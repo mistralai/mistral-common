@@ -1,0 +1,109 @@
+{
+    "tools": [
+        {
+            "type": "function",
+            "function": {
+                "name": "send_email",
+                "description": "Send an email to a recipient",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "attachment": {
+                            "type": "string",
+                            "description": "The path or URL of an attachment (optional)"
+                        },
+                        "body": {
+                            "type": "string",
+                            "description": "The body/content of the email"
+                        },
+                        "subject": {
+                            "type": "string",
+                            "description": "The subject of the email"
+                        },
+                        "to": {
+                            "type": "string",
+                            "description": "The email address of the recipient"
+                        }
+                    },
+                    "required": [
+                        "to",
+                        "subject",
+                        "body"
+                    ]
+                }
+            }
+        }
+    ],
+    "messages": [
+        {
+            "role": "user",
+            "content": "I need to send a report to my manager. The report is saved as a PDF at 'report.pdf'. The email address is manager@company.com. The subject should be \"Monthly Report\" and the body should say \"Attached is the monthly report for your review.\""
+        },
+        {
+            "content": null,
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "123456789",
+                    "function": {
+                        "arguments": "{\"attachment\": \"report.pdf\", \"body\": \"Attached is the monthly report for your review.\", \"subject\": \"Monthly Report\", \"to\": \"manager@company.com\"}",
+                        "name": "send_email"
+                    },
+                    "type": "function"
+                }
+            ]
+        },
+        {
+            "tool_call_id": "123456789",
+            "role": "tool",
+            "name": "send_email",
+            "content": "Email sent to manager@company.com"
+        },
+        {
+            "role": "assistant",
+            "content": "I've sent the report to your manager. Anything else?"
+        },
+        {
+            "role": "user",
+            "content": "Great! Can you also send the same report to the finance team? Their email addresses are finance1@company.com and finance2@company.com."
+        },
+        {
+            "content": null,
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "123456789",
+                    "function": {
+                        "arguments": "{\"attachment\": \"report.pdf\", \"body\": \"Attached is the monthly report for your review.\", \"subject\": \"Monthly Report\", \"to\": \"finance1@company.com\"}",
+                        "name": "send_email"
+                    }
+                }
+            ]
+        },
+        {
+            "tool_call_id": "123456789",
+            "role": "tool",
+            "name": "send_email",
+            "content": "Email sent to finance1@company.com"
+        },
+        {
+            "content": null,
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "123456789",
+                    "function": {
+                        "arguments": "{\"attachment\": \"report.pdf\", \"body\": \"Attached is the monthly report for your review.\", \"subject\": \"Monthly Report\", \"to\": \"finance2@company.com.\"}",
+                        "name": "send_email"
+                    }
+                }
+            ]
+        },
+        {
+            "tool_call_id": "123456789",
+            "role": "tool",
+            "name": "send_email",
+            "content": "Email sent to finance2@company.com"
+        }
+    ]
+}

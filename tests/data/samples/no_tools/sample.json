@@ -1,0 +1,36 @@
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "What's the result of 5 + 5?"
+    },
+    {
+      "role": "assistant",
+      "content": "The result of 5 + 5 is 10.",
+      "tool_calls": null
+    },
+    {
+      "role": "user",
+      "content": "What is the square root of 64?"
+    },
+    {
+      "role": "assistant",
+      "content": "The square root of 64 is 8, because 8 x 8 equals 64.",
+      "tool_calls": null
+    },
+    {
+      "role": "user",
+      "content": "Can you multiply the results of the previous two questions?"
+    },
+    {
+      "role": "assistant",
+      "content": "Sure! The result of 10 x 8 is 80.",
+      "tool_calls": null
+    },
+    {
+      "role": "user",
+      "content": "Thanks"
+    }
+  ],
+  "tools": []
+}

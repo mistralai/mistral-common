@@ -1,0 +1,1 @@
+<s>▁[INST]▁What's▁the▁result▁of▁5▁+▁5?▁[/INST]▁The▁result▁of▁5▁+▁5▁is▁10.</s>▁[INST]▁What▁is▁the▁square▁root▁of▁64?▁[/INST]▁The▁square▁root▁of▁64▁is▁8,▁because▁8▁x▁8▁equals▁64.</s>▁[INST]▁Can▁you▁multiply▁the▁results▁of▁the▁previous▁two▁questions?▁[/INST]▁Sure!▁The▁result▁of▁10▁x▁8▁is▁80.</s>▁[INST]▁Thanks▁[/INST]
