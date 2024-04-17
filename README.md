@@ -41,19 +41,14 @@ poetry install
 
 ```py
 # Import needed packages:
-from mistral_common.protocol.instruct.messages import (
-    UserMessage,
-)
+from mistral_common.protocol.instruct.messages import UserMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
-from mistral_common.protocol.instruct.tool_calls import (
-    Function,
-    Tool,
-)
+from mistral_common.protocol.instruct.tool_calls import Function, Tool
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 # Load Mistral tokenizer
 
-model_name = "open-mixtral-8x22B"
+model_name = "open-mixtral-8x22b"
 
 tokenizer = MistralTokenizer.from_model(model_name)
 

@@ -60,12 +60,12 @@ class MistralTokenizer:
     @classmethod
     def from_model(cls, model: str) -> MistralTokenizer:
         model_name_to_tokenizer_cls = {
-            "open-mistral-7B": MistralTokenizer.v1,
-            "open-mixtral-8x7B": MistralTokenizer.v1,
+            "open-mistral-7b": MistralTokenizer.v1,
+            "open-mixtral-8x7b": MistralTokenizer.v1,
             "mistral-embed": MistralTokenizer.v1,
             "mistral-small": MistralTokenizer.v2,
             "mistral-large": MistralTokenizer.v2,
-            "open-mixtral-8x22B": MistralTokenizer.v3,
+            "open-mixtral-8x22b": MistralTokenizer.v3,
         }
 
         # Prefix search the model name mapping
