@@ -290,7 +290,7 @@ class SentencePieceInstructTokenizerV2(SentencePieceInstructTokenizer):
         elif message.content:
             curr_tokens = self.tokenizer.encode(message.content, bos=False, eos=False)
         elif message.content == "":
-            raise TokenizerException(f"Empty assistant message.")
+            raise TokenizerException("Empty assistant message.")
         else:
             raise TokenizerException(f"Invalid assistant message: {message.content}")
 
