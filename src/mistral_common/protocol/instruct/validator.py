@@ -192,7 +192,7 @@ class MistralRequestValidator:
                 elif previous_role == Roles.user:
                     expected_roles = {Roles.assistant, Roles.system, Roles.user}
                 elif previous_role == Roles.assistant:
-                    expected_roles = {Roles.user, Roles.tool}
+                    expected_roles = {Roles.assistant, Roles.user, Roles.tool}
                 elif previous_role == Roles.tool:
                     expected_roles = {Roles.assistant, Roles.tool}
 
