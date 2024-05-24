@@ -58,7 +58,7 @@ class MistralTokenizer(
 
     @classmethod
     def v1(cls) -> MistralTokenizer:
-        """open-mistral-7B // open-mixtral-8x7B // mistral-embed"""
+        """open-mistral-7b // open-mixtral-8x7b // mistral-embed"""
         return cls.from_file(str(cls._data_path() / "tokenizer.model.v1"), mode=ValidationMode.test)
 
     @classmethod
@@ -78,8 +78,8 @@ class MistralTokenizer(
     @classmethod
     def from_model(cls, model: str) -> MistralTokenizer:
         model_name_to_tokenizer_cls: Dict[str, Callable[[], MistralTokenizer]] = {
-            "open-mistral-7B": MistralTokenizer.v1,
-            "open-mixtral-8x7B": MistralTokenizer.v1,
+            "open-mistral-7b": MistralTokenizer.v1,
+            "open-mixtral-8x7b": MistralTokenizer.v1,
             "mistral-embed": MistralTokenizer.v1,
             "mistral-small": MistralTokenizer.v2,
             "mistral-large": MistralTokenizer.v2,
