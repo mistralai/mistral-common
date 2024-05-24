@@ -3,17 +3,17 @@ import json
 import pytest
 from mistral_common.protocol.instruct.messages import AssistantMessage, ToolMessage, UserMessage
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
-from mistral_common.tokens.instruct.normalize import InstructRequest
+from mistral_common.tokens.instruct.request import InstructRequest
+from mistral_common.tokens.tokenizers.base import InstructTokenizer
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceInstructTokenizerV2
 
 
 @pytest.fixture()
-def tokenizer() -> SentencePieceInstructTokenizerV2:
-    return MistralTokenizer.v2().instruct_tokenizer  # type: ignore
+def tokenizer() -> InstructTokenizer:
+    return MistralTokenizer.v2().instruct_tokenizer
 
 
-def test_normal(tokenizer: SentencePieceInstructTokenizerV2) -> None:
+def test_normal(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
             messages=[
@@ -29,7 +29,7 @@ def test_normal(tokenizer: SentencePieceInstructTokenizerV2) -> None:
     assert tokens == [1, 3, 1032, 4, 1055, 2, 3, 1045, 4, 1049, 2]
 
 
-def test_tools_singleturn(tokenizer: SentencePieceInstructTokenizerV2) -> None:
+def test_tools_singleturn(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
             messages=[UserMessage(content="a")],
@@ -45,7 +45,7 @@ def test_tools_singleturn(tokenizer: SentencePieceInstructTokenizerV2) -> None:
     json.loads(tokenizer.tokenizer.decode(tokens[begin_tool : end_tool + 1]))
 
 
-def test_tools_multiturn(tokenizer: SentencePieceInstructTokenizerV2) -> None:
+def test_tools_multiturn(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
             messages=[
@@ -84,7 +84,7 @@ def test_tools_multiturn(tokenizer: SentencePieceInstructTokenizerV2) -> None:
     json.loads(tokenizer.tokenizer.decode(tokens[begin_tool : end_tool + 1]))
 
 
-def test_system_singleturn(tokenizer: SentencePieceInstructTokenizerV2) -> None:
+def test_system_singleturn(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(InstructRequest(messages=[UserMessage(content="a")], system_prompt="SYSTEM"))
     tokens, text = tokenized.tokens, tokenized.text
     assert text == "<s>[INST]▁SYSTEM<0x0A><0x0A>a[/INST]"  # NOTE THE SPACE
@@ -92,7 +92,7 @@ def test_system_singleturn(tokenizer: SentencePieceInstructTokenizerV2) -> None:
     assert tokenizer.tokenizer.decode(tokens) == "SYSTEM\n\na"
 
 
-def test_system_multiturn(tokenizer: SentencePieceInstructTokenizerV2) -> None:
+def test_system_multiturn(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
             messages=[
@@ -127,7 +127,7 @@ def test_system_multiturn(tokenizer: SentencePieceInstructTokenizerV2) -> None:
     assert tokenizer.tokenizer.decode(tokens[first_eos:]) == "SYSTEM\n\nc d"
 
 
-def test_system_tools_multiturn(tokenizer: SentencePieceInstructTokenizerV2) -> None:
+def test_system_tools_multiturn(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
             messages=[
@@ -151,7 +151,7 @@ def test_system_tools_multiturn(tokenizer: SentencePieceInstructTokenizerV2) -> 
     assert tokenizer.tokenizer.decode(tokens[end_tool + 1 :]) == "SYSTEM\n\nc d"
 
 
-def test_tool_response(tokenizer: SentencePieceInstructTokenizerV2) -> None:
+def test_tool_response(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
             messages=[
@@ -181,7 +181,7 @@ def test_tool_response(tokenizer: SentencePieceInstructTokenizerV2) -> None:
     )
 
 
-def test_tool_message_multiple_shots_without_history(tokenizer: SentencePieceInstructTokenizerV2) -> None:
+def test_tool_message_multiple_shots_without_history(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
             messages=[

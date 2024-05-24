@@ -1,6 +1,6 @@
 import re
 from enum import Enum
-from typing import List
+from typing import Generic, List
 
 from jsonschema import Draft7Validator, SchemaError
 
@@ -15,12 +15,13 @@ from mistral_common.exceptions import (
     InvalidToolSchemaException,
 )
 from mistral_common.protocol.instruct.messages import (
-    AssistantMessage,
-    ChatMessage,
+    UATS,
+    AssistantMessageType,
+    FinetuningAssistantMessage,
     Roles,
-    SystemMessage,
-    ToolMessage,
-    UserMessage,
+    SystemMessageType,
+    ToolMessageType,
+    UserMessageType,
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.tool_calls import (
@@ -33,21 +34,22 @@ from mistral_common.protocol.instruct.tool_calls import (
 
 class ValidationMode(Enum):
     serving = "serving"
+    finetuning = "finetuning"
     test = "test"
 
 
-class MistralRequestValidator:
+class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType]):
     def __init__(self, mode: ValidationMode = ValidationMode.test):
         self._mode = mode
 
-    def validate_messages(self, messages: List[ChatMessage]) -> None:
+    def validate_messages(self, messages: List[UATS]) -> None:
         """
         Validates the list of messages
         """
         self._validate_message_list_structure(messages)
         self._validate_message_list_content(messages)
 
-    def validate_request(self, request: ChatCompletionRequest) -> ChatCompletionRequest:
+    def validate_request(self, request: ChatCompletionRequest) -> ChatCompletionRequest[UATS]:
         """
         Validates the request
         """
@@ -60,7 +62,7 @@ class MistralRequestValidator:
         self.validate_messages(request.messages)
 
         # Validate the tools
-        self._validate_tools(request.tools)
+        self._validate_tools(request.tools or [])
 
         return request
 
@@ -89,10 +91,10 @@ class MistralRequestValidator:
         for tool in tools:
             self._validate_function(tool.function)
 
-    def _validate_user_message(self, message: UserMessage) -> None:
+    def _validate_user_message(self, message: UserMessageType) -> None:
         pass
 
-    def _validate_tool_message(self, message: ToolMessage) -> None:
+    def _validate_tool_message(self, message: ToolMessageType) -> None:
         """
         Checks:
         - The tool name is valid
@@ -104,7 +106,7 @@ class MistralRequestValidator:
                     "or contain underscores and dashes, with a maximum length of 64."
                 )
 
-    def _validate_system_message(self, message: SystemMessage) -> None:
+    def _validate_system_message(self, message: SystemMessageType) -> None:
         """
         Checks:
         - That the system prompt has content
@@ -123,7 +125,7 @@ class MistralRequestValidator:
                 "or contain underscores and dashes, with a maximum length of 64."
             )
 
-    def _validate_tool_call(self, tool_call: ToolCall) -> None:
+    def _validate_tool_call(self, tool_call: ToolCall, is_last_message: bool) -> None:
         """
         Checks:
         - That the tool call has a valid function
@@ -131,24 +133,31 @@ class MistralRequestValidator:
 
         self._validate_function_call(tool_call.function)
 
-    def _validate_assistant_message(self, message: AssistantMessage) -> None:
+    def _validate_assistant_message(self, message: AssistantMessageType, is_last_message: bool = False) -> None:
         """
         Checks:
         - That the assistant message has either text or tool_calls, but not both
         - That the tool calls are valid
         """
 
-        # Validate that the message has either text or tool_calls, but not both
-        if (message.content is None) == (message.tool_calls is None):
-            raise InvalidAssistantMessageException("Assistant message must have either content or tool_calls")
+        # Validate that the message has either text or tool_calls
+        # but not both and not neither.
+        if bool(message.content) == bool(message.tool_calls):
+            raise InvalidAssistantMessageException(
+                "Assistant message must have either content or tool_calls, but not both."
+            )
 
         # If we have tool calls, validate them
         if message.tool_calls is not None:
             # Validate that the tool calls are valid
             for tool_call in message.tool_calls:
-                self._validate_tool_call(tool_call)
+                self._validate_tool_call(tool_call, is_last_message=is_last_message)
 
-    def _validate_tool_calls_followed_by_tool_messages(self, messages: List[ChatMessage]) -> None:
+        if self._mode == ValidationMode.finetuning and isinstance(message, FinetuningAssistantMessage):
+            if message.weight is not None and message.weight not in [0, 1]:
+                raise InvalidAssistantMessageException("Assistant message weight must be either 0 or 1")
+
+    def _validate_tool_calls_followed_by_tool_messages(self, messages: List[UATS]) -> None:
         """
         Checks:
         - That the number of tool calls and tool messages are the same
@@ -175,10 +184,14 @@ class MistralRequestValidator:
 
             prev_role = message.role
 
-        if expected_tool_messages != 0:
+        if expected_tool_messages != 0 and self._mode == ValidationMode.serving:
             raise InvalidMessageStructureException("Not the same number of function calls and responses")
+        elif expected_tool_messages not in [0, 1] and self._mode == ValidationMode.finetuning:
+            # if last assistant message has no tool calls, then same number of tool calls and messages => 0
+            # if last assistant message has a tool call we have one more tool call => 1
+            raise InvalidMessageStructureException("Too many function calls and too few responses")
 
-    def _validate_message_order(self, messages: List[ChatMessage]) -> None:
+    def _validate_message_order(self, messages: List[UATS]) -> None:
         """
         Validates the order of the messages, for example user -> assistant -> user -> assistant -> ...
         """
@@ -192,7 +205,7 @@ class MistralRequestValidator:
                 elif previous_role == Roles.user:
                     expected_roles = {Roles.assistant, Roles.system, Roles.user}
                 elif previous_role == Roles.assistant:
-                    expected_roles = {Roles.user, Roles.tool}
+                    expected_roles = {Roles.assistant, Roles.user, Roles.tool}
                 elif previous_role == Roles.tool:
                     expected_roles = {Roles.assistant, Roles.tool}
 
@@ -203,7 +216,22 @@ class MistralRequestValidator:
 
             previous_role = current_role
 
-    def _validate_message_list_structure(self, messages: List[ChatMessage]) -> None:
+    def _validate_last_message(self, message: UATS) -> None:
+        # The last message must be a user or tool message in serving mode or an assistant message in finetuning mode
+        last_message_role = message.role
+        expected_roles = (
+            {Roles.user, Roles.tool}
+            if self._mode != ValidationMode.finetuning
+            else {Roles.assistant}
+        )
+
+        if last_message_role not in expected_roles:
+            expected_roles_str = ", ".join(role.value for role in expected_roles)
+            raise InvalidMessageStructureException(
+                f"Expected last role to be one of: [{expected_roles_str}] but got {last_message_role.value}"
+            )
+
+    def _validate_message_list_structure(self, messages: List[UATS]) -> None:
         """
         Validates the structure of the list of messages
 
@@ -217,31 +245,22 @@ class MistralRequestValidator:
         if len(messages) == 1:
             if messages[0].role not in {Roles.user, Roles.system}:
                 raise InvalidMessageStructureException("Conversation must start with a user message or system message")
-
         else:
-            # The last message must be a user or tool message
-            last_message_role = messages[-1].role
-            expected_roles = {Roles.user, Roles.tool}
-
-            if last_message_role not in expected_roles:
-                expected_roles_str = ", ".join(role.value for role in expected_roles)
-                raise InvalidMessageStructureException(
-                    f"Expected last role to be one of: [{expected_roles_str}] but got {last_message_role.value}"
-                )
+            self._validate_last_message(messages[-1])
 
         self._validate_message_order(messages)
         self._validate_tool_calls_followed_by_tool_messages(messages)
 
-    def _validate_message_list_content(self, messages: List[ChatMessage]) -> None:
+    def _validate_message_list_content(self, messages: List[UATS]) -> None:
         """
         Validates the content of the messages
         """
 
-        for message in messages:
+        for idx, message in enumerate(messages):
             if message.role == Roles.user:
                 self._validate_user_message(message)
             elif message.role == Roles.assistant:
-                self._validate_assistant_message(message)
+                self._validate_assistant_message(message, is_last_message=idx == len(messages) - 1)
             elif message.role == Roles.tool:
                 self._validate_tool_message(message)
             elif message.role == Roles.system:
@@ -251,10 +270,11 @@ class MistralRequestValidator:
 
 
 class MistralRequestValidatorV3(MistralRequestValidator):
-    def _validate_tool_message(self, message: ToolMessage) -> None:
+    def _validate_tool_message(self, message: ToolMessageType) -> None:
         """
         Checks:
         - The tool name is valid
+        - Tool call id is valid
         """
         if message.name is not None:
             if not re.match(r"^[a-zA-Z0-9_-]{1,64}$", message.name):
@@ -263,20 +283,39 @@ class MistralRequestValidatorV3(MistralRequestValidator):
                     "or contain underscores and dashes, with a maximum length of 64."
                 )
 
-        if message.tool_call_id is not None:
-            if not re.match(r"^[a-zA-Z0-9]{9}$", message.tool_call_id):
-                raise InvalidToolMessageException(
-                    f"Tool call id was {message.tool_call_id} but must be a-z, A-Z, 0-9, with a length of 9."
-                )
+        if message.tool_call_id is None:
+            raise InvalidRequestException("Tool call id has to be defined.")
 
-    def _validate_tool_call(self, tool_call: ToolCall) -> None:
+        if not re.match(r"^[a-zA-Z0-9]{9}$", message.tool_call_id):
+            raise InvalidToolMessageException(
+                f"Tool call id was {message.tool_call_id} but must be a-z, A-Z, 0-9, with a length of 9."
+            )
+
+
+    def _validate_tool_call(self, tool_call: ToolCall, is_last_message: bool) -> None:
         """
         Validate that the tool call has a valid ID
         """
+        if tool_call.id != "null":
+            if not re.match(r"^[a-zA-Z0-9]{9}$", tool_call.id):
+                raise InvalidFunctionCallException(
+                    f"Tool call id was {tool_call.id} but must be a-z, A-Z, 0-9, with a length of 9."
+                )
+        if self._mode == ValidationMode.finetuning and not is_last_message and tool_call.id == "null":
+            err_message = "Tool call id of assistant message that is not last has to be defined in finetuning mode."
+            raise InvalidFunctionCallException(err_message)
 
-        if not re.match(r"^[a-zA-Z0-9]{9}$", tool_call.id):
-            raise InvalidFunctionCallException(
-                f"Tool call id was {tool_call.id} but must be a-z, A-Z, 0-9, with a length of 9."
-            )
+        if self._mode == ValidationMode.serving and tool_call.id == "null":
+            raise InvalidFunctionCallException("Tool call id has to be defined in serving mode.")
 
         self._validate_function_call(tool_call.function)
+
+    def _validate_last_message(self, message: UATS) -> None:
+        super()._validate_last_message(message)
+
+        if self._mode == ValidationMode.finetuning:
+            # in finetuning mode it has to be an assistant message
+            # as checked by parent `_validate_last_message`
+            if message.tool_calls is not None:
+                for tool_call in message.tool_calls:
+                    self._validate_tool_call(tool_call, is_last_message=True)

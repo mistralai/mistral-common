@@ -6,4 +6,8 @@ class MistralBase(BaseModel):
     Base class for all Mistral Pydantic models.
     """
 
-    model_config = ConfigDict(extra="forbid", strict=True, validate_default=True, use_enum_values=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        validate_default=True,
+        use_enum_values=True
+    )

@@ -1,5 +1,6 @@
 from typing import Dict, List
 
+import pytest
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
@@ -9,13 +10,17 @@ from mistral_common.protocol.instruct.messages import (
     ToolMessage,
     UserMessage,
 )
+from mistral_common.protocol.instruct.normalize import InstructRequestNormalizer
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
-from mistral_common.tokens.instruct.normalize import InstructRequestNormalizer
 from mistral_common.tokens.instruct.request import InstructRequest
 
 
 class TestChatCompletionRequestNormalization:
+    @pytest.fixture(autouse=True)
+    def normalizer(self) -> InstructRequestNormalizer:
+        return InstructRequestNormalizer(UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest)
+
     def mock_chat_completion(self, messages: List[ChatMessage]) -> ChatCompletionRequest:
         return ChatCompletionRequest(
             model="test",
@@ -24,7 +29,7 @@ class TestChatCompletionRequestNormalization:
             temperature=0.7,
         )
 
-    def test_user_system_user(self) -> None:
+    def test_user_system_user(self, normalizer: InstructRequestNormalizer) -> None:
         chat_completion_request = self.mock_chat_completion(
             messages=[
                 UserMessage(content="U"),
@@ -33,10 +38,10 @@ class TestChatCompletionRequestNormalization:
             ]
         )
 
-        parsed_request = InstructRequestNormalizer().from_chat_completion_request(chat_completion_request)
+        parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
         assert parsed_request.system_prompt == "S"
 
-    def test_multiple_system(self) -> None:
+    def test_multiple_system(self, normalizer: InstructRequestNormalizer) -> None:
         chat_completion_request = self.mock_chat_completion(
             messages=[
                 SystemMessage(content="S"),
@@ -45,21 +50,21 @@ class TestChatCompletionRequestNormalization:
             ]
         )
 
-        parsed_request = InstructRequestNormalizer().from_chat_completion_request(chat_completion_request)
+        parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
         assert parsed_request.system_prompt == "S\n\nS\n\nS"
 
-    def test_single_system(self) -> None:
+    def test_single_system(self, normalizer: InstructRequestNormalizer) -> None:
         chat_completion_request = self.mock_chat_completion(
             messages=[
                 SystemMessage(content="S"),
             ]
         )
 
-        parsed_request = InstructRequestNormalizer().from_chat_completion_request(chat_completion_request)
+        parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
 
         assert parsed_request.system_prompt == "S"
 
-    def test_system_assistant_user(self) -> None:
+    def test_system_assistant_user(self, normalizer: InstructRequestNormalizer) -> None:
         chat_completion_request = self.mock_chat_completion(
             messages=[
                 SystemMessage(content="S"),
@@ -68,7 +73,7 @@ class TestChatCompletionRequestNormalization:
             ]
         )
 
-        parsed_request = InstructRequestNormalizer().from_chat_completion_request(chat_completion_request)
+        parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
 
         assert parsed_request.system_prompt == "S"
 
@@ -77,7 +82,7 @@ class TestChatCompletionRequestNormalization:
         assert first_message.content == ""
         assert parsed_request.system_prompt == "S"
 
-    def test_assistant_system_user_adds_user(self) -> None:
+    def test_assistant_system_user_adds_user(self, normalizer: InstructRequestNormalizer) -> None:
         chat_completion_request = self.mock_chat_completion(
             messages=[
                 AssistantMessage(content="A"),
@@ -86,7 +91,7 @@ class TestChatCompletionRequestNormalization:
             ]
         )
 
-        parsed_request = InstructRequestNormalizer().from_chat_completion_request(chat_completion_request)
+        parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
 
         assert parsed_request.system_prompt == "S"
 
@@ -97,7 +102,13 @@ class TestChatCompletionRequestNormalization:
         assert first_message.content == ""
         assert parsed_request.system_prompt == "S"
 
-    def check_merge(self, roles: List[str], expected_roles: List[str], expected_content: List[str]) -> None:
+    def check_merge(
+        self,
+        roles: List[str],
+        expected_roles: List[str],
+        expected_content: List[str],
+        normalizer: InstructRequestNormalizer,
+    ) -> None:
         letter_to_cls: Dict[str, ChatMessage] = {
             "s": SystemMessage(content="s"),
             "u": UserMessage(content="u"),
@@ -108,7 +119,7 @@ class TestChatCompletionRequestNormalization:
         chat_completion_request = self.mock_chat_completion(
             messages=[letter_to_cls[r] for r in roles],
         )
-        parsed_request = InstructRequestNormalizer().from_chat_completion_request(chat_completion_request)
+        parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
         assert len(parsed_request.messages) == len(expected_roles)
         assert [message.role for message in parsed_request.messages] == [
             letter_to_cls[role].role for role in expected_roles
@@ -118,28 +129,26 @@ class TestChatCompletionRequestNormalization:
             assert isinstance(x, (UserMessage, AssistantMessage))
             assert x.content == expected
 
-    def test_message_aggregation(self) -> None:
-        self.check_merge(["s", "s", "s", "u"], ["u"], ["u"])
-        self.check_merge(["s", "s", "s", "u", "u"], ["u"], ["u\n\nu"])
-        self.check_merge(
-            ["s", "s", "s", "u", "u", "s", "a", "u"],
-            ["u", "a", "u"],
-            ["u\n\nu", "a", "u"],
-        )
+    def test_message_aggregation(self, normalizer: InstructRequestNormalizer) -> None:
+        self.check_merge(["s", "s", "s", "u"], ["u"], ["u"], normalizer)
+        self.check_merge(["s", "s", "s", "u", "u"], ["u"], ["u\n\nu"], normalizer)
+        self.check_merge(["s", "s", "s", "u", "u", "s", "a", "u"], ["u", "a", "u"], ["u\n\nu", "a", "u"], normalizer)
 
         self.check_merge(
             ["s", "s", "s", "u", "u", "a", "a", "u"],
             ["u", "a", "u"],
             ["u\n\nu", "a\n\na", "u"],
+            normalizer,
         )
 
         self.check_merge(
             ["s", "a", "u"],
             ["u", "a", "u"],
             ["", "a", "u"],
+            normalizer,
         )
 
-    def test_normalize_chunks(self) -> None:
+    def test_normalize_chunks(self, normalizer: InstructRequestNormalizer) -> None:
         chat_completion_request = self.mock_chat_completion(
             messages=[
                 UserMessage(content="foo"),
@@ -153,13 +162,13 @@ class TestChatCompletionRequestNormalization:
             ],
         )
 
-        parsed_request = InstructRequestNormalizer().from_chat_completion_request(chat_completion_request)
+        parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
 
         first_message = parsed_request.messages[0]
         assert isinstance(first_message, UserMessage)
         assert first_message.content == "foo\n\nchunk\n\nfoo\n\nchunk"
 
-    def test_many_chunks_in_user_message(self) -> None:
+    def test_many_chunks_in_user_message(self, normalizer: InstructRequestNormalizer) -> None:
         chat_completion_request = self.mock_chat_completion(
             messages=[
                 UserMessage(content="foo"),
@@ -172,13 +181,13 @@ class TestChatCompletionRequestNormalization:
                 ),
             ],
         )
-        parsed_request = InstructRequestNormalizer().from_chat_completion_request(chat_completion_request)
+        parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
         first_message = parsed_request.messages[0]
         assert isinstance(first_message, UserMessage)
         assert first_message.content == "foo\n\nchunk1\n\nchunk2\n\nchunk3"
 
-    def test_safety_prompt_aggregated(self) -> None:
-        chat_completion_request = ChatCompletionRequest(
+    def test_safety_prompt_aggregated(self, normalizer: InstructRequestNormalizer) -> None:
+        chat_completion_request = ChatCompletionRequest[ChatMessage](
             model="test",
             messages=[
                 UserMessage(content="user"),
@@ -188,13 +197,13 @@ class TestChatCompletionRequestNormalization:
             temperature=0.7,
         )
 
-        parsed_request = InstructRequestNormalizer().from_chat_completion_request(chat_completion_request)
+        parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
         first_message = parsed_request.messages[0]
         assert isinstance(first_message, UserMessage)
         assert first_message.content == "user"
         assert parsed_request.system_prompt == "system"
 
-    def test_system_prompt_chunks_aggregated(self) -> None:
+    def test_system_prompt_chunks_aggregated(self, normalizer: InstructRequestNormalizer) -> None:
         chat_completion_request = self.mock_chat_completion(
             messages=[
                 UserMessage(content="foo"),
@@ -208,10 +217,10 @@ class TestChatCompletionRequestNormalization:
             ],
         )
 
-        parsed_request = InstructRequestNormalizer().from_chat_completion_request(chat_completion_request)
+        parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
         assert parsed_request.system_prompt == "chunk1\n\nchunk2\n\nchunk3"
 
-    def test_normalize_tools(self) -> None:
+    def test_normalize_tools(self, normalizer: InstructRequestNormalizer) -> None:
         """
         Test doesnt really "normalize" anything but it checks that the tools are added to the
         InstructRequest during from_chat_completion_request
@@ -221,7 +230,7 @@ class TestChatCompletionRequestNormalization:
             Tool(function=Function(name="tool2", description="2", parameters={})),
         ]
 
-        request = ChatCompletionRequest(
+        request = ChatCompletionRequest[ChatMessage](
             model="triton",
             messages=[
                 SystemMessage(content="helpful assistant"),
@@ -232,19 +241,17 @@ class TestChatCompletionRequestNormalization:
             tools=tools,
         )
 
-        gt = InstructRequest(
+        gt = InstructRequest[ChatMessage, Tool](
             messages=[UserMessage(content="a"), AssistantMessage(content="b"), UserMessage(content="c")],
             available_tools=tools,
             system_prompt="helpful assistant",
         )
 
-        request_normalizer = InstructRequestNormalizer()
-
-        normalized = request_normalizer.from_chat_completion_request(request)
+        normalized = normalizer.from_chat_completion_request(request)
         assert normalized == gt
 
-    def test_normalize_funcalls(self) -> None:
-        request = ChatCompletionRequest(
+    def test_normalize_funcalls(self, normalizer: InstructRequestNormalizer) -> None:
+        request = ChatCompletionRequest[ChatMessage](
             model="triton",
             messages=[
                 SystemMessage(content="helpful assistant"),
@@ -264,7 +271,7 @@ class TestChatCompletionRequestNormalization:
             tools=[Tool(function=Function(name="tool1", description="1", parameters={}))],
         )
 
-        gt = InstructRequest(
+        gt = InstructRequest[ChatMessage, Tool](
             messages=[
                 UserMessage(content="a"),
                 AssistantMessage(
@@ -281,7 +288,5 @@ class TestChatCompletionRequestNormalization:
             available_tools=[Tool(function=Function(name="tool1", description="1", parameters={}))],
         )
 
-        request_normalizer = InstructRequestNormalizer()
-
-        normalized = request_normalizer.from_chat_completion_request(request)
+        normalized = normalizer.from_chat_completion_request(request)
         assert normalized == gt
