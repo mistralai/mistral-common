@@ -1,16 +1,16 @@
 import pytest
 from mistral_common.protocol.instruct.messages import AssistantMessage, UserMessage
-from mistral_common.tokens.instruct.normalize import InstructRequest
+from mistral_common.tokens.instruct.request import InstructRequest
+from mistral_common.tokens.tokenizers.base import InstructTokenizer
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceInstructTokenizerV1
 
 
 @pytest.fixture()
-def tokenizer() -> SentencePieceInstructTokenizerV1:
-    return MistralTokenizer.v1().instruct_tokenizer  # type: ignore
+def tokenizer() -> InstructTokenizer:
+    return MistralTokenizer.v1().instruct_tokenizer
 
 
-def test_normal(tokenizer: SentencePieceInstructTokenizerV1) -> None:
+def test_normal(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
             messages=[
@@ -48,7 +48,7 @@ def test_normal(tokenizer: SentencePieceInstructTokenizerV1) -> None:
     ]
 
 
-def test_system_singleturn(tokenizer: SentencePieceInstructTokenizerV1) -> None:
+def test_system_singleturn(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(InstructRequest(messages=[UserMessage(content="a")], system_prompt="SYSTEM"))
     tokens, text = tokenized.tokens, tokenized.text
     assert text == "<s>▁[INST]▁SYSTEM<0x0A><0x0A>a▁[/INST]"
@@ -56,7 +56,7 @@ def test_system_singleturn(tokenizer: SentencePieceInstructTokenizerV1) -> None:
     assert tokenizer.tokenizer.decode(tokens) == "[INST] SYSTEM\n\na [/INST]"
 
 
-def test_system_multiturn(tokenizer: SentencePieceInstructTokenizerV1) -> None:
+def test_system_multiturn(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
             messages=[

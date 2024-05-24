@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import List, Optional, Protocol
+from typing import Generic, List, Optional, TypeVar
 
 from mistral_common.base import MistralBase
 from mistral_common.tokens.instruct.request import InstructRequest
@@ -55,7 +55,29 @@ class Tokenizer(ABC):
     def decode(self, t: List[int]) -> str:
         """Token ids to string"""
 
+    @abstractmethod
+    def get_control_token(self, s: str) -> int:
+        """Get the id of a control token"""
 
-class InstructTokenizer(Protocol):
-    def encode_instruct(self, request: InstructRequest) -> Tokenized:
+    @abstractmethod
+    def to_string(self, tokens: List[int]) -> str:
+        """Convert token ids to string"""
+
+
+InstructRequestType = TypeVar("InstructRequestType", bound=InstructRequest)
+TokenizedType = TypeVar("TokenizedType", bound=Tokenized)
+
+
+class InstructTokenizer(Generic[InstructRequestType, TokenizedType], ABC):
+    tokenizer: Tokenizer
+
+    def __init__(self, model_path: str):
+        """Init from model file"""
+
+    @abstractmethod
+    def encode_instruct(self, request: InstructRequestType) -> TokenizedType:
         """Instruct request to Tokenized object"""
+
+    @abstractmethod
+    def decode(self, tokens: List[int]) -> str:
+        """Convert token ids to string"""

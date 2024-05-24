@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any, Dict, Tuple
 
 import pytest
+from mistral_common.protocol.instruct.messages import ChatMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
@@ -65,7 +66,7 @@ def test_samples(sample: Dict[str, Any], version: int, samples_dir: Path) -> Non
     chat_completion_string = json.dumps(
         {"model": "debug", "messages": instruct_request["messages"], "tools": instruct_request["tools"]}
     )
-    chat_completion_request = ChatCompletionRequest.model_validate_json(chat_completion_string)
+    chat_completion_request = ChatCompletionRequest[ChatMessage].model_validate_json(chat_completion_string)
     tokenized = mistral_tokenizer.encode_chat_completion(chat_completion_request)
     assert tokenized.text == text
     assert tokenized.tokens == tokens

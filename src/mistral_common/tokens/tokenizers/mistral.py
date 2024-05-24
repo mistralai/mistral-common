@@ -1,38 +1,56 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Type
+from typing import Callable, Dict, Generic, List
 
 from mistral_common.exceptions import (
     TokenizerException,
 )
+from mistral_common.protocol.instruct.messages import (
+    UATS,
+    AssistantMessageType,
+    SystemMessageType,
+    ToolMessageType,
+    UserMessageType,
+)
+from mistral_common.protocol.instruct.normalize import InstructRequestNormalizer
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import (
     MistralRequestValidator,
     MistralRequestValidatorV3,
     ValidationMode,
 )
-from mistral_common.tokens.instruct.normalize import InstructRequestNormalizer
-from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized
+from mistral_common.tokens.tokenizers.base import (
+    InstructRequest,
+    InstructRequestType,
+    InstructTokenizer,
+    Tokenized,
+    TokenizedType,
+)
 from mistral_common.tokens.tokenizers.sentencepiece import (
-    SentencePieceInstructTokenizerV1,
-    SentencePieceInstructTokenizerV2,
-    SentencePieceInstructTokenizerV3,
+    InstructTokenizerV1,
+    InstructTokenizerV2,
+    InstructTokenizerV3,
+    SentencePieceTokenizer,
 )
 
 
-class MistralTokenizer:
+class MistralTokenizer(
+    Generic[
+        UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType, TokenizedType
+    ]
+):
     def __init__(
         self,
-        instruct_tokenizer: InstructTokenizer,
-        validator: Type[MistralRequestValidator] = MistralRequestValidator,
-        request_normalizer: Type[InstructRequestNormalizer] = InstructRequestNormalizer,
-        mode: ValidationMode = ValidationMode.test,
+        instruct_tokenizer: InstructTokenizer[InstructRequest, TokenizedType],
+        validator: MistralRequestValidator[UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType],
+        request_normalizer: InstructRequestNormalizer[
+            UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType, InstructRequestType
+        ],
     ):
-        self._chat_completion_request_validator = validator(mode)
-        self._instruct_request_normalizer = request_normalizer()
+        self._chat_completion_request_validator = validator
+        self._instruct_request_normalizer = request_normalizer
         self.instruct_tokenizer = instruct_tokenizer
-
 
     @classmethod
     def _data_path(cls) -> Path:
@@ -40,7 +58,7 @@ class MistralTokenizer:
 
     @classmethod
     def v1(cls) -> MistralTokenizer:
-        """open-mistral-7B // open-mixtral-8x7B // mistral-embed"""
+        """open-mistral-7b // open-mixtral-8x7b // mistral-embed"""
         return cls.from_file(str(cls._data_path() / "tokenizer.model.v1"), mode=ValidationMode.test)
 
     @classmethod
@@ -52,14 +70,14 @@ class MistralTokenizer:
 
     @classmethod
     def v3(cls) -> MistralTokenizer:
-        """open-mixtral-8x22B"""
+        """open-mixtral-8x22b"""
         return cls.from_file(
             str(cls._data_path() / "mistral_instruct_tokenizer_240216.model.v3"), mode=ValidationMode.test
         )
 
     @classmethod
     def from_model(cls, model: str) -> MistralTokenizer:
-        model_name_to_tokenizer_cls = {
+        model_name_to_tokenizer_cls: Dict[str, Callable[[], MistralTokenizer]] = {
             "open-mistral-7b": MistralTokenizer.v1,
             "open-mixtral-8x7b": MistralTokenizer.v1,
             "mistral-embed": MistralTokenizer.v1,
@@ -80,38 +98,38 @@ class MistralTokenizer:
         """
         Depending on which model we are loading, tokenization and validation might be different. 💩
         """
+
         if tokenizer_filename.endswith(".model.v1"):
-            return cls(
-                SentencePieceInstructTokenizerV1(tokenizer_filename),
-                validator=MistralRequestValidator,
-                request_normalizer=InstructRequestNormalizer,
-                mode=mode,
+            return MistralTokenizer(
+                InstructTokenizerV1(SentencePieceTokenizer(tokenizer_filename)),
+                validator=MistralRequestValidator(mode=mode),
+                request_normalizer=InstructRequestNormalizer.normalizer(),
             )
         elif tokenizer_filename.endswith(".model.v2"):
-            return cls(
-                SentencePieceInstructTokenizerV2(tokenizer_filename),
-                validator=MistralRequestValidator,
-                request_normalizer=InstructRequestNormalizer,
-                mode=mode,
+            return MistralTokenizer(
+                InstructTokenizerV2(SentencePieceTokenizer(tokenizer_filename)),
+                validator=MistralRequestValidator(mode=mode),
+                request_normalizer=InstructRequestNormalizer.normalizer(),
             )
         elif tokenizer_filename.endswith(".model.v3"):
-            return cls(
-                SentencePieceInstructTokenizerV3(tokenizer_filename),
-                validator=MistralRequestValidatorV3,
-                request_normalizer=InstructRequestNormalizer,
-                mode=mode,
+            return MistralTokenizer(
+                InstructTokenizerV3(SentencePieceTokenizer(tokenizer_filename)),
+                validator=MistralRequestValidatorV3(mode=mode),
+                request_normalizer=InstructRequestNormalizer.normalizer(),
             )
         elif tokenizer_filename.endswith(".model"):
-            return cls(
-                SentencePieceInstructTokenizerV1(tokenizer_filename),
-                validator=MistralRequestValidator,
-                request_normalizer=InstructRequestNormalizer,
-                mode=mode,
+            return MistralTokenizer(
+                InstructTokenizerV1(SentencePieceTokenizer(tokenizer_filename)),
+                validator=MistralRequestValidator(mode=mode),
+                request_normalizer=InstructRequestNormalizer.normalizer(),
             )
         else:
             raise TokenizerException(f"Unrecognized tokenizer filename: {tokenizer_filename}")
 
-    def encode_chat_completion(self, request: ChatCompletionRequest) -> Tokenized:
+    def encode_chat_completion(self, request: ChatCompletionRequest[UATS]) -> Tokenized:
         validated_request = self._chat_completion_request_validator.validate_request(request)
         instruct_request = self._instruct_request_normalizer.from_chat_completion_request(validated_request)
         return self.instruct_tokenizer.encode_instruct(instruct_request)
+
+    def decode(self, tokens: List[int]) -> str:
+        return self.instruct_tokenizer.decode(tokens)

@@ -3,17 +3,17 @@ import json
 import pytest
 from mistral_common.protocol.instruct.messages import AssistantMessage, ToolMessage, UserMessage
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
-from mistral_common.tokens.instruct.normalize import InstructRequest
+from mistral_common.tokens.instruct.request import InstructRequest
+from mistral_common.tokens.tokenizers.base import InstructTokenizer
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceInstructTokenizerV3
 
 
 @pytest.fixture()
-def tokenizer() -> SentencePieceInstructTokenizerV3:
-    return MistralTokenizer.v3().instruct_tokenizer  # type: ignore
+def tokenizer() -> InstructTokenizer:
+    return MistralTokenizer.v3().instruct_tokenizer
 
 
-def test_tools_singleturn(tokenizer: SentencePieceInstructTokenizerV3) -> None:
+def test_tools_singleturn(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
             messages=[UserMessage(content="a")],
@@ -29,7 +29,7 @@ def test_tools_singleturn(tokenizer: SentencePieceInstructTokenizerV3) -> None:
     json.loads(tokenizer.tokenizer.decode(tokens[begin_tool : end_tool + 1]))
 
 
-def test_tools_multiturn(tokenizer: SentencePieceInstructTokenizerV3) -> None:
+def test_tools_multiturn(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
             messages=[
@@ -68,7 +68,7 @@ def test_tools_multiturn(tokenizer: SentencePieceInstructTokenizerV3) -> None:
     json.loads(tokenizer.tokenizer.decode(tokens[begin_tool : end_tool + 1]))
 
 
-def test_system_tools_multiturn(tokenizer: SentencePieceInstructTokenizerV3) -> None:
+def test_system_tools_multiturn(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
             messages=[
@@ -94,7 +94,7 @@ def test_system_tools_multiturn(tokenizer: SentencePieceInstructTokenizerV3) -> 
     assert tokenizer.tokenizer.decode(tokens[end_tool + 1 :]) == "SYSTEM\n\nc d"
 
 
-def test_tool_message(tokenizer: SentencePieceInstructTokenizerV3) -> None:
+def test_tool_message(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
             messages=[
@@ -112,7 +112,7 @@ def test_tool_message(tokenizer: SentencePieceInstructTokenizerV3) -> None:
     )
     _, text = tokenized.tokens, tokenized.text
     assert text == (
-        '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"123456789"}]</s>[TOOL_RESULTS]▁{"call_id":▁"123456789",▁"content":▁"d"}[/TOOL_RESULTS]'
+        '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"123456789"}]</s>[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"123456789"}[/TOOL_RESULTS]'
     )
 
     tokenized = tokenizer.encode_instruct(
@@ -132,11 +132,34 @@ def test_tool_message(tokenizer: SentencePieceInstructTokenizerV3) -> None:
     )
     _, text = tokenized.tokens, tokenized.text
     assert text == (
-        '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"123456789"}]</s>[TOOL_RESULTS]▁{"call_id":▁"123456789",▁"content":▁{"a":▁1}}[/TOOL_RESULTS]'
+        '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"123456789"}]</s>[TOOL_RESULTS]▁{"content":▁{"a":▁1},▁"call_id":▁"123456789"}[/TOOL_RESULTS]'
     )
 
 
-def test_tool_message_multiple_shots_with_history(tokenizer: SentencePieceInstructTokenizerV3) -> None:
+def test_tool_message_no_id_fine_tuning_OK(tokenizer: InstructTokenizer) -> None:
+    # In fine-tuning we allow passing a tool call as the last message.
+    # We need to make sure to not parse this empty id as "null"
+    function = FunctionCall(name="b", arguments="{}")
+
+    tool_calls = [ToolCall(id="null", function=function), ToolCall(function=function)]
+    for tool_call in tool_calls:
+        tokenized = tokenizer.encode_instruct(
+            InstructRequest(
+                messages=[
+                    UserMessage(content="a"),
+                    AssistantMessage(
+                        tool_calls=[tool_call]
+                    ),
+                ],
+            )
+        )
+        _, text = tokenized.tokens, tokenized.text
+        # make sure to "null" is in the output
+        assert text == (
+            '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>'
+        )
+
+def test_tool_message_multiple_shots_with_history(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
             messages=[
@@ -153,13 +176,13 @@ def test_tool_message_multiple_shots_with_history(tokenizer: SentencePieceInstru
     _, text = tokenized.tokens, tokenized.text
     assert text == (
         '<s>[INST]▁a[/INST]'
-        '[TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"0"}]</s>[TOOL_RESULTS]▁{"call_id":▁"0",▁"content":▁"d"}[/TOOL_RESULTS]'
+        '[TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"0"}]</s>[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"0"}[/TOOL_RESULTS]'
         '▁e</s>[INST]▁f[/INST]'
-        '[TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"1"}]</s>[TOOL_RESULTS]▁{"call_id":▁"1",▁"content":▁"d"}[/TOOL_RESULTS]'
+        '[TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"1"}]</s>[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"1"}[/TOOL_RESULTS]'
     )
 
 
-def test_tool_message_multiple_calls(tokenizer: SentencePieceInstructTokenizerV3) -> None:
+def test_tool_message_multiple_calls(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
             messages=[
@@ -189,10 +212,10 @@ def test_tool_message_multiple_calls(tokenizer: SentencePieceInstructTokenizerV3
     assert text == (
         '<s>[INST]▁a[/INST]'
         '[TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"0"},▁{"name":▁"q",▁"arguments":▁{},▁"id":▁"1"}]</s>'
-        '[TOOL_RESULTS]▁{"call_id":▁"0",▁"content":▁"d"}[/TOOL_RESULTS]'
-        '[TOOL_RESULTS]▁{"call_id":▁"1",▁"content":▁"d"}[/TOOL_RESULTS]'
+        '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"0"}[/TOOL_RESULTS]'
+        '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"1"}[/TOOL_RESULTS]'
         '▁e</s>[INST]▁f[/INST]'
         '[TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"2"},▁{"name":▁"q",▁"arguments":▁{},▁"id":▁"3"}]</s>'
-        '[TOOL_RESULTS]▁{"call_id":▁"2",▁"content":▁"d"}[/TOOL_RESULTS]'
-        '[TOOL_RESULTS]▁{"call_id":▁"3",▁"content":▁"d"}[/TOOL_RESULTS]'
+        '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"2"}[/TOOL_RESULTS]'
+        '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"3"}[/TOOL_RESULTS]'
     )

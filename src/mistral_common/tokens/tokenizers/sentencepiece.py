@@ -3,7 +3,7 @@ import logging
 import os
 from abc import abstractmethod
 from functools import cached_property
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from mistral_common.exceptions import TokenizerException
 from mistral_common.protocol.instruct.messages import (
@@ -33,6 +33,9 @@ class SentencePieceTokenizer(Tokenizer):
         self._vocab = [self._model.id_to_piece(i) for i in range(self.n_words)]
 
         super().__init__()
+
+    def get_control_token(self, s: str) -> int:
+        return self._model.piece_to_id(s)  # type: ignore
 
     @property
     def n_words(self) -> int:
@@ -91,12 +94,24 @@ class SentencePieceTokenizer(Tokenizer):
         return text
 
 
-class SentencePieceInstructTokenizer(InstructTokenizer):
-    def __init__(self, model_path: str):
-        self.tokenizer = SentencePieceTokenizer(model_path)
+class InstructTokenizerBase(InstructTokenizer):
+    def __init__(self, tokenizer: Tokenizer):
+        self.tokenizer = tokenizer
 
     def start(self) -> List[int]:
         return [self.tokenizer.bos_id]
+
+    @staticmethod
+    def find_first_last_user(request: InstructRequest) -> Tuple[int, int]:
+        # find last user message
+        last_user_idx = -1
+        first_user_idx = -1
+        for i, msg in list(enumerate(request.messages)):
+            if isinstance(msg, UserMessage):
+                if first_user_idx == -1:
+                    first_user_idx = i
+                last_user_idx = i
+        return first_user_idx, last_user_idx
 
     @abstractmethod
     def encode_user_message(
@@ -121,13 +136,7 @@ class SentencePieceInstructTokenizer(InstructTokenizer):
         # init at bos
         tokens = self.start()
         # find last user message
-        last_user_idx = -1
-        first_user_idx = -1
-        for i, msg in list(enumerate(request.messages)):
-            if isinstance(msg, UserMessage):
-                if first_user_idx == -1:
-                    first_user_idx = i
-                last_user_idx = i
+        first_user_idx, last_user_idx = self.find_first_last_user(request)
         for msg_idx, msg in enumerate(request.messages):
             if isinstance(msg, UserMessage):
                 new_tokens = self.encode_user_message(
@@ -146,8 +155,11 @@ class SentencePieceInstructTokenizer(InstructTokenizer):
 
         return Tokenized(tokens=tokens, text=self.tokenizer.to_string(tokens))
 
+    def decode(self, tokens: List[int]) -> str:
+        return self.tokenizer.decode(tokens)
 
-class SentencePieceInstructTokenizerV1(SentencePieceInstructTokenizer):
+
+class InstructTokenizerV1(InstructTokenizerBase):
     def encode_user_message(
         self,
         message: UserMessage,
@@ -157,7 +169,7 @@ class SentencePieceInstructTokenizerV1(SentencePieceInstructTokenizer):
         system_prompt: Optional[str] = None,
     ) -> List[int]:
         assert message.content is not None
-        assert isinstance(message.content, str), "Message content must be normalized"
+        assert isinstance(message.content, str), "Message content must be nornmalized"
         content = ""
         if is_first and system_prompt:
             content = system_prompt + "\n\n" + message.content
@@ -184,20 +196,17 @@ class SentencePieceInstructTokenizerV1(SentencePieceInstructTokenizer):
         return curr_tokens
 
 
-class SentencePieceInstructTokenizerV2(SentencePieceInstructTokenizer):
-    def __init__(self, model_path: str):
-        super().__init__(model_path)
+class InstructTokenizerV2(InstructTokenizerBase):
+    def __init__(self, tokenizer: Tokenizer):
+        super().__init__(tokenizer)
 
-        self.BEGIN_INST = self.get_control_token(SpecialTokens.begin_inst.value)
-        self.END_INST = self.get_control_token(SpecialTokens.end_inst.value)
-        self.BEGIN_AVAILABLE_TOOLS = self.get_control_token(SpecialTokens.begin_tools.value)
-        self.END_AVAILABLE_TOOLS = self.get_control_token(SpecialTokens.end_tools.value)
-        self.BEGIN_TOOL_RESULTS = self.get_control_token(SpecialTokens.begin_tool_results.value)
-        self.END_TOOL_RESULTS = self.get_control_token(SpecialTokens.end_tool_results.value)
-        self.TOOL_CALLS = self.get_control_token(SpecialTokens.tool_calls.value)
-
-    def get_control_token(self, s: str) -> int:
-        return self.tokenizer._model.piece_to_id(s)  # type: ignore
+        self.BEGIN_INST = self.tokenizer.get_control_token(SpecialTokens.begin_inst.value)
+        self.END_INST = self.tokenizer.get_control_token(SpecialTokens.end_inst.value)
+        self.BEGIN_AVAILABLE_TOOLS = self.tokenizer.get_control_token(SpecialTokens.begin_tools.value)
+        self.END_AVAILABLE_TOOLS = self.tokenizer.get_control_token(SpecialTokens.end_tools.value)
+        self.BEGIN_TOOL_RESULTS = self.tokenizer.get_control_token(SpecialTokens.begin_tool_results.value)
+        self.END_TOOL_RESULTS = self.tokenizer.get_control_token(SpecialTokens.end_tool_results.value)
+        self.TOOL_CALLS = self.tokenizer.get_control_token(SpecialTokens.tool_calls.value)
 
     def encode_user_message(
         self,
@@ -208,7 +217,7 @@ class SentencePieceInstructTokenizerV2(SentencePieceInstructTokenizer):
         system_prompt: Optional[str] = None,
     ) -> List[int]:
         assert message.content is not None
-        assert isinstance(message.content, str), "Message content must be normalized"
+        assert isinstance(message.content, str), "Message content must be nornmalized"
         content = ""
         tools_tokens: List[int] = []
         if is_last and available_tools:
@@ -296,30 +305,36 @@ class SentencePieceInstructTokenizerV2(SentencePieceInstructTokenizer):
         return curr_tokens
 
 
-class SentencePieceInstructTokenizerV3(SentencePieceInstructTokenizerV2):
+class InstructTokenizerV3(InstructTokenizerV2):
     """
     The only difference with V3 tokenizer is that it encodes the tool messages differently
     """
 
     def _prepare_function_call(self, tool_call: ToolCall) -> Dict[str, Any]:
-        return {
+        function_call = {
             "name": tool_call.function.name,
             "arguments": self._parse_json_content(tool_call.function.arguments),
-            "id": tool_call.id,
         }
+
+        if tool_call.id and tool_call.id != "null":
+            function_call["id"] = tool_call.id
+
+        return function_call
 
     def _prepare_tool_result(self, tool_message: ToolMessage) -> Dict[str, Any]:
         assert tool_message.content is not None, "Tool message content cannot be None"
+        assert tool_message.tool_call_id is not None, "Tool message has to have the tool call id defined in v3"
+
         return {
-            "call_id": tool_message.tool_call_id,
             "content": self._parse_json_content(tool_message.content),
+            "call_id": tool_message.tool_call_id,
         }
 
     def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
         """
         Same as V2 but tools not wrapped in a list and history is tokenized also
         """
-        tool_result_str = json.dumps(self._prepare_tool_result(message))
+        tool_result_str = json.dumps(self._prepare_tool_result(message), ensure_ascii=False)
         curr_tokens = [
             self.BEGIN_TOOL_RESULTS,
             *self.tokenizer.encode(tool_result_str, bos=False, eos=False),

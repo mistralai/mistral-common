@@ -98,13 +98,17 @@ class TestChatValidation:
                 ],
             )
 
-    def test_model_none_chat_mode(self) -> None:
-        validator = MistralRequestValidator(ValidationMode.serving)
+    def test_model_none_serving_mode(self) -> None:
+        validator = MistralRequestValidator[UserMessage, AssistantMessage, ToolMessage, SystemMessage](
+            ValidationMode.serving
+        )
         with pytest.raises(InvalidRequestException, match=r"Model name parameter is required for serving mode"):
             validator.validate_request(ChatCompletionRequest(messages=[UserMessage(content="foo")]))
 
-    def test_model_none_test_mode(self, validator: MistralRequestValidator) -> None:
-        validator = MistralRequestValidator(ValidationMode.test)
+    def test_model_none_test_mode(self) -> None:
+        validator = MistralRequestValidator[UserMessage, AssistantMessage, ToolMessage, SystemMessage](
+            ValidationMode.test
+        )
         validator.validate_request(ChatCompletionRequest(messages=[UserMessage(content="foo")]))
 
     def test_tool_calls_OK(self, validator: MistralRequestValidator) -> None:
