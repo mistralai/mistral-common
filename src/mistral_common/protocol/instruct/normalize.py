@@ -111,6 +111,7 @@ class InstructRequestNormalizer(
     def _aggregate_assistant_messages(self, messages: List[UATS]) -> AssistantMessageType:
         aggregated_content: List[str] = []
         tool_calls: List[ToolCall] = []
+        prefix: bool = False
         for message in messages:
             assert isinstance(message, self._assistant_message_class), "Expected assistant message"
             if message.tool_calls is not None:
@@ -119,10 +120,12 @@ class InstructRequestNormalizer(
                     tool_calls.append(normalized_tool_call)
             elif message.content:
                 aggregated_content.append(self._aggregate_content_chunks(message.content))
+            prefix |= message.prefix
 
         return self._assistant_message_class(
             content="\n\n".join(aggregated_content) if len(aggregated_content) else None,
             tool_calls=tool_calls or None,
+            prefix=prefix
         )
 
     def _aggregate_user_messages(self, messages: List[UATS]) -> UserMessageType:

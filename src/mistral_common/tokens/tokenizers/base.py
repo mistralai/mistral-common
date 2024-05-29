@@ -3,7 +3,8 @@ from enum import Enum
 from typing import Generic, List, Optional, TypeVar
 
 from mistral_common.base import MistralBase
-from mistral_common.tokens.instruct.request import InstructRequest
+from mistral_common.protocol.instruct.messages import AssistantMessageType
+from mistral_common.tokens.instruct.request import FIMRequest, InstructRequest
 
 
 class SpecialTokens(str, Enum):
@@ -16,6 +17,9 @@ class SpecialTokens(str, Enum):
     begin_tool_results = "[TOOL_RESULTS]"
     end_tool_results = "[/TOOL_RESULTS]"
     tool_calls = "[TOOL_CALLS]"
+    prefix = "[PREFIX]"
+    middle = "[MIDDLE]"
+    suffix = "[SUFFIX]"
 
 
 class Tokenized(MistralBase):
@@ -25,6 +29,7 @@ class Tokenized(MistralBase):
 
     tokens: List[int]
     text: Optional[str] = None
+    prefix_ids: Optional[List[int]] = None
 
 
 class Tokenizer(ABC):
@@ -65,14 +70,15 @@ class Tokenizer(ABC):
 
 
 InstructRequestType = TypeVar("InstructRequestType", bound=InstructRequest)
+FIMRequestType = TypeVar("FIMRequestType", bound=FIMRequest)
 TokenizedType = TypeVar("TokenizedType", bound=Tokenized)
 
 
-class InstructTokenizer(Generic[InstructRequestType, TokenizedType], ABC):
+class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]):
     tokenizer: Tokenizer
 
-    def __init__(self, model_path: str):
-        """Init from model file"""
+    def __init__(self, tokenizer: Tokenizer) -> None:
+        """Init from tokenizer"""
 
     @abstractmethod
     def encode_instruct(self, request: InstructRequestType) -> TokenizedType:
@@ -81,3 +87,7 @@ class InstructTokenizer(Generic[InstructRequestType, TokenizedType], ABC):
     @abstractmethod
     def decode(self, tokens: List[int]) -> str:
         """Convert token ids to string"""
+
+    @abstractmethod
+    def encode_fim(self, request: FIMRequestType) -> TokenizedType:
+        """FIM request to Tokenized object"""

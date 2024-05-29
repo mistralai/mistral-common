@@ -1,5 +1,6 @@
 import pytest
 from mistral_common.exceptions import (
+    InvalidAssistantMessageException,
     InvalidMessageStructureException,
     InvalidRequestException,
 )
@@ -79,12 +80,31 @@ class TestChatValidation:
     def test_ends_with_assistant(self, validator: MistralRequestValidator) -> None:
         with pytest.raises(
             InvalidMessageStructureException,
-            match=r"Expected last role to be one of: \[(tool|user), (tool|user)\] but got assistant",
+            match=r"Expected last role User or Tool \(or Assistant with prefix True\) for serving but got assistant",
         ):
             validator.validate_messages(
                 messages=[
                     UserMessage(content="foo"),
                     AssistantMessage(content="foo"),
+                ],
+            )
+
+    def test_assistant_prefix(self, validator: MistralRequestValidator) -> None:
+        validator.validate_messages(
+            messages=[
+                UserMessage(content="foo"),
+                AssistantMessage(content="foo", prefix=True),
+            ],
+        )
+        with pytest.raises(
+            InvalidAssistantMessageException,
+            match=r"Assistant message with prefix True must be last message",
+        ):
+            validator.validate_messages(
+                messages=[
+                    UserMessage(content="foo"),
+                    AssistantMessage(content="foo", prefix=True),
+                    UserMessage(content="foo"),
                 ],
             )
 
