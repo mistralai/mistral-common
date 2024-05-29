@@ -47,4 +47,5 @@ class ToolCall(MistralBase):
     type: ToolTypes = ToolTypes.function
     function: FunctionCall
 
+
 ToolType = TypeVar("ToolType", bound=Tool)

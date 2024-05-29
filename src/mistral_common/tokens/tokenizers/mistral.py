@@ -20,6 +20,7 @@ from mistral_common.protocol.instruct.validator import (
     MistralRequestValidatorV3,
     ValidationMode,
 )
+from mistral_common.tokens.instruct.request import FIMRequest
 from mistral_common.tokens.tokenizers.base import (
     InstructRequest,
     InstructRequestType,
@@ -36,13 +37,11 @@ from mistral_common.tokens.tokenizers.sentencepiece import (
 
 
 class MistralTokenizer(
-    Generic[
-        UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType, TokenizedType
-    ]
+    Generic[UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType, TokenizedType]
 ):
     def __init__(
         self,
-        instruct_tokenizer: InstructTokenizer[InstructRequest, TokenizedType],
+        instruct_tokenizer: InstructTokenizer[InstructRequest, FIMRequest, TokenizedType, AssistantMessageType],
         validator: MistralRequestValidator[UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType],
         request_normalizer: InstructRequestNormalizer[
             UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType, InstructRequestType
@@ -84,6 +83,7 @@ class MistralTokenizer(
             "mistral-small": MistralTokenizer.v2,
             "mistral-large": MistralTokenizer.v2,
             "open-mixtral-8x22b": MistralTokenizer.v3,
+            "codestral-22b": MistralTokenizer.v3,
         }
 
         # Prefix search the model name mapping
@@ -98,8 +98,7 @@ class MistralTokenizer(
         """
         Depending on which model we are loading, tokenization and validation might be different. 💩
         """
-
-        if tokenizer_filename.endswith(".model.v1"):
+        if tokenizer_filename.endswith(".model.v1") or tokenizer_filename.endswith(".model"):
             return MistralTokenizer(
                 InstructTokenizerV1(SentencePieceTokenizer(tokenizer_filename)),
                 validator=MistralRequestValidator(mode=mode),
@@ -117,12 +116,6 @@ class MistralTokenizer(
                 validator=MistralRequestValidatorV3(mode=mode),
                 request_normalizer=InstructRequestNormalizer.normalizer(),
             )
-        elif tokenizer_filename.endswith(".model"):
-            return MistralTokenizer(
-                InstructTokenizerV1(SentencePieceTokenizer(tokenizer_filename)),
-                validator=MistralRequestValidator(mode=mode),
-                request_normalizer=InstructRequestNormalizer.normalizer(),
-            )
         else:
             raise TokenizerException(f"Unrecognized tokenizer filename: {tokenizer_filename}")
 
@@ -130,6 +123,9 @@ class MistralTokenizer(
         validated_request = self._chat_completion_request_validator.validate_request(request)
         instruct_request = self._instruct_request_normalizer.from_chat_completion_request(validated_request)
         return self.instruct_tokenizer.encode_instruct(instruct_request)
+
+    def encode_fim(self, request: FIMRequest) -> Tokenized:
+        return self.instruct_tokenizer.encode_fim(request)
 
     def decode(self, tokens: List[int]) -> str:
         return self.instruct_tokenizer.decode(tokens)

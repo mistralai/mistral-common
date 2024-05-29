@@ -16,6 +16,7 @@ from mistral_common.exceptions import (
 )
 from mistral_common.protocol.instruct.messages import (
     UATS,
+    AssistantMessage,
     AssistantMessageType,
     FinetuningAssistantMessage,
     Roles,
@@ -157,6 +158,11 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
             if message.weight is not None and message.weight not in [0, 1]:
                 raise InvalidAssistantMessageException("Assistant message weight must be either 0 or 1")
 
+        if message.prefix:
+            if not is_last_message:
+                raise InvalidAssistantMessageException("Assistant message with prefix True must be last message")
+            # note : we already validate that assistant messsage has content 3 lines up.
+
     def _validate_tool_calls_followed_by_tool_messages(self, messages: List[UATS]) -> None:
         """
         Checks:
@@ -219,17 +225,19 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
     def _validate_last_message(self, message: UATS) -> None:
         # The last message must be a user or tool message in serving mode or an assistant message in finetuning mode
         last_message_role = message.role
-        expected_roles = (
-            {Roles.user, Roles.tool}
-            if self._mode != ValidationMode.finetuning
-            else {Roles.assistant}
-        )
-
-        if last_message_role not in expected_roles:
-            expected_roles_str = ", ".join(role.value for role in expected_roles)
-            raise InvalidMessageStructureException(
-                f"Expected last role to be one of: [{expected_roles_str}] but got {last_message_role.value}"
-            )
+        if self._mode == ValidationMode.finetuning:
+            if last_message_role  != Roles.assistant:
+                raise InvalidMessageStructureException(
+                    f"Expected last role Assistant for finetuning but got {last_message_role.value}"
+                )
+        else:
+            bad_assistant = isinstance(message, AssistantMessage) and not message.prefix
+            bad_role = message.role not in {Roles.user, Roles.tool}
+            if bad_assistant and bad_role:
+                raise InvalidMessageStructureException(
+                    f"Expected last role User or Tool (or Assistant with prefix True) for serving"
+                    f" but got {last_message_role.value}"
+                )
 
     def _validate_message_list_structure(self, messages: List[UATS]) -> None:
         """
@@ -290,7 +298,6 @@ class MistralRequestValidatorV3(MistralRequestValidator):
             raise InvalidToolMessageException(
                 f"Tool call id was {message.tool_call_id} but must be a-z, A-Z, 0-9, with a length of 9."
             )
-
 
     def _validate_tool_call(self, tool_call: ToolCall, is_last_message: bool) -> None:
         """

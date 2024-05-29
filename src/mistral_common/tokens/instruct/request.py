@@ -5,6 +5,15 @@ from mistral_common.protocol.instruct.messages import ChatMessageType
 from mistral_common.protocol.instruct.tool_calls import ToolType
 
 
+class FIMRequest(MistralBase):
+    """
+    A valid Fill in the Middle completion request to be tokenized
+    """
+
+    prompt: str
+    suffix: Optional[str] = None
+
+
 class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
     """
     A valid request to be tokenized

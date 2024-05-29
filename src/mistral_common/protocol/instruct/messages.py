@@ -45,6 +45,7 @@ class AssistantMessage(BaseMessage):
     role: Literal[Roles.assistant] = Roles.assistant
     content: Optional[str] = None
     tool_calls: Optional[List[ToolCall]] = None
+    prefix: bool = False
 
 
 class FinetuningAssistantMessage(AssistantMessage):
