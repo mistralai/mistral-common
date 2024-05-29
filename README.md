@@ -9,7 +9,7 @@ We are releasing three versions of our tokenizer powering different sets of mode
 
 - v1: open-mistral-7b, open-mixtral-8x7b, mistral-embed
 - v2: mistral-small-latest, mistral-large-latest
-- v3: open-mixtral-8x22b
+- v3: open-mixtral-8x22b, codestral-22b
 
 ## Installation 
 
