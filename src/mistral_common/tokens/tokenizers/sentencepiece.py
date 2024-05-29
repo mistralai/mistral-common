@@ -327,6 +327,7 @@ class InstructTokenizerV2(
     def _encode_infilling(self, text: str) -> List[int]:
         """
         Remove prefix space in the case of SentencePieceTokenizers
+        Thanks Fabian !
         """
 
         return self.tokenizer.encode("☺" + text, bos=False, eos=False)[2:]
