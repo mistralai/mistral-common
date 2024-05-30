@@ -1,6 +1,6 @@
 import pytest
 from mistral_common.tokens.tokenizers.base import FIMRequest
-from mistral_common_private.tokens.tokenizers.mistral import MistralTokenizer
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 
 @pytest.fixture()

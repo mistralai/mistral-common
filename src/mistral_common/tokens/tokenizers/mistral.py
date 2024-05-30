@@ -69,9 +69,9 @@ class MistralTokenizer(
 
     @classmethod
     def v3(cls) -> MistralTokenizer:
-        """open-mixtral-8x22b"""
+        """open-mixtral-8x22b // codestral-22b"""
         return cls.from_file(
-            str(cls._data_path() / "mistral_instruct_tokenizer_240216.model.v3"), mode=ValidationMode.test
+            str(cls._data_path() / "mistral_instruct_tokenizer_240323.model.v3"), mode=ValidationMode.test
         )
 
     @classmethod
