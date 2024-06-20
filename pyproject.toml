@@ -30,7 +30,7 @@ ignore_missing_imports = true
 python = "^3.8.10"
 pydantic = "2.6.1"
 jsonschema = "4.21.1"
-sentencepiece = "0.1.99"
+sentencepiece = "0.2.0"
 typing-extensions = "^4.11.0"
 
 [tool.poetry.group.dev.dependencies]
