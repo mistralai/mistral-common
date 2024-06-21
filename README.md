@@ -7,9 +7,37 @@ Our first release contains tokenization. Our tokenizers go beyond  the usual tex
 
 We are releasing three versions of our tokenizer powering different sets of models. 
 
-- v1: open-mistral-7b, open-mixtral-8x7b, mistral-embed
-- v2: mistral-small-latest, mistral-large-latest
-- v3: open-mixtral-8x22b, codestral-22b
+<table>
+  <tr>
+    <td>
+
+| Open Model | Tokenizer |
+|------------|-----------|
+| Mistral 7B Instruct v0.1 | v1 |
+| Mistral 7B Instruct v0.2 | v1 |
+| Mistral 7B Instruct v0.3 | v3 |
+| Mixtral 8x7B Instruct v0.1 | v1 |
+| Mixtral 8x22B Instruct v0.1 | v3 |
+| Mixtral 8x22B Instruct v0.3 | v3 |
+| Codestral 22B v0.1 | v3 |
+
+</td>
+<td>
+
+| Endpoint Model | Tokenizer |
+|---------------|-----------|
+| mistral-embed | v1 |
+| open-mistral-7b | v3 |
+| open-mixtral-8x7b | v1 |
+| open-mixtral-8x22b | v3 |
+| mistral-small-latest | v2 |
+| mistral-large-latest | v2 |
+| codestral-22b | v3 |
+
+</td>
+  </tr>
+</table>
+
 
 ## Installation 
 
