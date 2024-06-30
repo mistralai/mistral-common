@@ -236,7 +236,7 @@ class InstructTokenizerV2(
         system_prompt: Optional[str] = None,
     ) -> List[int]:
         assert message.content is not None
-        assert isinstance(message.content, str), "Message content must be nornmalized"
+        assert isinstance(message.content, str), "Message content must be normalized"
         content = ""
         tools_tokens: List[int] = []
         if is_last and available_tools:
