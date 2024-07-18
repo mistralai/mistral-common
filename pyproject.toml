@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mistral_common"
-version = "1.3.0"
+version = "1.3.1"
 description = ""
 authors = ["bam4d <bam4d@mistral.ai>"]
 readme = "README.md"
@@ -32,6 +32,7 @@ pydantic = "2.6.1"
 jsonschema = "4.21.1"
 sentencepiece = "0.2.0"
 typing-extensions = "^4.11.0"
+tiktoken = "^0.7.0"
 
 [tool.poetry.group.dev.dependencies]
 types-jsonschema = "4.21.0.20240118"
