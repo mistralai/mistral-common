@@ -125,7 +125,7 @@ class InstructRequestNormalizer(
         return self._assistant_message_class(
             content="\n\n".join(aggregated_content) if len(aggregated_content) else None,
             tool_calls=tool_calls or None,
-            prefix=prefix
+            prefix=prefix,
         )
 
     def _aggregate_user_messages(self, messages: List[UATS]) -> UserMessageType:

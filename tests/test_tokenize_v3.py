@@ -1,16 +1,50 @@
 import json
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 import pytest
 from mistral_common.protocol.instruct.messages import AssistantMessage, ToolMessage, UserMessage
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.tokens.instruct.request import InstructRequest
-from mistral_common.tokens.tokenizers.base import InstructTokenizer
+from mistral_common.tokens.tokenizers.base import InstructTokenizer, TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from mistral_common.tokens.tokenizers.sentencepiece import (
+    SentencePieceTokenizer,
+    is_sentencepiece,
+)
 
 
 @pytest.fixture()
 def tokenizer() -> InstructTokenizer:
     return MistralTokenizer.v3().instruct_tokenizer
+
+
+def test_is_spm() -> None:
+    # this is valid
+    for suffix in list(TokenizerVersion.__members__):
+        with NamedTemporaryFile(suffix=".model." + suffix) as f:
+            assert is_sentencepiece(f.name)
+
+    with NamedTemporaryFile(suffix=".model") as f:
+        assert is_sentencepiece(f.name)
+
+    # this is not valid
+    with NamedTemporaryFile(suffix=".model.vx") as f:
+        assert not is_sentencepiece(f.name)
+
+
+def test_spm_version() -> None:
+    directory = Path(__file__).parent / "data"
+
+    for file in directory.iterdir():
+        if not file.is_file() or str(file).endswith(".json"):
+            continue
+        suffix = file.suffix[1:]
+        print(suffix)
+        if suffix == "model":
+            assert SentencePieceTokenizer(str(file)).version == TokenizerVersion.v1
+        else:
+            assert SentencePieceTokenizer(str(file)).version == TokenizerVersion(suffix)
 
 
 def test_tools_singleturn(tokenizer: InstructTokenizer) -> None:
@@ -147,17 +181,14 @@ def test_tool_message_no_id_fine_tuning_OK(tokenizer: InstructTokenizer) -> None
             InstructRequest(
                 messages=[
                     UserMessage(content="a"),
-                    AssistantMessage(
-                        tool_calls=[tool_call]
-                    ),
+                    AssistantMessage(tool_calls=[tool_call]),
                 ],
             )
         )
         _, text = tokenized.tokens, tokenized.text
         # make sure to "null" is in the output
-        assert text == (
-            '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>'
-        )
+        assert text == ('<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>')
+
 
 def test_tool_message_multiple_shots_with_history(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(
@@ -175,9 +206,9 @@ def test_tool_message_multiple_shots_with_history(tokenizer: InstructTokenizer) 
     )
     _, text = tokenized.tokens, tokenized.text
     assert text == (
-        '<s>[INST]▁a[/INST]'
+        "<s>[INST]▁a[/INST]"
         '[TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"0"}]</s>[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"0"}[/TOOL_RESULTS]'
-        '▁e</s>[INST]▁f[/INST]'
+        "▁e</s>[INST]▁f[/INST]"
         '[TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"1"}]</s>[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"1"}[/TOOL_RESULTS]'
     )
 
@@ -210,11 +241,11 @@ def test_tool_message_multiple_calls(tokenizer: InstructTokenizer) -> None:
     )
     _, text = tokenized.tokens, tokenized.text
     assert text == (
-        '<s>[INST]▁a[/INST]'
+        "<s>[INST]▁a[/INST]"
         '[TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"0"},▁{"name":▁"q",▁"arguments":▁{},▁"id":▁"1"}]</s>'
         '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"0"}[/TOOL_RESULTS]'
         '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"1"}[/TOOL_RESULTS]'
-        '▁e</s>[INST]▁f[/INST]'
+        "▁e</s>[INST]▁f[/INST]"
         '[TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"2"},▁{"name":▁"q",▁"arguments":▁{},▁"id":▁"3"}]</s>'
         '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"2"}[/TOOL_RESULTS]'
         '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"3"}[/TOOL_RESULTS]'
