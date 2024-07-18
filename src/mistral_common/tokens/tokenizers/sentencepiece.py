@@ -3,7 +3,8 @@ import logging
 import os
 from abc import abstractmethod
 from functools import cached_property
-from typing import Any, Dict, Generic, List, Optional, Set, Tuple
+from pathlib import Path
+from typing import Any, Dict, Generic, List, Optional, Set, Tuple, Union
 
 from mistral_common.exceptions import TokenizerException
 from mistral_common.protocol.instruct.messages import (
@@ -22,8 +23,32 @@ from mistral_common.tokens.tokenizers.base import (
     Tokenized,
     TokenizedType,
     Tokenizer,
+    TokenizerVersion,
 )
 from sentencepiece import SentencePieceProcessor
+
+
+def is_sentencepiece(path: Union[str, Path]) -> bool:
+    if isinstance(path, str):
+        path = Path(path)
+
+    suffixes = [f".model.{v}" for v in list(TokenizerVersion.__members__)] + [".model"]
+    return path.is_file() and any(path.name.endswith(suffix) for suffix in suffixes)
+
+
+def get_spm_version(tokenizer_filename: str, raise_deprecated: bool = False) -> TokenizerVersion:
+    _version_str = tokenizer_filename.split(".")[-1]
+    if _version_str == "model":
+        if raise_deprecated:
+            raise TokenizerException(f"Make sure to rename your tokenizer file to end with {tokenizer_filename}.v1.")
+
+        # tokenizer.model => tokenizer.model.v1
+        return TokenizerVersion("v1")
+
+    if _version_str not in TokenizerVersion.__members__:
+        raise TokenizerException(f"Unrecognized tokenizer filename: {tokenizer_filename}")
+
+    return TokenizerVersion(_version_str)
 
 
 class SentencePieceTokenizer(Tokenizer):
@@ -36,7 +61,13 @@ class SentencePieceTokenizer(Tokenizer):
         assert self._model.vocab_size() == self._model.get_piece_size()
         self._vocab = [self._model.id_to_piece(i) for i in range(self.n_words)]
 
+        self._version: TokenizerVersion = get_spm_version(model_path, raise_deprecated=False)
+
         super().__init__()
+
+    @property
+    def version(self) -> TokenizerVersion:
+        return self._version
 
     def get_control_token(self, s: str) -> int:
         return self._model.piece_to_id(s)  # type: ignore

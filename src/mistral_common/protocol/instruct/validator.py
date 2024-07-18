@@ -226,7 +226,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
         # The last message must be a user or tool message in serving mode or an assistant message in finetuning mode
         last_message_role = message.role
         if self._mode == ValidationMode.finetuning:
-            if last_message_role  != Roles.assistant:
+            if last_message_role != Roles.assistant:
                 raise InvalidMessageStructureException(
                     f"Expected last role Assistant for finetuning but got {last_message_role.value}"
                 )

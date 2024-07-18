@@ -19,6 +19,7 @@ from mistral_common.protocol.instruct.validator import (
 def validator(request: pytest.FixtureRequest) -> MistralRequestValidator:
     return request.param  # type: ignore
 
+
 class TestFineTuningValidation:
     # This fails in chat validation
     def test_ends_with_assistant(self, validator: MistralRequestValidator) -> None:
@@ -71,7 +72,7 @@ class TestFineTuningValidation:
                 UserMessage(content="foo"),
                 FinetuningAssistantMessage(tool_calls=[ToolCall(id="123456789", function=function)]),
                 ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
-                FinetuningAssistantMessage(content="foo")
+                FinetuningAssistantMessage(content="foo"),
             ],
         )
 
@@ -91,4 +92,3 @@ class TestFineTuningValidation:
                     FinetuningAssistantMessage(tool_calls=[ToolCall(function=function)]),
                 ],
             )
-

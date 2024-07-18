@@ -8,7 +8,6 @@ from mistral_common.protocol.instruct.validator import MistralRequestValidator
 
 
 class TestValidateTools:
-
     @pytest.fixture
     def validator(self) -> MistralRequestValidator:
         return MistralRequestValidator()
@@ -25,10 +24,10 @@ class TestValidateTools:
                                 "properties": {
                                     "location": {
                                         "type": "string",
-                                        "description": "The city and state, e.g. San Francisco, CA"
+                                        "description": "The city and state, e.g. San Francisco, CA",
                                     },
-                                }
-                            }
+                                },
+                            },
                         )
                     )
                 ]
@@ -36,8 +35,4 @@ class TestValidateTools:
 
     def test_tool_function_invalid_schema(self, validator: MistralRequestValidator) -> None:
         with pytest.raises(InvalidToolSchemaException, match=r"32 is not valid under any of the given schemas"):
-            validator._validate_tools(
-                tools=[
-                    Tool(function=Function(name="function_name", parameters={"type": 32}))
-                ]
-            )
+            validator._validate_tools(tools=[Tool(function=Function(name="function_name", parameters={"type": 32}))])
