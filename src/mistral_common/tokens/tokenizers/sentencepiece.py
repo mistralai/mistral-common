@@ -159,8 +159,7 @@ class InstructTokenizerBase(
         is_last: bool,
         is_first: bool,
         system_prompt: Optional[str] = None,
-    ) -> List[int]:
-        ...
+    ) -> List[int]: ...
 
     @abstractmethod
     def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
