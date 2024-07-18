@@ -54,21 +54,34 @@ def test_spm_version() -> None:
 
 
 @pytest.mark.parametrize(
-    "tokenizer, expected_text, begin_tool_index, end_tool_index, expected_tokens_before_tool, expected_tokens_after_tool",
+    "tokenizer, expected_text, begin_tool_index, end_tool_index, expected_tokens_before_tool, expected_tokens_after_tool",  # noqa: E501
     [
-        (tokenizer(),
-         '<s>[AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"tool1",▁"description":▁"1",▁"parameters":▁{}}}][/AVAILABLE_TOOLS][INST]▁a[/INST]',
-         6, 7,
-         [1, 3, 1032, 4],
-         []),
-        (tekken_tokenizer(),
-         '<s>[AVAILABLE_TOOLS][{"type": "function", "function": {"name": "tool1", "description": "1", "parameters": {}}}][/AVAILABLE_TOOLS][INST]a[/INST]',
-         5, 6,
-         [1, 3, 1097, 4],
-         [])
-    ])
-def test_tools_singleturn(tokenizer: InstructTokenizer, expected_text: str, begin_tool_index: int, end_tool_index: int,
-                          expected_tokens_before_tool: list, expected_tokens_after_tool: list) -> None:
+        (
+            tokenizer(),
+            '<s>[AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"tool1",▁"description":▁"1",▁"parameters":▁{}}}][/AVAILABLE_TOOLS][INST]▁a[/INST]',  # noqa: E501
+            6,
+            7,
+            [1, 3, 1032, 4],
+            [],
+        ),
+        (
+            tekken_tokenizer(),
+            '<s>[AVAILABLE_TOOLS][{"type": "function", "function": {"name": "tool1", "description": "1", "parameters": {}}}][/AVAILABLE_TOOLS][INST]a[/INST]',  # noqa: E501
+            5,
+            6,
+            [1, 3, 1097, 4],
+            [],
+        ),
+    ],
+)
+def test_tools_singleturn(
+    tokenizer: InstructTokenizer,
+    expected_text: str,
+    begin_tool_index: int,
+    end_tool_index: int,
+    expected_tokens_before_tool: list,
+    expected_tokens_after_tool: list,
+) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
             messages=[UserMessage(content="a")],
@@ -79,32 +92,45 @@ def test_tools_singleturn(tokenizer: InstructTokenizer, expected_text: str, begi
     assert text == expected_text
 
     begin_tool, end_tool = tokens.index(begin_tool_index), tokens.index(end_tool_index)
-    assert tokens[:begin_tool] + tokens[end_tool + 1:] == expected_tokens_before_tool + expected_tokens_after_tool
-    json.loads(tokenizer.tokenizer.decode(tokens[begin_tool: end_tool + 1]))
+    assert tokens[:begin_tool] + tokens[end_tool + 1 :] == expected_tokens_before_tool + expected_tokens_after_tool
+    json.loads(tokenizer.tokenizer.decode(tokens[begin_tool : end_tool + 1]))
 
 
 @pytest.mark.parametrize(
-    "tokenizer, expected_text, begin_tool_index, end_tool_index, expected_tokens_before_tool, expected_tokens_after_tool",
+    "tokenizer, expected_text, begin_tool_index, end_tool_index, expected_tokens_before_tool, expected_tokens_after_tool",  # noqa: E501
     [
-        (tokenizer(),
-         "<s>[INST]▁a[/INST]▁b</s>[AVAILABLE_TOOLS]▁["
-         '{"type":▁"function",▁"function":▁{"name":▁"tool1",▁"description":▁"1",▁"parameters":▁{}}},'
-         '▁{"type":▁"function",▁"function":▁{"name":▁"tool2",▁"description":▁"2",▁"parameters":▁{}}}]'
-         "[/AVAILABLE_TOOLS][INST]▁c[/INST]▁d</s>",
-         6, 7,
-         [1, 3, 1032, 4, 1055],
-         [2, 3, 1045, 4, 1049, 2]),
-        (tekken_tokenizer(),
-         "<s>[INST]a[/INST]b</s>[AVAILABLE_TOOLS]["
-         '{"type": "function", "function": {"name": "tool1", "description": "1", "parameters": {}}},'
-         ' {"type": "function", "function": {"name": "tool2", "description": "2", "parameters": {}}}]'
-         "[/AVAILABLE_TOOLS][INST]c[/INST]d</s>",
-         5, 6,
-         [1, 3, 1097, 4, 1098],
-         [2, 3, 1099, 4, 1100, 2])
-    ])
-def test_tools_multiturn(tokenizer: InstructTokenizer, expected_text: str, begin_tool_index: int, end_tool_index: int,
-                         expected_tokens_before_tool: list, expected_tokens_after_tool: list) -> None:
+        (
+            tokenizer(),
+            "<s>[INST]▁a[/INST]▁b</s>[AVAILABLE_TOOLS]▁["
+            '{"type":▁"function",▁"function":▁{"name":▁"tool1",▁"description":▁"1",▁"parameters":▁{}}},'
+            '▁{"type":▁"function",▁"function":▁{"name":▁"tool2",▁"description":▁"2",▁"parameters":▁{}}}]'
+            "[/AVAILABLE_TOOLS][INST]▁c[/INST]▁d</s>",
+            6,
+            7,
+            [1, 3, 1032, 4, 1055],
+            [2, 3, 1045, 4, 1049, 2],
+        ),
+        (
+            tekken_tokenizer(),
+            "<s>[INST]a[/INST]b</s>[AVAILABLE_TOOLS]["
+            '{"type": "function", "function": {"name": "tool1", "description": "1", "parameters": {}}},'
+            ' {"type": "function", "function": {"name": "tool2", "description": "2", "parameters": {}}}]'
+            "[/AVAILABLE_TOOLS][INST]c[/INST]d</s>",
+            5,
+            6,
+            [1, 3, 1097, 4, 1098],
+            [2, 3, 1099, 4, 1100, 2],
+        ),
+    ],
+)
+def test_tools_multiturn(
+    tokenizer: InstructTokenizer,
+    expected_text: str,
+    begin_tool_index: int,
+    end_tool_index: int,
+    expected_tokens_before_tool: list,
+    expected_tokens_after_tool: list,
+) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
             messages=[
@@ -123,27 +149,45 @@ def test_tools_multiturn(tokenizer: InstructTokenizer, expected_text: str, begin
     assert text == expected_text
 
     begin_tool, end_tool = tokens.index(begin_tool_index), tokens.index(end_tool_index)
-    assert tokens[:begin_tool] + tokens[end_tool + 1:] == expected_tokens_before_tool + expected_tokens_after_tool
-    json.loads(tokenizer.tokenizer.decode(tokens[begin_tool: end_tool + 1]))
+    assert tokens[:begin_tool] + tokens[end_tool + 1 :] == expected_tokens_before_tool + expected_tokens_after_tool
+    json.loads(tokenizer.tokenizer.decode(tokens[begin_tool : end_tool + 1]))
 
 
 @pytest.mark.parametrize(
-    "tokenizer, expected_text, begin_tool_index, end_tool_index, decoded_before_tool, decoded_after_tool", [
-        (tokenizer(),
-         "<s>[INST]▁a[/INST]▁b</s>[AVAILABLE_TOOLS]▁["
-         '{"type":▁"function",▁"function":▁{"name":▁"tool1",▁"description":▁"1",▁"parameters":▁{}}}]'
-         "[/AVAILABLE_TOOLS][INST]▁SYSTEM<0x0A><0x0A>c[/INST]▁d</s>",
-         6, 7, "a b", "SYSTEM\n\nc d"),
-        (tekken_tokenizer(),
-         '<s>[INST]a[/INST]b</s>[AVAILABLE_TOOLS][{"type": "function", "function": '
-         '{"name": "tool1", "description": "1", "parameters": '
-         '{}}}][/AVAILABLE_TOOLS][INST]SYSTEM\n'
-         '\n'
-         'c[/INST]d</s>',
-         5, 6, "ab", "SYSTEM\n\ncd")
-    ])
-def test_system_tools_multiturn(tokenizer: InstructTokenizer, expected_text: str, begin_tool_index: int,
-                                end_tool_index: int, decoded_before_tool: str, decoded_after_tool: str) -> None:
+    "tokenizer, expected_text, begin_tool_index, end_tool_index, decoded_before_tool, decoded_after_tool",
+    [
+        (
+            tokenizer(),
+            "<s>[INST]▁a[/INST]▁b</s>[AVAILABLE_TOOLS]▁["
+            '{"type":▁"function",▁"function":▁{"name":▁"tool1",▁"description":▁"1",▁"parameters":▁{}}}]'
+            "[/AVAILABLE_TOOLS][INST]▁SYSTEM<0x0A><0x0A>c[/INST]▁d</s>",
+            6,
+            7,
+            "a b",
+            "SYSTEM\n\nc d",
+        ),
+        (
+            tekken_tokenizer(),
+            '<s>[INST]a[/INST]b</s>[AVAILABLE_TOOLS][{"type": "function", "function": '
+            '{"name": "tool1", "description": "1", "parameters": '
+            "{}}}][/AVAILABLE_TOOLS][INST]SYSTEM\n"
+            "\n"
+            "c[/INST]d</s>",
+            5,
+            6,
+            "ab",
+            "SYSTEM\n\ncd",
+        ),
+    ],
+)
+def test_system_tools_multiturn(
+    tokenizer: InstructTokenizer,
+    expected_text: str,
+    begin_tool_index: int,
+    end_tool_index: int,
+    decoded_before_tool: str,
+    decoded_after_tool: str,
+) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
             messages=[
@@ -160,19 +204,26 @@ def test_system_tools_multiturn(tokenizer: InstructTokenizer, expected_text: str
     assert text == expected_text
 
     begin_tool, end_tool = tokens.index(begin_tool_index), tokens.index(end_tool_index)
-    assert tokens[end_tool + 1:].index(3) == 0  # begin_inst follows end_tool
+    assert tokens[end_tool + 1 :].index(3) == 0  # begin_inst follows end_tool
     assert tokenizer.tokenizer.decode(tokens[:begin_tool]) == decoded_before_tool
-    assert tokenizer.tokenizer.decode(tokens[end_tool + 1:]) == decoded_after_tool
+    assert tokenizer.tokenizer.decode(tokens[end_tool + 1 :]) == decoded_after_tool
 
 
-@pytest.mark.parametrize("tokenizer, expected_text_1, expected_text_2", [
-    (tokenizer(),
-     '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"123456789"}]</s>[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"123456789"}[/TOOL_RESULTS]',
-     '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"123456789"}]</s>[TOOL_RESULTS]▁{"content":▁{"a":▁1},▁"call_id":▁"123456789"}[/TOOL_RESULTS]'),
-    (tekken_tokenizer(),
-     '<s>[INST]a[/INST][TOOL_CALLS][{"name": "b", "arguments": {}, "id": "123456789"}]</s>[TOOL_RESULTS]{"content": "d", "call_id": "123456789"}[/TOOL_RESULTS]',
-     '<s>[INST]a[/INST][TOOL_CALLS][{"name": "b", "arguments": {}, "id": "123456789"}]</s>[TOOL_RESULTS]{"content": {"a": 1}, "call_id": "123456789"}[/TOOL_RESULTS]')
-])
+@pytest.mark.parametrize(
+    "tokenizer, expected_text_1, expected_text_2",
+    [
+        (
+            tokenizer(),
+            '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"123456789"}]</s>[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"123456789"}[/TOOL_RESULTS]',  # noqa: E501
+            '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"123456789"}]</s>[TOOL_RESULTS]▁{"content":▁{"a":▁1},▁"call_id":▁"123456789"}[/TOOL_RESULTS]',  # noqa: E501
+        ),
+        (
+            tekken_tokenizer(),
+            '<s>[INST]a[/INST][TOOL_CALLS][{"name": "b", "arguments": {}, "id": "123456789"}]</s>[TOOL_RESULTS]{"content": "d", "call_id": "123456789"}[/TOOL_RESULTS]',  # noqa: E501
+            '<s>[INST]a[/INST][TOOL_CALLS][{"name": "b", "arguments": {}, "id": "123456789"}]</s>[TOOL_RESULTS]{"content": {"a": 1}, "call_id": "123456789"}[/TOOL_RESULTS]',  # noqa: E501
+        ),
+    ],
+)
 def test_tool_message(tokenizer: InstructTokenizer, expected_text_1: str, expected_text_2: str) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
@@ -211,12 +262,13 @@ def test_tool_message(tokenizer: InstructTokenizer, expected_text_1: str, expect
     assert text == expected_text_2
 
 
-@pytest.mark.parametrize("tokenizer, expected_text", [
-    (tokenizer(),
-     '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>'),
-    (tekken_tokenizer(),
-     '<s>[INST]a[/INST][TOOL_CALLS][{"name": "b", "arguments": {}}]</s>')
-])
+@pytest.mark.parametrize(
+    "tokenizer, expected_text",
+    [
+        (tokenizer(), '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>'),
+        (tekken_tokenizer(), '<s>[INST]a[/INST][TOOL_CALLS][{"name": "b", "arguments": {}}]</s>'),
+    ],
+)
 def test_tool_message_no_id_fine_tuning_ok(tokenizer: InstructTokenizer, expected_text: str) -> None:
     # In fine-tuning we allow passing a tool call as the last message.
     # We need to make sure to not parse this empty id as "null"
@@ -237,18 +289,25 @@ def test_tool_message_no_id_fine_tuning_ok(tokenizer: InstructTokenizer, expecte
         assert text == expected_text
 
 
-@pytest.mark.parametrize("tokenizer, expected_text", [
-    (tokenizer(),
-     "<s>[INST]▁a[/INST]"
-     '[TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"0"}]</s>[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"0"}[/TOOL_RESULTS]'
-     "▁e</s>[INST]▁f[/INST]"
-     '[TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"1"}]</s>[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"1"}[/TOOL_RESULTS]'),
-    (tekken_tokenizer(),
-     "<s>[INST]a[/INST]"
-     '[TOOL_CALLS][{"name": "b", "arguments": {}, "id": "0"}]</s>[TOOL_RESULTS]{"content": "d", "call_id": "0"}[/TOOL_RESULTS]'
-     "e</s>[INST]f[/INST]"
-     '[TOOL_CALLS][{"name": "b", "arguments": {}, "id": "1"}]</s>[TOOL_RESULTS]{"content": "d", "call_id": "1"}[/TOOL_RESULTS]')
-])
+@pytest.mark.parametrize(
+    "tokenizer, expected_text",
+    [
+        (
+            tokenizer(),
+            "<s>[INST]▁a[/INST]"
+            '[TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"0"}]</s>[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"0"}[/TOOL_RESULTS]'  # noqa: E501
+            "▁e</s>[INST]▁f[/INST]"
+            '[TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"1"}]</s>[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"1"}[/TOOL_RESULTS]',  # noqa: E501
+        ),
+        (
+            tekken_tokenizer(),
+            "<s>[INST]a[/INST]"
+            '[TOOL_CALLS][{"name": "b", "arguments": {}, "id": "0"}]</s>[TOOL_RESULTS]{"content": "d", "call_id": "0"}[/TOOL_RESULTS]'  # noqa: E501
+            "e</s>[INST]f[/INST]"
+            '[TOOL_CALLS][{"name": "b", "arguments": {}, "id": "1"}]</s>[TOOL_RESULTS]{"content": "d", "call_id": "1"}[/TOOL_RESULTS]',  # noqa: E501
+        ),
+    ],
+)
 def test_tool_message_multiple_shots_with_history(tokenizer: InstructTokenizer, expected_text: str) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
@@ -267,26 +326,33 @@ def test_tool_message_multiple_shots_with_history(tokenizer: InstructTokenizer, 
     assert text == expected_text
 
 
-@pytest.mark.parametrize("tokenizer, expected_text", [
-    (tokenizer(),
-     "<s>[INST]▁a[/INST]"
-     '[TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"0"},▁{"name":▁"q",▁"arguments":▁{},▁"id":▁"1"}]</s>'
-     '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"0"}[/TOOL_RESULTS]'
-     '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"1"}[/TOOL_RESULTS]'
-     "▁e</s>[INST]▁f[/INST]"
-     '[TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"2"},▁{"name":▁"q",▁"arguments":▁{},▁"id":▁"3"}]</s>'
-     '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"2"}[/TOOL_RESULTS]'
-     '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"3"}[/TOOL_RESULTS]'),
-    (tekken_tokenizer(),
-     "<s>[INST]a[/INST]"
-     '[TOOL_CALLS][{"name": "b", "arguments": {}, "id": "0"}, {"name": "q", "arguments": {}, "id": "1"}]</s>'
-     '[TOOL_RESULTS]{"content": "d", "call_id": "0"}[/TOOL_RESULTS]'
-     '[TOOL_RESULTS]{"content": "d", "call_id": "1"}[/TOOL_RESULTS]'
-     "e</s>[INST]f[/INST]"
-     '[TOOL_CALLS][{"name": "b", "arguments": {}, "id": "2"}, {"name": "q", "arguments": {}, "id": "3"}]</s>'
-     '[TOOL_RESULTS]{"content": "d", "call_id": "2"}[/TOOL_RESULTS]'
-     '[TOOL_RESULTS]{"content": "d", "call_id": "3"}[/TOOL_RESULTS]')
-])
+@pytest.mark.parametrize(
+    "tokenizer, expected_text",
+    [
+        (
+            tokenizer(),
+            "<s>[INST]▁a[/INST]"
+            '[TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"0"},▁{"name":▁"q",▁"arguments":▁{},▁"id":▁"1"}]</s>'
+            '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"0"}[/TOOL_RESULTS]'
+            '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"1"}[/TOOL_RESULTS]'
+            "▁e</s>[INST]▁f[/INST]"
+            '[TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"2"},▁{"name":▁"q",▁"arguments":▁{},▁"id":▁"3"}]</s>'
+            '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"2"}[/TOOL_RESULTS]'
+            '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"3"}[/TOOL_RESULTS]',
+        ),
+        (
+            tekken_tokenizer(),
+            "<s>[INST]a[/INST]"
+            '[TOOL_CALLS][{"name": "b", "arguments": {}, "id": "0"}, {"name": "q", "arguments": {}, "id": "1"}]</s>'
+            '[TOOL_RESULTS]{"content": "d", "call_id": "0"}[/TOOL_RESULTS]'
+            '[TOOL_RESULTS]{"content": "d", "call_id": "1"}[/TOOL_RESULTS]'
+            "e</s>[INST]f[/INST]"
+            '[TOOL_CALLS][{"name": "b", "arguments": {}, "id": "2"}, {"name": "q", "arguments": {}, "id": "3"}]</s>'
+            '[TOOL_RESULTS]{"content": "d", "call_id": "2"}[/TOOL_RESULTS]'
+            '[TOOL_RESULTS]{"content": "d", "call_id": "3"}[/TOOL_RESULTS]',
+        ),
+    ],
+)
 def test_tool_message_multiple_calls(tokenizer: InstructTokenizer, expected_text: str) -> None:
     tokenized = tokenizer.encode_instruct(
         InstructRequest(
