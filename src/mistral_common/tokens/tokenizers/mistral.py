@@ -85,7 +85,7 @@ class MistralTokenizer(
             "mistral-large": MistralTokenizer.v2,
             "open-mixtral-8x22b": MistralTokenizer.v3,
             "codestral-22b": MistralTokenizer.v3,
-            "nemostral": lambda: MistralTokenizer.v3(is_tekken=True),
+            "mistral-nemo": lambda: MistralTokenizer.v3(is_tekken=True),
         }
 
         # Prefix search the model name mapping
