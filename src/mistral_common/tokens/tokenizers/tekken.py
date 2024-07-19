@@ -119,7 +119,7 @@ class Tekkenizer(Tokenizer):
         self._all_special_tokens = special_tokens
         self._vocab = [self.id_to_piece(i) for i in range(vocab_size)]
         self._version = version
-        self._special_token_policy = SpecialTokenPolicy.RAISE
+        self._special_token_policy = SpecialTokenPolicy.IGNORE
 
     @classmethod
     def from_file(cls, path: Union[str, Path]) -> "Tekkenizer":
