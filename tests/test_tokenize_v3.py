@@ -30,7 +30,7 @@ def tokenizer() -> InstructTokenizer:
 
 def tekken_tokenizer() -> InstructTokenizer:
     tekken = MistralTokenizer.v3(is_tekken=True).instruct_tokenizer
-    tekken.tokenizer.special_token_policy = SpecialTokenPolicy.IGNORE
+    tekken.tokenizer.special_token_policy = SpecialTokenPolicy.IGNORE   # type: ignore
     return tekken
 
 
