@@ -205,8 +205,10 @@ class Tekkenizer(Tokenizer):
                         "Either make sure `tokens` do not include any special tokens or, "
                         "if you want to decode `tokens` that includes special tokens, "
                         "change the tokenizer's special token policy to IGNORE or KEEP: \n"
-                        "```\nfrom mistral_common.tokens.tokenizers.tekken import SpecialTokenPolicy"
-                        "\n\ntokenizer.special_token_policy = SpecialTokenPolicy.IGNORE  # SpecialTokenPolicy.KEEP"
+                        "```\nfrom mistral_common.tokens.tokenizers.mistral import MistralTokenizer"
+                        "\nfrom mistral_common.tokens.tokenizers.tekken import SpecialTokenPolicy"
+                        "\n\ntokenizer = MistralTokenizer.v3(is_tekken=True)"
+                        "\ntokenizer.special_token_policy = SpecialTokenPolicy.IGNORE  # or SpecialTokenPolicy.KEEP"
                         "\n```"
                     )
                 elif special_token_policy == SpecialTokenPolicy.KEEP:
