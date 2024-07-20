@@ -119,7 +119,7 @@ class Tekkenizer(Tokenizer):
         self._all_special_tokens = special_tokens
         self._vocab = [self.id_to_piece(i) for i in range(vocab_size)]
         self._version = version
-        self._special_token_policy = SpecialTokenPolicy.IGNORE
+        self._special_token_policy = SpecialTokenPolicy.RAISE
 
     @classmethod
     def from_file(cls, path: Union[str, Path]) -> "Tekkenizer":
@@ -200,7 +200,15 @@ class Tekkenizer(Tokenizer):
         for is_special, group in groupby(tokens, lambda t: t < self.num_special_tokens):
             if is_special:
                 if special_token_policy == SpecialTokenPolicy.RAISE:
-                    raise ValueError(f"Special tokens not allowed in this context: {list(group)}")
+                    raise ValueError(
+                        f"Decoding `tokens` that contain special tokens ({list(group)}) is not allowed. \n"
+                        "Either make sure `tokens` do not include any special tokens or, "
+                        "if you want to decode `tokens` that includes special tokens, "
+                        "change the tokenizer's special token policy to IGNORE or KEEP: \n"
+                        "```\nfrom mistral_common.tokens.tokenizers.tekken import SpecialTokenPolicy"
+                        "\n\ntokenizer.special_token_policy = SpecialTokenPolicy.IGNORE  # SpecialTokenPolicy.KEEP"
+                        "\n```"
+                    )
                 elif special_token_policy == SpecialTokenPolicy.KEEP:
                     decoded.extend(self._all_special_tokens[t] for t in group)
                 elif special_token_policy == SpecialTokenPolicy.IGNORE:
