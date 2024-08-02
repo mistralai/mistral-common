@@ -126,7 +126,7 @@ class Tekkenizer(Tokenizer):
         if isinstance(path, str):
             path = Path(path)
         assert path.exists()
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             model_data: ModelData = json.load(f)
 
         _version_str = model_data["config"].get("version")
