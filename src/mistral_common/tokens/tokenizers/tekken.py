@@ -196,6 +196,7 @@ class Tekkenizer(Tokenizer):
         return tokens
 
     def _decode_all(self, tokens: List[int], special_token_policy: SpecialTokenPolicy) -> List[str]:
+        # Lump special and non-special tokens together to minimize calls to decode
         decoded: List[str] = []
         for is_special, group in groupby(tokens, lambda t: t < self.num_special_tokens):
             if is_special:
@@ -215,6 +216,7 @@ class Tekkenizer(Tokenizer):
                     decoded.extend(self._all_special_tokens[t] for t in group)
                 elif special_token_policy == SpecialTokenPolicy.IGNORE:
                     continue
+                
             else:
                 decoded.extend(self._decode_token(t) for t in group)
         return decoded
