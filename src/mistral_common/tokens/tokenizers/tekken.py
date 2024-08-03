@@ -89,6 +89,7 @@ class Tekkenizer(Tokenizer):
         )
         self._vocab_size = vocab_size
         self._path = _path
+        self._tokens_str = {token['rank']: token['token_str'] for token in vocab if token['token_str'] is not None}
 
         special_tokens = list(self.SPECIAL_TOKENS)
         assert len(special_tokens) == len(set(special_tokens)), f"Special tokens must be unique: {special_tokens}"
@@ -195,7 +196,6 @@ class Tekkenizer(Tokenizer):
         return tokens
 
     def _decode_all(self, tokens: List[int], special_token_policy: SpecialTokenPolicy) -> List[str]:
-        # Lump special and non-special tokens together to minimize calls to decode
         decoded: List[str] = []
         for is_special, group in groupby(tokens, lambda t: t < self.num_special_tokens):
             if is_special:
@@ -215,11 +215,15 @@ class Tekkenizer(Tokenizer):
                     decoded.extend(self._all_special_tokens[t] for t in group)
                 elif special_token_policy == SpecialTokenPolicy.IGNORE:
                     continue
-                # TODO: Could use "tokens_str" from vocab.json
-                # but need to handle null cases.
             else:
-                decoded.append(self._model.decode([t - self.num_special_tokens for t in group]))
+                decoded.extend(self._decode_token(t) for t in group)
         return decoded
+
+    def _decode_token(self, token: int) -> str:
+        adjusted_token = token - self.num_special_tokens
+        if adjusted_token in self._tokens_str:
+            return self._tokens_str[adjusted_token]
+        return self._model.decode([adjusted_token])
 
     def is_byte(self, token_id: int) -> bool:
         return 0 <= token_id - self.num_special_tokens < 256
