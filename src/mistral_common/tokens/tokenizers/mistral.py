@@ -25,8 +25,15 @@ from mistral_common.tokens.tokenizers.base import (
     InstructRequest,
     InstructRequestType,
     InstructTokenizer,
+    SpecialTokens,
     TokenizedType,
     TokenizerVersion,
+)
+from mistral_common.tokens.tokenizers.multimodal import (
+    ImageEncoder,
+    MultimodalConfig,
+    MultiModalEncoder,
+    SpecialImageIDs,
 )
 from mistral_common.tokens.tokenizers.sentencepiece import (
     InstructTokenizerV1,
@@ -36,6 +43,15 @@ from mistral_common.tokens.tokenizers.sentencepiece import (
     is_sentencepiece,
 )
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekken
+
+
+def load_mm_encoder(mm_config: MultimodalConfig, tokenizer: Tekkenizer) -> MultiModalEncoder:
+    special_ids = SpecialImageIDs(
+        img=tokenizer.get_control_token(SpecialTokens.img.value),
+        img_break=tokenizer.get_control_token(SpecialTokens.img_break.value),
+        img_end=tokenizer.get_control_token(SpecialTokens.img_end.value),
+    )
+    return ImageEncoder(mm_config, special_ids)
 
 
 class MistralTokenizer(
@@ -70,9 +86,17 @@ class MistralTokenizer(
         )
 
     @classmethod
-    def v3(cls, is_tekken: bool = False) -> "MistralTokenizer":
+    def v3(cls, is_tekken: bool = False, is_mm: bool = False) -> "MistralTokenizer":
         """open-mixtral-8x22B"""
-        tokenizer_name = "mistral_instruct_tokenizer_240323.model.v3" if not is_tekken else "tekken_240718.json"
+        if is_tekken and is_mm:
+            tokenizer_name = "tekken_240911.json"
+        elif is_tekken and not is_mm:
+            tokenizer_name = "tekken_240718.json"
+        elif not is_tekken and is_mm:
+            raise ValueError("Multimodal tokenizer is currently only supported for tekken")
+        else:
+            tokenizer_name = "mistral_instruct_tokenizer_240323.model.v3"
+
         return cls.from_file(str(cls._data_path() / tokenizer_name), mode=ValidationMode.test)
 
     @classmethod
@@ -88,11 +112,12 @@ class MistralTokenizer(
             "open-mixtral-8x22b": MistralTokenizer.v3,
             "codestral-22b": MistralTokenizer.v3,
             "mistral-nemo": lambda: MistralTokenizer.v3(is_tekken=True),
+            "pixtral": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
         }
 
         # Prefix search the model name mapping
         for model_name, tokenizer_cls in model_name_to_tokenizer_cls.items():
-            if model_name in model:
+            if model_name in model.lower():
                 return tokenizer_cls()
 
         raise TokenizerException(f"Unrecognized model: {model}")
@@ -110,20 +135,25 @@ class MistralTokenizer(
 
         if is_tekken(tokenizer_filename):
             tokenizer = Tekkenizer.from_file(tokenizer_filename)
+            mm_config = tokenizer.multimodal
+            mm_encoder = load_mm_encoder(mm_config, tokenizer) if mm_config is not None else None
         elif is_sentencepiece(tokenizer_filename):
             tokenizer = SentencePieceTokenizer(tokenizer_filename)
+            mm_encoder = None
         else:
             raise TokenizerException(f"Unrecognized tokenizer file: {tokenizer_filename}")
 
         request_normalizer = InstructRequestNormalizer.normalizer()
 
         if tokenizer.version == TokenizerVersion.v1:
+            assert mm_encoder is None, "Tokenizer version needs to be >= v3"
             return MistralTokenizer(
                 InstructTokenizerV1(tokenizer),
                 validator=MistralRequestValidator(mode=mode),
                 request_normalizer=request_normalizer,
             )
         elif tokenizer.version == TokenizerVersion.v2:
+            assert mm_encoder is None, "Tokenizer version needs to be >= v3"
             return MistralTokenizer(
                 InstructTokenizerV2(tokenizer),
                 validator=MistralRequestValidator(mode=mode),
@@ -131,10 +161,12 @@ class MistralTokenizer(
             )
         elif tokenizer.version == TokenizerVersion.v3:
             return MistralTokenizer(
-                InstructTokenizerV3(tokenizer),
+                InstructTokenizerV3(tokenizer, mm_encoder=mm_encoder),
                 validator=MistralRequestValidatorV3(mode=mode),
                 request_normalizer=request_normalizer,
             )
+        else:
+            raise TokenizerException(f"Unrecognized tokenizer filename: {tokenizer_filename}")
 
         raise TokenizerException(f"Unrecognized tokenizer version: {tokenizer.version}")
 

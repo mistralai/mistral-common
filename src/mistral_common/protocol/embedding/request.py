@@ -1,7 +1,8 @@
 from typing import List, Optional, Union
 
-from mistral_common.base import MistralBase
 from pydantic import Field
+
+from mistral_common.base import MistralBase
 
 
 class EmbeddingRequest(MistralBase):

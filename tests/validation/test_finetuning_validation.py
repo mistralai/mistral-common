@@ -1,5 +1,9 @@
 import pytest
-from mistral_common.exceptions import InvalidAssistantMessageException, InvalidFunctionCallException
+from mistral_common.exceptions import (
+    InvalidAssistantMessageException,
+    InvalidFunctionCallException,
+    InvalidMessageStructureException,
+)
 from mistral_common.protocol.instruct.messages import (
     FinetuningAssistantMessage,
     ToolMessage,
@@ -47,6 +51,16 @@ class TestFineTuningValidation:
                 ],
             )
 
+    def test_should_allow_multiple_weights(self, validator: MistralRequestValidator) -> None:
+        validator.validate_messages(
+            messages=[
+                UserMessage(content="foo"),
+                FinetuningAssistantMessage(content="foo", weight=0),
+                FinetuningAssistantMessage(content="foo", weight=1),
+                FinetuningAssistantMessage(content="foo", weight=1),
+            ],
+        )
+
     def test_ends_with_tool_call_null(self, validator: MistralRequestValidator) -> None:
         if not isinstance(validator, MistralRequestValidatorV3):
             pytest.skip("MistralRequestValidator v1 does not validate tool call ids")
@@ -92,3 +106,12 @@ class TestFineTuningValidation:
                     FinetuningAssistantMessage(tool_calls=[ToolCall(function=function)]),
                 ],
             )
+
+    def test_one_message_with_user_is_not_valid(self, validator: MistralRequestValidator) -> None:
+        with pytest.raises(InvalidMessageStructureException) as exc:
+            validator.validate_messages(
+                messages=[
+                    UserMessage(content="foo"),
+                ],
+            )
+        assert str(exc.value) == "Expected last role Assistant for finetuning but got user"

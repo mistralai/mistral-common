@@ -1,9 +1,20 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import Enum
-from typing import Generic, List, Optional, TypeVar
+from typing import Generic, List, Optional, Protocol, Tuple, TypeVar, Union
+
+import numpy as np
+from pydantic import ConfigDict
 
 from mistral_common.base import MistralBase
-from mistral_common.protocol.instruct.messages import AssistantMessageType
+from mistral_common.protocol.instruct.messages import (
+    AssistantMessageType,
+    ContentChunk,
+    ImageChunk,
+    ImageURLChunk,
+    UserMessage,
+)
+from mistral_common.protocol.instruct.tool_calls import Tool
 from mistral_common.tokens.instruct.request import FIMRequest, InstructRequest
 
 
@@ -17,6 +28,9 @@ class SpecialTokens(str, Enum):
     begin_tool_results = "[TOOL_RESULTS]"
     end_tool_results = "[/TOOL_RESULTS]"
     tool_calls = "[TOOL_CALLS]"
+    img = "[IMG]"
+    img_break = "[IMG_BREAK]"
+    img_end = "[IMG_END]"
     prefix = "[PREFIX]"
     middle = "[MIDDLE]"
     suffix = "[SUFFIX]"
@@ -33,9 +47,11 @@ class Tokenized(MistralBase):
     A tokenized InstructRequest
     """
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     tokens: List[int]
     text: Optional[str] = None
     prefix_ids: Optional[List[int]] = None
+    images: List[np.ndarray] = []
 
 
 class Tokenizer(ABC):
@@ -48,6 +64,10 @@ class Tokenizer(ABC):
     def vocab(self) -> List[str]:
         """All tokens in the vocabulary as strings"""
 
+    @abstractmethod
+    def id_to_piece(self, token_id: int) -> str:
+        """Convert a token id to the token str"""
+
     @property
     @abstractmethod
     def bos_id(self) -> int:
@@ -57,6 +77,16 @@ class Tokenizer(ABC):
     @abstractmethod
     def eos_id(self) -> int:
         """id of the End of String token"""
+
+    @property
+    @abstractmethod
+    def pad_id(self) -> int:
+        """id of the Pad token"""
+
+    @property
+    @abstractmethod
+    def unk_id(self) -> int:
+        """id of the Unk token"""
 
     @abstractmethod
     def encode(self, s: str, bos: bool, eos: bool) -> List[int]:
@@ -70,6 +100,11 @@ class Tokenizer(ABC):
     def get_control_token(self, s: str) -> int:
         """Get the id of a control token"""
 
+    @property
+    @abstractmethod
+    def version(self) -> TokenizerVersion:
+        """Get the version of the tokenizer"""
+
     @abstractmethod
     def to_string(self, tokens: List[int]) -> str:
         """Convert token ids to string"""
@@ -80,10 +115,50 @@ FIMRequestType = TypeVar("FIMRequestType", bound=FIMRequest)
 TokenizedType = TypeVar("TokenizedType", bound=Tokenized)
 
 
+@dataclass
+class ImageEncoding:
+    tokens: List[int]
+    image: np.ndarray
+
+
+@dataclass
+class SpecialImageIDs:
+    img: int
+    img_break: int
+    img_end: int
+
+    @staticmethod
+    def from_tokenizer(tokenizer: "Tokenizer") -> "SpecialImageIDs":
+        return SpecialImageIDs(
+            img=tokenizer.get_control_token(SpecialTokens.img.value),
+            img_break=tokenizer.get_control_token(SpecialTokens.img_break.value),
+            img_end=tokenizer.get_control_token(SpecialTokens.img_end.value),
+        )
+
+
+class MultiModalEncoder(Protocol):
+    def __call__(self, content: Union[ImageChunk, ImageURLChunk]) -> ImageEncoding:
+        """
+        Encode the given content.
+
+        Args:
+            content (ChunkContent): The content to be encoded.
+
+        Returns:
+            ImageEncoding: The encoded image content.
+        """
+        ...
+
+    @property
+    def image_token(self) -> int:
+        ...
+
+
 class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]):
     tokenizer: Tokenizer
+    mm_encoder: Optional[MultiModalEncoder]
 
-    def __init__(self, tokenizer: Tokenizer) -> None:
+    def __init__(self, tokenizer: Tokenizer, mm_encoder: Optional[MultiModalEncoder]) -> None:
         """Init from tokenizer"""
 
     @abstractmethod
@@ -97,3 +172,25 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
     @abstractmethod
     def encode_fim(self, request: FIMRequestType) -> TokenizedType:
         """FIM request to Tokenized object"""
+
+    @abstractmethod
+    def encode_user_message(
+        self,
+        message: UserMessage,
+        available_tools: Optional[List[Tool]],
+        is_last: bool,
+        is_first: bool,
+        system_prompt: Optional[str] = None,
+        force_img_first: bool = False,
+    ) -> Tuple[List[int], List[np.ndarray]]:
+        ...
+
+    @abstractmethod
+    def encode_user_content(
+        self,
+        content: Union[str, List[ContentChunk]],
+        is_last: bool,
+        system_prompt: Optional[str] = None,
+        force_img_first: bool = False,
+    ) -> Tuple[List[int], List[np.ndarray]]:
+        ...

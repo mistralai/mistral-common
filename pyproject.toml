@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mistral_common"
-version = "1.3.4"
+version = "1.4.0"
 description = ""
 authors = ["bam4d <bam4d@mistral.ai>"]
 readme = "README.md"
@@ -33,6 +33,8 @@ jsonschema = "^4.21.1"
 sentencepiece = "0.2.0"
 typing-extensions = "^4.11.0"
 tiktoken = "^0.7.0"
+pillow = "^10.3.0"
+requests = "^2.0.0"
 
 [tool.poetry.group.dev.dependencies]
 types-jsonschema = "4.21.0.20240118"
@@ -43,6 +45,8 @@ ruff = "^0.2.2"
 mypy = "^1.8.0"
 pytest-cov = "^4.1.0"
 diff-cover = "^8.0.3"
+types-Pillow = "^10.2.0"
+types-requests = "^2.32"
 coverage = { extras = ["toml"], version = "^7.4.4" }
 
 [build-system]

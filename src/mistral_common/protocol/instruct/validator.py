@@ -253,7 +253,9 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
         if len(messages) == 1:
             if messages[0].role not in {Roles.user, Roles.system}:
                 raise InvalidMessageStructureException("Conversation must start with a user message or system message")
-        else:
+
+        # Always check the last message if in fine-tuning mode
+        if self._mode == ValidationMode.finetuning or len(messages) > 1:
             self._validate_last_message(messages[-1])
 
         self._validate_message_order(messages)

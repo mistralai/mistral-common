@@ -5,8 +5,10 @@ from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
     ChunkTypes,
-    ContentChunk,
+    FinetuningAssistantMessage,
+    FinetuningMessage,
     SystemMessage,
+    TextChunk,
     ToolMessage,
     UserMessage,
 )
@@ -153,11 +155,11 @@ class TestChatCompletionRequestNormalization:
             messages=[
                 UserMessage(content="foo"),
                 UserMessage(
-                    content=[ContentChunk(type=ChunkTypes.text, text="chunk")],
+                    content=[TextChunk(type=ChunkTypes.text, text="chunk")],
                 ),
                 UserMessage(content="foo"),
                 UserMessage(
-                    content=[ContentChunk(type=ChunkTypes.text, text="chunk")],
+                    content=[TextChunk(type=ChunkTypes.text, text="chunk")],
                 ),
             ],
         )
@@ -174,9 +176,9 @@ class TestChatCompletionRequestNormalization:
                 UserMessage(content="foo"),
                 UserMessage(
                     content=[
-                        ContentChunk(type=ChunkTypes.text, text="chunk1"),
-                        ContentChunk(type=ChunkTypes.text, text="chunk2"),
-                        ContentChunk(type=ChunkTypes.text, text="chunk3"),
+                        TextChunk(type=ChunkTypes.text, text="chunk1"),
+                        TextChunk(type=ChunkTypes.text, text="chunk2"),
+                        TextChunk(type=ChunkTypes.text, text="chunk3"),
                     ],
                 ),
             ],
@@ -209,9 +211,9 @@ class TestChatCompletionRequestNormalization:
                 UserMessage(content="foo"),
                 SystemMessage(
                     content=[
-                        ContentChunk(type=ChunkTypes.text, text="chunk1"),
-                        ContentChunk(type=ChunkTypes.text, text="chunk2"),
-                        ContentChunk(type=ChunkTypes.text, text="chunk3"),
+                        TextChunk(type=ChunkTypes.text, text="chunk1"),
+                        TextChunk(type=ChunkTypes.text, text="chunk2"),
+                        TextChunk(type=ChunkTypes.text, text="chunk3"),
                     ],
                 ),
             ],
@@ -290,3 +292,58 @@ class TestChatCompletionRequestNormalization:
 
         normalized = normalizer.from_chat_completion_request(request)
         assert normalized == gt
+
+
+class TestFineTuningNormalizer:
+    @pytest.fixture(autouse=True)
+    def normalizer(self) -> InstructRequestNormalizer:
+        return InstructRequestNormalizer(
+            UserMessage, FinetuningAssistantMessage, ToolMessage, SystemMessage, InstructRequest
+        )
+
+    def test_normalize_weighted_assistant(self, normalizer: InstructRequestNormalizer) -> None:
+        request = ChatCompletionRequest[FinetuningMessage](
+            messages=[
+                SystemMessage(content="helpful assistant"),
+                UserMessage(content="a"),
+                FinetuningAssistantMessage(content="he", weight=0),
+                UserMessage(content="b"),
+                FinetuningAssistantMessage(content="ho", weight=1),
+                FinetuningAssistantMessage(content="lla", weight=1),
+            ],
+        )
+        expected = InstructRequest[FinetuningMessage, Tool](
+            messages=[
+                UserMessage(content="a"),
+                FinetuningAssistantMessage(content="he", weight=0),
+                UserMessage(content="b"),
+                FinetuningAssistantMessage(content="ho\n\nlla", weight=1),
+            ],
+            system_prompt="helpful assistant",
+        )
+        normalized = normalizer.from_chat_completion_request(request)
+        assert expected == normalized
+
+    def test_should_not_aggregate_if_weight_is_different(self, normalizer: InstructRequestNormalizer) -> None:
+        request = ChatCompletionRequest[FinetuningMessage](
+            messages=[
+                SystemMessage(content="helpful assistant"),
+                UserMessage(content="a"),
+                FinetuningAssistantMessage(content="he", weight=0),
+                UserMessage(content="b"),
+                FinetuningAssistantMessage(content="ho", weight=0),
+                FinetuningAssistantMessage(content="lla", weight=1),
+            ],
+        )
+        expected = InstructRequest[FinetuningMessage, Tool](
+            messages=[
+                UserMessage(content="a"),
+                FinetuningAssistantMessage(content="he", weight=0),
+                UserMessage(content="b"),
+                FinetuningAssistantMessage(content="ho", weight=0),
+                FinetuningAssistantMessage(content="lla", weight=1),
+            ],
+            system_prompt="helpful assistant",
+        )
+        normalized = normalizer.from_chat_completion_request(request)
+        assert normalized == expected

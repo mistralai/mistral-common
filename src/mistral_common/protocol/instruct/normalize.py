@@ -6,9 +6,11 @@ from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     AssistantMessageType,
     ContentChunk,
+    FinetuningAssistantMessage,
     Roles,
     SystemMessage,
     SystemMessageType,
+    TextChunk,
     ToolMessage,
     ToolMessageType,
     UserMessage,
@@ -69,7 +71,7 @@ class InstructRequestNormalizer(
             normalized_content = content
         return normalized_content
 
-    def _aggregate_content_chunks(self, content: Union[str, List[ContentChunk]], chunk_join_str: str = "\n\n") -> str:
+    def _aggregate_content_chunks(self, content: Union[str, List[TextChunk]], chunk_join_str: str = "\n\n") -> str:
         if isinstance(content, list):
             return chunk_join_str.join([chunk.text for chunk in content])
         else:
@@ -112,6 +114,7 @@ class InstructRequestNormalizer(
         aggregated_content: List[str] = []
         tool_calls: List[ToolCall] = []
         prefix: bool = False
+        weight: Optional[float] = None
         for message in messages:
             assert isinstance(message, self._assistant_message_class), "Expected assistant message"
             if message.tool_calls is not None:
@@ -121,23 +124,55 @@ class InstructRequestNormalizer(
             elif message.content:
                 aggregated_content.append(self._aggregate_content_chunks(message.content))
             prefix |= message.prefix
+            if isinstance(message, FinetuningAssistantMessage):
+                # Only FinetuningAssistantMessage can be weighted
+                if weight is not None:
+                    assert (
+                        weight == message.weight
+                    ), "Expected weights of aggregated FinetuningAssistantMessage to be equal"
+                weight = message.weight
 
-        return self._assistant_message_class(
+        aggregated_message = self._assistant_message_class(
             content="\n\n".join(aggregated_content) if len(aggregated_content) else None,
             tool_calls=tool_calls or None,
             prefix=prefix,
         )
 
-    def _aggregate_user_messages(self, messages: List[UATS]) -> UserMessageType:
-        aggregated_content: List[str] = []
-        for message in messages:
-            assert isinstance(message, self._user_message_class), "Expected user message"
-            content = self._aggregate_content_chunks(message.content)
-            if content:
-                aggregated_content.append(content)
+        if weight is not None and hasattr(aggregated_message, "weight"):
+            aggregated_message.weight = weight
+        return aggregated_message
 
-        aggregated_content_str = "\n\n".join(aggregated_content)
-        return self._user_message_class(content=aggregated_content_str)
+    def _aggregate_user_messages(self, messages: List[UATS]) -> UserMessageType:
+        """
+        Just coalesce neighboring blocks of text
+        """
+        all_content: List[ContentChunk] = []
+        text_chunks: List[str] = []
+        for message in messages:
+            assert isinstance(message, self._user_message_class), f"Expected user message got {type(message)}"
+            if isinstance(message.content, str):
+                text_chunks.append(message.content)
+            else:  # it's a List[ContentChunk]
+                for chunk in message.content:
+                    if isinstance(chunk, TextChunk):
+                        text_chunks.append(chunk.text)
+                    else:
+                        if text_chunks:
+                            all_content.append(TextChunk(text="\n\n".join(text_chunks)))
+                            text_chunks = []
+                        all_content.append(chunk)
+
+        text_content = "\n\n".join(text_chunks) if text_chunks else ""
+
+        if not all_content:
+            # if no ContentChunk was passed, we return content as a str
+            return self._user_message_class(content=text_content)
+
+        if text_content:
+            # else we return a List of content chunks
+            all_content.append(TextChunk(text=text_content))
+
+        return self._user_message_class(content=all_content)
 
     def _aggregate_role(self, messages: List[UATS], role: Optional[Roles]) -> Sequence[UATS]:
         if role == Roles.tool:
@@ -153,13 +188,15 @@ class InstructRequestNormalizer(
         aggregated_messages: List[UATS] = []
         messages_to_aggregate: List[UATS] = []
         current_role: Optional[Roles] = None
+        current_weight: Optional[float] = None
 
-        # Collect consecutive lists of messages with the same role
+        # Collect consecutive lists of messages with the same role and weight
         for message in request.messages:
-            if current_role != message.role:
+            new_weight = getattr(message, "weight", None)
+            if current_role != message.role or (new_weight != current_weight):
                 aggregated_messages.extend(self._aggregate_role(messages_to_aggregate, current_role))
                 messages_to_aggregate.clear()
-
+            current_weight = new_weight
             current_role = message.role
             messages_to_aggregate.append(message)
 

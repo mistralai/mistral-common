@@ -6,10 +6,15 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, Dict, Generic, List, Optional, Set, Tuple, Union
 
+import numpy as np
+from sentencepiece import SentencePieceProcessor
+
 from mistral_common.exceptions import TokenizerException
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     AssistantMessageType,
+    ContentChunk,
+    TextChunk,
     ToolMessage,
     UserMessage,
 )
@@ -25,7 +30,7 @@ from mistral_common.tokens.tokenizers.base import (
     Tokenizer,
     TokenizerVersion,
 )
-from sentencepiece import SentencePieceProcessor
+from mistral_common.tokens.tokenizers.multimodal import MultiModalEncoder
 
 
 def is_sentencepiece(path: Union[str, Path]) -> bool:
@@ -52,7 +57,7 @@ def get_spm_version(tokenizer_filename: str, raise_deprecated: bool = False) -> 
 
 
 class SentencePieceTokenizer(Tokenizer):
-    def __init__(self, model_path: str) -> None:
+    def __init__(self, model_path: str, tokenizer_version: Optional[TokenizerVersion] = None) -> None:
         self._logger = logging.getLogger(self.__class__.__name__)
         # reload tokenizer
         assert os.path.isfile(model_path), model_path
@@ -61,7 +66,7 @@ class SentencePieceTokenizer(Tokenizer):
         assert self._model.vocab_size() == self._model.get_piece_size()
         self._vocab = [self._model.id_to_piece(i) for i in range(self.n_words)]
 
-        self._version: TokenizerVersion = get_spm_version(model_path, raise_deprecated=False)
+        self._version: TokenizerVersion = tokenizer_version or get_spm_version(model_path, raise_deprecated=False)
 
         super().__init__()
 
@@ -128,13 +133,22 @@ class SentencePieceTokenizer(Tokenizer):
 
         return text
 
+    @property
+    def pad_id(self) -> int:
+        return self._model.pad_id()  # type: ignore
+
+    @property
+    def unk_id(self) -> int:
+        return self._model.unk_id()  # type: ignore
+
 
 class InstructTokenizerBase(
     InstructTokenizer, Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]
 ):
-    def __init__(self, tokenizer: Tokenizer):
+    def __init__(self, tokenizer: Tokenizer, mm_encoder: Optional[MultiModalEncoder] = None):
         self.tokenizer = tokenizer
-        super().__init__(tokenizer)
+        self.mm_encoder = mm_encoder
+        super().__init__(tokenizer, mm_encoder)
 
     def start(self) -> List[int]:
         return [self.tokenizer.bos_id]
@@ -152,17 +166,6 @@ class InstructTokenizerBase(
         return first_user_idx, last_user_idx
 
     @abstractmethod
-    def encode_user_message(
-        self,
-        message: UserMessage,
-        available_tools: Optional[List[Tool]],
-        is_last: bool,
-        is_first: bool,
-        system_prompt: Optional[str] = None,
-    ) -> List[int]:
-        ...
-
-    @abstractmethod
     def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
         raise NotImplementedError("Tool message not implemented")
 
@@ -170,31 +173,42 @@ class InstructTokenizerBase(
     def encode_assistant_message(self, message: AssistantMessageType, is_before_last_user_message: bool) -> List[int]:
         raise NotImplementedError("Assistant message not implemented")
 
-    def encode_instruct(self, request: InstructRequest[AssistantMessageType, Tool]) -> Tokenized:
+    def encode_instruct(
+        self,
+        request: InstructRequest[AssistantMessageType, Tool],
+    ) -> Tokenized:
         # init at bos
         tokens = self.start()
+        images: List[np.ndarray] = []
         prefix_ids: Optional[List[int]] = None
+
         # find last user message
         first_user_idx, last_user_idx = self.find_first_last_user(request)
         for msg_idx, msg in enumerate(request.messages):
             if isinstance(msg, UserMessage):
-                new_tokens = self.encode_user_message(
+                new_tokens, new_images = self.encode_user_message(
                     msg,
                     request.available_tools,
                     msg_idx == last_user_idx,
                     msg_idx == first_user_idx,
                     system_prompt=request.system_prompt,
+                    force_img_first=True,  # img is always first when providing text/img chunk pair
                 )
+                images.extend(new_images)
             elif isinstance(msg, ToolMessage):
                 new_tokens = self.encode_tool_message(msg, msg_idx < last_user_idx)
             elif isinstance(msg, AssistantMessage):
                 new_tokens = self.encode_assistant_message(msg, msg_idx < last_user_idx)
                 if msg_idx == len(request.messages) - 1:
                     prefix_ids = new_tokens
-
             tokens.extend(new_tokens)
 
-        return Tokenized(tokens=tokens, text=self.tokenizer.to_string(tokens), prefix_ids=prefix_ids)
+        return Tokenized(
+            tokens=tokens,
+            text=self.tokenizer.to_string(tokens),
+            prefix_ids=prefix_ids,
+            images=images,
+        )
 
     def decode(self, tokens: List[int]) -> str:
         return self.tokenizer.decode(tokens)
@@ -210,9 +224,12 @@ class InstructTokenizerV1(
         is_last: bool,
         is_first: bool,
         system_prompt: Optional[str] = None,
-    ) -> List[int]:
+        force_img_first: bool = False,
+    ) -> Tuple[List[int], List[np.ndarray]]:
         assert message.content is not None
         assert isinstance(message.content, str), "Message content must be normalized"
+        assert self.mm_encoder is None, "InstructTokenizerV1 cannot encode images"
+
         content = ""
         if is_first and system_prompt:
             content = system_prompt + "\n\n" + message.content
@@ -220,8 +237,23 @@ class InstructTokenizerV1(
             content = message.content
 
         message_txt = f"[INST] {content} [/INST]"
-        curr_tokens = self.tokenizer.encode(message_txt, bos=False, eos=False)
-        return curr_tokens
+        curr_tokens, image_tokens = self.encode_user_content(content=message_txt, is_last=False, system_prompt=None)
+        return curr_tokens, image_tokens
+
+    def encode_user_content(
+        self,
+        content: Union[str, List[ContentChunk]],
+        is_last: bool,
+        system_prompt: Optional[str] = None,
+        force_img_first: bool = False,
+    ) -> Tuple[List[int], List[np.ndarray]]:
+        assert isinstance(content, str)
+
+        if is_last and system_prompt:
+            content = system_prompt + "\n\n" + content
+
+        tokens = self.tokenizer.encode(content, bos=False, eos=False)
+        return tokens, []
 
     def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
         raise TokenizerException("Tools not implemented for tokenizer V1")
@@ -245,8 +277,8 @@ class InstructTokenizerV1(
 class InstructTokenizerV2(
     InstructTokenizerV1, Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]
 ):
-    def __init__(self, tokenizer: Tokenizer):
-        super().__init__(tokenizer)
+    def __init__(self, tokenizer: Tokenizer, mm_encoder: Optional[MultiModalEncoder] = None):
+        super().__init__(tokenizer, mm_encoder)
         self.BEGIN_INST = self.tokenizer.get_control_token(SpecialTokens.begin_inst.value)
         self.END_INST = self.tokenizer.get_control_token(SpecialTokens.end_inst.value)
         self.BEGIN_AVAILABLE_TOOLS = self.tokenizer.get_control_token(SpecialTokens.begin_tools.value)
@@ -265,10 +297,9 @@ class InstructTokenizerV2(
         is_last: bool,
         is_first: bool,
         system_prompt: Optional[str] = None,
-    ) -> List[int]:
+        force_img_first: bool = False,
+    ) -> Tuple[List[int], List[np.ndarray]]:
         assert message.content is not None
-        assert isinstance(message.content, str), "Message content must be nornmalized"
-        content = ""
         tools_tokens: List[int] = []
         if is_last and available_tools:
             tools = [tool.model_dump() for tool in available_tools]
@@ -279,18 +310,19 @@ class InstructTokenizerV2(
                 self.END_AVAILABLE_TOOLS,
             ]
 
-        if is_last and system_prompt:
-            content = system_prompt + "\n\n" + message.content
-        else:
-            content = message.content
+        tokens, image_tokens = self.encode_user_content(
+            content=message.content,
+            is_last=is_last,
+            system_prompt=system_prompt,
+            force_img_first=force_img_first,
+        )
 
-        curr_tokens = [
-            *tools_tokens,
-            self.BEGIN_INST,
-            *self.tokenizer.encode(content, bos=False, eos=False),
-            self.END_INST,
-        ]
-        return curr_tokens
+        prefix_tokens = [*tools_tokens, self.BEGIN_INST]
+        suffix_tokens = [self.END_INST]
+
+        curr_tokens = prefix_tokens + tokens + suffix_tokens
+
+        return curr_tokens, image_tokens
 
     def _parse_json_content(self, content: str) -> Any:
         try:
@@ -383,8 +415,8 @@ class InstructTokenizerV3(
     The only difference with V3 tokenizer is that it encodes the tool messages differently
     """
 
-    def __init__(self, tokenizer: Tokenizer):
-        super().__init__(tokenizer)
+    def __init__(self, tokenizer: Tokenizer, mm_encoder: Optional[MultiModalEncoder] = None) -> None:
+        super().__init__(tokenizer, mm_encoder=mm_encoder)
 
     def _prepare_function_call(self, tool_call: ToolCall) -> Dict[str, Any]:
         function_call = {
@@ -423,3 +455,44 @@ class InstructTokenizerV3(
         Same as V2 but always encode tool history
         """
         return super().encode_assistant_message(message, False)
+
+    def encode_user_content(
+        self,
+        content: Union[str, List[ContentChunk]],
+        is_last: bool,
+        system_prompt: Optional[str] = None,
+        force_img_first: bool = False,
+    ) -> Tuple[List[int], List[np.ndarray]]:
+        if isinstance(content, str):
+            return super().encode_user_content(content, is_last, system_prompt)
+
+        tokens: List[int] = []
+        images: List[np.ndarray] = []
+
+        has_one_img_one_text_first = (
+            len(content) == 2 and isinstance(content[0], TextChunk) and not isinstance(content[1], TextChunk)
+        )
+        if force_img_first and has_one_img_one_text_first:
+            # make sure that if exactly one image and text chunk are passed we force the image chunk to be first
+            content = [content[1], content[0]]
+
+        first_chunk = True
+        for chunk in content:
+            content = ""
+            if first_chunk and is_last and system_prompt:
+                first_chunk = False
+                content = system_prompt + "\n\n"
+            if isinstance(chunk, TextChunk):
+                content += chunk.text
+                tokens.extend(self.tokenizer.encode(content, bos=False, eos=False))
+            else:
+                assert self.mm_encoder is not None, "Make sure to define a multi-modal encoder at init"
+                if content:
+                    tokens.extend(self.tokenizer.encode(content, bos=False, eos=False))
+
+                img_encoding = self.mm_encoder(chunk)
+
+                tokens.extend(img_encoding.tokens)
+                images.append(img_encoding.image)
+
+        return tokens, images
