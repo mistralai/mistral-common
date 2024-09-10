@@ -118,12 +118,17 @@ def test_read_from_file(tmp_path: Path) -> None:
 
 def test_istekken(tmp_path: Path) -> None:
     # Initialize the Tekkenizer with a path
-    common_case = tmp_path / "tekken.json"
+    common_case = tmp_path / "tekken.tokenizer.json"
     _write_tekkenizer_model(common_case)
     assert is_tekken(common_case)
     common_case.unlink()
 
-    fancy_name = tmp_path / "tekken_the_destroyer.json"
+    version_case = tmp_path / "v4.tekken.json"
+    _write_tekkenizer_model(version_case)
+    assert is_tekken(version_case)
+    version_case.unlink()
+
+    fancy_name = tmp_path / "tekken_the_destroyer.tekken.json"
     _write_tekkenizer_model(fancy_name)
     assert is_tekken(fancy_name)
     fancy_name.unlink()
@@ -138,7 +143,7 @@ def test_istekken(tmp_path: Path) -> None:
     assert not is_tekken(not_json)
     not_json.unlink()
 
-    assert not is_tekken(tmp_path / "nonexistent.json")
+    assert not is_tekken(tmp_path / "nonexistent.tekken.json")
 
 
 def test_isbyte() -> None:

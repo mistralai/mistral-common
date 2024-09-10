@@ -1,9 +1,10 @@
 from typing import List
 
+from pydantic import Field
+
 from mistral_common.base import MistralBase
 from mistral_common.protocol.base import UsageInfo
 from mistral_common.protocol.utils import random_uuid
-from pydantic import Field
 
 
 class EmbeddingObject(MistralBase):

@@ -1,14 +1,57 @@
 from enum import Enum
 from typing import List, Literal, Optional, TypeVar, Union
 
-from pydantic import Field
-from typing_extensions import (  # compatibility with 3.8
-    Annotated,
-    TypeAlias,
-)
+from pydantic import ConfigDict, Field
+from typing_extensions import Annotated, TypeAlias
 
 from mistral_common.base import MistralBase
+from mistral_common.multimodal import SerializableImage
 from mistral_common.protocol.instruct.tool_calls import ToolCall
+
+
+class ChunkTypes(str, Enum):
+    text = "text"
+    image = "image"
+    image_url = "image_url"
+
+
+class BaseContentChunk(MistralBase):
+    type: Literal[ChunkTypes.text, ChunkTypes.image, ChunkTypes.image_url]
+
+
+class ImageChunk(BaseContentChunk):
+    type: Literal[ChunkTypes.image] = ChunkTypes.image
+    image: SerializableImage
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
+class ImageURL(MistralBase):
+    url: str
+    detail: Optional[str] = None
+
+
+class ImageURLChunk(BaseContentChunk):
+    """
+    {"type":"image_url","image_url":{"url":"data:image/png;base64,iVBORw0
+    """
+
+    type: Literal[ChunkTypes.image_url] = ChunkTypes.image_url
+    image_url: Union[ImageURL, str]
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    def get_url(self) -> str:
+        if isinstance(self.image_url, ImageURL):
+            return self.image_url.url
+        return self.image_url
+
+
+class TextChunk(BaseContentChunk):
+    type: Literal[ChunkTypes.text] = ChunkTypes.text
+    text: str
+
+
+ContentChunk = Annotated[Union[TextChunk, ImageChunk, ImageURLChunk], Field(discriminator="type")]
 
 
 class Roles(str, Enum):
@@ -16,15 +59,6 @@ class Roles(str, Enum):
     user = "user"
     assistant = "assistant"
     tool = "tool"
-
-
-class ChunkTypes(str, Enum):
-    text = "text"
-
-
-class ContentChunk(MistralBase):
-    type: ChunkTypes = ChunkTypes.text
-    text: str
 
 
 class BaseMessage(MistralBase):

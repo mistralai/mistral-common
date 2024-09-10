@@ -5,10 +5,16 @@ from enum import Enum
 from functools import cached_property
 from itertools import groupby
 from pathlib import Path
-from typing import Dict, List, Optional, TypedDict, Union
+from typing import Dict, List, Optional, Type, TypedDict, Union
 
 import tiktoken
-from mistral_common.tokens.tokenizers.base import SpecialTokens, Tokenizer, TokenizerVersion
+
+from mistral_common.tokens.tokenizers.base import (
+    SpecialTokens,
+    Tokenizer,
+    TokenizerVersion,
+)
+from mistral_common.tokens.tokenizers.multimodal import MultimodalConfig
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +22,7 @@ logger = logging.getLogger(__name__)
 def is_tekken(path: Union[str, Path]) -> bool:
     if isinstance(path, str):
         path = Path(path)
-
-    return path.is_file() and path.name.startswith("tekken") and path.name.endswith(".json")
+    return path.is_file() and "tekken" in path.name and path.suffix == ".json"
 
 
 # Formatting specification of the JSON file
@@ -40,6 +45,7 @@ class ModelData(TypedDict):
     config: TekkenConfig
     version: int
     type: str
+    multimodal: MultimodalConfig
 
 
 class SpecialTokenPolicy(Enum):
@@ -62,7 +68,10 @@ class Tekkenizer(Tokenizer):
         SpecialTokens.begin_tool_results,
         SpecialTokens.end_tool_results,
         SpecialTokens.tool_calls,
+        SpecialTokens.img,
         "<pad>",
+        SpecialTokens.img_break,
+        SpecialTokens.img_end,
         SpecialTokens.prefix,
         SpecialTokens.middle,
         SpecialTokens.suffix,
@@ -81,6 +90,7 @@ class Tekkenizer(Tokenizer):
         *,
         name: str = "tekkenizer",
         _path: Optional[str] = None,
+        mm_config: Optional[MultimodalConfig] = None,
     ):
         assert vocab_size <= len(vocab) + num_special_tokens, (
             vocab_size,
@@ -120,14 +130,18 @@ class Tekkenizer(Tokenizer):
         self._vocab = [self.id_to_piece(i) for i in range(vocab_size)]
         self._version = version
         self._special_token_policy = SpecialTokenPolicy.RAISE
+        self._mm_config = mm_config
 
     @classmethod
-    def from_file(cls, path: Union[str, Path]) -> "Tekkenizer":
+    def from_file(cls: Type["Tekkenizer"], path: Union[str, Path]) -> "Tekkenizer":
         if isinstance(path, str):
             path = Path(path)
         assert path.exists()
         with open(path, "r") as f:
-            model_data: ModelData = json.load(f)
+            untyped = json.load(f)
+            if mm := untyped.get("multimodal", None):
+                untyped["multimodal"] = MultimodalConfig(**mm)
+            model_data: ModelData = untyped
 
         _version_str = model_data["config"].get("version")
         if _version_str not in TokenizerVersion.__members__:
@@ -144,7 +158,16 @@ class Tekkenizer(Tokenizer):
             version=TokenizerVersion(_version_str),
             name=path.name.replace(".json", ""),
             _path=str(path),
+            mm_config=model_data.get("multimodal"),
         )
+
+    @property
+    def multimodal(self) -> Optional[MultimodalConfig]:
+        return self._mm_config
+
+    @multimodal.setter
+    def multimodal(self, value: MultimodalConfig) -> None:
+        raise ValueError("Can only set Multimodal config at init")
 
     @property
     def num_special_tokens(self) -> int:
@@ -183,6 +206,11 @@ class Tekkenizer(Tokenizer):
         return self.SPECIAL_TOKENS.index("<unk>")
 
     def vocab(self) -> List[str]:
+        # when returning self._vocab this will collapse
+        # all tokens for which we have a decoding error into
+        # the <?> string. This is bad and results in things
+        # like len(set(vocab)) != len(vocab))
+        # be careful when using self._vocab
         return self._vocab
 
     def encode(self, s: str, bos: bool, eos: bool) -> List[int]:
