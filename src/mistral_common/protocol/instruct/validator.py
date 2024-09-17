@@ -179,7 +179,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
             if message.role == Roles.tool:
                 expected_tool_messages -= 1
             elif message.role == Roles.assistant:
-                # if we have an assistant message and we have not recieved all the function calls
+                # if we have an assistant message and we have not received all the function calls
                 # we need to raise an exception
                 if expected_tool_messages != 0:
                     raise InvalidMessageStructureException("Not the same number of function calls and responses")
