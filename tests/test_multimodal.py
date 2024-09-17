@@ -1,6 +1,8 @@
 import base64
 from io import BytesIO
+from typing import Tuple
 
+import numpy as np
 import pytest
 import requests
 from mistral_common.protocol.instruct.messages import (
@@ -68,6 +70,44 @@ def test_image_encoder(mm_config: MultimodalConfig, special_token_ids: SpecialIm
     w, h = mm_encoder._image_to_num_tokens(img)
     assert (w * mm_config.image_patch_size, h * mm_config.image_patch_size) == (112, 112)
     assert len(tokens) == (w + 1) * h
+
+
+@pytest.mark.parametrize("size", [(200, 311), (300, 212), (251, 1374), (1475, 477), (1344, 1544), (2133, 3422)])
+def test_image_processing(
+    mm_config: MultimodalConfig, special_token_ids: SpecialImageIDs, size: Tuple[int, int]
+) -> None:
+    mm_config.max_image_size = 1024
+    mm_encoder = ImageEncoder(mm_config, special_token_ids)
+
+    # all images with w,h >= 1024 should be resized to 1024
+    # else round to nearest multiple of 16
+    # all while keeping the aspect ratio
+    EXP_IMG_SIZES = {
+        (200, 311): (208, 320),
+        (300, 212): (304, 224),
+        (251, 1374): (192, 1024),
+        (1475, 477): (1024, 336),
+        (1344, 1544): (896, 1024),
+        (2133, 3422): (640, 1024),
+    }
+    # integration test to make sure the img processing stays 100% the same
+    EXP_IMG_SUM = {
+        (200, 311): 232038.65023772235,
+        (300, 212): 182668.98900347573,
+        (251, 1374): 726925.9371541862,
+        (1475, 477): 985935.4162606588,
+        (1344, 1544): 2982953.705365115,
+        (2133, 3422): 2304438.4010818982,
+    }
+
+    url = f"https://picsum.photos/id/237/{size[0]}/{size[1]}"
+
+    content = ImageURLChunk(image_url=url)
+
+    image = mm_encoder(content).image
+
+    assert image.transpose().shape[:2] == EXP_IMG_SIZES[size], image.transpose().shape[:2]
+    assert np.abs(image).sum() - EXP_IMG_SUM[size] < 1e-5, np.abs(image).sum()
 
 
 def test_image_encoder_formats(mm_config: MultimodalConfig, special_token_ids: SpecialImageIDs) -> None:

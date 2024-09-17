@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from io import BytesIO
 from typing import Tuple, Union
 
+import cv2
 import numpy as np
 from PIL import Image
 
@@ -54,7 +55,7 @@ def _convert_to_rgb(image: Image.Image) -> Image.Image:
 
 
 def normalize(
-    image: Image.Image,
+    np_image: np.ndarray,
     mean: Tuple[float, float, float],
     std: Tuple[float, float, float],
 ) -> np.ndarray:
@@ -62,14 +63,13 @@ def normalize(
     Normalize a tensor image with mean and standard deviation.
 
     Args:
-    image (Image.Image): Image to be normalized.
+    image (np.ndarray): Image to be normalized.
     mean (tuple[float, float, float]): Mean for each channel.
     std (tuple[float, float, float]): Standard deviation for each channel.
 
     Returns:
     np.ndarray: Normalized image with shape (C, H, W).
     """
-    np_image = np.array(image, dtype=np.float32)
     np_image = np_image / 255.0
 
     assert len(np_image.shape) == 3, f"{np_image.shape=}"
@@ -81,9 +81,8 @@ def normalize(
 
 
 def transform_image(image: Image.Image, new_size: Tuple[int, int]) -> np.ndarray:
-    image = _convert_to_rgb(image)
-    image = image.resize(new_size, Image.Resampling.BICUBIC)
-    return normalize(image, DATASET_MEAN, DATASET_STD)
+    np_image = cv2.resize(np.array(_convert_to_rgb(image), dtype=np.float32), new_size, interpolation=cv2.INTER_CUBIC)
+    return normalize(np_image, DATASET_MEAN, DATASET_STD)
 
 
 class ImageEncoder(MultiModalEncoder):
