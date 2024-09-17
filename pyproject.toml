@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mistral_common"
-version = "1.4.0"
+version = "1.4.1"
 description = ""
 authors = ["bam4d <bam4d@mistral.ai>"]
 readme = "README.md"
@@ -35,6 +35,7 @@ typing-extensions = "^4.11.0"
 tiktoken = "^0.7.0"
 pillow = "^10.3.0"
 requests = "^2.0.0"
+opencv-python-headless = "^4.10.0.84"
 
 [tool.poetry.group.dev.dependencies]
 types-jsonschema = "4.21.0.20240118"
