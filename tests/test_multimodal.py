@@ -36,6 +36,19 @@ def test_image_to_num_tokens(mm_config: MultimodalConfig, special_token_ids: Spe
         assert mm_encoder._image_to_num_tokens(img) == (exp1, exp2)
 
 
+def test_download_gated_image(mm_config: MultimodalConfig, special_token_ids: SpecialImageIDs) -> None:
+    mm_encoder = ImageEncoder(mm_config, special_token_ids)
+
+    url1 = "https://upload.wikimedia.org/wikipedia/commons/d/da/2015_Kaczka_krzy%C5%BCowka_w_wodzie_%28samiec%29.jpg"
+    url2 = "https://upload.wikimedia.org/wikipedia/commons/7/77/002_The_lion_king_Snyggve_in_the_Serengeti_National_Park_Photo_by_Giles_Laurent.jpg"
+
+    for url in [url1, url2]:
+        content = ImageURLChunk(image_url=url)
+        image = mm_encoder(content).image
+
+        assert image is not None, "Make sure gated wikipedia images can be downloaded"
+
+
 def test_image_encoder(mm_config: MultimodalConfig, special_token_ids: SpecialImageIDs) -> None:
     mm_encoder = ImageEncoder(mm_config, special_token_ids)
 
