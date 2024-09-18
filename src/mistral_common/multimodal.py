@@ -9,6 +9,7 @@ from typing_extensions import Annotated
 
 from mistral_common import __version__
 
+
 def download_image(url: str) -> Image.Image:
     headers = {"User-Agent": f"mistral-common/{__version__}"}
     try:
