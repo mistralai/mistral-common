@@ -236,7 +236,8 @@ class Tekkenizer(Tokenizer):
                         "```\nfrom mistral_common.tokens.tokenizers.mistral import MistralTokenizer"
                         "\nfrom mistral_common.tokens.tokenizers.tekken import SpecialTokenPolicy"
                         "\n\ntokenizer = MistralTokenizer.v3(is_tekken=True)"
-                        "\ntokenizer.instruct_tokenizer.tokenizer.special_token_policy = SpecialTokenPolicy.IGNORE  # or SpecialTokenPolicy.KEEP"
+                        "\ntekken = tokenizer.instruct_tokenizer.tokenizer"
+                        "\ntekken.special_token_policy = SpecialTokenPolicy.IGNORE  # or SpecialTokenPolicy.KEEP"
                         "\n```"
                     )
                 elif special_token_policy == SpecialTokenPolicy.KEEP:
