@@ -150,7 +150,8 @@ class MultiModalEncoder(Protocol):
         ...
 
     @property
-    def image_token(self) -> int: ...
+    def image_token(self) -> int:
+        ...
 
 
 class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]):
@@ -181,7 +182,8 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         is_first: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray]]: ...
+    ) -> Tuple[List[int], List[np.ndarray]]:
+        ...
 
     @abstractmethod
     def encode_user_content(
@@ -190,4 +192,5 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         is_last: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray]]: ...
+    ) -> Tuple[List[int], List[np.ndarray]]:
+        ...
