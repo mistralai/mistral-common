@@ -62,7 +62,7 @@ types-requests = "^2.32"
 coverage = { extras = ["toml"], version = "^7.4.4" }
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
