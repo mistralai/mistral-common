@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from io import BytesIO
 from typing import Tuple, Union
 
-import cv2
 import numpy as np
 from PIL import Image
 
@@ -14,6 +13,18 @@ from mistral_common.tokens.tokenizers.base import (
     MultiModalEncoder,
     SpecialImageIDs,
 )
+
+_cv2_installed: bool
+try:
+    import cv2
+
+    _cv2_installed = True
+except ImportError:
+    _cv2_installed = False
+
+
+def is_cv2_installed() -> bool:
+    return _cv2_installed
 
 
 def image_from_chunk(chunk: Union[ImageURLChunk, ImageChunk]) -> SerializableImage:
@@ -81,6 +92,9 @@ def normalize(
 
 
 def transform_image(image: Image.Image, new_size: Tuple[int, int]) -> np.ndarray:
+    if not is_cv2_installed():
+        raise ImportError("OpenCV is required for this function. Install it with 'pip install mistral_common[opencv]'")
+
     np_image = cv2.resize(np.array(_convert_to_rgb(image), dtype=np.float32), new_size, interpolation=cv2.INTER_CUBIC)
     return normalize(np_image, DATASET_MEAN, DATASET_STD)
 
