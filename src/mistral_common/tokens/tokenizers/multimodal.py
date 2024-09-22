@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from io import BytesIO
 from typing import Tuple, Union
 
-from PIL import Image
 import numpy as np
+from PIL import Image
 
 from mistral_common.multimodal import SerializableImage, download_image
 from mistral_common.protocol.instruct.messages import ImageChunk, ImageURLChunk
