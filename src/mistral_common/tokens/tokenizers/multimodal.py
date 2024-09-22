@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from io import BytesIO
 from typing import Tuple, Union
 
-import numpy as np
 from PIL import Image
 
 from mistral_common.multimodal import SerializableImage, download_image
@@ -22,9 +21,21 @@ try:
 except ImportError:
     _cv2_installed = False
 
+_np_installed: bool
+try:
+    import numpy as np
+
+    _np_installed = True
+except ImportError:
+    _np_installed = False
+
 
 def is_cv2_installed() -> bool:
     return _cv2_installed
+
+
+def is_np_installed() -> bool:
+    return _np_installed
 
 
 def image_from_chunk(chunk: Union[ImageURLChunk, ImageChunk]) -> SerializableImage:
@@ -81,6 +92,10 @@ def normalize(
     Returns:
     np.ndarray: Normalized image with shape (C, H, W).
     """
+    assert (
+        is_np_installed()
+    ), "Numpy has to be installed as part of opencv. Make sure to have run 'pip install mistral_common[opencv]'"
+
     np_image = np_image / 255.0
 
     assert len(np_image.shape) == 3, f"{np_image.shape=}"
