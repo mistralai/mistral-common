@@ -29,9 +29,9 @@ except Exception:
     # cv2 has lots of import problems: https://github.com/opencv/opencv-python/issues/884
     # for better UX, let's simple skip import errors for now
     logger.warn(
-        "You seem to have a broken installation of opencv. "
-        "Please follow : https://github.com/opencv/opencv-python/issues/884 to correct your environment."
-        " Skipped cv2 import."
+        "Warning: Your installation of OpenCV appears to be broken. "
+        "Please follow the instructions at https://github.com/opencv/opencv-python/issues/884 "
+        "to correct your environment. The import of cv2 has been skipped."
     )
 
 
