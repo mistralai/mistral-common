@@ -1,4 +1,5 @@
 import base64
+import logging
 from dataclasses import dataclass
 from io import BytesIO
 from typing import Tuple, Union
@@ -14,6 +15,9 @@ from mistral_common.tokens.tokenizers.base import (
     SpecialImageIDs,
 )
 
+logger = logging.getLogger(__name__)
+
+
 _cv2_installed: bool
 try:
     import cv2
@@ -21,6 +25,14 @@ try:
     _cv2_installed = True
 except ImportError:
     _cv2_installed = False
+except Exception as e:
+    # cv2 has lots of import problems: https://github.com/opencv/opencv-python/issues/884
+    # for better UX, let's simply skip all errors that might arise from import for now
+    logger.warning(
+        f"Warning: Your installation of OpenCV appears to be broken: {e}."
+        "Please follow the instructions at https://github.com/opencv/opencv-python/issues/884 "
+        "to correct your environment. The import of cv2 has been skipped."
+    )
 
 
 def is_cv2_installed() -> bool:
