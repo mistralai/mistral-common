@@ -27,7 +27,7 @@ except ImportError:
     _cv2_installed = False
 except Exception as e:
     # cv2 has lots of import problems: https://github.com/opencv/opencv-python/issues/884
-    # for better UX, let's simple skip import errors for now
+    # for better UX, let's simply skip all errors that might arise from import for now
     logger.warning(
         f"Warning: Your installation of OpenCV appears to be broken: {e}."
         "Please follow the instructions at https://github.com/opencv/opencv-python/issues/884 "
