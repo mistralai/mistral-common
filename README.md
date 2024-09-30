@@ -24,6 +24,8 @@ We are releasing three versions of our tokenizer powering different sets of mode
 | Mathstral 7B v0.1 | v3 |
 | Nemo 12B 2407 | v3 - Tekken |
 | Large 123B 2407 | v3 |
+| Small 22B 2409 | v3 |
+| Pixtral 12B 2409 | v3 - Tekken |
 
 </td>
 <td>
@@ -34,11 +36,12 @@ We are releasing three versions of our tokenizer powering different sets of mode
 | open-mistral-7b | v3 |
 | open-mixtral-8x7b | v1 |
 | open-mixtral-8x22b | v3 |
-| mistral-small-latest | v2 |
+| mistral-small-latest | v3 |
 | mistral-large-latest | v3 |
 | codestral-22b | v3 |
 | open-codestral-mamba | v3 |
 | open-mistral-nemo | v3 - Tekken |
+| pixtral-12b-2409 | v3 - Tekken |
 
 </td>
   </tr>
