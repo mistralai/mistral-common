@@ -380,6 +380,8 @@ class InstructTokenizerV2(
             ]
         elif message.content:
             curr_tokens = self.tokenizer.encode(message.content, bos=False, eos=False)
+        elif message.content == "":
+            raise TokenizerException("Empty assistant message.")
         else:
             raise TokenizerException(f"Invalid assistant message: {message.content}")
 
