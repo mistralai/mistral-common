@@ -117,7 +117,7 @@ class InstructRequestNormalizer(
         weight: Optional[float] = None
         for message in messages:
             assert isinstance(message, self._assistant_message_class), "Expected assistant message"
-            if message.tool_calls is not None:
+            if message.tool_calls:
                 for tool_call in message.tool_calls:
                     normalized_tool_call = self._normalize_tool_call(tool_call)
                     tool_calls.append(normalized_tool_call)

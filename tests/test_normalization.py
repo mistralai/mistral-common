@@ -293,6 +293,10 @@ class TestChatCompletionRequestNormalization:
         normalized = normalizer.from_chat_completion_request(request)
         assert normalized == gt
 
+    def test_normalize_empty_array_tool_calls(self, normalizer: InstructRequestNormalizer) -> None:
+        message = AssistantMessage(role="assistant", content="Hello", tool_calls=[])
+        normalized_message = normalizer._aggregate_assistant_messages([message])
+        assert normalized_message.content == "Hello"
 
 class TestFineTuningNormalizer:
     @pytest.fixture(autouse=True)
