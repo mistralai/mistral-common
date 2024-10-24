@@ -217,7 +217,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
 
                 if current_role not in expected_roles:
                     raise InvalidMessageStructureException(
-                        f"Unexpected role '{current_role.value}' after role '{previous_role.value}'"
+                        f"Unexpected role '{current_role}' after role '{previous_role}'"
                     )
 
             previous_role = current_role
@@ -228,7 +228,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
         if self._mode == ValidationMode.finetuning:
             if last_message_role != Roles.assistant:
                 raise InvalidMessageStructureException(
-                    f"Expected last role Assistant for finetuning but got {last_message_role.value}"
+                    f"Expected last role Assistant for finetuning but got {last_message_role}"
                 )
         else:
             bad_assistant = isinstance(message, AssistantMessage) and not message.prefix
@@ -236,7 +236,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
             if bad_assistant and bad_role:
                 raise InvalidMessageStructureException(
                     f"Expected last role User or Tool (or Assistant with prefix True) for serving"
-                    f" but got {last_message_role.value}"
+                    f" but got {last_message_role}"
                 )
 
     def _validate_message_list_structure(self, messages: List[UATS]) -> None:
