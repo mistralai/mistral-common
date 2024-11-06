@@ -29,10 +29,10 @@ We are releasing three versions of our tokenizer powering different sets of mode
 | Mathstral 7B v0.1 | v3 |
 | Nemo 12B 2407 | v3 - Tekken |
 | Nemo 12B Instruct 2407 | v3 - Tekken |
-| Large 123B 2407 | v3 |
-| Small 22B 2409 | v3 |
+| Large 123B Instruct 2407 | v3 |
+| Small 22B Instruct 2409 | v3 |
 | Pixtral 12B 2409 | v3 - Tekken |
-| Ministral 8B 2410 | v3 - Tekken |
+| Ministral 8B Instruct 2410 | v3 - Tekken |
 
 </td>
 <td>
