@@ -11,26 +11,33 @@ We are releasing three versions of our tokenizer powering different sets of mode
   <tr>
     <td>
 
-| Open Model | Tokenizer |
+| Weights Available Models | Tokenizer |
 |------------|-----------|
+| Mistral 7B v0.1 | v1 |
+| Mistral 7B v0.2 | v1 |
+| Mistral 7B v0.3 | v3 |
 | Mistral 7B Instruct v0.1 | v1 |
 | Mistral 7B Instruct v0.2 | v1 |
 | Mistral 7B Instruct v0.3 | v3 |
+| Mixtral 8x7B v0.1 | v1 |
 | Mixtral 8x7B Instruct v0.1 | v1 |
+| Mixtral 8x22B v0.1 | v1 |
 | Mixtral 8x22B Instruct v0.1 | v3 |
 | Mixtral 8x22B Instruct v0.3 | v3 |
 | Codestral 22B v0.1 | v3 |
 | Codestral Mamba 7B v0.1 | v3 |
 | Mathstral 7B v0.1 | v3 |
 | Nemo 12B 2407 | v3 - Tekken |
+| Nemo 12B Instruct 2407 | v3 - Tekken |
 | Large 123B 2407 | v3 |
 | Small 22B 2409 | v3 |
 | Pixtral 12B 2409 | v3 - Tekken |
+| Ministral 8B 2410 | v3 - Tekken |
 
 </td>
 <td>
 
-| Endpoint Model | Tokenizer |
+| Endpoint Models | Tokenizer |
 |---------------|-----------|
 | mistral-embed | v1 |
 | open-mistral-7b | v3 |
@@ -42,6 +49,7 @@ We are releasing three versions of our tokenizer powering different sets of mode
 | open-codestral-mamba | v3 |
 | open-mistral-nemo | v3 - Tekken |
 | pixtral-12b-2409 | v3 - Tekken |
+| ministral-8b-latest | v3 - Tekken |
 
 </td>
   </tr>
