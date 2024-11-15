@@ -12,7 +12,7 @@ from mistral_common.protocol.instruct.messages import (
     ToolMessage,
     UserMessage,
 )
-from mistral_common.protocol.instruct.normalize import InstructRequestNormalizer
+from mistral_common.protocol.instruct.normalize import InstructRequestNormalizer, InstructRequestNormalizerV7
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.tokens.instruct.request import InstructRequest
@@ -22,6 +22,10 @@ class TestChatCompletionRequestNormalization:
     @pytest.fixture(autouse=True)
     def normalizer(self) -> InstructRequestNormalizer:
         return InstructRequestNormalizer(UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest)
+
+    @pytest.fixture(autouse=True)
+    def normalizer_v7(self) -> InstructRequestNormalizerV7:
+        return InstructRequestNormalizerV7(UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest)
 
     def mock_chat_completion(self, messages: List[ChatMessage]) -> ChatCompletionRequest:
         return ChatCompletionRequest(
@@ -77,12 +81,31 @@ class TestChatCompletionRequestNormalization:
 
         parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
 
-        assert parsed_request.system_prompt == "S"
-
         first_message = parsed_request.messages[0]
         assert isinstance(first_message, UserMessage)
         assert first_message.content == ""
         assert parsed_request.system_prompt == "S"
+
+    def test_system_assistant_user_v7(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
+        chat_completion_request = self.mock_chat_completion(
+            messages=[
+                SystemMessage(content="S"),
+                AssistantMessage(content="A"),
+                UserMessage(content="U"),
+            ]
+        )
+
+        parsed_request: InstructRequest = normalizer_v7.from_chat_completion_request(chat_completion_request)
+
+        first_message = parsed_request.messages[0]
+        assert isinstance(first_message, SystemMessage)
+        assert first_message.content == "S"
+
+        second_message = parsed_request.messages[1]
+        assert isinstance(second_message, AssistantMessage)
+        assert second_message.content == "A"
+
+        assert parsed_request.system_prompt is None
 
     def test_assistant_system_user_adds_user(self, normalizer: InstructRequestNormalizer) -> None:
         chat_completion_request = self.mock_chat_completion(
@@ -103,6 +126,28 @@ class TestChatCompletionRequestNormalization:
         assert isinstance(first_message, UserMessage)
         assert first_message.content == ""
         assert parsed_request.system_prompt == "S"
+
+    def test_assistant_assistant_system_v7(self, normalizer_v7: InstructRequestNormalizer) -> None:
+        chat_completion_request = self.mock_chat_completion(
+            messages=[
+                AssistantMessage(content="A"),
+                SystemMessage(content="S"),
+            ]
+        )
+
+        parsed_request = normalizer_v7.from_chat_completion_request(chat_completion_request)
+
+        assert parsed_request.system_prompt is None
+
+        assert len(parsed_request.messages) == 2
+
+        first_message = parsed_request.messages[0]
+        assert isinstance(first_message, AssistantMessage)
+        assert first_message.content == "A"
+
+        second_message = parsed_request.messages[1]
+        assert isinstance(second_message, SystemMessage)
+        assert second_message.content == "S"
 
     def check_merge(
         self,

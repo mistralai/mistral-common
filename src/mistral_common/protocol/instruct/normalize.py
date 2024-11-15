@@ -19,7 +19,7 @@ from mistral_common.protocol.instruct.messages import (
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.tool_calls import FunctionCall, Tool, ToolCall
 from mistral_common.tokens.instruct.request import InstructRequest
-from mistral_common.tokens.tokenizers.base import InstructRequestType
+from mistral_common.tokens.tokenizers.base import InstructRequestType, TokenizerVersion
 
 
 class InstructRequestNormalizer(
@@ -34,6 +34,8 @@ class InstructRequestNormalizer(
     - Normalize json content
     - Normalize tool calls
     """
+
+    system_prompt_in_begin: bool = False
 
     def __init__(
         self,
@@ -117,7 +119,7 @@ class InstructRequestNormalizer(
         weight: Optional[float] = None
         for message in messages:
             assert isinstance(message, self._assistant_message_class), "Expected assistant message"
-            if message.tool_calls is not None:
+            if message.tool_calls is not None and len(message.tool_calls) > 0:
                 for tool_call in message.tool_calls:
                     normalized_tool_call = self._normalize_tool_call(tool_call)
                     tool_calls.append(normalized_tool_call)
@@ -205,7 +207,9 @@ class InstructRequestNormalizer(
 
         # If the first message is not a user message, or we didnt aggregate
         # anything (all system messages) for example, add an empty user message
-        if len(aggregated_messages) == 0 or aggregated_messages[0].role != Roles.user:
+        if len(aggregated_messages) == 0 or (
+            not self.system_prompt_in_begin and aggregated_messages[0].role != Roles.user
+        ):
             aggregated_messages.insert(0, self._user_message_class(content=""))
 
         return aggregated_messages
@@ -217,3 +221,45 @@ class InstructRequestNormalizer(
         return self._instruct_request_class(
             messages=messages, system_prompt=system_prompt, available_tools=request.tools
         )
+
+
+class InstructRequestNormalizerV7(InstructRequestNormalizer):
+    system_prompt_in_begin: bool = True
+
+    @staticmethod
+    def normalizer() -> "InstructRequestNormalizerV7":
+        return InstructRequestNormalizerV7(
+            UserMessage,
+            AssistantMessage,
+            ToolMessage,
+            SystemMessage,
+            InstructRequest[UATS, Tool],
+        )
+
+    def _aggregate_role(self, messages: List[UATS], role: Optional[Roles]) -> Sequence[UATS]:
+        if role == Roles.tool:
+            return self._aggregate_tool_messages(messages)
+        elif role == Roles.assistant:
+            return [self._aggregate_assistant_messages(messages)]
+        elif role == Roles.user:
+            return [self._aggregate_user_messages(messages)]
+        elif role == Roles.system:
+            return messages
+        else:
+            assert role is None and len(messages) == 0
+            return []
+
+    def _aggregate_system_prompts(self, request: ChatCompletionRequest[UATS]) -> Optional[str]:
+        raise NotImplementedError("We should not aggregate system prompts")
+
+    def from_chat_completion_request(self, request: ChatCompletionRequest[UATS]) -> InstructRequestType:  # type: ignore[type-var]
+        messages = self._aggregate_messages(request)
+        return self._instruct_request_class(messages=messages, system_prompt=None, available_tools=request.tools)  # type: ignore[no-any-return]
+
+
+def normalizer_for_tokenizer_version(version: TokenizerVersion) -> InstructRequestNormalizer:
+    if version in {TokenizerVersion.v1, TokenizerVersion.v2, TokenizerVersion.v3}:
+        return InstructRequestNormalizer.normalizer()
+    elif version == TokenizerVersion.v7:
+        return InstructRequestNormalizerV7.normalizer()
+    raise ValueError(f"Unknown tokenizer version {version}")

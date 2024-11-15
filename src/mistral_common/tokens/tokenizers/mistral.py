@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable, Dict, Generic, List, Union
+from typing import Callable, Dict, Generic, List, Optional, Union
 
 from mistral_common.exceptions import (
     TokenizerException,
@@ -13,7 +13,7 @@ from mistral_common.protocol.instruct.messages import (
     ToolMessageType,
     UserMessageType,
 )
-from mistral_common.protocol.instruct.normalize import InstructRequestNormalizer
+from mistral_common.protocol.instruct.normalize import InstructRequestNormalizer, normalizer_for_tokenizer_version
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import (
     MistralRequestValidator,
@@ -39,13 +39,17 @@ from mistral_common.tokens.tokenizers.sentencepiece import (
     InstructTokenizerV1,
     InstructTokenizerV2,
     InstructTokenizerV3,
+    InstructTokenizerV7,
     SentencePieceTokenizer,
+    get_mm_config,
     is_sentencepiece,
 )
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekken
 
 
-def load_mm_encoder(mm_config: MultimodalConfig, tokenizer: Tekkenizer) -> MultiModalEncoder:
+def load_mm_encoder(
+    mm_config: MultimodalConfig, tokenizer: Union[Tekkenizer, SentencePieceTokenizer]
+) -> MultiModalEncoder:
     special_ids = SpecialImageIDs(
         img=tokenizer.get_control_token(SpecialTokens.img.value),
         img_break=tokenizer.get_control_token(SpecialTokens.img_break.value),
@@ -100,6 +104,13 @@ class MistralTokenizer(
         return cls.from_file(str(cls._data_path() / tokenizer_name), mode=ValidationMode.test)
 
     @classmethod
+    def v7(cls) -> "MistralTokenizer":
+        """mistral-large 2.1"""
+        return cls.from_file(
+            str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7m1"), mode=ValidationMode.test
+        )
+
+    @classmethod
     def from_model(cls, model: str) -> "MistralTokenizer":
         model_name_to_tokenizer_cls: Dict[str, Callable[[], MistralTokenizer]] = {
             "open-mistral-7b": MistralTokenizer.v1,
@@ -136,14 +147,15 @@ class MistralTokenizer(
         if is_tekken(tokenizer_filename):
             tokenizer = Tekkenizer.from_file(tokenizer_filename)
             mm_config = tokenizer.multimodal
-            mm_encoder = load_mm_encoder(mm_config, tokenizer) if mm_config is not None else None
         elif is_sentencepiece(tokenizer_filename):
             tokenizer = SentencePieceTokenizer(tokenizer_filename)
-            mm_encoder = None
+            mm_config = get_mm_config(tokenizer_filename)
         else:
             raise TokenizerException(f"Unrecognized tokenizer file: {tokenizer_filename}")
 
-        request_normalizer = InstructRequestNormalizer.normalizer()
+        mm_encoder = load_mm_encoder(mm_config, tokenizer) if mm_config is not None else None
+
+        request_normalizer = normalizer_for_tokenizer_version(tokenizer.version)
 
         if tokenizer.version == TokenizerVersion.v1:
             assert mm_encoder is None, "Tokenizer version needs to be >= v3"
@@ -165,14 +177,35 @@ class MistralTokenizer(
                 validator=MistralRequestValidatorV3(mode=mode),
                 request_normalizer=request_normalizer,
             )
+        elif tokenizer.version == TokenizerVersion.v7:
+            return MistralTokenizer(
+                InstructTokenizerV7(tokenizer, mm_encoder=mm_encoder),
+                validator=MistralRequestValidatorV3(mode=mode),
+                request_normalizer=request_normalizer,
+            )
         else:
             raise TokenizerException(f"Unrecognized tokenizer filename: {tokenizer_filename}")
 
         raise TokenizerException(f"Unrecognized tokenizer version: {tokenizer.version}")
 
-    def encode_chat_completion(self, request: ChatCompletionRequest[UATS]) -> TokenizedType:
+    def encode_chat_completion(
+        self, request: ChatCompletionRequest[UATS], max_model_input_len: Optional[int] = None
+    ) -> TokenizedType:
         validated_request = self._chat_completion_request_validator.validate_request(request)
+
+        if max_model_input_len is None and request.truncate_for_context_length:
+            # the max_model_input_len arg should not be optionnal ;
+            # but this function is used in many small scripts that have no use
+            # for truncation, and don't provide the max model len
+            raise TokenizerException(
+                "encoding a chat completion request with truncation, but no max model len was provided",
+            )
+
         instruct_request = self._instruct_request_normalizer.from_chat_completion_request(validated_request)
+
+        if request.truncate_for_context_length:
+            instruct_request.truncate_at_max_tokens = max_model_input_len
+
         return self.instruct_tokenizer.encode_instruct(instruct_request)
 
     def encode_fim(self, request: FIMRequest) -> TokenizedType:

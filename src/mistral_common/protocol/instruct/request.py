@@ -24,3 +24,4 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     response_format: ResponseFormat = Field(default_factory=ResponseFormat)
     tools: Optional[List[Tool]] = None
     tool_choice: ToolChoice = ToolChoice.auto
+    truncate_for_context_length: bool = False
