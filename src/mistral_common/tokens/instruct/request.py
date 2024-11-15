@@ -22,3 +22,4 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
     messages: List[ChatMessageType]
     system_prompt: Optional[str] = None
     available_tools: Optional[List[ToolType]] = None
+    truncate_at_max_tokens: Optional[int] = None

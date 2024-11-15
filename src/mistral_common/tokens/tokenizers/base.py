@@ -34,12 +34,16 @@ class SpecialTokens(str, Enum):
     prefix = "[PREFIX]"
     middle = "[MIDDLE]"
     suffix = "[SUFFIX]"
+    begin_system = "[SYSTEM_PROMPT]"
+    end_system = "[/SYSTEM_PROMPT]"
+    begin_tool_content = "[TOOL_CONTENT]"
 
 
 class TokenizerVersion(str, Enum):
     v1 = "v1"  # vocab_size = 32000
     v2 = "v2"  # vocab_size = 32768 with special control tokens [INST], [\INST]
     v3 = "v3"  # vocab_size = 32768 (spm) OR 128000 (tekken) with improved function calling
+    v7 = "v7"  # vocab_size = 32768 (spm) or 128000 (tekken) with improved system prompt and function calling
 
 
 class Tokenized(MistralBase):

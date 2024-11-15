@@ -36,7 +36,7 @@ def tekken_tokenizer() -> InstructTokenizer:
 
 def test_is_spm() -> None:
     # this is valid
-    for suffix in list(TokenizerVersion.__members__):
+    for suffix in list(TokenizerVersion.__members__) + ["v3m1"]:
         with NamedTemporaryFile(suffix=".model." + suffix) as f:
             assert is_sentencepiece(f.name)
 
@@ -49,13 +49,12 @@ def test_is_spm() -> None:
 
 
 def test_spm_version() -> None:
-    directory = Path(__file__).parent / "data"
+    directory = Path(__file__).parent.parent / "src" / "mistral_common" / "data"
 
     for file in directory.iterdir():
         if not file.is_file() or str(file).endswith(".json"):
             continue
-        suffix = file.suffix[1:]
-        print(suffix)
+        suffix = file.suffix[1:].split("m")[0]
         if suffix == "model":
             assert SentencePieceTokenizer(str(file)).version == TokenizerVersion.v1
         else:

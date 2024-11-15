@@ -1,6 +1,7 @@
 import base64
 import logging
 from dataclasses import dataclass
+from enum import Enum
 from io import BytesIO
 from typing import Tuple, Union
 
@@ -55,6 +56,18 @@ def image_from_chunk(chunk: Union[ImageURLChunk, ImageChunk]) -> SerializableIma
 
 DATASET_MEAN = (0.48145466, 0.4578275, 0.40821073)  # RGB
 DATASET_STD = (0.26862954, 0.26130258, 0.27577711)  # RGB
+
+
+# only relevant for spm
+class MultiModalVersion(str, Enum):
+    m1 = "m1"
+
+    @property
+    def config(self) -> "MultimodalConfig":
+        if self.name == "m1":
+            return MultimodalConfig(16, 1024)
+
+        raise NotImplementedError(f"{self.name}")
 
 
 @dataclass
