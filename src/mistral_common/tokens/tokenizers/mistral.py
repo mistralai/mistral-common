@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+import warnings
 from pathlib import Path
 from typing import Callable, Dict, Generic, List, Optional, Union
 
@@ -104,34 +103,60 @@ class MistralTokenizer(
         return cls.from_file(str(cls._data_path() / tokenizer_name), mode=ValidationMode.test)
 
     @classmethod
-    def v7(cls) -> "MistralTokenizer":
+    def v7(cls, is_mm: bool = False) -> "MistralTokenizer":
         """mistral-large 2.1"""
-        return cls.from_file(
-            str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7m1"), mode=ValidationMode.test
-        )
+        if is_mm:
+            return cls.from_file(
+                str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7m1"), mode=ValidationMode.test
+            )
+        else:
+            return cls.from_file(
+                str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7"), mode=ValidationMode.test
+            )
 
     @classmethod
-    def from_model(cls, model: str) -> "MistralTokenizer":
+    def from_model(cls, model: str, strict: bool = False) -> "MistralTokenizer":
         model_name_to_tokenizer_cls: Dict[str, Callable[[], MistralTokenizer]] = {
-            "open-mistral-7b": MistralTokenizer.v1,
-            "open-mixtral-8x7b": MistralTokenizer.v1,
-            "mistral-embed": MistralTokenizer.v1,
-            "mistral-small-v1": MistralTokenizer.v2,
-            "mistral-large-v1": MistralTokenizer.v2,
-            "mistral-small": MistralTokenizer.v3,
-            "mistral-large": MistralTokenizer.v3,
-            "open-mixtral-8x22b": MistralTokenizer.v3,
-            "codestral-22b": MistralTokenizer.v3,
-            "mistral-nemo": lambda: MistralTokenizer.v3(is_tekken=True),
+            "ministral-8b-2410": lambda: MistralTokenizer.v3(is_tekken=True),
+            "mistral-tiny-2312": MistralTokenizer.v2,
+            "open-mistral-nemo-2407": lambda: MistralTokenizer.v3(is_tekken=True),
+            "mistral-tiny-2407": MistralTokenizer.v3,
+            "mistral-small-2312": MistralTokenizer.v2,
+            "open-mixtral-8x22b-2404": MistralTokenizer.v3,
+            "mistral-small-2402": MistralTokenizer.v2,
+            "mistral-small-2409": lambda: MistralTokenizer.v3(is_tekken=True),
+            "mistral-medium-2312": MistralTokenizer.v1,
+            "mistral-large-2402": MistralTokenizer.v2,
+            "mistral-large-2407": MistralTokenizer.v3,
+            "mistral-large-2411": MistralTokenizer.v7,
+            "pixtral-large-2411": lambda: MistralTokenizer.v7(is_mm=True),
+            "codestral-2405": MistralTokenizer.v3,
+            "codestral-mamba-2407": MistralTokenizer.v3,
+            "pixtral-12b-2409": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
+            # Deprecated - only left for backward comp
             "pixtral": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
         }
 
-        # Prefix search the model name mapping
-        for model_name, tokenizer_cls in model_name_to_tokenizer_cls.items():
-            if model_name in model.lower():
-                return tokenizer_cls()
+        if not strict:
+            warnings.warn(
+                "Calling `MistralTokenizer.from_model(..., strict=False)` is deprecated as it can lead to incorrect tokenizers."
+                "It is strongly recommended to use MistralTokenizer.from_model(..., strict=True)` "
+                "which will become the default in `mistral_common=1.6.0`."
+                "If you are using `mistral_common` for open-sourced model weights, we recommend using "
+                "`MistralTokenizer.from_file('<path/to/tokenizer/file>')` instead.",
+                FutureWarning,
+            )
 
-        raise TokenizerException(f"Unrecognized model: {model}")
+            # TODO(Delete this code in mistral_common >= 1.6.0
+            # Prefix search the model name mapping
+            for model_name, tokenizer_cls in model_name_to_tokenizer_cls.items():
+                if model_name in model.lower():
+                    return tokenizer_cls()
+
+        if model not in model_name_to_tokenizer_cls:
+            raise TokenizerException(f"Unrecognized model: {model}")
+
+        return model_name_to_tokenizer_cls[model]()
 
     @classmethod
     def from_file(

@@ -38,7 +38,7 @@ def tekkenizer() -> InstructTokenizerV7:
 
 @pytest.fixture(scope="session")
 def spm_tokenizer() -> InstructTokenizerV7:
-    tokenizer = MistralTokenizer.v7().instruct_tokenizer
+    tokenizer = MistralTokenizer.v7(is_mm=True).instruct_tokenizer
     mm_encoder = tokenizer.mm_encoder
     assert isinstance(mm_encoder, ImageEncoder)
     # hardcode image_patch_size = 2 for easier checks
@@ -165,7 +165,7 @@ def test_encode_spm(spm_tokenizer: InstructTokenizerV7, messages: List[ChatMessa
 
 
 def test_encode_chat_completion() -> None:
-    tokenizer = MistralTokenizer.v7()
+    tokenizer = MistralTokenizer.v7(is_mm=True)
 
     request: ChatCompletionRequest = ChatCompletionRequest(
         tools=[
@@ -302,3 +302,42 @@ def test_truncation(tekkenizer: InstructTokenizerV7, messages: List[ChatMessage]
 def test_truncation_failed(tekkenizer: InstructTokenizerV7, messages: List[ChatMessage]) -> None:
     with pytest.raises(TokenizerException):
         tekkenizer.encode_instruct(InstructRequest(messages=messages, truncate_at_max_tokens=9))
+
+
+def test_from_model():
+    tokenizer = MistralTokenizer.from_model("ministral-8b-2410", strict=True)
+    assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v3
+    assert tokenizer.instruct_tokenizer.mm_encoder is None
+
+    tokenizer = MistralTokenizer.from_model("mistral-small-2402", strict=True)
+    assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v2
+    assert tokenizer.instruct_tokenizer.mm_encoder is None
+
+    tokenizer = MistralTokenizer.from_model("mistral-small-2409", strict=True)
+    assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v3
+    assert tokenizer.instruct_tokenizer.mm_encoder is None
+
+    tokenizer = MistralTokenizer.from_model("mistral-large-2411", strict=True)
+    assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v7
+    assert tokenizer.instruct_tokenizer.mm_encoder is None
+
+    tokenizer = MistralTokenizer.from_model("pixtral-large-2411", strict=True)
+    assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v7
+    assert tokenizer.instruct_tokenizer.mm_encoder is not None
+
+    tokenizer = MistralTokenizer.from_model("pixtral-12b-2409", strict=True)
+    assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v3
+    assert tokenizer.instruct_tokenizer.mm_encoder is not None
+
+    with pytest.raises(TokenizerException):
+        MistralTokenizer.from_model("unknown-model", strict=True)
+
+    with pytest.warns(FutureWarning):
+        tokenizer = MistralTokenizer.from_model("ministral-8b-2410", strict=False)
+        assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v3
+        assert tokenizer.instruct_tokenizer.mm_encoder is None
+
+    with pytest.warns(FutureWarning):
+        tokenizer = MistralTokenizer.from_model("pixtral", strict=False)
+        assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v3
+        assert tokenizer.instruct_tokenizer.mm_encoder is not None
