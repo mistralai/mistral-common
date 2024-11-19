@@ -139,8 +139,8 @@ class MistralTokenizer(
 
         if not strict:
             warnings.warn(
-                "Calling `MistralTokenizer.from_model(..., strict=False)` is deprecated as it can lead to incorrect tokenizers."
-                "It is strongly recommended to use MistralTokenizer.from_model(..., strict=True)` "
+                "Calling `MistralTokenizer.from_model(..., strict=False)` is deprecated as it can lead to incorrect "
+                "tokenizers. It is strongly recommended to use MistralTokenizer.from_model(..., strict=True)` "
                 "which will become the default in `mistral_common=1.6.0`."
                 "If you are using `mistral_common` for open-sourced model weights, we recommend using "
                 "`MistralTokenizer.from_file('<path/to/tokenizer/file>')` instead.",

@@ -304,7 +304,7 @@ def test_truncation_failed(tekkenizer: InstructTokenizerV7, messages: List[ChatM
         tekkenizer.encode_instruct(InstructRequest(messages=messages, truncate_at_max_tokens=9))
 
 
-def test_from_model():
+def test_from_model() -> None:
     tokenizer = MistralTokenizer.from_model("ministral-8b-2410", strict=True)
     assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v3
     assert tokenizer.instruct_tokenizer.mm_encoder is None
