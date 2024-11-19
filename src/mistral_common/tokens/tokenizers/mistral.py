@@ -133,8 +133,19 @@ class MistralTokenizer(
             "codestral-2405": MistralTokenizer.v3,
             "codestral-mamba-2407": MistralTokenizer.v3,
             "pixtral-12b-2409": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
-            # Deprecated - only left for backward comp
+            # The following are deprecated - only left for backward comp. Delete in >= 1.6.0
+            "open-mistral-7b": MistralTokenizer.v1,
+            "open-mixtral-8x7b": MistralTokenizer.v1,
+            "mistral-embed": MistralTokenizer.v1,
+            "mistral-small-v1": MistralTokenizer.v2,
+            "mistral-large-v1": MistralTokenizer.v2,
+            "mistral-small": MistralTokenizer.v3,
+            "mistral-large": MistralTokenizer.v3,
+            "open-mixtral-8x22b": MistralTokenizer.v3,
+            "codestral-22b": MistralTokenizer.v3,
+            "mistral-nemo": lambda: MistralTokenizer.v3(is_tekken=True),
             "pixtral": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
+            "pixtral-large": lambda: MistralTokenizer.v7(is_mm=True),
         }
 
         if not strict:
