@@ -1,0 +1,69 @@
+name: Mistral Common CI
+on:
+  push:
+    # branches: [ "main" ]
+    # tags:
+    #   # This will match tags like v1.0.0, v1.0.1, v1.0.2-dev0, etc.
+    #   - v[0-9]+.[0-9]+.[0-9]+
+    #   - v[0-9]+.[0-9]+.[0-9]+-[a-z]+[0-9]+
+
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+# we cancel all runs of previous commits in PR. On main we run the CI on all commits
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || 'no-pr' }}
+  cancel-in-progress: ${{ github.event.pull_request.number != null }}
+
+jobs:
+  build_lint_test:
+    if: ${{ github.event.pull_request.draft != true }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # For our public version of that code, support it back to Python 3.8.
+        python-version: [
+          "3.8",
+          "3.9",
+          "3.10",
+          "3.11",
+          "3.12"
+        ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Install
+      - name: Install Dependencies
+        run: |
+          pip install "poetry==1.*"
+          poetry install
+
+      # Ruff Linter
+      - name: Ruff Linter
+        run: |
+          poetry run ruff check .
+
+      # Ruff Format
+      - name: Ruff Format
+        run: |
+          poetry run ruff format . --check
+
+      # Mypy
+      - name: Mypy Check
+        run: |
+          poetry run mypy .
+
+      # PyTest
+      - name: Tests
+        run: |
+          poetry run pytest --cov=mistral_common . --cov-report "xml:coverage.xml"
