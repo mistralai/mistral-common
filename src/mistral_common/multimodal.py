@@ -48,11 +48,16 @@ def maybe_load_image_from_str_or_bytes(x: Union[Image.Image, str, bytes]) -> Ima
 
 
 def serialize_image_to_byte_str(im: Image.Image, info: SerializationInfo) -> str:
+    if hasattr(info, "context"):
+        context = info.context or {}
+    else:
+        context = {}
+
     stream = io.BytesIO()
     im_format = im.format or "PNG"
     im.save(stream, format=im_format)
     im_b64 = base64.b64encode(stream.getvalue()).decode("ascii")
-    if info.context and (max_image_b64_len := info.context.get("max_image_b64_len")):
+    if context and (max_image_b64_len := context.get("max_image_b64_len")):
         return im_b64[:max_image_b64_len] + "..."
     return im_b64
 

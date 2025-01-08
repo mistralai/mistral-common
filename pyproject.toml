@@ -29,7 +29,7 @@ ignore_missing_imports = true
 
 [tool.poetry.dependencies]
 python = "^3.8.10"
-pydantic = "^2.6.1"
+pydantic = "^2.7,<3.0"
 jsonschema = "^4.21.1"
 sentencepiece = "0.2.0"
 typing-extensions = "^4.11.0"
