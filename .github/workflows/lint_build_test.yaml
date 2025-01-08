@@ -46,7 +46,7 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install "poetry==1.*"
-          poetry install
+          poetry install --extras "opencv"
 
       # Ruff Linter
       - name: Ruff Linter
