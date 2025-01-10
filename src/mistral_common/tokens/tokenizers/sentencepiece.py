@@ -332,6 +332,7 @@ class InstructTokenizerV2(
         self.BOS = self.tokenizer.get_control_token(SpecialTokens.bos.value)
         self.PREFIX = self.tokenizer.get_control_token(SpecialTokens.prefix.value)
         self.SUFFIX = self.tokenizer.get_control_token(SpecialTokens.suffix.value)
+        self.MIDDLE = self.tokenizer.get_control_token(SpecialTokens.middle.value)
 
     def encode_user_message(
         self,
@@ -453,6 +454,7 @@ class InstructTokenizerV2(
             *suffix_tokens,
             self.PREFIX,
             *prefix_tokens,
+            self.MIDDLE,
         ]
         return Tokenized(tokens=tokens, text=self.tokenizer.to_string(tokens))
 
