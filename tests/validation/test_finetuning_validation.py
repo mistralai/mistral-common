@@ -115,3 +115,49 @@ class TestFineTuningValidation:
                 ],
             )
         assert str(exc.value) == "Expected last role Assistant for finetuning but got user"
+
+    def test_parallel_tool_call(self, validator: MistralRequestValidator) -> None:
+        function = FunctionCall(name="foo", arguments='{"a": 1}')
+        validator.validate_messages(
+            messages=[
+                UserMessage(content="foo"),
+                FinetuningAssistantMessage(
+                    tool_calls=[
+                        ToolCall(id="123456789", function=function),
+                        ToolCall(id="912345678", function=function),
+                    ]
+                ),
+            ],
+        )
+
+        validator.validate_messages(
+            messages=[
+                UserMessage(content="foo"),
+                FinetuningAssistantMessage(
+                    tool_calls=[
+                        ToolCall(id="123456789", function=function),
+                        ToolCall(id="912345678", function=function),
+                    ]
+                ),
+                ToolMessage(name="foo", content="bar", tool_call_id="912345678"),
+                ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
+                FinetuningAssistantMessage(content="foo"),
+            ],
+        )
+
+        with pytest.raises(InvalidMessageStructureException):
+            validator.validate_messages(
+                messages=[
+                    UserMessage(content="foo"),
+                    FinetuningAssistantMessage(
+                        tool_calls=[
+                            ToolCall(id="123456789", function=function),
+                            ToolCall(id="912345678", function=function),
+                        ]
+                    ),
+                    ToolMessage(name="foo", content="bar", tool_call_id="912345678"),
+                    ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
+                    ToolMessage(name="foo", content="bar", tool_call_id="891234567"),
+                    FinetuningAssistantMessage(content="foo"),
+                ],
+            )
