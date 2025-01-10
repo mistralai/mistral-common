@@ -16,7 +16,7 @@ We are releasing three versions of our tokenizer powering different sets of mode
 | Mistral 7B Instruct v0.1 | v1 |
 | Mistral 7B Instruct v0.2 | v1 |
 | Mistral 7B Instruct v0.3 | v3 |
-| Mixtral 8x7B Instruct v0.1 | v1 |
+| Mixtral 8x7B Instruct v0.1 | v1 | 
 | Mixtral 8x22B Instruct v0.1 | v3 |
 | Mixtral 8x22B Instruct v0.3 | v3 |
 | Codestral 22B v0.1 | v3 |
