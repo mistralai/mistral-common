@@ -78,19 +78,16 @@ class MistralTokenizer(
 
     @classmethod
     def v1(cls) -> "MistralTokenizer":
-        """open 7B x 8x7B + embed"""
         return cls.from_file(str(cls._data_path() / "tokenizer.model.v1"), mode=ValidationMode.test)
 
     @classmethod
     def v2(cls) -> "MistralTokenizer":
-        """mistral-small // mistral-large"""
         return cls.from_file(
             str(cls._data_path() / "mistral_instruct_tokenizer_240216.model.v2"), mode=ValidationMode.test
         )
 
     @classmethod
     def v3(cls, is_tekken: bool = False, is_mm: bool = False) -> "MistralTokenizer":
-        """open-mixtral-8x22B"""
         if is_tekken and is_mm:
             tokenizer_name = "tekken_240911.json"
         elif is_tekken and not is_mm:
@@ -103,16 +100,19 @@ class MistralTokenizer(
         return cls.from_file(str(cls._data_path() / tokenizer_name), mode=ValidationMode.test)
 
     @classmethod
-    def v7(cls, is_mm: bool = False) -> "MistralTokenizer":
-        """mistral-large 2.1"""
-        if is_mm:
-            return cls.from_file(
-                str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7m1"), mode=ValidationMode.test
-            )
+    def v7(cls, is_tekken: bool = False, is_mm: bool = False) -> "MistralTokenizer":
+        if not is_tekken and is_mm:
+            file_name = "mistral_instruct_tokenizer_241114.model.v7m1"
+        elif not is_tekken and not is_mm:
+            file_name = "mistral_instruct_tokenizer_241114.model.v7"
+        elif is_tekken and not is_mm:
+            file_name = "tekken_250128.json"
         else:
-            return cls.from_file(
-                str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7"), mode=ValidationMode.test
+            raise ValueError(
+                f"No tokenizer exists for {is_tekken=} and {is_mm=}. Either disable `is_mm`, `is_tekken` or both."
             )
+
+        return cls.from_file(str(cls._data_path() / file_name), mode=ValidationMode.test)
 
     @classmethod
     def from_model(cls, model: str, strict: bool = False) -> "MistralTokenizer":
