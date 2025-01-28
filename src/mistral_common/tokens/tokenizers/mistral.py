@@ -146,6 +146,7 @@ class MistralTokenizer(
             "mistral-nemo": lambda: MistralTokenizer.v3(is_tekken=True),
             "pixtral": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
             "pixtral-large": lambda: MistralTokenizer.v7(is_mm=True),
+            "mistral-small-2501": lambda: MistralTokenizer.v7(is_tekken=True, is_mm=False),
         }
 
         if not strict:
