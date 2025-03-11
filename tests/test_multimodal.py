@@ -18,9 +18,12 @@ from PIL import Image
 def special_token_ids() -> SpecialImageIDs:
     return SpecialImageIDs(img=0, img_break=1, img_end=2)
 
+
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
 def test_image_to_num_tokens(spatial_merge_size: int, special_token_ids: SpecialImageIDs) -> None:
-    mm_config = MultimodalConfig(image_patch_size=16 // spatial_merge_size, max_image_size=128, spatial_merge_size=spatial_merge_size)
+    mm_config = MultimodalConfig(
+        image_patch_size=16 // spatial_merge_size, max_image_size=128, spatial_merge_size=spatial_merge_size
+    )
     mm_encoder = ImageEncoder(mm_config, special_token_ids)
 
     for size, exp in [(4, 1), (16, 1), (128, 8), (512, 8), (2048, 8)]:
@@ -34,7 +37,9 @@ def test_image_to_num_tokens(spatial_merge_size: int, special_token_ids: Special
 
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
 def test_download_gated_image(spatial_merge_size: int, special_token_ids: SpecialImageIDs) -> None:
-    mm_config = MultimodalConfig(image_patch_size=16 // spatial_merge_size, max_image_size=128, spatial_merge_size=spatial_merge_size)
+    mm_config = MultimodalConfig(
+        image_patch_size=16 // spatial_merge_size, max_image_size=128, spatial_merge_size=spatial_merge_size
+    )
     mm_encoder = ImageEncoder(mm_config, special_token_ids)
 
     url1 = "https://upload.wikimedia.org/wikipedia/commons/d/da/2015_Kaczka_krzy%C5%BCowka_w_wodzie_%28samiec%29.jpg"
@@ -49,7 +54,9 @@ def test_download_gated_image(spatial_merge_size: int, special_token_ids: Specia
 
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
 def test_image_encoder(spatial_merge_size: int, special_token_ids: SpecialImageIDs) -> None:
-    mm_config = MultimodalConfig(image_patch_size=16 // spatial_merge_size, max_image_size=128, spatial_merge_size=spatial_merge_size)
+    mm_config = MultimodalConfig(
+        image_patch_size=16 // spatial_merge_size, max_image_size=128, spatial_merge_size=spatial_merge_size
+    )
     mm_encoder = ImageEncoder(mm_config, special_token_ids)
 
     size = 386
@@ -66,7 +73,10 @@ def test_image_encoder(spatial_merge_size: int, special_token_ids: SpecialImageI
     w, h = mm_encoder._image_to_num_tokens(img)
     # max image size 128
     assert image.shape == (3, 128, 128)
-    assert (w * mm_config.image_patch_size * spatial_merge_size, h * mm_config.image_patch_size * spatial_merge_size) == (128, 128)
+    assert (
+        w * mm_config.image_patch_size * spatial_merge_size,
+        h * mm_config.image_patch_size * spatial_merge_size,
+    ) == (128, 128)
     assert len(tokens) == (w + 1) * h
 
     size = 111  # nearest multiple of sixteen lower than 128 is 112
@@ -81,30 +91,34 @@ def test_image_encoder(spatial_merge_size: int, special_token_ids: SpecialImageI
     tokens, image = output.tokens, output.image
     assert image.shape == (3, 112, 112)
     w, h = mm_encoder._image_to_num_tokens(img)
-    assert (w * mm_config.image_patch_size * spatial_merge_size, h * mm_config.image_patch_size * spatial_merge_size) == (112, 112)
+    assert (
+        w * mm_config.image_patch_size * spatial_merge_size,
+        h * mm_config.image_patch_size * spatial_merge_size,
+    ) == (112, 112)
     assert len(tokens) == (w + 1) * h
 
 
-@pytest.mark.parametrize("size, spatial_merge_size", 
+@pytest.mark.parametrize(
+    "size, spatial_merge_size",
     [
         ((200, 311), 1),
         ((300, 212), 1),
         ((251, 1374), 1),
-        ((1475, 477), 1), 
-        ((1344, 1544),1), 
-        ((2133, 3422), 1), 
-        ((200, 311), 2), 
-        ((300, 212), 2),  
-        ((251, 1374), 2),  
-        ((1475, 477), 2),  
-        ((1344, 1544), 2),  
-        ((2133, 3422), 2),  
-    ]
+        ((1475, 477), 1),
+        ((1344, 1544), 1),
+        ((2133, 3422), 1),
+        ((200, 311), 2),
+        ((300, 212), 2),
+        ((251, 1374), 2),
+        ((1475, 477), 2),
+        ((1344, 1544), 2),
+        ((2133, 3422), 2),
+    ],
 )
-def test_image_processing(
-    special_token_ids: SpecialImageIDs, size: Tuple[int, int], spatial_merge_size: int
-) -> None:
-    mm_config = MultimodalConfig(image_patch_size=16 // spatial_merge_size, max_image_size=1024, spatial_merge_size=spatial_merge_size)
+def test_image_processing(special_token_ids: SpecialImageIDs, size: Tuple[int, int], spatial_merge_size: int) -> None:
+    mm_config = MultimodalConfig(
+        image_patch_size=16 // spatial_merge_size, max_image_size=1024, spatial_merge_size=spatial_merge_size
+    )
     mm_encoder = ImageEncoder(mm_config, special_token_ids)
 
     # all images with w,h >= 1024 should be resized to 1024
@@ -140,7 +154,9 @@ def test_image_processing(
 
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
 def test_image_encoder_formats(spatial_merge_size, special_token_ids: SpecialImageIDs) -> None:
-    mm_config = MultimodalConfig(image_patch_size=16 // spatial_merge_size, max_image_size=1024, spatial_merge_size=spatial_merge_size)
+    mm_config = MultimodalConfig(
+        image_patch_size=16 // spatial_merge_size, max_image_size=1024, spatial_merge_size=spatial_merge_size
+    )
     mm_encoder = ImageEncoder(mm_config, special_token_ids)
 
     url = "https://picsum.photos/id/237/200/300"
