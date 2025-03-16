@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mistral_common"
-version = "1.5.3"
+version = "1.5.4"
 description = ""
 authors = ["bam4d <bam4d@mistral.ai>"]
 readme = "README.md"

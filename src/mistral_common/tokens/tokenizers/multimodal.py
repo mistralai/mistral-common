@@ -74,6 +74,7 @@ class MultiModalVersion(str, Enum):
 class MultimodalConfig:
     image_patch_size: int
     max_image_size: int
+    spatial_merge_size: int = 1
 
 
 def _convert_to_rgb(image: Image.Image) -> Image.Image:
@@ -139,8 +140,8 @@ class ImageEncoder(MultiModalEncoder):
             w = round(w / ratio)
             h = round(h / ratio)
 
-        width_tokens = (w - 1) // self.mm_config.image_patch_size + 1
-        height_tokens = (h - 1) // self.mm_config.image_patch_size + 1
+        width_tokens = (w - 1) // (self.mm_config.image_patch_size * self.mm_config.spatial_merge_size) + 1
+        height_tokens = (h - 1) // (self.mm_config.image_patch_size * self.mm_config.spatial_merge_size) + 1
 
         return width_tokens, height_tokens
 
@@ -161,8 +162,8 @@ class ImageEncoder(MultiModalEncoder):
         image_tokens = ([self.special_ids.img] * w + [self.special_ids.img_break]) * h
         image_tokens[-1] = self.special_ids.img_end
         new_image_size = (
-            w * self.mm_config.image_patch_size,
-            h * self.mm_config.image_patch_size,
+            w * self.mm_config.image_patch_size * self.mm_config.spatial_merge_size,
+            h * self.mm_config.image_patch_size * self.mm_config.spatial_merge_size,
         )
         processed_image = transform_image(image, new_image_size)
         return ImageEncoding(tokens=image_tokens, image=processed_image)
