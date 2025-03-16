@@ -153,7 +153,7 @@ def test_image_processing(special_token_ids: SpecialImageIDs, size: Tuple[int, i
 
 
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
-def test_image_encoder_formats(spatial_merge_size, special_token_ids: SpecialImageIDs) -> None:
+def test_image_encoder_formats(spatial_merge_size: int, special_token_ids: SpecialImageIDs) -> None:
     mm_config = MultimodalConfig(
         image_patch_size=16 // spatial_merge_size, max_image_size=1024, spatial_merge_size=spatial_merge_size
     )
