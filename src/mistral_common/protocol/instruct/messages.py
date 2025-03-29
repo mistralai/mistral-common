@@ -77,7 +77,7 @@ class SystemMessage(BaseMessage):
 
 class AssistantMessage(BaseMessage):
     role: Literal[Roles.assistant] = Roles.assistant
-    content: Optional[str] = None
+    content: Optional[Union[str, List[TextChunk]]] = None
     tool_calls: Optional[List[ToolCall]] = None
     prefix: bool = False
 
