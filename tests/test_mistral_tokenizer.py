@@ -1,11 +1,11 @@
 import pytest
 from mistral_common.exceptions import TokenizerException
-from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.sentencepiece import (
+from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV1,
     InstructTokenizerV2,
     InstructTokenizerV3,
 )
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 
 class TestMistralToknizer:

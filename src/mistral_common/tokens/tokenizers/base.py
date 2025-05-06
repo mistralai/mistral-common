@@ -19,6 +19,7 @@ from mistral_common.tokens.instruct.request import FIMRequest, InstructRequest
 
 
 class SpecialTokens(str, Enum):
+    unk = "<unk>"
     bos = "<s>"
     eos = "</s>"
     begin_inst = "[INST]"
@@ -29,6 +30,7 @@ class SpecialTokens(str, Enum):
     end_tool_results = "[/TOOL_RESULTS]"
     tool_calls = "[TOOL_CALLS]"
     img = "[IMG]"
+    pad = "<pad>"
     img_break = "[IMG_BREAK]"
     img_end = "[IMG_END]"
     prefix = "[PREFIX]"
@@ -154,8 +156,7 @@ class MultiModalEncoder(Protocol):
         ...
 
     @property
-    def image_token(self) -> int:
-        ...
+    def image_token(self) -> int: ...
 
 
 class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]):
@@ -186,8 +187,7 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         is_first: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray]]:
-        ...
+    ) -> Tuple[List[int], List[np.ndarray]]: ...
 
     @abstractmethod
     def encode_user_content(
@@ -196,5 +196,4 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         is_last: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray]]:
-        ...
+    ) -> Tuple[List[int], List[np.ndarray]]: ...

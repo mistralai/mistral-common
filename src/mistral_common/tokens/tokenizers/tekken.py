@@ -1,6 +1,7 @@
 import base64
 import json
 import logging
+import warnings
 from enum import Enum
 from functools import cached_property
 from itertools import groupby
@@ -32,6 +33,12 @@ class TokenInfo(TypedDict):
     token_str: Optional[str]
 
 
+class SpecialTokenInfo(TypedDict):
+    rank: int
+    token_str: str
+    is_control: bool
+
+
 class TekkenConfig(TypedDict):
     pattern: str
     num_vocab_tokens: int
@@ -57,28 +64,29 @@ class SpecialTokenPolicy(Enum):
 
 
 class Tekkenizer(Tokenizer):
-    SPECIAL_TOKENS = (
-        "<unk>",
-        SpecialTokens.bos,
-        SpecialTokens.eos,
-        SpecialTokens.begin_inst,
-        SpecialTokens.end_inst,
-        SpecialTokens.begin_tools,
-        SpecialTokens.end_tools,
-        SpecialTokens.begin_tool_results,
-        SpecialTokens.end_tool_results,
-        SpecialTokens.tool_calls,
-        SpecialTokens.img,
-        "<pad>",
-        SpecialTokens.img_break,
-        SpecialTokens.img_end,
-        SpecialTokens.prefix,
-        SpecialTokens.middle,
-        SpecialTokens.suffix,
-        SpecialTokens.begin_system,
-        SpecialTokens.end_system,
-        SpecialTokens.begin_tool_content,
+    DEPRECATED_SPECIAL_TOKENS = (
+        SpecialTokenInfo(rank=0, token_str=SpecialTokens.unk, is_control=True),
+        SpecialTokenInfo(rank=1, token_str=SpecialTokens.bos, is_control=True),
+        SpecialTokenInfo(rank=2, token_str=SpecialTokens.eos, is_control=True),
+        SpecialTokenInfo(rank=3, token_str=SpecialTokens.begin_inst, is_control=True),
+        SpecialTokenInfo(rank=4, token_str=SpecialTokens.end_inst, is_control=True),
+        SpecialTokenInfo(rank=5, token_str=SpecialTokens.begin_tools, is_control=True),
+        SpecialTokenInfo(rank=6, token_str=SpecialTokens.end_tools, is_control=True),
+        SpecialTokenInfo(rank=7, token_str=SpecialTokens.begin_tool_results, is_control=True),
+        SpecialTokenInfo(rank=8, token_str=SpecialTokens.end_tool_results, is_control=True),
+        SpecialTokenInfo(rank=9, token_str=SpecialTokens.tool_calls, is_control=True),
+        SpecialTokenInfo(rank=10, token_str=SpecialTokens.img, is_control=True),
+        SpecialTokenInfo(rank=11, token_str=SpecialTokens.pad, is_control=True),
+        SpecialTokenInfo(rank=12, token_str=SpecialTokens.img_break, is_control=True),
+        SpecialTokenInfo(rank=13, token_str=SpecialTokens.img_end, is_control=True),
+        SpecialTokenInfo(rank=14, token_str=SpecialTokens.prefix, is_control=True),
+        SpecialTokenInfo(rank=15, token_str=SpecialTokens.middle, is_control=True),
+        SpecialTokenInfo(rank=16, token_str=SpecialTokens.suffix, is_control=True),
+        SpecialTokenInfo(rank=17, token_str=SpecialTokens.begin_system, is_control=True),
+        SpecialTokenInfo(rank=18, token_str=SpecialTokens.end_system, is_control=True),
+        SpecialTokenInfo(rank=19, token_str=SpecialTokens.begin_tool_content, is_control=True),
     )
+
     SPECIAL_TOKEN_TEMPLATE = "<SPECIAL_{id}>"
 
     # # note that params has a vocab_size field, but it's not used
@@ -86,6 +94,7 @@ class Tekkenizer(Tokenizer):
     def __init__(
         self,
         vocab: List[TokenInfo],
+        special_tokens: List[SpecialTokenInfo],
         pattern: str,
         vocab_size: int,
         num_special_tokens: int,
@@ -101,19 +110,26 @@ class Tekkenizer(Tokenizer):
             num_special_tokens,
         )
         self._vocab_size = vocab_size
-        self._path = _path
 
-        special_tokens = list(self.SPECIAL_TOKENS)
-        assert len(special_tokens) == len(set(special_tokens)), f"Special tokens must be unique: {special_tokens}"
-        assert len(special_tokens) < num_special_tokens
+        # The number of special tokens defined in the tokenizer json
+        num_defined_special_tokens = len(set([t["token_str"] for t in special_tokens]))
+
+        assert len(special_tokens) == num_defined_special_tokens, f"Special tokens must be unique: {special_tokens}"
+        assert len(special_tokens) <= num_special_tokens
 
         special_filler = [
-            self.SPECIAL_TOKEN_TEMPLATE.format(id=i) for i in range(len(special_tokens), num_special_tokens)
+            SpecialTokenInfo(rank=i, token_str=self.SPECIAL_TOKEN_TEMPLATE.format(id=i), is_control=True)
+            for i in range(len(special_tokens), num_special_tokens)
         ]
         if special_filler:
-            logger.info(f"Adding special tokens {special_filler[0]}, ..., {special_filler[-1]}")
+            logger.info(
+                f"Adding special tokens {special_filler[0]['token_str']}, ..., {special_filler[-1]['token_str']}"
+            )
         special_tokens = special_tokens + special_filler
-        assert len(set(special_tokens)) == len(special_tokens) == num_special_tokens, special_tokens
+
+        assert (
+            len(set([t["token_str"] for t in special_tokens])) == len(special_tokens) == num_special_tokens
+        ), special_tokens
         inner_vocab_size = vocab_size - num_special_tokens
 
         # reload vocab
@@ -122,45 +138,72 @@ class Tekkenizer(Tokenizer):
             inner_vocab_size,
             self._tekken_token2id_nospecial,
         )
-
         self._model = tiktoken.Encoding(
             name=name,
             pat_str=pattern,
             mergeable_ranks=self._tekken_token2id_nospecial,
             special_tokens={},  # special tokens are handled manually
         )
-        self._all_special_tokens = special_tokens
-        self._vocab = [self.id_to_piece(i) for i in range(vocab_size)]
+
         self._version = version
-        self._special_token_policy = SpecialTokenPolicy.RAISE
         self._mm_config = mm_config
+        self._all_special_tokens = special_tokens
+        self._special_tokens_reverse_vocab = {t["token_str"]: t["rank"] for t in special_tokens}
+        self._vocab = [self.id_to_piece(i) for i in range(vocab_size)]
+        self._special_token_policy = SpecialTokenPolicy.RAISE
 
     @classmethod
     def from_file(cls: Type["Tekkenizer"], path: Union[str, Path]) -> "Tekkenizer":
         if isinstance(path, str):
             path = Path(path)
-        assert path.exists()
+        assert path.exists(), path
         with open(path, "r") as f:
             untyped = json.load(f)
-            if mm := untyped.get("multimodal", None):
-                untyped["multimodal"] = MultimodalConfig(**mm)
-            model_data: ModelData = untyped
 
-        _version_str = model_data["config"].get("version")
+        _version_str = untyped["config"].get("version")
         if _version_str not in TokenizerVersion.__members__:
             raise ValueError(
                 f"Unknown version: {_version_str} in {path}. "
                 f"Make sure to use a valid version string: {list(TokenizerVersion.__members__)}"
             )
 
+        assert _version_str is not None
+        version = TokenizerVersion(_version_str)
+
+        special_tokens_dicts: list[SpecialTokenInfo] | None = untyped.get("special_tokens", None)
+        if special_tokens_dicts is None:
+            err_msg = (
+                f"Special tokens not found in {path} and default to {Tekkenizer.DEPRECATED_SPECIAL_TOKENS}. "
+                "This behavior will be deprecated going forward. "
+                "Please update your tokenizer file and include all special tokens you need."
+            )
+            # Tokenizer > v7 should find special tokens in the tokenizer file
+            if version > TokenizerVersion("v7"):
+                raise ValueError(err_msg)
+            else:
+                warnings.warn(
+                    err_msg,
+                    FutureWarning,
+                )
+                special_tokens = list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS)
+        else:
+            special_tokens = [token for token in special_tokens_dicts]
+
+        untyped["special_tokens"] = special_tokens
+
+        if mm := untyped.get("multimodal", None):
+            untyped["multimodal"] = MultimodalConfig(**mm)
+
+        model_data: ModelData = untyped
+
         return cls(
             vocab=model_data["vocab"],
+            special_tokens=special_tokens,
             pattern=model_data["config"]["pattern"],
             vocab_size=model_data["config"]["default_vocab_size"],
             num_special_tokens=model_data["config"]["default_num_special_tokens"],
-            version=TokenizerVersion(_version_str),
+            version=version,
             name=path.name.replace(".json", ""),
-            _path=str(path),
             mm_config=model_data.get("multimodal"),
         )
 
@@ -194,19 +237,19 @@ class Tekkenizer(Tokenizer):
 
     @cached_property
     def bos_id(self) -> int:
-        return self.SPECIAL_TOKENS.index("<s>")
+        return self.get_control_token("<s>")
 
     @cached_property
     def eos_id(self) -> int:
-        return self.SPECIAL_TOKENS.index("</s>")
+        return self.get_control_token("</s>")
 
     @cached_property
     def pad_id(self) -> int:
-        return self.SPECIAL_TOKENS.index("<pad>")
+        return self.get_control_token("<pad>")
 
     @cached_property
     def unk_id(self) -> int:
-        return self.SPECIAL_TOKENS.index("<unk>")
+        return self.get_control_token("<unk>")
 
     def vocab(self) -> List[str]:
         # when returning self._vocab this will collapse
@@ -244,7 +287,7 @@ class Tekkenizer(Tokenizer):
                         "\n```"
                     )
                 elif special_token_policy == SpecialTokenPolicy.KEEP:
-                    decoded.extend(self._all_special_tokens[t] for t in group)
+                    decoded.extend(self._all_special_tokens[t]["token_str"] for t in group)
                 elif special_token_policy == SpecialTokenPolicy.IGNORE:
                     continue
                 # TODO: Could use "tokens_str" from vocab.json
@@ -257,9 +300,9 @@ class Tekkenizer(Tokenizer):
         return 0 <= token_id - self.num_special_tokens < 256
 
     def get_control_token(self, s: str) -> int:
-        try:
-            return self._all_special_tokens.index(s)
-        except ValueError:
+        if s in self._special_tokens_reverse_vocab:
+            return self._special_tokens_reverse_vocab[s]
+        else:
             raise ValueError(f"Unknown control token {s}")
 
     def decode(self, tokens: List[int]) -> str:
@@ -276,7 +319,7 @@ class Tekkenizer(Tokenizer):
         """convert a token id to its byte representation."""
         if token_id < self.num_special_tokens:
             if self._special_token_policy == SpecialTokenPolicy.KEEP:
-                return self._all_special_tokens[token_id].encode("utf-8")
+                return self._all_special_tokens[token_id]["token_str"].encode("utf-8")
             elif self._special_token_policy == SpecialTokenPolicy.RAISE:
                 raise ValueError(f"{token_id} is a special token")
 

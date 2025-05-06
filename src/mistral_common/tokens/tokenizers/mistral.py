@@ -28,6 +28,12 @@ from mistral_common.tokens.tokenizers.base import (
     TokenizedType,
     TokenizerVersion,
 )
+from mistral_common.tokens.tokenizers.instruct import (
+    InstructTokenizerV1,
+    InstructTokenizerV2,
+    InstructTokenizerV3,
+    InstructTokenizerV7,
+)
 from mistral_common.tokens.tokenizers.multimodal import (
     ImageEncoder,
     MultimodalConfig,
@@ -35,10 +41,6 @@ from mistral_common.tokens.tokenizers.multimodal import (
     SpecialImageIDs,
 )
 from mistral_common.tokens.tokenizers.sentencepiece import (
-    InstructTokenizerV1,
-    InstructTokenizerV2,
-    InstructTokenizerV3,
-    InstructTokenizerV7,
     SentencePieceTokenizer,
     get_mm_config,
     is_sentencepiece,
@@ -219,10 +221,8 @@ class MistralTokenizer(
                 validator=MistralRequestValidatorV3(mode=mode),
                 request_normalizer=request_normalizer,
             )
-        else:
-            raise TokenizerException(f"Unrecognized tokenizer filename: {tokenizer_filename}")
 
-        raise TokenizerException(f"Unrecognized tokenizer version: {tokenizer.version}")
+        raise TokenizerException(f"Unrecognized tokenizer filename: {tokenizer_filename}")
 
     def encode_chat_completion(
         self, request: ChatCompletionRequest[UATS], max_model_input_len: Optional[int] = None
