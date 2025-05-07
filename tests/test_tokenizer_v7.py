@@ -15,9 +15,9 @@ from mistral_common.protocol.instruct.messages import (
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.tokens.tokenizers.base import InstructRequest, TokenizerVersion
+from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.multimodal import ImageEncoder
-from mistral_common.tokens.tokenizers.sentencepiece import InstructTokenizerV7
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from PIL import Image
 
@@ -28,6 +28,7 @@ from tests.test_tekken import _quick_vocab
 def tekkenizer() -> InstructTokenizerV7:
     tokenizer = Tekkenizer(
         _quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
+        list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS),
         pattern=r".+",  # single token, whole string
         vocab_size=256 + 100,
         num_special_tokens=100,

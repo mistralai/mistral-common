@@ -19,6 +19,7 @@ from mistral_common.tokens.instruct.request import FIMRequest, InstructRequest
 
 
 class SpecialTokens(str, Enum):
+    unk = "<unk>"
     bos = "<s>"
     eos = "</s>"
     begin_inst = "[INST]"
@@ -29,6 +30,7 @@ class SpecialTokens(str, Enum):
     end_tool_results = "[/TOOL_RESULTS]"
     tool_calls = "[TOOL_CALLS]"
     img = "[IMG]"
+    pad = "<pad>"
     img_break = "[IMG_BREAK]"
     img_end = "[IMG_END]"
     prefix = "[PREFIX]"

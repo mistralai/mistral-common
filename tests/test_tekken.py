@@ -61,6 +61,7 @@ def _write_tekkenizer_model(
 def test_roundtrip() -> None:
     tekkenizer = Tekkenizer(
         _quick_vocab(extra_toks=[b"beau", b"My", b"unused"]),
+        list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS),
         pattern=".",
         vocab_size=256 + 3 + 100,
         num_special_tokens=100,
@@ -105,6 +106,7 @@ def test_read_from_file(tmp_path: Path) -> None:
     tekkenizer_loaded = Tekkenizer.from_file(tokpath)
     tekkenizer = Tekkenizer(
         vocab,
+        list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS),
         pattern,
         vocab_size=256 + 3 + num_special_tokens,
         num_special_tokens=100,
@@ -149,6 +151,7 @@ def test_istekken(tmp_path: Path) -> None:
 def test_isbyte() -> None:
     tekkenizer = Tekkenizer(
         _quick_vocab([b"hello"]),
+        list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS),
         pattern=r".+",  # single token, whole string
         vocab_size=256 + 1 + 100,
         num_special_tokens=100,
