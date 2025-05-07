@@ -170,7 +170,7 @@ class Tekkenizer(Tokenizer):
         assert _version_str is not None
         version = TokenizerVersion(_version_str)
 
-        special_tokens_dicts: list[SpecialTokenInfo] | None = untyped.get("special_tokens", None)
+        special_tokens_dicts: Optional[list[SpecialTokenInfo]] = untyped.get("special_tokens", None)
         if special_tokens_dicts is None:
             err_msg = (
                 f"Special tokens not found in {path} and default to {Tekkenizer.DEPRECATED_SPECIAL_TOKENS}. "
