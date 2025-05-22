@@ -345,7 +345,7 @@ def test_from_model() -> None:
 
 
 def test_assistant_tool_call_and_content(tekkenizer: InstructTokenizerV7) -> None:
-    request = InstructRequest(
+    request: InstructRequest = InstructRequest(
         available_tools=[
             Tool(function=Function(name="t1", parameters={})),
             Tool(function=Function(name="t2", parameters={})),

@@ -407,7 +407,7 @@ def test_tool_message_multiple_calls(tokenizer: InstructTokenizer, special_ws: s
 
 @pytest.mark.parametrize("tokenizer", [tokenizer(), tekken_tokenizer()])
 def test_assistant_tool_call_and_content(tokenizer: InstructTokenizer) -> None:
-    req = InstructRequest(
+    req: InstructRequest = InstructRequest(
         messages=[
             UserMessage(content="a"),
             AssistantMessage(
