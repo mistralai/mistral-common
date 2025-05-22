@@ -17,7 +17,6 @@ from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import (
     MistralRequestValidator,
     MistralRequestValidatorV3,
-    MistralRequestValidatorV7,
     ValidationMode,
 )
 from mistral_common.tokens.instruct.request import FIMRequest
@@ -219,7 +218,7 @@ class MistralTokenizer(
         elif tokenizer.version == TokenizerVersion.v7:
             return MistralTokenizer(
                 InstructTokenizerV7(tokenizer, mm_encoder=mm_encoder),
-                validator=MistralRequestValidatorV7(mode=mode),
+                validator=MistralRequestValidatorV3(mode=mode),
                 request_normalizer=request_normalizer,
             )
 

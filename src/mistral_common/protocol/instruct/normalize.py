@@ -34,8 +34,8 @@ class InstructRequestNormalizer(
     - Normalize json content
     - Normalize tool calls
     """
-
     system_prompt_in_begin: bool = False
+    allow_tool_call_and_content: bool = False
 
     def __init__(
         self,
@@ -44,8 +44,6 @@ class InstructRequestNormalizer(
         tool_message_class: Type[ToolMessageType],
         system_message_class: Type[SystemMessageType],
         instruct_request_class: Type[InstructRequestType],
-        allow_tool_call_and_content: bool = False,
-        
     ):
         self._user_message_class = user_message_class
         self._assistant_message_class = assistant_message_class
@@ -53,7 +51,6 @@ class InstructRequestNormalizer(
         self._instruct_request_class = instruct_request_class
         # this is unused but makes creation nicer
         self._system_message_class = system_message_class
-        self._allow_tool_call_and_content = allow_tool_call_and_content
 
     @staticmethod
     def normalizer() -> "InstructRequestNormalizer":
@@ -123,7 +120,7 @@ class InstructRequestNormalizer(
         for message in messages:
             assert isinstance(message, self._assistant_message_class), "Expected assistant message"
 
-            if not self._allow_tool_call_and_content and (message.tool_calls and message.content):
+            if not self.allow_tool_call_and_content and (message.tool_calls and message.content):
                 raise ValueError(
                     f"Tool calls and content cannot be used together in the same message. {message}"
                 )
@@ -236,6 +233,7 @@ class InstructRequestNormalizer(
 
 class InstructRequestNormalizerV7(InstructRequestNormalizer):
     system_prompt_in_begin: bool = True
+    allow_tool_call_and_content: bool = True
 
     @staticmethod
     def normalizer() -> "InstructRequestNormalizerV7":
