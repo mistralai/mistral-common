@@ -362,7 +362,11 @@ def test_assistant_tool_call_and_content(tekkenizer: InstructTokenizerV7) -> Non
         ],
     )
     text = tekkenizer.encode_instruct(request).text
-    assert (
-        text
-        == '<s>[AVAILABLE_TOOLS][{"type": "function", "function": {"name": "t1", "description": "", "parameters": {}}}, {"type": "function", "function": {"name": "t2", "description": "", "parameters": {}}}][/AVAILABLE_TOOLS][INST]a[/INST]b1b2[TOOL_CALLS][{"name": "t1", "arguments": {}, "id": "0"}, {"name": "t2", "arguments": {}, "id": "1"}]</s>'
+    assert text == (
+        '<s>[AVAILABLE_TOOLS][{"type": "function", "function": '
+        '{"name": "t1", "description": "", "parameters": {}}}, '
+        '{"type": "function", "function": {"name": "t2", "description"'
+        ': "", "parameters": {}}}][/AVAILABLE_TOOLS][INST]a[/INST]b1b2[TOOL_CALLS]'
+        '[{"name": "t1", "arguments": {}, "id": "0"}, {"name": "t2", "arguments": {}'
+        ', "id": "1"}]</s>'
     )
