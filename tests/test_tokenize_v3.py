@@ -403,3 +403,33 @@ def test_tool_message_multiple_calls(tokenizer: InstructTokenizer, special_ws: s
         f'[TOOL_RESULTS]{special_ws}{{"content":{ws}"d",{ws}"call_id":{ws}"2"}}[/TOOL_RESULTS]'
         f'[TOOL_RESULTS]{special_ws}{{"content":{ws}"d",{ws}"call_id":{ws}"3"}}[/TOOL_RESULTS]'
     )
+
+
+@pytest.mark.parametrize("tokenizer", [tokenizer(), tekken_tokenizer()])
+def test_assistant_tool_call_and_content(tokenizer: InstructTokenizer) -> None:
+    req = InstructRequest(
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(
+                content="b",
+                tool_calls=[
+                    ToolCall(id="0", function=FunctionCall(name="b", arguments="{}")),
+                ]
+            ),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="Cannot have tool calls and content defined in the same assistant message"):
+        tokenizer.encode_instruct(req)
+
+    #_, text = tokenized.tokens, tokenized.text
+    #assert text == (
+    #    f"<s>[INST]{special_ws}a[/INST]"
+    #    f'[TOOL_CALLS]{special_ws}[{{"name":{ws}"b",{ws}"arguments":{ws}{{}},{ws}"id":{ws}"0"}},{ws}{{"name":{ws}"q",{ws}"arguments":{ws}{{}},{ws}"id":{ws}"1"}}]</s>'
+    #    f'[TOOL_RESULTS]{special_ws}{{"content":{ws}"d",{ws}"call_id":{ws}"0"}}[/TOOL_RESULTS]'
+    #    f'[TOOL_RESULTS]{special_ws}{{"content":{ws}"d",{ws}"call_id":{ws}"1"}}[/TOOL_RESULTS]'
+    #    f"{special_ws}e</s>[INST]{special_ws}f[/INST]"
+    #    f'[TOOL_CALLS]{special_ws}[{{"name":{ws}"b",{ws}"arguments":{ws}{{}},{ws}"id":{ws}"2"}},{ws}{{"name":{ws}"q",{ws}"arguments":{ws}{{}},{ws}"id":{ws}"3"}}]</s>'
+    #    f'[TOOL_RESULTS]{special_ws}{{"content":{ws}"d",{ws}"call_id":{ws}"2"}}[/TOOL_RESULTS]'
+    #    f'[TOOL_RESULTS]{special_ws}{{"content":{ws}"d",{ws}"call_id":{ws}"3"}}[/TOOL_RESULTS]'
+    #)

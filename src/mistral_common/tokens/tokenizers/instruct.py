@@ -295,6 +295,9 @@ class InstructTokenizerV2(
         return curr_tokens
 
     def encode_assistant_message(self, message: AssistantMessageType, is_before_last_user_message: bool) -> List[int]:
+        if message.tool_calls and message.content:
+            raise ValueError(f"Cannot have tool calls and content defined in the same assistant message {message}")
+
         if message.tool_calls:
             if is_before_last_user_message:
                 # don't tokenize tool call before last user message

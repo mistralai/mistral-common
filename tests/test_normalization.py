@@ -1,3 +1,4 @@
+import json
 from typing import Dict, List
 
 import pytest
@@ -353,6 +354,60 @@ class TestChatCompletionRequestNormalizationV7:
         assert isinstance(second_message, SystemMessage)
         assert second_message.content == "S"
 
+    def test_assistant_content_with_tool_calls(self, normalizer_v7: InstructRequestNormalizer) -> None:
+        chat_completion_request = mock_chat_completion(
+            messages=[
+                AssistantMessage(
+                    content="A",
+                    tool_calls=[ToolCall(function=FunctionCall(name="tool1", arguments='{"input": "11"}'))],
+                )
+            ]
+        )
+        normalized_chat_req = normalizer_v7.from_chat_completion_request(chat_completion_request)
+
+        assert normalized_chat_req.messages[0].content == "A", normalized_chat_req.messages[0].content
+        assert len(normalized_chat_req.messages[0].tool_calls) == 1, normalized_chat_req.messages[0].tool_calls
+        assert normalized_chat_req.messages[0].tool_calls[0].function.name == "tool1", normalized_chat_req.messages[0].tool_calls[0].function.name
+
+    def test_assistant_content_with_more_tool_calls(self, normalizer_v7: InstructRequestNormalizer) -> None:
+        chat_completion_request = mock_chat_completion(
+            messages=[
+                UserMessage(content="A1"),
+                AssistantMessage(
+                    content="B1",
+                ),
+                AssistantMessage(
+                    content="B2",
+                    tool_calls=[ToolCall(function=FunctionCall(name="tool1", arguments='{"input": "1"}'))],
+                ),
+                AssistantMessage(
+                    content="B3",
+                ),
+                AssistantMessage(
+                    content="B4",
+                    tool_calls=[
+                        ToolCall(function=FunctionCall(name="tool21", arguments='{"input": "21"}')),
+                        ToolCall(function=FunctionCall(name="tool22", arguments='{"input": "22"}'))
+                    ],
+                ),
+                AssistantMessage(
+                    content="B5",
+                ),
+                UserMessage(content="C1"),
+            ]
+        )
+        normalized_chat_req = normalizer_v7.from_chat_completion_request(chat_completion_request)
+
+        assert normalized_chat_req.messages[0].content == "A1"
+        assert normalized_chat_req.messages[1].content.split("\n\n") == [f"B{i}" for i in range(1, 6)]
+
+        tool_calls = normalized_chat_req.messages[1].tool_calls
+
+        assert len(tool_calls) == 3
+
+        tool_key = ["1", "21", "22"]
+        assert all([t.function.name == f"tool{tool_key[i]}" for i, t in enumerate(tool_calls)])
+        assert all([json.loads(t.function.arguments)["input"] == tool_key[i] for i, t in enumerate(tool_calls)])
 
 class TestFineTuningNormalizer:
     @pytest.fixture(autouse=True)
