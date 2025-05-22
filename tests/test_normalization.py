@@ -18,25 +18,22 @@ from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, 
 from mistral_common.tokens.instruct.request import InstructRequest
 
 
+def mock_chat_completion(messages: List[ChatMessage]) -> ChatCompletionRequest:
+    return ChatCompletionRequest(
+        model="test",
+        messages=messages,
+        top_p=1.0,
+        temperature=0.7,
+    )
+
+
 class TestChatCompletionRequestNormalization:
     @pytest.fixture(autouse=True)
     def normalizer(self) -> InstructRequestNormalizer:
         return InstructRequestNormalizer(UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest)
 
-    @pytest.fixture(autouse=True)
-    def normalizer_v7(self) -> InstructRequestNormalizerV7:
-        return InstructRequestNormalizerV7(UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest)
-
-    def mock_chat_completion(self, messages: List[ChatMessage]) -> ChatCompletionRequest:
-        return ChatCompletionRequest(
-            model="test",
-            messages=messages,
-            top_p=1.0,
-            temperature=0.7,
-        )
-
     def test_user_system_user(self, normalizer: InstructRequestNormalizer) -> None:
-        chat_completion_request = self.mock_chat_completion(
+        chat_completion_request = mock_chat_completion(
             messages=[
                 UserMessage(content="U"),
                 SystemMessage(content="S"),
@@ -48,7 +45,7 @@ class TestChatCompletionRequestNormalization:
         assert parsed_request.system_prompt == "S"
 
     def test_multiple_system(self, normalizer: InstructRequestNormalizer) -> None:
-        chat_completion_request = self.mock_chat_completion(
+        chat_completion_request = mock_chat_completion(
             messages=[
                 SystemMessage(content="S"),
                 SystemMessage(content="S"),
@@ -60,7 +57,7 @@ class TestChatCompletionRequestNormalization:
         assert parsed_request.system_prompt == "S\n\nS\n\nS"
 
     def test_single_system(self, normalizer: InstructRequestNormalizer) -> None:
-        chat_completion_request = self.mock_chat_completion(
+        chat_completion_request = mock_chat_completion(
             messages=[
                 SystemMessage(content="S"),
             ]
@@ -71,7 +68,7 @@ class TestChatCompletionRequestNormalization:
         assert parsed_request.system_prompt == "S"
 
     def test_system_assistant_user(self, normalizer: InstructRequestNormalizer) -> None:
-        chat_completion_request = self.mock_chat_completion(
+        chat_completion_request = mock_chat_completion(
             messages=[
                 SystemMessage(content="S"),
                 AssistantMessage(content="A"),
@@ -86,29 +83,20 @@ class TestChatCompletionRequestNormalization:
         assert first_message.content == ""
         assert parsed_request.system_prompt == "S"
 
-    def test_system_assistant_user_v7(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
-        chat_completion_request = self.mock_chat_completion(
+    def test_assistant_content_with_tool_calls(self, normalizer: InstructRequestNormalizer) -> None:
+        chat_completion_request = mock_chat_completion(
             messages=[
-                SystemMessage(content="S"),
-                AssistantMessage(content="A"),
-                UserMessage(content="U"),
+                AssistantMessage(
+                    content="A",
+                    tool_calls=[ToolCall(function=FunctionCall(name="tool1", arguments='{"input": "11"}'))],
+                )
             ]
         )
-
-        parsed_request: InstructRequest = normalizer_v7.from_chat_completion_request(chat_completion_request)
-
-        first_message = parsed_request.messages[0]
-        assert isinstance(first_message, SystemMessage)
-        assert first_message.content == "S"
-
-        second_message = parsed_request.messages[1]
-        assert isinstance(second_message, AssistantMessage)
-        assert second_message.content == "A"
-
-        assert parsed_request.system_prompt is None
+        with pytest.raises(ValueError, match="Tool calls and content cannot be used together in the same message"):
+            normalizer.from_chat_completion_request(chat_completion_request)
 
     def test_assistant_system_user_adds_user(self, normalizer: InstructRequestNormalizer) -> None:
-        chat_completion_request = self.mock_chat_completion(
+        chat_completion_request = mock_chat_completion(
             messages=[
                 AssistantMessage(content="A"),
                 SystemMessage(content="S"),
@@ -127,28 +115,6 @@ class TestChatCompletionRequestNormalization:
         assert first_message.content == ""
         assert parsed_request.system_prompt == "S"
 
-    def test_assistant_assistant_system_v7(self, normalizer_v7: InstructRequestNormalizer) -> None:
-        chat_completion_request = self.mock_chat_completion(
-            messages=[
-                AssistantMessage(content="A"),
-                SystemMessage(content="S"),
-            ]
-        )
-
-        parsed_request = normalizer_v7.from_chat_completion_request(chat_completion_request)
-
-        assert parsed_request.system_prompt is None
-
-        assert len(parsed_request.messages) == 2
-
-        first_message = parsed_request.messages[0]
-        assert isinstance(first_message, AssistantMessage)
-        assert first_message.content == "A"
-
-        second_message = parsed_request.messages[1]
-        assert isinstance(second_message, SystemMessage)
-        assert second_message.content == "S"
-
     def check_merge(
         self,
         roles: List[str],
@@ -163,7 +129,7 @@ class TestChatCompletionRequestNormalization:
             "u2": UserMessage(content="u2"),
         }
 
-        chat_completion_request = self.mock_chat_completion(
+        chat_completion_request = mock_chat_completion(
             messages=[letter_to_cls[r] for r in roles],
         )
         parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
@@ -196,7 +162,7 @@ class TestChatCompletionRequestNormalization:
         )
 
     def test_normalize_chunks(self, normalizer: InstructRequestNormalizer) -> None:
-        chat_completion_request = self.mock_chat_completion(
+        chat_completion_request = mock_chat_completion(
             messages=[
                 UserMessage(content="foo"),
                 UserMessage(
@@ -216,7 +182,7 @@ class TestChatCompletionRequestNormalization:
         assert first_message.content == "foo\n\nchunk\n\nfoo\n\nchunk"
 
     def test_many_chunks_in_user_message(self, normalizer: InstructRequestNormalizer) -> None:
-        chat_completion_request = self.mock_chat_completion(
+        chat_completion_request = mock_chat_completion(
             messages=[
                 UserMessage(content="foo"),
                 UserMessage(
@@ -251,7 +217,7 @@ class TestChatCompletionRequestNormalization:
         assert parsed_request.system_prompt == "system"
 
     def test_system_prompt_chunks_aggregated(self, normalizer: InstructRequestNormalizer) -> None:
-        chat_completion_request = self.mock_chat_completion(
+        chat_completion_request = mock_chat_completion(
             messages=[
                 UserMessage(content="foo"),
                 SystemMessage(
@@ -337,6 +303,55 @@ class TestChatCompletionRequestNormalization:
 
         normalized = normalizer.from_chat_completion_request(request)
         assert normalized == gt
+
+
+class TestChatCompletionRequestNormalizationV7:
+    @pytest.fixture(autouse=True)
+    def normalizer_v7(self) -> InstructRequestNormalizerV7:
+        return InstructRequestNormalizerV7(UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest)
+
+    def test_system_assistant_user_v7(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
+        chat_completion_request = mock_chat_completion(
+            messages=[
+                SystemMessage(content="S"),
+                AssistantMessage(content="A"),
+                UserMessage(content="U"),
+            ]
+        )
+
+        parsed_request: InstructRequest = normalizer_v7.from_chat_completion_request(chat_completion_request)
+
+        first_message = parsed_request.messages[0]
+        assert isinstance(first_message, SystemMessage)
+        assert first_message.content == "S"
+
+        second_message = parsed_request.messages[1]
+        assert isinstance(second_message, AssistantMessage)
+        assert second_message.content == "A"
+
+        assert parsed_request.system_prompt is None
+
+    def test_assistant_assistant_system_v7(self, normalizer_v7: InstructRequestNormalizer) -> None:
+        chat_completion_request = mock_chat_completion(
+            messages=[
+                AssistantMessage(content="A"),
+                SystemMessage(content="S"),
+            ]
+        )
+
+        parsed_request = normalizer_v7.from_chat_completion_request(chat_completion_request)
+
+        assert parsed_request.system_prompt is None
+
+        assert len(parsed_request.messages) == 2
+
+        first_message = parsed_request.messages[0]
+        assert isinstance(first_message, AssistantMessage)
+        assert first_message.content == "A"
+
+        second_message = parsed_request.messages[1]
+        assert isinstance(second_message, SystemMessage)
+        assert second_message.content == "S"
 
 
 class TestFineTuningNormalizer:
