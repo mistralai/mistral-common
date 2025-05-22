@@ -326,3 +326,8 @@ class MistralRequestValidatorV3(MistralRequestValidator):
             if message.tool_calls is not None:
                 for tool_call in message.tool_calls:
                     self._validate_tool_call(tool_call, is_last_message=True)
+
+
+class MistralRequestValidatorV7(MistralRequestValidatorV3):
+    def __init__(self, mode: ValidationMode = ValidationMode.test):
+        super().__init__(mode)
