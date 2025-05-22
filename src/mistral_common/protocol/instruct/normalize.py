@@ -34,6 +34,7 @@ class InstructRequestNormalizer(
     - Normalize json content
     - Normalize tool calls
     """
+
     system_prompt_in_begin: bool = False
     allow_tool_call_and_content: bool = False
 
@@ -121,9 +122,7 @@ class InstructRequestNormalizer(
             assert isinstance(message, self._assistant_message_class), "Expected assistant message"
 
             if not self.allow_tool_call_and_content and (message.tool_calls and message.content):
-                raise ValueError(
-                    f"Tool calls and content cannot be used together in the same message. {message}"
-                )
+                raise ValueError(f"Tool calls and content cannot be used together in the same message. {message}")
 
             if message.tool_calls:
                 for tool_call in message.tool_calls:

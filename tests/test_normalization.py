@@ -367,7 +367,9 @@ class TestChatCompletionRequestNormalizationV7:
 
         assert normalized_chat_req.messages[0].content == "A", normalized_chat_req.messages[0].content
         assert len(normalized_chat_req.messages[0].tool_calls) == 1, normalized_chat_req.messages[0].tool_calls
-        assert normalized_chat_req.messages[0].tool_calls[0].function.name == "tool1", normalized_chat_req.messages[0].tool_calls[0].function.name
+        assert normalized_chat_req.messages[0].tool_calls[0].function.name == "tool1", (
+            normalized_chat_req.messages[0].tool_calls[0].function.name
+        )
 
     def test_assistant_content_with_more_tool_calls(self, normalizer_v7: InstructRequestNormalizer) -> None:
         chat_completion_request = mock_chat_completion(
@@ -387,7 +389,7 @@ class TestChatCompletionRequestNormalizationV7:
                     content="B4",
                     tool_calls=[
                         ToolCall(function=FunctionCall(name="tool21", arguments='{"input": "21"}')),
-                        ToolCall(function=FunctionCall(name="tool22", arguments='{"input": "22"}'))
+                        ToolCall(function=FunctionCall(name="tool22", arguments='{"input": "22"}')),
                     ],
                 ),
                 AssistantMessage(
@@ -408,6 +410,7 @@ class TestChatCompletionRequestNormalizationV7:
         tool_key = ["1", "21", "22"]
         assert all([t.function.name == f"tool{tool_key[i]}" for i, t in enumerate(tool_calls)])
         assert all([json.loads(t.function.arguments)["input"] == tool_key[i] for i, t in enumerate(tool_calls)])
+
 
 class TestFineTuningNormalizer:
     @pytest.fixture(autouse=True)
