@@ -388,8 +388,6 @@ def test_assistant_tool_call_and_content(tekkenizer: InstructTokenizerV7) -> Non
     normalizer = InstructRequestNormalizerV7.normalizer()
 
     mistral_tokenizer = MistralTokenizer(tekkenizer, validator, normalizer)
-    mistral_tokenizer._chat_completion_request_validator
-
     tokens_2 = mistral_tokenizer.encode_chat_completion(chat_completion_request)
 
     assert tokens == tokens_2.tokens

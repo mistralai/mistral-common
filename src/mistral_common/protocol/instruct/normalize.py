@@ -35,8 +35,8 @@ class InstructRequestNormalizer(
     - Normalize tool calls
     """
 
-    system_prompt_in_begin: bool = False
-    allow_tool_call_and_content: bool = False
+    _system_prompt_in_begin: bool = False
+    _allow_tool_call_and_content: bool = False
 
     def __init__(
         self,
@@ -121,7 +121,7 @@ class InstructRequestNormalizer(
         for message in messages:
             assert isinstance(message, self._assistant_message_class), "Expected assistant message"
 
-            if not self.allow_tool_call_and_content and (message.tool_calls and message.content):
+            if not self._allow_tool_call_and_content and (message.tool_calls and message.content):
                 raise ValueError(f"Tool calls and content cannot be used together in the same message. {message}")
 
             if message.tool_calls:
@@ -215,7 +215,7 @@ class InstructRequestNormalizer(
         # If the first message is not a user message, or we didnt aggregate
         # anything (all system messages) for example, add an empty user message
         if len(aggregated_messages) == 0 or (
-            not self.system_prompt_in_begin and aggregated_messages[0].role != Roles.user
+            not self._system_prompt_in_begin and aggregated_messages[0].role != Roles.user
         ):
             aggregated_messages.insert(0, self._user_message_class(content=""))
 
@@ -231,8 +231,8 @@ class InstructRequestNormalizer(
 
 
 class InstructRequestNormalizerV7(InstructRequestNormalizer):
-    system_prompt_in_begin: bool = True
-    allow_tool_call_and_content: bool = True
+    _system_prompt_in_begin: bool = True
+    _allow_tool_call_and_content: bool = True
 
     @staticmethod
     def normalizer() -> "InstructRequestNormalizerV7":
