@@ -332,4 +332,3 @@ class MistralRequestValidatorV3(MistralRequestValidator):
 
 class MistralRequestValidatorV5(MistralRequestValidatorV3):
     _allow_tool_call_and_content: bool = True
-

@@ -15,7 +15,10 @@ from mistral_common.protocol.instruct.messages import (
 from mistral_common.protocol.instruct.normalize import InstructRequestNormalizerV7
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
-from mistral_common.protocol.instruct.validator import MistralRequestValidatorV3, MistralRequestValidatorV5, ValidationMode
+from mistral_common.protocol.instruct.validator import (
+    MistralRequestValidatorV5,
+    ValidationMode,
+)
 from mistral_common.tokens.tokenizers.base import InstructRequest, TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
@@ -378,11 +381,13 @@ def test_assistant_tool_call_and_content(tekkenizer: InstructTokenizerV7) -> Non
 
     # make sure it also works end to end
     tools = request.available_tools
-    chat_completion_request = ChatCompletionRequest(**request.model_dump(exclude=["system_prompt", "truncate_at_max_tokens", "available_tools"]), tools=tools)
+    chat_completion_request = ChatCompletionRequest(
+        **request.model_dump(exclude=["system_prompt", "truncate_at_max_tokens", "available_tools"]), tools=tools
+    )
     validator = MistralRequestValidatorV5(mode=ValidationMode.finetuning)
     normalizer = InstructRequestNormalizerV7.normalizer()
 
-    mistral_tokenizer =  MistralTokenizer(tekkenizer, validator, normalizer)
+    mistral_tokenizer = MistralTokenizer(tekkenizer, validator, normalizer)
     mistral_tokenizer._chat_completion_request_validator
 
     tokens_2 = mistral_tokenizer.encode_chat_completion(chat_completion_request)
