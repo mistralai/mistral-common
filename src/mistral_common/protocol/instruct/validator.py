@@ -40,6 +40,8 @@ class ValidationMode(Enum):
 
 
 class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType]):
+    _allow_tool_call_and_content: bool = False
+
     def __init__(self, mode: ValidationMode = ValidationMode.test):
         self._mode = mode
 
@@ -143,7 +145,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
 
         # Validate that the message has either text or tool_calls
         # but not both and not neither.
-        if bool(message.content) == bool(message.tool_calls):
+        if (not self._allow_tool_call_and_content) and (bool(message.content) == bool(message.tool_calls)):
             raise InvalidAssistantMessageException(
                 "Assistant message must have either content or tool_calls, but not both."
             )
@@ -326,3 +328,7 @@ class MistralRequestValidatorV3(MistralRequestValidator):
             if message.tool_calls is not None:
                 for tool_call in message.tool_calls:
                     self._validate_tool_call(tool_call, is_last_message=True)
+
+
+class MistralRequestValidatorV5(MistralRequestValidatorV3):
+    _allow_tool_call_and_content: bool = True

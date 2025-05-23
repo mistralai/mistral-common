@@ -12,8 +12,13 @@ from mistral_common.protocol.instruct.messages import (
     ToolMessage,
     UserMessage,
 )
+from mistral_common.protocol.instruct.normalize import InstructRequestNormalizerV7
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
+from mistral_common.protocol.instruct.validator import (
+    MistralRequestValidatorV5,
+    ValidationMode,
+)
 from mistral_common.tokens.tokenizers.base import InstructRequest, TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
@@ -342,3 +347,47 @@ def test_from_model() -> None:
         tokenizer = MistralTokenizer.from_model("pixtral", strict=False)
         assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v3
         assert tokenizer.instruct_tokenizer.mm_encoder is not None
+
+
+def test_assistant_tool_call_and_content(tekkenizer: InstructTokenizerV7) -> None:
+    request: InstructRequest = InstructRequest(
+        available_tools=[
+            Tool(function=Function(name="t1", parameters={})),
+            Tool(function=Function(name="t2", parameters={})),
+        ],
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(
+                content="b1b2",
+                tool_calls=[
+                    ToolCall(id="000000000", function=FunctionCall(name="t1", arguments="{}")),
+                    ToolCall(id="111111111", function=FunctionCall(name="t2", arguments="{}")),
+                ],
+            ),
+        ],
+    )
+    tokenized = tekkenizer.encode_instruct(request)
+    tokens = tokenized.tokens
+    text = tokenized.text
+
+    assert text == (
+        '<s>[AVAILABLE_TOOLS][{"type": "function", "function": '
+        '{"name": "t1", "description": "", "parameters": {}}}, '
+        '{"type": "function", "function": {"name": "t2", "description"'
+        ': "", "parameters": {}}}][/AVAILABLE_TOOLS][INST]a[/INST]b1b2[TOOL_CALLS]'
+        '[{"name": "t1", "arguments": {}, "id": "000000000"}, {"name": "t2", "arguments": {}'
+        ', "id": "111111111"}]</s>'
+    )
+
+    # make sure it also works end to end
+    tools = request.available_tools
+    chat_completion_request = ChatCompletionRequest(
+        **request.model_dump(exclude={"system_prompt", "truncate_at_max_tokens", "available_tools"}), tools=tools
+    )
+    validator = MistralRequestValidatorV5(mode=ValidationMode.finetuning)
+    normalizer = InstructRequestNormalizerV7.normalizer()
+
+    mistral_tokenizer = MistralTokenizer(tekkenizer, validator, normalizer)
+    tokens_2 = mistral_tokenizer.encode_chat_completion(chat_completion_request)
+
+    assert tokens == tokens_2.tokens
