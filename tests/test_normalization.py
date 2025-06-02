@@ -2,6 +2,7 @@ import json
 from typing import Dict, List
 
 import pytest
+
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,

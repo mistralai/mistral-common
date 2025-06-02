@@ -2,6 +2,8 @@ import json
 from typing import List
 
 import pytest
+from PIL import Image
+
 from mistral_common.exceptions import TokenizerException
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
@@ -24,8 +26,6 @@ from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.multimodal import ImageEncoder
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-from PIL import Image
-
 from tests.test_tekken import _quick_vocab
 
 

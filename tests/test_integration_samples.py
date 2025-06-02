@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any, Dict, Tuple
 
 import pytest
+
 from mistral_common.protocol.instruct.messages import ChatMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer

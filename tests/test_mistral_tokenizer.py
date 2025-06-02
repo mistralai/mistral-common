@@ -1,4 +1,5 @@
 import pytest
+
 from mistral_common.exceptions import TokenizerException
 from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV1,

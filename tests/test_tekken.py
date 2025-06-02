@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, Optional, Sequence
 
 import pytest
+
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.tekken import (
     ModelData,

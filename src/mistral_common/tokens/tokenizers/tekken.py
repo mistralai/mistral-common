@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def is_tekken(path: Union[str, Path]) -> bool:
+    r"""Check if the given path is a tekken tokenizer file."""
     if isinstance(path, str):
         path = Path(path)
     return path.is_file() and "tekken" in path.name and path.suffix == ".json"
@@ -28,18 +29,44 @@ def is_tekken(path: Union[str, Path]) -> bool:
 
 # Formatting specification of the JSON file
 class TokenInfo(TypedDict):
+    r"""Token information in the JSON file.
+
+    Attributes:
+        rank: The rank of the token.
+        token_bytes: The token in bytes, base64 encoded.
+        token_str: The token in string format.
+    """
+
     rank: int
     token_bytes: str  # base64 encoded
     token_str: Optional[str]
 
 
 class SpecialTokenInfo(TypedDict):
+    r"""Special token information in the JSON file.
+
+    Attributes:
+        rank: The rank of the token.
+        token_str: The token in string format.
+        is_control: Whether the token is a control token.
+    """
+
     rank: int
     token_str: str
     is_control: bool
 
 
 class TekkenConfig(TypedDict):
+    r"""Tekken configuration in the JSON file.
+
+    Attributes:
+        pattern: The pattern of the tokenizer.
+        num_vocab_tokens: The number of vocabulary tokens.
+        default_vocab_size: The default vocabulary size.
+        default_num_special_tokens: The default number of special tokens.
+        version: The version of the tokenizer.
+    """
+
     pattern: str
     num_vocab_tokens: int
     default_vocab_size: int
@@ -48,6 +75,16 @@ class TekkenConfig(TypedDict):
 
 
 class ModelData(TypedDict):
+    r"""The data of the tekken tokenizer model.
+
+    Attributes:
+        vocab: The vocabulary of the tokenizer.
+        config: The configuration of the tokenizer.
+        version: The version of the tokenizer.
+        type: The type of the tokenizer.
+        multimodal: The multimodal configuration of the tokenizer.
+    """
+
     vocab: List[TokenInfo]
     config: TekkenConfig
     version: int
@@ -56,7 +93,13 @@ class ModelData(TypedDict):
 
 
 class SpecialTokenPolicy(Enum):
-    """What to do with special tokens when encoding/decoding."""
+    r"""What to do with special tokens when encoding/decoding.
+
+    Attributes:
+        IGNORE: Ignore special tokens.
+        KEEP: Keep special tokens.
+        RAISE: Raise an error if special tokens are found.
+    """
 
     IGNORE = 0
     KEEP = 1
@@ -64,6 +107,12 @@ class SpecialTokenPolicy(Enum):
 
 
 class Tekkenizer(Tokenizer):
+    r"""Tekken tokenizer.
+
+    This tokenizer is based on the [tiktoken](https://github.com/openai/tiktoken) library. It fastens the tokenization
+    for multiple languages.
+    """
+
     DEPRECATED_SPECIAL_TOKENS = (
         SpecialTokenInfo(rank=0, token_str=SpecialTokens.unk, is_control=True),
         SpecialTokenInfo(rank=1, token_str=SpecialTokens.bos, is_control=True),
@@ -104,6 +153,18 @@ class Tekkenizer(Tokenizer):
         _path: Optional[str] = None,
         mm_config: Optional[MultimodalConfig] = None,
     ):
+        r"""Initialize the tekken tokenizer.
+
+        Args:
+            vocab: The vocabulary of the tokenizer.
+            special_tokens: The special tokens of the tokenizer.
+            pattern: The pattern of the tokenizer.
+            vocab_size: The vocabulary size of the tokenizer.
+            num_special_tokens: The number of special tokens of the tokenizer.
+            version: The version of the tokenizer.
+            name: The name of the tokenizer.
+            mm_config: The multimodal configuration of the tokenizer.
+        """
         assert vocab_size <= len(vocab) + num_special_tokens, (
             vocab_size,
             len(vocab),
@@ -127,9 +188,9 @@ class Tekkenizer(Tokenizer):
             )
         special_tokens = special_tokens + special_filler
 
-        assert (
-            len(set([t["token_str"] for t in special_tokens])) == len(special_tokens) == num_special_tokens
-        ), special_tokens
+        assert len(set([t["token_str"] for t in special_tokens])) == len(special_tokens) == num_special_tokens, (
+            special_tokens
+        )
         inner_vocab_size = vocab_size - num_special_tokens
 
         # reload vocab
@@ -154,6 +215,14 @@ class Tekkenizer(Tokenizer):
 
     @classmethod
     def from_file(cls: Type["Tekkenizer"], path: Union[str, Path]) -> "Tekkenizer":
+        r"""Load the tekken tokenizer from a file.
+
+        Args:
+            path: The path to the tokenizer file.
+
+        Returns:
+            The tekken tokenizer.
+        """
         if isinstance(path, str):
             path = Path(path)
         assert path.exists(), path
@@ -209,6 +278,7 @@ class Tekkenizer(Tokenizer):
 
     @property
     def multimodal(self) -> Optional[MultimodalConfig]:
+        r"""The multimodal configuration of the tokenizer."""
         return self._mm_config
 
     @multimodal.setter
@@ -217,18 +287,22 @@ class Tekkenizer(Tokenizer):
 
     @property
     def num_special_tokens(self) -> int:
+        r"""The number of special tokens of the tokenizer."""
         return len(self._all_special_tokens)
 
     @property
     def n_words(self) -> int:
+        r"""Vocabulary size of the tokenizer."""
         return self._vocab_size
 
     @property
     def version(self) -> TokenizerVersion:
+        r"""The version of the tokenizer."""
         return self._version
 
     @property
     def special_token_policy(self) -> SpecialTokenPolicy:
+        r"""The policy for handling special tokens."""
         return self._special_token_policy
 
     @special_token_policy.setter
@@ -237,21 +311,34 @@ class Tekkenizer(Tokenizer):
 
     @cached_property
     def bos_id(self) -> int:
+        r"""The beginning of sentence token id."""
         return self.get_control_token("<s>")
 
     @cached_property
     def eos_id(self) -> int:
+        r"""The end of sentence token id."""
         return self.get_control_token("</s>")
 
     @cached_property
     def pad_id(self) -> int:
+        r"""The padding token id."""
         return self.get_control_token("<pad>")
 
     @cached_property
     def unk_id(self) -> int:
+        r"""The unknown token id."""
         return self.get_control_token("<unk>")
 
     def vocab(self) -> List[str]:
+        r"""All tokens in the vocabulary as strings.
+
+        Note:
+           This will collapse all tokens for which we have a decoding error into
+           the <?> string. This is bad and results in things like len(set(vocab)) != len(vocab)).
+
+        Returns:
+            The vocabulary of the tokenizer.
+        """
         # when returning self._vocab this will collapse
         # all tokens for which we have a decoding error into
         # the <?> string. This is bad and results in things
@@ -260,6 +347,16 @@ class Tekkenizer(Tokenizer):
         return self._vocab
 
     def encode(self, s: str, bos: bool, eos: bool) -> List[int]:
+        r"""Encode a string into a list of token ids.
+
+        Args:
+            s: The string to encode.
+            bos: Whether to add the beginning of sentence token.
+            eos: Whether to add the end of sentence token.
+
+        Returns:
+            The list of token ids.
+        """
         tokens: List[int] = self._model.encode(s)
         tokens = [t + self.num_special_tokens for t in tokens]
         if bos:
@@ -297,26 +394,30 @@ class Tekkenizer(Tokenizer):
         return decoded
 
     def is_byte(self, token_id: int) -> bool:
+        r"""Check if a token id is a byte token."""
         return 0 <= token_id - self.num_special_tokens < 256
 
     def get_control_token(self, s: str) -> int:
+        r"""Get the token id of a control token."""
         if s in self._special_tokens_reverse_vocab:
             return self._special_tokens_reverse_vocab[s]
         else:
             raise ValueError(f"Unknown control token {s}")
 
     def decode(self, tokens: List[int]) -> str:
+        r"""Decode a list of token ids into a string."""
         return "".join(self._decode_all(tokens, special_token_policy=self._special_token_policy))
 
     def to_string(self, tokens: List[int]) -> str:
+        r"""Decode a list of token ids into a string keeping special tokens for debugging purposes."""
         return "".join(self._decode_all(tokens, special_token_policy=SpecialTokenPolicy.KEEP))
 
     def id_to_piece(self, token_id: int) -> str:
-        """convert a token id to its string representation."""
+        r"""Convert a token id to its string representation."""
         return self._decode_all([token_id], special_token_policy=SpecialTokenPolicy.KEEP)[0]
 
     def id_to_byte_piece(self, token_id: int) -> bytes:
-        """convert a token id to its byte representation."""
+        r"""Convert a token id to its byte representation."""
         if token_id < self.num_special_tokens:
             if self._special_token_policy == SpecialTokenPolicy.KEEP:
                 return self._all_special_tokens[token_id]["token_str"].encode("utf-8")
@@ -330,9 +431,7 @@ def _reload_mergeable_ranks(
     vocab: List[TokenInfo],
     max_vocab: Union[int, None] = None,
 ) -> Dict[bytes, int]:
-    """
-    Reload our tokenizer JSON file and convert it to Tiktoken format.
-    """
+    r"""Reload our tokenizer JSON file and convert it to Tiktoken format."""
     logger.info(f"Vocab size: {len(vocab)}")
     if max_vocab is not None:
         assert len(vocab) >= max_vocab, (len(vocab), max_vocab)

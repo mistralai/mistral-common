@@ -1,7 +1,8 @@
 import pytest
+from pydantic import ValidationError
+
 from mistral_common.protocol.instruct.messages import UserMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
-from pydantic import ValidationError
 
 
 class TestValidateRequest:

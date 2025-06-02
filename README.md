@@ -1,130 +1,55 @@
-# Mistral Common
+<div align="center">
+
+<img src="./docs/assets/logo.svg" alt="Mistral AI" height="100"/>
+
+<br/>
+<br/>
+
+# Mistral-common
+
+[![PyPI version](https://img.shields.io/pypi/v/mistral-common?label=release&logo=pypi&logoColor=white)](https://pypi.org/project/mistral-common/)
+[![Tests](https://img.shields.io/github/actions/workflow/status/mistralai/mistral-common/lint_build_test.yaml?label=tests&branch=main)](https://github.com/mistralai/mistral-common/actions/workflows/lint_build_test.yaml)
+[![Documentation](https://img.shields.io/website?url=https%3A%2F%2Fmistral-common.github.io%2F&up_message=online&down_message=offline&label=docs)](https://mistral-common.github.io)
+[![Python version](https://img.shields.io/pypi/pyversions/mistral-common?color=blue&logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENCE)
+
+</div>
 
 ## What is it? 
-mistral-common is a set of tools to help you work with Mistral models. 
 
-Our first release contains tokenization. Our tokenizers go beyond  the usual text <-> tokens, adding parsing of tools and structured conversation. We also release the validation and normalization code that is used in our API. 
+**mistral-common** is a set of tools to help you work with [Mistral AI](https://mistral.ai/) models.
 
-We are releasing three versions of our tokenizer powering different sets of models. 
+We open-source the tokenizers, validation and normalization code that can be used with our models.
 
-<table>
-  <tr>
-    <td>
+This ensures that you can take full advantage of our models for the following features:
 
-| Open Model | Tokenizer |
-|------------|-----------|
-| Mistral 7B Instruct v0.1 | v1 |
-| Mistral 7B Instruct v0.2 | v1 |
-| Mistral 7B Instruct v0.3 | v3 |
-| Mixtral 8x7B Instruct v0.1 | v1 |
-| Mixtral 8x22B Instruct v0.1 | v3 |
-| Mixtral 8x22B Instruct v0.3 | v3 |
-| Codestral 22B v0.1 | v3 |
-| Codestral Mamba 7B v0.1 | v3 |
-| Mathstral 7B v0.1 | v3 |
-| Nemo 12B 2407 | v3 - Tekken |
-| Large 123B 2407 | v3 |
+- **tokenization** of text, images and tools calls.
+- **validation and normalization** of requests, messages, tool calls, and responses. This is built on top of the [Pydantic](https://docs.pydantic.dev/latest/) library.
 
-</td>
-<td>
+We also version our tokenizers to guarantee backward compatibility for the models that we release.
 
-| Endpoint Model | Tokenizer |
-|---------------|-----------|
-| mistral-embed | v1 |
-| open-mistral-7b | v3 |
-| open-mixtral-8x7b | v1 |
-| open-mixtral-8x22b | v3 |
-| mistral-small-latest | v2 |
-| mistral-large-latest | v3 |
-| codestral-22b | v3 |
-| open-codestral-mamba | v3 |
-| open-mistral-nemo | v3 - Tekken |
+## For who ?
 
-</td>
-  </tr>
-</table>
+This library is for you if you want to:
 
+- use our models in your own application.
+- build your own models and want to use the same tokenization and validation code as we do.
 
-## Installation 
+## How to use it ?
 
-### pip 
-You can install `mistral-common` via pip: 
-```
+You can install the library using pip:
+```sh
 pip install mistral-common
 ```
 
-### From Source
-Alternatively, you can install from source directly. This repo uses poetry as a dependency and virtual environment manager.
+For more information, please refer to the [documentation](https://mistral-common.github.io).
 
-You can install poetry with
-```
-pip install poetry
-```
+## How to contribute ?
 
-poetry will set up a virtual environment and install dependencies with the following command:
-```
-poetry install
-```
+We welcome contributions to this library. Please open an issue on our [GitHub repository](https://github.com/mistralai/mistral-common/issues) if you have any questions or suggestions.
 
-## Examples 
-<a target="_blank" href="https://colab.research.google.com/github/mistralai/mistral-common/blob/main/examples/tokenizer.ipynb">
-  <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
-</a>
+All of our features are tested to ensure best usage. But if you encounter a bug, find difficulties in using `mistral-common`. Please also open an issue.
 
+## License
 
-
-```py
-# Import needed packages:
-from mistral_common.protocol.instruct.messages import (
-    UserMessage,
-)
-from mistral_common.protocol.instruct.request import ChatCompletionRequest
-from mistral_common.protocol.instruct.tool_calls import (
-    Function,
-    Tool,
-)
-from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-
-# Load Mistral tokenizer
-
-model_name = "open-mixtral-8x22b"
-
-tokenizer = MistralTokenizer.from_model(model_name)
-
-# Tokenize a list of messages
-tokenized = tokenizer.encode_chat_completion(
-    ChatCompletionRequest(
-        tools=[
-            Tool(
-                function=Function(
-                    name="get_current_weather",
-                    description="Get the current weather",
-                    parameters={
-                        "type": "object",
-                        "properties": {
-                            "location": {
-                                "type": "string",
-                                "description": "The city and state, e.g. San Francisco, CA",
-                            },
-                            "format": {
-                                "type": "string",
-                                "enum": ["celsius", "fahrenheit"],
-                                "description": "The temperature unit to use. Infer this from the user's location.",
-                            },
-                        },
-                        "required": ["location", "format"],
-                    },
-                )
-            )
-        ],
-        messages=[
-            UserMessage(content="What's the weather like today in Paris"),
-        ],
-        model=model_name,
-    )
-)
-tokens, text = tokenized.tokens, tokenized.text
-
-# Count the number of tokens
-print(len(tokens))
-```
+This library is licensed under the Apache 2.0 License. See the [LICENSE](../LICENSE) file for more information.
