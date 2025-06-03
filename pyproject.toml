@@ -21,7 +21,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-opencv = ["opencv-python-headless>=4.0.0" ]
+opencv = ["opencv-python-headless>=4.0.0"]
+hub = ["huggingface-hub>=0.32.4"]
 
 [dependency-groups]
 dev = [

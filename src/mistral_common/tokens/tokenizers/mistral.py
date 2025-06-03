@@ -1,6 +1,6 @@
 import warnings
 from pathlib import Path
-from typing import Callable, Dict, Generic, List, Optional, Union
+from typing import Any, Callable, Dict, Generic, List, Optional, Union
 
 from mistral_common.exceptions import (
     TokenizerException,
@@ -47,6 +47,14 @@ from mistral_common.tokens.tokenizers.sentencepiece import (
     is_sentencepiece,
 )
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekken
+
+_hub_installed: bool
+try:
+    import huggingface_hub
+
+    _hub_installed = True
+except ImportError:
+    _hub_installed = False
 
 
 def load_mm_encoder(
@@ -190,6 +198,62 @@ class MistralTokenizer(
             raise TokenizerException(f"Unrecognized model: {model}")
 
         return MODEL_NAME_TO_TOKENIZER_CLS[model]()
+
+    @staticmethod
+    def from_hf_hub(model_id: str, **kwargs: Any) -> "MistralTokenizer":
+        r"""Get the Mistral tokenizer for a given Hugging Face model ID.
+
+        Note:
+            You need to install the `huggingface_hub` package to use this method.
+            please run `pip install huggingface_hub` to install it.
+
+        Args:
+            model_id: The Hugging Face model ID.
+               See [Models](../models.md) for a list of supported models.
+            kwargs: Additional keyword arguments to pass to `huggingface_hub.hf_hub_download`.
+
+        Returns:
+            The Mistral tokenizer for the given model ID.
+        """
+        if not _hub_installed:
+            raise ImportError(
+                "Please install the `huggingface_hub` package to use this method.\n"
+                "Run `pip install huggingface_hub` to install it."
+            )
+
+        model_id_to_tokenizer_file: Dict[str, str] = {
+            "mistralai/Mistral-7B-v0.1": "tokenizer.model",
+            "mistralai/Mistral-7B-Instruct-v0.1": "tokenizer.model.v1",
+            "mistralai/Mixtral-8x7B-v0.1": "tokenizer.model",
+            "mistralai/Mixtral-8x7B-Instruct-v0.1": "tokenizer.model",
+            "mistralai/Mistral-7B-Instruct-v0.2": "tokenizer.model",
+            "mistralai/Mixtral-8x22B-v0.1": "tokenizer.model.v1",
+            "mistralai/Mixtral-8x22B-Instruct-v0.1": "tokenizer.model.v3",
+            "mistralai/Mistral-7B-v0.3": "tokenizer.model.v3",
+            "mistralai/Mistral-7B-Instruct-v0.3": "tokenizer.model.v3",
+            "mistralai/Codestral-22B-v0.1": "tokenizer.model.v3",
+            "mistralai/Mathstral-7B-v0.1": "tokenizer.model.v3",
+            "mistralai/Mamba-Codestral-7B-v0.1": "tokenizer.model.v3",
+            "mistralai/Mistral-Nemo-Base-2407": "tekken.json",
+            "mistralai/Mistral-Nemo-Instruct-2407": "tekken.json",
+            "mistralai/Mistral-Large-Instruct-2407": "tokenizer.model.v3",
+            "mistralai/Pixtral-12B-Base-2409": "tekken.json",
+            "mistralai/Pixtral-12B-2409": "tekken.json",
+            "mistralai/Mistral-Large-Instruct-2411": "tokenizer.model.v7",
+            "mistralai/Pixtral-Large-Instruct-2411": "tokenizer.model.v7m1",
+            "mistralai/Mistral-Small-24B-Base-2501": "tekken.json",
+            "mistralai/Mistral-Small-24B-Instruct-2501": "tekken.json",
+            "mistralai/Mistral-Small-3.1-24B-Base-2503": "tekken.json",
+            "mistralai/Mistral-Small-3.1-24B-Instruct-2503": "tekken.json",
+            "mistralai/Devstral-Small-2505": "tekken.json",
+        }
+
+        if model_id not in model_id_to_tokenizer_file:
+            raise TokenizerException(f"Unrecognized model ID: {model_id}")
+
+        tokenizer_file = model_id_to_tokenizer_file[model_id]
+        tokenizer_path = huggingface_hub.hf_hub_download(repo_id=model_id, filename=tokenizer_file, **kwargs)
+        return MistralTokenizer.from_file(tokenizer_path)
 
     @classmethod
     def from_file(
