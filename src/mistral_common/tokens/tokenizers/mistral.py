@@ -34,6 +34,7 @@ from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV2,
     InstructTokenizerV3,
     InstructTokenizerV7,
+    InstructTokenizerV11,
 )
 from mistral_common.tokens.tokenizers.multimodal import (
     ImageEncoder,
@@ -219,6 +220,12 @@ class MistralTokenizer(
         elif tokenizer.version == TokenizerVersion.v7:
             return MistralTokenizer(
                 InstructTokenizerV7(tokenizer, mm_encoder=mm_encoder),
+                validator=MistralRequestValidatorV5(mode=mode),
+                request_normalizer=request_normalizer,
+            )
+        elif tokenizer.version == TokenizerVersion.v11:
+            return MistralTokenizer(
+                InstructTokenizerV11(tokenizer, mm_encoder=mm_encoder),
                 validator=MistralRequestValidatorV5(mode=mode),
                 request_normalizer=request_normalizer,
             )

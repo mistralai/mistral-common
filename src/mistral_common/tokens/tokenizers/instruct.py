@@ -125,9 +125,6 @@ class InstructTokenizerBase(
     def decode(self, tokens: List[int]) -> str:
         return self.tokenizer.decode(tokens)
 
-    def function_call_prefix(self, tool_choice: ToolChoice) -> List[int]:
-        raise NotImplementedError("Tool prefix not implemented")
-
 
 class InstructTokenizerV1(
     InstructTokenizerBase, Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]
@@ -428,8 +425,6 @@ class InstructTokenizerV7(InstructTokenizerV3):
     - in V7 the system prompts are treated as separate SystemMessages
     - they are no longer prepended to the last user message
     - they are printed between special tokens
-    Tool call results are encoded as :
-    - [begin tool call] call_id_tokens [tool_content]  content tokens [end tool call]
     """
 
     def __init__(self, tokenizer: Tokenizer, mm_encoder: Optional[MultiModalEncoder] = None) -> None:
@@ -545,3 +540,38 @@ class InstructTokenizerV7(InstructTokenizerV3):
             curr_tokens.append(self.tokenizer.eos_id)
 
         return curr_tokens
+
+
+class InstructTokenizerV11(InstructTokenizerV7):
+    """
+    The difference with V7 tokenizer is that it encodes tool calls differently:
+    Tool call results are encoded as :
+    - [begin tool call] call_name_tokens [call id] call_id_tokens [args] content tokens
+    """
+    def __init__(
+        self,
+        tokenizer: Tokenizer,
+        image_encoder: Optional[MultiModalEncoder] = None,
+    ) -> None:
+        super().__init__(tokenizer, image_encoder)
+        self.ARGS = self.tokenizer.get_control_token(SpecialTokens.args.value)
+        self.CALL_ID = self.tokenizer.get_control_token(SpecialTokens.call_id.value)
+
+    def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> Tokenized:
+        assert message.tool_calls, f"Assistant message must have tool calls. Got {message}"
+        curr_tokens = []
+        for tool_call in message.tool_calls:
+            prepared = self._prepare_function_call(tool_call)
+
+            ids = []
+            if "id" in prepared:
+                ids = [self.CALL_ID, *self.tokenizer.encode(prepared["id"], bos=False, eos=False)]
+
+            curr_tokens += [
+                self.TOOL_CALLS,
+                *self.tokenizer.encode(prepared["name"], bos=False, eos=False),
+                *ids,
+                self.ARGS,
+                *self.tokenizer.encode(json.dumps(prepared["arguments"], ensure_ascii=False), bos=False, eos=False),
+            ]
+        return Tokenized(tokens=curr_tokens)

@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
+import re
 from typing import Generic, List, Optional, Protocol, Tuple, TypeVar, Union
 
 import numpy as np
@@ -39,13 +40,47 @@ class SpecialTokens(str, Enum):
     begin_system = "[SYSTEM_PROMPT]"
     end_system = "[/SYSTEM_PROMPT]"
     begin_tool_content = "[TOOL_CONTENT]"
+    args = "[ARGS]"
+    call_id = "[CALL_ID]"
 
 
 class TokenizerVersion(str, Enum):
+    def __new__(cls, value: str) -> "TokenizerVersion":
+        if not re.match(r"^v\d+$", value):
+            raise ValueError(f"Invalid version format: {value}. Must be 'v' followed by a number.")
+        obj = str.__new__(cls, value)
+        obj._value_ = value
+        return obj
+
+    @property
+    def _version_num(self) -> int:
+        return int(self.value[1:])
+
+    def __lt__(self, other: "str | TokenizerVersion") -> bool:
+        if isinstance(other, str):
+            other = TokenizerVersion(other)
+        return self._version_num < other._version_num
+
+    def __le__(self, other: "str | TokenizerVersion") -> bool:
+        if isinstance(other, str):
+            other = TokenizerVersion(other)
+            return self._version_num <= other._version_num
+
+    def __gt__(self, other: "str | TokenizerVersion") -> bool:
+        if isinstance(other, str):
+            other = TokenizerVersion(other)
+            return self._version_num > other._version_num
+
+    def __ge__(self, other: "str | TokenizerVersion") -> bool:
+        if isinstance(other, str):
+            other = TokenizerVersion(other)
+            return self._version_num >= other._version_num
+
     v1 = "v1"  # vocab_size = 32000
     v2 = "v2"  # vocab_size = 32768 with special control tokens [INST], [\INST]
     v3 = "v3"  # vocab_size = 32768 (spm) OR 128000 (tekken) with improved function calling
     v7 = "v7"  # vocab_size = 32768 (spm) or 128000 (tekken) with improved system prompt and function calling
+    v11 = "v11"  # vocab_size = 32768 (spm) or 128000 (tekken) with improved function calling
 
 
 class Tokenized(MistralBase):
