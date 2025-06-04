@@ -574,4 +574,4 @@ class InstructTokenizerV11(InstructTokenizerV7):
                 self.ARGS,
                 *self.tokenizer.encode(json.dumps(prepared["arguments"], ensure_ascii=False), bos=False, eos=False),
             ]
-        return Tokenized(tokens=curr_tokens)
+        return curr_tokens
