@@ -1,7 +1,7 @@
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-import re
 from typing import Generic, List, Optional, Protocol, Tuple, TypeVar, Union
 
 import numpy as np

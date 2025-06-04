@@ -1,5 +1,4 @@
 import pytest
-
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
 )

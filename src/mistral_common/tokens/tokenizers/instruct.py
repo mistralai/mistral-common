@@ -14,7 +14,7 @@ from mistral_common.protocol.instruct.messages import (
     ToolMessage,
     UserMessage,
 )
-from mistral_common.protocol.instruct.tool_calls import Tool, ToolCall, ToolChoice
+from mistral_common.protocol.instruct.tool_calls import Tool, ToolCall
 from mistral_common.tokens.instruct.request import FIMRequest, InstructRequest
 from mistral_common.tokens.tokenizers.base import (
     FIMRequestType,
