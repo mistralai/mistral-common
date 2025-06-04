@@ -551,9 +551,9 @@ class InstructTokenizerV11(InstructTokenizerV7):
     def __init__(
         self,
         tokenizer: Tokenizer,
-        image_encoder: Optional[MultiModalEncoder] = None,
+        mm_encoder: Optional[MultiModalEncoder] = None,
     ) -> None:
-        super().__init__(tokenizer, image_encoder)
+        super().__init__(tokenizer, mm_encoder)
         self.ARGS = self.tokenizer.get_control_token(SpecialTokens.args.value)
         self.CALL_ID = self.tokenizer.get_control_token(SpecialTokens.call_id.value)
 
