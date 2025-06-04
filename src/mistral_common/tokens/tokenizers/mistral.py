@@ -209,7 +209,7 @@ class MistralTokenizer(
 
         Args:
             model_id: The Hugging Face model ID.
-               See [Models](../models.md) for a list of supported models.
+                See [Models](../../../../models.md) for a list of supported models.
             kwargs: Additional keyword arguments to pass to `huggingface_hub.hf_hub_download`.
 
         Returns:
