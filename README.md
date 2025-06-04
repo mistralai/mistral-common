@@ -39,7 +39,7 @@ This library is for you if you want to:
 
 You can install the library using pip:
 ```sh
-pip install mistral-common
+pip install mistral-common[opencv]
 ```
 
 For more information, please refer to the [documentation](https://mistral-common.github.io).

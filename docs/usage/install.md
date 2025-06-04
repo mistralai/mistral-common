@@ -4,7 +4,7 @@
 
 You can install the library using pip:
 ```sh
-pip install mistral-common
+pip install mistral-common[opencv]
 ```
 
 ## From source

@@ -1,9 +1,6 @@
-
 # Requests
 
-To perform a call to your Machine Learning System, you need to pass all the information needed to meet your inquiry.
-
-Therefore when you submit a request you need to provide depending on the task:
+To query an AI assistant like [Mistral's LeChat](https://chat.mistral.ai/chat) or ChatGPT you need to provide the following:
 - The history of the conversation between the user, the assistant and the tool calls.
 - The tools available to the assistant.
 - The context of the request.
@@ -11,17 +8,28 @@ Therefore when you submit a request you need to provide depending on the task:
 In `mistral-common`, we currently support the following requests types:
 
 - Instruct requests:
-    - [Chat Completion](#chat-completion).
-    - [FIM](#fim).
+    - [Chat completion requests](#chat-completion).
+    - [Fill-In-the-Middle completion](#fim).
 - [Embedding](#embedding) requests.
 
-We also defined a set of Pydantic classes to ease the creation of these requests.
+Every instruct requests should be encoded with it's corresponding `encode_function` function by the tokenizers.
 
-Finally, we provide normalizes (e.g [InstructRequestNormalizer][mistral_common.protocol.instruct.normalize.InstructRequestNormalizer]) and validators (e.g [MistralRequestValidator][mistral_common.protocol.instruct.validator.MistralRequestValidator]) to ensure that the requests are valid that our [MistralTokenizer][mistral_common.tokens.tokenizers.mistral.MistralTokenizer] can handle.
 
 ## Chat completion
 
 Chat completion consists in a conversation between a user and an assistant. The assistant can call tools to enrich its response. Some of our tokenizers also support the use of images (see the [images](./images.md))
+
+Every chat completion request are defined via [ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest].
+
+To perform actual task every requests should follow the following structure:
+
+1. validate the request via a [MistralRequestValidator][mistral_common.protocol.instruct.validator.MistralRequestValidator]
+2. normalize the requests via the [InstructRequestNormalizer][mistral_common.protocol.instruct.normalize.InstructRequestNormalizer].
+3. encode the request.
+
+Using the [MistralTokenizer.encode_chat_completion][mistral_common.tokens.tokenizers.mistral.MistralTokenizer.encode_chat_completion] method will perform all these steps for you.
+
+Following this design ensures minimizing unexpected behavor from the user.
 
 ### Conversation
 
@@ -41,12 +49,12 @@ Tools are functions that the model can call to get information to answer the use
 Here is an example of a request where a user asks for the weather in Paris. The model is also given access to a `get_current_weather` tool to get the weather:
 
 ```python
-from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.messages import UserMessage
-from mistral_common.protocol.instruct.tool_calls import Tool, Function
+from mistral_common.protocol.instruct.request import ChatCompletionRequest
+from mistral_common.protocol.instruct.tool_calls import Function, Tool
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
-
-ChatCompletionRequest(
+request = ChatCompletionRequest(
     tools=[
         Tool(
             function=Function(
@@ -74,6 +82,9 @@ ChatCompletionRequest(
         UserMessage(content="What's the weather like today in Paris"),
     ],
 )
+
+tokenizer = MistralTokenizer.v3()
+tokenizer.encode_chat_completion(request)
 ```
 
 ## FIM
@@ -84,11 +95,15 @@ A pydantic class [FIMRequest][mistral_common.tokens.instruct.request.FIMRequest]
 
 ```python
 from mistral_common.tokens.instruct.request import FIMRequest
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
-FIMRequest(
+request = FIMRequest(
     prompt="def hello_world():\n    print('Hello, world!')",
     suffix="\n\nhello_world()",
 )
+
+tokenizer = MistralTokenizer.v3()
+tokenizer.encode_fim(request)
 ```
 
 ## Embedding
@@ -100,7 +115,8 @@ A pydantic class [EmbeddingRequest][mistral_common.protocol.embedding.request.Em
 ```python
 from mistral_common.protocol.embedding.request import EmbeddingRequest
 
-EmbeddingRequest(
+request = EmbeddingRequest(
+    model="mistral-small-2409",
     input="Hello, world!",
 )
 ```

@@ -31,12 +31,7 @@ from mistral_common.tokens.tokenizers.multimodal import MultiModalEncoder
 class InstructTokenizerBase(
     InstructTokenizer, Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]
 ):
-    r"""Base instruct tokenizer.
-
-    Attributes:
-        tokenizer: The tokenizer to use.
-        mm_encoder: The multi-modal encoder to use if any.
-    """
+    r"""Base instruct tokenizer."""
 
     def __init__(self, tokenizer: Tokenizer, mm_encoder: Optional[MultiModalEncoder] = None):
         r"""Initialize the instruct tokenizer.

@@ -212,7 +212,7 @@ print(
 )
 ```
 
-You should see that the model gives you the weather for Paris:
+You should see that the model correctly called the tool to give you the weather in Paris:
 
 ```python
 {'temperature': '20', 'unit': 'celsius', 'description': 'sunny'}

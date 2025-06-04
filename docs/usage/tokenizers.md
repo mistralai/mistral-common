@@ -2,7 +2,7 @@
 
 ## How do we perform tokenization ?
 
-Tokenization is the process of converting a sequence of characters into a sequence of tokens. These tokens are numeric identifiers that can be used to train a model. To dive deeper into the tokenization process, you can read the [tokenization guide](https://docs.mistral.ai/guides/tokenization/) on our website.
+Tokenization is the process of converting a sequence of characters into a sequence of tokens. To dive deeper into the tokenization process, you can read the [tokenization guide](https://docs.mistral.ai/guides/tokenization/) on our website.
 
 Historically, we based our tokenizers on the following libraries:
 
@@ -11,7 +11,7 @@ Historically, we based our tokenizers on the following libraries:
 
 ## Tokenizer
 
-For our releases, we provide a tokenizer file that you can use to load a tokenizer. For Tekken, the file is generally named `tekken.json`. Here is how you could do it for Devstral Small:
+For our releases, we provide a tokenizer file that you can use to load a tokenizer. If the tokenizer is based on the `tiktoken` library, the file is generally named `tekken.json`. Here is how you could load the [Devstral Small](https://huggingface.co/mistralai/Devstral-Small-2505)'s tokenizer:
 
 ```python
 from huggingface_hub import hf_hub_download

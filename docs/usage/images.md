@@ -1,33 +1,42 @@
 # Images
 
-Some [Mistral models](../models.md) support image inputs. Therefore you can use images in your prompts for these models.
+Most of the recently released [Mistral models](../models.md) support image inputs. Images are represented as [BaseContentChunk][mistral_common.protocol.instruct.messages.BaseContentChunk] objects within the `messages` field of the [ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest]. Encoding an image via a [ImageEncoder][mistral_common.tokens.tokenizers.multimodal.ImageEncoder] will return:
+- a sequence of special tokens representing the image.
+- the image normalized as a numpy array.
 
 ## Supported image formats
 
-Mistral Image encoders use Pillow to decode images. Hence, the supported formats are the same as Pillow's. The images can be provided as:
-
+Mistral Image encoders use Pillow to decode images and OpenCV to encode. Hence, the supported formats are the same as Pillow's. The images can be provided as:
 - an [ImageURLChunk][mistral_common.protocol.instruct.messages.ImageURLChunk]: a pydantic model containing an image URL from which the image will be downloaded.
 - an [ImageChunk][mistral_common.protocol.instruct.messages.ImageChunk]: a pydantic model containing a serialized image that can be either a base64 string or a pillow image.
 
-## Config an Image encoder inside our tokenizer
+## Use an Image encoder with our tokenizer
 
-Our multimodal tokenizers use an  [ImageEncoder][mistral_common.tokens.tokenizers.multimodal.ImageEncoder] that expects a [MultimodalConfig][mistral_common.tokens.tokenizers.multimodal.MultimodalConfig] to be configured.
+Our tokenizers can an [ImageEncoder][mistral_common.tokens.tokenizers.multimodal.ImageEncoder] that is configured with [MultimodalConfig][mistral_common.tokens.tokenizers.multimodal.MultimodalConfig].
 
-The attributes of the config configure how the images will be patched into tokens:
+The attributes of the [MultimodalConfig][mistral_common.tokens.tokenizers.multimodal.MultimodalConfig] configure how the images will be patched into tokens:
 
 - `image_patch_size`: the square size of a patch in pixels to form one token. E.g if the image is 224x224 and the patch size is 14, then the image will be divided into 16x16 patches.
 - `max_image_size`: the maximum size of the image in pixels. If the image is larger, it will be resized to this size.
 - `spatial_merge_size`: the number of patches to merge into one token. This is useful to reduce the number of redudant tokens in the image. E.g if the image is 224x224 and the patch size is 14, then the image will be divided into 16x16 patches. If the spatial merge size is 2, then the image will be divided into 8x8 patches.
 
 ```python
-from mistral_common.tokens.tokenizers.multimodal import ImageEncoder, MultimodalConfig
+from mistral_common.protocol.instruct.messages import ImageURLChunk
+from mistral_common.tokens.tokenizers.multimodal import ImageEncoder, MultimodalConfig, SpecialImageIDs
+
+special_ids = SpecialImageIDs(img=10, img_break=11, img_end=12)  # These are normally automatically set by the tokenizer
 
 config = MultimodalConfig(image_patch_size=14, max_image_size=224, spatial_merge_size=2)
+
+image = ImageURLChunk(image_url="https://live.staticflickr.com/7250/7534338696_b33e941b7d_b.jpg")
+
+encoder = ImageEncoder(config, special_ids)
+encoder(image)
 ```
 
 ## Tokenize an image
 
-Let's load the tekken tokenizer used for Mistral Small 3.1 and tokenize an image.
+Let's load the tekken tokenizer used for [Mistral Small 3.1's](https://mistral.ai/news/mistral-small-3-1) tokenizer to encode and tokenize an image.
 
 ```python
 from huggingface_hub import hf_hub_download

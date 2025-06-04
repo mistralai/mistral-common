@@ -1,6 +1,16 @@
-# Mistral Open Models
+# Mistral Models
 
-At Mistral, We believe in the power of openness and broad distribution to promote innovation and collaboration in AI.
+At Mistral, we believe in the power of openness and broad distribution to promote innovation and collaboration in AI. Based on this principle, we release models to the community that are open for anyone to use, subject to the terms of the license. These models supports wide range of use cases:
+
+- Text generation and chat
+- Code generation and editing
+- Math reasoning
+- Multimodal generation and chat
+- Coding agent.
+
+To learn more about all of our models, please visit our [website](https://mistral.ai/models).
+
+## List of Open models
 
 | Model | Task | Text | Image | Tokenizer | Context size | License | HF Hub Repo |
 |-------|------|------|-------|-----------|--------------|---------|-------|
