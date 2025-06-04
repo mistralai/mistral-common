@@ -10,10 +10,13 @@ from mistral_common.tokens.tokenizers.tekken import SpecialTokenInfo, Tekkenizer
 
 from tests.test_tekken import _quick_vocab
 
+
 @pytest.fixture(scope="session")
 def tekkenizer() -> InstructTokenizerV11:
     special_tokens = list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS)
-    special_tokens += [SpecialTokenInfo(rank=i, token_str=f"<SPCECIAL_{i}>", is_control=True) for i in range(len(special_tokens), 32)]
+    special_tokens += [
+        SpecialTokenInfo(rank=i, token_str=f"<SPCECIAL_{i}>", is_control=True) for i in range(len(special_tokens), 32)
+    ]
 
     # new special tokens
     special_tokens += [
@@ -44,7 +47,24 @@ def test_tokenize_assistant_message(tekkenizer: InstructTokenizerV11) -> None:
         ),
         is_before_last_user_message=False,
     )
-    assert tokens == [tekkenizer.TOOL_CALLS, 197, 195, 197, 195, 197, tekkenizer.ARGS, 134, 198, 208, 197, 198, 208, 197, 134, 2]
+    assert tokens == [
+        tekkenizer.TOOL_CALLS,
+        197,
+        195,
+        197,
+        195,
+        197,
+        tekkenizer.ARGS,
+        134,
+        198,
+        208,
+        197,
+        198,
+        208,
+        197,
+        134,
+        2,
+    ]
     assert tekkenizer.tokenizer.to_string(tokens) == ('[TOOL_CALLS]a_a_a[ARGS]"blabla"</s>')
 
 
@@ -58,10 +78,33 @@ def test_tokenize_assistant_messages(tekkenizer: InstructTokenizerV11) -> None:
         ),
         is_before_last_user_message=False,
     )
-    assert tokens == [tekkenizer.TOOL_CALLS, 197, 195, 197, 195, 197, tekkenizer.ARGS, 134, 198, 208, 197, 198, 208, 197, 134, tekkenizer.TOOL_CALLS, 198, tekkenizer.ARGS, 134, 198, 208, 217, 134, 2]
-    assert tekkenizer.tokenizer.to_string(tokens) == (
-        '[TOOL_CALLS]a_a_a[ARGS]"blabla"[TOOL_CALLS]b[ARGS]"blu"</s>'
-    )
+    assert tokens == [
+        tekkenizer.TOOL_CALLS,
+        197,
+        195,
+        197,
+        195,
+        197,
+        tekkenizer.ARGS,
+        134,
+        198,
+        208,
+        197,
+        198,
+        208,
+        197,
+        134,
+        tekkenizer.TOOL_CALLS,
+        198,
+        tekkenizer.ARGS,
+        134,
+        198,
+        208,
+        217,
+        134,
+        2,
+    ]
+    assert tekkenizer.tokenizer.to_string(tokens) == ('[TOOL_CALLS]a_a_a[ARGS]"blabla"[TOOL_CALLS]b[ARGS]"blu"</s>')
 
 
 def test_tokenize_assistant_message_train(tekkenizer: InstructTokenizerV11) -> None:
@@ -71,5 +114,26 @@ def test_tokenize_assistant_message_train(tekkenizer: InstructTokenizerV11) -> N
         ),
         is_before_last_user_message=True,
     )
-    assert tokens == [tekkenizer.TOOL_CALLS, 197, 195, 197, 195, 197, tekkenizer.CALL_ID, 165, 166, 167, tekkenizer.ARGS, 134, 198, 208, 197, 198, 208, 197, 134, 2]
+    assert tokens == [
+        tekkenizer.TOOL_CALLS,
+        197,
+        195,
+        197,
+        195,
+        197,
+        tekkenizer.CALL_ID,
+        165,
+        166,
+        167,
+        tekkenizer.ARGS,
+        134,
+        198,
+        208,
+        197,
+        198,
+        208,
+        197,
+        134,
+        2,
+    ]
     assert tekkenizer.tokenizer.to_string(tokens) == ('[TOOL_CALLS]a_a_a[CALL_ID]ABC[ARGS]"blabla"</s>')

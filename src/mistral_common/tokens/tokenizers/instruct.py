@@ -548,6 +548,7 @@ class InstructTokenizerV11(InstructTokenizerV7):
     Tool call results are encoded as :
     - [begin tool call] call_name_tokens [call id] call_id_tokens [args] content tokens
     """
+
     def __init__(
         self,
         tokenizer: Tokenizer,
