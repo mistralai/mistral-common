@@ -1,6 +1,7 @@
 from typing import Optional
 
 import pytest
+
 from mistral_common.exceptions import (
     InvalidAssistantMessageException,
     InvalidFunctionCallException,

@@ -5,13 +5,14 @@ from typing import Tuple
 import numpy as np
 import pytest
 import requests
+from PIL import Image
+
 from mistral_common.protocol.instruct.messages import (
     ImageChunk,
     ImageURLChunk,
     TextChunk,
 )
 from mistral_common.tokens.tokenizers.multimodal import ImageEncoder, MultimodalConfig, SpecialImageIDs
-from PIL import Image
 
 
 @pytest.fixture
