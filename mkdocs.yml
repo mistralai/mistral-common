@@ -38,6 +38,7 @@ theme:
     - content.action.view
 repo_url: https://github.com/mistralai/mistral-common
 repo_name: mistralai/mistral-common
+edit_uri: blob/main/docs/
 copyright: Mistral AI 2025.
 extra:
   homepage: https://mistral.ai/
