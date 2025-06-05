@@ -1,6 +1,7 @@
 # Requests
 
 To query an AI assistant like [Mistral's LeChat](https://chat.mistral.ai/chat) or ChatGPT you need to provide the following:
+
 - The history of the conversation between the user, the assistant and the tool calls.
 - The tools available to the assistant.
 - The context of the request.
