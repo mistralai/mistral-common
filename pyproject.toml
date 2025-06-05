@@ -1,7 +1,7 @@
 [project]
 name = "mistral_common"
 version = "1.5.6"
-description = ""
+description = "Mistral-common is a library of common utilities for Mistral AI."
 authors = [{name = "bam4d", email = "bam4d@mistral.ai"}]
 license = "Apache-2.0"
 license-files = ["LICENSE"] 
