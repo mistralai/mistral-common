@@ -51,39 +51,6 @@ from mistral_common.tokens.tokenizers.sentencepiece import (
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekken
 
 
-MODEL_NAME_TO_TOKENIZER_CLS: Dict[str, Callable[[], MistralTokenizer]] = {
-    "ministral-8b-2410": lambda: MistralTokenizer.v3(is_tekken=True),
-    "mistral-tiny-2312": MistralTokenizer.v2,
-    "open-mistral-nemo-2407": lambda: MistralTokenizer.v3(is_tekken=True),
-    "mistral-tiny-2407": MistralTokenizer.v3,
-    "mistral-small-2312": MistralTokenizer.v2,
-    "open-mixtral-8x22b-2404": MistralTokenizer.v3,
-    "mistral-small-2402": MistralTokenizer.v2,
-    "mistral-small-2409": lambda: MistralTokenizer.v3(is_tekken=True),
-    "mistral-medium-2312": MistralTokenizer.v1,
-    "mistral-large-2402": MistralTokenizer.v2,
-    "mistral-large-2407": MistralTokenizer.v3,
-    "mistral-large-2411": MistralTokenizer.v7,
-    "pixtral-large-2411": lambda: MistralTokenizer.v7(is_mm=True),
-    "codestral-2405": MistralTokenizer.v3,
-    "codestral-mamba-2407": MistralTokenizer.v3,
-    "pixtral-12b-2409": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
-    # The following are deprecated - only left for backward comp. Delete in >= 1.6.0
-    "open-mistral-7b": MistralTokenizer.v1,
-    "open-mixtral-8x7b": MistralTokenizer.v1,
-    "mistral-embed": MistralTokenizer.v1,
-    "mistral-small-v1": MistralTokenizer.v2,
-    "mistral-large-v1": MistralTokenizer.v2,
-    "mistral-small": MistralTokenizer.v3,
-    "mistral-large": MistralTokenizer.v3,
-    "open-mixtral-8x22b": MistralTokenizer.v3,
-    "codestral-22b": MistralTokenizer.v3,
-    "mistral-nemo": lambda: MistralTokenizer.v3(is_tekken=True),
-    "pixtral": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
-    "pixtral-large": lambda: MistralTokenizer.v7(is_mm=True),
-}
-
-
 def load_mm_encoder(
     mm_config: MultimodalConfig, tokenizer: Union[Tekkenizer, SentencePieceTokenizer]
 ) -> MultiModalEncoder:
@@ -166,14 +133,14 @@ class MistralTokenizer(
 
             # TODO(Delete this code in mistral_common >= 1.6.0
             # Prefix search the model name mapping
-            for model_name, tokenizer_cls in model_name_to_tokenizer_cls.items():
+            for model_name, tokenizer_cls in MODEL_NAME_TO_TOKENIZER_CLS.items():
                 if model_name in model.lower():
                     return tokenizer_cls()
 
-        if model not in model_name_to_tokenizer_cls:
+        if model not in MODEL_NAME_TO_TOKENIZER_CLS:
             raise TokenizerException(f"Unrecognized model: {model}")
 
-        return model_name_to_tokenizer_cls[model]()
+        return MODEL_NAME_TO_TOKENIZER_CLS[model]()
 
     @classmethod
     def from_file(
@@ -253,3 +220,36 @@ class MistralTokenizer(
 
     def decode(self, tokens: List[int]) -> str:
         return self.instruct_tokenizer.decode(tokens)
+
+
+MODEL_NAME_TO_TOKENIZER_CLS: Dict[str, Callable[[], MistralTokenizer]] = {
+    "ministral-8b-2410": lambda: MistralTokenizer.v3(is_tekken=True),
+    "mistral-tiny-2312": MistralTokenizer.v2,
+    "open-mistral-nemo-2407": lambda: MistralTokenizer.v3(is_tekken=True),
+    "mistral-tiny-2407": MistralTokenizer.v3,
+    "mistral-small-2312": MistralTokenizer.v2,
+    "open-mixtral-8x22b-2404": MistralTokenizer.v3,
+    "mistral-small-2402": MistralTokenizer.v2,
+    "mistral-small-2409": lambda: MistralTokenizer.v3(is_tekken=True),
+    "mistral-medium-2312": MistralTokenizer.v1,
+    "mistral-large-2402": MistralTokenizer.v2,
+    "mistral-large-2407": MistralTokenizer.v3,
+    "mistral-large-2411": MistralTokenizer.v7,
+    "pixtral-large-2411": lambda: MistralTokenizer.v7(is_mm=True),
+    "codestral-2405": MistralTokenizer.v3,
+    "codestral-mamba-2407": MistralTokenizer.v3,
+    "pixtral-12b-2409": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
+    # The following are deprecated - only left for backward comp. Delete in >= 1.6.0
+    "open-mistral-7b": MistralTokenizer.v1,
+    "open-mixtral-8x7b": MistralTokenizer.v1,
+    "mistral-embed": MistralTokenizer.v1,
+    "mistral-small-v1": MistralTokenizer.v2,
+    "mistral-large-v1": MistralTokenizer.v2,
+    "mistral-small": MistralTokenizer.v3,
+    "mistral-large": MistralTokenizer.v3,
+    "open-mixtral-8x22b": MistralTokenizer.v3,
+    "codestral-22b": MistralTokenizer.v3,
+    "mistral-nemo": lambda: MistralTokenizer.v3(is_tekken=True),
+    "pixtral": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
+    "pixtral-large": lambda: MistralTokenizer.v7(is_mm=True),
+}
