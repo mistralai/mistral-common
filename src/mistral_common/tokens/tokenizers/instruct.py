@@ -557,7 +557,7 @@ class InstructTokenizerV11(InstructTokenizerV7):
         self.ARGS = self.tokenizer.get_control_token(SpecialTokens.args.value)
         self.CALL_ID = self.tokenizer.get_control_token(SpecialTokens.call_id.value)
 
-    def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> Tokenized:
+    def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> List[int]:
         assert message.tool_calls, f"Assistant message must have tool calls. Got {message}"
         curr_tokens = []
         for tool_call in message.tool_calls:
@@ -574,4 +574,4 @@ class InstructTokenizerV11(InstructTokenizerV7):
                 self.ARGS,
                 *self.tokenizer.encode(json.dumps(prepared["arguments"], ensure_ascii=False), bos=False, eos=False),
             ]
-        return Tokenized(tokens=curr_tokens)
+        return curr_tokens
