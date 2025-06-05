@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import warnings
 from pathlib import Path
 from typing import Callable, Dict, Generic, List, Optional, Union
@@ -82,19 +80,19 @@ class MistralTokenizer(
         return Path(__file__).parents[2] / "data"
 
     @classmethod
-    def v1(cls) -> MistralTokenizer:
+    def v1(cls) -> "MistralTokenizer":
         """open 7B x 8x7B + embed"""
         return cls.from_file(str(cls._data_path() / "tokenizer.model.v1"), mode=ValidationMode.test)
 
     @classmethod
-    def v2(cls) -> MistralTokenizer:
+    def v2(cls) -> "MistralTokenizer":
         """mistral-small // mistral-large"""
         return cls.from_file(
             str(cls._data_path() / "mistral_instruct_tokenizer_240216.model.v2"), mode=ValidationMode.test
         )
 
     @classmethod
-    def v3(cls, is_tekken: bool = False, is_mm: bool = False) -> MistralTokenizer:
+    def v3(cls, is_tekken: bool = False, is_mm: bool = False) -> "MistralTokenizer":
         """open-mixtral-8x22B"""
         if is_tekken and is_mm:
             tokenizer_name = "tekken_240911.json"
@@ -108,7 +106,7 @@ class MistralTokenizer(
         return cls.from_file(str(cls._data_path() / tokenizer_name), mode=ValidationMode.test)
 
     @classmethod
-    def v7(cls, is_mm: bool = False) -> MistralTokenizer:
+    def v7(cls, is_mm: bool = False) -> "MistralTokenizer":
         """mistral-large 2.1"""
         if is_mm:
             return cls.from_file(
@@ -120,7 +118,7 @@ class MistralTokenizer(
             )
 
     @classmethod
-    def from_model(cls, model: str, strict: bool = False) -> MistralTokenizer:
+    def from_model(cls, model: str, strict: bool = False) -> "MistralTokenizer":
         if not strict:
             warnings.warn(
                 "Calling `MistralTokenizer.from_model(..., strict=False)` is deprecated as it can lead to incorrect "
@@ -147,7 +145,7 @@ class MistralTokenizer(
         cls,
         tokenizer_filename: str,
         mode: ValidationMode = ValidationMode.test,
-    ) -> MistralTokenizer:
+    ) -> "MistralTokenizer":
         """
         Depending on which model we are loading, tokenization and validation might be different. 💩
         """
