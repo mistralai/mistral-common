@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import warnings
 from pathlib import Path
 from typing import Callable, Dict, Generic, List, Optional, Union
@@ -49,6 +51,39 @@ from mistral_common.tokens.tokenizers.sentencepiece import (
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekken
 
 
+MODEL_NAME_TO_TOKENIZER_CLS: Dict[str, Callable[[], MistralTokenizer]] = {
+    "ministral-8b-2410": lambda: MistralTokenizer.v3(is_tekken=True),
+    "mistral-tiny-2312": MistralTokenizer.v2,
+    "open-mistral-nemo-2407": lambda: MistralTokenizer.v3(is_tekken=True),
+    "mistral-tiny-2407": MistralTokenizer.v3,
+    "mistral-small-2312": MistralTokenizer.v2,
+    "open-mixtral-8x22b-2404": MistralTokenizer.v3,
+    "mistral-small-2402": MistralTokenizer.v2,
+    "mistral-small-2409": lambda: MistralTokenizer.v3(is_tekken=True),
+    "mistral-medium-2312": MistralTokenizer.v1,
+    "mistral-large-2402": MistralTokenizer.v2,
+    "mistral-large-2407": MistralTokenizer.v3,
+    "mistral-large-2411": MistralTokenizer.v7,
+    "pixtral-large-2411": lambda: MistralTokenizer.v7(is_mm=True),
+    "codestral-2405": MistralTokenizer.v3,
+    "codestral-mamba-2407": MistralTokenizer.v3,
+    "pixtral-12b-2409": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
+    # The following are deprecated - only left for backward comp. Delete in >= 1.6.0
+    "open-mistral-7b": MistralTokenizer.v1,
+    "open-mixtral-8x7b": MistralTokenizer.v1,
+    "mistral-embed": MistralTokenizer.v1,
+    "mistral-small-v1": MistralTokenizer.v2,
+    "mistral-large-v1": MistralTokenizer.v2,
+    "mistral-small": MistralTokenizer.v3,
+    "mistral-large": MistralTokenizer.v3,
+    "open-mixtral-8x22b": MistralTokenizer.v3,
+    "codestral-22b": MistralTokenizer.v3,
+    "mistral-nemo": lambda: MistralTokenizer.v3(is_tekken=True),
+    "pixtral": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
+    "pixtral-large": lambda: MistralTokenizer.v7(is_mm=True),
+}
+
+
 def load_mm_encoder(
     mm_config: MultimodalConfig, tokenizer: Union[Tekkenizer, SentencePieceTokenizer]
 ) -> MultiModalEncoder:
@@ -80,19 +115,19 @@ class MistralTokenizer(
         return Path(__file__).parents[2] / "data"
 
     @classmethod
-    def v1(cls) -> "MistralTokenizer":
+    def v1(cls) -> MistralTokenizer:
         """open 7B x 8x7B + embed"""
         return cls.from_file(str(cls._data_path() / "tokenizer.model.v1"), mode=ValidationMode.test)
 
     @classmethod
-    def v2(cls) -> "MistralTokenizer":
+    def v2(cls) -> MistralTokenizer:
         """mistral-small // mistral-large"""
         return cls.from_file(
             str(cls._data_path() / "mistral_instruct_tokenizer_240216.model.v2"), mode=ValidationMode.test
         )
 
     @classmethod
-    def v3(cls, is_tekken: bool = False, is_mm: bool = False) -> "MistralTokenizer":
+    def v3(cls, is_tekken: bool = False, is_mm: bool = False) -> MistralTokenizer:
         """open-mixtral-8x22B"""
         if is_tekken and is_mm:
             tokenizer_name = "tekken_240911.json"
@@ -106,7 +141,7 @@ class MistralTokenizer(
         return cls.from_file(str(cls._data_path() / tokenizer_name), mode=ValidationMode.test)
 
     @classmethod
-    def v7(cls, is_mm: bool = False) -> "MistralTokenizer":
+    def v7(cls, is_mm: bool = False) -> MistralTokenizer:
         """mistral-large 2.1"""
         if is_mm:
             return cls.from_file(
@@ -118,39 +153,7 @@ class MistralTokenizer(
             )
 
     @classmethod
-    def from_model(cls, model: str, strict: bool = False) -> "MistralTokenizer":
-        model_name_to_tokenizer_cls: Dict[str, Callable[[], MistralTokenizer]] = {
-            "ministral-8b-2410": lambda: MistralTokenizer.v3(is_tekken=True),
-            "mistral-tiny-2312": MistralTokenizer.v2,
-            "open-mistral-nemo-2407": lambda: MistralTokenizer.v3(is_tekken=True),
-            "mistral-tiny-2407": MistralTokenizer.v3,
-            "mistral-small-2312": MistralTokenizer.v2,
-            "open-mixtral-8x22b-2404": MistralTokenizer.v3,
-            "mistral-small-2402": MistralTokenizer.v2,
-            "mistral-small-2409": lambda: MistralTokenizer.v3(is_tekken=True),
-            "mistral-medium-2312": MistralTokenizer.v1,
-            "mistral-large-2402": MistralTokenizer.v2,
-            "mistral-large-2407": MistralTokenizer.v3,
-            "mistral-large-2411": MistralTokenizer.v7,
-            "pixtral-large-2411": lambda: MistralTokenizer.v7(is_mm=True),
-            "codestral-2405": MistralTokenizer.v3,
-            "codestral-mamba-2407": MistralTokenizer.v3,
-            "pixtral-12b-2409": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
-            # The following are deprecated - only left for backward comp. Delete in >= 1.6.0
-            "open-mistral-7b": MistralTokenizer.v1,
-            "open-mixtral-8x7b": MistralTokenizer.v1,
-            "mistral-embed": MistralTokenizer.v1,
-            "mistral-small-v1": MistralTokenizer.v2,
-            "mistral-large-v1": MistralTokenizer.v2,
-            "mistral-small": MistralTokenizer.v3,
-            "mistral-large": MistralTokenizer.v3,
-            "open-mixtral-8x22b": MistralTokenizer.v3,
-            "codestral-22b": MistralTokenizer.v3,
-            "mistral-nemo": lambda: MistralTokenizer.v3(is_tekken=True),
-            "pixtral": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
-            "pixtral-large": lambda: MistralTokenizer.v7(is_mm=True),
-        }
-
+    def from_model(cls, model: str, strict: bool = False) -> MistralTokenizer:
         if not strict:
             warnings.warn(
                 "Calling `MistralTokenizer.from_model(..., strict=False)` is deprecated as it can lead to incorrect "
@@ -177,7 +180,7 @@ class MistralTokenizer(
         cls,
         tokenizer_filename: str,
         mode: ValidationMode = ValidationMode.test,
-    ) -> "MistralTokenizer":
+    ) -> MistralTokenizer:
         """
         Depending on which model we are loading, tokenization and validation might be different. 💩
         """
