@@ -1,5 +1,6 @@
+import re
 from enum import Enum
-from typing import List, Literal, Optional, TypeVar, Union
+from typing import Any, Dict, List, Literal, Optional, TypeVar, Union
 
 from pydantic import ConfigDict, Field
 from typing_extensions import Annotated, TypeAlias
@@ -38,6 +39,21 @@ class BaseContentChunk(MistralBase):
 
     type: Literal[ChunkTypes.text, ChunkTypes.image, ChunkTypes.image_url]
 
+    def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
+        r"""Converts the chunk to the OpenAI format.
+
+        Should be implemented by subclasses.
+        """
+        raise NotImplementedError("to_openai method not implemented for {cls.__name__}")
+
+    @classmethod
+    def from_openai(cls, openai_chunk: Dict[str, Union[str, Dict[str, str]]]) -> "BaseContentChunk":
+        r"""Converts the OpenAI chunk to the Mistral format.
+
+        Should be implemented by subclasses.
+        """
+        raise NotImplementedError("from_openai method not implemented for {cls.__name__}")
+
 
 class ImageChunk(BaseContentChunk):
     r"""Image chunk.
@@ -53,6 +69,24 @@ class ImageChunk(BaseContentChunk):
     type: Literal[ChunkTypes.image] = ChunkTypes.image
     image: SerializableImage
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
+        r"""Converts the chunk to the OpenAI format."""
+        base64_image = self.model_dump(include={"image"}, context={"add_format_prefix": True})["image"]
+        return {"type": "image_url", "image_url": {"url": base64_image}}
+
+    @classmethod
+    def from_openai(cls, openai_chunk: Dict[str, Union[str, Dict[str, str]]]) -> "ImageChunk":
+        r"""Converts the OpenAI chunk to the Mistral format."""
+        assert openai_chunk.get("type") == "image_url", openai_chunk
+
+        image_url_dict = openai_chunk["image_url"]
+        assert isinstance(image_url_dict, dict) and "url" in image_url_dict, image_url_dict
+
+        if re.match(r"^data:image/\w+;base64,", image_url_dict["url"]):  # Remove the prefix if it exists
+            image_url_dict["url"] = image_url_dict["url"].split(",")[1]
+
+        return cls.model_validate({"image": image_url_dict["url"]})
 
 
 class ImageURL(MistralBase):
@@ -90,6 +124,23 @@ class ImageURLChunk(BaseContentChunk):
             return self.image_url.url
         return self.image_url
 
+    def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
+        r"""Converts the chunk to the OpenAI format."""
+        image_url_dict = {"url": self.get_url()}
+        if isinstance(self.image_url, ImageURL) and self.image_url.detail is not None:
+            image_url_dict["detail"] = self.image_url.detail
+
+        out_dict: Dict[str, Union[str, Dict[str, str]]] = {
+            "type": "image_url",
+            "image_url": image_url_dict,
+        }
+        return out_dict
+
+    @classmethod
+    def from_openai(cls, openai_chunk: Dict[str, Union[str, Dict[str, str]]]) -> "ImageURLChunk":
+        r"""Converts the OpenAI chunk to the Mistral format."""
+        return cls.model_validate({"image_url": openai_chunk["image_url"]})
+
 
 class TextChunk(BaseContentChunk):
     r"""Text chunk.
@@ -104,8 +155,35 @@ class TextChunk(BaseContentChunk):
     type: Literal[ChunkTypes.text] = ChunkTypes.text
     text: str
 
+    def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
+        r"""Converts the chunk to the OpenAI format."""
+        return self.model_dump()
+
+    @classmethod
+    def from_openai(cls, messages: Dict[str, Union[str, Dict[str, str]]]) -> "TextChunk":
+        r"""Converts the OpenAI chunk to the Mistral format."""
+        return cls.model_validate(messages)
+
 
 ContentChunk = Annotated[Union[TextChunk, ImageChunk, ImageURLChunk], Field(discriminator="type")]
+
+
+def _convert_openai_content_chunks(openai_content_chunks: Dict[str, Union[str, Dict[str, str]]]) -> ContentChunk:
+    content_type_str = openai_content_chunks.get("type")
+
+    if content_type_str is None:
+        raise ValueError("Content chunk must have a type field.")
+
+    content_type = ChunkTypes(content_type_str)
+
+    if content_type == ChunkTypes.text:
+        return TextChunk.from_openai(openai_content_chunks)
+    elif content_type == ChunkTypes.image_url:
+        return ImageURLChunk.from_openai(openai_content_chunks)
+    elif content_type == ChunkTypes.image:
+        return ImageChunk.from_openai(openai_content_chunks)
+    else:
+        raise ValueError(f"Unknown content chunk type: {content_type}")
 
 
 class Roles(str, Enum):
@@ -136,6 +214,23 @@ class BaseMessage(MistralBase):
 
     role: Literal[Roles.system, Roles.user, Roles.assistant, Roles.tool]
 
+    def to_openai(self) -> Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]:
+        r"""Converts the message to the OpenAI format.
+
+        Should be implemented by subclasses.
+        """
+        raise NotImplementedError("to_openai method not implemented for {cls.__name__}")
+
+    @classmethod
+    def from_openai(
+        cls, openai_message: Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]
+    ) -> "BaseMessage":
+        r"""Converts the OpenAI message to the Mistral format.
+
+        Should be implemented by subclasses.
+        """
+        raise NotImplementedError("from_openai method not implemented for {cls.__name__}.")
+
 
 class UserMessage(BaseMessage):
     r"""User message.
@@ -150,6 +245,26 @@ class UserMessage(BaseMessage):
     role: Literal[Roles.user] = Roles.user
     content: Union[str, List[ContentChunk]]
 
+    def to_openai(self) -> Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]:
+        r"""Converts the message to the OpenAI format."""
+        if isinstance(self.content, str):
+            return {"role": self.role, "content": self.content}
+        return {"role": self.role, "content": [chunk.to_openai() for chunk in self.content]}
+
+    @classmethod
+    def from_openai(
+        cls, openai_message: Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]
+    ) -> "UserMessage":
+        r"""Converts the OpenAI message to the Mistral format."""
+        if isinstance(openai_message["content"], str):
+            return cls.model_validate(openai_message)
+        return cls.model_validate(
+            {
+                "role": openai_message["role"],
+                "content": [_convert_openai_content_chunks(chunk) for chunk in openai_message["content"]],
+            },
+        )
+
 
 class SystemMessage(BaseMessage):
     r"""System message.
@@ -163,6 +278,26 @@ class SystemMessage(BaseMessage):
 
     role: Literal[Roles.system] = Roles.system
     content: Union[str, List[ContentChunk]]
+
+    def to_openai(self) -> Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]:
+        r"""Converts the message to the OpenAI format."""
+        if isinstance(self.content, str):
+            return {"role": self.role, "content": self.content}
+        return {"role": self.role, "content": [chunk.to_openai() for chunk in self.content]}
+
+    @classmethod
+    def from_openai(
+        cls, openai_message: Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]
+    ) -> "SystemMessage":
+        r"""Converts the OpenAI message to the Mistral format."""
+        if isinstance(openai_message["content"], str):
+            return cls.model_validate(openai_message)
+        return cls.model_validate(
+            {
+                "role": openai_message["role"],
+                "content": [_convert_openai_content_chunks(chunk) for chunk in openai_message["content"]],
+            }
+        )
 
 
 class AssistantMessage(BaseMessage):
@@ -182,6 +317,38 @@ class AssistantMessage(BaseMessage):
     content: Optional[str] = None
     tool_calls: Optional[List[ToolCall]] = None
     prefix: bool = False
+
+    def to_openai(self) -> Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]:
+        r"""Converts the message to the OpenAI format."""
+        out_dict: dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]] = {"role": self.role}
+        if self.content is not None:
+            out_dict["content"] = self.content
+        if self.tool_calls is not None:
+            out_dict["tool_calls"] = [tool_call.to_openai() for tool_call in self.tool_calls]
+
+        return out_dict
+
+    @classmethod
+    def from_openai(
+        cls, openai_message: Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]
+    ) -> "AssistantMessage":
+        r"""Converts the OpenAI message to the Mistral format."""
+        openai_tool_calls = openai_message.get("tool_calls", None)
+        tools_calls = (
+            [
+                ToolCall.from_openai(openai_tool_call)  # type: ignore[arg-type]
+                for openai_tool_call in openai_tool_calls
+            ]
+            if openai_tool_calls is not None
+            else None
+        )
+        return cls.model_validate(
+            {
+                "role": openai_message["role"],
+                "content": openai_message.get("content"),
+                "tool_calls": tools_calls,
+            }
+        )
 
 
 class FinetuningAssistantMessage(AssistantMessage):
@@ -215,6 +382,18 @@ class ToolMessage(BaseMessage):
 
     # Deprecated in V3 tokenization
     name: Optional[str] = None
+
+    def to_openai(self) -> Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]:
+        r"""Converts the message to the OpenAI format."""
+        assert self.tool_call_id is not None, "tool_call_id must be provided for tool messages."
+        return self.model_dump(exclude={"name"})
+
+    @classmethod
+    def from_openai(cls, messages: Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]) -> "ToolMessage":
+        r"""Converts the OpenAI message to the Mistral format."""
+        tool_message = cls.model_validate(messages)
+        assert tool_message.tool_call_id is not None, "tool_call_id must be provided for tool messages."
+        return tool_message
 
 
 ChatMessage = Annotated[Union[SystemMessage, UserMessage, AssistantMessage, ToolMessage], Field(discriminator="role")]
