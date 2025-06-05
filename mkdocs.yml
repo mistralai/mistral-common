@@ -34,6 +34,8 @@ theme:
     - toc.follow
     - toc.integrate
     - content.code.copy
+    - content.action.edit
+    - content.action.view
 repo_url: https://github.com/mistralai/mistral-common
 repo_name: mistralai/mistral-common
 copyright: Mistral AI 2025.
