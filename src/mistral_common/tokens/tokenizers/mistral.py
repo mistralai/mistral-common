@@ -1,6 +1,6 @@
 import warnings
 from pathlib import Path
-from typing import Callable, Dict, Generic, List, Optional, Union
+from typing import Any, Callable, Dict, Generic, List, Optional, Union
 
 from mistral_common.exceptions import (
     TokenizerException,
@@ -47,6 +47,7 @@ from mistral_common.tokens.tokenizers.sentencepiece import (
     is_sentencepiece,
 )
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekken
+from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hub
 
 
 def load_mm_encoder(
@@ -190,6 +191,22 @@ class MistralTokenizer(
             raise TokenizerException(f"Unrecognized model: {model}")
 
         return MODEL_NAME_TO_TOKENIZER_CLS[model]()
+
+    @staticmethod
+    def from_hf_hub(model_id: str, **kwargs: Any) -> "MistralTokenizer":
+        r"""Get the Mistral tokenizer for a given Hugging Face model ID.
+
+        See [here](../../../../models.md#list-of-open-models) for a list of our OSS models.
+
+        Args:
+            model_id: The Hugging Face model ID.
+            kwargs: Additional keyword arguments to pass to `huggingface_hub.hf_hub_download`.
+
+        Returns:
+            The Mistral tokenizer for the given model.
+        """
+        tokenizer_path = download_tokenizer_from_hf_hub(model_id, **kwargs)
+        return MistralTokenizer.from_file(tokenizer_path)
 
     @classmethod
     def from_file(

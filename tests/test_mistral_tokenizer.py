@@ -1,3 +1,6 @@
+from typing import Any
+from unittest.mock import patch
+
 import pytest
 
 from mistral_common.exceptions import TokenizerException
@@ -35,3 +38,22 @@ class TestMistralToknizer:
 
             assert tokenizer.decode(encoded) == prompt
             assert tokenizer.instruct_tokenizer.decode(encoded) == prompt
+
+    def test_from_hf_hub(self) -> None:
+        def _mocked_hf_download(repo_id: str, *args: Any) -> str:
+            if repo_id == "mistralai/Mistral-7B-Instruct-v0.1":
+                return str(MistralTokenizer._data_path() / "tokenizer.model.v1")
+            elif repo_id == "mistralai/Pixtral-Large-Instruct-2411":
+                return str(MistralTokenizer._data_path() / "tekken_240911.json")
+            else:
+                raise ValueError(f"Unknown repo_id: {repo_id}")
+
+        with patch("mistral_common.tokens.tokenizers.mistral.download_tokenizer_from_hf_hub", _mocked_hf_download):
+            tokenizer = MistralTokenizer.from_hf_hub("mistralai/Mistral-7B-Instruct-v0.1")
+            assert isinstance(tokenizer.instruct_tokenizer, InstructTokenizerV1)
+
+            tokenizer = MistralTokenizer.from_hf_hub("mistralai/Pixtral-Large-Instruct-2411")
+            assert isinstance(tokenizer.instruct_tokenizer, InstructTokenizerV3)
+
+            with pytest.raises(ValueError):
+                MistralTokenizer.from_hf_hub("mistralai/unknown-model")

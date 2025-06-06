@@ -28,7 +28,10 @@ def is_sentencepiece(path: Union[str, Path]) -> bool:
 
 def get_spm_version(tokenizer_filename: str, raise_deprecated: bool = False) -> TokenizerVersion:
     r"""Get the version of the tokenizer from the filename."""
-    _version_str = tokenizer_filename.split(".")[-1].split("m")[0]
+    _version_str = tokenizer_filename.split(".")[-1]
+    if _version_str != "model":  # filter tokenizer_filename == "/path/to/tokenizer.model" case
+        _version_str = _version_str.split("m")[0]
+
     if _version_str == "model":
         if raise_deprecated:
             raise TokenizerException(f"Make sure to rename your tokenizer file to end with {tokenizer_filename}.v1.")
@@ -45,7 +48,7 @@ def get_spm_version(tokenizer_filename: str, raise_deprecated: bool = False) -> 
 def get_mm_config(tokenizer_filename: str) -> Optional[MultimodalConfig]:
     r"""Get the multimodal config from the tokenizer filename."""
     _version_str = tokenizer_filename.split(".")[-1]
-    if "m" not in _version_str:
+    if _version_str == "model" or "m" not in _version_str:
         return None
 
     _mm_version_str = "m" + _version_str.split("m")[-1]
