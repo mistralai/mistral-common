@@ -554,7 +554,7 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-hub = [
+hf-hub = [
     { name = "huggingface-hub" },
 ]
 opencv = [
@@ -586,7 +586,7 @@ docs = [
 
 [package.metadata]
 requires-dist = [
-    { name = "huggingface-hub", marker = "extra == 'hub'", specifier = ">=0.32.4" },
+    { name = "huggingface-hub", marker = "extra == 'hf-hub'", specifier = ">=0.32.4" },
     { name = "jsonschema", specifier = ">=4.21.1" },
     { name = "numpy", marker = "python_full_version < '3.9'", specifier = ">=1.22,<1.25" },
     { name = "numpy", marker = "python_full_version >= '3.9'", specifier = ">=1.25" },
@@ -598,7 +598,7 @@ requires-dist = [
     { name = "tiktoken", specifier = ">=0.7.0" },
     { name = "typing-extensions", specifier = ">=4.11.0" },
 ]
-provides-extras = ["opencv", "hub"]
+provides-extras = ["opencv", "hf-hub"]
 
 [package.metadata.requires-dev]
 dev = [
