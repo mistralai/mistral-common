@@ -1,7 +1,5 @@
 from typing import Any, Dict, Iterator, List
 
-from mistral_common.exceptions import TokenizerException
-
 _hub_installed: bool
 try:
     import huggingface_hub
@@ -52,7 +50,7 @@ def download_tokenizer_from_hf_hub(model_id: str, **kwargs: Any) -> str:
         )
 
     if model_id not in MODEL_HF_ID_TO_TOKENIZER_FILE:
-        raise TokenizerException(f"Unrecognized model ID: {model_id}")
+        raise ValueError(f"Unrecognized model ID: {model_id}")
 
     tokenizer_file = MODEL_HF_ID_TO_TOKENIZER_FILE[model_id]
     tokenizer_path = huggingface_hub.hf_hub_download(repo_id=model_id, filename=tokenizer_file, **kwargs)

@@ -56,5 +56,5 @@ class TestMistralToknizer:
             tokenizer = MistralTokenizer.from_hf_hub("mistralai/Pixtral-Large-Instruct-2411")
             assert isinstance(tokenizer.instruct_tokenizer, InstructTokenizerV7)
 
-            with pytest.raises(TokenizerException):
+            with pytest.raises(ValueError):
                 MistralTokenizer.from_hf_hub("mistralai/unknown-model")
