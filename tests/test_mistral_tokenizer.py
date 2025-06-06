@@ -49,7 +49,7 @@ class TestMistralToknizer:
             else:
                 raise ValueError(f"Unknown repo_id: {repo_id}")
 
-        with patch("mistral_common.tokens.tokenizers.mistral.huggingface_hub.hf_hub_download", _mocked_hf_download):
+        with patch("mistral_common.tokens.tokenizers.utils.download_tokenizer_from_hf_hub", _mocked_hf_download):
             tokenizer = MistralTokenizer.from_hf_hub("mistralai/Mistral-7B-Instruct-v0.1")
             assert isinstance(tokenizer.instruct_tokenizer, InstructTokenizerV1)
 
