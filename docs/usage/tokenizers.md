@@ -11,14 +11,14 @@ Historically, we based our tokenizers on the following libraries:
 
 ## Tokenizer
 
-For our releases, we provide a tokenizer file that you can use to load a tokenizer. If the tokenizer is based on the `tiktoken` library, the file is generally named `tekken.json`. Here is how you could load the [Devstral Small](https://huggingface.co/mistralai/Devstral-Small-2505)'s tokenizer:
+For our releases, we provide a tokenizer file that you can use to load a tokenizer. If the tokenizer is based on the `tiktoken` library, the file is generally named `tekken.json`. Here is how you could load the [Mistral Small 3.1 Instruct](https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503)'s tokenizer:
 
 ```python
 from mistral_common.protocol.instruct.messages import UserMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
-tokenizer = MistralTokenizer.from_hf_hub("mistralai/Devstral-Small-2505", token="your_hf_token")
+tokenizer = MistralTokenizer.from_hf_hub("mistralai/Mistral-Small-3.1-24B-Instruct-2503", token="your_hf_token")
 
 chat_completion = ChatCompletionRequest(
     messages=[

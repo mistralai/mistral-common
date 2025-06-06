@@ -197,6 +197,14 @@ class MistralTokenizer(
         r"""Get the Mistral tokenizer for a given Hugging Face model ID.
 
         See [Models](../../../../models.md) for a list of supported models.
+
+        Args:
+            model_id: The Hugging Face model ID.
+                See [Models](../../../../models.md) for a list of supported models.
+            kwargs: Additional keyword arguments to pass to `huggingface_hub.hf_hub_download`.
+
+        Returns:
+            The Mistral tokenizer for the given model.
         """
         tokenizer_path = download_tokenizer_from_hf_hub(model_id, **kwargs)
         return MistralTokenizer.from_file(tokenizer_path)

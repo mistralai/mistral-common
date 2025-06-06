@@ -29,7 +29,7 @@ def chunks(lst: List[str], chunk_size: int) -> Iterator[List[str]]:
 
 
 def download_tokenizer_from_hf_hub(model_id: str, **kwargs: Any) -> str:
-    r"""Download a Mistral tokenizer from the Hugging Face Hub.
+    r"""Download the configuration file of an official Mistral tokenizer from the Hugging Face Hub.
 
     See [Models](../../../../models.md) for a list of supported models.
 
@@ -43,7 +43,7 @@ def download_tokenizer_from_hf_hub(model_id: str, **kwargs: Any) -> str:
         kwargs: Additional keyword arguments to pass to `huggingface_hub.hf_hub_download`.
 
     Returns:
-        The Mistral tokenizer local path for the given model ID.
+        The downloaded tokenizer local path for the given model ID.
     """
     if not _hub_installed:
         raise ImportError(
