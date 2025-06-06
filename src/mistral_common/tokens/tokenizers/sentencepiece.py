@@ -29,7 +29,7 @@ def is_sentencepiece(path: Union[str, Path]) -> bool:
 def get_spm_version(tokenizer_filename: str, raise_deprecated: bool = False) -> TokenizerVersion:
     r"""Get the version of the tokenizer from the filename."""
     _version_str = tokenizer_filename.split(".")[-1]
-    if _version_str != "model": # filter tokenizer_filename == "/path/to/tokenizer.model" case
+    if _version_str != "model":  # filter tokenizer_filename == "/path/to/tokenizer.model" case
         _version_str = _version_str.split("m")[0]
 
     if _version_str == "model":
