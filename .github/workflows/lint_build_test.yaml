@@ -37,6 +37,10 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
+      
+      - name: Check uv lock
+        run: |
+          uv lock --check
 
       # Install
       - name: Install Dependencies
