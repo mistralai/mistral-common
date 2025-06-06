@@ -8,7 +8,6 @@ from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV1,
     InstructTokenizerV2,
     InstructTokenizerV3,
-    InstructTokenizerV7,
 )
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
