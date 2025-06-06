@@ -147,7 +147,15 @@ def test_image_processing(special_token_ids: SpecialImageIDs, size: Tuple[int, i
 
     content = ImageURLChunk(image_url=url)
 
-    image = mm_encoder(content).image
+    RETRY = 10  # sometimes the image download fails, so we retry a few times
+    for i in range(RETRY):
+        try:
+            image = mm_encoder(content).image
+            break
+        except RuntimeError as e:
+            if i == RETRY - 1:
+                raise e
+            continue
 
     assert image.transpose().shape[:2] == EXP_IMG_SIZES[size], image.transpose().shape[:2]
     assert np.abs(image).sum() - EXP_IMG_SUM[size] < 1e-1, np.abs(image).sum()
