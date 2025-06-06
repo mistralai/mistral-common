@@ -1,5 +1,5 @@
 site_name: Mistral-common
-site_url: https://mistral-common.github.io/
+site_url: https://mistralai.github.io/mistral-common/
 site_description: Mistral-common is a library of common utilities for Mistral AI.
 theme:
   name: material
@@ -38,6 +38,7 @@ theme:
     - content.action.view
 repo_url: https://github.com/mistralai/mistral-common
 repo_name: mistralai/mistral-common
+edit_uri: blob/main/docs/
 copyright: Mistral AI 2025.
 extra:
   homepage: https://mistral.ai/

@@ -9,7 +9,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/mistral-common?label=release&logo=pypi&logoColor=white)](https://pypi.org/project/mistral-common/)
 [![Tests](https://img.shields.io/github/actions/workflow/status/mistralai/mistral-common/lint_build_test.yaml?label=tests&branch=main)](https://github.com/mistralai/mistral-common/actions/workflows/lint_build_test.yaml)
-[![Documentation](https://img.shields.io/website?url=https%3A%2F%2Fmistral-common.github.io%2F&up_message=online&down_message=offline&label=docs)](https://mistral-common.github.io)
+[![Documentation](https://img.shields.io/website?url=https%3A%2F%2Fmistralai.github.io%2Fmistral-common%2F&up_message=online&down_message=offline&label=docs)](https://mistralai.github.io/mistral-common/)
 [![Python version](https://img.shields.io/pypi/pyversions/mistral-common?color=blue&logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENCE)
 
@@ -42,7 +42,7 @@ You can install the library using pip:
 pip install mistral-common[opencv]
 ```
 
-For more information, please refer to the [documentation](https://mistral-common.github.io).
+For more information, please refer to the [documentation](https://mistralai.github.io/mistral-common/).
 
 ## How to contribute ?
 
