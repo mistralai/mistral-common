@@ -31,15 +31,15 @@ def chunks(lst: List[str], chunk_size: int) -> Iterator[List[str]]:
 def download_tokenizer_from_hf_hub(model_id: str, **kwargs: Any) -> str:
     r"""Download the configuration file of an official Mistral tokenizer from the Hugging Face Hub.
 
-    See [Models](../../../../models.md) for a list of supported models.
+    See [here](../../../../models.md#list-of-open-models) for a list of our OSS models.
 
     Note:
         You need to install the `huggingface_hub` package to use this method.
-        please run `pip install mistral-common[hf-hub]` to install it.
+
+        Please run `pip install mistral-common[hf-hub]` to install it.
 
     Args:
         model_id: The Hugging Face model ID.
-            See [Models](../../../../models.md) for a list of supported models.
         kwargs: Additional keyword arguments to pass to `huggingface_hub.hf_hub_download`.
 
     Returns:
