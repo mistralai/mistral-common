@@ -49,7 +49,7 @@ def image_from_chunk(chunk: Union[ImageURLChunk, ImageChunk]) -> SerializableIma
         image_data = base64.b64decode(data)
         return Image.open(BytesIO(image_data))
     if chunk.get_url().startswith("file"):
-        return Image.open(open(chunk.get_url().replace("file://", ""),'rb'))
+        return Image.open(open(chunk.get_url().replace("file://", ""), "rb"))
     if chunk.get_url().startswith("http"):
         return download_image(chunk.get_url())
 
