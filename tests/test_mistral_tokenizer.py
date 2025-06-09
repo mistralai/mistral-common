@@ -56,4 +56,3 @@ class TestMistralToknizer:
 
             tokenizer = MistralTokenizer.from_hf_hub("mistralai/Pixtral-Large-Instruct-2411")
             assert isinstance(tokenizer.instruct_tokenizer, InstructTokenizerV3)
-
