@@ -1,6 +1,6 @@
 import warnings
 from pathlib import Path
-from typing import Any, Callable, Dict, Generic, List, Optional, Union
+from typing import Callable, Dict, Generic, List, Optional, Union
 
 from mistral_common.exceptions import (
     TokenizerException,
@@ -194,19 +194,22 @@ class MistralTokenizer(
         return MODEL_NAME_TO_TOKENIZER_CLS[model]()
 
     @staticmethod
-    def from_hf_hub(model_id: str, **kwargs: Any) -> "MistralTokenizer":
-        r"""Get the Mistral tokenizer for a given Hugging Face model ID.
+    def from_hf_hub(
+        repo_id: str, token: Optional[Union[bool, str]] = None, revision: Optional[str] = None
+    ) -> "MistralTokenizer":
+        r"""Download the Mistral tokenizer for a given Hugging Face repository ID.
 
         See [here](../../../../models.md#list-of-open-models) for a list of our OSS models.
 
         Args:
-            model_id: The Hugging Face model ID.
-            kwargs: Additional keyword arguments to pass to `huggingface_hub.hf_hub_download`.
+            repo_id: The Hugging Face repo ID.
+            token: The Hugging Face token to use to download the tokenizer.
+            revision: The revision of the model to use. If `None`, the latest revision will be used.
 
         Returns:
             The Mistral tokenizer for the given model.
         """
-        tokenizer_path = download_tokenizer_from_hf_hub(model_id, **kwargs)
+        tokenizer_path = download_tokenizer_from_hf_hub(repo_id=repo_id, token=token, revision=revision)
         return MistralTokenizer.from_file(tokenizer_path)
 
     @classmethod
