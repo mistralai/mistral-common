@@ -1,0 +1,112 @@
+site_name: Mistral-common
+site_url: https://mistralai.github.io/mistral-common/
+site_description: Mistral-common is a library of common utilities for Mistral AI.
+theme:
+  name: material
+  custom_dir: ./docs/overrides
+  logo: assets/logo.svg
+  logo_dark: assets/logo-dark.svg
+  favicon: assets/logo_favicon.png
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      primary: custom
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      primary: custom
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Poppins
+  features:
+    - navigation.instant
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.tracking
+    - navigation.top
+    - navigation.indexes
+    - toc.follow
+    - toc.integrate
+    - content.code.copy
+    - content.action.edit
+    - content.action.view
+repo_url: https://github.com/mistralai/mistral-common
+repo_name: mistralai/mistral-common
+edit_uri: blob/main/docs/
+copyright: Mistral AI 2025.
+extra:
+  homepage: https://mistral.ai/
+  social:
+    - icon: material/email-outline
+      link: https://mistral.ai/contact
+      name: Contact us
+    - icon: material/web
+      link: https://mistral.ai/
+      name: Mistral AI
+    - icon: fontawesome/brands/github
+      link: https://github.com/mistralai/mistral-common
+      name: GitHub
+extra_css:
+  - assets/extra.css
+plugins:
+  - search
+  - autorefs
+  - gen-files:
+      scripts:
+        - docs/gen_api_pages.py
+  - literate-nav:
+      nav_file: SUMMARY.md
+  - mkdocstrings:
+      enable_inventory: true
+      handlers:
+        python:
+          paths: ["src"]
+          inventories:
+            - https://docs.python.org/3.12/objects.inv
+            - https://numpy.org/doc/1.23/objects.inv
+            - https://pillow.readthedocs.io/en/stable/objects.inv
+            - https://docs.pydantic.dev/2.4/objects.inv
+            - https://pytorch.org/docs/stable/objects.inv
+          options:
+            docstring_style: google
+            docstring_options:
+              returns_named_value: false
+              ignore_init_summary: yes
+            show_submodules: true
+            docstring_section_style: table
+            members_order: alphabetical
+            merge_init_into_class: yes
+            show_root_heading: true
+            show_source: true
+            heading_level: 1
+            preload_modules:
+              - pydantic
+            show_docstring_examples: true
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+
+nav:
+  - "Home": index.md
+  - "Usage":
+    - usage/index.md
+    - "Install": usage/install.md
+    - "Requests": usage/requests.md
+    - "Tools": usage/tools.md
+    - "Images": usage/images.md
+    - "Tokenizers": usage/tokenizers.md
+  - "Examples": examples/
+  - "Models": models.md
+  - "Code reference": code_reference/

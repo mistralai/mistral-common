@@ -31,17 +31,33 @@ from mistral_common.tokens.tokenizers.multimodal import MultiModalEncoder
 class InstructTokenizerBase(
     InstructTokenizer, Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]
 ):
+    r"""Base instruct tokenizer."""
+
     def __init__(self, tokenizer: Tokenizer, mm_encoder: Optional[MultiModalEncoder] = None):
+        r"""Initialize the instruct tokenizer.
+
+        Args:
+            tokenizer: The tokenizer to use.
+            mm_encoder: The multi-modal encoder to use if any.
+        """
         self.tokenizer = tokenizer
         self.mm_encoder = mm_encoder
         super().__init__(tokenizer, mm_encoder)
 
     def start(self) -> List[int]:
+        r"""Return the start tokens."""
         return [self.tokenizer.bos_id]
 
     @staticmethod
     def find_first_last_user(request: InstructRequest) -> Tuple[int, int]:
-        # find last user message
+        r"""Find the first and last user message in the request.
+
+        Args:
+            request: The request to search for user messages.
+
+        Returns:
+            The index of the first and last user message.
+        """
         last_user_idx = -1
         first_user_idx = -1
         for i, msg in list(enumerate(request.messages)):
@@ -53,10 +69,20 @@ class InstructTokenizerBase(
 
     @abstractmethod
     def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
+        r"""Encode a tool message.
+
+        Raises:
+            NotImplementedError: The tool message is not implemented for the base tokenizer.
+        """
         raise NotImplementedError("Tool message not implemented")
 
     @abstractmethod
     def encode_assistant_message(self, message: AssistantMessageType, is_before_last_user_message: bool) -> List[int]:
+        r"""Encode an assistant message.
+
+        Raises:
+            NotImplementedError: The assistant message is not implemented for the base tokenizer.
+        """
         raise NotImplementedError("Assistant message not implemented")
 
     def _truncate_for_max_tokens(
@@ -73,6 +99,14 @@ class InstructTokenizerBase(
         self,
         request: InstructRequest[AssistantMessageType, Tool],
     ) -> Tokenized:
+        r"""Encode an instruct request.
+
+        Args:
+            request: The request to encode.
+
+        Returns:
+            The encoded tokens.
+        """
         # init at bos
         images: List[np.ndarray] = []
         prefix_ids: Optional[List[int]] = None
@@ -123,12 +157,25 @@ class InstructTokenizerBase(
         )
 
     def decode(self, tokens: List[int]) -> str:
-        return self.tokenizer.decode(tokens)
+        r"""Decode tokens to a string.
 
+        Args:
+            tokens: The tokens to decode.
+
+        Returns:
+            The decoded string.
+        """
+        return self.tokenizer.decode(tokens)
+      
 
 class InstructTokenizerV1(
     InstructTokenizerBase, Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]
 ):
+    r"""Instruct tokenizer V1.
+
+    This tokenizer has basic for messages. It does not support tools or multi-modal inputs.
+    """
+
     def encode_user_message(
         self,
         message: UserMessage,
@@ -138,6 +185,19 @@ class InstructTokenizerV1(
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
     ) -> Tuple[List[int], List[np.ndarray]]:
+        r"""Encode a user message.
+
+        Args:
+            message: The message to encode.
+            available_tools: Not used.
+            is_last: Not used.
+            is_first: Whether the message is the first one.
+            system_prompt: The system prompt.
+            force_img_first: Not used.
+
+        Returns:
+            The encoded tokens and empty list.
+        """
         assert message.content is not None
         assert isinstance(message.content, str), "Message content must be normalized"
         assert self.mm_encoder is None, "InstructTokenizerV1 cannot encode images"
@@ -159,6 +219,17 @@ class InstructTokenizerV1(
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
     ) -> Tuple[List[int], List[np.ndarray]]:
+        r"""Encode a user content.
+
+        Args:
+            content: The content to encode.
+            is_last: Whether the message is the last one.
+            system_prompt: The system prompt.
+            force_img_first: Not used.
+
+        Returns:
+            The encoded tokens and empty list.
+        """
         assert isinstance(content, str)
 
         if is_last and system_prompt:
@@ -168,9 +239,23 @@ class InstructTokenizerV1(
         return tokens, []
 
     def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
+        r"""Encode a tool message.
+
+        Raises:
+            TokenizerException: The tool message is not implemented for this version.
+        """
         raise TokenizerException("Tools not implemented for tokenizer V1")
 
     def encode_assistant_message(self, message: AssistantMessageType, is_before_last_user_message: bool) -> List[int]:
+        r"""Encode an assistant message.
+
+        Args:
+            message: The message to encode.
+            is_before_last_user_message: Not used.
+
+        Returns:
+            The encoded tokens.
+        """
         assert isinstance(message, AssistantMessage), message
         if message.tool_calls is not None and len(message.tool_calls) > 0:
             raise TokenizerException("Tools not implemented for tokenizer V1")
@@ -183,13 +268,29 @@ class InstructTokenizerV1(
         return curr_tokens
 
     def encode_fim(self, request: FIMRequest) -> Tokenized:
+        r"""Encode a FIM request.
+
+        Raises:
+           TokenizerException: The FIM request is not implemented for this version.
+        """
         raise TokenizerException("FIM not available for tokenizer V1")
 
 
 class InstructTokenizerV2(
     InstructTokenizerV1, Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]
 ):
+    r"""Instruct tokenizer V2.
+
+    This tokenizer adds supports to images, tools and FIM requests.
+    """
+
     def __init__(self, tokenizer: Tokenizer, mm_encoder: Optional[MultiModalEncoder] = None):
+        r"""Initialize the tokenizer.
+
+        Args:
+            tokenizer: The tokenizer to use.
+            mm_encoder: The multi-modal encoder to use.
+        """
         super().__init__(tokenizer, mm_encoder)
         self.BEGIN_INST = self.tokenizer.get_control_token(SpecialTokens.begin_inst.value)
         self.END_INST = self.tokenizer.get_control_token(SpecialTokens.end_inst.value)
@@ -211,6 +312,19 @@ class InstructTokenizerV2(
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
     ) -> Tuple[List[int], List[np.ndarray]]:
+        r"""Encode a user message.
+
+        Args:
+            message: The message to encode.
+            available_tools: The list of available tools if any.
+            is_last: Whether the message is the last one.
+            is_first: Not used.
+            system_prompt: The system prompt.
+            force_img_first: Whether to force the image to be first.
+
+        Returns:
+            The encoded tokens and the list of images.
+        """
         assert message.content is not None
         tools_tokens: List[int] = []
         if is_last and available_tools:
@@ -243,9 +357,7 @@ class InstructTokenizerV2(
             return content
 
     def _prepare_tool_result(self, tool_message: ToolMessage) -> Dict[str, Any]:
-        """
-        Bit of a hack due to the way tool results are tokenized
-        """
+        r"""Bit of a hack due to the way tool results are tokenized."""
         assert tool_message.content is not None, "Tool message content cannot be None"
         return {
             "name": tool_message.name,
@@ -253,6 +365,16 @@ class InstructTokenizerV2(
         }
 
     def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
+        r"""Encode a tool message.
+
+        Args:
+            message: The message to encode.
+            is_before_last_user_message: Whether the message is before the last user message. If true, the message is
+                not encoded.
+
+        Returns:
+            The encoded tokens.
+        """
         if is_before_last_user_message:
             # don't tokenize last tool response before last user msg
             return []
@@ -267,9 +389,7 @@ class InstructTokenizerV2(
         return curr_tokens
 
     def _prepare_function_call(self, tool_call: ToolCall) -> Dict[str, Any]:
-        """
-        Bit of a hack due to the way function calls are tokenized
-        """
+        r"""Bit of a hack due to the way function calls are tokenized."""
         return {
             "name": tool_call.function.name,
             "arguments": self._parse_json_content(tool_call.function.arguments),
@@ -292,6 +412,16 @@ class InstructTokenizerV2(
         return curr_tokens
 
     def encode_assistant_message(self, message: AssistantMessageType, is_before_last_user_message: bool) -> List[int]:
+        r"""Encode an assistant message.
+
+        Args:
+            message: The message to encode.
+            is_before_last_user_message: Whether the message is before the last user message. If has tools and true, the
+                message is not encoded.
+
+        Returns:
+            The encoded tokens.
+        """
         if message.tool_calls and message.content:
             raise ValueError(f"Cannot have tool calls and content defined in the same assistant message {message}")
 
@@ -309,14 +439,19 @@ class InstructTokenizerV2(
         return curr_tokens
 
     def _encode_infilling(self, text: str) -> List[int]:
-        """
-        Remove prefix space in the case of SentencePieceTokenizers
-        Thanks Fabian !
-        """
+        r"""Remove prefix space in the case of SentencePieceTokenizers."""
 
         return self.tokenizer.encode("☺" + text, bos=False, eos=False)[2:]
 
     def encode_fim(self, request: FIMRequest) -> Tokenized:
+        r"""Encode a FIM request.
+
+        Args:
+            request: The request to encode.
+
+        Returns:
+            The encoded tokens.
+        """
         prefix_tokens = self.tokenizer.encode(request.prompt, bos=False, eos=False)
         suffix_tokens = self._encode_infilling(request.suffix) if request.suffix else []
         tokens = [
@@ -332,11 +467,18 @@ class InstructTokenizerV2(
 class InstructTokenizerV3(
     InstructTokenizerV2, Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]
 ):
-    """
-    The only difference with V3 tokenizer is that it encodes the tool messages differently
+    r"""Instruct tokenizer V3.
+
+    The only difference with V2 tokenizer is that it encodes the tool messages differently.
     """
 
     def __init__(self, tokenizer: Tokenizer, mm_encoder: Optional[MultiModalEncoder] = None) -> None:
+        r"""Initialize the tokenizer.
+
+        Args:
+            tokenizer: The tokenizer to use.
+            mm_encoder: The multi-modal encoder to use.
+        """
         super().__init__(tokenizer, mm_encoder=mm_encoder)
 
     def _prepare_function_call(self, tool_call: ToolCall) -> Dict[str, Any]:
@@ -360,8 +502,19 @@ class InstructTokenizerV3(
         }
 
     def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
-        """
-        Same as V2 but tools not wrapped in a list and history is tokenized also
+        r"""Encode a tool message.
+
+        Note:
+            Same as [V2][mistral_common.tokens.tokenizers.instruct.InstructTokenizerV2.encode_tool_message] but tools
+            are not wrapped in a list and the history is also tokenized.
+
+        Args:
+            message: The message to encode.
+            is_before_last_user_message: Whether the message is before the last user message. If true, the message is
+                not encoded.
+
+        Returns:
+            The encoded tokens.
         """
         tool_result_str = json.dumps(self._prepare_tool_result(message), ensure_ascii=False)
         curr_tokens = [
@@ -372,8 +525,18 @@ class InstructTokenizerV3(
         return curr_tokens
 
     def encode_assistant_message(self, message: AssistantMessageType, is_before_last_user_message: bool) -> List[int]:
-        """
-        Same as V2 but always encode tool history
+        r"""Encode an assistant message.
+
+        Note:
+            Same as [V2][mistral_common.tokens.tokenizers.instruct.InstructTokenizerV2.encode_assistant_message] but
+            always encode the tool history.
+
+        Args:
+            message: The message to encode.
+            is_before_last_user_message: Not used.
+
+        Returns:
+            The encoded tokens.
         """
         return super().encode_assistant_message(message, False)
 
@@ -384,6 +547,17 @@ class InstructTokenizerV3(
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
     ) -> Tuple[List[int], List[np.ndarray]]:
+        r"""Encode a user content.
+
+        Args:
+            content: The content to encode.
+            is_last: Whether the message is the last one.
+            system_prompt: The system prompt.
+            force_img_first: Whether to force the image to be first.
+
+        Returns:
+            The encoded tokens and the images.
+        """
         if isinstance(content, str):
             return super().encode_user_content(content, is_last, system_prompt)
 
@@ -420,14 +594,23 @@ class InstructTokenizerV3(
 
 
 class InstructTokenizerV7(InstructTokenizerV3):
-    """
+    r"""Instruct tokenizer V7.
+
     The difference with V3 tokenizer is that it encodes the system prompts differently:
     - in V7 the system prompts are treated as separate SystemMessages
     - they are no longer prepended to the last user message
     - they are printed between special tokens
+
     """
 
     def __init__(self, tokenizer: Tokenizer, mm_encoder: Optional[MultiModalEncoder] = None) -> None:
+        r"""Initialize the tokenizer.
+
+        Args:
+            tokenizer: The tokenizer to use.
+            mm_encoder: The multi-modal encoder to use.
+        """
+
         super().__init__(tokenizer, mm_encoder)
         self.BEGIN_SYSTEM = self.tokenizer.get_control_token(SpecialTokens.begin_system.value)
         self.END_SYSTEM = self.tokenizer.get_control_token(SpecialTokens.end_system.value)
@@ -475,6 +658,14 @@ class InstructTokenizerV7(InstructTokenizerV3):
             raise TokenizerException("Input couldn't fit in truncate_at_max_token")
 
     def encode_system_message(self, message: SystemMessage) -> List[int]:
+        r"""Encode a system message.
+
+        Args:
+            message: The message to encode.
+
+        Returns:
+            The encoded tokens.
+        """
         assert message.content is not None
         assert isinstance(message.content, str), "Message content must be normalized"
         tokens = [
@@ -493,6 +684,19 @@ class InstructTokenizerV7(InstructTokenizerV3):
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
     ) -> Tuple[List[int], List[np.ndarray]]:
+        r"""Encode a user message.
+
+        Args:
+            message: The message to encode.
+            available_tools: The list of available tools if any.
+            is_last: Whether the message is the last one.
+            is_first: Whether the message is the first one.
+            system_prompt: Not used.
+            force_img_first: Whether to force the image to be first.
+
+        Returns:
+            The encoded tokens and the list of images.
+        """
         assert system_prompt is None, "in Tokenizer V7 we don't encode system prompts in user messages"
         return super().encode_user_message(
             message,
@@ -504,8 +708,18 @@ class InstructTokenizerV7(InstructTokenizerV3):
         )
 
     def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
-        """
-        Same as V3 but tools not wrapped in a list and history is tokenized also
+        r"""Encode a tool message.
+
+        Note:
+            Same as [V3][mistral_common.tokens.tokenizers.instruct.InstructTokenizerV3.encode_tool_message]
+            but tools are not wrapped in a list and history is also tokenized
+
+        Args:
+            message: The message to encode.
+            is_before_last_user_message: Not used.
+
+        Returns:
+            The encoded tokens.
         """
         assert message.tool_call_id is not None
         tool_call_id_tokens = self.tokenizer.encode(message.tool_call_id, bos=False, eos=False)
@@ -524,6 +738,15 @@ class InstructTokenizerV7(InstructTokenizerV3):
         return curr_tokens
 
     def encode_assistant_message(self, message: AssistantMessageType, is_before_last_user_message: bool) -> List[int]:
+        r"""Encode an assistant message.
+
+        Args:
+            message: The message to encode.
+            is_before_last_user_message: Not used.
+
+        Returns:
+            The encoded tokens.
+        """
         if not message.content and not message.tool_calls:
             raise TokenizerException(f"Invalid assistant message: {message}")
         curr_tokens: list = []

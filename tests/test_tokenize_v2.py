@@ -1,6 +1,7 @@
 import json
 
 import pytest
+
 from mistral_common.protocol.instruct.messages import AssistantMessage, ToolMessage, UserMessage
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.tokens.instruct.request import InstructRequest

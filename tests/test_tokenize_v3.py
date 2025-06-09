@@ -3,6 +3,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 import pytest
+
 from mistral_common.protocol.instruct.messages import AssistantMessage, ToolMessage, UserMessage
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.tokens.instruct.request import InstructRequest
@@ -62,7 +63,7 @@ def test_spm_version() -> None:
 
 
 @pytest.mark.parametrize(
-    "tokenizer, special_ws, ws, begin_tool_index, end_tool_index, " "expected_tokens_before_tool",
+    "tokenizer, special_ws, ws, begin_tool_index, end_tool_index, expected_tokens_before_tool",
     [
         (
             tokenizer(),
@@ -348,14 +349,11 @@ def test_tool_message_multiple_shots_with_history(tokenizer: InstructTokenizer, 
         )
     )
     _, text = tokenized.tokens, tokenized.text
-    assert (
-        text
-        == (
-            f"<s>[INST]{special_ws}a[/INST]"
-            f'[TOOL_CALLS]{special_ws}[{{"name":{ws}"b",{ws}"arguments":{ws}{{}},{ws}"id":{ws}"0"}}]</s>[TOOL_RESULTS]{special_ws}{{"content":{ws}"d",{ws}"call_id":{ws}"0"}}[/TOOL_RESULTS]'  # noqa: E501
-            f"{special_ws}e</s>[INST]{special_ws}f[/INST]"
-            f'[TOOL_CALLS]{special_ws}[{{"name":{ws}"b",{ws}"arguments":{ws}{{}},{ws}"id":{ws}"1"}}]</s>[TOOL_RESULTS]{special_ws}{{"content":{ws}"d",{ws}"call_id":{ws}"1"}}[/TOOL_RESULTS]'
-        )
+    assert text == (
+        f"<s>[INST]{special_ws}a[/INST]"
+        f'[TOOL_CALLS]{special_ws}[{{"name":{ws}"b",{ws}"arguments":{ws}{{}},{ws}"id":{ws}"0"}}]</s>[TOOL_RESULTS]{special_ws}{{"content":{ws}"d",{ws}"call_id":{ws}"0"}}[/TOOL_RESULTS]'  # noqa: E501
+        f"{special_ws}e</s>[INST]{special_ws}f[/INST]"
+        f'[TOOL_CALLS]{special_ws}[{{"name":{ws}"b",{ws}"arguments":{ws}{{}},{ws}"id":{ws}"1"}}]</s>[TOOL_RESULTS]{special_ws}{{"content":{ws}"d",{ws}"call_id":{ws}"1"}}[/TOOL_RESULTS]'
     )
 
 

@@ -1,6 +1,8 @@
 name: Mistral Common CI
 on:
   push:
+    branches:
+      - main
   pull_request:
     types:
       - opened
@@ -19,45 +21,54 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # For our public version of that code, support it back to Python 3.8.
+        # Support all LTS versions of Python
         python-version: [
-          "3.8",
           "3.9",
           "3.10",
           "3.11",
-          "3.12"
+          "3.12",
+          "3.13"
         ]
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Set up python
-        uses: actions/setup-python@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
+      
+      - name: Check uv lock
+        run: |
+          uv lock --check
 
       # Install
       - name: Install Dependencies
         run: |
-          pip install "poetry==1.*"
-          poetry install --extras "opencv"
+          uv sync --frozen --extra opencv --extra hf-hub --group dev
+          uv pip install --editable .
 
       # Ruff Linter
       - name: Ruff Linter
         run: |
-          poetry run ruff check .
+          uv run ruff check .
 
       # Ruff Format
       - name: Ruff Format
         run: |
-          poetry run ruff format . --check
+          uv run ruff format . --check
 
       # Mypy
       - name: Mypy Check
         run: |
-          poetry run mypy .
+          uv run mypy .
 
       # PyTest
       - name: Tests
         run: |
-          poetry run pytest --cov=mistral_common . --cov-report "xml:coverage.xml"
+          uv run pytest --cov=mistral_common . --cov-report "xml:coverage.xml"
+      
+      # Doctests
+      - name: Doctests
+        run: |
+          uv run pytest --doctest-modules ./src

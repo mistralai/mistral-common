@@ -37,17 +37,27 @@ except Exception as e:
 
 
 def is_cv2_installed() -> bool:
+    r"""Check if OpenCV is installed."""
     return _cv2_installed
 
 
 def image_from_chunk(chunk: Union[ImageURLChunk, ImageChunk]) -> SerializableImage:
-    """Get a serializable image from a chunk."""
+    r"""Get a serializable image from a chunk.
+
+    Args:
+        chunk: The chunk to get the image from.
+
+    Returns:
+        The image as a PIL Image object.
+    """
     if isinstance(chunk, ImageChunk):
         return chunk.image
     if chunk.get_url().startswith("data:image"):
         data = chunk.get_url().split(",")[1]
         image_data = base64.b64decode(data)
         return Image.open(BytesIO(image_data))
+    if chunk.get_url().startswith("file"):
+        return Image.open(open(chunk.get_url().replace("file://", ""), "rb"))
     if chunk.get_url().startswith("http"):
         return download_image(chunk.get_url())
 
@@ -60,6 +70,8 @@ DATASET_STD = (0.26862954, 0.26130258, 0.27577711)  # RGB
 
 # only relevant for spm
 class MultiModalVersion(str, Enum):
+    r"""Version of the multimodal tokenizer."""
+
     m1 = "m1"
 
     @property
@@ -72,14 +84,16 @@ class MultiModalVersion(str, Enum):
 
 @dataclass
 class MultimodalConfig:
+    r"""Configuration for the multimodal tokenizers."""
+
     image_patch_size: int
     max_image_size: int
     spatial_merge_size: int = 1
 
 
 def _convert_to_rgb(image: Image.Image) -> Image.Image:
-    """
-    Convert a PIL image to RGB.
+    r"""Convert a PIL image to RGB.
+
     We ensure transparent background becomes white.
     """
     if image.mode == "RGB":
@@ -96,16 +110,15 @@ def normalize(
     mean: Tuple[float, float, float],
     std: Tuple[float, float, float],
 ) -> np.ndarray:
-    """
-    Normalize a tensor image with mean and standard deviation.
+    r"""Normalize a tensor image with mean and standard deviation.
 
     Args:
-    image (np.ndarray): Image to be normalized.
-    mean (tuple[float, float, float]): Mean for each channel.
-    std (tuple[float, float, float]): Standard deviation for each channel.
+        np_image: Image to be normalized.
+        mean: Mean for each channel.
+        std: Standard deviation for each channel.
 
     Returns:
-    np.ndarray: Normalized image with shape (C, H, W).
+        Normalized image with shape (C, H, W).
     """
     np_image = np_image / 255.0
 
@@ -118,6 +131,15 @@ def normalize(
 
 
 def transform_image(image: Image.Image, new_size: Tuple[int, int]) -> np.ndarray:
+    r"""Transform an image to a numpy array with the given size.
+
+    Args:
+        image: Image to be transformed.
+        new_size: New size of the image.
+
+    Returns:
+        Transformed image with shape (C, H, W).
+    """
     if not is_cv2_installed():
         raise ImportError("OpenCV is required for this function. Install it with 'pip install mistral_common[opencv]'")
 
@@ -126,7 +148,15 @@ def transform_image(image: Image.Image, new_size: Tuple[int, int]) -> np.ndarray
 
 
 class ImageEncoder(MultiModalEncoder):
+    r"""Image encoder for the multimodal tokenizer."""
+
     def __init__(self, mm_config: MultimodalConfig, special_ids: SpecialImageIDs) -> None:
+        r"""Initialize the image encoder.
+
+        Args:
+            mm_config: Configuration for the multimodal tokenizer.
+            special_ids: Special image tokens ids.
+        """
         self.mm_config = mm_config
         self.special_ids = special_ids
 
@@ -146,14 +176,13 @@ class ImageEncoder(MultiModalEncoder):
         return width_tokens, height_tokens
 
     def __call__(self, content: Union[ImageChunk, ImageURLChunk]) -> ImageEncoding:
-        """
-        Converts ImageChunks to numpy image arrays and image token ids
+        r"""Converts an image chunk to an image encoding.
 
         Args:
-        image (ImageChunk, ImageURLChunk): ImageChunk to be converted
+            content: image chunk to be converted.
 
         Returns:
-        ImageEncoding containing image token ids and processed image in numpy format
+            Image encoding.
         """
         image = image_from_chunk(content)
         w, h = self._image_to_num_tokens(image)

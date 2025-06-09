@@ -1,4 +1,5 @@
 import pytest
+
 from mistral_common.exceptions import (
     InvalidAssistantMessageException,
     InvalidMessageStructureException,

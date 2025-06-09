@@ -11,6 +11,14 @@ from mistral_common import __version__
 
 
 def download_image(url: str) -> Image.Image:
+    r"""Download an image from a URL and return it as a PIL Image.
+
+    Args:
+        url: The URL of the image to download.
+
+    Returns:
+       The downloaded image as a PIL Image object.
+    """
     headers = {"User-Agent": f"mistral-common/{__version__}"}
     try:
         # Make a request to download the image
@@ -28,6 +36,17 @@ def download_image(url: str) -> Image.Image:
 
 
 def maybe_load_image_from_str_or_bytes(x: Union[Image.Image, str, bytes]) -> Image.Image:
+    r"""Load an image from a string or bytes.
+
+    If the input is already a PIL Image, return it as is.
+
+    Args:
+        x: The input to load the image from. Can be a PIL Image, a string, or bytes.
+            If it's a string, it's assumed to be a base64 encoded string of bytes.
+
+    Returns:
+       The loaded image as a PIL Image object.
+    """
     if isinstance(x, Image.Image):
         return x
     if isinstance(x, bytes):
@@ -48,6 +67,15 @@ def maybe_load_image_from_str_or_bytes(x: Union[Image.Image, str, bytes]) -> Ima
 
 
 def serialize_image_to_byte_str(im: Image.Image, info: SerializationInfo) -> str:
+    r"""Serialize an image to a base64 encoded string of bytes.
+
+    Args:
+        im: The image to serialize.
+        info: The serialization info.
+
+    Returns:
+        The serialized image as a base64 encoded string of bytes.
+    """
     if hasattr(info, "context"):
         context = info.context or {}
     else:
@@ -62,9 +90,9 @@ def serialize_image_to_byte_str(im: Image.Image, info: SerializationInfo) -> str
     return im_b64
 
 
-# A normal PIL image that supports serialization to b64 bytes string
 SerializableImage = Annotated[
     Image.Image,
     BeforeValidator(maybe_load_image_from_str_or_bytes),
     PlainSerializer(serialize_image_to_byte_str),
+    "A normal PIL image that supports serialization to b64 bytes string.",
 ]

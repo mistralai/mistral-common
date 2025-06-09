@@ -1,6 +1,6 @@
 import warnings
 from pathlib import Path
-from typing import Callable, Dict, Generic, List, Optional, Union
+from typing import Any, Callable, Dict, Generic, List, Optional, Union
 
 from mistral_common.exceptions import (
     TokenizerException,
@@ -48,11 +48,21 @@ from mistral_common.tokens.tokenizers.sentencepiece import (
     is_sentencepiece,
 )
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekken
+from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hub
 
 
 def load_mm_encoder(
     mm_config: MultimodalConfig, tokenizer: Union[Tekkenizer, SentencePieceTokenizer]
 ) -> MultiModalEncoder:
+    r"""Load a multi-modal encoder from a config and a tokenizer.
+
+    Args:
+        mm_config: The multi-modal config.
+        tokenizer: The tokenizer.
+
+    Returns:
+        The multi-modal encoder.
+    """
     special_ids = SpecialImageIDs(
         img=tokenizer.get_control_token(SpecialTokens.img.value),
         img_break=tokenizer.get_control_token(SpecialTokens.img_break.value),
@@ -64,6 +74,15 @@ def load_mm_encoder(
 class MistralTokenizer(
     Generic[UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType, TokenizedType]
 ):
+    r"""Mistral tokenizer.
+
+    This class is a wrapper around a [InstructTokenizer][mistral_common.tokens.tokenizers.base.InstructTokenizer],
+    a [MistralRequestValidator][mistral_common.protocol.instruct.validator.MistralRequestValidator] and a
+    [InstructRequestNormalizer][mistral_common.protocol.instruct.normalize.InstructRequestNormalizer].
+
+    It provides a convenient interface to tokenize, validate ad normalize Mistral requests.
+    """
+
     def __init__(
         self,
         instruct_tokenizer: InstructTokenizer[InstructRequest, FIMRequest, TokenizedType, AssistantMessageType],
@@ -72,6 +91,13 @@ class MistralTokenizer(
             UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType, InstructRequestType
         ],
     ):
+        r"""Initializes a `MistralTokenizer`.
+
+        Args:
+            instruct_tokenizer: The instruct tokenizer to use.
+            validator: The request validator to use.
+            request_normalizer: The request normalizer to use.
+        """
         self._chat_completion_request_validator = validator
         self._instruct_request_normalizer = request_normalizer
         self.instruct_tokenizer = instruct_tokenizer
@@ -82,19 +108,28 @@ class MistralTokenizer(
 
     @classmethod
     def v1(cls) -> "MistralTokenizer":
-        """open 7B x 8x7B + embed"""
+        r"""Get the Mistral tokenizer v1."""
         return cls.from_file(str(cls._data_path() / "tokenizer.model.v1"), mode=ValidationMode.test)
 
     @classmethod
     def v2(cls) -> "MistralTokenizer":
-        """mistral-small // mistral-large"""
+        r"""Get the Mistral tokenizer v2."""
         return cls.from_file(
             str(cls._data_path() / "mistral_instruct_tokenizer_240216.model.v2"), mode=ValidationMode.test
         )
 
     @classmethod
     def v3(cls, is_tekken: bool = False, is_mm: bool = False) -> "MistralTokenizer":
-        """open-mixtral-8x22B"""
+        r"""Get the Mistral tokenizer v3.
+
+        Args:
+            is_tekken: Whether the tokenizer is a tekken tokenizer. See
+                [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer].
+            is_mm: Whether to load multimodal tokenizer.
+
+        Returns:
+            The Mistral tokenizer v3.
+        """
         if is_tekken and is_mm:
             tokenizer_name = "tekken_240911.json"
         elif is_tekken and not is_mm:
@@ -108,7 +143,14 @@ class MistralTokenizer(
 
     @classmethod
     def v7(cls, is_mm: bool = False) -> "MistralTokenizer":
-        """mistral-large 2.1"""
+        """Get the Mistral tokenizer v7.
+
+        Args:
+            is_mm: Whether to load the multimodal tokenizer.
+
+        Returns:
+            The Mistral tokenizer v7.
+        """
         if is_mm:
             return cls.from_file(
                 str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7m1"), mode=ValidationMode.test
@@ -120,38 +162,16 @@ class MistralTokenizer(
 
     @classmethod
     def from_model(cls, model: str, strict: bool = False) -> "MistralTokenizer":
-        model_name_to_tokenizer_cls: Dict[str, Callable[[], MistralTokenizer]] = {
-            "ministral-8b-2410": lambda: MistralTokenizer.v3(is_tekken=True),
-            "mistral-tiny-2312": MistralTokenizer.v2,
-            "open-mistral-nemo-2407": lambda: MistralTokenizer.v3(is_tekken=True),
-            "mistral-tiny-2407": MistralTokenizer.v3,
-            "mistral-small-2312": MistralTokenizer.v2,
-            "open-mixtral-8x22b-2404": MistralTokenizer.v3,
-            "mistral-small-2402": MistralTokenizer.v2,
-            "mistral-small-2409": lambda: MistralTokenizer.v3(is_tekken=True),
-            "mistral-medium-2312": MistralTokenizer.v1,
-            "mistral-large-2402": MistralTokenizer.v2,
-            "mistral-large-2407": MistralTokenizer.v3,
-            "mistral-large-2411": MistralTokenizer.v7,
-            "pixtral-large-2411": lambda: MistralTokenizer.v7(is_mm=True),
-            "codestral-2405": MistralTokenizer.v3,
-            "codestral-mamba-2407": MistralTokenizer.v3,
-            "pixtral-12b-2409": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
-            # The following are deprecated - only left for backward comp. Delete in >= 1.6.0
-            "open-mistral-7b": MistralTokenizer.v1,
-            "open-mixtral-8x7b": MistralTokenizer.v1,
-            "mistral-embed": MistralTokenizer.v1,
-            "mistral-small-v1": MistralTokenizer.v2,
-            "mistral-large-v1": MistralTokenizer.v2,
-            "mistral-small": MistralTokenizer.v3,
-            "mistral-large": MistralTokenizer.v3,
-            "open-mixtral-8x22b": MistralTokenizer.v3,
-            "codestral-22b": MistralTokenizer.v3,
-            "mistral-nemo": lambda: MistralTokenizer.v3(is_tekken=True),
-            "pixtral": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
-            "pixtral-large": lambda: MistralTokenizer.v7(is_mm=True),
-        }
+        r"""Get the Mistral tokenizer for a given model.
 
+        Args:
+            model: The model name.
+            strict: Whether to use strict model name matching. If `False`, the model name is matched as a substring.
+                This is deprecated and will be removed in `mistral_common=1.6.0`.
+
+        Returns:
+            The Mistral tokenizer for the given model.
+        """
         if not strict:
             warnings.warn(
                 "Calling `MistralTokenizer.from_model(..., strict=False)` is deprecated as it can lead to incorrect "
@@ -164,14 +184,30 @@ class MistralTokenizer(
 
             # TODO(Delete this code in mistral_common >= 1.6.0
             # Prefix search the model name mapping
-            for model_name, tokenizer_cls in model_name_to_tokenizer_cls.items():
+            for model_name, tokenizer_cls in MODEL_NAME_TO_TOKENIZER_CLS.items():
                 if model_name in model.lower():
                     return tokenizer_cls()
 
-        if model not in model_name_to_tokenizer_cls:
+        if model not in MODEL_NAME_TO_TOKENIZER_CLS:
             raise TokenizerException(f"Unrecognized model: {model}")
 
-        return model_name_to_tokenizer_cls[model]()
+        return MODEL_NAME_TO_TOKENIZER_CLS[model]()
+
+    @staticmethod
+    def from_hf_hub(model_id: str, **kwargs: Any) -> "MistralTokenizer":
+        r"""Get the Mistral tokenizer for a given Hugging Face model ID.
+
+        See [here](../../../../models.md#list-of-open-models) for a list of our OSS models.
+
+        Args:
+            model_id: The Hugging Face model ID.
+            kwargs: Additional keyword arguments to pass to `huggingface_hub.hf_hub_download`.
+
+        Returns:
+            The Mistral tokenizer for the given model.
+        """
+        tokenizer_path = download_tokenizer_from_hf_hub(model_id, **kwargs)
+        return MistralTokenizer.from_file(tokenizer_path)
 
     @classmethod
     def from_file(
@@ -179,8 +215,14 @@ class MistralTokenizer(
         tokenizer_filename: str,
         mode: ValidationMode = ValidationMode.test,
     ) -> "MistralTokenizer":
-        """
-        Depending on which model we are loading, tokenization and validation might be different. 💩
+        r"""Loads a tokenizer from a file.
+
+        Args:
+            tokenizer_filename: The path to the tokenizer file.
+            mode: The validation mode to use.
+
+        Returns:
+            The loaded tokenizer.
         """
         tokenizer: Union[SentencePieceTokenizer, Tekkenizer]
 
@@ -235,6 +277,17 @@ class MistralTokenizer(
     def encode_chat_completion(
         self, request: ChatCompletionRequest[UATS], max_model_input_len: Optional[int] = None
     ) -> TokenizedType:
+        r"""Encodes a chat completion request.
+
+        Args:
+            request: The chat completion request to encode.
+            max_model_input_len: The maximum length of the input to the model.
+                If `None`, the input will not be truncated.
+
+        Returns:
+            The encoded chat completion request.
+        """
+
         validated_request = self._chat_completion_request_validator.validate_request(request)
 
         if max_model_input_len is None and request.truncate_for_context_length:
@@ -253,7 +306,56 @@ class MistralTokenizer(
         return self.instruct_tokenizer.encode_instruct(instruct_request)
 
     def encode_fim(self, request: FIMRequest) -> TokenizedType:
+        r"""Encodes a fill in the middle request.
+
+        Args:
+            request: The fill in the middle request to encode.
+
+        Returns:
+            The encoded fill in the middle request.
+        """
         return self.instruct_tokenizer.encode_fim(request)
 
     def decode(self, tokens: List[int]) -> str:
+        r"""Decodes a list of tokens into a string.
+
+        Args:
+            tokens: The tokens to decode.
+
+        Returns:
+            The decoded string.
+        """
         return self.instruct_tokenizer.decode(tokens)
+
+
+MODEL_NAME_TO_TOKENIZER_CLS: Dict[str, Callable[[], MistralTokenizer]] = {
+    "ministral-8b-2410": lambda: MistralTokenizer.v3(is_tekken=True),
+    "mistral-tiny-2312": MistralTokenizer.v2,
+    "open-mistral-nemo-2407": lambda: MistralTokenizer.v3(is_tekken=True),
+    "mistral-tiny-2407": MistralTokenizer.v3,
+    "mistral-small-2312": MistralTokenizer.v2,
+    "open-mixtral-8x22b-2404": MistralTokenizer.v3,
+    "mistral-small-2402": MistralTokenizer.v2,
+    "mistral-small-2409": lambda: MistralTokenizer.v3(is_tekken=True),
+    "mistral-medium-2312": MistralTokenizer.v1,
+    "mistral-large-2402": MistralTokenizer.v2,
+    "mistral-large-2407": MistralTokenizer.v3,
+    "mistral-large-2411": MistralTokenizer.v7,
+    "pixtral-large-2411": lambda: MistralTokenizer.v7(is_mm=True),
+    "codestral-2405": MistralTokenizer.v3,
+    "codestral-mamba-2407": MistralTokenizer.v3,
+    "pixtral-12b-2409": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
+    # The following are deprecated - only left for backward comp. Delete in >= 1.6.0
+    "open-mistral-7b": MistralTokenizer.v1,
+    "open-mixtral-8x7b": MistralTokenizer.v1,
+    "mistral-embed": MistralTokenizer.v1,
+    "mistral-small-v1": MistralTokenizer.v2,
+    "mistral-large-v1": MistralTokenizer.v2,
+    "mistral-small": MistralTokenizer.v3,
+    "mistral-large": MistralTokenizer.v3,
+    "open-mixtral-8x22b": MistralTokenizer.v3,
+    "codestral-22b": MistralTokenizer.v3,
+    "mistral-nemo": lambda: MistralTokenizer.v3(is_tekken=True),
+    "pixtral": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
+    "pixtral-large": lambda: MistralTokenizer.v7(is_mm=True),
+}
