@@ -166,7 +166,7 @@ class InstructTokenizerBase(
             The decoded string.
         """
         return self.tokenizer.decode(tokens)
-      
+
 
 class InstructTokenizerV1(
     InstructTokenizerBase, Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]

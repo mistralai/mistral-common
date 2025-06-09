@@ -86,6 +86,7 @@ class TokenizerVersion(str, Enum):
     Examples:
         >>> version = TokenizerVersion.v1
     """
+
     def __new__(cls, value: str) -> "TokenizerVersion":
         if not re.match(r"^v\d+$", value):
             raise ValueError(f"Invalid version format: {value}. Must be 'v' followed by a number.")
