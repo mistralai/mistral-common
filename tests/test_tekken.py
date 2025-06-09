@@ -125,7 +125,7 @@ def test_read_from_file(tmp_path: Path) -> None:
     vocab = _quick_vocab(extra_toks=[b"beau", b"My", b"unused"])
     pattern = "."
     num_special_tokens = 100
-    _write_tekkenizer_model(tokpath, vocab, pattern, num_special_tokens)
+    _write_tekkenizer_model(tokpath, vocab, None, pattern, num_special_tokens)
 
     tekkenizer_loaded = Tekkenizer.from_file(tokpath)
     tekkenizer = Tekkenizer(
