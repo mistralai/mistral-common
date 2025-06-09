@@ -87,6 +87,8 @@ def serialize_image_to_byte_str(im: Image.Image, info: SerializationInfo) -> str
     im_b64 = base64.b64encode(stream.getvalue()).decode("ascii")
     if context and (max_image_b64_len := context.get("max_image_b64_len")):
         return im_b64[:max_image_b64_len] + "..."
+    if context and context.get("add_format_prefix"):
+        im_b64 = f"data:image/{im_format.lower()};base64," + im_b64
     return im_b64
 
 
