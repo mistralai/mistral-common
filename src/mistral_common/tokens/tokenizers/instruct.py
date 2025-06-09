@@ -766,7 +766,8 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
 
 class InstructTokenizerV11(InstructTokenizerV7):
-    """
+    r"""Instruct tokenizer V11.
+
     The difference with V7 tokenizer is that it encodes tool calls differently:
     Tool call results are encoded as :
     - [begin tool call] call_name_tokens [call id] call_id_tokens [args] content tokens
