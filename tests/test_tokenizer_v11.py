@@ -7,21 +7,12 @@ from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
 from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV11
 from mistral_common.tokens.tokenizers.tekken import SpecialTokenInfo, Tekkenizer
-from tests.test_tekken import _quick_vocab
+from tests.test_tekken import _quick_vocab, get_special_tokens
 
 
 @pytest.fixture(scope="session")
 def tekkenizer() -> InstructTokenizerV11:
-    special_tokens = list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS)
-    special_tokens += [
-        SpecialTokenInfo(rank=i, token_str=f"<SPCECIAL_{i}>", is_control=True) for i in range(len(special_tokens), 32)
-    ]
-
-    # new special tokens
-    special_tokens += [
-        SpecialTokenInfo(rank=32, token_str=SpecialTokens.args, is_control=True),
-        SpecialTokenInfo(rank=33, token_str=SpecialTokens.call_id, is_control=True),
-    ]
+    special_tokens = get_special_tokens(TokenizerVersion.v11)
     tokenizer = Tekkenizer(
         _quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
         special_tokens=special_tokens,

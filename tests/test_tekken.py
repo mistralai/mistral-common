@@ -6,9 +6,10 @@ from typing import List, Optional, Sequence
 
 import pytest
 
-from mistral_common.tokens.tokenizers.base import TokenizerVersion
+from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
 from mistral_common.tokens.tokenizers.tekken import (
     ModelData,
+    SpecialTokenInfo,
     TekkenConfig,
     Tekkenizer,
     TokenInfo,
@@ -29,9 +30,28 @@ def _quick_vocab(extra_toks: Sequence[bytes] = ()) -> List[TokenInfo]:
     return vocab
 
 
+def get_special_tokens(tokenizer_version: TokenizerVersion) -> List[SpecialTokenInfo]:
+    special_tokens = list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS)
+    if tokenizer_version <= TokenizerVersion.v7:
+        return special_tokens
+
+    special_tokens += [
+        SpecialTokenInfo(rank=i, token_str=f"<SPCECIAL_{i}>", is_control=True) for i in range(len(special_tokens), 32)
+    ]
+
+    # new special tokens
+    special_tokens += [
+        SpecialTokenInfo(rank=32, token_str=SpecialTokens.args, is_control=True),
+        SpecialTokenInfo(rank=33, token_str=SpecialTokens.call_id, is_control=True),
+    ]
+
+    return special_tokens
+
+
 def _write_tekkenizer_model(
     tmp_path: Path,
     vocab: Optional[List[TokenInfo]] = None,
+    special_tokens: Optional[List[SpecialTokenInfo]] = None,
     pattern: str = ".",
     num_special_tokens: int = 100,
     version: Optional[str] = "v3",
@@ -52,6 +72,7 @@ def _write_tekkenizer_model(
     model = ModelData(
         vocab=vocab if vocab else _quick_vocab(),
         config=TekkenConfig(**config),  # type: ignore
+        special_tokens=special_tokens,
         version=1,
         type="Tekken",
     )
@@ -84,14 +105,16 @@ def test_version(tmp_path: Path) -> None:
     # test all versions can be loaded
     assert len(TokenizerVersion.__members__) > 0
     for version in TokenizerVersion.__members__:
-        _write_tekkenizer_model(tokpath, vocab, pattern, num_special_tokens, version=str(version))
+        special_tokens = get_special_tokens(TokenizerVersion)
+
+        _write_tekkenizer_model(tokpath, vocab, special_tokens, pattern, num_special_tokens, version=str(version))
         tekkenizer_loaded = Tekkenizer.from_file(tokpath)
 
         assert tekkenizer_loaded.version == TokenizerVersion(version)
 
     # test `None` and other version cannot be loaded
     for version in [None, "dummy-v"]:  # type: ignore
-        _write_tekkenizer_model(tokpath, vocab, pattern, num_special_tokens, version=version)
+        _write_tekkenizer_model(tokpath, vocab, special_tokens, pattern, num_special_tokens, version=version)
         with pytest.raises(ValueError, match=re.compile("Unknown version:*")):
             tekkenizer_loaded = Tekkenizer.from_file(tokpath)
 
