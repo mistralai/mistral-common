@@ -4,9 +4,9 @@ from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
 )
 from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
-from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
+from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV11
-from mistral_common.tokens.tokenizers.tekken import SpecialTokenInfo, Tekkenizer
+from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import _quick_vocab, get_special_tokens
 
 
