@@ -105,7 +105,7 @@ def test_version(tmp_path: Path) -> None:
     # test all versions can be loaded
     assert len(TokenizerVersion.__members__) > 0
     for version in TokenizerVersion.__members__:
-        special_tokens = get_special_tokens(TokenizerVersion)
+        special_tokens = get_special_tokens(TokenizerVersion(version))
 
         _write_tekkenizer_model(tokpath, vocab, special_tokens, pattern, num_special_tokens, version=str(version))
         tekkenizer_loaded = Tekkenizer.from_file(tokpath)
