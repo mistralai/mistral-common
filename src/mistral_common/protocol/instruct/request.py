@@ -171,10 +171,10 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         Returns:
             The chat completion request.
         """
-        if "seeds" in kwargs and "random_seed" in kwargs:
-            raise ValueError("Cannot specify both `seeds` and `random_seed`.")
+        if "seed" in kwargs and "random_seed" in kwargs:
+            raise ValueError("Cannot specify both `seed` and `random_seed`.")
 
-        random_seed = kwargs.pop("seeds", None) or kwargs.pop("random_seed", None)
+        random_seed = kwargs.pop("seed", None) or kwargs.pop("random_seed", None)
 
         _check_openai_fields_names(set(cls.model_fields.keys()), set(kwargs.keys()))
 

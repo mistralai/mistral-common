@@ -140,6 +140,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
             The instruct request.
         """
         # Handle the case where the tools are passed as `available_tools`.
+        # This is to maintain compatibility with the OpenAI API.
         if "available_tools" in kwargs:
             if tools is None:
                 tools = kwargs.pop("available_tools")
