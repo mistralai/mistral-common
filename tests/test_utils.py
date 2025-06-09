@@ -15,7 +15,7 @@ from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hu
         (["unvalid1.txt", "tekken.json"], "tekken.json"),
         (["unvalid1.txt", "sentencepiece.model"], "sentencepiece.model"),
         (["unvalid1.txt", "sentencepiece.model.v1"], "sentencepiece.model.v1"),
-        (["unvalid1.txt", "sentencepiece.model.v1m1", "sentencepiece.model.v1m1"], "sentencepiece.model.v1m1"),
+        (["unvalid1.txt", "sentencepiece.model.v1", "sentencepiece.model.v1m1"], "sentencepiece.model.v1m1"),
         (["unvalid1.txt", "sentencepiece.model", "sentencepiece.model.v1m1"], "sentencepiece.model.v1m1"),
         (["unvalid1.txt", "unvalid2.txt"], None),
     ],
