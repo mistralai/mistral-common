@@ -98,6 +98,13 @@ class Tool(MistralBase):
     type: ToolTypes = ToolTypes.function
     function: Function
 
+    def to_openai(self) -> Dict[str, Any]:
+        return self.model_dump()
+
+    @classmethod
+    def from_openai(cls, openai_tool: Dict[str, Any]) -> "Tool":
+        return cls.model_validate(openai_tool)
+
 
 class FunctionCall(MistralBase):
     r"""Function call.
@@ -152,6 +159,13 @@ class ToolCall(MistralBase):
     id: str = "null"
     type: ToolTypes = ToolTypes.function
     function: FunctionCall
+
+    def to_openai(self) -> Dict[str, Any]:
+        return self.model_dump()
+
+    @classmethod
+    def from_openai(cls, tool_call: Dict[str, Any]) -> "ToolCall":
+        return cls.model_validate(tool_call)
 
 
 ToolType = TypeVar("ToolType", bound=Tool)

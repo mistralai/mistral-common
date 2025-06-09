@@ -137,22 +137,9 @@ The messages are now normalized and the last two users messages are merged into 
 Now let's convert the request to something vLLM can understand:
 
 ```python
-def convert_insruct_request_to_vllm_request(instruct_request, **kwargs):
-    vllm_request = {}
-    vllm_request["messages"] = [m.model_dump(include=["role", "content"]) for m in instruct_request.messages]
-    for m in vllm_request["messages"]:
-        if isinstance(m["content"], list):
-            new_content = []
-            for c in m["content"]:
-                if c["type"] == "image_url":
-                    c = {"type": "image_url", "image_url": {"url": c["image_url"]}}
-                new_content.append(c)
-            m["content"] = new_content
-    vllm_request.update(kwargs)
-    return vllm_request
-
-vllm_request = convert_insruct_request_to_vllm_request(
-    instruct_request, model="mistralai/Mistral-Small-3.1-24B-Instruct-2503", temperature=0.15
+vllm_request = instruct_request.to_openai(
+    temperature=0.15,
+    model="mistralai/Mistral-Small-3.1-24B-Instruct-2503"
 )
 ```
 
@@ -167,7 +154,8 @@ url = "http://<your-url>:8000/v1/chat/completions"
 headers = {"Content-Type": "application/json", "Authorization": "Bearer token"}
 
 response = requests.post(url, headers=headers, data=json.dumps(vllm_request))
-print(response.json()["choices"][0]["message"]["tool_calls"])
+assistant_response_content = response.json()["choices"][0]["message"]["content"]
+print(assistant_response_content)
 ```
 
 Your response should look like this:
@@ -191,10 +179,10 @@ new_request = instruct_request.model_copy(deep=True)
 new_request.messages.append(AssistantMessage(content=assistant_response_content))
 new_request.messages.append(UserMessage(content="Could you tell me what is the weather there ?"))
 
-new_vllm_request = convert_insruct_request_to_vllm_request(
-    new_request, model="mistralai/Mistral-Small-3.1-24B-Instruct-2503", temperature=0.15
+new_vllm_request = new_request.to_openai(
+    temperature=0.15,
+    model="mistralai/Mistral-Small-3.1-24B-Instruct-2503"
 )
-
 
 response = requests.post(url, headers=headers, data=json.dumps(new_vllm_request))
 tool_call_content = response.json()["choices"][0]["message"]["tool_calls"]
