@@ -34,9 +34,9 @@ def chunks(lst: List[str], chunk_size: int) -> Iterator[List[str]]:
 
 
 def download_tokenizer_from_hf_hub(
-    model_id: str, token: Optional[Union[bool, str]] = None, revision: Optional[str] = None
+    repo_id: str, token: Optional[Union[bool, str]] = None, revision: Optional[str] = None
 ) -> str:
-    r"""Download the configuration file of an official Mistral tokenizer from the Hugging Face Hub.
+    r"""Download the tokenizer file of a Mistral model from the Hugging Face Hub.
 
     See [here](../../../../models.md#list-of-open-models) for a list of our OSS models.
 
@@ -46,7 +46,7 @@ def download_tokenizer_from_hf_hub(
         Please run `pip install mistral-common[hf-hub]` to install it.
 
     Args:
-        model_id: The Hugging Face model ID.
+        repo_id: The Hugging Face repo ID.
         token: The Hugging Face token to use to download the tokenizer.
         revision: The revision of the model to use. If `None`, the latest revision will be used.
 
@@ -60,7 +60,7 @@ def download_tokenizer_from_hf_hub(
         )
 
     hf_api = huggingface_hub.HfApi()
-    repo_files = hf_api.list_repo_files(model_id)
+    repo_files = hf_api.list_repo_files(repo_id)
 
     valid_tokenizer_files = []
     tokenizer_file: str
@@ -79,18 +79,18 @@ def download_tokenizer_from_hf_hub(
             valid_tokenizer_files.append(file_name)
 
     if len(valid_tokenizer_files) == 0:
-        raise ValueError(f"No tokenizer file found for model ID: {model_id}")
+        raise ValueError(f"No tokenizer file found for model ID: {repo_id}")
     # If there are multiple tokenizer files, we use tekken.json if it exists, otherwise the versionned one.
     if len(valid_tokenizer_files) > 1:
         if "tekken.json" in valid_tokenizer_files:
             tokenizer_file = "tekken.json"
         else:
             tokenizer_file = sorted(valid_tokenizer_files)[-1]
-        logger.warning(f"Multiple tokenizer files found for model ID: {model_id}. Using {tokenizer_file}.")
+        logger.warning(f"Multiple tokenizer files found for model ID: {repo_id}. Using {tokenizer_file}.")
     else:
         tokenizer_file = valid_tokenizer_files[0]
 
     tokenizer_path = huggingface_hub.hf_hub_download(
-        repo_id=model_id, filename=tokenizer_file, token=token, revision=revision
+        repo_id=repo_id, filename=tokenizer_file, token=token, revision=revision
     )
     return tokenizer_path

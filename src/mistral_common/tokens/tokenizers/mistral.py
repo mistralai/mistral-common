@@ -194,21 +194,21 @@ class MistralTokenizer(
 
     @staticmethod
     def from_hf_hub(
-        model_id: str, token: Optional[Union[bool, str]] = None, revision: Optional[str] = None
+        repo_id: str, token: Optional[Union[bool, str]] = None, revision: Optional[str] = None
     ) -> "MistralTokenizer":
-        r"""Get the Mistral tokenizer for a given Hugging Face model ID.
+        r"""Download the Mistral tokenizer for a given Hugging Face repository ID.
 
         See [here](../../../../models.md#list-of-open-models) for a list of our OSS models.
 
         Args:
-            model_id: The Hugging Face model ID.
+            repo_id: The Hugging Face repo ID.
             token: The Hugging Face token to use to download the tokenizer.
             revision: The revision of the model to use. If `None`, the latest revision will be used.
 
         Returns:
             The Mistral tokenizer for the given model.
         """
-        tokenizer_path = download_tokenizer_from_hf_hub(model_id, token=token, revision=revision)
+        tokenizer_path = download_tokenizer_from_hf_hub(repo_id=repo_id, token=token, revision=revision)
         return MistralTokenizer.from_file(tokenizer_path)
 
     @classmethod

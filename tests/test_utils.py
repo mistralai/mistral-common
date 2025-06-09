@@ -24,10 +24,10 @@ def test_download_tokenizer_from_hf_hub(files: list[str], expected: Optional[str
     with patch("huggingface_hub.HfApi.list_repo_files", return_value=files):
         if expected is None:
             with pytest.raises(ValueError):
-                download_tokenizer_from_hf_hub(model_id="mistralai/Mistral-7B-v0.1", token=True, revision=None)
+                download_tokenizer_from_hf_hub(repo_id="mistralai/Mistral-7B-v0.1", token=True, revision=None)
         else:
             with patch("huggingface_hub.hf_hub_download", return_value=expected):
                 tokenizer = download_tokenizer_from_hf_hub(
-                    model_id="mistralai/Mistral-7B-v0.1", token=True, revision=None
+                    repo_id="mistralai/Mistral-7B-v0.1", token=True, revision=None
                 )
                 assert tokenizer == expected

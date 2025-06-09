@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Optional, Union
 from unittest.mock import patch
 
 import pytest
@@ -40,7 +40,9 @@ class TestMistralToknizer:
             assert tokenizer.instruct_tokenizer.decode(encoded) == prompt
 
     def test_from_hf_hub(self) -> None:
-        def _mocked_hf_download(repo_id: str, *args: Any) -> str:
+        def _mocked_hf_download(
+            repo_id: str, token: Optional[Union[bool, str]] = None, revision: Optional[str] = None
+        ) -> str:
             if repo_id == "mistralai/Mistral-7B-Instruct-v0.1":
                 return str(MistralTokenizer._data_path() / "tokenizer.model.v1")
             elif repo_id == "mistralai/Pixtral-Large-Instruct-2411":
@@ -55,5 +57,3 @@ class TestMistralToknizer:
             tokenizer = MistralTokenizer.from_hf_hub("mistralai/Pixtral-Large-Instruct-2411")
             assert isinstance(tokenizer.instruct_tokenizer, InstructTokenizerV3)
 
-            with pytest.raises(ValueError):
-                MistralTokenizer.from_hf_hub("mistralai/unknown-model")
