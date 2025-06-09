@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Any, Iterator, List
+from typing import Iterator, List, Optional, Union
 
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.multimodal import MultiModalVersion
@@ -33,7 +33,9 @@ def chunks(lst: List[str], chunk_size: int) -> Iterator[List[str]]:
         yield lst[i : i + chunk_size]
 
 
-def download_tokenizer_from_hf_hub(model_id: str, **kwargs: Any) -> str:
+def download_tokenizer_from_hf_hub(
+    model_id: str, token: Optional[Union[bool, str]] = None, revision: Optional[str] = None
+) -> str:
     r"""Download the configuration file of an official Mistral tokenizer from the Hugging Face Hub.
 
     See [here](../../../../models.md#list-of-open-models) for a list of our OSS models.
@@ -45,7 +47,8 @@ def download_tokenizer_from_hf_hub(model_id: str, **kwargs: Any) -> str:
 
     Args:
         model_id: The Hugging Face model ID.
-        kwargs: Additional keyword arguments to pass to `huggingface_hub.hf_hub_download`.
+        token: The Hugging Face token to use to download the tokenizer.
+        revision: The revision of the model to use. If `None`, the latest revision will be used.
 
     Returns:
         The downloaded tokenizer local path for the given model ID.
@@ -87,5 +90,7 @@ def download_tokenizer_from_hf_hub(model_id: str, **kwargs: Any) -> str:
     else:
         tokenizer_file = valid_tokenizer_files[0]
 
-    tokenizer_path = huggingface_hub.hf_hub_download(repo_id=model_id, filename=tokenizer_file, **kwargs)
+    tokenizer_path = huggingface_hub.hf_hub_download(
+        repo_id=model_id, filename=tokenizer_file, token=token, revision=revision
+    )
     return tokenizer_path
