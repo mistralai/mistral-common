@@ -86,6 +86,7 @@ class ModelData(TypedDict):
     """
 
     vocab: List[TokenInfo]
+    special_tokens: Optional[List[SpecialTokenInfo]]
     config: TekkenConfig
     version: int
     type: str

@@ -14,7 +14,7 @@ from mistral_common.protocol.instruct.messages import (
     ToolMessage,
     UserMessage,
 )
-from mistral_common.protocol.instruct.tool_calls import Tool, ToolCall, ToolChoice
+from mistral_common.protocol.instruct.tool_calls import Tool, ToolCall
 from mistral_common.tokens.instruct.request import FIMRequest, InstructRequest
 from mistral_common.tokens.tokenizers.base import (
     FIMRequestType,
@@ -166,14 +166,6 @@ class InstructTokenizerBase(
             The decoded string.
         """
         return self.tokenizer.decode(tokens)
-
-    def function_call_prefix(self, tool_choice: ToolChoice) -> List[int]:
-        r"""Return the function call prefix tokens.
-
-        Raises:
-            NotImplementedError: The function call prefix is not implemented for the base tokenizer.
-        """
-        raise NotImplementedError("Tool prefix not implemented")
 
 
 class InstructTokenizerV1(
@@ -605,13 +597,10 @@ class InstructTokenizerV7(InstructTokenizerV3):
     r"""Instruct tokenizer V7.
 
     The difference with V3 tokenizer is that it encodes the system prompts differently:
-    - in V7 the system prompts are treated as separate
-        [SystemMessages][mistral_common.protocol.instruct.messages.SystemMessage].
-    - they are no longer prepended to the last user message.
-    - they are printed between special tokens.
+    - in V7 the system prompts are treated as separate SystemMessages
+    - they are no longer prepended to the last user message
+    - they are printed between special tokens
 
-    Tool call results are encoded as :
-    - `[begin tool call] call_id_tokens [tool_content] content tokens [end tool call]`.
     """
 
     def __init__(self, tokenizer: Tokenizer, mm_encoder: Optional[MultiModalEncoder] = None) -> None:
@@ -773,4 +762,41 @@ class InstructTokenizerV7(InstructTokenizerV3):
         if not message.prefix:
             curr_tokens.append(self.tokenizer.eos_id)
 
+        return curr_tokens
+
+
+class InstructTokenizerV11(InstructTokenizerV7):
+    r"""Instruct tokenizer V11.
+
+    The difference with V7 tokenizer is that it encodes tool calls differently:
+    Tool call results are encoded as :
+    - [begin tool call] call_name_tokens [call id] call_id_tokens [args] content tokens
+    """
+
+    def __init__(
+        self,
+        tokenizer: Tokenizer,
+        mm_encoder: Optional[MultiModalEncoder] = None,
+    ) -> None:
+        super().__init__(tokenizer, mm_encoder)
+        self.ARGS = self.tokenizer.get_control_token(SpecialTokens.args.value)
+        self.CALL_ID = self.tokenizer.get_control_token(SpecialTokens.call_id.value)
+
+    def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> List[int]:
+        assert message.tool_calls, f"Assistant message must have tool calls. Got {message}"
+        curr_tokens = []
+        for tool_call in message.tool_calls:
+            prepared = self._prepare_function_call(tool_call)
+
+            ids = []
+            if "id" in prepared:
+                ids = [self.CALL_ID, *self.tokenizer.encode(prepared["id"], bos=False, eos=False)]
+
+            curr_tokens += [
+                self.TOOL_CALLS,
+                *self.tokenizer.encode(prepared["name"], bos=False, eos=False),
+                *ids,
+                self.ARGS,
+                *self.tokenizer.encode(json.dumps(prepared["arguments"], ensure_ascii=False), bos=False, eos=False),
+            ]
         return curr_tokens
