@@ -47,9 +47,8 @@ from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 model_id = "mistralai/Mistral-Small-3.1-24B-Instruct-2503"
-tekken_file = hf_hub_download(repo_id=model_id, filename="tekken.json", token="your_hf_token")
 
-tokenizer = MistralTokenizer.from_file(tekken_file)
+tokenizer = MistralTokenizer.from_hub(repo_id=model_id, token="your_hf_token")
 
 tokenizer.encode_chat_completion(
     ChatCompletionRequest(
