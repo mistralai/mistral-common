@@ -1,0 +1,8 @@
+# Include every file under src/mistral_common
+recursive-include src/mistral_common *
+
+# Exclude all .pyc files
+global-exclude *.pyc
+
+# Prune out any __pycache__ directories entirely
+prune src/mistral_common/**/__pycache__
