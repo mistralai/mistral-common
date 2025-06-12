@@ -109,7 +109,6 @@ class TestMistralToknizer:
             assert tokenizer.instruct_tokenizer.to_string(encoded) == expected
             assert tokenizer.instruct_tokenizer.tokenizer.to_string(encoded) == expected
 
-
     def test_from_hf_hub(self) -> None:
         def _mocked_hf_download(
             repo_id: str, token: Optional[Union[bool, str]] = None, revision: Optional[str] = None

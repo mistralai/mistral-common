@@ -345,7 +345,7 @@ class MistralTokenizer(
             The decoded string.
         """
         return self.instruct_tokenizer.decode(tokens, special_token_policy=special_token_policy)
-    
+
     def to_string(self, tokens: List[int]) -> str:
         r"""Convert the token ids to a string.
 
