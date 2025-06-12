@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 from typing import Iterator, List, Optional, Union
 
@@ -16,6 +17,14 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def _assert_hub_installed() -> None:
+    if not _hub_installed:
+        raise ImportError(
+            "Please install the `huggingface_hub` package to use this method.\n"
+            "Run `pip install mistral-common[hf-hub]` to install it."
+        )
+
+
 def chunks(lst: List[str], chunk_size: int) -> Iterator[List[str]]:
     r"""Chunk a list into smaller lists of a given size.
 
@@ -31,6 +40,33 @@ def chunks(lst: List[str], chunk_size: int) -> Iterator[List[str]]:
     """
     for i in range(0, len(lst), chunk_size):
         yield lst[i : i + chunk_size]
+
+
+def list_local_hf_repo_files(repo_id: str, revision: Optional[str]) -> list[str]:
+    r"""List the files of a local Hugging Face repo.
+
+    Args:
+        repo_id: The Hugging Face repo ID.
+        revision: The revision of the model to use. If `None`, the latest revision will be used.
+    """
+    _assert_hub_installed()
+
+    repo_cache = Path(huggingface_hub.constants.HF_HUB_CACHE) / huggingface_hub.constants.REPO_ID_SEPARATOR.join(
+        ["models", *repo_id.split("/")]
+    )
+
+    if revision is None:
+        revision_file = repo_cache / "refs" / "main"
+        if revision_file.is_file():
+            with revision_file.open("r") as file:
+                revision = file.read()
+
+    if revision:
+        revision_dir = repo_cache / "snapshots" / revision
+        if revision_dir.is_dir():
+            return os.listdir(revision_dir)
+
+    return []
 
 
 def download_tokenizer_from_hf_hub(
@@ -53,14 +89,23 @@ def download_tokenizer_from_hf_hub(
     Returns:
         The downloaded tokenizer local path for the given model ID.
     """
-    if not _hub_installed:
-        raise ImportError(
-            "Please install the `huggingface_hub` package to use this method.\n"
-            "Run `pip install mistral-common[hf-hub]` to install it."
-        )
+    _assert_hub_installed()
 
-    hf_api = huggingface_hub.HfApi()
-    repo_files = hf_api.list_repo_files(repo_id)
+    try:
+        hf_api = huggingface_hub.HfApi()
+        repo_files = hf_api.list_repo_files(repo_id)
+        local_files_only = False
+    except ConnectionError as e:
+        repo_files = list_local_hf_repo_files(repo_id=repo_id, revision=revision)
+        local_files_only = True
+
+        logger.info("Could not connect to the Hugging Face Hub. Using local files only.")
+
+        if len(repo_files) == 0:
+            raise ConnectionError(
+                "Could not connect to the Hugging Face Hub and no local files were found for the repo ID {repo_id} "
+                "and revision {revision}. Please check your internet connection and try again."
+            ) from e
 
     valid_tokenizer_files = []
     tokenizer_file: str
@@ -91,6 +136,6 @@ def download_tokenizer_from_hf_hub(
         tokenizer_file = valid_tokenizer_files[0]
 
     tokenizer_path = huggingface_hub.hf_hub_download(
-        repo_id=repo_id, filename=tokenizer_file, token=token, revision=revision
+        repo_id=repo_id, filename=tokenizer_file, token=token, revision=revision, local_files_only=local_files_only
     )
     return tokenizer_path
