@@ -1,6 +1,10 @@
+[build-system]
+requires = ["setuptools>=42", "wheel", "build"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "mistral_common"
-version = "1.6.0"
+version = "1.6.1"
 description = "Mistral-common is a library of common utilities for Mistral AI."
 authors = [{name = "bam4d", email = "bam4d@mistral.ai"}]
 license = "Apache-2.0"
@@ -78,3 +82,9 @@ omit = ["tests", "*src/mistral_common/data*"]
 
 [tool.coverage.report]
 skip_covered = true
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
