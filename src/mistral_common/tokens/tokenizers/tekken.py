@@ -2,7 +2,6 @@ import base64
 import json
 import logging
 import warnings
-from enum import Enum
 from functools import cached_property
 from itertools import groupby
 from pathlib import Path
@@ -11,6 +10,7 @@ from typing import Dict, List, Optional, Type, TypedDict, Union
 import tiktoken
 
 from mistral_common.tokens.tokenizers.base import (
+    SpecialTokenPolicy,
     SpecialTokens,
     Tokenizer,
     TokenizerVersion,
@@ -91,20 +91,6 @@ class ModelData(TypedDict):
     version: int
     type: str
     multimodal: MultimodalConfig
-
-
-class SpecialTokenPolicy(Enum):
-    r"""What to do with special tokens when encoding/decoding.
-
-    Attributes:
-        IGNORE: Ignore special tokens.
-        KEEP: Keep special tokens.
-        RAISE: Raise an error if special tokens are found.
-    """
-
-    IGNORE = 0
-    KEEP = 1
-    RAISE = 2
 
 
 class Tekkenizer(Tokenizer):
@@ -308,6 +294,10 @@ class Tekkenizer(Tokenizer):
 
     @special_token_policy.setter
     def special_token_policy(self, policy: SpecialTokenPolicy) -> None:
+        r"""Set the policy for handling special tokens."""
+        if not isinstance(policy, SpecialTokenPolicy):
+            raise ValueError(f"Expected SpecialTokenPolicy, got {type(policy)}.")
+
         self._special_token_policy = policy
 
     @cached_property
@@ -405,17 +395,38 @@ class Tekkenizer(Tokenizer):
         else:
             raise ValueError(f"Unknown control token {s}")
 
-    def decode(self, tokens: List[int]) -> str:
-        r"""Decode a list of token ids into a string."""
-        return "".join(self._decode_all(tokens, special_token_policy=self._special_token_policy))
+    def decode(self, tokens: List[int], special_token_policy: Optional[SpecialTokenPolicy] = None) -> str:
+        r"""Decode a list of token ids into a string.
+
+        Args:
+            tokens: The list of token ids to decode.
+            special_token_policy: The policy for handling special tokens.
+                Use the tokenizer's [attribute][mistral_common.tokens.tokenizers.tekken.Tekkenizer.special_token_policy]
+                if None.
+
+        Returns:
+            The decoded string.
+        """
+        if special_token_policy is not None and not isinstance(special_token_policy, SpecialTokenPolicy):
+            raise ValueError(
+                f"Expected `special_token_policy` to be None or SpecialTokenPolicy, got {type(special_token_policy)}."
+            )
+
+        return "".join(
+            self._decode_all(tokens, special_token_policy=special_token_policy or self._special_token_policy)
+        )
 
     def to_string(self, tokens: List[int]) -> str:
-        r"""Decode a list of token ids into a string keeping special tokens for debugging purposes."""
-        return "".join(self._decode_all(tokens, special_token_policy=SpecialTokenPolicy.KEEP))
+        r"""Decode a list of token ids into a string, keeping special tokens.
+
+        This is a convenience method for [decode][mistral_common.tokens.tokenizers.tekken.Tekkenizer.decode].
+        It is equivalent to `decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP)`.
+        """
+        return self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP)
 
     def id_to_piece(self, token_id: int) -> str:
         r"""Convert a token id to its string representation."""
-        return self._decode_all([token_id], special_token_policy=SpecialTokenPolicy.KEEP)[0]
+        return self.decode([token_id], special_token_policy=SpecialTokenPolicy.KEEP)
 
     def id_to_byte_piece(self, token_id: int) -> bytes:
         r"""Convert a token id to its byte representation."""

@@ -20,6 +20,7 @@ from mistral_common.tokens.tokenizers.base import (
     FIMRequestType,
     InstructRequestType,
     InstructTokenizer,
+    SpecialTokenPolicy,
     SpecialTokens,
     Tokenized,
     TokenizedType,
@@ -156,16 +157,37 @@ class InstructTokenizerBase(
             images=images,
         )
 
-    def decode(self, tokens: List[int]) -> str:
+    def decode(self, tokens: List[int], special_token_policy: Optional[SpecialTokenPolicy] = None) -> str:
         r"""Decode tokens to a string.
 
         Args:
             tokens: The tokens to decode.
+            special_token_policy: The policy to use for special tokens.
 
         Returns:
             The decoded string.
         """
-        return self.tokenizer.decode(tokens)
+        return self.tokenizer.decode(tokens, special_token_policy=special_token_policy)
+
+    def to_string(self, tokens: List[int]) -> str:
+        r"""Convert the token ids to a string.
+
+        This is different from `decode` in that it does not remove special tokens and does not decode the tokens but
+        just converts them to a string:
+
+        - For [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer], this is the same as `decode` with
+            `special_token_policy=SpecialTokenPolicy.KEEP`.
+        - For [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer], this is
+            the **not the same** as `decode()` with `special_token_policy=SpecialTokenPolicy.KEEP` as the tokens will be
+            returned as Sentencepiece pieces and not raw text.
+
+        Args:
+            tokens: The token ids to convert to a string.
+
+        Returns:
+            The string representation of the tokens.
+        """
+        return self.tokenizer.to_string(tokens)
 
 
 class InstructTokenizerV1(

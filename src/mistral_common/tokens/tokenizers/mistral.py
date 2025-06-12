@@ -25,6 +25,7 @@ from mistral_common.tokens.tokenizers.base import (
     InstructRequest,
     InstructRequestType,
     InstructTokenizer,
+    SpecialTokenPolicy,
     SpecialTokens,
     TokenizedType,
     TokenizerVersion,
@@ -81,6 +82,14 @@ class MistralTokenizer(
     [InstructRequestNormalizer][mistral_common.protocol.instruct.normalize.InstructRequestNormalizer].
 
     It provides a convenient interface to tokenize, validate ad normalize Mistral requests.
+
+    Attributes:
+        instruct_tokenizer: The instruct tokenizer to use. See
+            [InstructTokenizer][mistral_common.tokens.tokenizers.instruct.InstructTokenizer].
+        raw_tokenizer: The raw tokenzer used by the instruct tokenizer. Can be:
+
+                - A [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer]
+                - A [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer].
     """
 
     def __init__(
@@ -101,6 +110,7 @@ class MistralTokenizer(
         self._chat_completion_request_validator = validator
         self._instruct_request_normalizer = request_normalizer
         self.instruct_tokenizer = instruct_tokenizer
+        self.raw_tokenizer = instruct_tokenizer.tokenizer
 
     @classmethod
     def _data_path(cls) -> Path:
@@ -323,16 +333,38 @@ class MistralTokenizer(
         """
         return self.instruct_tokenizer.encode_fim(request)
 
-    def decode(self, tokens: List[int]) -> str:
+    def decode(self, tokens: List[int], special_token_policy: Optional[SpecialTokenPolicy] = None) -> str:
         r"""Decodes a list of tokens into a string.
 
         Args:
             tokens: The tokens to decode.
+            special_token_policy: The policy to use for special tokens. If `None`, the default policy of the tokenizer
+                will be used.
 
         Returns:
             The decoded string.
         """
-        return self.instruct_tokenizer.decode(tokens)
+        return self.instruct_tokenizer.decode(tokens, special_token_policy=special_token_policy)
+    
+    def to_string(self, tokens: List[int]) -> str:
+        r"""Convert the token ids to a string.
+
+        This is different from `decode` in that it does not remove special tokens and does not decode the tokens but
+        just converts them to a string:
+
+        - For [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer], this is the same as `decode` with
+            `special_token_policy=SpecialTokenPolicy.KEEP`.
+        - For [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer], this is
+            the **not the same** as `decode()` with `special_token_policy=SpecialTokenPolicy.KEEP` as the tokens will be
+            returned as Sentencepiece pieces and not raw text.
+
+        Args:
+            tokens: The token ids to convert to a string.
+
+        Returns:
+            The string representation of the tokens.
+        """
+        return self.instruct_tokenizer.to_string(tokens)
 
 
 MODEL_NAME_TO_TOKENIZER_CLS: Dict[str, Callable[[], MistralTokenizer]] = {

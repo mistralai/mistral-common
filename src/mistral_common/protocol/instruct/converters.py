@@ -16,7 +16,7 @@ def convert_openai_messages(
     r"""Convert OpenAI messages to Mistral messages.
 
     Args:
-        openai_messages: The OpenAI messages to convert.
+        messages: The OpenAI messages to convert.
 
     Returns:
         The Mistral messages.

@@ -72,6 +72,20 @@ class SpecialTokens(str, Enum):
     call_id = "[CALL_ID]"
 
 
+class SpecialTokenPolicy(int, Enum):
+    r"""What to do with special tokens when encoding/decoding.
+
+    Attributes:
+        IGNORE: Ignore special tokens.
+        KEEP: Keep special tokens.
+        RAISE: Raise an error if special tokens are found.
+    """
+
+    IGNORE = 0
+    KEEP = 1
+    RAISE = 2
+
+
 class TokenizerVersion(str, Enum):
     r"""Enum of tokenizer versions.
 
@@ -79,7 +93,7 @@ class TokenizerVersion(str, Enum):
 
     Attributes:
         v1: The first version of the tokenizer.
-        v2: The second version of the tokenizer that includes special control tokens [INST], [\\INST].
+        v2: The second version of the tokenizer that includes special control tokens [INST], [\INST].
         v3: The third version of the tokenizer that includes improved function calling.
         v7: The seventh version of the tokenizer that includes improved system prompt and function calling.
 
@@ -184,8 +198,16 @@ class Tokenizer(ABC):
         """Convert a string to a list of token ids."""
 
     @abstractmethod
-    def decode(self, t: List[int]) -> str:
-        r"""Convert the token ids to a string."""
+    def decode(self, tokens: List[int], special_token_policy: Optional[SpecialTokenPolicy] = None) -> str:
+        r"""Decode the token ids to a string.
+
+        Args:
+            tokens: The token ids to decode.
+            special_token_policy: The policy to use for special tokens.
+
+        Returns:
+            The decoded string.
+        """
 
     @abstractmethod
     def get_control_token(self, s: str) -> int:
@@ -198,7 +220,23 @@ class Tokenizer(ABC):
 
     @abstractmethod
     def to_string(self, tokens: List[int]) -> str:
-        r"""Convert the token ids to a string for debugging purposes."""
+        r"""Convert the token ids to a string.
+
+        This is different from `decode` in that it does not remove special tokens and does not decode the tokens but
+        just converts them to a string:
+
+        - For [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer], this is the same as `decode` with
+            `special_token_policy=SpecialTokenPolicy.KEEP`.
+        - For [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer], this is
+            the **not the same** as `decode()` with `special_token_policy=SpecialTokenPolicy.KEEP` as the tokens will be
+            returned as Sentencepiece pieces and not raw text.
+
+        Args:
+            tokens: The token ids to convert to a string.
+
+        Returns:
+            The string representation of the tokens.
+        """
 
 
 InstructRequestType = TypeVar("InstructRequestType", bound=InstructRequest)
@@ -311,11 +349,12 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         """
 
     @abstractmethod
-    def decode(self, tokens: List[int]) -> str:
+    def decode(self, tokens: List[int], special_token_policy: Optional[SpecialTokenPolicy] = None) -> str:
         r"""Convert token ids to string
 
         Args:
             tokens: The token ids to decode.
+            special_token_policy: The policy to use for special tokens.
 
         Returns:
             The decoded string.
@@ -375,5 +414,26 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
 
         Returns:
             The encoded tokens and images.
+        """
+        ...
+
+    @abstractmethod
+    def to_string(self, tokens: List[int]) -> str:
+        r"""Convert the token ids to a string.
+
+        This is different from `decode` in that it does not remove special tokens and does not decode the tokens but
+        just converts them to a string:
+
+        - For [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer], this is the same as `decode` with
+            `special_token_policy=SpecialTokenPolicy.KEEP`.
+        - For [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer], this is
+            the **not the same** as `decode()` with `special_token_policy=SpecialTokenPolicy.KEEP` as the tokens will be
+            returned as Sentencepiece pieces and not raw text.
+
+        Args:
+            tokens: The token ids to convert to a string.
+
+        Returns:
+            The string representation of the tokens.
         """
         ...
