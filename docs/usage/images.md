@@ -48,7 +48,7 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 model_id = "mistralai/Mistral-Small-3.1-24B-Instruct-2503"
 
-tokenizer = MistralTokenizer.from_hub(repo_id=model_id)
+tokenizer = MistralTokenizer.from_hub(repo_id=model_id, token="your_hf_token")
 
 tokenizer.encode_chat_completion(
     ChatCompletionRequest(
