@@ -56,7 +56,7 @@ def list_local_hf_repo_files(repo_id: str, revision: Optional[str]) -> list[str]
     )
 
     if revision is None:
-        revision_file = repo_cache / "refs" / "main"
+        revision_file = repo_cache / "refs" / huggingface_hub.constants.DEFAULT_REVISION
         if revision_file.is_file():
             with revision_file.open("r") as file:
                 revision = file.read()
