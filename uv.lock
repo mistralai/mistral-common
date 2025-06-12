@@ -671,8 +671,8 @@ wheels = [
 
 [[package]]
 name = "mistral-common"
-version = "1.6.0"
-source = { virtual = "." }
+version = "1.6.1"
+source = { editable = "." }
 dependencies = [
     { name = "jsonschema" },
     { name = "numpy", version = "2.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
