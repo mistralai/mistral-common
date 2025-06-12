@@ -30,16 +30,15 @@ def test_list_local_hf_repo_files() -> None:
     hf_cache = _create_temporary_hf_model_cache("mistralai/Mistral-7B-v0.1")
     with patch("huggingface_hub.constants.HF_HUB_CACHE", hf_cache):
         # Test without revision
-        files = list_local_hf_repo_files("mistralai/Mistral-7B-v0.1", None)
+        files = sorted(list_local_hf_repo_files("mistralai/Mistral-7B-v0.1", None))
         assert files == ["file2.txt", "tekken.json"]
 
         # Test with a specific revision
-        files = list_local_hf_repo_files("mistralai/Mistral-7B-v0.1", "RANDOM_REVISION")
+        files = sorted(list_local_hf_repo_files("mistralai/Mistral-7B-v0.1", "RANDOM_REVISION"))
         assert files == ["file2.txt", "tekken.json"]
 
         # Test with non-existent revision
-        files = list_local_hf_repo_files("mistralai/Mistral-7B-v0.1", "non_existent_revision")
-        assert files == []
+        assert list_local_hf_repo_files("mistralai/Mistral-7B-v0.1", "non_existent_revision") == []
 
     # Test huggingface_hub not installed
     with patch("mistral_common.tokens.tokenizers.utils._hub_installed", False):
