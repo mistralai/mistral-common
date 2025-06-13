@@ -152,7 +152,7 @@ class InstructTokenizerBase(
 
         return Tokenized(
             tokens=tokens,
-            text=self.tokenizer.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP),
+            text=self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP),
             prefix_ids=prefix_ids,
             images=images,
         )
@@ -172,7 +172,7 @@ class InstructTokenizerBase(
         Returns:
             The decoded string.
         """
-        return self.tokenizer.decode(tokens, special_token_policy=special_token_policy)
+        return self.decode(tokens, special_token_policy=special_token_policy)
 
     def _to_string(self, tokens: List[int]) -> str:
         return self.tokenizer._to_string(tokens)
@@ -472,7 +472,7 @@ class InstructTokenizerV2(
             *prefix_tokens,
         ]
         return Tokenized(
-            tokens=tokens, text=self.tokenizer.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+            tokens=tokens, text=self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP)
         )
 
 
