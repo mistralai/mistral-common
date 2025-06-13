@@ -235,7 +235,7 @@ class Tekkenizer(Tokenizer):
             )
             # Tokenizer > v7 should find special tokens in the tokenizer file
             if version > TokenizerVersion("v7"):
-                raise ValueError(err_msg)
+                raise ValueError(" ")
             else:
                 warnings.warn(
                     err_msg,
