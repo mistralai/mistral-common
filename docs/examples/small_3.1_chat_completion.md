@@ -29,6 +29,7 @@ vllm serve mistralai/Mistral-Small-3.1-24B-Instruct-2503 --tokenizer_mode mistra
 ```
 
 As you can see the following arguments need the `mistral` specific value:
+
 - `--tokenizer_mode`
 - `--config_format`
 - `--load_format`

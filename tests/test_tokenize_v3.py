@@ -20,6 +20,7 @@ TEKKEN_WHITESPACE = " "
 TEKKEN_BEGIN_TOOL_ID = 5
 TEKKEN_END_TOOL_ID = 6
 
+SPM_SPECIAL_WHITESPACE = "▁"
 SPM_WHITESPACE = "▁"
 SPM_BEGIN_TOOL_ID = 6
 SPM_END_TOOL_ID = 7
@@ -115,7 +116,7 @@ def test_tools_singleturn(
     [
         (
             tokenizer(),
-            SPM_WHITESPACE,
+            SPM_SPECIAL_WHITESPACE,
             SPM_WHITESPACE,
             SPM_BEGIN_TOOL_ID,
             SPM_END_TOOL_ID,
@@ -174,7 +175,7 @@ def test_tools_multiturn(
     [
         (
             tokenizer(),
-            SPM_WHITESPACE,
+            SPM_SPECIAL_WHITESPACE,
             SPM_WHITESPACE,
             SPM_BEGIN_TOOL_ID,
             SPM_END_TOOL_ID,
@@ -234,7 +235,7 @@ def test_system_tools_multiturn(
     [
         (
             tokenizer(),
-            SPM_WHITESPACE,
+            SPM_SPECIAL_WHITESPACE,
             SPM_WHITESPACE,
         ),
         (tekken_tokenizer(), TEKKEN_SPECIAL_WHITESPACE, TEKKEN_WHITESPACE),
@@ -291,7 +292,7 @@ def test_tool_message(tokenizer: InstructTokenizer, special_ws: str, ws: str) ->
     [
         (
             tokenizer(),
-            SPM_WHITESPACE,
+            SPM_SPECIAL_WHITESPACE,
             SPM_WHITESPACE,
         ),
         (tekken_tokenizer(), TEKKEN_SPECIAL_WHITESPACE, TEKKEN_WHITESPACE),
@@ -324,7 +325,7 @@ def test_tool_message_no_id_fine_tuning_ok(tokenizer: InstructTokenizer, special
     [
         (
             tokenizer(),
-            SPM_WHITESPACE,
+            SPM_SPECIAL_WHITESPACE,
             SPM_WHITESPACE,
         ),
         (
@@ -360,7 +361,7 @@ def test_tool_message_multiple_shots_with_history(tokenizer: InstructTokenizer, 
 @pytest.mark.parametrize(
     "tokenizer, special_ws, ws",
     [
-        (tokenizer(), SPM_WHITESPACE, SPM_WHITESPACE),
+        (tokenizer(), SPM_SPECIAL_WHITESPACE, SPM_WHITESPACE),
         (tekken_tokenizer(), TEKKEN_SPECIAL_WHITESPACE, TEKKEN_WHITESPACE),
     ],
 )

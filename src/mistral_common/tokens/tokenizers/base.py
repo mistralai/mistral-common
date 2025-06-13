@@ -72,6 +72,20 @@ class SpecialTokens(str, Enum):
     call_id = "[CALL_ID]"
 
 
+class SpecialTokenPolicy(int, Enum):
+    r"""What to do with special tokens when encoding/decoding.
+
+    Attributes:
+        IGNORE: Ignore special tokens.
+        KEEP: Keep special tokens.
+        RAISE: Raise an error if special tokens are found.
+    """
+
+    IGNORE = 0
+    KEEP = 1
+    RAISE = 2
+
+
 class TokenizerVersion(str, Enum):
     r"""Enum of tokenizer versions.
 
@@ -79,7 +93,7 @@ class TokenizerVersion(str, Enum):
 
     Attributes:
         v1: The first version of the tokenizer.
-        v2: The second version of the tokenizer that includes special control tokens [INST], [\\INST].
+        v2: The second version of the tokenizer that includes special control tokens [INST], [\INST].
         v3: The third version of the tokenizer that includes improved function calling.
         v7: The seventh version of the tokenizer that includes improved system prompt and function calling.
 
@@ -184,8 +198,21 @@ class Tokenizer(ABC):
         """Convert a string to a list of token ids."""
 
     @abstractmethod
-    def decode(self, t: List[int]) -> str:
-        r"""Convert the token ids to a string."""
+    def decode(self, tokens: List[int], special_token_policy: Optional[SpecialTokenPolicy] = None) -> str:
+        r"""Decode the token ids to a string.
+
+        Args:
+            tokens: The token ids to decode.
+            special_token_policy: The policy to use for special tokens.
+                Passing `None` will default to `self._special_token_policy` for
+                [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer] and `SpecialTokenPolicy.IGNORE`
+                for [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer].
+                Note that passing `None` will be deprecated and `special_token_policy` will default to
+                `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
+
+        Returns:
+            The decoded string.
+        """
 
     @abstractmethod
     def get_control_token(self, s: str) -> int:
@@ -198,7 +225,16 @@ class Tokenizer(ABC):
 
     @abstractmethod
     def to_string(self, tokens: List[int]) -> str:
-        r"""Convert the token ids to a string for debugging purposes."""
+        r"""[DEPRECATED] Converts a list of token ids into a string, keeping special tokens.
+
+        Use `decode` with `special_token_policy=SpecialTokenPolicy.KEEP` instead.
+
+        This is a convenient method for debugging.
+        """
+        ...
+
+    @abstractmethod
+    def _to_string(self, tokens: List[int]) -> str: ...
 
 
 InstructRequestType = TypeVar("InstructRequestType", bound=InstructRequest)
@@ -311,11 +347,17 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         """
 
     @abstractmethod
-    def decode(self, tokens: List[int]) -> str:
+    def decode(self, tokens: List[int], special_token_policy: Optional[SpecialTokenPolicy] = None) -> str:
         r"""Convert token ids to string
 
         Args:
             tokens: The token ids to decode.
+            special_token_policy: The policy to use for special tokens.
+                Passing `None` will default to `self._special_token_policy` for
+                [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer] and `SpecialTokenPolicy.IGNORE`
+                for [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer].
+                Note that passing `None` will be deprecated and `special_token_policy` will default to
+                `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
 
         Returns:
             The decoded string.
@@ -377,3 +419,6 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
             The encoded tokens and images.
         """
         ...
+
+    @abstractmethod
+    def _to_string(self, tokens: List[int]) -> str: ...

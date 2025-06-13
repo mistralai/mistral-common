@@ -20,6 +20,7 @@ from mistral_common.tokens.tokenizers.base import (
     FIMRequestType,
     InstructRequestType,
     InstructTokenizer,
+    SpecialTokenPolicy,
     SpecialTokens,
     Tokenized,
     TokenizedType,
@@ -151,21 +152,30 @@ class InstructTokenizerBase(
 
         return Tokenized(
             tokens=tokens,
-            text=self.tokenizer.to_string(tokens),
+            text=self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP),
             prefix_ids=prefix_ids,
             images=images,
         )
 
-    def decode(self, tokens: List[int]) -> str:
+    def decode(self, tokens: List[int], special_token_policy: Optional[SpecialTokenPolicy] = None) -> str:
         r"""Decode tokens to a string.
 
         Args:
             tokens: The tokens to decode.
+            special_token_policy: The policy to use for special tokens.
+                Passing `None` will default to `self._special_token_policy` for
+                [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer] and `SpecialTokenPolicy.IGNORE`
+                for [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer].
+                Note that passing `None` will be deprecated and `special_token_policy` will default to
+                `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
 
         Returns:
             The decoded string.
         """
-        return self.tokenizer.decode(tokens)
+        return self.tokenizer.decode(tokens, special_token_policy=special_token_policy)
+
+    def _to_string(self, tokens: List[int]) -> str:
+        return self.tokenizer._to_string(tokens)
 
 
 class InstructTokenizerV1(
@@ -461,7 +471,7 @@ class InstructTokenizerV2(
             self.PREFIX,
             *prefix_tokens,
         ]
-        return Tokenized(tokens=tokens, text=self.tokenizer.to_string(tokens))
+        return Tokenized(tokens=tokens, text=self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP))
 
 
 class InstructTokenizerV3(

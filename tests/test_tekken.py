@@ -6,7 +6,7 @@ from typing import List, Optional, Sequence
 
 import pytest
 
-from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTokens, TokenizerVersion
 from mistral_common.tokens.tokenizers.tekken import (
     ModelData,
     SpecialTokenInfo,
@@ -28,6 +28,10 @@ def _quick_vocab(extra_toks: Sequence[bytes] = ()) -> List[TokenInfo]:
             )
         )
     return vocab
+
+
+def _get_deprecated_special_tokens() -> List[SpecialTokenInfo]:
+    return list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS)
 
 
 def get_special_tokens(tokenizer_version: TokenizerVersion) -> List[SpecialTokenInfo]:
@@ -189,3 +193,61 @@ def test_isbyte() -> None:
     assert len(byte_tok) == 1
     assert tekkenizer.is_byte(byte_tok[0]), byte_tok
     assert byte_tok[0] < 256 + tekkenizer.num_special_tokens <= tok[0]
+
+
+def test_id_to_byte_piece() -> None:
+    vocab = _quick_vocab([b"hello"])
+    tekkenizer = Tekkenizer(
+        vocab,
+        special_tokens=_get_deprecated_special_tokens(),
+        pattern=r".+",  # single token, whole string
+        vocab_size=len(vocab) + len(_get_deprecated_special_tokens()),
+        num_special_tokens=len(_get_deprecated_special_tokens()),
+        version=TokenizerVersion.v3,
+    )
+
+    with pytest.raises(ValueError, match="5 is a special token"):
+        tekkenizer.id_to_byte_piece(5, special_token_policy=SpecialTokenPolicy.RAISE)
+
+    assert tekkenizer.id_to_byte_piece(5, special_token_policy=SpecialTokenPolicy.IGNORE) == b""
+    assert tekkenizer.id_to_byte_piece(5, special_token_policy=SpecialTokenPolicy.KEEP) == b"[AVAILABLE_TOOLS]"
+
+    assert (
+        tekkenizer.id_to_byte_piece(
+            len(vocab) + len(_get_deprecated_special_tokens()) - 1, special_token_policy=SpecialTokenPolicy.KEEP
+        )
+        == b"hello"
+    )
+
+
+def test_frozen_special_tokens_list() -> None:
+    """
+    The `DEPRECATED_SPECIAL_TOKENS` is frozen and should not have any modifications.
+    """
+
+    NUM_TOKENS_IN_FROZEN_LIST = 20  # DO NOT MODIFY.
+    assert len(_get_deprecated_special_tokens()) == NUM_TOKENS_IN_FROZEN_LIST
+
+    FROZEN_TOKENS_DO_NOT_MODIFY = [
+        "<unk>",
+        "<s>",
+        "</s>",
+        "[INST]",
+        "[/INST]",
+        "[AVAILABLE_TOOLS]",
+        "[/AVAILABLE_TOOLS]",
+        "[TOOL_RESULTS]",
+        "[/TOOL_RESULTS]",
+        "[TOOL_CALLS]",
+        "[IMG]",
+        "<pad>",
+        "[IMG_BREAK]",
+        "[IMG_END]",
+        "[PREFIX]",
+        "[MIDDLE]",
+        "[SUFFIX]",
+        "[SYSTEM_PROMPT]",
+        "[/SYSTEM_PROMPT]",
+        "[TOOL_CONTENT]",
+    ]  # DO NOT MODIFY
+    assert FROZEN_TOKENS_DO_NOT_MODIFY == [token["token_str"] for token in _get_deprecated_special_tokens()]
