@@ -172,7 +172,7 @@ class InstructTokenizerBase(
         Returns:
             The decoded string.
         """
-        return self.decode(tokens, special_token_policy=special_token_policy)
+        return self.tokenizer.decode(tokens, special_token_policy=special_token_policy)
 
     def _to_string(self, tokens: List[int]) -> str:
         return self.tokenizer._to_string(tokens)
