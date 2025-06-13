@@ -471,9 +471,7 @@ class InstructTokenizerV2(
             self.PREFIX,
             *prefix_tokens,
         ]
-        return Tokenized(
-            tokens=tokens, text=self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP)
-        )
+        return Tokenized(tokens=tokens, text=self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP))
 
 
 class InstructTokenizerV3(
