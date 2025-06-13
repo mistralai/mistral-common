@@ -7,4 +7,4 @@ class MistralBase(BaseModel):
     Forbids extra attributes, validates default values and use enum values.
     """
 
-    model_config = ConfigDict(extra="forbid", validate_default=True, use_enum_values=True)
+    model_config = ConfigDict(validate_default=True, use_enum_values=True)
