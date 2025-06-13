@@ -89,8 +89,8 @@ class MistralTokenizer(
             [InstructTokenizer][mistral_common.tokens.tokenizers.instruct.InstructTokenizer].
         raw_tokenizer: The raw tokenzer used by the instruct tokenizer. Can be:
 
-                - A [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer]
-                - A [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer].
+            - A [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer]
+            - A [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer].
     """
 
     def __init__(
@@ -341,8 +341,8 @@ class MistralTokenizer(
 
         Args:
             tokens: The tokens to decode.
-            special_token_policy: The policy to use for special tokens. If `None`, the default policy of the tokenizer
-                will be used.
+            special_token_policy: The policy to use for special tokens. Passing `None` is deprecated and will be changed
+                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
 
         Returns:
             The decoded string.

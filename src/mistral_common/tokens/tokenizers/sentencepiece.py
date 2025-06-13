@@ -144,7 +144,8 @@ class SentencePieceTokenizer(Tokenizer):
         Args:
             tokens: The list of token ids.
             special_token_policy: The policy to use for special tokens. If `None`, the default policy
-                is `SpecialTokenPolicy.IGNORE`.
+                is `SpecialTokenPolicy.IGNORE`.  Passing `None` is deprecated and will be changed
+                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
 
         Returns:
             The decoded string.

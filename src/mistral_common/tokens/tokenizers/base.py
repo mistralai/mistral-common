@@ -348,6 +348,8 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         Args:
             tokens: The token ids to decode.
             special_token_policy: The policy to use for special tokens.
+                Passing `None` is deprecated and will be changed
+                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
 
         Returns:
             The decoded string.

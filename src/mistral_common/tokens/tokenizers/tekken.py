@@ -410,7 +410,8 @@ class Tekkenizer(Tokenizer):
             tokens: The list of token ids to decode.
             special_token_policy: The policy for handling special tokens.
                 Use the tokenizer's [attribute][mistral_common.tokens.tokenizers.tekken.Tekkenizer.special_token_policy]
-                if None.
+                if None. Passing `None` is deprecated and will be changed
+                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
 
         Returns:
             The decoded string.
