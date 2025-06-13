@@ -303,7 +303,7 @@ class Tekkenizer(Tokenizer):
                 "The attributed `special_token_policy` is deprecated and will be removed in 1.7.0. "
                 "Please pass a special token policy explicitly to the relevant methods."
             ),
-            DeprecationWarning,
+            FutureWarning,
         )
 
         self._special_token_policy = policy
@@ -429,7 +429,7 @@ class Tekkenizer(Tokenizer):
                     "Please pass a special token policy explicitly. "
                     "Future default will be SpecialTokenPolicy.IGNORE."
                 ),
-                DeprecationWarning,
+                FutureWarning,
             )
             special_token_policy = self._special_token_policy
 
@@ -447,7 +447,7 @@ class Tekkenizer(Tokenizer):
                 "`to_string` is deprecated and will be removed in 1.7.0. "
                 "Use `decode` with `special_token_policy=SpecialTokenPolicy.KEEP` instead."
             ),
-            DeprecationWarning,
+            FutureWarning,
         )
         return self._to_string(tokens)
 
@@ -479,7 +479,7 @@ class Tekkenizer(Tokenizer):
                     "Please pass a special token policy explicitly. "
                     "Future default will be SpecialTokenPolicy.IGNORE."
                 ),
-                DeprecationWarning,
+                FutureWarning,
             )
             special_token_policy = self._special_token_policy
 

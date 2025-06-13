@@ -28,7 +28,6 @@ from mistral_common.tokens.tokenizers.base import (
     SpecialTokenPolicy,
     SpecialTokens,
     TokenizedType,
-    Tokenizer,
     TokenizerVersion,
 )
 from mistral_common.tokens.tokenizers.instruct import (
@@ -87,10 +86,6 @@ class MistralTokenizer(
     Attributes:
         instruct_tokenizer: The instruct tokenizer to use. See
             [InstructTokenizer][mistral_common.tokens.tokenizers.instruct.InstructTokenizer].
-        raw_tokenizer: The raw tokenizer used by the instruct tokenizer. Can be:
-
-            - A [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer]
-            - A [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer].
     """
 
     def __init__(
@@ -113,7 +108,6 @@ class MistralTokenizer(
         self.instruct_tokenizer: InstructTokenizer[InstructRequest, FIMRequest, TokenizedType, AssistantMessageType] = (
             instruct_tokenizer
         )
-        self.raw_tokenizer: Tokenizer = instruct_tokenizer.tokenizer
 
     @classmethod
     def _data_path(cls) -> Path:

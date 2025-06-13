@@ -155,6 +155,18 @@ class SentencePieceTokenizer(Tokenizer):
                 f"Expected `special_token_policy` to be None or SpecialTokenPolicy, got {type(special_token_policy)}."
             )
 
+        if special_token_policy is None:
+            warnings.warn(
+                (
+                    "Using the tokenizer's special token policy `None` is deprecated. "
+                    "It will be removed in 1.7.0. "
+                    "Please pass a special token policy explicitly. "
+                    "Future default will be SpecialTokenPolicy.IGNORE."
+                ),
+                FutureWarning,
+            )
+            special_token_policy = SpecialTokenPolicy.IGNORE
+
         if special_token_policy in [SpecialTokenPolicy.KEEP, SpecialTokenPolicy.RAISE]:
             return self._decode_with_special_tokens(tokens, special_token_policy)
 
@@ -196,7 +208,7 @@ class SentencePieceTokenizer(Tokenizer):
                 "`to_string` is deprecated and will be removed in 1.7.0. "
                 "Use `decode` with `special_token_policy=SpecialTokenPolicy.KEEP` instead."
             ),
-            DeprecationWarning,
+            FutureWarning,
         )
         return self._to_string(tokens)
 

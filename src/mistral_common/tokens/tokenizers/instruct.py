@@ -163,8 +163,11 @@ class InstructTokenizerBase(
         Args:
             tokens: The tokens to decode.
             special_token_policy: The policy to use for special tokens.
-                Passing `None` is deprecated and will be changed
-                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
+                Passing `None` will default to `self._special_token_policy` for
+                [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer] and `SpecialTokenPolicy.IGNORE`
+                for [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer].
+                Note that passing `None` will be deprecated and `special_token_policy` will default to
+                `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
 
         Returns:
             The decoded string.
