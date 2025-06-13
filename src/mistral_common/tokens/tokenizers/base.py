@@ -224,7 +224,7 @@ class Tokenizer(ABC):
     def to_string(self, tokens: List[int]) -> str:
         r"""[DEPRECATED] Converts a list of token ids into a string, keeping special tokens.
 
-        Use `decode` with `special_token_policy=SpecialTokenPolicy instead.
+        Use `decode` with `special_token_policy=SpecialTokenPolicy.KEEP` instead.
 
         This is a convenient method for debugging.
         """
