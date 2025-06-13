@@ -213,7 +213,7 @@ class Tekkenizer(Tokenizer):
         if isinstance(path, str):
             path = Path(path)
         assert path.exists(), path
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             untyped = json.load(f)
 
         _version_str = untyped["config"].get("version")
@@ -235,7 +235,7 @@ class Tekkenizer(Tokenizer):
             )
             # Tokenizer > v7 should find special tokens in the tokenizer file
             if version > TokenizerVersion("v7"):
-                raise ValueError(err_msg)
+                raise ValueError(" ")
             else:
                 warnings.warn(
                     err_msg,
