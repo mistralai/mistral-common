@@ -410,7 +410,7 @@ class Tekkenizer(Tokenizer):
             tokens: The list of token ids to decode.
             special_token_policy: The policy for handling special tokens.
                 Use the tokenizer's [attribute][mistral_common.tokens.tokenizers.tekken.Tekkenizer.special_token_policy]
-                if None. Passing `None` is deprecated and will be changed
+                if `None`. Passing `None` is deprecated and will be changed
                 to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
 
         Returns:
@@ -459,7 +459,18 @@ class Tekkenizer(Tokenizer):
         return self.decode([token_id], special_token_policy=SpecialTokenPolicy.KEEP)
 
     def id_to_byte_piece(self, token_id: int, special_token_policy: Optional[SpecialTokenPolicy] = None) -> bytes:
-        r"""Convert a token id to its byte representation."""
+        r"""Convert a token id to its byte representation.
+
+        Args:
+            token_id: The token id to convert.
+            special_token_policy: The policy for handling special tokens.
+                Use the tokenizer's [attribute][mistral_common.tokens.tokenizers.tekken.Tekkenizer.special_token_policy]
+                if `None`. Passing `None` is deprecated and will be changed
+                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
+
+        Returns:
+            The byte representation of the token.
+        """
         if special_token_policy is None:
             warnings.warn(
                 (
