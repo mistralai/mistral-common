@@ -152,7 +152,7 @@ class InstructTokenizerBase(
 
         return Tokenized(
             tokens=tokens,
-            text=self.tokenizer.to_string(tokens),
+            text=self.tokenizer.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP),
             prefix_ids=prefix_ids,
             images=images,
         )
@@ -169,25 +169,8 @@ class InstructTokenizerBase(
         """
         return self.tokenizer.decode(tokens, special_token_policy=special_token_policy)
 
-    def to_string(self, tokens: List[int]) -> str:
-        r"""Convert the token ids to a string.
-
-        This is different from `decode` in that it does not remove special tokens and does not decode the tokens but
-        just converts them to a string:
-
-        - For [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer], this is the same as `decode` with
-            `special_token_policy=SpecialTokenPolicy.KEEP`.
-        - For [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer], this is
-            the **not the same** as `decode()` with `special_token_policy=SpecialTokenPolicy.KEEP` as the tokens will be
-            returned as Sentencepiece pieces and not raw text.
-
-        Args:
-            tokens: The token ids to convert to a string.
-
-        Returns:
-            The string representation of the tokens.
-        """
-        return self.tokenizer.to_string(tokens)
+    def _to_string(self, tokens: List[int]) -> str:
+        return self.tokenizer._to_string(tokens)
 
 
 class InstructTokenizerV1(
@@ -483,7 +466,9 @@ class InstructTokenizerV2(
             self.PREFIX,
             *prefix_tokens,
         ]
-        return Tokenized(tokens=tokens, text=self.tokenizer.to_string(tokens))
+        return Tokenized(
+            tokens=tokens, text=self.tokenizer.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+        )
 
 
 class InstructTokenizerV3(

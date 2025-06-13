@@ -28,6 +28,7 @@ from mistral_common.tokens.tokenizers.base import (
     SpecialTokenPolicy,
     SpecialTokens,
     TokenizedType,
+    Tokenizer,
     TokenizerVersion,
 )
 from mistral_common.tokens.tokenizers.instruct import (
@@ -109,8 +110,10 @@ class MistralTokenizer(
         """
         self._chat_completion_request_validator = validator
         self._instruct_request_normalizer = request_normalizer
-        self.instruct_tokenizer = instruct_tokenizer
-        self.raw_tokenizer = instruct_tokenizer.tokenizer
+        self.instruct_tokenizer: InstructTokenizer[InstructRequest, FIMRequest, TokenizedType, AssistantMessageType] = (
+            instruct_tokenizer
+        )
+        self.raw_tokenizer: Tokenizer = instruct_tokenizer.tokenizer
 
     @classmethod
     def _data_path(cls) -> Path:
@@ -346,25 +349,8 @@ class MistralTokenizer(
         """
         return self.instruct_tokenizer.decode(tokens, special_token_policy=special_token_policy)
 
-    def to_string(self, tokens: List[int]) -> str:
-        r"""Convert the token ids to a string.
-
-        This is different from `decode` in that it does not remove special tokens and does not decode the tokens but
-        just converts them to a string:
-
-        - For [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer], this is the same as `decode` with
-            `special_token_policy=SpecialTokenPolicy.KEEP`.
-        - For [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer], this is
-            the **not the same** as `decode()` with `special_token_policy=SpecialTokenPolicy.KEEP` as the tokens will be
-            returned as Sentencepiece pieces and not raw text.
-
-        Args:
-            tokens: The token ids to convert to a string.
-
-        Returns:
-            The string representation of the tokens.
-        """
-        return self.instruct_tokenizer.to_string(tokens)
+    def _to_string(self, tokens: List[int]) -> str:
+        return self.instruct_tokenizer._to_string(tokens)
 
 
 MODEL_NAME_TO_TOKENIZER_CLS: Dict[str, Callable[[], MistralTokenizer]] = {

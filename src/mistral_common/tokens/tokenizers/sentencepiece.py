@@ -1,5 +1,6 @@
 import logging
 import os
+import warnings
 from functools import cached_property
 from pathlib import Path
 from typing import List, Optional, Set, Union
@@ -137,8 +138,8 @@ class SentencePieceTokenizer(Tokenizer):
         r"""Decode the given list of token ids into a string.
 
         Note:
-            Using `special_token_policy=SpecialTokenPolicy.KEEP` will keep the special tokens in the decoded string.
-            This is not the same as `to_string`, which will return the tokens as SentencePiece pieces.
+            Using `special_token_policy=SpecialTokenPolicy.KEEP` will keep the special tokens and the normal tokens as
+            SentencePiece pieces.
 
         Args:
             tokens: The list of token ids.
@@ -154,16 +155,14 @@ class SentencePieceTokenizer(Tokenizer):
             )
 
         if special_token_policy in [SpecialTokenPolicy.KEEP, SpecialTokenPolicy.RAISE]:
-            return self._decode_with_special_tokens(tokens, True, special_token_policy)
+            return self._decode_with_special_tokens(tokens, special_token_policy)
 
         return self._model.decode(tokens)  # type: ignore
 
     def id_to_piece(self, token_id: int) -> str:
         return self._model.id_to_piece(token_id)  # type: ignore
 
-    def _decode_with_special_tokens(
-        self, tokens: List[int], decode_normal_tokens: bool, special_token_policy: SpecialTokenPolicy
-    ) -> str:
+    def _decode_with_special_tokens(self, tokens: List[int], special_token_policy: SpecialTokenPolicy) -> str:
         text = ""
         curr_tokens: List[int] = []
         for tok in tokens:
@@ -171,10 +170,7 @@ class SentencePieceTokenizer(Tokenizer):
                 if special_token_policy == SpecialTokenPolicy.RAISE:
                     raise ValueError("Decoding `tokens` that contain special tokens with special_token_policy=RAISE.")
                 if curr_tokens:
-                    if decode_normal_tokens:
-                        text += self._model.decode(curr_tokens)
-                    else:
-                        text += "".join([self.id_to_piece(tok) for tok in curr_tokens])
+                    text += "".join([self.id_to_piece(tok) for tok in curr_tokens])
                     curr_tokens = []
 
                 text += self.id_to_piece(tok)
@@ -183,26 +179,28 @@ class SentencePieceTokenizer(Tokenizer):
                 curr_tokens.append(tok)
 
         if curr_tokens:
-            if decode_normal_tokens:
-                text += self._model.decode(curr_tokens)
-            else:
-                text += "".join([self.id_to_piece(tok) for tok in curr_tokens])
+            text += "".join([self.id_to_piece(tok) for tok in curr_tokens])
 
         return text
 
     def to_string(self, tokens: List[int]) -> str:
-        r"""Converts tokens into a string as SentencePiece pieces, without decoding them.
+        r"""[DEPRECATED] Converts a list of token ids into a string, keeping special tokens.
 
-        Note:
-            This is not the same as `decode`, which will decode the tokens into a string.
+        Use `decode` with `special_token_policy=SpecialTokenPolicy instead.
 
-        Args:
-            tokens: The list of token ids.
-
-        Returns:
-            The string representation of the tokens.
+        This is a convenient method for debugging.
         """
-        return self._decode_with_special_tokens(tokens, False, special_token_policy=SpecialTokenPolicy.KEEP)
+        warnings.warn(
+            (
+                "`to_string` is deprecated and will be removed in 1.7.0. "
+                "Use `decode` with `special_token_policy=SpecialTokenPolicy instead."
+            ),
+            DeprecationWarning,
+        )
+        return self._to_string(tokens)
+
+    def _to_string(self, tokens: List[int]) -> str:
+        return self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP)
 
     @property
     def pad_id(self) -> int:

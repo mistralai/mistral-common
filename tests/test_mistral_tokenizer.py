@@ -60,54 +60,27 @@ class TestMistralToknizer:
 
             elif special_token_policy == SpecialTokenPolicy.KEEP:
                 if bos:
-                    bos_string = "<s>"
-                    expected = bos_string + prompt
+                    bos_piece = "<s>" if is_tekken else f"<s>{SPM_SPECIAL_WHITESPACE}"
+                    expected = bos_piece + prompt
+                elif not bos and not is_tekken:
+                    expected = SPM_SPECIAL_WHITESPACE + prompt
                 else:
                     expected = prompt
                 if eos:
-                    eos_string = "</s>"
-                    expected += eos_string
+                    eos_piece = "</s>"
+                    expected += eos_piece
 
-                    assert tokenizer.decode(encoded, special_token_policy) == expected
-                    assert tokenizer.instruct_tokenizer.decode(encoded, special_token_policy) == expected
-                    assert tokenizer.instruct_tokenizer.tokenizer.decode(encoded, special_token_policy) == expected
+                if not is_tekken:
+                    expected = expected.replace(" ", SPM_WHITESPACE)
+
+                assert tokenizer.decode(encoded, special_token_policy) == expected
+                assert tokenizer.instruct_tokenizer.decode(encoded, special_token_policy) == expected
+                assert tokenizer.instruct_tokenizer.tokenizer.decode(encoded, special_token_policy) == expected
 
             elif special_token_policy == SpecialTokenPolicy.RAISE:
                 if bos or eos:
                     with pytest.raises(ValueError):
                         tokenizer.decode(encoded, special_token_policy)
-
-    @pytest.mark.parametrize(
-        ["is_tekken"],
-        [
-            (False,),
-            (True,),
-        ],
-    )
-    def test_to_string(self, is_tekken: bool) -> None:
-        tokenizer = MistralTokenizer.v3(is_tekken=is_tekken)
-
-        prompt = "This is a complicated te$t, ain't it?"
-
-        for bos, eos in [[False, False], [True, True]]:
-            encoded = tokenizer.instruct_tokenizer.tokenizer.encode(prompt, bos=bos, eos=eos)
-            if bos:
-                bos_piece = "<s>" if is_tekken else f"<s>{SPM_SPECIAL_WHITESPACE}"
-                expected = bos_piece + prompt
-            elif not bos and not is_tekken:
-                expected = SPM_SPECIAL_WHITESPACE + prompt
-            else:
-                expected = prompt
-            if eos:
-                eos_piece = "</s>"
-                expected += eos_piece
-
-            if not is_tekken:
-                expected = expected.replace(" ", SPM_WHITESPACE)
-
-            assert tokenizer.to_string(encoded) == expected
-            assert tokenizer.instruct_tokenizer.to_string(encoded) == expected
-            assert tokenizer.instruct_tokenizer.tokenizer.to_string(encoded) == expected
 
     def test_from_hf_hub(self) -> None:
         def _mocked_hf_download(
