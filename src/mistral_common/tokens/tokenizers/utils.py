@@ -103,8 +103,8 @@ def download_tokenizer_from_hf_hub(
 
         if len(repo_files) == 0:
             raise ConnectionError(
-                "Could not connect to the Hugging Face Hub and no local files were found for the repo ID {repo_id} "
-                "and revision {revision}. Please check your internet connection and try again."
+                f"Could not connect to the Hugging Face Hub and no local files were found for the repo ID {repo_id} "
+                f"and revision {revision}. Please check your internet connection and try again."
             ) from e
 
     valid_tokenizer_files = []
