@@ -1,1 +1,3 @@
-__version__ = "1.8.2"
+import importlib.metadata
+
+__version__ = importlib.metadata.version("mistral-common")
