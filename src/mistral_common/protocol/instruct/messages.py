@@ -231,9 +231,7 @@ class BaseMessage(MistralBase):
 
         Should be implemented by subclasses.
         """
-        raise NotImplementedError(
-            f"from_openai method not implemented for {cls.__name__}."
-        )
+        raise NotImplementedError(f"from_openai method not implemented for {cls.__name__}.")
 
 
 class UserMessage(BaseMessage):
