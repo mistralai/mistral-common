@@ -44,7 +44,9 @@ class BaseContentChunk(MistralBase):
 
         Should be implemented by subclasses.
         """
-        raise NotImplementedError("to_openai method not implemented for {cls.__name__}")
+        raise NotImplementedError(
+            f"to_openai method not implemented for {cls.__name__}"
+        )
 
     @classmethod
     def from_openai(cls, openai_chunk: Dict[str, Union[str, Dict[str, str]]]) -> "BaseContentChunk":
@@ -52,7 +54,9 @@ class BaseContentChunk(MistralBase):
 
         Should be implemented by subclasses.
         """
-        raise NotImplementedError("from_openai method not implemented for {cls.__name__}")
+        raise NotImplementedError(
+            f"from_openai method not implemented for {cls.__name__}"
+        )
 
 
 class ImageChunk(BaseContentChunk):
@@ -219,7 +223,9 @@ class BaseMessage(MistralBase):
 
         Should be implemented by subclasses.
         """
-        raise NotImplementedError("to_openai method not implemented for {cls.__name__}")
+        raise NotImplementedError(
+            f"to_openai method not implemented for {cls.__name__}"
+        )
 
     @classmethod
     def from_openai(
@@ -229,7 +235,9 @@ class BaseMessage(MistralBase):
 
         Should be implemented by subclasses.
         """
-        raise NotImplementedError("from_openai method not implemented for {cls.__name__}.")
+        raise NotImplementedError(
+            f"from_openai method not implemented for {cls.__name__}."
+        )
 
 
 class UserMessage(BaseMessage):
