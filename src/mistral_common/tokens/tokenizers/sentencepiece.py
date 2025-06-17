@@ -28,8 +28,10 @@ def is_sentencepiece(path: Union[str, Path]) -> bool:
     return path.is_file() and any(path.name.endswith(suffix) for suffix in suffixes)
 
 
-def get_spm_version(tokenizer_filename: str, raise_deprecated: bool = False) -> TokenizerVersion:
+def get_spm_version(tokenizer_filename: Union[str, Path], raise_deprecated: bool = False) -> TokenizerVersion:
     r"""Get the version of the tokenizer from the filename."""
+    if isinstance(tokenizer_filename, Path):
+        tokenizer_filename = tokenizer_filename.name
     _version_str = tokenizer_filename.split(".")[-1]
     if _version_str != "model":  # filter tokenizer_filename == "/path/to/tokenizer.model" case
         _version_str = _version_str.split("m")[0]
@@ -47,8 +49,10 @@ def get_spm_version(tokenizer_filename: str, raise_deprecated: bool = False) -> 
     return TokenizerVersion(_version_str)
 
 
-def get_mm_config(tokenizer_filename: str) -> Optional[MultimodalConfig]:
+def get_mm_config(tokenizer_filename: Union[str, Path]) -> Optional[MultimodalConfig]:
     r"""Get the multimodal config from the tokenizer filename."""
+    if isinstance(tokenizer_filename, Path):
+        tokenizer_filename = tokenizer_filename.name
     _version_str = tokenizer_filename.split(".")[-1]
     if _version_str == "model" or "m" not in _version_str:
         return None
@@ -64,7 +68,7 @@ def get_mm_config(tokenizer_filename: str) -> Optional[MultimodalConfig]:
 class SentencePieceTokenizer(Tokenizer):
     r"""[SentencePiece](https://github.com/google/sentencepiece) tokenizer."""
 
-    def __init__(self, model_path: str, tokenizer_version: Optional[TokenizerVersion] = None) -> None:
+    def __init__(self, model_path: Union[str, Path], tokenizer_version: Optional[TokenizerVersion] = None) -> None:
         r"""Initialize the `SentencePieceTokenizer`.
 
         Args:

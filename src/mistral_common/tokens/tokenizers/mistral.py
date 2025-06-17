@@ -238,7 +238,7 @@ class MistralTokenizer(
     @classmethod
     def from_file(
         cls,
-        tokenizer_filename: str,
+        tokenizer_filename: Union[str, Path],
         mode: ValidationMode = ValidationMode.test,
     ) -> "MistralTokenizer":
         r"""Loads a tokenizer from a file.
