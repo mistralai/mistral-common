@@ -141,7 +141,7 @@ def transform_image(image: Image.Image, new_size: Tuple[int, int]) -> np.ndarray
         Transformed image with shape (C, H, W).
     """
     if not is_cv2_installed():
-        raise ImportError("OpenCV is required for this function. Install it with 'pip install mistral_common[opencv]'")
+        raise ImportError("OpenCV is required for this function. Install it with 'pip install mistral-common[opencv]'")
 
     np_image = cv2.resize(np.array(_convert_to_rgb(image), dtype=np.float32), new_size, interpolation=cv2.INTER_CUBIC)
     return normalize(np_image, DATASET_MEAN, DATASET_STD)
