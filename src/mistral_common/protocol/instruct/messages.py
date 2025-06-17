@@ -44,9 +44,7 @@ class BaseContentChunk(MistralBase):
 
         Should be implemented by subclasses.
         """
-        raise NotImplementedError(
-            f"to_openai method not implemented for {type(self).__name__}"
-        )
+        raise NotImplementedError(f"to_openai method not implemented for {type(self).__name__}")
 
     @classmethod
     def from_openai(cls, openai_chunk: Dict[str, Union[str, Dict[str, str]]]) -> "BaseContentChunk":
