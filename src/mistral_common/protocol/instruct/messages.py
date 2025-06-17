@@ -224,7 +224,7 @@ class BaseMessage(MistralBase):
         Should be implemented by subclasses.
         """
         raise NotImplementedError(
-            f"to_openai method not implemented for {cls.__name__}"
+            f"to_openai method not implemented for {type(self).__name__}"
         )
 
     @classmethod
