@@ -7,7 +7,7 @@ from mistral_common.protocol.instruct.converters import (
     convert_openai_messages,
     convert_openai_tools,
 )
-from mistral_common.protocol.instruct.messages import ChatMessage, ChatMessageType
+from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, ChatMessageType
 from mistral_common.protocol.instruct.tool_calls import ToolType
 
 
@@ -34,6 +34,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         system_prompt: The system prompt to be used for the conversation.
         available_tools: The tools available to the assistant.
         truncate_at_max_tokens: The maximum number of tokens to truncate the conversation at.
+        continue_final_message: Whether to continue the final message in the conversation.
 
     Examples:
         >>> from mistral_common.protocol.instruct.messages import UserMessage, SystemMessage
@@ -46,6 +47,16 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
     system_prompt: Optional[str] = None
     available_tools: Optional[List[ToolType]] = None
     truncate_at_max_tokens: Optional[int] = None
+    continue_final_message: bool = False
+
+    def model_post_init(self, context: Any) -> None:
+        super().model_post_init(context)
+
+        if self.continue_final_message:
+            if len(self.messages) == 0 or not isinstance(self.messages[-1], AssistantMessage):
+                raise ValueError("Cannot continue final message if the last message is not an assistant message.")
+            self.messages[-1].prefix = True
+
 
     def to_openai(self, **kwargs: Any) -> Dict[str, List[Dict[str, Any]]]:
         r"""Convert the request messages and tools into the OpenAI format.
@@ -126,6 +137,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         cls,
         messages: List[Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]],
         tools: Optional[List[Dict[str, Any]]] = None,
+        continue_final_message: bool = False,
         **kwargs: Any,
     ) -> "InstructRequest":
         r"""Create an instruct request from the OpenAI format.
@@ -163,5 +175,6 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
             messages=converted_messages,  # type: ignore[arg-type]
             available_tools=converted_tools,  # type: ignore[arg-type]
             truncate_at_max_tokens=truncate_at_max_tokens,
+            continue_final_message=continue_final_message,
             **kwargs,
         )

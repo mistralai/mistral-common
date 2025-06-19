@@ -12,6 +12,7 @@ from mistral_common.protocol.instruct.converters import (
     convert_openai_tools,
 )
 from mistral_common.protocol.instruct.messages import (
+    AssistantMessage,
     ChatMessage,
     ChatMessageType,
 )
@@ -56,6 +57,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         tools: The tools to use for the chat completion.
         tool_choice: The tool choice to use for the chat completion.
         truncate_for_context_length: Whether to truncate the messages for the context length.
+        continue_final_message: Whether to continue the final message.
 
     Examples:
         >>> from mistral_common.protocol.instruct.messages import UserMessage, AssistantMessage
@@ -78,6 +80,16 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     tools: Optional[List[Tool]] = None
     tool_choice: ToolChoice = ToolChoice.auto
     truncate_for_context_length: bool = False
+    continue_final_message: bool = False
+
+    def model_post_init(self, context: Any) -> None:
+        super().model_post_init(context)
+
+        if self.continue_final_message:
+            if len(self.messages) == 0 or not isinstance(self.messages[-1], AssistantMessage):
+                raise ValueError("Cannot continue final message if the last message is not an assistant message.")
+            self.messages[-1].prefix = True
+
 
     def to_openai(self, **kwargs: Any) -> Dict[str, List[Dict[str, Any]]]:
         r"""Convert the request messages and tools into the OpenAI format.
@@ -157,6 +169,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         cls,
         messages: List[Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]],
         tools: Optional[List[Dict[str, Any]]] = None,
+        continue_final_message: bool = False,
         **kwargs: Any,
     ) -> "ChatCompletionRequest":
         r"""Create a chat completion request from the OpenAI format.
@@ -164,6 +177,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         Args:
             messages: The messages in the OpenAI format.
             tools: The tools in the OpenAI format.
+            continue_final_message: Whether to continue the final message.
             **kwargs: Additional keyword arguments to pass to the constructor. These should be the same as the fields
                 of the request class or the OpenAI API equivalent.
 
@@ -186,5 +200,6 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             messages=converted_messages,  # type: ignore[arg-type]
             tools=converted_tools,
             random_seed=random_seed,
+            continue_final_message=continue_final_message,
             **kwargs,
         )

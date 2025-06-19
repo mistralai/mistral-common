@@ -262,7 +262,10 @@ class InstructRequestNormalizer(
         messages = self._aggregate_messages(request)
 
         return self._instruct_request_class(
-            messages=messages, system_prompt=system_prompt, available_tools=request.tools
+            messages=messages,
+            system_prompt=system_prompt,
+            available_tools=request.tools,
+            continue_final_message=request.continue_final_message,
         )
 
 

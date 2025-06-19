@@ -205,6 +205,8 @@ class MistralTokenizer(
         repo_id: str,
         token: Optional[Union[bool, str]] = None,
         revision: Optional[str] = None,
+        force_download: bool = False,
+        local_files_only: bool = False,
         mode: ValidationMode = ValidationMode.test,
     ) -> "MistralTokenizer":
         r"""Download the Mistral tokenizer for a given Hugging Face repository ID.
@@ -216,11 +218,21 @@ class MistralTokenizer(
             token: The Hugging Face token to use to download the tokenizer.
             revision: The revision of the model to use. If `None`, the latest revision will be used.
             mode: The validation mode to use.
+            force_download: Whether to force the download of the tokenizer. If `True`, the tokenizer will be downloaded
+                even if it is already cached.
+            local_files_only: Whether to only use local files. If `True`, the tokenizer will be downloaded only if it is
+                already cached.
 
         Returns:
             The Mistral tokenizer for the given model.
         """
-        tokenizer_path = download_tokenizer_from_hf_hub(repo_id=repo_id, token=token, revision=revision)
+        tokenizer_path = download_tokenizer_from_hf_hub(
+            repo_id=repo_id,
+            token=token,
+            revision=revision,
+            force_download=force_download,
+            local_files_only=local_files_only,
+        )
         return MistralTokenizer.from_file(tokenizer_path, mode=mode)
 
     @classmethod
