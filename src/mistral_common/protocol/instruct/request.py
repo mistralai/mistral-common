@@ -82,14 +82,6 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     truncate_for_context_length: bool = False
     continue_final_message: bool = False
 
-    def model_post_init(self, context: Any) -> None:
-        super().model_post_init(context)
-
-        if self.continue_final_message:
-            if len(self.messages) == 0 or not isinstance(self.messages[-1], AssistantMessage):
-                raise ValueError("Cannot continue final message if the last message is not an assistant message.")
-            self.messages[-1].prefix = True
-
 
     def to_openai(self, **kwargs: Any) -> Dict[str, List[Dict[str, Any]]]:
         r"""Convert the request messages and tools into the OpenAI format.
@@ -193,6 +185,11 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         _check_openai_fields_names(set(cls.model_fields.keys()), set(kwargs.keys()))
 
         converted_messages: list[ChatMessage] = convert_openai_messages(messages)
+
+        if continue_final_message:
+            if len(converted_messages) == 0 or not isinstance(converted_messages[-1], AssistantMessage):
+                raise ValueError("Cannot continue final message if the last message is not an assistant message.")
+            converted_messages[-1].prefix = True
 
         converted_tools = convert_openai_tools(tools) if tools is not None else None
 

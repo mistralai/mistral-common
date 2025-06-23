@@ -169,6 +169,11 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
 
         converted_messages: list[ChatMessage] = convert_openai_messages(messages)
 
+        if continue_final_message:
+            if len(converted_messages) == 0 or not isinstance(converted_messages[-1], AssistantMessage):
+                raise ValueError("Cannot continue final message if the last message is not an assistant message.")
+            converted_messages[-1].prefix = True
+
         converted_tools = convert_openai_tools(tools) if tools is not None else None
 
         return cls(
