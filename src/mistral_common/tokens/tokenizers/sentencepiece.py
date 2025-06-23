@@ -92,6 +92,10 @@ class SentencePieceTokenizer(Tokenizer):
         r"""Get the control token for the given string."""
         return self._model.piece_to_id(s)  # type: ignore
 
+    def is_control_token(self, token_id: int) -> bool:
+        r"""Check if the given token id is a control token."""
+        return token_id in self._control_tokens
+
     @property
     def n_words(self) -> int:
         r"""Vocabulary size of the tokenizer."""
@@ -173,7 +177,12 @@ class SentencePieceTokenizer(Tokenizer):
         return self._model.decode(tokens)  # type: ignore
 
     def id_to_piece(self, token_id: int) -> str:
+        r"""Convert the given token id to a token piece."""
         return self._model.id_to_piece(token_id)  # type: ignore
+
+    def piece_to_id(self, piece: str) -> int:
+        r"""Convert the given token piece to a token id."""
+        return self._model.piece_to_id(piece)  # type: ignore
 
     def _decode_with_special_tokens(self, tokens: List[int], special_token_policy: SpecialTokenPolicy) -> str:
         text = ""

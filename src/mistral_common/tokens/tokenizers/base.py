@@ -172,6 +172,10 @@ class Tokenizer(ABC):
     @abstractmethod
     def id_to_piece(self, token_id: int) -> str:
         r"""Convert a token id to the token str."""
+    
+    @abstractmethod
+    def piece_to_id(self, token: str) -> int:
+        r"""Convert a token str to the token id."""
 
     @property
     @abstractmethod
@@ -217,6 +221,10 @@ class Tokenizer(ABC):
     @abstractmethod
     def get_control_token(self, s: str) -> int:
         r"""Get the id of a control token."""
+    
+    @abstractmethod
+    def is_control_token(self, token_id: int) -> bool:
+        r"""Check if the given token id is a control token."""
 
     @property
     @abstractmethod
