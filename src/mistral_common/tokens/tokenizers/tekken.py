@@ -5,7 +5,7 @@ import warnings
 from functools import cached_property
 from itertools import groupby
 from pathlib import Path
-from typing import Dict, List, Optional, Type, TypedDict, Union
+from typing import Dict, List, Optional, Set, Type, TypedDict, Union
 
 import tiktoken
 
@@ -327,6 +327,16 @@ class Tekkenizer(Tokenizer):
     def unk_id(self) -> int:
         r"""The unknown token id."""
         return self.get_control_token("<unk>")
+
+    @cached_property
+    def all_special_ids(self) -> Set[int]:
+        r"""All special token ids."""
+        return {t["rank"] for t in self._all_special_tokens}
+
+    @cached_property
+    def all_special_tokens(self) -> Set[str]:
+        r"""All special tokens."""
+        return {t["token_str"] for t in self._all_special_tokens}
 
     def vocab(self) -> List[str]:
         r"""All tokens in the vocabulary as strings.

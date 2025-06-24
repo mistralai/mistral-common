@@ -1,3 +1,4 @@
+import logging
 from enum import Enum
 from typing import Any, Dict, Generic, List, Optional, Union
 
@@ -12,11 +13,12 @@ from mistral_common.protocol.instruct.converters import (
     convert_openai_tools,
 )
 from mistral_common.protocol.instruct.messages import (
-    AssistantMessage,
     ChatMessage,
     ChatMessageType,
 )
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolChoice
+
+logger = logging.getLogger(__name__)
 
 
 class ResponseFormats(str, Enum):
@@ -81,7 +83,6 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     tool_choice: ToolChoice = ToolChoice.auto
     truncate_for_context_length: bool = False
     continue_final_message: bool = False
-
 
     def to_openai(self, **kwargs: Any) -> Dict[str, List[Dict[str, Any]]]:
         r"""Convert the request messages and tools into the OpenAI format.
@@ -185,11 +186,6 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         _check_openai_fields_names(set(cls.model_fields.keys()), set(kwargs.keys()))
 
         converted_messages: list[ChatMessage] = convert_openai_messages(messages)
-
-        if continue_final_message:
-            if len(converted_messages) == 0 or not isinstance(converted_messages[-1], AssistantMessage):
-                raise ValueError("Cannot continue final message if the last message is not an assistant message.")
-            converted_messages[-1].prefix = True
 
         converted_tools = convert_openai_tools(tools) if tools is not None else None
 

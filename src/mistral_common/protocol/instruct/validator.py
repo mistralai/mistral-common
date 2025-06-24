@@ -72,19 +72,20 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
         """
         self._mode = mode
 
-    def validate_messages(self, messages: List[UATS]) -> None:
+    def validate_messages(self, messages: List[UATS], continue_final_message: bool) -> None:
         r"""Validates the list of messages.
 
         Args:
             messages: The list of messages to validate.
+            continue_final_message: Whether to continue the final message.
 
         Examples:
             >>> from mistral_common.protocol.instruct.messages import UserMessage, AssistantMessage
             >>> validator = MistralRequestValidator()
             >>> messages = [AssistantMessage(content="Hi"), UserMessage(content="Hello")]
-            >>> validator.validate_messages(messages)
+            >>> validator.validate_messages(messages, False)
         """
-        self._validate_message_list_structure(messages)
+        self._validate_message_list_structure(messages, continue_final_message=continue_final_message)
         self._validate_message_list_content(messages)
 
     def validate_request(self, request: ChatCompletionRequest) -> ChatCompletionRequest[UATS]:
@@ -108,7 +109,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
                 raise InvalidRequestException("Model name parameter is required for serving mode")
 
         # Validate the messages
-        self.validate_messages(request.messages)
+        self.validate_messages(request.messages, continue_final_message=request.continue_final_message)
 
         # Validate the tools
         self._validate_tools(request.tools or [])
@@ -268,7 +269,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
 
             previous_role = current_role
 
-    def _validate_last_message(self, message: UATS) -> None:
+    def _validate_last_message(self, message: UATS, continue_final_message: bool) -> None:
         # The last message must be a user or tool message in serving mode or an assistant message in finetuning mode
         last_message_role = message.role
         if self._mode == ValidationMode.finetuning:
@@ -276,16 +277,18 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
                 raise InvalidMessageStructureException(
                     f"Expected last role Assistant for finetuning but got {last_message_role}"
                 )
+            if continue_final_message:
+                raise InvalidMessageStructureException("Cannot continue final message in finetuning mode")
         else:
-            bad_assistant = isinstance(message, AssistantMessage) and not message.prefix
-            bad_role = message.role not in {Roles.user, Roles.tool}
+            bad_assistant = isinstance(message, AssistantMessage) and not message.prefix and not continue_final_message
+            bad_role = message.role not in {Roles.user, Roles.tool} or continue_final_message
             if bad_assistant and bad_role:
                 raise InvalidMessageStructureException(
-                    f"Expected last role User or Tool (or Assistant with prefix True) for serving"
-                    f" but got {last_message_role}"
+                    f"Expected last role User or Tool (or Assistant with prefix or continue_final_message set to True) "
+                    f"for serving but got {last_message_role}"
                 )
 
-    def _validate_message_list_structure(self, messages: List[UATS]) -> None:
+    def _validate_message_list_structure(self, messages: List[UATS], continue_final_message: bool) -> None:
         """
         Validates the structure of the list of messages
 
@@ -302,7 +305,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
 
         # Always check the last message if in fine-tuning mode
         if self._mode == ValidationMode.finetuning or len(messages) > 1:
-            self._validate_last_message(messages[-1])
+            self._validate_last_message(messages[-1], continue_final_message=continue_final_message)
 
         self._validate_message_order(messages)
         self._validate_tool_calls_followed_by_tool_messages(messages)
@@ -373,8 +376,8 @@ class MistralRequestValidatorV3(MistralRequestValidator):
 
         self._validate_function_call(tool_call.function)
 
-    def _validate_last_message(self, message: UATS) -> None:
-        super()._validate_last_message(message)
+    def _validate_last_message(self, message: UATS, continue_final_message: bool) -> None:
+        super()._validate_last_message(message, continue_final_message)
 
         if self._mode == ValidationMode.finetuning:
             # in finetuning mode it has to be an assistant message
