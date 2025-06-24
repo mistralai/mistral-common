@@ -1,6 +1,6 @@
 import base64
 from io import BytesIO
-from typing import Tuple
+from typing import Any, Tuple
 
 import numpy as np
 import pytest
@@ -189,7 +189,7 @@ def test_image_encoder_formats(spatial_merge_size: int, special_token_ids: Speci
         assert output.tokens == outputs[0].tokens
 
 
-def test_transform_image_missing_cv2(monkeypatch) -> None:
+def test_transform_image_missing_cv2(monkeypatch: Any) -> None:
     img = Image.new("RGB", (10, 10), "red")
 
     monkeypatch.setattr("mistral_common.tokens.tokenizers.multimodal.is_cv2_installed", lambda: False)
