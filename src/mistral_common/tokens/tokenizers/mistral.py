@@ -305,7 +305,7 @@ class MistralTokenizer(
         validated_request = self._chat_completion_request_validator.validate_request(request)
 
         if max_model_input_len is None and request.truncate_for_context_length:
-            # the max_model_input_len arg should not be optionnal ;
+            # the max_model_input_len arg should not be optional ;
             # but this function is used in many small scripts that have no use
             # for truncation, and don't provide the max model len
             raise TokenizerException(

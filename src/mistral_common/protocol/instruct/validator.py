@@ -209,7 +209,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
         if message.prefix:
             if not is_last_message:
                 raise InvalidAssistantMessageException("Assistant message with prefix True must be last message")
-            # note : we already validate that assistant messsage has content 3 lines up.
+            # note : we already validate that assistant message has content 3 lines up.
 
     def _validate_tool_calls_followed_by_tool_messages(self, messages: List[UATS]) -> None:
         """

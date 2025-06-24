@@ -48,7 +48,7 @@ class TestMistralToknizer:
     def test_decode(self, special_token_policy: Optional[SpecialTokenPolicy], is_tekken: bool) -> None:
         tokenizer = MistralTokenizer.v3(is_tekken=is_tekken)
 
-        prompt = "This is a complicated te$t, ain't it?"
+        prompt = "This is a complicated test, ain't it?"
 
         for bos, eos in [[False, False], [True, True]]:
             encoded = tokenizer.instruct_tokenizer.tokenizer.encode(prompt, bos=bos, eos=eos)

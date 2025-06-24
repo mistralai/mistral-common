@@ -310,7 +310,7 @@ class AssistantMessage(BaseMessage):
         prefix: Whether the message is a prefix.
 
     Examples:
-        >>> messsage = AssistantMessage(content="Hello, how can I help you?")
+        >>> message = AssistantMessage(content="Hello, how can I help you?")
     """
 
     role: Literal[Roles.assistant] = Roles.assistant
