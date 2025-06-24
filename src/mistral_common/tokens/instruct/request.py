@@ -34,6 +34,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         system_prompt: The system prompt to be used for the conversation.
         available_tools: The tools available to the assistant.
         truncate_at_max_tokens: The maximum number of tokens to truncate the conversation at.
+        continue_final_message: Whether to continue the final message.
 
     Examples:
         >>> from mistral_common.protocol.instruct.messages import UserMessage, SystemMessage
@@ -46,6 +47,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
     system_prompt: Optional[str] = None
     available_tools: Optional[List[ToolType]] = None
     truncate_at_max_tokens: Optional[int] = None
+    continue_final_message: bool = True
 
     def to_openai(self, **kwargs: Any) -> Dict[str, List[Dict[str, Any]]]:
         r"""Convert the request messages and tools into the OpenAI format.
@@ -126,6 +128,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         cls,
         messages: List[Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]],
         tools: Optional[List[Dict[str, Any]]] = None,
+        continue_final_message: bool = False,
         **kwargs: Any,
     ) -> "InstructRequest":
         r"""Create an instruct request from the OpenAI format.
@@ -133,6 +136,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         Args:
             messages: The messages in the OpenAI format.
             tools: The tools in the OpenAI format.
+            continue_final_message: Whether to continue the final message.
             **kwargs: Additional keyword arguments to pass to the constructor. These should be the same as the fields
                 of the request class or the OpenAI API equivalent.
 
@@ -156,5 +160,6 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         return cls(
             messages=converted_messages,  # type: ignore[arg-type]
             available_tools=converted_tools,  # type: ignore[arg-type]
+            continue_final_message=continue_final_message,
             **kwargs,
         )

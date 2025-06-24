@@ -57,7 +57,8 @@ def convert_openai_tools(
 def _check_openai_fields_names(valid_fields_names: Set[str], names: Set[str]) -> None:
     r"""Check if the names are valid field names.
 
-    If the names are not valid field names, raise a ValueError.
+    Names are valid if they are inside the `valid_fields_names` set or chat completion OpenAI fields. If the names are
+    not valid field names, raise a ValueError.
 
     The error message will contain the invalid field names sorted by if they are openAI valid field names or not.
 

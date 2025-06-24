@@ -320,7 +320,9 @@ class AssistantMessage(BaseMessage):
 
     def to_openai(self) -> Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]:
         r"""Converts the message to the OpenAI format."""
-        out_dict: dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]] = {"role": self.role}
+        out_dict: dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]] = {
+            "role": self.role,
+        }
         if self.content is not None:
             out_dict["content"] = self.content
         if self.tool_calls is not None:
