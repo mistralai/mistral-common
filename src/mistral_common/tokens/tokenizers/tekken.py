@@ -5,7 +5,7 @@ import warnings
 from functools import cached_property
 from itertools import groupby
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Type, TypedDict, Union
+from typing import Dict, List, Optional, Type, TypedDict, Union
 
 import tiktoken
 
@@ -328,16 +328,6 @@ class Tekkenizer(Tokenizer):
         r"""The unknown token id."""
         return self.get_control_token("<unk>")
 
-    @cached_property
-    def all_special_ids(self) -> Set[int]:
-        r"""All special token ids."""
-        return {t["rank"] for t in self._all_special_tokens}
-
-    @cached_property
-    def all_special_tokens(self) -> Set[str]:
-        r"""All special tokens."""
-        return {t["token_str"] for t in self._all_special_tokens}
-
     def vocab(self) -> List[str]:
         r"""All tokens in the vocabulary as strings.
 
@@ -413,10 +403,6 @@ class Tekkenizer(Tokenizer):
         else:
             raise ValueError(f"Unknown control token {s}")
 
-    def is_control_token(self, token_id: int) -> bool:
-        r"""Check if a token id is a control token."""
-        return token_id < self.num_special_tokens
-
     def decode(self, tokens: List[int], special_token_policy: Optional[SpecialTokenPolicy] = None) -> str:
         r"""Decode a list of token ids into a string.
 
@@ -471,12 +457,6 @@ class Tekkenizer(Tokenizer):
     def id_to_piece(self, token_id: int) -> str:
         r"""Convert a token id to its string representation."""
         return self.decode([token_id], special_token_policy=SpecialTokenPolicy.KEEP)
-
-    def piece_to_id(self, piece: str) -> int:
-        r"""Convert a token string to its id."""
-        pieces = self._model.encode(piece, allowed_special="all", disallowed_special=set())
-        assert len(pieces) == 1, f"Expected to decode 1 token, got {len(pieces)}"
-        return pieces[0]
 
     def id_to_byte_piece(self, token_id: int, special_token_policy: Optional[SpecialTokenPolicy] = None) -> bytes:
         r"""Convert a token id to its byte representation.

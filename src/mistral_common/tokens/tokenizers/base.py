@@ -2,7 +2,7 @@ import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Generic, List, Optional, Protocol, Set, Tuple, TypeVar, Union
+from typing import Generic, List, Optional, Protocol, Tuple, TypeVar, Union
 
 import numpy as np
 from pydantic import ConfigDict
@@ -173,10 +173,6 @@ class Tokenizer(ABC):
     def id_to_piece(self, token_id: int) -> str:
         r"""Convert a token id to the token str."""
 
-    @abstractmethod
-    def piece_to_id(self, token: str) -> int:
-        r"""Convert a token str to the token id."""
-
     @property
     @abstractmethod
     def bos_id(self) -> int:
@@ -221,20 +217,6 @@ class Tokenizer(ABC):
     @abstractmethod
     def get_control_token(self, s: str) -> int:
         r"""Get the id of a control token."""
-
-    @abstractmethod
-    def is_control_token(self, token_id: int) -> bool:
-        r"""Check if the given token id is a control token."""
-
-    @property
-    @abstractmethod
-    def all_special_ids(self) -> Set[int]:
-        r"""Get all special token ids."""
-
-    @property
-    @abstractmethod
-    def all_special_tokens(self) -> Set[str]:
-        r"""Get all special tokens."""
 
     @property
     @abstractmethod
