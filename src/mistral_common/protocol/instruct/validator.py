@@ -287,10 +287,10 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
                     f"Expected last role User or Tool (or Assistant with prefix or continue_final_message set to True) "
                     f"for serving but got {last_message_role}"
                 )
-            elif continue_final_message and last_message_role != Roles.assistant:
+            elif continue_final_message and (last_message_role != Roles.assistant or message.prefix):
                 raise InvalidMessageStructureException(
-                    f"Expected last role Assistant for serving with continue_final_message set to True "
-                    f"but got {last_message_role}"
+                    f"Expected last role Assistant with prefix False for serving with continue_final_message set to "
+                    f"True but got {last_message_role}"
                 )
 
     def _validate_message_list_structure(self, messages: List[UATS], continue_final_message: bool) -> None:

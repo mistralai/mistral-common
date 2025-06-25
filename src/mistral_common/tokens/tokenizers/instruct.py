@@ -4,7 +4,7 @@ from typing import Any, Dict, Generic, List, Optional, Tuple, Union
 
 import numpy as np
 
-from mistral_common.exceptions import TokenizerException
+from mistral_common.exceptions import InvalidMessageStructureException, TokenizerException
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     AssistantMessageType,
@@ -118,6 +118,14 @@ class InstructTokenizerBase(
         # find last user message
         first_user_idx, last_user_idx = self.find_first_last_user(request)
         for msg_idx, msg in enumerate(request.messages):
+            if (
+                request.continue_final_message
+                and (msg_idx == len(request.messages) - 1)
+                and not isinstance(msg, AssistantMessage)
+            ):
+                raise InvalidMessageStructureException(
+                    "Cannot continue final message if it is not an assistant message"
+                )
             if isinstance(msg, UserMessage):
                 new_tokens, new_images = self.encode_user_message(
                     msg,
