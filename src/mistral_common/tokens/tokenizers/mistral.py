@@ -1,3 +1,4 @@
+import json
 import warnings
 from pathlib import Path
 from typing import Callable, Dict, Generic, List, Optional, Union
@@ -11,6 +12,7 @@ from mistral_common.protocol.instruct.messages import (
     SystemMessageType,
     ToolMessageType,
     UserMessageType,
+    ChatMessage,
 )
 from mistral_common.protocol.instruct.normalize import InstructRequestNormalizer, normalizer_for_tokenizer_version
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
@@ -329,6 +331,48 @@ class MistralTokenizer(
             The encoded fill in the middle request.
         """
         return self.instruct_tokenizer.encode_fim(request)
+
+    def from_jsonl(
+        self, path: str, max_model_input_len: Optional[int] = None
+    ) -> Union[TokenizedType, List[TokenizedType]]:
+        """Tokenize chat completion or FIM requests from a JSONL file.
+
+        Each line should contain a JSON object describing either a
+        :class:`~mistral_common.protocol.instruct.request.ChatCompletionRequest`
+        or a :class:`~mistral_common.tokens.instruct.request.FIMRequest`.
+
+        Args:
+            path: Path to the JSONL file.
+            max_model_input_len: Optional truncation length for chat completion
+                requests.
+
+        Returns:
+            A single :class:`~mistral_common.tokens.tokenizers.base.Tokenized`
+            instance if the file contains one line, otherwise a list of
+            tokenized requests in the same order as the file.
+        """
+
+        results: List[TokenizedType] = []
+        with open(path, "r") as fp:
+            for line in fp:
+                line = line.strip()
+                if not line:
+                    continue
+                data = json.loads(line)
+                if "messages" in data:
+                    request = ChatCompletionRequest[ChatMessage].model_validate(data)
+                    results.append(
+                        self.encode_chat_completion(request, max_model_input_len=max_model_input_len)
+                    )
+                elif "prompt" in data:
+                    request = FIMRequest.model_validate(data)
+                    results.append(self.encode_fim(request))
+                else:
+                    raise ValueError("Invalid jsonl line: missing `messages` or `prompt`")
+
+        if len(results) == 1:
+            return results[0]
+        return results
 
     def decode(self, tokens: List[int], special_token_policy: Optional[SpecialTokenPolicy] = None) -> str:
         r"""Decodes a list of tokens into a string.
