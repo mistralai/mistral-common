@@ -92,7 +92,7 @@ class TestChatValidation:
             match=(
                 r"Expected last role User or Tool \(or Assistant with prefix or continue_final_message set to "
                 r"True\) for serving but got assistant"
-            )
+            ),
         ):
             validator.validate_messages(
                 messages=[
@@ -151,7 +151,7 @@ class TestChatValidation:
             match=(
                 r"Expected last role User or Tool \(or Assistant with prefix or continue_final_message set to True\)"
                 r" for serving but got assistant"
-            )
+            ),
         ):
             validator.validate_messages(
                 messages=[
@@ -165,7 +165,7 @@ class TestChatValidation:
             match=(
                 r"Expected last role Assistant with prefix False for serving with continue_final_message set to True "
                 r"but got assistant"
-            )
+            ),
         ):
             validator.validate_messages(
                 messages=[
