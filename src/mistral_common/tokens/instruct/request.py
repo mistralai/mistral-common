@@ -61,9 +61,9 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         Examples:
             >>> from mistral_common.protocol.instruct.messages import UserMessage
             >>> from mistral_common.protocol.instruct.tool_calls import Tool, Function
-            >>> request = InstructRequest(messages=[UserMessage(content="Hello, how are you?")], truncate_at_max_tokens=20)
+            >>> request = InstructRequest(messages=[UserMessage(content="Hello, how are you?")])
             >>> request.to_openai(temperature=0.15, stream=True)
-            {'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'max_tokens': 20, 'temperature': 0.15, 'stream': True}
+            {'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'temperature': 0.15, 'stream': True}
             >>> request = InstructRequest(
             ...     messages=[UserMessage(content="Hello, how are you?")],
             ...     available_tools=[
