@@ -19,7 +19,7 @@ The attributes of the [MultimodalConfig][mistral_common.tokens.tokenizers.multim
 
 - `image_patch_size`: the square size of a patch in pixels to form one token. E.g if the image is 224x224 and the patch size is 14, then the image will be divided into 16x16 patches.
 - `max_image_size`: the maximum size of the image in pixels. If the image is larger, it will be resized to this size.
-- `spatial_merge_size`: the number of patches to merge into one token. This is useful to reduce the number of redudant tokens in the image. E.g if the image is 224x224 and the patch size is 14, then the image will be divided into 16x16 patches. If the spatial merge size is 2, then the image will be divided into 8x8 patches.
+- `spatial_merge_size`: the number of patches to merge into one token. This is useful to reduce the number of redundant tokens in the image. E.g if the image is 224x224 and the patch size is 14, then the image will be divided into 16x16 patches. If the spatial merge size is 2, then the image will be divided into 8x8 patches.
 
 ```python
 from mistral_common.protocol.instruct.messages import ImageURLChunk

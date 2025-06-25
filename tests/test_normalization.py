@@ -237,7 +237,7 @@ class TestChatCompletionRequestNormalization:
 
     def test_normalize_tools(self, normalizer: InstructRequestNormalizer) -> None:
         """
-        Test doesnt really "normalize" anything but it checks that the tools are added to the
+        Test doesn't really "normalize" anything but it checks that the tools are added to the
         InstructRequest during from_chat_completion_request
         """
         tools = [

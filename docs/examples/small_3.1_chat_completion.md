@@ -18,7 +18,7 @@ pip install --upgrade mistral-common
 
 ## Running the model
 
-We recommand that you use Mistral-Small-3.1-24B-Instruct-2503 in a server/client setting.
+We recommend that you use Mistral-Small-3.1-24B-Instruct-2503 in a server/client setting.
 
 ### Launch the server
 

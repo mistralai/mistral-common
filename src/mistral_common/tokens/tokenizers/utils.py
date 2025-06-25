@@ -125,7 +125,7 @@ def download_tokenizer_from_hf_hub(
 
     if len(valid_tokenizer_files) == 0:
         raise ValueError(f"No tokenizer file found for model ID: {repo_id}")
-    # If there are multiple tokenizer files, we use tekken.json if it exists, otherwise the versionned one.
+    # If there are multiple tokenizer files, we use tekken.json if it exists, otherwise the versioned one.
     if len(valid_tokenizer_files) > 1:
         if "tekken.json" in valid_tokenizer_files:
             tokenizer_file = "tekken.json"

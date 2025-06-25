@@ -30,7 +30,7 @@ To perform actual task every requests should follow the following structure:
 
 Using the [MistralTokenizer.encode_chat_completion][mistral_common.tokens.tokenizers.mistral.MistralTokenizer.encode_chat_completion] method will perform all these steps for you.
 
-Following this design ensures minimizing unexpected behavor from the user.
+Following this design ensures minimizing unexpected behavior from the user.
 
 ### Conversation
 
