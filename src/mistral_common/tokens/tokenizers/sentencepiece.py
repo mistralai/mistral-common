@@ -115,12 +115,6 @@ class SentencePieceTokenizer(Tokenizer):
     def _control_tokens(self) -> Set[int]:
         return {tok for tok in range(self.n_words) if self._model.IsControl(tok)}
 
-    @cached_property
-    def all_special_tokens(self) -> Set[str]:
-        r"""All special tokens."""
-        return {self.id_to_piece(tok) for tok in self._control_tokens}
-
-
     def encode(self, s: str, bos: bool, eos: bool) -> List[int]:
         r"""Encode the given string into a list of token ids.
 
