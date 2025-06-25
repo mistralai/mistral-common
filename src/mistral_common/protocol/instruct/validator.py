@@ -59,7 +59,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
         >>> from mistral_common.protocol.instruct.messages import UserMessage, AssistantMessage
         >>> validator = MistralRequestValidator()
         >>> messages = [UserMessage(content="Hello how are you ?")]
-        >>> validator.validate_messages(messages)
+        >>> validator.validate_messages(messages, False)
     """
 
     _allow_tool_call_and_content: bool = False
