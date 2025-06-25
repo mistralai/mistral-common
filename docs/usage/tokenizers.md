@@ -50,4 +50,20 @@ tokenizer.encode("Plz tekkenize me", bos=True, eos=True)
 # [1, 4444, 1122, 16058, 3569, 2033, 1639, 2]
 ```
 
+### Tokenizing from JSONL files
+
+The `MistralTokenizer` can directly read chat or FIM requests from a JSONL file
+and return the corresponding tokenized representation.
+
+```python
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+
+tokenizer = MistralTokenizer.from_model("open-mixtral-8x22b")
+tokenized = tokenizer.from_jsonl("my_file.jsonl")
+tokens, text = tokenized.tokens, tokenized.text
+```
+
+If the file contains multiple lines, a list of `Tokenized` objects is returned
+in the same order as the file.
+
 See the [Examples section](../examples/index.md) for examples on how to use the tokenizers with our models.
