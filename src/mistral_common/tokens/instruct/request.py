@@ -47,7 +47,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
     system_prompt: Optional[str] = None
     available_tools: Optional[List[ToolType]] = None
     truncate_at_max_tokens: Optional[int] = None
-    continue_final_message: bool = True
+    continue_final_message: bool = False
 
     def to_openai(self, **kwargs: Any) -> Dict[str, List[Dict[str, Any]]]:
         r"""Convert the request messages and tools into the OpenAI format.

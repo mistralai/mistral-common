@@ -281,11 +281,16 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
                 raise InvalidMessageStructureException("Cannot continue final message in finetuning mode")
         else:
             bad_assistant = isinstance(message, AssistantMessage) and not message.prefix and not continue_final_message
-            bad_role = message.role not in {Roles.user, Roles.tool} or continue_final_message
+            bad_role = message.role not in {Roles.user, Roles.tool}
             if bad_assistant and bad_role:
                 raise InvalidMessageStructureException(
                     f"Expected last role User or Tool (or Assistant with prefix or continue_final_message set to True) "
                     f"for serving but got {last_message_role}"
+                )
+            elif continue_final_message and last_message_role != Roles.assistant:
+                raise InvalidMessageStructureException(
+                    f"Expected last role Assistant for serving with continue_final_message set to True "
+                    f"but got {last_message_role}"
                 )
 
     def _validate_message_list_structure(self, messages: List[UATS], continue_final_message: bool) -> None:
