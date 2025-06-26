@@ -1,6 +1,6 @@
 import pytest
 
-from mistral_common.exceptions import InvalidMessageStructureException
+from mistral_common.exceptions import InvalidAssistantMessageException, InvalidMessageStructureException
 from mistral_common.protocol.instruct.messages import AssistantMessage, UserMessage
 from mistral_common.tokens.instruct.request import InstructRequest
 from mistral_common.tokens.tokenizers.base import InstructTokenizer
@@ -158,4 +158,17 @@ def test_continue_final_message(tokenizer: InstructTokenizer) -> None:
                 system_prompt="SYSTEM",
                 continue_final_message=True,
             )
+        )
+
+    with pytest.raises(
+        InvalidAssistantMessageException,
+        match="`continue_message` is only supported for assistant messages that have `prefix=False`.",
+    ):
+        tokenizer.encode_assistant_message(  # type: ignore[attr-defined]
+            AssistantMessage(
+                content='"blabla"',
+                prefix=True,
+            ),
+            is_before_last_user_message=False,
+            continue_message=True,
         )

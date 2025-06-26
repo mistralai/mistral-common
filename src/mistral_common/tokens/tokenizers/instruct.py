@@ -4,7 +4,11 @@ from typing import Any, Dict, Generic, List, Optional, Tuple, Union
 
 import numpy as np
 
-from mistral_common.exceptions import InvalidMessageStructureException, TokenizerException
+from mistral_common.exceptions import (
+    InvalidAssistantMessageException,
+    InvalidMessageStructureException,
+    TokenizerException,
+)
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     AssistantMessageType,
@@ -287,6 +291,11 @@ class InstructTokenizerV1(
         assert isinstance(message, AssistantMessage), message
         if message.tool_calls is not None and len(message.tool_calls) > 0:
             raise TokenizerException("Tools not implemented for tokenizer V1")
+        if continue_message and message.prefix:
+            raise InvalidAssistantMessageException(
+                "`continue_message` is only supported for assistant messages that have `prefix=False`."
+            )
+
         elif message.content:
             curr_tokens = self.tokenizer.encode(message.content, bos=False, eos=False)
         else:
@@ -456,6 +465,10 @@ class InstructTokenizerV2(
         """
         if message.tool_calls and message.content:
             raise ValueError(f"Cannot have tool calls and content defined in the same assistant message {message}")
+        if continue_message and message.prefix:
+            raise InvalidAssistantMessageException(
+                "`continue_message` is only supported for assistant messages that have `prefix=False`."
+            )
 
         if message.tool_calls:
             if is_before_last_user_message:
@@ -789,6 +802,11 @@ class InstructTokenizerV7(InstructTokenizerV3):
         """
         if not message.content and not message.tool_calls:
             raise TokenizerException(f"Invalid assistant message: {message}")
+        if continue_message and message.prefix:
+            raise InvalidAssistantMessageException(
+                "`continue_message` is only supported for assistant messages that have `prefix=False`."
+            )
+
         curr_tokens: list = []
         if message.content:
             if isinstance(message.content, str):

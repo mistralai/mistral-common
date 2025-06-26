@@ -1,5 +1,6 @@
 import pytest
 
+from mistral_common.exceptions import InvalidAssistantMessageException
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
 )
@@ -78,6 +79,19 @@ def test_tokenize_assistant_message_continue_message(tekkenizer: InstructTokeniz
         134,
     ]
     assert tekkenizer.tokenizer.to_string(tokens) == ('"blabla"')
+
+    with pytest.raises(
+        InvalidAssistantMessageException,
+        match="`continue_message` is only supported for assistant messages that have `prefix=False`.",
+    ):
+        tekkenizer.encode_assistant_message(
+            AssistantMessage(
+                content='"blabla"',
+                prefix=True,
+            ),
+            is_before_last_user_message=False,
+            continue_message=True,
+        )
 
 
 def test_tokenize_assistant_messages(tekkenizer: InstructTokenizerV11) -> None:

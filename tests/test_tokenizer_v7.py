@@ -4,7 +4,11 @@ from typing import List
 import pytest
 from PIL import Image
 
-from mistral_common.exceptions import InvalidMessageStructureException, TokenizerException
+from mistral_common.exceptions import (
+    InvalidAssistantMessageException,
+    InvalidMessageStructureException,
+    TokenizerException,
+)
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
@@ -141,6 +145,19 @@ def test_tokenize_assistant_message_continue_final_message(spm_tokenizer: Instru
                 ],
                 continue_final_message=True,
             )
+        )
+
+    with pytest.raises(
+        InvalidAssistantMessageException,
+        match="`continue_message` is only supported for assistant messages that have `prefix=False`.",
+    ):
+        spm_tokenizer.encode_assistant_message(
+            AssistantMessage(
+                content='"blabla"',
+                prefix=True,
+            ),
+            is_before_last_user_message=False,
+            continue_message=True,
         )
 
 
