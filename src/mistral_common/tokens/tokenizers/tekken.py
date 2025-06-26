@@ -231,7 +231,7 @@ class Tekkenizer(Tokenizer):
             # Tokenizer > v7 should find special tokens in the tokenizer file
             if version > TokenizerVersion("v7"):
                 raise ValueError(
-                    f"Special tokens not found in {path} and default to {Tekkenizer.DEPRECATED_SPECIAL_TOKENS}. "
+                    f"Special tokens not found in {path}. "
                     "Please update your tokenizer file and include all special tokens you need."
                 )
             else:
