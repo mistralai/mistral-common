@@ -4,7 +4,11 @@ from typing import List
 import pytest
 from PIL import Image
 
-from mistral_common.exceptions import TokenizerException
+from mistral_common.exceptions import (
+    InvalidAssistantMessageException,
+    InvalidMessageStructureException,
+    TokenizerException,
+)
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
@@ -91,6 +95,70 @@ def test_tokenize_assistant_message(spm_tokenizer: InstructTokenizerV7) -> None:
         tokenized.text
         == "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁a[/INST]▁b</s>[TOOL_RESULTS]▁b[TOOL_CONTENT]▁f[/TOOL_RESULTS]"  # noqa
     )
+
+
+def test_tokenize_assistant_message_continue_final_message(spm_tokenizer: InstructTokenizerV7) -> None:
+    tokenized = spm_tokenizer.encode_instruct(
+        InstructRequest(
+            messages=[
+                UserMessage(
+                    content=[
+                        TextChunk(
+                            text="a",
+                        ),
+                        ImageChunk(image=Image.new("RGB", (4, 4), "red")),
+                    ]
+                ),
+                AssistantMessage(content="b"),
+            ],
+            continue_final_message=True,
+        )
+    )
+    _im = 10
+    _im_break = 14
+    _im_end = 15
+    img_tokens = [_im, _im, _im_break, _im, _im, _im_end]
+    assert tokenized.tokens == [
+        1,  # bos
+        3,  # begin_inst
+        *img_tokens,
+        1032,  # a
+        4,  # end_inst
+        1055,  # b
+    ]
+    assert tokenized.text == "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁a[/INST]▁b"
+
+    with pytest.raises(
+        InvalidMessageStructureException, match="Cannot continue final message if it is not an assistant message"
+    ):
+        spm_tokenizer.encode_instruct(
+            InstructRequest(
+                messages=[
+                    UserMessage(
+                        content=[
+                            TextChunk(
+                                text="a",
+                            ),
+                            ImageChunk(image=Image.new("RGB", (4, 4), "red")),
+                        ]
+                    ),
+                ],
+                continue_final_message=True,
+            )
+        )
+
+    with pytest.raises(
+        InvalidAssistantMessageException,
+        match="`continue_message` is only supported for assistant messages that have `prefix=False`.",
+    ):
+        spm_tokenizer.encode_assistant_message(
+            AssistantMessage(
+                content='"blabla"',
+                prefix=True,
+            ),
+            is_before_last_user_message=False,
+            continue_message=True,
+        )
 
 
 @pytest.mark.parametrize(

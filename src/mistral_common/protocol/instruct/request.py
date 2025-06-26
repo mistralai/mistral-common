@@ -56,6 +56,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         tools: The tools to use for the chat completion.
         tool_choice: The tool choice to use for the chat completion.
         truncate_for_context_length: Whether to truncate the messages for the context length.
+        continue_final_message: Whether to continue the final message.
 
     Examples:
         >>> from mistral_common.protocol.instruct.messages import UserMessage, AssistantMessage
@@ -78,6 +79,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     tools: Optional[List[Tool]] = None
     tool_choice: ToolChoice = ToolChoice.auto
     truncate_for_context_length: bool = False
+    continue_final_message: bool = False
 
     def to_openai(self, **kwargs: Any) -> Dict[str, List[Dict[str, Any]]]:
         r"""Convert the request messages and tools into the OpenAI format.
@@ -93,7 +95,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             >>> from mistral_common.protocol.instruct.tool_calls import Tool, Function
             >>> request = ChatCompletionRequest(messages=[UserMessage(content="Hello, how are you?")], temperature=0.15)
             >>> request.to_openai(stream=True)
-            {'temperature': 0.15, 'top_p': 1.0, 'response_format': {'type': 'text'}, 'tool_choice': 'auto', 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'stream': True}
+            {'temperature': 0.15, 'top_p': 1.0, 'response_format': {'type': 'text'}, 'tool_choice': 'auto', 'continue_final_message': False, 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'stream': True}
             >>> request = ChatCompletionRequest(messages=[UserMessage(content="Hello, how are you?")], tools=[
             ...     Tool(function=Function(
             ...         name="get_current_weather",
@@ -112,7 +114,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             ...     ),
             ... )])
             >>> request.to_openai()
-            {'temperature': 0.7, 'top_p': 1.0, 'response_format': {'type': 'text'}, 'tool_choice': 'auto', 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'tools': [{'type': 'function', 'function': {'name': 'get_current_weather', 'description': 'Get the current weather in a given location', 'parameters': {'type': 'object', 'properties': {'location': {'type': 'string', 'description': 'The city and state, e.g. San Francisco, CA'}, 'unit': {'type': 'string', 'enum': ['celsius', 'fahrenheit']}}, 'required': ['location']}}}]}
+            {'temperature': 0.7, 'top_p': 1.0, 'response_format': {'type': 'text'}, 'tool_choice': 'auto', 'continue_final_message': False, 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'tools': [{'type': 'function', 'function': {'name': 'get_current_weather', 'description': 'Get the current weather in a given location', 'parameters': {'type': 'object', 'properties': {'location': {'type': 'string', 'description': 'The city and state, e.g. San Francisco, CA'}, 'unit': {'type': 'string', 'enum': ['celsius', 'fahrenheit']}}, 'required': ['location']}}}]}
         """  # noqa: E501
 
         # Handle messages and tools separately.
@@ -157,6 +159,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         cls,
         messages: List[Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]],
         tools: Optional[List[Dict[str, Any]]] = None,
+        continue_final_message: bool = False,
         **kwargs: Any,
     ) -> "ChatCompletionRequest":
         r"""Create a chat completion request from the OpenAI format.
@@ -164,6 +167,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         Args:
             messages: The messages in the OpenAI format.
             tools: The tools in the OpenAI format.
+            continue_final_message: Whether to continue the final message.
             **kwargs: Additional keyword arguments to pass to the constructor. These should be the same as the fields
                 of the request class or the OpenAI API equivalent.
 
@@ -186,5 +190,6 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             messages=converted_messages,  # type: ignore[arg-type]
             tools=converted_tools,
             random_seed=random_seed,
+            continue_final_message=continue_final_message,
             **kwargs,
         )

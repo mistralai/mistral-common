@@ -51,3 +51,34 @@ tokenizer.encode("Plz tekkenize me", bos=True, eos=True)
 ```
 
 See the [Examples section](../examples/index.md) for examples on how to use the tokenizers with our models.
+
+## Special tokens
+
+Special tokens are tokens that have a special meaning for the model. They are used to mark the beginning or end of a sequence, an image, tools, etc. For example, in the [Mistral Small 3.1 Instruct](https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503) tokenizer, some special tokens include:
+
+- `<s>`: Beginning of a sequence
+- `</s>`: End of a sequence
+- `[INST]`: Beginning of an instruction
+- `[/INST]`: End of an instruction
+- `[TOOL_CALLS]`: Beginning of a tool call
+- `[IMG]`: Content of an image
+- `[IMG_BREAK]`: End of a row in an image
+- `[IMG_END]`: End of an image
+- ...
+
+These tokens are defined in the tokenizer configuration file (recommended) or at instantiation for the [Tekkenizer](mistral_common.tokens.tokenizers.tekken.Tekkenizer) (deprecated).
+
+In `mistral-common`, special tokens are never encoded directly. This means that:
+
+```python
+tokenizer.encode("<s>")
+```
+
+will not return the ID of the `<s>` token. Instead, it will return a list of IDs corresponding to the tokenization of the string `"<s>"`. The special token IDs are added directly to the sequence of IDs when encoding the [requests](requests.md).
+
+To add new tokens to the tokenizer and use them correctly, you need to:
+
+1. Add the tokens to the tokenizer configuration file.
+2. Include the special token IDs in the input IDs when encoding requests.
+
+We are open to suggestions for improvement. Please open an [issue](https://github.com/mistralai/mistral-common/issues) if you have any feedback.

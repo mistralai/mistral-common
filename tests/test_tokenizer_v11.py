@@ -1,5 +1,6 @@
 import pytest
 
+from mistral_common.exceptions import InvalidAssistantMessageException
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
 )
@@ -36,6 +37,7 @@ def test_tokenize_assistant_message(tekkenizer: InstructTokenizerV11) -> None:
             tool_calls=[ToolCall(function=FunctionCall(name="a_a_a", arguments="blabla"))],
         ),
         is_before_last_user_message=False,
+        continue_message=False,
     )
     assert tokens == [
         tekkenizer.TOOL_CALLS,
@@ -58,6 +60,40 @@ def test_tokenize_assistant_message(tekkenizer: InstructTokenizerV11) -> None:
     assert tekkenizer.tokenizer.to_string(tokens) == ('[TOOL_CALLS]a_a_a[ARGS]"blabla"</s>')
 
 
+def test_tokenize_assistant_message_continue_message(tekkenizer: InstructTokenizerV11) -> None:
+    tokens = tekkenizer.encode_assistant_message(
+        AssistantMessage(
+            content='"blabla"',
+        ),
+        is_before_last_user_message=False,
+        continue_message=True,
+    )
+    assert tokens == [
+        134,
+        198,
+        208,
+        197,
+        198,
+        208,
+        197,
+        134,
+    ]
+    assert tekkenizer.tokenizer.to_string(tokens) == ('"blabla"')
+
+    with pytest.raises(
+        InvalidAssistantMessageException,
+        match="`continue_message` is only supported for assistant messages that have `prefix=False`.",
+    ):
+        tekkenizer.encode_assistant_message(
+            AssistantMessage(
+                content='"blabla"',
+                prefix=True,
+            ),
+            is_before_last_user_message=False,
+            continue_message=True,
+        )
+
+
 def test_tokenize_assistant_messages(tekkenizer: InstructTokenizerV11) -> None:
     tokens = tekkenizer.encode_assistant_message(
         AssistantMessage(
@@ -67,6 +103,7 @@ def test_tokenize_assistant_messages(tekkenizer: InstructTokenizerV11) -> None:
             ],
         ),
         is_before_last_user_message=False,
+        continue_message=False,
     )
     assert tokens == [
         tekkenizer.TOOL_CALLS,
@@ -103,6 +140,7 @@ def test_tokenize_assistant_message_train(tekkenizer: InstructTokenizerV11) -> N
             tool_calls=[ToolCall(function=FunctionCall(name="a_a_a", arguments="blabla"), id="ABC")],
         ),
         is_before_last_user_message=True,
+        continue_message=False,
     )
     assert tokens == [
         tekkenizer.TOOL_CALLS,

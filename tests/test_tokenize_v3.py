@@ -4,6 +4,7 @@ from tempfile import NamedTemporaryFile
 
 import pytest
 
+from mistral_common.exceptions import InvalidAssistantMessageException, InvalidMessageStructureException
 from mistral_common.protocol.instruct.messages import AssistantMessage, ToolMessage, UserMessage
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.tokens.instruct.request import InstructRequest
@@ -13,7 +14,7 @@ from mistral_common.tokens.tokenizers.sentencepiece import (
     SentencePieceTokenizer,
     is_sentencepiece,
 )
-from mistral_common.tokens.tokenizers.tekken import SpecialTokenPolicy
+from mistral_common.tokens.tokenizers.tekken import SpecialTokenPolicy, Tekkenizer
 
 TEKKEN_SPECIAL_WHITESPACE = ""
 TEKKEN_WHITESPACE = " "
@@ -228,6 +229,76 @@ def test_system_tools_multiturn(
     assert tokens[end_tool + 1 :].index(3) == 0  # begin_inst follows end_tool
     assert tokenizer.tokenizer.decode(tokens[:begin_tool]) == decoded_before_tool
     assert tokenizer.tokenizer.decode(tokens[end_tool + 1 :]) == decoded_after_tool
+
+
+@pytest.mark.parametrize(
+    "tokenizer, special_ws, new_line",
+    [
+        (
+            tokenizer(),
+            SPM_SPECIAL_WHITESPACE,
+            "<0x0A><0x0A>",
+        ),
+        (
+            tekken_tokenizer(),
+            TEKKEN_SPECIAL_WHITESPACE,
+            "\n\n",
+        ),
+    ],
+)
+def test_continue_final_message(
+    tokenizer: InstructTokenizer,
+    special_ws: str,
+    new_line: str,
+) -> None:
+    tokenized = tokenizer.encode_instruct(
+        InstructRequest(
+            messages=[
+                UserMessage(content="a"),
+                AssistantMessage(content="b"),
+                UserMessage(content="c"),
+                AssistantMessage(content="d"),
+            ],
+            system_prompt="SYSTEM",
+            continue_final_message=True,
+        )
+    )
+    tokens, text = tokenized.tokens, tokenized.text
+    assert text == (
+        f"<s>[INST]{special_ws}a[/INST]{special_ws}b</s>[INST]{special_ws}SYSTEM{new_line}c[/INST]{special_ws}d"
+    )
+    if not isinstance(tokenizer.tokenizer, Tekkenizer):
+        assert tokens == [1, 3, 1032, 4, 1055, 2, 3, 17889, 23294, 781, 781, 29485, 4, 1049]
+    else:
+        assert tokens == [1, 3, 1097, 4, 1098, 2, 3, 101289, 58343, 1267, 1099, 4, 1100]
+
+    with pytest.raises(
+        InvalidMessageStructureException, match="Cannot continue final message if it is not an assistant message"
+    ):
+        tokenized = tokenizer.encode_instruct(
+            InstructRequest(
+                messages=[
+                    UserMessage(content="a"),
+                    AssistantMessage(content="b"),
+                    UserMessage(content="c"),
+                ],
+                system_prompt="SYSTEM",
+                continue_final_message=True,
+            )
+        )
+
+    with pytest.raises(
+        InvalidAssistantMessageException,
+        match="`continue_message` is only supported for assistant messages that have `prefix=False`.",
+    ):
+        tokenizer.encode_assistant_message(  # type: ignore[attr-defined]
+            AssistantMessage(
+                content='"blabla"',
+                prefix=True,
+            ),
+            is_before_last_user_message=False,
+            continue_message=True,
+        )
 
 
 @pytest.mark.parametrize(

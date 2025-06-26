@@ -36,6 +36,7 @@ class TestChatValidation:
                 SystemMessage(content="foo"),
                 UserMessage(content="foo"),  # so we don't get an error for ending with a system message
             ],
+            continue_final_message=False,
         )
 
     def test_system_user_messages_OK(self, validator: MistralRequestValidator) -> None:
@@ -43,7 +44,8 @@ class TestChatValidation:
             messages=[
                 SystemMessage(content="foo"),
                 UserMessage(content="foo"),
-            ]
+            ],
+            continue_final_message=False,
         )
 
     def test_user_system_messages_OK(self, validator: MistralRequestValidator) -> None:
@@ -52,7 +54,8 @@ class TestChatValidation:
                 UserMessage(content="foo"),
                 SystemMessage(content="foo"),
                 UserMessage(content="foo"),  # so we don't get an error for ending with a system message
-            ]
+            ],
+            continue_final_message=False,
         )
 
     def test_user_user_messages_OK(self, validator: MistralRequestValidator) -> None:
@@ -60,12 +63,16 @@ class TestChatValidation:
             messages=[
                 UserMessage(content="foo"),
                 UserMessage(content="foo"),  # so we don't get an error for ending with a system message
-            ]
+            ],
+            continue_final_message=False,
         )
 
     def test_empty_messages(self, validator: MistralRequestValidator) -> None:
         with pytest.raises(InvalidMessageStructureException, match=r"Conversation must have at least one message"):
-            validator.validate_messages(messages=[])
+            validator.validate_messages(
+                messages=[],
+                continue_final_message=False,
+            )
 
     def test_starts_with_system_or_user(self, validator: MistralRequestValidator) -> None:
         """
@@ -75,19 +82,24 @@ class TestChatValidation:
             messages=[
                 AssistantMessage(content="foo"),
                 UserMessage(content="foo"),  # so we don't get an error for ending with a system message
-            ]
+            ],
+            continue_final_message=False,
         )
 
     def test_ends_with_assistant(self, validator: MistralRequestValidator) -> None:
         with pytest.raises(
             InvalidMessageStructureException,
-            match=r"Expected last role User or Tool \(or Assistant with prefix True\) for serving but got assistant",
+            match=(
+                r"Expected last role User or Tool \(or Assistant with prefix or continue_final_message set to "
+                r"True\) for serving but got assistant"
+            ),
         ):
             validator.validate_messages(
                 messages=[
                     UserMessage(content="foo"),
                     AssistantMessage(content="foo"),
                 ],
+                continue_final_message=False,
             )
 
     def test_assistant_prefix(self, validator: MistralRequestValidator) -> None:
@@ -96,6 +108,7 @@ class TestChatValidation:
                 UserMessage(content="foo"),
                 AssistantMessage(content="foo", prefix=True),
             ],
+            continue_final_message=False,
         )
         with pytest.raises(
             InvalidAssistantMessageException,
@@ -107,6 +120,59 @@ class TestChatValidation:
                     AssistantMessage(content="foo", prefix=True),
                     UserMessage(content="foo"),
                 ],
+                continue_final_message=False,
+            )
+
+    def test_continue_final_message(self, validator: MistralRequestValidator) -> None:
+        validator.validate_messages(
+            messages=[
+                UserMessage(content="foo"),
+                AssistantMessage(content="foo"),
+            ],
+            continue_final_message=True,
+        )
+        with pytest.raises(
+            InvalidMessageStructureException,
+            match=(
+                r"Expected last role Assistant with prefix False for serving with continue_final_message set to True "
+                r"but got user"
+            ),
+        ):
+            validator.validate_messages(
+                messages=[
+                    UserMessage(content="foo"),
+                    AssistantMessage(content="foo", prefix=True),
+                    UserMessage(content="foo"),
+                ],
+                continue_final_message=True,
+            )
+        with pytest.raises(
+            InvalidMessageStructureException,
+            match=(
+                r"Expected last role User or Tool \(or Assistant with prefix or continue_final_message set to True\)"
+                r" for serving but got assistant"
+            ),
+        ):
+            validator.validate_messages(
+                messages=[
+                    UserMessage(content="foo"),
+                    AssistantMessage(content="foo"),
+                ],
+                continue_final_message=False,
+            )
+        with pytest.raises(
+            InvalidMessageStructureException,
+            match=(
+                r"Expected last role Assistant with prefix False for serving with continue_final_message set to True "
+                r"but got assistant"
+            ),
+        ):
+            validator.validate_messages(
+                messages=[
+                    UserMessage(content="foo"),
+                    AssistantMessage(content="foo", prefix=True),
+                ],
+                continue_final_message=True,
             )
 
     def test_user_tool_user(self, validator: MistralRequestValidator) -> None:
@@ -117,6 +183,7 @@ class TestChatValidation:
                     ToolMessage(content="foo"),
                     UserMessage(content="foo"),
                 ],
+                continue_final_message=False,
             )
 
     def test_model_none_serving_mode(self) -> None:
@@ -140,7 +207,8 @@ class TestChatValidation:
                     tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]
                 ),
                 ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
-            ]
+            ],
+            continue_final_message=False,
         )
 
     def test_not_enough_tool_messages(self, validator: MistralRequestValidator) -> None:
@@ -158,7 +226,8 @@ class TestChatValidation:
                     ),
                     ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
                     # missing ToolMessage
-                ]
+                ],
+                continue_final_message=False,
             )
 
     def test_too_many_tool_messages(self, validator: MistralRequestValidator) -> None:
@@ -173,5 +242,6 @@ class TestChatValidation:
                     ),
                     ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
                     ToolMessage(name="foo", content="bar", tool_call_id="999999999"),  # too many tool messages
-                ]
+                ],
+                continue_final_message=False,
             )

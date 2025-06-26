@@ -34,6 +34,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         system_prompt: The system prompt to be used for the conversation.
         available_tools: The tools available to the assistant.
         truncate_at_max_tokens: The maximum number of tokens to truncate the conversation at.
+        continue_final_message: Whether to continue the final message.
 
     Examples:
         >>> from mistral_common.protocol.instruct.messages import UserMessage, SystemMessage
@@ -46,6 +47,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
     system_prompt: Optional[str] = None
     available_tools: Optional[List[ToolType]] = None
     truncate_at_max_tokens: Optional[int] = None
+    continue_final_message: bool = False
 
     def to_openai(self, **kwargs: Any) -> Dict[str, List[Dict[str, Any]]]:
         r"""Convert the request messages and tools into the OpenAI format.
@@ -59,9 +61,9 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         Examples:
             >>> from mistral_common.protocol.instruct.messages import UserMessage
             >>> from mistral_common.protocol.instruct.tool_calls import Tool, Function
-            >>> request = InstructRequest(messages=[UserMessage(content="Hello, how are you?")], truncate_at_max_tokens=20)
+            >>> request = InstructRequest(messages=[UserMessage(content="Hello, how are you?")])
             >>> request.to_openai(temperature=0.15, stream=True)
-            {'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'max_tokens': 20, 'temperature': 0.15, 'stream': True}
+            {'continue_final_message': False, 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'temperature': 0.15, 'stream': True}
             >>> request = InstructRequest(
             ...     messages=[UserMessage(content="Hello, how are you?")],
             ...     available_tools=[
@@ -82,7 +84,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
             ...     ),
             ... )])
             >>> request.to_openai()
-            {'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'tools': [{'type': 'function', 'function': {'name': 'get_current_weather', 'description': 'Get the current weather in a given location', 'parameters': {'type': 'object', 'properties': {'location': {'type': 'string', 'description': 'The city and state, e.g. San Francisco, CA'}, 'unit': {'type': 'string', 'enum': ['celsius', 'fahrenheit']}}, 'required': ['location']}}}]}
+            {'continue_final_message': False, 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'tools': [{'type': 'function', 'function': {'name': 'get_current_weather', 'description': 'Get the current weather in a given location', 'parameters': {'type': 'object', 'properties': {'location': {'type': 'string', 'description': 'The city and state, e.g. San Francisco, CA'}, 'unit': {'type': 'string', 'enum': ['celsius', 'fahrenheit']}}, 'required': ['location']}}}]}
         """  # noqa: E501
 
         # Handle messages, tools, and truncate_at_max_tokens separately.
@@ -115,7 +117,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
             openai_request["tools"] = [tool.to_openai() for tool in self.available_tools]
 
         if self.truncate_at_max_tokens is not None:  # Rename to max_tokens
-            openai_request["max_tokens"] = self.truncate_at_max_tokens
+            raise NotImplementedError("Truncating at max tokens is not implemented for OpenAI requests.")
 
         openai_request.update(kwargs)
 
@@ -126,6 +128,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         cls,
         messages: List[Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]],
         tools: Optional[List[Dict[str, Any]]] = None,
+        continue_final_message: bool = False,
         **kwargs: Any,
     ) -> "InstructRequest":
         r"""Create an instruct request from the OpenAI format.
@@ -133,6 +136,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         Args:
             messages: The messages in the OpenAI format.
             tools: The tools in the OpenAI format.
+            continue_final_message: Whether to continue the final message.
             **kwargs: Additional keyword arguments to pass to the constructor. These should be the same as the fields
                 of the request class or the OpenAI API equivalent.
 
@@ -146,12 +150,6 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
                 tools = kwargs.pop("available_tools")
             else:
                 raise ValueError("Cannot specify both `tools` and `available_tools`.")
-        # Only one of max_tokens or truncate_at_max_tokens can be specified.
-        if "truncate_at_max_tokens" in kwargs:
-            if "max_tokens" in kwargs:
-                raise ValueError("Cannot specify both `max_tokens` and `truncate_at_max_tokens`.")
-
-        truncate_at_max_tokens = kwargs.pop("max_tokens", None) or kwargs.pop("truncate_at_max_tokens", None)
 
         _check_openai_fields_names(set(cls.model_fields.keys()), set(kwargs.keys()))
 
@@ -162,6 +160,6 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         return cls(
             messages=converted_messages,  # type: ignore[arg-type]
             available_tools=converted_tools,  # type: ignore[arg-type]
-            truncate_at_max_tokens=truncate_at_max_tokens,
+            continue_final_message=continue_final_message,
             **kwargs,
         )

@@ -101,12 +101,12 @@ class SentencePieceTokenizer(Tokenizer):
         r"""All tokens in the vocabulary as strings."""
         return self._vocab
 
-    @property
+    @cached_property
     def bos_id(self) -> int:
         r"""The beginning of sentence token id."""
         return self._model.bos_id()  # type: ignore
 
-    @property
+    @cached_property
     def eos_id(self) -> int:
         r"""The end of sentence token id."""
         return self._model.eos_id()  # type: ignore
@@ -173,6 +173,7 @@ class SentencePieceTokenizer(Tokenizer):
         return self._model.decode(tokens)  # type: ignore
 
     def id_to_piece(self, token_id: int) -> str:
+        r"""Convert the given token id to a token piece."""
         return self._model.id_to_piece(token_id)  # type: ignore
 
     def _decode_with_special_tokens(self, tokens: List[int], special_token_policy: SpecialTokenPolicy) -> str:

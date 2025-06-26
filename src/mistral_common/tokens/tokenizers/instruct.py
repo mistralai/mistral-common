@@ -4,7 +4,11 @@ from typing import Any, Dict, Generic, List, Optional, Tuple, Union
 
 import numpy as np
 
-from mistral_common.exceptions import TokenizerException
+from mistral_common.exceptions import (
+    InvalidAssistantMessageException,
+    InvalidMessageStructureException,
+    TokenizerException,
+)
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     AssistantMessageType,
@@ -78,7 +82,9 @@ class InstructTokenizerBase(
         raise NotImplementedError("Tool message not implemented")
 
     @abstractmethod
-    def encode_assistant_message(self, message: AssistantMessageType, is_before_last_user_message: bool) -> List[int]:
+    def encode_assistant_message(
+        self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
+    ) -> List[int]:
         r"""Encode an assistant message.
 
         Raises:
@@ -116,6 +122,14 @@ class InstructTokenizerBase(
         # find last user message
         first_user_idx, last_user_idx = self.find_first_last_user(request)
         for msg_idx, msg in enumerate(request.messages):
+            if (
+                request.continue_final_message
+                and (msg_idx == len(request.messages) - 1)
+                and not isinstance(msg, AssistantMessage)
+            ):
+                raise InvalidMessageStructureException(
+                    "Cannot continue final message if it is not an assistant message"
+                )
             if isinstance(msg, UserMessage):
                 new_tokens, new_images = self.encode_user_message(
                     msg,
@@ -129,7 +143,11 @@ class InstructTokenizerBase(
             elif isinstance(msg, ToolMessage):
                 new_tokens = self.encode_tool_message(msg, msg_idx < last_user_idx)
             elif isinstance(msg, AssistantMessage):
-                new_tokens = self.encode_assistant_message(msg, msg_idx < last_user_idx)
+                continue_message = request.continue_final_message and (msg_idx == len(request.messages) - 1)
+
+                new_tokens = self.encode_assistant_message(
+                    msg, msg_idx < last_user_idx, continue_message=continue_message
+                )
                 if msg_idx == len(request.messages) - 1:
                     prefix_ids = new_tokens
             elif isinstance(msg, SystemMessage):
@@ -256,12 +274,16 @@ class InstructTokenizerV1(
         """
         raise TokenizerException("Tools not implemented for tokenizer V1")
 
-    def encode_assistant_message(self, message: AssistantMessageType, is_before_last_user_message: bool) -> List[int]:
+    def encode_assistant_message(
+        self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
+    ) -> List[int]:
         r"""Encode an assistant message.
 
         Args:
             message: The message to encode.
             is_before_last_user_message: Not used.
+            continue_message: Whether to continue the message generation.
+                Only use this if the assistant message is the last message.
 
         Returns:
             The encoded tokens.
@@ -269,11 +291,16 @@ class InstructTokenizerV1(
         assert isinstance(message, AssistantMessage), message
         if message.tool_calls is not None and len(message.tool_calls) > 0:
             raise TokenizerException("Tools not implemented for tokenizer V1")
+        if continue_message and message.prefix:
+            raise InvalidAssistantMessageException(
+                "`continue_message` is only supported for assistant messages that have `prefix=False`."
+            )
+
         elif message.content:
             curr_tokens = self.tokenizer.encode(message.content, bos=False, eos=False)
         else:
             raise TokenizerException(f"{message.content} // {message.tool_calls}")
-        if not message.prefix:
+        if not message.prefix and not continue_message:
             curr_tokens.append(self.tokenizer.eos_id)
         return curr_tokens
 
@@ -421,19 +448,27 @@ class InstructTokenizerV2(
         ]
         return curr_tokens
 
-    def encode_assistant_message(self, message: AssistantMessageType, is_before_last_user_message: bool) -> List[int]:
+    def encode_assistant_message(
+        self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
+    ) -> List[int]:
         r"""Encode an assistant message.
 
         Args:
             message: The message to encode.
             is_before_last_user_message: Whether the message is before the last user message. If has tools and true, the
                 message is not encoded.
+            continue_message: Whether to continue the message generation.
+                Only use this if the assistant message is the last message.
 
         Returns:
             The encoded tokens.
         """
         if message.tool_calls and message.content:
             raise ValueError(f"Cannot have tool calls and content defined in the same assistant message {message}")
+        if continue_message and message.prefix:
+            raise InvalidAssistantMessageException(
+                "`continue_message` is only supported for assistant messages that have `prefix=False`."
+            )
 
         if message.tool_calls:
             if is_before_last_user_message:
@@ -444,7 +479,7 @@ class InstructTokenizerV2(
             curr_tokens = self._encode_normal_content_assistant_message(message)
         else:
             raise TokenizerException(f"Invalid assistant message: {message.content}")
-        if not message.prefix:
+        if not message.prefix and not continue_message:
             curr_tokens.append(self.tokenizer.eos_id)
         return curr_tokens
 
@@ -534,12 +569,16 @@ class InstructTokenizerV3(
         ]
         return curr_tokens
 
-    def encode_assistant_message(self, message: AssistantMessageType, is_before_last_user_message: bool) -> List[int]:
+    def encode_assistant_message(
+        self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
+    ) -> List[int]:
         r"""Encode an assistant message.
 
         Note:
             Same as [V2][mistral_common.tokens.tokenizers.instruct.InstructTokenizerV2.encode_assistant_message] but
             always encode the tool history.
+            continue_message: Whether to continue the message generation.
+                Only use this if the assistant message is the last message.
 
         Args:
             message: The message to encode.
@@ -548,7 +587,7 @@ class InstructTokenizerV3(
         Returns:
             The encoded tokens.
         """
-        return super().encode_assistant_message(message, False)
+        return super().encode_assistant_message(message, False, continue_message)
 
     def encode_user_content(
         self,
@@ -747,18 +786,27 @@ class InstructTokenizerV7(InstructTokenizerV3):
         ]
         return curr_tokens
 
-    def encode_assistant_message(self, message: AssistantMessageType, is_before_last_user_message: bool) -> List[int]:
+    def encode_assistant_message(
+        self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
+    ) -> List[int]:
         r"""Encode an assistant message.
 
         Args:
             message: The message to encode.
             is_before_last_user_message: Not used.
+            continue_message: Whether to continue the message generation.
+                Only use this if the assistant message is the last message.
 
         Returns:
             The encoded tokens.
         """
         if not message.content and not message.tool_calls:
             raise TokenizerException(f"Invalid assistant message: {message}")
+        if continue_message and message.prefix:
+            raise InvalidAssistantMessageException(
+                "`continue_message` is only supported for assistant messages that have `prefix=False`."
+            )
+
         curr_tokens: list = []
         if message.content:
             if isinstance(message.content, str):
@@ -769,7 +817,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
                 ).tokens
         if message.tool_calls:
             curr_tokens += self._encode_tool_calls_in_assistant_message(message)
-        if not message.prefix:
+        if not message.prefix and not continue_message:
             curr_tokens.append(self.tokenizer.eos_id)
 
         return curr_tokens

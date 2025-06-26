@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from mistral_common.exceptions import InvalidAssistantMessageException, InvalidMessageStructureException
 from mistral_common.protocol.instruct.messages import AssistantMessage, ToolMessage, UserMessage
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.tokens.instruct.request import InstructRequest
@@ -126,6 +127,67 @@ def test_system_multiturn(tokenizer: InstructTokenizer) -> None:
     ]
     first_eos = tokens.index(2)
     assert tokenizer.tokenizer.decode(tokens[first_eos:]) == "SYSTEM\n\nc d"
+
+
+def test_continue_final_message(tokenizer: InstructTokenizer) -> None:
+    tokenized = tokenizer.encode_instruct(
+        InstructRequest(
+            messages=[
+                UserMessage(content="a"),
+                AssistantMessage(content="b"),
+                UserMessage(content="c"),
+                AssistantMessage(content="d"),
+            ],
+            system_prompt="SYSTEM",
+            continue_final_message=True,
+        )
+    )
+    tokens, text = tokenized.tokens, tokenized.text
+    assert text == "<s>[INST]▁a[/INST]▁b</s>[INST]▁SYSTEM<0x0A><0x0A>c[/INST]▁d"
+    assert tokens == [
+        1,
+        3,
+        1032,
+        4,
+        1055,
+        2,
+        3,
+        17889,
+        23294,
+        781,
+        781,
+        29485,
+        4,
+        1049,
+    ]
+
+    with pytest.raises(
+        InvalidMessageStructureException, match="Cannot continue final message if it is not an assistant message"
+    ):
+        tokenizer.encode_instruct(
+            InstructRequest(
+                messages=[
+                    UserMessage(content="a"),
+                    AssistantMessage(content="b"),
+                    UserMessage(content="c"),
+                ],
+                system_prompt="SYSTEM",
+                continue_final_message=True,
+            )
+        )
+
+    with pytest.raises(
+        InvalidAssistantMessageException,
+        match="`continue_message` is only supported for assistant messages that have `prefix=False`.",
+    ):
+        tokenizer.encode_assistant_message(  # type: ignore[attr-defined]
+            AssistantMessage(
+                content='"blabla"',
+                prefix=True,
+            ),
+            is_before_last_user_message=False,
+            continue_message=True,
+        )
 
 
 def test_system_tools_multiturn(tokenizer: InstructTokenizer) -> None:
