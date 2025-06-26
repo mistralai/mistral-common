@@ -1,4 +1,3 @@
-import logging
 from enum import Enum
 from typing import Any, Dict, Generic, List, Optional, Union
 
@@ -17,8 +16,6 @@ from mistral_common.protocol.instruct.messages import (
     ChatMessageType,
 )
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolChoice
-
-logger = logging.getLogger(__name__)
 
 
 class ResponseFormats(str, Enum):
