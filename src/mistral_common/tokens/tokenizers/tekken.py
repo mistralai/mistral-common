@@ -213,7 +213,7 @@ class Tekkenizer(Tokenizer):
         if isinstance(path, str):
             path = Path(path)
         assert path.exists(), path
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             untyped = json.load(f)
 
         _version_str = untyped["config"].get("version")
@@ -228,19 +228,13 @@ class Tekkenizer(Tokenizer):
 
         special_tokens_dicts: Optional[List[SpecialTokenInfo]] = untyped.get("special_tokens", None)
         if special_tokens_dicts is None:
-            err_msg = (
-                f"Special tokens not found in {path} and default to {Tekkenizer.DEPRECATED_SPECIAL_TOKENS}. "
-                "This behavior will be deprecated going forward. "
-                "Please update your tokenizer file and include all special tokens you need."
-            )
             # Tokenizer > v7 should find special tokens in the tokenizer file
             if version > TokenizerVersion("v7"):
-                raise ValueError(err_msg)
-            else:
-                warnings.warn(
-                    err_msg,
-                    FutureWarning,
+                raise ValueError(
+                    f"Special tokens not found in {path}. "
+                    "Please update your tokenizer file and include all special tokens you need."
                 )
+            else:
                 special_tokens = list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS)
         else:
             special_tokens = [token for token in special_tokens_dicts]
