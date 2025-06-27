@@ -80,7 +80,9 @@ class SentencePieceTokenizer(Tokenizer):
         self._logger = logging.getLogger(self.__class__.__name__)
         # reload tokenizer
         assert os.path.isfile(model_path), model_path
-        self._model = SentencePieceProcessor(model_file=model_path if isinstance(model_path, str) else model_path.as_posix())
+        self._model = SentencePieceProcessor(
+            model_file=model_path if isinstance(model_path, str) else model_path.as_posix()
+        )
 
         assert self._model.vocab_size() == self._model.get_piece_size()
         self._vocab = [self._model.id_to_piece(i) for i in range(self.n_words)]
