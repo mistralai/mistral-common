@@ -105,7 +105,9 @@ class MistralTokenizer(
         """
         self._chat_completion_request_validator = validator
         self._instruct_request_normalizer = request_normalizer
-        self.instruct_tokenizer = instruct_tokenizer
+        self.instruct_tokenizer: InstructTokenizer[InstructRequest, FIMRequest, TokenizedType, AssistantMessageType] = (
+            instruct_tokenizer
+        )
 
     def __reduce__(self) -> Tuple[Callable, Tuple[Any, ...]]:
         """
