@@ -130,7 +130,7 @@ def test_tokenizer_is_pickleable_with_multiprocessing(tokenizer_file: str, token
     tokenizer_path = str(MistralTokenizer._data_path() / tokenizer_file)
     tokenizer = MistralTokenizer.from_file(tokenizer_path)
 
-    with multiprocessing.Pool(processes=1) as pool:
+    with multiprocessing.Pool(processes=2) as pool:
         results = pool.map(_worker_decode_function, [(tokenizer, token_ids)])
 
     assert len(results) == 1
