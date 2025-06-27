@@ -81,7 +81,14 @@ class SentencePieceTokenizer(Tokenizer):
 
         self._version: TokenizerVersion = tokenizer_version or get_spm_version(model_path, raise_deprecated=False)
 
+        self._file_path = Path(model_path)
+
         super().__init__()
+
+    @property
+    def file_path(self) -> Path:
+        r"""The path to the tokenizer model."""
+        return self._file_path
 
     @property
     def version(self) -> TokenizerVersion:

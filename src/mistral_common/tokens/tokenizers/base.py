@@ -2,6 +2,7 @@ import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Generic, List, Optional, Protocol, Tuple, TypeVar, Union
 
 import numpy as np
@@ -235,6 +236,12 @@ class Tokenizer(ABC):
 
     @abstractmethod
     def _to_string(self, tokens: List[int]) -> str: ...
+
+    @property
+    @abstractmethod
+    def file_path(self) -> Path:
+        r"""The file path of the tokenizer."""
+        ...
 
 
 InstructRequestType = TypeVar("InstructRequestType", bound=InstructRequest)
