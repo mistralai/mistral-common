@@ -1,6 +1,6 @@
 import warnings
 from pathlib import Path
-from typing import Callable, Dict, Generic, List, Optional, Union
+from typing import Callable, Dict, Generic, List, Optional, Tuple, Union, Any
 
 from mistral_common.exceptions import (
     TokenizerException,
@@ -95,6 +95,7 @@ class MistralTokenizer(
         request_normalizer: InstructRequestNormalizer[
             UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType, InstructRequestType
         ],
+        _reconstruction_args: Optional[Dict[str, Any]] = None,
     ):
         r"""Initializes a `MistralTokenizer`.
 
@@ -102,12 +103,40 @@ class MistralTokenizer(
             instruct_tokenizer: The instruct tokenizer to use.
             validator: The request validator to use.
             request_normalizer: The request normalizer to use.
+            _reconstruction_args: The reconstruction arguments to use.
         """
         self._chat_completion_request_validator = validator
         self._instruct_request_normalizer = request_normalizer
+        self._reconstruction_args = _reconstruction_args
         self.instruct_tokenizer: InstructTokenizer[InstructRequest, FIMRequest, TokenizedType, AssistantMessageType] = (
             instruct_tokenizer
         )
+
+    def __reduce__(self) -> Tuple[Callable, Tuple[Any, ...]]:
+        """
+        Provides a recipe for pickling (serializing) this object, which is
+        necessary for use with multiprocessing. Instead of pickling the complex
+        internal state, we provide a factory function and the arguments to
+        reconstruct the object from its source file.
+
+        Returns:
+            A tuple of the factory function and the arguments to reconstruct the object from its source file.
+        """
+        if self._reconstruction_args is None:
+            raise TokenizerException(
+                "This MistralTokenizer instance cannot be pickled because it was not created "
+                "using a supported factory method (e.g., from_file, from_hf_hub)."
+            )
+
+        # Get the name of the factory method (e.g., 'from_file')
+        method_name = self._reconstruction_args["method"]
+        # Get the actual classmethod from the class object
+        factory = getattr(self.__class__, method_name)
+        # Get the arguments for that factory
+        args = self._reconstruction_args["args"]
+
+        # Return the recipe: (callable, arguments_tuple)
+        return (factory, args)
 
     @classmethod
     def _data_path(cls) -> Path:
@@ -250,6 +279,11 @@ class MistralTokenizer(
         Returns:
             The loaded tokenizer.
         """
+        reconstruction_args: Dict[str, Any] = {
+            "method": "from_file",
+            "args": (tokenizer_filename, mode),
+        }
+
         tokenizer: Union[SentencePieceTokenizer, Tekkenizer]
 
         if is_tekken(tokenizer_filename):
@@ -265,37 +299,42 @@ class MistralTokenizer(
 
         request_normalizer = normalizer_for_tokenizer_version(tokenizer.version)
 
+        tokenizer_kwargs: Dict[str, Any] = {
+            "_reconstruction_args": reconstruction_args,
+            "request_normalizer": request_normalizer,
+        }
+
         if tokenizer.version == TokenizerVersion.v1:
             assert mm_encoder is None, "Tokenizer version needs to be >= v3"
             return MistralTokenizer(
                 InstructTokenizerV1(tokenizer),
                 validator=MistralRequestValidator(mode=mode),
-                request_normalizer=request_normalizer,
+                **tokenizer_kwargs,
             )
         elif tokenizer.version == TokenizerVersion.v2:
             assert mm_encoder is None, "Tokenizer version needs to be >= v3"
             return MistralTokenizer(
                 InstructTokenizerV2(tokenizer),
                 validator=MistralRequestValidator(mode=mode),
-                request_normalizer=request_normalizer,
+                **tokenizer_kwargs,
             )
         elif tokenizer.version == TokenizerVersion.v3:
             return MistralTokenizer(
                 InstructTokenizerV3(tokenizer, mm_encoder=mm_encoder),
                 validator=MistralRequestValidatorV3(mode=mode),
-                request_normalizer=request_normalizer,
+                **tokenizer_kwargs,
             )
         elif tokenizer.version == TokenizerVersion.v7:
             return MistralTokenizer(
                 InstructTokenizerV7(tokenizer, mm_encoder=mm_encoder),
                 validator=MistralRequestValidatorV5(mode=mode),
-                request_normalizer=request_normalizer,
+                **tokenizer_kwargs,
             )
         elif tokenizer.version == TokenizerVersion.v11:
             return MistralTokenizer(
                 InstructTokenizerV11(tokenizer, mm_encoder=mm_encoder),
                 validator=MistralRequestValidatorV5(mode=mode),
-                request_normalizer=request_normalizer,
+                **tokenizer_kwargs,
             )
 
         raise TokenizerException(f"Unrecognized tokenizer filename: {tokenizer_filename}")
