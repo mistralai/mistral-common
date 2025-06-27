@@ -1,4 +1,5 @@
-from typing import Optional, Union
+import multiprocessing
+from typing import List, Optional, Tuple, Union
 from unittest.mock import patch
 
 import pytest
@@ -103,3 +104,34 @@ class TestMistralToknizer:
 
             tokenizer = MistralTokenizer.from_hf_hub("mistralai/Pixtral-Large-Instruct-2411")
             assert isinstance(tokenizer.instruct_tokenizer, InstructTokenizerV3)
+
+
+def _worker_decode_function(tokenizer_instance_and_token_ids: Tuple[MistralTokenizer, List[int]]) -> str:
+    tokenizer_instance, token_ids = tokenizer_instance_and_token_ids
+    return tokenizer_instance.decode(token_ids)
+
+
+@pytest.mark.parametrize(
+    ["tokenizer_file", "token_ids", "expected"],
+    [
+        (
+            "tokenizer.model.v1",
+            [1, 733, 16289, 28793, 17121, 22526, 13, 13, 28708, 733, 28748, 16289, 28793],
+            "[INST] SYSTEM\n\na [/INST]",
+        ),
+        (
+            "tekken_240911.json",
+            [1091, 3174, 3074, 1093, 126205, 1267, 1097, 1766, 1047, 3174, 3074, 1093],
+            "[INST] SYSTEM\n\na [/INST]",
+        ),
+    ],
+)
+def test_tokenizer_is_pickleable_with_multiprocessing(tokenizer_file: str, token_ids: List[int], expected: str) -> None:
+    tokenizer_path = str(MistralTokenizer._data_path() / tokenizer_file)
+    tokenizer = MistralTokenizer.from_file(tokenizer_path)
+
+    with multiprocessing.Pool(processes=1) as pool:
+        results = pool.map(_worker_decode_function, [(tokenizer, token_ids)])
+
+    assert len(results) == 1
+    assert results[0] == expected

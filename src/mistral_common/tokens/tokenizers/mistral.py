@@ -116,7 +116,7 @@ class MistralTokenizer(
         Returns:
             A tuple of the factory function and the arguments to reconstruct the object from its source file.
         """
-        return self.from_file, (self.instruct_tokenizer.tokenizer.file_path,)
+        return MistralTokenizer.from_file, (self.instruct_tokenizer.tokenizer.file_path,)
 
     @classmethod
     def _data_path(cls) -> Path:
@@ -247,7 +247,7 @@ class MistralTokenizer(
     @classmethod
     def from_file(
         cls,
-        tokenizer_filename: str,
+        tokenizer_filename: Union[str, Path],
         mode: ValidationMode = ValidationMode.test,
     ) -> "MistralTokenizer":
         r"""Loads a tokenizer from a file.
@@ -259,7 +259,6 @@ class MistralTokenizer(
         Returns:
             The loaded tokenizer.
         """
-
         tokenizer: Union[SentencePieceTokenizer, Tekkenizer]
 
         if is_tekken(tokenizer_filename):
