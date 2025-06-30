@@ -5,6 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from mistral_common.exceptions import TokenizerException
+from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy
 from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV1,
@@ -106,32 +107,39 @@ class TestMistralToknizer:
             assert isinstance(tokenizer.instruct_tokenizer, InstructTokenizerV3)
 
 
-def _worker_decode_function(tokenizer_instance_and_token_ids: Tuple[MistralTokenizer, List[int]]) -> str:
-    tokenizer_instance, token_ids = tokenizer_instance_and_token_ids
+def _worker_decode_function(
+    tokenizer_instance_and_token_ids_and_validation_mode: Tuple[MistralTokenizer, List[int], ValidationMode],
+) -> str:
+    tokenizer_instance, token_ids, validation_mode = tokenizer_instance_and_token_ids_and_validation_mode
+    assert tokenizer_instance._chat_completion_request_validator._mode == validation_mode
     return tokenizer_instance.decode(token_ids)
 
 
 @pytest.mark.parametrize(
-    ["tokenizer_file", "token_ids", "expected"],
+    ["tokenizer_file", "validation_mode", "token_ids", "expected"],
     [
         (
             "tokenizer.model.v1",
+            ValidationMode.test,
             [1, 733, 16289, 28793, 17121, 22526, 13, 13, 28708, 733, 28748, 16289, 28793],
             "[INST] SYSTEM\n\na [/INST]",
         ),
         (
             "tekken_240911.json",
+            ValidationMode.finetuning,
             [1091, 3174, 3074, 1093, 126205, 1267, 1097, 1766, 1047, 3174, 3074, 1093],
             "[INST] SYSTEM\n\na [/INST]",
         ),
     ],
 )
-def test_tokenizer_is_pickleable_with_multiprocessing(tokenizer_file: str, token_ids: List[int], expected: str) -> None:
+def test_tokenizer_is_pickleable_with_multiprocessing(
+    tokenizer_file: str, validation_mode: ValidationMode, token_ids: List[int], expected: str
+) -> None:
     tokenizer_path = str(MistralTokenizer._data_path() / tokenizer_file)
-    tokenizer = MistralTokenizer.from_file(tokenizer_path)
+    tokenizer = MistralTokenizer.from_file(tokenizer_path, validation_mode)
 
     with multiprocessing.Pool(processes=2) as pool:
-        results = pool.map(_worker_decode_function, [(tokenizer, token_ids)])
+        results = pool.map(_worker_decode_function, [(tokenizer, token_ids, validation_mode)])
 
     assert len(results) == 1
     assert results[0] == expected

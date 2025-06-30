@@ -30,8 +30,7 @@ def is_sentencepiece(path: Union[str, Path]) -> bool:
 
 def get_spm_version(tokenizer_filename: Union[str, Path], raise_deprecated: bool = False) -> TokenizerVersion:
     r"""Get the version of the tokenizer from the filename."""
-    if isinstance(tokenizer_filename, Path):
-        tokenizer_filename = str(tokenizer_filename)
+    tokenizer_filename = str(tokenizer_filename)
 
     _version_str = tokenizer_filename.split(".")[-1]
     if _version_str != "model":  # filter tokenizer_filename == "/path/to/tokenizer.model" case
@@ -52,8 +51,7 @@ def get_spm_version(tokenizer_filename: Union[str, Path], raise_deprecated: bool
 
 def get_mm_config(tokenizer_filename: Union[str, Path]) -> Optional[MultimodalConfig]:
     r"""Get the multimodal config from the tokenizer filename."""
-    if isinstance(tokenizer_filename, Path):
-        tokenizer_filename = str(tokenizer_filename)
+    tokenizer_filename = str(tokenizer_filename)
 
     _version_str = tokenizer_filename.split(".")[-1]
     if _version_str == "model" or "m" not in _version_str:

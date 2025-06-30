@@ -116,7 +116,10 @@ class MistralTokenizer(
         Returns:
             A tuple of the factory function and the arguments to reconstruct the object from its source file.
         """
-        return MistralTokenizer.from_file, (self.instruct_tokenizer.tokenizer.file_path,)
+        return MistralTokenizer.from_file, (
+            self.instruct_tokenizer.tokenizer.file_path,
+            self._chat_completion_request_validator._mode,
+        )
 
     @classmethod
     def _data_path(cls) -> Path:
