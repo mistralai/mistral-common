@@ -1,6 +1,6 @@
 import warnings
 from pathlib import Path
-from typing import Callable, Dict, Generic, List, Optional, Union
+from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, Union
 
 from mistral_common.exceptions import (
     TokenizerException,
@@ -107,6 +107,18 @@ class MistralTokenizer(
         self._instruct_request_normalizer = request_normalizer
         self.instruct_tokenizer: InstructTokenizer[InstructRequest, FIMRequest, TokenizedType, AssistantMessageType] = (
             instruct_tokenizer
+        )
+
+    def __reduce__(self) -> Tuple[Callable, Tuple[Any, ...]]:
+        """
+        Provides a recipe for pickling (serializing) this object, which is necessary for use with multiprocessing.
+
+        Returns:
+            A tuple of the factory function and the arguments to reconstruct the object from its source file.
+        """
+        return MistralTokenizer.from_file, (
+            self.instruct_tokenizer.tokenizer.file_path,
+            self._chat_completion_request_validator._mode,
         )
 
     @classmethod
@@ -238,7 +250,7 @@ class MistralTokenizer(
     @classmethod
     def from_file(
         cls,
-        tokenizer_filename: str,
+        tokenizer_filename: Union[str, Path],
         mode: ValidationMode = ValidationMode.test,
     ) -> "MistralTokenizer":
         r"""Loads a tokenizer from a file.

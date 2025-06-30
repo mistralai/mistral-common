@@ -28,8 +28,10 @@ def is_sentencepiece(path: Union[str, Path]) -> bool:
     return path.is_file() and any(path.name.endswith(suffix) for suffix in suffixes)
 
 
-def get_spm_version(tokenizer_filename: str, raise_deprecated: bool = False) -> TokenizerVersion:
+def get_spm_version(tokenizer_filename: Union[str, Path], raise_deprecated: bool = False) -> TokenizerVersion:
     r"""Get the version of the tokenizer from the filename."""
+    tokenizer_filename = str(tokenizer_filename)
+
     _version_str = tokenizer_filename.split(".")[-1]
     if _version_str != "model":  # filter tokenizer_filename == "/path/to/tokenizer.model" case
         _version_str = _version_str.split("m")[0]
@@ -47,8 +49,10 @@ def get_spm_version(tokenizer_filename: str, raise_deprecated: bool = False) -> 
     return TokenizerVersion(_version_str)
 
 
-def get_mm_config(tokenizer_filename: str) -> Optional[MultimodalConfig]:
+def get_mm_config(tokenizer_filename: Union[str, Path]) -> Optional[MultimodalConfig]:
     r"""Get the multimodal config from the tokenizer filename."""
+    tokenizer_filename = str(tokenizer_filename)
+
     _version_str = tokenizer_filename.split(".")[-1]
     if _version_str == "model" or "m" not in _version_str:
         return None
@@ -64,7 +68,7 @@ def get_mm_config(tokenizer_filename: str) -> Optional[MultimodalConfig]:
 class SentencePieceTokenizer(Tokenizer):
     r"""[SentencePiece](https://github.com/google/sentencepiece) tokenizer."""
 
-    def __init__(self, model_path: str, tokenizer_version: Optional[TokenizerVersion] = None) -> None:
+    def __init__(self, model_path: Union[str, Path], tokenizer_version: Optional[TokenizerVersion] = None) -> None:
         r"""Initialize the `SentencePieceTokenizer`.
 
         Args:
@@ -74,14 +78,22 @@ class SentencePieceTokenizer(Tokenizer):
         self._logger = logging.getLogger(self.__class__.__name__)
         # reload tokenizer
         assert os.path.isfile(model_path), model_path
-        self._model = SentencePieceProcessor(model_file=model_path)
+        self._model = SentencePieceProcessor(
+            model_file=model_path if isinstance(model_path, str) else model_path.as_posix()
+        )
 
         assert self._model.vocab_size() == self._model.get_piece_size()
         self._vocab = [self._model.id_to_piece(i) for i in range(self.n_words)]
 
         self._version: TokenizerVersion = tokenizer_version or get_spm_version(model_path, raise_deprecated=False)
 
+        self._file_path = Path(model_path)
         super().__init__()
+
+    @property
+    def file_path(self) -> Path:
+        r"""The path to the tokenizer model."""
+        return self._file_path
 
     @property
     def version(self) -> TokenizerVersion:

@@ -137,7 +137,7 @@ class Tekkenizer(Tokenizer):
         version: TokenizerVersion,
         *,
         name: str = "tekkenizer",
-        _path: Optional[str] = None,
+        _path: Optional[Union[str, Path]] = None,
         mm_config: Optional[MultimodalConfig] = None,
     ):
         r"""Initialize the tekken tokenizer.
@@ -199,6 +199,14 @@ class Tekkenizer(Tokenizer):
         self._special_tokens_reverse_vocab = {t["token_str"]: t["rank"] for t in special_tokens}
         self._vocab = [self.id_to_piece(i) for i in range(vocab_size)]
         self._special_token_policy = SpecialTokenPolicy.IGNORE
+        self._file_path = Path(_path) if _path is not None else None
+
+    @property
+    def file_path(self) -> Path:
+        r"""The path to the tokenizer file."""
+        if self._file_path is None:
+            raise ValueError("The tokenizer was not loaded from a file.")
+        return self._file_path
 
     @classmethod
     def from_file(cls: Type["Tekkenizer"], path: Union[str, Path]) -> "Tekkenizer":
@@ -255,6 +263,7 @@ class Tekkenizer(Tokenizer):
             version=version,
             name=path.name.replace(".json", ""),
             mm_config=model_data.get("multimodal"),
+            _path=path,
         )
 
     @property
