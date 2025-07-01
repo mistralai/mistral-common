@@ -30,7 +30,7 @@ from mistral_common.tokens.tokenizers.base import (
     TokenizedType,
     Tokenizer,
 )
-from mistral_common.tokens.tokenizers.image import MultiModalEncoder
+from mistral_common.tokens.tokenizers.image import ImageEncoder
 
 
 class InstructTokenizerBase(
@@ -38,7 +38,7 @@ class InstructTokenizerBase(
 ):
     r"""Base instruct tokenizer."""
 
-    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[MultiModalEncoder] = None):
+    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None):
         r"""Initialize the instruct tokenizer.
 
         Args:
@@ -321,7 +321,7 @@ class InstructTokenizerV2(
     This tokenizer adds supports to images, tools and FIM requests.
     """
 
-    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[MultiModalEncoder] = None):
+    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None):
         r"""Initialize the tokenizer.
 
         Args:
@@ -517,7 +517,7 @@ class InstructTokenizerV3(
     The only difference with V2 tokenizer is that it encodes the tool messages differently.
     """
 
-    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[MultiModalEncoder] = None) -> None:
+    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None) -> None:
         r"""Initialize the tokenizer.
 
         Args:
@@ -652,7 +652,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
     """
 
-    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[MultiModalEncoder] = None) -> None:
+    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None) -> None:
         r"""Initialize the tokenizer.
 
         Args:
@@ -834,7 +834,7 @@ class InstructTokenizerV11(InstructTokenizerV7):
     def __init__(
         self,
         tokenizer: Tokenizer,
-        image_encoder: Optional[MultiModalEncoder] = None,
+        image_encoder: Optional[ImageEncoder] = None,
     ) -> None:
         super().__init__(tokenizer, image_encoder)
         self.ARGS = self.tokenizer.get_control_token(SpecialTokens.args.value)
