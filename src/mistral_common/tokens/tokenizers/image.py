@@ -147,7 +147,7 @@ def transform_image(image: Image.Image, new_size: Tuple[int, int]) -> np.ndarray
     return normalize(np_image, DATASET_MEAN, DATASET_STD)
 
 
-class ImageEncoder(ImageEncoder):
+class ImageEncoder:
     r"""Image encoder for the image tokenizer."""
 
     def __init__(self, image_config: ImageConfig, special_ids: SpecialImageIDs) -> None:

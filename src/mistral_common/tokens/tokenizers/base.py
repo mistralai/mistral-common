@@ -18,6 +18,7 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.tool_calls import Tool
 from mistral_common.tokens.instruct.request import FIMRequest, InstructRequest
+from mistral_common.tokens.tokenizers.image import ImageEncoder
 
 
 class SpecialTokens(str, Enum):
@@ -298,29 +299,6 @@ class SpecialImageIDs:
             img_break=tokenizer.get_control_token(SpecialTokens.img_break.value),
             img_end=tokenizer.get_control_token(SpecialTokens.img_end.value),
         )
-
-
-class ImageEncoder(Protocol):
-    r"""Protocol for image encoders.
-
-    Currently, only image encoders are supported.
-    """
-
-    def __call__(self, content: Union[ImageChunk, ImageURLChunk]) -> ImageEncoding:
-        """Encode the given content.
-
-        Args:
-            content: The content to be encoded.
-
-        Returns:
-            The encoded image content.
-        """
-        ...
-
-    @property
-    def image_token(self) -> int:
-        r"""The image token id."""
-        ...
 
 
 class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]):
