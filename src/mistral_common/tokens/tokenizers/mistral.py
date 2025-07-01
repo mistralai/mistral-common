@@ -52,9 +52,7 @@ from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekken
 from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hub
 
 
-def load_image_encoder(
-    image_config: ImageConfig, tokenizer: Union[Tekkenizer, SentencePieceTokenizer]
-) -> ImageEncoder:
+def load_image_encoder(image_config: ImageConfig, tokenizer: Union[Tekkenizer, SentencePieceTokenizer]) -> ImageEncoder:
     r"""Load a multi-modal encoder from a config and a tokenizer.
 
     Args:
