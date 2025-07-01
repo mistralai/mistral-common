@@ -1,21 +1,35 @@
 import importlib.metadata
+from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Union, overload
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union, overload
 
 import click
 import uvicorn
-from fastapi import APIRouter, Body, FastAPI, HTTPException
+from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, ValidationError
 from pydantic_settings import BaseSettings
 
 from mistral_common.protocol.instruct.messages import ChatMessageType
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
+from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 
 class OpenAIChatCompletionRequest(BaseModel):
+    r"""OpenAI chat completion request.
+
+    Attributes:
+        messages: The messages to use for the chat completion.
+        tools: The tools to use for the chat completion.
+
+    Note:
+        This class accepts extra fields, as the
+        [from_openai][mistral_common.protocol.instruct.request.ChatCompletionRequest.from_openai] method will handle
+        them.
+    """
+
     messages: List[dict[str, Union[str, List[dict[str, Union[str, dict[str, Any]]]]]]]
     tools: Optional[List[dict[str, Any]]] = None
 
@@ -25,6 +39,13 @@ class OpenAIChatCompletionRequest(BaseModel):
 
 
 class Settings(BaseSettings):
+    r"""Settings for the Mistral-common API.
+
+    Attributes:
+        app_name: The name of the application.
+        app_version: The version of the application.
+    """
+
     app_name: str = "Mistral-common API"
     app_version: str = importlib.metadata.version("mistral-common")
 
@@ -32,7 +53,7 @@ class Settings(BaseSettings):
         super().model_post_init(context)
         self._tokenizer: Optional[MistralTokenizer] = None
 
-    def _initialize_tokenizer(self, tokenizer_path: Union[str, Path]) -> None:
+    def _initialize_tokenizer(self, tokenizer_path: Union[str, Path], validation_mode: ValidationMode) -> None:
         if tokenizer_path == "":
             raise ValueError("Tokenizer path must be set via the environment variable `TOKENIZER_PATH`.")
         elif self._tokenizer is not None:
@@ -44,9 +65,9 @@ class Settings(BaseSettings):
                 tokenizer_path = candidate_tokenizer_path
 
         if isinstance(tokenizer_path, Path) and tokenizer_path.exists():
-            self._tokenizer = MistralTokenizer.from_file(tokenizer_path)
+            self._tokenizer = MistralTokenizer.from_file(tokenizer_path, mode=validation_mode)
         else:
-            self._tokenizer = MistralTokenizer.from_hf_hub(str(tokenizer_path))
+            self._tokenizer = MistralTokenizer.from_hf_hub(str(tokenizer_path), mode=validation_mode)
 
     @property
     def tokenizer(self) -> MistralTokenizer:
@@ -56,49 +77,63 @@ class Settings(BaseSettings):
 
 
 main_router = APIRouter(tags=["app"])
-tokenize_router = APIRouter(prefix="/tokenizer/tokenize", tags=["tokenizer", "tokenize"])
-template_router = APIRouter(prefix="/tokenizer/apply-template", tags=["tokenizer", "template"])
-decode_router = APIRouter(prefix="/tokenizer/detokenize", tags=["tokenizer", "detokenize"])
+tokenize_router = APIRouter(prefix="/tokenize", tags=["tokenizer", "tokenize"])
+template_router = APIRouter(prefix="/apply-chat-template", tags=["tokenizer", "template"])
+decode_router = APIRouter(prefix="/detokenize", tags=["tokenizer", "detokenize"])
 
-settings = Settings()
+
+def get_settings() -> Settings:
+    r"""Get the settings for the Mistral-common API."""
+    return Settings()
 
 
 @main_router.get("/")
 def redirect_to_docs() -> RedirectResponse:
+    r"""Redirect to the documentation."""
     return RedirectResponse(url="docs")
 
 
 @main_router.get("/info")
-def get_info() -> Dict[str, str]:
+def get_info(settings: Annotated[Settings, Depends(get_settings)]) -> Dict[str, str]:
+    r"""Get the information about the Mistral-common API."""
     return {"app_name": settings.app_name, "app_version": settings.app_version}
 
 
 @overload
 def _tokenize_request(
-    request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest], as_int: Literal[True]
+    request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
+    encode_as_int: Literal[True],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> List[int]: ...
 @overload
 def _tokenize_request(
-    request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest], as_int: Literal[False]
+    request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
+    encode_as_int: Literal[False],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> str: ...
 @overload
 def _tokenize_request(
-    request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest], as_int: bool
+    request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
+    encode_as_int: bool,
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> Union[List[int], str]: ...
 def _tokenize_request(
-    request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest], as_int: bool
+    request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
+    encode_as_int: bool,
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> Union[List[int], str]:
     if isinstance(request, OpenAIChatCompletionRequest):
         try:
             request = ChatCompletionRequest.from_openai(**request.model_dump(exclude_none=True))
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-        except ValidationError as e:
+        except (ValidationError, ValueError) as e:
             raise HTTPException(status_code=400, detail=str(e))
 
+    if request.messages == []:
+        raise HTTPException(status_code=400, detail="Messages list cannot be empty.")
+
     tokenized = settings.tokenizer.encode_chat_completion(request)
-    assert isinstance(tokenized, Tokenized)
-    if as_int:
+    assert isinstance(tokenized, Tokenized), type(tokenized)
+    if encode_as_int:
         return tokenized.tokens
     else:
         assert isinstance(tokenized.text, str)
@@ -106,46 +141,81 @@ def _tokenize_request(
 
 
 @overload
-def _tokenize_messages(messages: list[ChatMessageType], as_int: Literal[True]) -> List[int]: ...
+def _tokenize_messages(
+    messages: list[ChatMessageType], encode_as_int: Literal[True], settings: Annotated[Settings, Depends(get_settings)]
+) -> List[int]: ...
 @overload
-def _tokenize_messages(messages: list[ChatMessageType], as_int: Literal[False]) -> str: ...
+def _tokenize_messages(
+    messages: list[ChatMessageType], encode_as_int: Literal[False], settings: Annotated[Settings, Depends(get_settings)]
+) -> str: ...
 @overload
-def _tokenize_messages(messages: list[ChatMessageType], as_int: bool) -> Union[List[int], str]: ...
-def _tokenize_messages(messages: list[ChatMessageType], as_int: bool) -> Union[List[int], str]:
+def _tokenize_messages(
+    messages: list[ChatMessageType], encode_as_int: bool, settings: Annotated[Settings, Depends(get_settings)]
+) -> Union[List[int], str]: ...
+def _tokenize_messages(
+    messages: list[ChatMessageType], encode_as_int: bool, settings: Annotated[Settings, Depends(get_settings)]
+) -> Union[List[int], str]:
     if len(messages) == 0:
         raise HTTPException(status_code=400, detail="Messages list cannot be empty.")
     request = ChatCompletionRequest(messages=messages)
 
-    return _tokenize_request(request, as_int)
+    return _tokenize_request(request, encode_as_int, settings)
 
 
 @tokenize_router.post("/messages")
-def tokenize_messages(messages: list[ChatMessageType] = Body(default_factory=list)) -> list[int]:
-    return _tokenize_messages(messages, as_int=True)
+def tokenize_messages(
+    settings: Annotated[Settings, Depends(get_settings)], messages: list[ChatMessageType] = Body(default_factory=list)
+) -> list[int]:
+    r"""Tokenize a list of messages."""
+    return _tokenize_messages(messages, encode_as_int=True, settings=settings)
 
 
 @template_router.post("/messages")
-def tokenize_messages_text(messages: list[ChatMessageType] = Body(default_factory=list)) -> str:
-    return _tokenize_messages(messages, as_int=False)
+def apply_template_to_messages(
+    settings: Annotated[Settings, Depends(get_settings)], messages: list[ChatMessageType] = Body(default_factory=list)
+) -> str:
+    r"""Apply the chat template to a list of messages."""
+    return _tokenize_messages(messages, encode_as_int=False, settings=settings)
+
+
+@tokenize_router.post("/prompt")
+def tokenize_prompt(
+    settings: Annotated[Settings, Depends(get_settings)],
+    prompt: str = Body(default_factory=str),
+    add_special: bool = Body(default=True),
+) -> list[int]:
+    r"""Tokenize a prompt."""
+    if prompt == "":
+        raise HTTPException(status_code=400, detail="Prompt cannot be empty.")
+
+    return settings.tokenizer.instruct_tokenizer.tokenizer.encode(prompt, bos=add_special, eos=add_special)
 
 
 @tokenize_router.post("/request")
-def tokenize(
+def tokenize_request(
     request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> list[int]:
-    return _tokenize_request(request, as_int=True)
+    r"""Tokenize a chat completion request."""
+    return _tokenize_request(request, encode_as_int=True, settings=settings)
 
 
 @template_router.post("/request")
-def tokenize_request_text(request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest]) -> str:
-    return _tokenize_request(request, as_int=False)
+def apply_template_to_request(
+    request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> str:
+    r"""Apply the chat template to a chat completion request."""
+    return _tokenize_request(request, encode_as_int=False, settings=settings)
 
 
 @decode_router.post("/")
 def detokenize_tokens(
+    settings: Annotated[Settings, Depends(get_settings)],
     tokens: list[int] = Body(default_factory=list),
     special_token_policy: SpecialTokenPolicy = Body(default=SpecialTokenPolicy.IGNORE),
 ) -> str:
+    r"""Detokenize a list of tokens."""
     if len(tokens) == 0:
         raise HTTPException(status_code=400, detail="Tokens list cannot be empty.")
 
@@ -155,8 +225,32 @@ def detokenize_tokens(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+def create_app(tokenizer_path: Union[str, Path], validation_mode: ValidationMode) -> FastAPI:
+    r"""Create a Mistral-common FastAPI app with the given tokenizer path and validation mode."""
+    app = FastAPI()
+    app.include_router(tokenize_router)
+    app.include_router(decode_router)
+    app.include_router(main_router)
+    app.include_router(template_router)
+
+    @lru_cache
+    def get_settings_override() -> Settings:
+        settings = Settings()
+        settings._initialize_tokenizer(tokenizer_path, validation_mode)
+        return settings
+
+    app.dependency_overrides[get_settings] = get_settings_override
+
+    return app
+
+
 @click.command(context_settings={"auto_envvar_prefix": "UVICORN"})
-@click.argument("TOKENIZER_PATH", type=str)
+@click.argument("tokenizer_path", type=str)
+@click.argument(
+    "validation_mode",
+    type=click.Choice(ValidationMode, case_sensitive=False),
+    default=ValidationMode.test,
+)
 @click.option(
     "--host",
     type=str,
@@ -171,11 +265,7 @@ def detokenize_tokens(
     help="Mistral-common API port",
     show_default=True,
 )
-def serve_app(tokenizer_path: Union[str, Path], host: str, port: int) -> None:
-    settings._initialize_tokenizer(tokenizer_path)
-    app = FastAPI()
-    app.include_router(tokenize_router)
-    app.include_router(decode_router)
-    app.include_router(main_router)
-
+def serve_app(tokenizer_path: Union[str, Path], validation_mode: ValidationMode, host: str, port: int) -> None:
+    r"""Serve the Mistral-common API with the given tokenizer path and validation mode."""
+    app = create_app(tokenizer_path, validation_mode)
     uvicorn.run(app, host=host, port=port)
