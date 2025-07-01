@@ -1,6 +1,5 @@
 import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Generic, List, Optional, Tuple, TypeVar, Union
@@ -247,56 +246,6 @@ InstructRequestType = TypeVar("InstructRequestType", bound=InstructRequest)
 FIMRequestType = TypeVar("FIMRequestType", bound=FIMRequest)
 TokenizedType = TypeVar("TokenizedType", bound=Tokenized)
 
-
-@dataclass
-class ImageEncoding:
-    """A tokenized image.
-
-    Attributes:
-        tokens: The token ids.
-        image: The image as a numpy array.
-
-    Examples:
-        >>> import numpy as np
-        >>> image_encoding = ImageEncoding(tokens=[1, 2, 3], image=np.array([[0., 0.5, 1.]]))
-    """
-
-    tokens: List[int]
-    image: np.ndarray
-
-
-@dataclass
-class SpecialImageIDs:
-    """Special image tokens ids.
-
-    Attributes:
-        img: The image token id.
-        img_break: The image break token id.
-        img_end: The image end token id.
-
-    Examples:
-        >>> special_image_ids = SpecialImageIDs(img=1, img_break=2, img_end=3)
-    """
-
-    img: int
-    img_break: int
-    img_end: int
-
-    @staticmethod
-    def from_tokenizer(tokenizer: "Tokenizer") -> "SpecialImageIDs":
-        r"""Create a `SpecialImageIDs` from a `Tokenizer`.
-
-        Args:
-            tokenizer: The tokenizer to use.
-
-        Returns:
-            The special image tokens ids.
-        """
-        return SpecialImageIDs(
-            img=tokenizer.get_control_token(SpecialTokens.img.value),
-            img_break=tokenizer.get_control_token(SpecialTokens.img_break.value),
-            img_end=tokenizer.get_control_token(SpecialTokens.img_end.value),
-        )
 
 
 class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]):
