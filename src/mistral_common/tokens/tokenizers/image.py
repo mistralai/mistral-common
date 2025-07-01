@@ -193,7 +193,7 @@ class ImageEncoder:
     @property
     def mm_config(self) -> ImageConfig:
         # this property is deprecated, use image_config instead
-        # TODO(Patrick) - throw deprecation warning once 
+        # TODO(Patrick) - throw deprecation warning once
         # changes implemented into vLLM and transformers
         return self.image_config
 
