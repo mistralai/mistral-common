@@ -26,9 +26,9 @@ from mistral_common.protocol.instruct.validator import (
     ValidationMode,
 )
 from mistral_common.tokens.tokenizers.base import InstructRequest, TokenizerVersion
+from mistral_common.tokens.tokenizers.image import ImageEncoder
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.image import ImageEncoder
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import _quick_vocab
 

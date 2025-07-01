@@ -30,18 +30,17 @@ from mistral_common.tokens.tokenizers.base import (
     TokenizedType,
     TokenizerVersion,
 )
+from mistral_common.tokens.tokenizers.image import (
+    ImageConfig,
+    ImageEncoder,
+    SpecialImageIDs,
+)
 from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV1,
     InstructTokenizerV2,
     InstructTokenizerV3,
     InstructTokenizerV7,
     InstructTokenizerV11,
-)
-from mistral_common.tokens.tokenizers.image import (
-    ImageEncoder,
-    ImageConfig,
-    ImageEncoder,
-    SpecialImageIDs,
 )
 from mistral_common.tokens.tokenizers.sentencepiece import (
     SentencePieceTokenizer,

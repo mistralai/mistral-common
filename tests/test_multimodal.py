@@ -12,7 +12,7 @@ from mistral_common.protocol.instruct.messages import (
     ImageURLChunk,
     TextChunk,
 )
-from mistral_common.tokens.tokenizers.image import ImageEncoder, ImageConfig, SpecialImageIDs, transform_image
+from mistral_common.tokens.tokenizers.image import ImageConfig, ImageEncoder, SpecialImageIDs, transform_image
 
 
 @pytest.fixture
