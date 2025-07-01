@@ -70,22 +70,6 @@ class SpecialImageIDs:
     img_break: int
     img_end: int
 
-    @staticmethod
-    def from_tokenizer(tokenizer: "Tokenizer") -> "SpecialImageIDs":
-        r"""Create a `SpecialImageIDs` from a `Tokenizer`.
-
-        Args:
-            tokenizer: The tokenizer to use.
-
-        Returns:
-            The special image tokens ids.
-        """
-        return SpecialImageIDs(
-            img=tokenizer.get_control_token(SpecialTokens.img.value),
-            img_break=tokenizer.get_control_token(SpecialTokens.img_break.value),
-            img_end=tokenizer.get_control_token(SpecialTokens.img_end.value),
-        )
-
 
 def image_from_chunk(chunk: Union[ImageURLChunk, ImageChunk]) -> SerializableImage:
     r"""Get a serializable image from a chunk.
