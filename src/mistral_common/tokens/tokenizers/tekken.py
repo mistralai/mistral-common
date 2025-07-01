@@ -16,7 +16,6 @@ from mistral_common.tokens.tokenizers.base import (
     TokenizerVersion,
 )
 from mistral_common.tokens.tokenizers.image import ImageConfig
-from mistral_common.tokens.tokenizers.audio import AudioConfig
 
 logger = logging.getLogger(__name__)
 
@@ -282,14 +281,6 @@ class Tekkenizer(Tokenizer):
     @image.setter
     def image(self, value: ImageConfig) -> None:
         raise ValueError("Can only set Image config at init")
-
-    @property
-    def audio(self) -> Optional[AudioConfig]:
-        return self._audio_config
-
-    @audio.setter
-    def audio(self, value: AudioConfig) -> None:
-        raise ValueError("Can only set Audio config at init")
 
     @property
     def num_special_tokens(self) -> int:
