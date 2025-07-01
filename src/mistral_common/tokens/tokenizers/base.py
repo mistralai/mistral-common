@@ -301,7 +301,7 @@ class SpecialImageIDs:
 
 
 class ImageEncoder(Protocol):
-    r"""Protocol for multi-modal encoders.
+    r"""Protocol for image encoders.
 
     Currently, only image encoders are supported.
     """
@@ -328,7 +328,7 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
 
     Attributes:
         tokenizer: The tokenizer to use.
-        image_encoder: The multi-modal encoder to use if any.
+        image_encoder: The image encoder to use if any.
     """
 
     tokenizer: Tokenizer
@@ -339,7 +339,7 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
 
         Args:
             tokenizer: The tokenizer to use.
-            image_encoder: The multi-modal encoder to use if any.
+            image_encoder: The image encoder to use if any.
         """
 
     @abstractmethod

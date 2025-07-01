@@ -52,14 +52,14 @@ from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hu
 
 
 def load_image_encoder(image_config: ImageConfig, tokenizer: Union[Tekkenizer, SentencePieceTokenizer]) -> ImageEncoder:
-    r"""Load a multi-modal encoder from a config and a tokenizer.
+    r"""Load a image encoder from a config and a tokenizer.
 
     Args:
-        image_config: The multi-modal config.
+        image_config: The image config.
         tokenizer: The tokenizer.
 
     Returns:
-        The multi-modal encoder.
+        The image encoder.
     """
     special_ids = SpecialImageIDs(
         img=tokenizer.get_control_token(SpecialTokens.img.value),

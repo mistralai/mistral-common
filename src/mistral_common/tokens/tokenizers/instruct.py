@@ -43,7 +43,7 @@ class InstructTokenizerBase(
 
         Args:
             tokenizer: The tokenizer to use.
-            image_encoder: The multi-modal encoder to use if any.
+            image_encoder: The image encoder to use if any.
         """
         self.tokenizer = tokenizer
         self.image_encoder = image_encoder
@@ -201,7 +201,7 @@ class InstructTokenizerV1(
 ):
     r"""Instruct tokenizer V1.
 
-    This tokenizer has basic for messages. It does not support tools or multi-modal inputs.
+    This tokenizer has basic for messages. It does not support tools or image inputs.
     """
 
     def encode_user_message(
@@ -326,7 +326,7 @@ class InstructTokenizerV2(
 
         Args:
             tokenizer: The tokenizer to use.
-            image_encoder: The multi-modal encoder to use.
+            image_encoder: The image encoder to use.
         """
         super().__init__(tokenizer, image_encoder)
         self.BEGIN_INST = self.tokenizer.get_control_token(SpecialTokens.begin_inst.value)
@@ -522,7 +522,7 @@ class InstructTokenizerV3(
 
         Args:
             tokenizer: The tokenizer to use.
-            image_encoder: The multi-modal encoder to use.
+            image_encoder: The image encoder to use.
         """
         super().__init__(tokenizer, image_encoder=image_encoder)
 
@@ -630,7 +630,7 @@ class InstructTokenizerV3(
                 content += chunk.text
                 tokens.extend(self.tokenizer.encode(content, bos=False, eos=False))
             else:
-                assert self.image_encoder is not None, "Make sure to define a multi-modal encoder at init"
+                assert self.image_encoder is not None, "Make sure to define a image encoder at init"
                 if content:
                     tokens.extend(self.tokenizer.encode(content, bos=False, eos=False))
 
@@ -657,7 +657,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
         Args:
             tokenizer: The tokenizer to use.
-            image_encoder: The multi-modal encoder to use.
+            image_encoder: The image encoder to use.
         """
 
         super().__init__(tokenizer, image_encoder)
