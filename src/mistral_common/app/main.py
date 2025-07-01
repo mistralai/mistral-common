@@ -265,7 +265,12 @@ def create_app(tokenizer_path: Union[str, Path], validation_mode: ValidationMode
     help="Mistral-common API port",
     show_default=True,
 )
-def serve_app(tokenizer_path: Union[str, Path], validation_mode: Union[ValidationMode, str], host: str, port: int) -> None:
+def serve_app(
+    tokenizer_path: Union[str, Path],
+    validation_mode: Union[ValidationMode, str],
+    host: str,
+    port: int
+) -> None:
     r"""Serve the Mistral-common API with the given tokenizer path and validation mode."""
     app = create_app(tokenizer_path, ValidationMode(validation_mode))
     uvicorn.run(app, host=host, port=port)
