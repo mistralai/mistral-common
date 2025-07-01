@@ -11,7 +11,6 @@ from PIL import Image
 from mistral_common.image import SerializableImage, download_image
 from mistral_common.protocol.instruct.messages import ImageChunk, ImageURLChunk
 from mistral_common.tokens.tokenizers.base import (
-    ImageEncoder,
     ImageEncoding,
     SpecialImageIDs,
 )

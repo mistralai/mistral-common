@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Generic, List, Optional, Protocol, Tuple, TypeVar, Union
+from typing import Generic, List, Optional, Tuple, TypeVar, Union
 
 import numpy as np
 from pydantic import ConfigDict
@@ -12,8 +12,6 @@ from mistral_common.base import MistralBase
 from mistral_common.protocol.instruct.messages import (
     AssistantMessageType,
     ContentChunk,
-    ImageChunk,
-    ImageURLChunk,
     UserMessage,
 )
 from mistral_common.protocol.instruct.tool_calls import Tool
