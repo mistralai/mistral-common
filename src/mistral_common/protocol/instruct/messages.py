@@ -6,7 +6,7 @@ from pydantic import ConfigDict, Field
 from typing_extensions import Annotated, TypeAlias
 
 from mistral_common.base import MistralBase
-from mistral_common.multimodal import SerializableImage
+from mistral_common.image import SerializableImage
 from mistral_common.protocol.instruct.tool_calls import ToolCall
 
 

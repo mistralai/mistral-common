@@ -6,7 +6,7 @@ from typing import Iterator, List, Optional, Union
 import requests
 
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from mistral_common.tokens.tokenizers.multimodal import MultiModalVersion
+from mistral_common.tokens.tokenizers.image import MultiModalVersion
 
 _hub_installed: bool
 try:

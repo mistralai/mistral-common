@@ -8,7 +8,7 @@ from typing import Tuple, Union
 import numpy as np
 from PIL import Image
 
-from mistral_common.multimodal import SerializableImage, download_image
+from mistral_common.image import SerializableImage, download_image
 from mistral_common.protocol.instruct.messages import ImageChunk, ImageURLChunk
 from mistral_common.tokens.tokenizers.base import (
     ImageEncoding,
@@ -70,21 +70,21 @@ DATASET_STD = (0.26862954, 0.26130258, 0.27577711)  # RGB
 
 # only relevant for spm
 class MultiModalVersion(str, Enum):
-    r"""Version of the multimodal tokenizer."""
+    r"""Version of the image tokenizer."""
 
     m1 = "m1"
 
     @property
-    def config(self) -> "MultimodalConfig":
+    def config(self) -> "ImageConfig":
         if self.name == "m1":
-            return MultimodalConfig(16, 1024)
+            return ImageConfig(16, 1024)
 
         raise NotImplementedError(f"{self.name}")
 
 
 @dataclass
-class MultimodalConfig:
-    r"""Configuration for the multimodal tokenizers."""
+class ImageConfig:
+    r"""Configuration for the image tokenizers."""
 
     image_patch_size: int
     max_image_size: int
@@ -148,16 +148,16 @@ def transform_image(image: Image.Image, new_size: Tuple[int, int]) -> np.ndarray
 
 
 class ImageEncoder(MultiModalEncoder):
-    r"""Image encoder for the multimodal tokenizer."""
+    r"""Image encoder for the image tokenizer."""
 
-    def __init__(self, mm_config: MultimodalConfig, special_ids: SpecialImageIDs) -> None:
+    def __init__(self, image_config: ImageConfig, special_ids: SpecialImageIDs) -> None:
         r"""Initialize the image encoder.
 
         Args:
-            mm_config: Configuration for the multimodal tokenizer.
+            image_config: Configuration for the image tokenizer.
             special_ids: Special image tokens ids.
         """
-        self.mm_config = mm_config
+        self.image_config = image_config
         self.special_ids = special_ids
 
     def _image_to_num_tokens(self, img: Image.Image) -> Tuple[int, int]:
@@ -165,13 +165,13 @@ class ImageEncoder(MultiModalEncoder):
         h: Union[int, float]
 
         w, h = img.size
-        ratio = max(h / self.mm_config.max_image_size, w / self.mm_config.max_image_size)
+        ratio = max(h / self.image_config.max_image_size, w / self.image_config.max_image_size)
         if ratio > 1:
             w = round(w / ratio)
             h = round(h / ratio)
 
-        width_tokens = (w - 1) // (self.mm_config.image_patch_size * self.mm_config.spatial_merge_size) + 1
-        height_tokens = (h - 1) // (self.mm_config.image_patch_size * self.mm_config.spatial_merge_size) + 1
+        width_tokens = (w - 1) // (self.image_config.image_patch_size * self.image_config.spatial_merge_size) + 1
+        height_tokens = (h - 1) // (self.image_config.image_patch_size * self.image_config.spatial_merge_size) + 1
 
         return width_tokens, height_tokens
 
@@ -191,8 +191,8 @@ class ImageEncoder(MultiModalEncoder):
         image_tokens = ([self.special_ids.img] * w + [self.special_ids.img_break]) * h
         image_tokens[-1] = self.special_ids.img_end
         new_image_size = (
-            w * self.mm_config.image_patch_size * self.mm_config.spatial_merge_size,
-            h * self.mm_config.image_patch_size * self.mm_config.spatial_merge_size,
+            w * self.image_config.image_patch_size * self.image_config.spatial_merge_size,
+            h * self.image_config.image_patch_size * self.image_config.spatial_merge_size,
         )
         processed_image = transform_image(image, new_image_size)
         return ImageEncoding(tokens=image_tokens, image=processed_image)

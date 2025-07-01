@@ -30,7 +30,7 @@ from mistral_common.tokens.tokenizers.base import (
     TokenizedType,
     Tokenizer,
 )
-from mistral_common.tokens.tokenizers.multimodal import MultiModalEncoder
+from mistral_common.tokens.tokenizers.image import MultiModalEncoder
 
 
 class InstructTokenizerBase(

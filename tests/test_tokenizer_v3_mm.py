@@ -251,7 +251,7 @@ def test_image_tokenization_integration(mm_tokenizer: MistralTokenizer) -> None:
     mm_encoder = mm_tokenizer.instruct_tokenizer.mm_encoder
     assert isinstance(mm_encoder, ImageEncoder)
     # hardcode image_patch_size = 2
-    mm_encoder.mm_config.image_patch_size = 2
+    mm_encoder.image_config.image_patch_size = 2
 
     kw_args = dict(strict=True) if sys.version_info >= (3, 10) else {}
     for r, expected_tokens in zip(requests, expected, **kw_args):

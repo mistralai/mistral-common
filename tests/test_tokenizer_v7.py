@@ -52,7 +52,7 @@ def spm_tokenizer() -> InstructTokenizerV7:
     mm_encoder = tokenizer.mm_encoder
     assert isinstance(mm_encoder, ImageEncoder)
     # hardcode image_patch_size = 2 for easier checks
-    mm_encoder.mm_config.image_patch_size = 2
+    mm_encoder.image_config.image_patch_size = 2
     return tokenizer  # type: ignore
 
 

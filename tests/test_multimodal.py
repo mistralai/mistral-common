@@ -12,7 +12,7 @@ from mistral_common.protocol.instruct.messages import (
     ImageURLChunk,
     TextChunk,
 )
-from mistral_common.tokens.tokenizers.multimodal import ImageEncoder, MultimodalConfig, SpecialImageIDs, transform_image
+from mistral_common.tokens.tokenizers.multimodal import ImageEncoder, ImageConfig, SpecialImageIDs, transform_image
 
 
 @pytest.fixture
@@ -22,10 +22,10 @@ def special_token_ids() -> SpecialImageIDs:
 
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
 def test_image_to_num_tokens(spatial_merge_size: int, special_token_ids: SpecialImageIDs) -> None:
-    mm_config = MultimodalConfig(
+    image_config = ImageConfig(
         image_patch_size=16 // spatial_merge_size, max_image_size=128, spatial_merge_size=spatial_merge_size
     )
-    mm_encoder = ImageEncoder(mm_config, special_token_ids)
+    mm_encoder = ImageEncoder(image_config, special_token_ids)
 
     for size, exp in [(4, 1), (16, 1), (128, 8), (512, 8), (2048, 8)]:
         img = Image.new("RGB", (size, size), "red")
@@ -38,10 +38,10 @@ def test_image_to_num_tokens(spatial_merge_size: int, special_token_ids: Special
 
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
 def test_download_gated_image(spatial_merge_size: int, special_token_ids: SpecialImageIDs) -> None:
-    mm_config = MultimodalConfig(
+    image_config = ImageConfig(
         image_patch_size=16 // spatial_merge_size, max_image_size=128, spatial_merge_size=spatial_merge_size
     )
-    mm_encoder = ImageEncoder(mm_config, special_token_ids)
+    mm_encoder = ImageEncoder(image_config, special_token_ids)
 
     url1 = "https://upload.wikimedia.org/wikipedia/commons/d/da/2015_Kaczka_krzy%C5%BCowka_w_wodzie_%28samiec%29.jpg"
     url2 = "https://upload.wikimedia.org/wikipedia/commons/7/77/002_The_lion_king_Snyggve_in_the_Serengeti_National_Park_Photo_by_Giles_Laurent.jpg"
@@ -55,10 +55,10 @@ def test_download_gated_image(spatial_merge_size: int, special_token_ids: Specia
 
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
 def test_image_encoder(spatial_merge_size: int, special_token_ids: SpecialImageIDs) -> None:
-    mm_config = MultimodalConfig(
+    image_config = ImageConfig(
         image_patch_size=16 // spatial_merge_size, max_image_size=128, spatial_merge_size=spatial_merge_size
     )
-    mm_encoder = ImageEncoder(mm_config, special_token_ids)
+    mm_encoder = ImageEncoder(image_config, special_token_ids)
 
     size = 386
     img = Image.new("RGB", (size, size), "red")
@@ -75,8 +75,8 @@ def test_image_encoder(spatial_merge_size: int, special_token_ids: SpecialImageI
     # max image size 128
     assert image.shape == (3, 128, 128)
     assert (
-        w * mm_config.image_patch_size * spatial_merge_size,
-        h * mm_config.image_patch_size * spatial_merge_size,
+        w * image_config.image_patch_size * spatial_merge_size,
+        h * image_config.image_patch_size * spatial_merge_size,
     ) == (128, 128)
     assert len(tokens) == (w + 1) * h
 
@@ -93,8 +93,8 @@ def test_image_encoder(spatial_merge_size: int, special_token_ids: SpecialImageI
     assert image.shape == (3, 112, 112)
     w, h = mm_encoder._image_to_num_tokens(img)
     assert (
-        w * mm_config.image_patch_size * spatial_merge_size,
-        h * mm_config.image_patch_size * spatial_merge_size,
+        w * image_config.image_patch_size * spatial_merge_size,
+        h * image_config.image_patch_size * spatial_merge_size,
     ) == (112, 112)
     assert len(tokens) == (w + 1) * h
 
@@ -117,10 +117,10 @@ def test_image_encoder(spatial_merge_size: int, special_token_ids: SpecialImageI
     ],
 )
 def test_image_processing(special_token_ids: SpecialImageIDs, size: Tuple[int, int], spatial_merge_size: int) -> None:
-    mm_config = MultimodalConfig(
+    image_config = ImageConfig(
         image_patch_size=16 // spatial_merge_size, max_image_size=1024, spatial_merge_size=spatial_merge_size
     )
-    mm_encoder = ImageEncoder(mm_config, special_token_ids)
+    mm_encoder = ImageEncoder(image_config, special_token_ids)
 
     # all images with w,h >= 1024 should be resized to 1024
     # else round to nearest multiple of 16
@@ -163,10 +163,10 @@ def test_image_processing(special_token_ids: SpecialImageIDs, size: Tuple[int, i
 
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
 def test_image_encoder_formats(spatial_merge_size: int, special_token_ids: SpecialImageIDs) -> None:
-    mm_config = MultimodalConfig(
+    image_config = ImageConfig(
         image_patch_size=16 // spatial_merge_size, max_image_size=1024, spatial_merge_size=spatial_merge_size
     )
-    mm_encoder = ImageEncoder(mm_config, special_token_ids)
+    mm_encoder = ImageEncoder(image_config, special_token_ids)
 
     url = "https://picsum.photos/id/237/200/300"
     img_data = requests.get(url).content

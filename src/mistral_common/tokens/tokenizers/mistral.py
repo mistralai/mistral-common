@@ -37,15 +37,15 @@ from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV7,
     InstructTokenizerV11,
 )
-from mistral_common.tokens.tokenizers.multimodal import (
+from mistral_common.tokens.tokenizers.image import (
     ImageEncoder,
-    MultimodalConfig,
+    ImageConfig,
     MultiModalEncoder,
     SpecialImageIDs,
 )
 from mistral_common.tokens.tokenizers.sentencepiece import (
     SentencePieceTokenizer,
-    get_mm_config,
+    get_image_config,
     is_sentencepiece,
 )
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekken
@@ -53,12 +53,12 @@ from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hu
 
 
 def load_mm_encoder(
-    mm_config: MultimodalConfig, tokenizer: Union[Tekkenizer, SentencePieceTokenizer]
+    image_config: ImageConfig, tokenizer: Union[Tekkenizer, SentencePieceTokenizer]
 ) -> MultiModalEncoder:
     r"""Load a multi-modal encoder from a config and a tokenizer.
 
     Args:
-        mm_config: The multi-modal config.
+        image_config: The multi-modal config.
         tokenizer: The tokenizer.
 
     Returns:
@@ -69,7 +69,7 @@ def load_mm_encoder(
         img_break=tokenizer.get_control_token(SpecialTokens.img_break.value),
         img_end=tokenizer.get_control_token(SpecialTokens.img_end.value),
     )
-    return ImageEncoder(mm_config, special_ids)
+    return ImageEncoder(image_config, special_ids)
 
 
 class MistralTokenizer(
@@ -144,7 +144,7 @@ class MistralTokenizer(
         Args:
             is_tekken: Whether the tokenizer is a tekken tokenizer. See
                 [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer].
-            is_mm: Whether to load multimodal tokenizer.
+            is_mm: Whether to load image tokenizer.
 
         Returns:
             The Mistral tokenizer v3.
@@ -165,7 +165,7 @@ class MistralTokenizer(
         """Get the Mistral tokenizer v7.
 
         Args:
-            is_mm: Whether to load the multimodal tokenizer.
+            is_mm: Whether to load the image tokenizer.
 
         Returns:
             The Mistral tokenizer v7.
@@ -266,14 +266,14 @@ class MistralTokenizer(
 
         if is_tekken(tokenizer_filename):
             tokenizer = Tekkenizer.from_file(tokenizer_filename)
-            mm_config = tokenizer.multimodal
+            image_config = tokenizer.image
         elif is_sentencepiece(tokenizer_filename):
             tokenizer = SentencePieceTokenizer(tokenizer_filename)
-            mm_config = get_mm_config(tokenizer_filename)
+            image_config = get_image_config(tokenizer_filename)
         else:
             raise TokenizerException(f"Unrecognized tokenizer file: {tokenizer_filename}")
 
-        mm_encoder = load_mm_encoder(mm_config, tokenizer) if mm_config is not None else None
+        mm_encoder = load_mm_encoder(image_config, tokenizer) if image_config is not None else None
 
         request_normalizer = normalizer_for_tokenizer_version(tokenizer.version)
 
