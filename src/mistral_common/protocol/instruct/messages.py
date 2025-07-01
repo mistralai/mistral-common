@@ -7,6 +7,7 @@ from typing_extensions import Annotated, TypeAlias
 
 from mistral_common.base import MistralBase
 from mistral_common.image import SerializableImage
+from mistral_common.audio import AudioFormat
 from mistral_common.protocol.instruct.tool_calls import ToolCall
 
 
@@ -26,6 +27,7 @@ class ChunkTypes(str, Enum):
     text = "text"
     image = "image"
     image_url = "image_url"
+    input_audio = "input_audio"
 
 
 class BaseContentChunk(MistralBase):
@@ -141,6 +143,21 @@ class ImageURLChunk(BaseContentChunk):
         r"""Converts the OpenAI chunk to the Mistral format."""
         return cls.model_validate({"image_url": openai_chunk["image_url"]})
 
+
+class RawAudio(MistralBase):
+    # Base64 encoded audio data.
+    data: str
+
+    # The format of the encoded audio data. Currently supports "wav" and "mp3".
+    format: AudioFormat
+
+class AudioChunk(BaseContentChunk):
+    type: Literal[ChunkTypes.input_audio] = ChunkTypes.input_audio
+    input_audio: RawAudio
+
+    @property
+    def is_empty(self) -> bool:
+        return not self.input_audio.data
 
 class TextChunk(BaseContentChunk):
     r"""Text chunk.

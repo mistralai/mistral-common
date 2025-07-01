@@ -52,7 +52,7 @@ from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekken
 from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hub
 
 
-def load_mm_encoder(
+def load_image_encoder(
     image_config: ImageConfig, tokenizer: Union[Tekkenizer, SentencePieceTokenizer]
 ) -> ImageEncoder:
     r"""Load a multi-modal encoder from a config and a tokenizer.
@@ -273,19 +273,19 @@ class MistralTokenizer(
         else:
             raise TokenizerException(f"Unrecognized tokenizer file: {tokenizer_filename}")
 
-        mm_encoder = load_mm_encoder(image_config, tokenizer) if image_config is not None else None
+        image_encoder = load_image_encoder(image_config, tokenizer) if image_config is not None else None
 
         request_normalizer = normalizer_for_tokenizer_version(tokenizer.version)
 
         if tokenizer.version == TokenizerVersion.v1:
-            assert mm_encoder is None, "Tokenizer version needs to be >= v3"
+            assert image_encoder is None, "Tokenizer version needs to be >= v3"
             return MistralTokenizer(
                 InstructTokenizerV1(tokenizer),
                 validator=MistralRequestValidator(mode=mode),
                 request_normalizer=request_normalizer,
             )
         elif tokenizer.version == TokenizerVersion.v2:
-            assert mm_encoder is None, "Tokenizer version needs to be >= v3"
+            assert image_encoder is None, "Tokenizer version needs to be >= v3"
             return MistralTokenizer(
                 InstructTokenizerV2(tokenizer),
                 validator=MistralRequestValidator(mode=mode),
@@ -293,19 +293,19 @@ class MistralTokenizer(
             )
         elif tokenizer.version == TokenizerVersion.v3:
             return MistralTokenizer(
-                InstructTokenizerV3(tokenizer, mm_encoder=mm_encoder),
+                InstructTokenizerV3(tokenizer, image_encoder=image_encoder),
                 validator=MistralRequestValidatorV3(mode=mode),
                 request_normalizer=request_normalizer,
             )
         elif tokenizer.version == TokenizerVersion.v7:
             return MistralTokenizer(
-                InstructTokenizerV7(tokenizer, mm_encoder=mm_encoder),
+                InstructTokenizerV7(tokenizer, image_encoder=image_encoder),
                 validator=MistralRequestValidatorV5(mode=mode),
                 request_normalizer=request_normalizer,
             )
         elif tokenizer.version == TokenizerVersion.v11:
             return MistralTokenizer(
-                InstructTokenizerV11(tokenizer, mm_encoder=mm_encoder),
+                InstructTokenizerV11(tokenizer, image_encoder=image_encoder),
                 validator=MistralRequestValidatorV5(mode=mode),
                 request_normalizer=request_normalizer,
             )

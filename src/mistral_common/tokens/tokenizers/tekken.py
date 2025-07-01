@@ -16,6 +16,7 @@ from mistral_common.tokens.tokenizers.base import (
     TokenizerVersion,
 )
 from mistral_common.tokens.tokenizers.image import ImageConfig
+from mistral_common.tokens.tokenizers.audio import AudioConfig
 
 logger = logging.getLogger(__name__)
 
@@ -249,8 +250,15 @@ class Tekkenizer(Tokenizer):
 
         untyped["special_tokens"] = special_tokens
 
-        if mm := untyped.get("image", None):
+        if mm := untyped.get("multimodal", None):
+            # TODO(Patrick) - enable warning once fixed in vllm & transformers
+            # warnings.warn(
+            #     "multimodal is deprecated. Please rename your tekken config to use image instead.",
+            #     FutureWarning,
+            # )
             untyped["image"] = ImageConfig(**mm)
+        elif image := untyped.get("image", None):
+            untyped["image"] = ImageConfig(**image)
 
         model_data: ModelData = untyped
 
@@ -273,7 +281,15 @@ class Tekkenizer(Tokenizer):
 
     @image.setter
     def image(self, value: ImageConfig) -> None:
-        raise ValueError("Can only set Multimodal config at init")
+        raise ValueError("Can only set Image config at init")
+
+    @property
+    def audio(self) -> Optional[AudioConfig]:
+        return self._audio_config
+
+    @audio.setter
+    def audio(self, value: AudioConfig) -> None:
+        raise ValueError("Can only set Audio config at init")
 
     @property
     def num_special_tokens(self) -> int:

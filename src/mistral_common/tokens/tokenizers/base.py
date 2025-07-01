@@ -322,24 +322,48 @@ class ImageEncoder(Protocol):
         r"""The image token id."""
         ...
 
+class AudioEncoder(Protocol):
+    def __call__(
+        self,
+        content: Union[AudioChunk, AudioTranscriptChunk],
+    ) -> Union[PreAudioEncoding, AudioEncoding]:
+        """
+        Encode the given content.
+
+        Args:
+            content (AudioChunk | AudioTranscriptChunk): The audio content to be encoded.
+            interleave_audio_transcript (bool): Whether to interleave audio and
+                transcript (if interleaving params and transcript are present).
+
+        Returns:
+            ChunkEncoding: The encoded content.
+        """
+        ...
+
+    @property
+    def begin_audio_token(self) -> int: ...
+
+    @property
+    def audio_token(self) -> int: ...
+
 
 class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]):
     r"""Base class for instruct tokenizers.
 
     Attributes:
         tokenizer: The tokenizer to use.
-        mm_encoder: The multi-modal encoder to use if any.
+        image_encoder: The multi-modal encoder to use if any.
     """
 
     tokenizer: Tokenizer
-    mm_encoder: Optional[ImageEncoder]
+    image_encoder: Optional[ImageEncoder]
 
-    def __init__(self, tokenizer: Tokenizer, mm_encoder: Optional[ImageEncoder]) -> None:
+    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder]) -> None:
         r"""Initialize the instruct tokenizer.
 
         Args:
             tokenizer: The tokenizer to use.
-            mm_encoder: The multi-modal encoder to use if any.
+            image_encoder: The multi-modal encoder to use if any.
         """
 
     @abstractmethod
