@@ -300,7 +300,7 @@ class SpecialImageIDs:
         )
 
 
-class MultiModalEncoder(Protocol):
+class ImageEncoder(Protocol):
     r"""Protocol for multi-modal encoders.
 
     Currently, only image encoders are supported.
@@ -332,9 +332,9 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
     """
 
     tokenizer: Tokenizer
-    mm_encoder: Optional[MultiModalEncoder]
+    mm_encoder: Optional[ImageEncoder]
 
-    def __init__(self, tokenizer: Tokenizer, mm_encoder: Optional[MultiModalEncoder]) -> None:
+    def __init__(self, tokenizer: Tokenizer, mm_encoder: Optional[ImageEncoder]) -> None:
         r"""Initialize the instruct tokenizer.
 
         Args:

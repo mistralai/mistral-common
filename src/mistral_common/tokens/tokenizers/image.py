@@ -12,7 +12,7 @@ from mistral_common.image import SerializableImage, download_image
 from mistral_common.protocol.instruct.messages import ImageChunk, ImageURLChunk
 from mistral_common.tokens.tokenizers.base import (
     ImageEncoding,
-    MultiModalEncoder,
+    ImageEncoder,
     SpecialImageIDs,
 )
 
@@ -147,7 +147,7 @@ def transform_image(image: Image.Image, new_size: Tuple[int, int]) -> np.ndarray
     return normalize(np_image, DATASET_MEAN, DATASET_STD)
 
 
-class ImageEncoder(MultiModalEncoder):
+class ImageEncoder(ImageEncoder):
     r"""Image encoder for the image tokenizer."""
 
     def __init__(self, image_config: ImageConfig, special_ids: SpecialImageIDs) -> None:

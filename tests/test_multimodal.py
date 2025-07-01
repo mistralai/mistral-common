@@ -12,7 +12,7 @@ from mistral_common.protocol.instruct.messages import (
     ImageURLChunk,
     TextChunk,
 )
-from mistral_common.tokens.tokenizers.multimodal import ImageEncoder, ImageConfig, SpecialImageIDs, transform_image
+from mistral_common.tokens.tokenizers.image import ImageEncoder, ImageConfig, SpecialImageIDs, transform_image
 
 
 @pytest.fixture
@@ -192,7 +192,7 @@ def test_image_encoder_formats(spatial_merge_size: int, special_token_ids: Speci
 def test_transform_image_missing_cv2(monkeypatch: Any) -> None:
     img = Image.new("RGB", (10, 10), "red")
 
-    monkeypatch.setattr("mistral_common.tokens.tokenizers.multimodal.is_cv2_installed", lambda: False)
+    monkeypatch.setattr("mistral_common.tokens.tokenizers.image.is_cv2_installed", lambda: False)
 
     with pytest.raises(ImportError) as exc_info:
         transform_image(img, (16, 16))

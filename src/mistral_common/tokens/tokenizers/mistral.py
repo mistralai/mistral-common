@@ -40,7 +40,7 @@ from mistral_common.tokens.tokenizers.instruct import (
 from mistral_common.tokens.tokenizers.image import (
     ImageEncoder,
     ImageConfig,
-    MultiModalEncoder,
+    ImageEncoder,
     SpecialImageIDs,
 )
 from mistral_common.tokens.tokenizers.sentencepiece import (
@@ -54,7 +54,7 @@ from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hu
 
 def load_mm_encoder(
     image_config: ImageConfig, tokenizer: Union[Tekkenizer, SentencePieceTokenizer]
-) -> MultiModalEncoder:
+) -> ImageEncoder:
     r"""Load a multi-modal encoder from a config and a tokenizer.
 
     Args:

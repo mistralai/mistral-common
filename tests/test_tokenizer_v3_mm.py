@@ -15,7 +15,7 @@ from mistral_common.protocol.instruct.messages import (
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.base import Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.multimodal import ImageEncoder
+from mistral_common.tokens.tokenizers.image import ImageEncoder
 
 text_alignment_requests: List[ChatCompletionRequest] = [
     ChatCompletionRequest(
