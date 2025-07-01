@@ -18,6 +18,13 @@ from mistral_common.tokens.instruct.request import FIMRequest, InstructRequest
 from mistral_common.tokens.tokenizers.image import ImageEncoder
 
 
+class UserMessagePosition(str, Enum):
+    """Where to encode available tools"""
+
+    first = "first"
+    last = "last"
+
+
 class SpecialTokens(str, Enum):
     r"""[DEPRECATED] Enum of special tokens used in the tokenizer.
 
@@ -137,6 +144,7 @@ class TokenizerVersion(str, Enum):
     v3 = "v3"  # vocab_size = 32768 (spm) OR 128000 (tekken) with improved function calling
     v7 = "v7"  # vocab_size = 32768 (spm) or 128000 (tekken) with improved system prompt and function calling
     v11 = "v11"  # vocab_size = 32768 (spm) or 128000 (tekken) with improved function calling
+    v13 = "v13"  # vocab_size = 32768 (spm) or 128000 (tekken) with no call id and better prompt caching
 
 
 class Tokenized(MistralBase):

@@ -29,6 +29,7 @@ from mistral_common.tokens.tokenizers.base import (
     Tokenized,
     TokenizedType,
     Tokenizer,
+    UserMessagePosition,
 )
 from mistral_common.tokens.tokenizers.image import ImageEncoder
 
@@ -80,7 +81,9 @@ class InstructTokenizerBase(
         return first_user_idx, last_user_idx
 
     @abstractmethod
-    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
+    def encode_tool_message(
+        self, message: ToolMessage, is_before_last_user_message: bool
+    ) -> Tuple[List[int], List[np.ndarray]]:
         r"""Encode a tool message.
 
         Raises:
@@ -148,7 +151,8 @@ class InstructTokenizerBase(
                 )
                 images.extend(new_images)
             elif isinstance(msg, ToolMessage):
-                new_tokens = self.encode_tool_message(msg, msg_idx < last_user_idx)
+                new_tokens, new_images = self.encode_tool_message(msg, msg_idx < last_user_idx)
+                images.extend(new_images)
             elif isinstance(msg, AssistantMessage):
                 continue_message = request.continue_final_message and (msg_idx == len(request.messages) - 1)
 
@@ -273,7 +277,9 @@ class InstructTokenizerV1(
         tokens = self.tokenizer.encode(content, bos=False, eos=False)
         return tokens, []
 
-    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
+    def encode_tool_message(
+        self, message: ToolMessage, is_before_last_user_message: bool
+    ) -> Tuple[List[int], List[np.ndarray]]:
         r"""Encode a tool message.
 
         Raises:
@@ -328,6 +334,8 @@ class InstructTokenizerV2(
     This tokenizer adds supports to images, tools and FIM requests.
     """
 
+    _message_position_to_encode_tools = UserMessagePosition.last
+
     def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None):
         r"""Initialize the tokenizer.
 
@@ -370,8 +378,12 @@ class InstructTokenizerV2(
             The encoded tokens and the list of images.
         """
         assert message.content is not None
+        do_encode_tools = False
+        do_encode_tools |= is_first and (self._message_position_to_encode_tools == UserMessagePosition.first)
+        do_encode_tools |= is_last and (self._message_position_to_encode_tools == UserMessagePosition.last)
         tools_tokens: List[int] = []
-        if is_last and available_tools:
+
+        if do_encode_tools and available_tools:
             tools = [tool.model_dump() for tool in available_tools]
             tools_json_tokens = self.tokenizer.encode(json.dumps(tools, ensure_ascii=False), bos=False, eos=False)
             tools_tokens = [
@@ -408,7 +420,9 @@ class InstructTokenizerV2(
             "content": self._parse_json_content(tool_message.content),
         }
 
-    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
+    def encode_tool_message(
+        self, message: ToolMessage, is_before_last_user_message: bool
+    ) -> Tuple[List[int], List[np.ndarray]]:
         r"""Encode a tool message.
 
         Args:
@@ -421,7 +435,7 @@ class InstructTokenizerV2(
         """
         if is_before_last_user_message:
             # don't tokenize last tool response before last user msg
-            return []
+            return [], []
 
         # Currently only supports single tool results
         tool_result_str = json.dumps([self._prepare_tool_result(message)], ensure_ascii=False)
@@ -430,7 +444,7 @@ class InstructTokenizerV2(
             *self.tokenizer.encode(tool_result_str, bos=False, eos=False),
             self.END_TOOL_RESULTS,
         ]
-        return curr_tokens
+        return curr_tokens, []
 
     def _prepare_function_call(self, tool_call: ToolCall) -> Dict[str, Any]:
         r"""Bit of a hack due to the way function calls are tokenized."""
@@ -553,7 +567,9 @@ class InstructTokenizerV3(
             "call_id": tool_message.tool_call_id,
         }
 
-    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
+    def encode_tool_message(
+        self, message: ToolMessage, is_before_last_user_message: bool
+    ) -> Tuple[List[int], List[np.ndarray]]:
         r"""Encode a tool message.
 
         Note:
@@ -574,7 +590,7 @@ class InstructTokenizerV3(
             *self.tokenizer.encode(tool_result_str, bos=False, eos=False),
             self.END_TOOL_RESULTS,
         ]
-        return curr_tokens
+        return curr_tokens, []
 
     def encode_assistant_message(
         self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
@@ -763,7 +779,9 @@ class InstructTokenizerV7(InstructTokenizerV3):
             force_img_first=force_img_first,
         )
 
-    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
+    def encode_tool_message(
+        self, message: ToolMessage, is_before_last_user_message: bool
+    ) -> Tuple[List[int], List[np.ndarray]]:
         r"""Encode a tool message.
 
         Note:
@@ -791,7 +809,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
             *tokens,
             self.END_TOOL_RESULTS,
         ]
-        return curr_tokens
+        return curr_tokens, []
 
     def encode_assistant_message(
         self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
@@ -865,3 +883,42 @@ class InstructTokenizerV11(InstructTokenizerV7):
                 *self.tokenizer.encode(json.dumps(prepared["arguments"], ensure_ascii=False), bos=False, eos=False),
             ]
         return curr_tokens
+
+
+class InstructTokenizerV13(InstructTokenizerV11):
+    """
+    V13 updates
+        - available tools are tokenized at the first user message
+        - call id is no longer tokenized for tool calls or results
+    """
+
+    _msg_pos_to_enc_tools = UserMessagePosition.first
+
+    def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> List[int]:
+        assert message.tool_calls, f"Assistant message must have tool calls. Got {message}"
+        curr_tokens = []
+        for tool_call in message.tool_calls:
+            assert tool_call.id and tool_call.id != "null"
+            prepared = self._prepare_function_call(tool_call)
+
+            curr_tokens += [
+                self.TOOL_CALLS,
+                *self.tokenizer.encode(prepared["name"], bos=False, eos=False),
+                self.ARGS,
+                *self.tokenizer.encode(json.dumps(prepared["arguments"], ensure_ascii=False), bos=False, eos=False),
+            ]
+        return curr_tokens
+
+    def encode_tool_message(
+        self, message: ToolMessage, is_before_last_user_message: bool
+    ) -> Tuple[List[int], List[np.ndarray]]:
+        assert message.tool_call_id is not None
+        tokens, images = self.encode_user_content(
+            message.content, is_last=False, system_prompt=None, force_img_first=None
+        )
+        curr_tokens = [
+            self.BEGIN_TOOL_RESULTS,
+            *tokens,
+            self.END_TOOL_RESULTS,
+        ]
+        return curr_tokens, images
