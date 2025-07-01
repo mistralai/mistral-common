@@ -190,6 +190,13 @@ class ImageEncoder:
         self.image_config = image_config
         self.special_ids = special_ids
 
+    @property
+    def mm_config(self) -> ImageConfig:
+        # this property is deprecated, use image_config instead
+        # TODO(Patrick) - throw deprecation warning once 
+        # changes implemented into vLLM and transformers
+        return self.image_config
+
     def _image_to_num_tokens(self, img: Image.Image) -> Tuple[int, int]:
         w: Union[int, float]
         h: Union[int, float]

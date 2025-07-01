@@ -49,6 +49,13 @@ class InstructTokenizerBase(
         self.image_encoder = image_encoder
         super().__init__(tokenizer, image_encoder)
 
+    @property
+    def mm_encoder(self) -> Optional[ImageEncoder]:
+        # this funtion is deprecated, use image_encoder instead
+        # TODO(Patrick) - throw a deprecation warning once
+        # changes applied to vllm and transformers
+        return self.image_encoder
+
     def start(self) -> List[int]:
         r"""Return the start tokens."""
         return [self.tokenizer.bos_id]
