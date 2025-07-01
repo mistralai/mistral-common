@@ -248,8 +248,8 @@ def create_app(tokenizer_path: Union[str, Path], validation_mode: ValidationMode
 @click.argument("tokenizer_path", type=str)
 @click.argument(
     "validation_mode",
-    type=click.Choice(ValidationMode, case_sensitive=False),
-    default=ValidationMode.test,
+    type=click.Choice([mode.value for mode in ValidationMode], case_sensitive=False),
+    default=ValidationMode.test.value,
 )
 @click.option(
     "--host",
@@ -265,7 +265,7 @@ def create_app(tokenizer_path: Union[str, Path], validation_mode: ValidationMode
     help="Mistral-common API port",
     show_default=True,
 )
-def serve_app(tokenizer_path: Union[str, Path], validation_mode: ValidationMode, host: str, port: int) -> None:
+def serve_app(tokenizer_path: Union[str, Path], validation_mode: Union[ValidationMode, str], host: str, port: int) -> None:
     r"""Serve the Mistral-common API with the given tokenizer path and validation mode."""
-    app = create_app(tokenizer_path, validation_mode)
+    app = create_app(tokenizer_path, ValidationMode(validation_mode))
     uvicorn.run(app, host=host, port=port)
