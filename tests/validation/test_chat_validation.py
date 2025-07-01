@@ -16,14 +16,28 @@ from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
 from mistral_common.protocol.instruct.validator import (
     MistralRequestValidator,
     MistralRequestValidatorV3,
+    MistralRequestValidatorV13,
     ValidationMode,
 )
 
 
 @pytest.fixture(
-    params=[MistralRequestValidator(ValidationMode.serving), MistralRequestValidatorV3(ValidationMode.serving)]
+    params=[
+        MistralRequestValidator(ValidationMode.serving),
+        MistralRequestValidatorV3(ValidationMode.serving),
+        MistralRequestValidatorV13(ValidationMode.serving),
+    ]
 )
 def validator(request: pytest.FixtureRequest) -> MistralRequestValidator:
+    return request.param  # type: ignore
+
+
+@pytest.fixture(
+    params=[
+        MistralRequestValidatorV13(ValidationMode.serving),
+    ]
+)
+def validator_v13(request: pytest.FixtureRequest) -> MistralRequestValidator:
     return request.param  # type: ignore
 
 
@@ -232,7 +246,8 @@ class TestChatValidation:
 
     def test_too_many_tool_messages(self, validator: MistralRequestValidator) -> None:
         with pytest.raises(
-            InvalidMessageStructureException, match=r"Not the same number of function calls and responses"
+            InvalidMessageStructureException,
+            match=r"Not the same number of function calls and responses|Unexpected tool call id",
         ):
             validator.validate_messages(
                 messages=[
@@ -245,3 +260,138 @@ class TestChatValidation:
                 ],
                 continue_final_message=False,
             )
+
+
+class TestChatValidationV6:
+    def test_right_number_results_invalid_id(self, validator_v13: MistralRequestValidatorV13) -> None:
+        with pytest.raises(
+            InvalidMessageStructureException,
+            match=r"Unexpected tool call id",
+        ):
+            validator_v13.validate_messages(
+                messages=[
+                    UserMessage(content="foo"),
+                    AssistantMessage(
+                        tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]
+                    ),
+                    ToolMessage(name="foo", content="bar", tool_call_id="999999999"),  # invalid id
+                ],
+                continue_final_message=False,
+            )
+
+    def test_extra_results(self, validator_v13: MistralRequestValidatorV13) -> None:
+        with pytest.raises(
+            InvalidMessageStructureException,
+            match=r"Unexpected tool call id",
+        ):
+            validator_v13.validate_messages(
+                messages=[
+                    UserMessage(content="foo"),
+                    AssistantMessage(
+                        tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]
+                    ),
+                    ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
+                    ToolMessage(name="foo", content="bar", tool_call_id="999999999"),  # extra results
+                ],
+                continue_final_message=False,
+            )
+
+    def test_parallel_call_missing_results(self, validator_v13: MistralRequestValidatorV13) -> None:
+        with pytest.raises(
+            InvalidMessageStructureException,
+            match=r"Not the same number of function calls and responses",
+        ):
+            validator_v13.validate_messages(
+                messages=[
+                    UserMessage(content="foo"),
+                    AssistantMessage(
+                        tool_calls=[
+                            ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}")),
+                            ToolCall(id="999999999", function=FunctionCall(name="foo", arguments="{}")),
+                        ]
+                    ),
+                    ToolMessage(name="foo", content="bar", tool_call_id="123456789"),  # missing ToolMessage
+                ],
+                continue_final_message=False,
+            )
+
+    def allow_tool_results_wrong_order(self, validator_v13: MistralRequestValidatorV13) -> None:
+        validator_v13.validate_messages(
+            messages=[
+                UserMessage(content="foo"),
+                AssistantMessage(
+                    tool_calls=[
+                        ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}")),
+                        ToolCall(id="999999999", function=FunctionCall(name="foo", arguments="{}")),
+                    ]
+                ),
+                ToolMessage(name="foo", content="bar", tool_call_id="999999999"),  # invalid order
+                ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
+            ],
+            continue_final_message=False,
+        )
+
+    def test_tool_call_duplicate_ids_same_assistant_messages(self, validator_v13: MistralRequestValidatorV13) -> None:
+        with pytest.raises(
+            InvalidMessageStructureException,
+            match=r"Duplicate",
+        ):
+            validator_v13.validate_messages(
+                messages=[
+                    UserMessage(content="foo"),
+                    AssistantMessage(
+                        tool_calls=[
+                            ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}")),
+                            ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}")),
+                        ]
+                    ),
+                    ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
+                ],
+                continue_final_message=False,
+            )
+
+    def test_tool_call_duplicate_ids_different_assistant_messages(
+        self, validator_v13: MistralRequestValidatorV13
+    ) -> None:
+        validator_v13.validate_messages(
+            messages=[
+                UserMessage(content="foo"),
+                AssistantMessage(
+                    tool_calls=[
+                        ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}")),
+                    ]
+                ),
+                ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
+                AssistantMessage(
+                    tool_calls=[
+                        ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}")),
+                    ]
+                ),
+                ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
+            ],
+            continue_final_message=False,
+        )
+
+    def test_multiple_assistant_messages_some_with_tool_calls(self, validator_v13: MistralRequestValidatorV13) -> None:
+        validator_v13.validate_messages(
+            messages=[
+                UserMessage(content="foo"),
+                AssistantMessage(
+                    tool_calls=[
+                        ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}")),
+                    ]
+                ),
+                ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
+                AssistantMessage(content="h"),
+                UserMessage(content="foo"),
+                AssistantMessage(
+                    tool_calls=[
+                        ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}")),
+                    ]
+                ),
+                ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
+                AssistantMessage(content="h"),
+                UserMessage(content="foo"),
+            ],
+            continue_final_message=False,
+        )

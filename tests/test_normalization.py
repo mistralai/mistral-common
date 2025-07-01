@@ -14,7 +14,11 @@ from mistral_common.protocol.instruct.messages import (
     ToolMessage,
     UserMessage,
 )
-from mistral_common.protocol.instruct.normalize import InstructRequestNormalizer, InstructRequestNormalizerV7
+from mistral_common.protocol.instruct.normalize import (
+    InstructRequestNormalizer,
+    InstructRequestNormalizerV7,
+    InstructRequestNormalizerV13,
+)
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.tokens.instruct.request import InstructRequest
@@ -466,3 +470,190 @@ class TestFineTuningNormalizer:
         )
         normalized = normalizer.from_chat_completion_request(request)
         assert normalized == expected
+
+
+class TestChatCompletionRequestNormalizationV13:
+    @pytest.fixture(autouse=True)
+    def normalizer_v13(self) -> InstructRequestNormalizerV13:
+        return InstructRequestNormalizerV13(UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest)
+
+    def _mock_chat_completion(self, messages: List[ChatMessage]) -> ChatCompletionRequest:
+        return ChatCompletionRequest(
+            model="test",
+            messages=messages,
+            top_p=1.0,
+            temperature=0.7,
+        )
+
+    def test_no_reorder_tool_messages(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
+        chat_completion_request: ChatCompletionRequest = self._mock_chat_completion(
+            messages=[
+                UserMessage(content="A"),
+                AssistantMessage(
+                    content="B",
+                    tool_calls=[
+                        ToolCall(id="1", function=FunctionCall(name="foo", arguments="{}")),
+                        ToolCall(id="2", function=FunctionCall(name="foo", arguments="{}")),
+                    ],
+                ),
+                ToolMessage(content="C", tool_call_id="1"),
+                ToolMessage(content="D", tool_call_id="2"),
+            ]
+        )
+        parsed_request: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(
+            chat_completion_request
+        )
+        assert parsed_request.messages == [
+            UserMessage(content="A"),
+            AssistantMessage(
+                content="B",
+                tool_calls=[
+                    ToolCall(id="1", function=FunctionCall(name="foo", arguments="{}")),
+                    ToolCall(id="2", function=FunctionCall(name="foo", arguments="{}")),
+                ],
+            ),
+            ToolMessage(content="C", tool_call_id="1"),
+            ToolMessage(content="D", tool_call_id="2"),
+        ]
+
+    def test_reorder_last_tool_messages(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
+        chat_completion_request: ChatCompletionRequest = self._mock_chat_completion(
+            messages=[
+                UserMessage(content="A"),
+                AssistantMessage(
+                    content="B",
+                    tool_calls=[
+                        ToolCall(id="1", function=FunctionCall(name="foo", arguments="{}")),
+                        ToolCall(id="2", function=FunctionCall(name="foo", arguments="{}")),
+                    ],
+                ),
+                ToolMessage(content="D", tool_call_id="2"),
+                ToolMessage(content="C", tool_call_id="1"),
+            ]
+        )
+        parsed_request: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(
+            chat_completion_request
+        )
+        assert parsed_request.messages == [
+            UserMessage(content="A"),
+            AssistantMessage(
+                content="B",
+                tool_calls=[
+                    ToolCall(id="1", function=FunctionCall(name="foo", arguments="{}")),
+                    ToolCall(id="2", function=FunctionCall(name="foo", arguments="{}")),
+                ],
+            ),
+            ToolMessage(content="C", tool_call_id="1"),
+            ToolMessage(content="D", tool_call_id="2"),
+        ]
+
+    def test_reorder_internal_tool_messages(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
+        chat_completion_request: ChatCompletionRequest = self._mock_chat_completion(
+            messages=[
+                UserMessage(content="A"),
+                AssistantMessage(
+                    content="B",
+                    tool_calls=[
+                        ToolCall(id="1", function=FunctionCall(name="foo", arguments="{}")),
+                        ToolCall(id="2", function=FunctionCall(name="foo", arguments="{}")),
+                    ],
+                ),
+                ToolMessage(content="D", tool_call_id="2"),
+                ToolMessage(content="C", tool_call_id="1"),
+                AssistantMessage(content="E"),
+            ]
+        )
+        parsed_request: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(
+            chat_completion_request
+        )
+        assert parsed_request.messages == [
+            UserMessage(content="A"),
+            AssistantMessage(
+                content="B",
+                tool_calls=[
+                    ToolCall(id="1", function=FunctionCall(name="foo", arguments="{}")),
+                    ToolCall(id="2", function=FunctionCall(name="foo", arguments="{}")),
+                ],
+            ),
+            ToolMessage(content="C", tool_call_id="1"),
+            ToolMessage(content="D", tool_call_id="2"),
+            AssistantMessage(content="E"),
+        ]
+
+    def test_reorder_extra_tool_messages(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
+        chat_completion_request: ChatCompletionRequest = self._mock_chat_completion(
+            messages=[
+                UserMessage(content="A"),
+                AssistantMessage(
+                    content="B",
+                    tool_calls=[
+                        ToolCall(id="1", function=FunctionCall(name="foo", arguments="{}")),
+                    ],
+                ),
+                ToolMessage(content="D", tool_call_id="2"),
+                ToolMessage(content="C", tool_call_id="1"),
+            ]
+        )
+        parsed_request: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(
+            chat_completion_request
+        )
+        assert parsed_request.messages == [
+            UserMessage(content="A"),
+            AssistantMessage(
+                content="B",
+                tool_calls=[
+                    ToolCall(id="1", function=FunctionCall(name="foo", arguments="{}")),
+                ],
+            ),
+            ToolMessage(content="C", tool_call_id="1"),
+            ToolMessage(content="D", tool_call_id="2"),
+        ]
+
+    def test_reorder_only_from_latest_assistant_message(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
+        chat_completion_request: ChatCompletionRequest = self._mock_chat_completion(
+            messages=[
+                UserMessage(content="A"),
+                AssistantMessage(
+                    content="B",
+                    tool_calls=[
+                        ToolCall(id="1", function=FunctionCall(name="foo", arguments="{}")),
+                        ToolCall(id="2", function=FunctionCall(name="foo", arguments="{}")),
+                    ],
+                ),
+                ToolMessage(content="C", tool_call_id="1"),
+                ToolMessage(content="D", tool_call_id="2"),
+                AssistantMessage(
+                    content="E",
+                    tool_calls=[
+                        ToolCall(id="2", function=FunctionCall(name="foo", arguments="{}")),
+                        ToolCall(id="1", function=FunctionCall(name="foo", arguments="{}")),
+                    ],
+                ),
+                ToolMessage(content="C", tool_call_id="1"),
+                ToolMessage(content="D", tool_call_id="2"),
+            ]
+        )
+        parsed_request: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(
+            chat_completion_request
+        )
+        assert parsed_request.messages == [
+            UserMessage(content="A"),
+            AssistantMessage(
+                content="B",
+                tool_calls=[
+                    ToolCall(id="1", function=FunctionCall(name="foo", arguments="{}")),
+                    ToolCall(id="2", function=FunctionCall(name="foo", arguments="{}")),
+                ],
+            ),
+            ToolMessage(content="C", tool_call_id="1"),
+            ToolMessage(content="D", tool_call_id="2"),
+            AssistantMessage(
+                content="E",
+                tool_calls=[
+                    ToolCall(id="2", function=FunctionCall(name="foo", arguments="{}")),
+                    ToolCall(id="1", function=FunctionCall(name="foo", arguments="{}")),
+                ],
+            ),
+            ToolMessage(content="D", tool_call_id="2"),
+            ToolMessage(content="C", tool_call_id="1"),
+        ]

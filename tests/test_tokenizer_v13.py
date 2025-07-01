@@ -1,0 +1,189 @@
+from typing import Any
+
+import pytest
+
+from mistral_common.protocol.instruct.messages import (
+    AssistantMessage,
+    BaseMessage,
+    SystemMessage,
+    ToolMessage,
+    UserMessage,
+)
+from mistral_common.protocol.instruct.normalize import InstructRequestNormalizerV13
+from mistral_common.protocol.instruct.request import ChatCompletionRequest
+from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
+from mistral_common.protocol.instruct.validator import MistralRequestValidatorV13
+from mistral_common.tokens.tokenizers.base import InstructRequest, InstructTokenizer, Tokenized, TokenizerVersion
+from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV11, InstructTokenizerV13
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from mistral_common.tokens.tokenizers.tekken import Tekkenizer
+from tests.test_tekken import _quick_vocab, get_special_tokens
+
+
+@pytest.fixture(scope="session")
+def v11_tekkenizer() -> InstructTokenizerV11:
+    special_tokens = get_special_tokens(TokenizerVersion.v11)
+    tokenizer = Tekkenizer(
+        _quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
+        special_tokens=special_tokens,
+        pattern=r".+",  # single token, whole string
+        vocab_size=256 + 100,
+        num_special_tokens=100,
+        version=TokenizerVersion.v11,
+    )
+    return InstructTokenizerV11(tokenizer)
+
+
+@pytest.fixture(scope="session")
+def v13_tekkenizer() -> InstructTokenizerV11:
+    special_tokens = get_special_tokens(TokenizerVersion.v11)
+    tokenizer = Tekkenizer(
+        _quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
+        special_tokens=special_tokens,
+        pattern=r".+",  # single token, whole string
+        vocab_size=256 + 100,
+        num_special_tokens=100,
+        version=TokenizerVersion.v13,
+    )
+    return InstructTokenizerV13(tokenizer)
+
+
+EXPECTED_TEXT_V11: str = (
+    r"<s>[SYSTEM_PROMPT]S[/SYSTEM_PROMPT][INST]U1[/INST]A1"
+    r"[TOOL_CALLS]F1[CALL_ID]123456789[ARGS]{}[TOOL_CALLS]"
+    r"F2[CALL_ID]999999999[ARGS]{}</s>[TOOL_RESULTS]123456789"
+    r"[TOOL_CONTENT]R1[/TOOL_RESULTS][TOOL_RESULTS]999999999"
+    r"[TOOL_CONTENT]R2[/TOOL_RESULTS]A2</s>[AVAILABLE_TOOLS][{"
+    r'"type": "function", "function": {"name": "math_interpreter", '
+    r'"description": "Get the value of an arithmetic expression.", '
+    r'"parameters": {"type": "object", "properties": {'
+    r'"expression": {"type": "string", "description": '
+    r'"Math expression."}}}}}][/AVAILABLE_TOOLS][INST]U2[/INST]'
+)
+
+EXPECTED_TEXT_V13: str = (
+    r"<s>[SYSTEM_PROMPT]S[/SYSTEM_PROMPT][AVAILABLE_TOOLS][{"
+    r'"type": "function", "function": {"name": "math_interpreter", '
+    r'"description": "Get the value of an arithmetic expression.", '
+    r'"parameters": {"type": "object", "properties": {'
+    r'"expression": {"type": "string", "description": '
+    r'"Math expression."}}}}}][/AVAILABLE_TOOLS][INST]U1[/INST]A1'
+    r"[TOOL_CALLS]F1[ARGS]{}[TOOL_CALLS]F2[ARGS]{}</s>"
+    r"[TOOL_RESULTS]R1[/TOOL_RESULTS][TOOL_RESULTS]R2"
+    r"[/TOOL_RESULTS]A2</s>[INST]U2[/INST]"
+)
+
+
+@pytest.fixture
+def available_tools() -> list[dict[str, Any]]:
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "math_interpreter",
+                "description": "Get the value of an arithmetic expression.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "expression": {
+                            "type": "string",
+                            "description": "Math expression.",
+                        }
+                    },
+                },
+            },
+        }
+    ]
+
+
+@pytest.fixture
+def messages() -> list[BaseMessage]:
+    return [
+        SystemMessage(content="S"),
+        UserMessage(content="U1"),
+        AssistantMessage(
+            content="A1",
+            tool_calls=[
+                ToolCall(id="123456789", function=FunctionCall(name="F1", arguments="{}")),
+                ToolCall(id="999999999", function=FunctionCall(name="F2", arguments="{}")),
+            ],
+        ),
+        ToolMessage(content="R1", tool_call_id="123456789"),
+        ToolMessage(content="R2", tool_call_id="999999999"),
+        AssistantMessage(content="A2"),
+        UserMessage(content="U2"),
+    ]
+
+
+@pytest.fixture
+def messages_wrong_order_results() -> list[BaseMessage]:
+    return [
+        SystemMessage(content="S"),
+        UserMessage(content="U1"),
+        AssistantMessage(
+            content="A1",
+            tool_calls=[
+                ToolCall(id="123456789", function=FunctionCall(name="F1", arguments="{}")),
+                ToolCall(id="999999999", function=FunctionCall(name="F2", arguments="{}")),
+            ],
+        ),
+        ToolMessage(
+            content="R2", tool_call_id="999999999"
+        ),  # wrong order of results but passes validation and is later normalized
+        ToolMessage(content="R1", tool_call_id="123456789"),
+        AssistantMessage(content="A2"),
+        UserMessage(content="U2"),
+    ]
+
+
+def test_function_calling_v11_vs_v13(
+    v11_tekkenizer: InstructTokenizer,
+    v13_tekkenizer: InstructTokenizer,
+    available_tools: list[dict[str, Any]],
+    messages: list[BaseMessage],
+) -> None:
+    assert isinstance(v11_tekkenizer, InstructTokenizerV11), type(v11_tekkenizer)
+    assert isinstance(v13_tekkenizer, InstructTokenizerV13), type(v13_tekkenizer)
+
+    tokenized_v11 = v11_tekkenizer.encode_instruct(
+        InstructRequest(
+            messages=messages,
+            available_tools=available_tools,
+        )
+    )
+
+    assert tokenized_v11.text == EXPECTED_TEXT_V11, tokenized_v11.text
+
+    tokenized_v13 = v13_tekkenizer.encode_instruct(
+        InstructRequest(
+            messages=messages,
+            available_tools=available_tools,
+        )
+    )
+
+    assert tokenized_v13.text == EXPECTED_TEXT_V13, tokenized_v13.text
+
+
+def test_end_to_end_v13(
+    v13_tekkenizer: InstructTokenizer,
+    available_tools: list[dict[str, Any]],
+    messages_wrong_order_results: list[BaseMessage],
+) -> None:
+    """
+    Tests normalization (including reordering) and validation
+    """
+    request_normalizer = InstructRequestNormalizerV13.normalizer()
+    validator = MistralRequestValidatorV13()
+    mistral_tokenizer_v13 = MistralTokenizer(
+        instruct_tokenizer=v13_tekkenizer, validator=validator, request_normalizer=request_normalizer
+    )
+    chat_completion_request: ChatCompletionRequest = ChatCompletionRequest(
+        messages=messages_wrong_order_results,
+        tools=available_tools,
+    )
+
+    assert isinstance(mistral_tokenizer_v13, MistralTokenizer), type(mistral_tokenizer_v13)
+    # This does validation, normalization and encoding
+    tokenized_v13 = mistral_tokenizer_v13.encode_chat_completion(chat_completion_request)
+    assert isinstance(tokenized_v13, Tokenized)
+    assert tokenized_v13.text == EXPECTED_TEXT_V13, tokenized_v13.text
