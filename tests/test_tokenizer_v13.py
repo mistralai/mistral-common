@@ -1,5 +1,3 @@
-from typing import Any
-
 import pytest
 
 from mistral_common.protocol.instruct.messages import (
@@ -138,7 +136,7 @@ def messages_wrong_order_results() -> list[BaseMessage]:
 def test_function_calling_v11_vs_v13(
     v11_tekkenizer: InstructTokenizer,
     v13_tekkenizer: InstructTokenizer,
-    available_tools: list[dict[str, Any]],
+    available_tools: list[Tool],
     messages: list[BaseMessage],
 ) -> None:
     assert isinstance(v11_tekkenizer, InstructTokenizerV11), type(v11_tekkenizer)
@@ -165,7 +163,7 @@ def test_function_calling_v11_vs_v13(
 
 def test_end_to_end_v13(
     v13_tekkenizer: InstructTokenizer,
-    available_tools: list[dict[str, Any]],
+    available_tools: list[Tool],
     messages_wrong_order_results: list[BaseMessage],
 ) -> None:
     """
