@@ -4,6 +4,7 @@ from typing import Any, Dict, Generic, List, Optional, Tuple, Union
 
 import numpy as np
 
+from mistral_common.audio import Audio
 from mistral_common.exceptions import (
     InvalidAssistantMessageException,
     InvalidMessageStructureException,
@@ -12,7 +13,10 @@ from mistral_common.exceptions import (
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     AssistantMessageType,
+    AudioChunk,
     ContentChunk,
+    ImageChunk,
+    ImageURLChunk,
     SystemMessage,
     TextChunk,
     ToolMessage,
@@ -20,6 +24,7 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolCall
 from mistral_common.tokens.instruct.request import FIMRequest, InstructRequest
+from mistral_common.tokens.tokenizers.audio import AudioEncoder
 from mistral_common.tokens.tokenizers.base import (
     FIMRequestType,
     InstructRequestType,
@@ -38,7 +43,7 @@ class InstructTokenizerBase(
 ):
     r"""Base instruct tokenizer."""
 
-    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None):
+    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None, audio_encoder: Optional[AudioEncoder] = None):
         r"""Initialize the instruct tokenizer.
 
         Args:
@@ -47,7 +52,8 @@ class InstructTokenizerBase(
         """
         self.tokenizer = tokenizer
         self.image_encoder = image_encoder
-        super().__init__(tokenizer, image_encoder)
+        self.audio_encoder = audio_encoder
+        super().__init__(tokenizer, image_encoder, audio_encoder)
 
     @property
     def mm_encoder(self) -> Optional[ImageEncoder]:
@@ -123,6 +129,7 @@ class InstructTokenizerBase(
         """
         # init at bos
         images: List[np.ndarray] = []
+        audios: List[Audio] = []
         prefix_ids: Optional[List[int]] = None
         tokens_list: List[Optional[List[int]]] = []
 
@@ -138,7 +145,7 @@ class InstructTokenizerBase(
                     "Cannot continue final message if it is not an assistant message"
                 )
             if isinstance(msg, UserMessage):
-                new_tokens, new_images = self.encode_user_message(
+                new_tokens, new_images, new_audios = self.encode_user_message(
                     msg,
                     request.available_tools,
                     msg_idx == last_user_idx,
@@ -147,6 +154,7 @@ class InstructTokenizerBase(
                     force_img_first=True,  # img is always first when providing text/img chunk pair
                 )
                 images.extend(new_images)
+                audios.extend(new_audios)
             elif isinstance(msg, ToolMessage):
                 new_tokens = self.encode_tool_message(msg, msg_idx < last_user_idx)
             elif isinstance(msg, AssistantMessage):
@@ -180,6 +188,7 @@ class InstructTokenizerBase(
             text=self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP),
             prefix_ids=prefix_ids,
             images=images,
+            audios=audios,
         )
 
     def decode(self, tokens: List[int], special_token_policy: Optional[SpecialTokenPolicy] = None) -> str:
@@ -219,7 +228,7 @@ class InstructTokenizerV1(
         is_first: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray]]:
+    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
         r"""Encode a user message.
 
         Args:
@@ -244,8 +253,8 @@ class InstructTokenizerV1(
             content = message.content
 
         message_txt = f"[INST] {content} [/INST]"
-        curr_tokens, image_tokens = self.encode_user_content(content=message_txt, is_last=False, system_prompt=None)
-        return curr_tokens, image_tokens
+        curr_tokens, image, audio = self.encode_user_content(content=message_txt, is_last=False, system_prompt=None)
+        return curr_tokens, image, audio
 
     def encode_user_content(
         self,
@@ -253,7 +262,7 @@ class InstructTokenizerV1(
         is_last: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray]]:
+    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
         r"""Encode a user content.
 
         Args:
@@ -271,7 +280,7 @@ class InstructTokenizerV1(
             content = system_prompt + "\n\n" + content
 
         tokens = self.tokenizer.encode(content, bos=False, eos=False)
-        return tokens, []
+        return tokens, [], []
 
     def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
         r"""Encode a tool message.
@@ -328,14 +337,17 @@ class InstructTokenizerV2(
     This tokenizer adds supports to images, tools and FIM requests.
     """
 
-    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None):
+    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None, audio_encoder: Optional[AudioEncoder] = None):
         r"""Initialize the tokenizer.
 
         Args:
             tokenizer: The tokenizer to use.
             image_encoder: The image encoder to use.
+            audio_encoder: The audio encoder to use.
         """
-        super().__init__(tokenizer, image_encoder)
+        assert image_encoder is None, "Image encoder not supported for tokenizer V2"
+        assert audio_encoder is None, "Audio encoder not supported for tokenizer V2"
+        super().__init__(tokenizer, None, None)
         self.BEGIN_INST = self.tokenizer.get_control_token(SpecialTokens.begin_inst.value)
         self.END_INST = self.tokenizer.get_control_token(SpecialTokens.end_inst.value)
         self.BEGIN_AVAILABLE_TOOLS = self.tokenizer.get_control_token(SpecialTokens.begin_tools.value)
@@ -380,7 +392,7 @@ class InstructTokenizerV2(
                 self.END_AVAILABLE_TOOLS,
             ]
 
-        tokens, image_tokens = self.encode_user_content(
+        tokens, image, audio = self.encode_user_content(
             content=message.content,
             is_last=is_last,
             system_prompt=system_prompt,
@@ -392,7 +404,7 @@ class InstructTokenizerV2(
 
         curr_tokens = prefix_tokens + tokens + suffix_tokens
 
-        return curr_tokens, image_tokens
+        return curr_tokens, image, audio
 
     def _parse_json_content(self, content: str) -> Any:
         try:
@@ -524,14 +536,16 @@ class InstructTokenizerV3(
     The only difference with V2 tokenizer is that it encodes the tool messages differently.
     """
 
-    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None) -> None:
+    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None, audio_encoder: Optional[AudioEncoder] = None):
         r"""Initialize the tokenizer.
 
         Args:
             tokenizer: The tokenizer to use.
             image_encoder: The image encoder to use.
+            audio_encoder: The audio encoder to use.
         """
-        super().__init__(tokenizer, image_encoder=image_encoder)
+        assert audio_encoder is None, "Audio encoder not supported for tokenizer V3"
+        super().__init__(tokenizer, image_encoder=image_encoder, audio_encoder=None)
 
     def _prepare_function_call(self, tool_call: ToolCall) -> Dict[str, Any]:
         function_call = {
@@ -602,7 +616,7 @@ class InstructTokenizerV3(
         is_last: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray]]:
+    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
         r"""Encode a user content.
 
         Args:
@@ -619,6 +633,7 @@ class InstructTokenizerV3(
 
         tokens: List[int] = []
         images: List[np.ndarray] = []
+        audio: List[Audio] = []
 
         has_one_img_one_text_first = (
             len(content) == 2 and isinstance(content[0], TextChunk) and not isinstance(content[1], TextChunk)
@@ -633,10 +648,11 @@ class InstructTokenizerV3(
             if first_chunk and is_last and system_prompt:
                 first_chunk = False
                 content = system_prompt + "\n\n"
+
             if isinstance(chunk, TextChunk):
                 content += chunk.text
                 tokens.extend(self.tokenizer.encode(content, bos=False, eos=False))
-            else:
+            elif isinstance(chunk, (ImageChunk, ImageURLChunk)):
                 assert self.image_encoder is not None, "Make sure to define a image encoder at init"
                 if content:
                     tokens.extend(self.tokenizer.encode(content, bos=False, eos=False))
@@ -645,8 +661,18 @@ class InstructTokenizerV3(
 
                 tokens.extend(img_encoding.tokens)
                 images.append(img_encoding.image)
+            elif isinstance(chunk, AudioChunk):
+                assert not content, f"It is not possible that `content` is non-empty when chunk is of type {type(chunk)}."
+                # the following is only possible for >= v7
+                assert self.audio_encoder is not None, "Make sure to define a audio encoder at init"
+                audio_encoding = self.audio_encoder(chunk)
 
-        return tokens, images
+                tokens.extend(audio_encoding.tokens)
+                audio.append(audio_encoding.audio)
+            else:
+                raise ValueError(f"Unknown chunk type: {chunk}")
+
+        return tokens, images, audio
 
 
 class InstructTokenizerV7(InstructTokenizerV3):
@@ -659,15 +685,16 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
     """
 
-    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None) -> None:
+    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None, audio_encoder: Optional[AudioEncoder] = None) -> None:
         r"""Initialize the tokenizer.
 
         Args:
             tokenizer: The tokenizer to use.
             image_encoder: The image encoder to use.
+            audio_encoder: The audio encoder to use.
         """
 
-        super().__init__(tokenizer, image_encoder)
+        super().__init__(tokenizer, image_encoder, audio_encoder)
         self.BEGIN_SYSTEM = self.tokenizer.get_control_token(SpecialTokens.begin_system.value)
         self.END_SYSTEM = self.tokenizer.get_control_token(SpecialTokens.end_system.value)
         self.BEGIN_TOOL_CONTENT = self.tokenizer.get_control_token(SpecialTokens.begin_tool_content.value)
@@ -739,7 +766,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
         is_first: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray]]:
+    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
         r"""Encode a user message.
 
         Args:
@@ -816,18 +843,35 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
         curr_tokens: list = []
         if message.content:
-            if isinstance(message.content, str):
-                curr_tokens += self._encode_normal_content_assistant_message(message)
-            elif isinstance(message.content, list):
-                curr_tokens += self.encode_content_chunks(
-                    message.content, is_last=False, system_prompt=None, force_img_first=True
-                ).tokens
+            assert isinstance(message.content, str), f"Message content must be a string. Got {message.content}"
+            curr_tokens += self._encode_normal_content_assistant_message(message)
         if message.tool_calls:
             curr_tokens += self._encode_tool_calls_in_assistant_message(message)
         if not message.prefix and not continue_message:
             curr_tokens.append(self.tokenizer.eos_id)
 
         return curr_tokens
+
+    def encode_audio_chunk(
+        self,
+        chunk: AudioChunk,
+        tokens: List[int],
+        curr_content_str: str,
+        audios: List[Audio],
+        audios_segment_token_sizes: List[List[int]],
+    ) -> Tuple[List[int], str, List[Audio], List[List[int]]]:
+        assert self.audio_encoder is not None
+        tokens, curr_content_str = self._tokenize_content_and_append(tokens, curr_content_str)
+
+        audio_enc = self.audio_encoder(chunk)
+        assert audio_enc.tokens
+
+        tokens += audio_enc.tokens
+        audios.append(audio_enc.audio)
+        audios_segment_token_sizes.append(audio_enc.audio_segment_token_sizes)
+
+        return tokens, curr_content_str, audios, audios_segment_token_sizes
+
 
 
 class InstructTokenizerV11(InstructTokenizerV7):
@@ -842,8 +886,9 @@ class InstructTokenizerV11(InstructTokenizerV7):
         self,
         tokenizer: Tokenizer,
         image_encoder: Optional[ImageEncoder] = None,
+        audio_encoder: Optional[AudioEncoder] = None,
     ) -> None:
-        super().__init__(tokenizer, image_encoder)
+        super().__init__(tokenizer, image_encoder, audio_encoder)
         self.ARGS = self.tokenizer.get_control_token(SpecialTokens.args.value)
         self.CALL_ID = self.tokenizer.get_control_token(SpecialTokens.call_id.value)
 

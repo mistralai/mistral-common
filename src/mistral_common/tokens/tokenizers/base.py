@@ -5,8 +5,9 @@ from pathlib import Path
 from typing import Generic, List, Optional, Tuple, TypeVar, Union
 
 import numpy as np
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 
+from mistral_common.audio import Audio
 from mistral_common.base import MistralBase
 from mistral_common.protocol.instruct.messages import (
     AssistantMessageType,
@@ -15,6 +16,7 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.tool_calls import Tool
 from mistral_common.tokens.instruct.request import FIMRequest, InstructRequest
+from mistral_common.tokens.tokenizers.audio import AudioEncoder
 from mistral_common.tokens.tokenizers.image import ImageEncoder
 
 
@@ -69,6 +71,11 @@ class SpecialTokens(str, Enum):
     begin_tool_content = "[TOOL_CONTENT]"
     args = "[ARGS]"
     call_id = "[CALL_ID]"
+    # Audio
+    # TODO(Patrick) - check what is actually needed here
+    audio = "[AUDIO]"
+    begin_audio = "[BEGIN_AUDIO]"
+    transcribe = "[TRANSCRIBE]"
 
 
 class SpecialTokenPolicy(int, Enum):
@@ -156,7 +163,8 @@ class Tokenized(MistralBase):
     tokens: List[int]
     text: Optional[str] = None
     prefix_ids: Optional[List[int]] = None
-    images: List[np.ndarray] = []
+    images: List[np.ndarray] = Field(default_factory=list)
+    audios: List[Audio] = Field(default_factory=list) 
 
 
 class Tokenizer(ABC):
@@ -258,13 +266,15 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
 
     tokenizer: Tokenizer
     image_encoder: Optional[ImageEncoder]
+    audio_encoder: Optional[AudioEncoder]
 
-    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder]) -> None:
+    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder], audio_encoder: Optional[AudioEncoder]) -> None:
         r"""Initialize the instruct tokenizer.
 
         Args:
             tokenizer: The tokenizer to use.
             image_encoder: The image encoder to use if any.
+            audio_encoder: The audio encoder to use if any.
         """
 
     @abstractmethod

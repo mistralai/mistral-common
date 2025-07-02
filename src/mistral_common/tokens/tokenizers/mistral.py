@@ -21,6 +21,7 @@ from mistral_common.protocol.instruct.validator import (
     ValidationMode,
 )
 from mistral_common.tokens.instruct.request import FIMRequest
+from mistral_common.tokens.tokenizers.audio import AudioEncoder, SpecialAudioIDs
 from mistral_common.tokens.tokenizers.base import (
     InstructRequest,
     InstructRequestType,
@@ -67,6 +68,23 @@ def load_image_encoder(image_config: ImageConfig, tokenizer: Union[Tekkenizer, S
         img_end=tokenizer.get_control_token(SpecialTokens.img_end.value),
     )
     return ImageEncoder(image_config, special_ids)
+
+
+def load_audio_encoder(audio_config: ImageConfig, tokenizer: Tekkenizer) -> AudioEncoder:
+    r"""Load a audio encoder from a config and a tokenizer.
+
+    Args:
+        audio_config: The audio config.
+        tokenizer: The tokenizer.
+
+    Returns:
+        The audio encoder.
+    """
+    special_ids = SpecialAudioIDs(
+        audio=tokenizer.get_control_token(SpecialTokens.audio.value),
+        begin_audio=tokenizer.get_control_token(SpecialTokens.begin_audio.value),
+    )
+    return AudioEncoder(audio_config, special_ids)
 
 
 class MistralTokenizer(
@@ -264,18 +282,27 @@ class MistralTokenizer(
         if is_tekken(tokenizer_filename):
             tokenizer = Tekkenizer.from_file(tokenizer_filename)
             image_config = tokenizer.image
+            audio_config = tokenizer.audio
         elif is_sentencepiece(tokenizer_filename):
             tokenizer = SentencePieceTokenizer(tokenizer_filename)
             image_config = get_image_config(tokenizer_filename)
+            # spm can't have audio
+            audio_config = None
         else:
             raise TokenizerException(f"Unrecognized tokenizer file: {tokenizer_filename}")
 
         image_encoder = load_image_encoder(image_config, tokenizer) if image_config is not None else None
 
+        audio_encoder = None
+        if audio_config is not None:
+            assert isinstance(tokenizer, Tekkenizer), "Audio is only supported for tekken tokenizers"
+            audio_encoder = load_audio_encoder(audio_config, tokenizer)
+
         request_normalizer = normalizer_for_tokenizer_version(tokenizer.version)
 
         if tokenizer.version == TokenizerVersion.v1:
             assert image_encoder is None, "Tokenizer version needs to be >= v3"
+            assert audio_encoder is None, "Tokenizer version needs to be >= v7"
             return MistralTokenizer(
                 InstructTokenizerV1(tokenizer),
                 validator=MistralRequestValidator(mode=mode),
@@ -283,12 +310,14 @@ class MistralTokenizer(
             )
         elif tokenizer.version == TokenizerVersion.v2:
             assert image_encoder is None, "Tokenizer version needs to be >= v3"
+            assert audio_encoder is None, "Tokenizer version needs to be >= v7"
             return MistralTokenizer(
                 InstructTokenizerV2(tokenizer),
                 validator=MistralRequestValidator(mode=mode),
                 request_normalizer=request_normalizer,
             )
         elif tokenizer.version == TokenizerVersion.v3:
+            assert audio_encoder is None, "Tokenizer version needs to be >= v7"
             return MistralTokenizer(
                 InstructTokenizerV3(tokenizer, image_encoder=image_encoder),
                 validator=MistralRequestValidatorV3(mode=mode),
@@ -296,13 +325,13 @@ class MistralTokenizer(
             )
         elif tokenizer.version == TokenizerVersion.v7:
             return MistralTokenizer(
-                InstructTokenizerV7(tokenizer, image_encoder=image_encoder),
+                InstructTokenizerV7(tokenizer, image_encoder=image_encoder, audio_encoder=audio_encoder),
                 validator=MistralRequestValidatorV5(mode=mode),
                 request_normalizer=request_normalizer,
             )
         elif tokenizer.version == TokenizerVersion.v11:
             return MistralTokenizer(
-                InstructTokenizerV11(tokenizer, image_encoder=image_encoder),
+                InstructTokenizerV11(tokenizer, image_encoder=image_encoder, audio_encoder=audio_encoder),
                 validator=MistralRequestValidatorV5(mode=mode),
                 request_normalizer=request_normalizer,
             )
