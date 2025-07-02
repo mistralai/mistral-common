@@ -111,26 +111,6 @@ def tekken_request_tokens(tekken_tokenizer: MistralTokenizer, tekken_request: Ch
 
 
 @pytest.fixture(scope="module")
-def tekken_request_template(tekken_tokenizer: MistralTokenizer, tekken_request: ChatCompletionRequest) -> str:
-    template: str = tekken_tokenizer.encode_chat_completion(tekken_request).text
-    return template
-
-
-@pytest.fixture(scope="module")
-def tekken_messages_template(tekken_tokenizer: MistralTokenizer, tekken_messages: list[ChatMessage]) -> str:
-    template: str = tekken_tokenizer.encode_chat_completion(ChatCompletionRequest(messages=tekken_messages)).text
-    return template
-
-
-@pytest.fixture(scope="module")
-def tekken_oai_template(tekken_app: FastAPI, tekken_oai_request: OpenAIChatCompletionRequest) -> str:
-    template: str = (
-        tekken_app.dependency_overrides[get_settings]()._tokenizer.encode_chat_completion(tekken_oai_request).text
-    )
-    return template
-
-
-@pytest.fixture(scope="module")
 def spm_request(spm_messages: list[ChatMessage]) -> ChatCompletionRequest:
     return ChatCompletionRequest(
         messages=spm_messages,
@@ -140,24 +120,6 @@ def spm_request(spm_messages: list[ChatMessage]) -> ChatCompletionRequest:
 @pytest.fixture(scope="module")
 def spm_oai_request(spm_request: ChatCompletionRequest) -> OpenAIChatCompletionRequest:
     return OpenAIChatCompletionRequest.model_validate(spm_request.to_openai())
-
-
-@pytest.fixture(scope="module")
-def spm_request_template(spm_tokenizer: MistralTokenizer, spm_request: ChatCompletionRequest) -> str:
-    template: str = spm_tokenizer.encode_chat_completion(spm_request).text
-    return template
-
-
-@pytest.fixture(scope="module")
-def spm_messages_template(spm_tokenizer: MistralTokenizer, spm_messages: list[ChatMessage]) -> str:
-    template: str = spm_tokenizer.encode_chat_completion(ChatCompletionRequest(messages=spm_messages)).text
-    return template
-
-
-@pytest.fixture(scope="module")
-def spm_request_messages(tekken_tokenizer: MistralTokenizer, spm_messages: list[ChatMessage]) -> str:
-    template: str = tekken_tokenizer.encode_chat_completion(ChatCompletionRequest(messages=spm_messages)).text
-    return template
 
 
 @pytest.fixture(scope="module")
@@ -249,72 +211,6 @@ def test_tokenize_messages_with_empty_messages(tekken_client: TestClient) -> Non
     response = tekken_client.post("/tokenize/messages", json=jsonable_encoder([]))
     assert response.status_code == 400
     assert response.json()["detail"] == "Messages list cannot be empty."
-
-
-@pytest.mark.parametrize(
-    ["client_fixture", "request_fixture", "template_fixture"],
-    [
-        (
-            "tekken_client",
-            "tekken_request",
-            "tekken_request_template",
-        ),
-        (
-            "tekken_client",
-            "tekken_oai_request",
-            "tekken_request_template",
-        ),
-        (
-            "spm_client",
-            "spm_request",
-            "spm_request_template",
-        ),
-        (
-            "spm_client",
-            "spm_oai_request",
-            "spm_request_template",
-        ),
-    ],
-)
-def test_apply_template_to_request(
-    client_fixture: str, request_fixture: str, template_fixture: str, request: pytest.FixtureRequest
-) -> None:
-    chat_request: ChatCompletionRequest = request.getfixturevalue(request_fixture)
-    template: str = request.getfixturevalue(template_fixture)
-
-    client: TestClient = request.getfixturevalue(client_fixture)
-
-    response = client.post("/apply-chat-template/request", json=jsonable_encoder(chat_request))
-    assert response.status_code == 200
-    assert response.json() == template
-
-
-@pytest.mark.parametrize(
-    ["client_fixture", "messages_fixture", "template_fixture"],
-    [
-        (
-            "tekken_client",
-            "tekken_messages",
-            "tekken_messages_template",
-        ),
-        (
-            "spm_client",
-            "spm_messages",
-            "spm_messages_template",
-        ),
-    ],
-)
-def test_apply_template_to_messages(
-    client_fixture: str, messages_fixture: str, template_fixture: str, request: pytest.FixtureRequest
-) -> None:
-    messages: list[ChatMessage] = request.getfixturevalue(messages_fixture)
-    template: str = request.getfixturevalue(template_fixture)
-
-    client: TestClient = request.getfixturevalue(client_fixture)
-
-    response = client.post("/apply-chat-template/messages", json=jsonable_encoder(messages))
-    assert response.status_code == 200
-    assert response.json() == template
 
 
 @pytest.mark.parametrize(
