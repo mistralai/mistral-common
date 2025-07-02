@@ -266,10 +266,7 @@ def create_app(tokenizer_path: Union[str, Path], validation_mode: ValidationMode
     show_default=True,
 )
 def serve_app(
-    tokenizer_path: Union[str, Path],
-    validation_mode: Union[ValidationMode, str],
-    host: str,
-    port: int
+    tokenizer_path: Union[str, Path], validation_mode: Union[ValidationMode, str], host: str, port: int
 ) -> None:
     r"""Serve the Mistral-common API with the given tokenizer path and validation mode."""
     app = create_app(tokenizer_path, ValidationMode(validation_mode))
