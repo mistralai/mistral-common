@@ -95,6 +95,7 @@ class TokenizerVersion(str, Enum):
         v2: The second version of the tokenizer that includes special control tokens [INST], [\INST].
         v3: The third version of the tokenizer that includes improved function calling.
         v7: The seventh version of the tokenizer that includes improved system prompt and function calling.
+        v11: The elevnth version of the tokenizer that has improved function calling
 
     Examples:
         >>> version = TokenizerVersion.v1
