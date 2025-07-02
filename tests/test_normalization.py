@@ -657,3 +657,18 @@ class TestChatCompletionRequestNormalizationV13:
             ToolMessage(content="D", tool_call_id="2"),
             ToolMessage(content="C", tool_call_id="1"),
         ]
+
+    def test_normalize_tool_messages(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
+        chat_completion_request: ChatCompletionRequest = self._mock_chat_completion(
+            messages=[
+                ToolMessage(content=[TextChunk(text="Chunk1"), TextChunk(text="Chunk2")], tool_call_id="1"),
+                ToolMessage(content="D", tool_call_id="2"),
+            ]
+        )
+        parsed_request: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(
+            chat_completion_request
+        )
+        assert parsed_request.messages == [
+            ToolMessage(content="Chunk1\n\nChunk2", tool_call_id="1"),
+            ToolMessage(content="D", tool_call_id="2"),
+        ]

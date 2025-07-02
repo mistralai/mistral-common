@@ -4,6 +4,7 @@ from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     BaseMessage,
     SystemMessage,
+    TextChunk,
     ToolMessage,
     UserMessage,
 )
@@ -184,3 +185,10 @@ def test_end_to_end_v13(
     tokenized_v13 = mistral_tokenizer_v13.encode_chat_completion(chat_completion_request)
     assert isinstance(tokenized_v13, Tokenized)
     assert tokenized_v13.text == EXPECTED_TEXT_V13, tokenized_v13.text
+
+
+def test_encode_tool_message(v13_tekkenizer: InstructTokenizer) -> None:
+    tool_message = ToolMessage(content=[TextChunk(text="R1")], tool_call_id="123456789")
+    assert isinstance(v13_tekkenizer, InstructTokenizerV13)
+    encoded = v13_tekkenizer.encode_tool_message(tool_message, is_before_last_user_message=False)
+    assert encoded[0] == [7, 182, 149, 8]

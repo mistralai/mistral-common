@@ -91,11 +91,44 @@ class InstructRequestNormalizer(
             normalized_content = content
         return normalized_content
 
-    def _aggregate_content_chunks(self, content: Union[str, List[TextChunk]], chunk_join_str: str = "\n\n") -> str:
-        if isinstance(content, list):
-            return chunk_join_str.join([chunk.text for chunk in content])
-        else:
-            return content
+    def _aggregate_content_chunks(self, messages: List[UATS]) -> Union[List[ContentChunk], str]:
+        """
+        Just coalesce neighboring blocks of ContentChunks
+        """
+        all_content: List[ContentChunk] = []
+        text_chunks: List[str] = []
+        for message in messages:
+            assert isinstance(
+                message,
+                (
+                    self._user_message_class,
+                    self._tool_message_class,
+                    self._system_message_class,
+                ),
+            ), f"Expected user/tool/system message got {type(message)}"
+            if isinstance(message.content, str):
+                text_chunks.append(message.content)
+            else:  # it's a List[ContentChunk]
+                for chunk in message.content:
+                    if isinstance(chunk, TextChunk):
+                        text_chunks.append(chunk.text)
+                    else:
+                        if text_chunks:
+                            all_content.append(TextChunk(text="\n\n".join(text_chunks)))
+                            text_chunks = []
+                        all_content.append(chunk)
+
+        text_content = "\n\n".join(text_chunks) if text_chunks else ""
+
+        if not all_content:
+            # if no ContentChunk was passed, we return content as a str
+            return text_content
+
+        if text_content:
+            # else we return a List of content chunks
+            all_content.append(TextChunk(text=text_content))
+
+        return all_content
 
     def _aggregate_system_prompts(self, request: ChatCompletionRequest[UATS]) -> Optional[str]:
         system_prompt: List[str] = []
@@ -106,22 +139,13 @@ class InstructRequestNormalizer(
 
         return "\n\n".join(system_prompt) if len(system_prompt) else None
 
-    def _aggregate_tool_messages(self, messages: List[UATS], latest_call_ids: List[str]) -> List[ToolMessageType]:
-        """
-        We currently do not do any aggregation for tool messages, but we normalize the json content
-        """
-        # latest_call_ids is not used here
-        tool_messages: List[ToolMessageType] = []
+    def _aggregate_tool_messages(self, messages: List[UATS], latest_call_ids: List[str]) -> List[ToolMessage]:
+        tool_messages: List[ToolMessage] = []
         for message in messages:
-            assert isinstance(message, self._tool_message_class), "Expected tool message"
-            content = self._aggregate_content_chunks(message.content)
-            normalized_content = self._normalize_json_content(content)
-            tool_messages.append(
-                self._tool_message_class(
-                    content=normalized_content, tool_call_id=message.tool_call_id, name=message.name
-                )
-            )
-
+            assert isinstance(message, ToolMessage), "Expected tool message"
+            # we do not aggregate across messages but only per message
+            normalized_content = self._aggregate_content_chunks(messages=[message])
+            tool_messages.append(ToolMessage(tool_call_id=message.tool_call_id, content=normalized_content))
         return tool_messages
 
     def _normalize_tool_call(self, tool_call: ToolCall) -> ToolCall:
@@ -173,33 +197,7 @@ class InstructRequestNormalizer(
         """
         Just coalesce neighboring blocks of text
         """
-        all_content: List[ContentChunk] = []
-        text_chunks: List[str] = []
-        for message in messages:
-            assert isinstance(message, self._user_message_class), f"Expected user message got {type(message)}"
-            if isinstance(message.content, str):
-                text_chunks.append(message.content)
-            else:  # it's a List[ContentChunk]
-                for chunk in message.content:
-                    if isinstance(chunk, TextChunk):
-                        text_chunks.append(chunk.text)
-                    else:
-                        if text_chunks:
-                            all_content.append(TextChunk(text="\n\n".join(text_chunks)))
-                            text_chunks = []
-                        all_content.append(chunk)
-
-        text_content = "\n\n".join(text_chunks) if text_chunks else ""
-
-        if not all_content:
-            # if no ContentChunk was passed, we return content as a str
-            return self._user_message_class(content=text_content)
-
-        if text_content:
-            # else we return a List of content chunks
-            all_content.append(TextChunk(text=text_content))
-
-        return self._user_message_class(content=all_content)
+        return self._user_message_class(content=self._aggregate_content_chunks(messages))
 
     def _aggregate_role(
         self, messages: List[UATS], role: Optional[Roles], latest_call_ids: List[str]

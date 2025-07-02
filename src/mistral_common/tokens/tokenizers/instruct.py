@@ -415,6 +415,7 @@ class InstructTokenizerV2(
     def _prepare_tool_result(self, tool_message: ToolMessage) -> Dict[str, Any]:
         r"""Bit of a hack due to the way tool results are tokenized."""
         assert tool_message.content is not None, "Tool message content cannot be None"
+        assert isinstance(tool_message.content, str), "Tool message content must be string"
         return {
             "name": tool_message.name,
             "content": self._parse_json_content(tool_message.content),
@@ -560,6 +561,7 @@ class InstructTokenizerV3(
 
     def _prepare_tool_result(self, tool_message: ToolMessage) -> Dict[str, Any]:
         assert tool_message.content is not None, "Tool message content cannot be None"
+        assert isinstance(tool_message.content, str), "Tool message content must be string"
         assert tool_message.tool_call_id is not None, "Tool message has to have the tool call id defined in v3"
 
         return {
@@ -796,6 +798,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
             The encoded tokens.
         """
         assert message.tool_call_id is not None
+        assert isinstance(message.content, str), "Tool message content must be string"
         tool_call_id_tokens = self.tokenizer.encode(message.tool_call_id, bos=False, eos=False)
         tokens = self.tokenizer.encode(message.content, bos=False, eos=False)
 

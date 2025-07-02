@@ -378,7 +378,7 @@ class ToolMessage(BaseMessage):
        >>> message = ToolMessage(content="Hello, how can I help you?", tool_call_id="123")
     """
 
-    content: str
+    content: Union[str, List[ContentChunk]]
     role: Literal[Roles.tool] = Roles.tool
     tool_call_id: Optional[str] = None
 
@@ -387,15 +387,33 @@ class ToolMessage(BaseMessage):
 
     def to_openai(self) -> Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]:
         r"""Converts the message to the OpenAI format."""
-        assert self.tool_call_id is not None, "tool_call_id must be provided for tool messages."
-        return self.model_dump(exclude={"name"})
+        if isinstance(self.content, str):
+            return {
+                "role": self.role,
+                "content": self.content,
+                "tool_call_id": self.tool_call_id,
+            }
+        return {
+            "role": self.role,
+            "content": [chunk.to_openai() for chunk in self.content],
+            "tool_call_id": self.tool_call_id,
+        }
 
     @classmethod
-    def from_openai(cls, messages: Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]) -> "ToolMessage":
+    def from_openai(
+        cls, tool_message: Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]
+    ) -> "ToolMessage":
         r"""Converts the OpenAI message to the Mistral format."""
-        tool_message = cls.model_validate(messages)
-        assert tool_message.tool_call_id is not None, "tool_call_id must be provided for tool messages."
-        return tool_message
+        if isinstance(tool_message["content"], str):
+            return cls.model_validate(tool_message)
+        assert tool_message["tool_call_id"] is not None, "tool_call_id must be provided for tool messages."
+        return cls.model_validate(
+            {
+                "role": tool_message["role"],
+                "content": [_convert_openai_content_chunks(chunk) for chunk in tool_message["content"]],
+                "tool_call_id": tool_message["tool_call_id"],
+            },
+        )
 
 
 ChatMessage = Annotated[Union[SystemMessage, UserMessage, AssistantMessage, ToolMessage], Field(discriminator="role")]
