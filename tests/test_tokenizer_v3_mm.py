@@ -14,8 +14,8 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.base import Tokenized
+from mistral_common.tokens.tokenizers.image import ImageEncoder
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.multimodal import ImageEncoder
 
 text_alignment_requests: List[ChatCompletionRequest] = [
     ChatCompletionRequest(
@@ -174,7 +174,7 @@ def test_swap_text_image_special_case(mm_tokenizer: MistralTokenizer) -> None:
 
 
 def are_requests_same(mm_tokenizer: MistralTokenizer, requests: List[ChatCompletionRequest]) -> bool:
-    assert mm_tokenizer.instruct_tokenizer.mm_encoder is not None
+    assert mm_tokenizer.instruct_tokenizer.image_encoder is not None
     outputs: List[Tokenized] = []
     for request in requests:
         outputs.append(mm_tokenizer.encode_chat_completion(request))
@@ -248,10 +248,10 @@ def test_image_tokenization_integration(mm_tokenizer: MistralTokenizer) -> None:
         [1, 3, 1065, *img_toks, 1066, 1267, 1067, *img_toks, 1068, 1267, 1069, 4],
     ]
     # fmt: on
-    mm_encoder = mm_tokenizer.instruct_tokenizer.mm_encoder
-    assert isinstance(mm_encoder, ImageEncoder)
+    image_encoder = mm_tokenizer.instruct_tokenizer.image_encoder
+    assert isinstance(image_encoder, ImageEncoder)
     # hardcode image_patch_size = 2
-    mm_encoder.mm_config.image_patch_size = 2
+    image_encoder.image_config.image_patch_size = 2
 
     kw_args = dict(strict=True) if sys.version_info >= (3, 10) else {}
     for r, expected_tokens in zip(requests, expected, **kw_args):

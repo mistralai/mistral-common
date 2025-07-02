@@ -12,7 +12,7 @@ from mistral_common.protocol.instruct.messages import (
     ImageURLChunk,
     TextChunk,
 )
-from mistral_common.tokens.tokenizers.multimodal import ImageEncoder, MultimodalConfig, SpecialImageIDs, transform_image
+from mistral_common.tokens.tokenizers.image import ImageConfig, ImageEncoder, SpecialImageIDs, transform_image
 
 
 @pytest.fixture
@@ -22,43 +22,43 @@ def special_token_ids() -> SpecialImageIDs:
 
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
 def test_image_to_num_tokens(spatial_merge_size: int, special_token_ids: SpecialImageIDs) -> None:
-    mm_config = MultimodalConfig(
+    image_config = ImageConfig(
         image_patch_size=16 // spatial_merge_size, max_image_size=128, spatial_merge_size=spatial_merge_size
     )
-    mm_encoder = ImageEncoder(mm_config, special_token_ids)
+    image_encoder = ImageEncoder(image_config, special_token_ids)
 
     for size, exp in [(4, 1), (16, 1), (128, 8), (512, 8), (2048, 8)]:
         img = Image.new("RGB", (size, size), "red")
-        assert mm_encoder._image_to_num_tokens(img) == (exp, exp)
+        assert image_encoder._image_to_num_tokens(img) == (exp, exp)
 
     for size1, size2, exp1, exp2 in [(4, 2, 1, 1), (8, 16, 1, 1), (128, 64, 8, 4), (512, 1024, 4, 8)]:
         img = Image.new("RGB", (size1, size2), "red")
-        assert mm_encoder._image_to_num_tokens(img) == (exp1, exp2)
+        assert image_encoder._image_to_num_tokens(img) == (exp1, exp2)
 
 
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
 def test_download_gated_image(spatial_merge_size: int, special_token_ids: SpecialImageIDs) -> None:
-    mm_config = MultimodalConfig(
+    image_config = ImageConfig(
         image_patch_size=16 // spatial_merge_size, max_image_size=128, spatial_merge_size=spatial_merge_size
     )
-    mm_encoder = ImageEncoder(mm_config, special_token_ids)
+    image_encoder = ImageEncoder(image_config, special_token_ids)
 
     url1 = "https://upload.wikimedia.org/wikipedia/commons/d/da/2015_Kaczka_krzy%C5%BCowka_w_wodzie_%28samiec%29.jpg"
     url2 = "https://upload.wikimedia.org/wikipedia/commons/7/77/002_The_lion_king_Snyggve_in_the_Serengeti_National_Park_Photo_by_Giles_Laurent.jpg"
 
     for url in [url1, url2]:
         content = ImageURLChunk(image_url=url)
-        image = mm_encoder(content).image
+        image = image_encoder(content).image
 
         assert image is not None, "Make sure gated wikipedia images can be downloaded"
 
 
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
 def test_image_encoder(spatial_merge_size: int, special_token_ids: SpecialImageIDs) -> None:
-    mm_config = MultimodalConfig(
+    image_config = ImageConfig(
         image_patch_size=16 // spatial_merge_size, max_image_size=128, spatial_merge_size=spatial_merge_size
     )
-    mm_encoder = ImageEncoder(mm_config, special_token_ids)
+    image_encoder = ImageEncoder(image_config, special_token_ids)
 
     size = 386
     img = Image.new("RGB", (size, size), "red")
@@ -66,17 +66,17 @@ def test_image_encoder(spatial_merge_size: int, special_token_ids: SpecialImageI
     text_chunk = TextChunk(text="")
 
     with pytest.raises(AttributeError):
-        mm_encoder(text_chunk)  # type: ignore
+        image_encoder(text_chunk)  # type: ignore
 
-    output = mm_encoder(img_chunk)
+    output = image_encoder(img_chunk)
     tokens, image = output.tokens, output.image
 
-    w, h = mm_encoder._image_to_num_tokens(img)
+    w, h = image_encoder._image_to_num_tokens(img)
     # max image size 128
     assert image.shape == (3, 128, 128)
     assert (
-        w * mm_config.image_patch_size * spatial_merge_size,
-        h * mm_config.image_patch_size * spatial_merge_size,
+        w * image_config.image_patch_size * spatial_merge_size,
+        h * image_config.image_patch_size * spatial_merge_size,
     ) == (128, 128)
     assert len(tokens) == (w + 1) * h
 
@@ -86,15 +86,15 @@ def test_image_encoder(spatial_merge_size: int, special_token_ids: SpecialImageI
     text_chunk = TextChunk(text="")
 
     with pytest.raises(AttributeError):
-        mm_encoder(text_chunk)  # type: ignore
+        image_encoder(text_chunk)  # type: ignore
 
-    output = mm_encoder(img_chunk)
+    output = image_encoder(img_chunk)
     tokens, image = output.tokens, output.image
     assert image.shape == (3, 112, 112)
-    w, h = mm_encoder._image_to_num_tokens(img)
+    w, h = image_encoder._image_to_num_tokens(img)
     assert (
-        w * mm_config.image_patch_size * spatial_merge_size,
-        h * mm_config.image_patch_size * spatial_merge_size,
+        w * image_config.image_patch_size * spatial_merge_size,
+        h * image_config.image_patch_size * spatial_merge_size,
     ) == (112, 112)
     assert len(tokens) == (w + 1) * h
 
@@ -117,10 +117,10 @@ def test_image_encoder(spatial_merge_size: int, special_token_ids: SpecialImageI
     ],
 )
 def test_image_processing(special_token_ids: SpecialImageIDs, size: Tuple[int, int], spatial_merge_size: int) -> None:
-    mm_config = MultimodalConfig(
+    image_config = ImageConfig(
         image_patch_size=16 // spatial_merge_size, max_image_size=1024, spatial_merge_size=spatial_merge_size
     )
-    mm_encoder = ImageEncoder(mm_config, special_token_ids)
+    image_encoder = ImageEncoder(image_config, special_token_ids)
 
     # all images with w,h >= 1024 should be resized to 1024
     # else round to nearest multiple of 16
@@ -150,7 +150,7 @@ def test_image_processing(special_token_ids: SpecialImageIDs, size: Tuple[int, i
     RETRY = 10  # sometimes the image download fails, so we retry a few times
     for i in range(RETRY):
         try:
-            image = mm_encoder(content).image
+            image = image_encoder(content).image
             break
         except RuntimeError as e:
             if i == RETRY - 1:
@@ -163,10 +163,10 @@ def test_image_processing(special_token_ids: SpecialImageIDs, size: Tuple[int, i
 
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
 def test_image_encoder_formats(spatial_merge_size: int, special_token_ids: SpecialImageIDs) -> None:
-    mm_config = MultimodalConfig(
+    image_config = ImageConfig(
         image_patch_size=16 // spatial_merge_size, max_image_size=1024, spatial_merge_size=spatial_merge_size
     )
-    mm_encoder = ImageEncoder(mm_config, special_token_ids)
+    image_encoder = ImageEncoder(image_config, special_token_ids)
 
     url = "https://picsum.photos/id/237/200/300"
     img_data = requests.get(url).content
@@ -182,7 +182,7 @@ def test_image_encoder_formats(spatial_merge_size: int, special_token_ids: Speci
     for content in [img_pil, img_url, img_data_url]:
         assert isinstance(content, (ImageChunk, ImageURLChunk))
 
-        outputs.append(mm_encoder(content))
+        outputs.append(image_encoder(content))
 
     for output in outputs[1:]:
         assert (output.image == outputs[0].image).all()
@@ -192,7 +192,7 @@ def test_image_encoder_formats(spatial_merge_size: int, special_token_ids: Speci
 def test_transform_image_missing_cv2(monkeypatch: Any) -> None:
     img = Image.new("RGB", (10, 10), "red")
 
-    monkeypatch.setattr("mistral_common.tokens.tokenizers.multimodal.is_cv2_installed", lambda: False)
+    monkeypatch.setattr("mistral_common.tokens.tokenizers.image.is_cv2_installed", lambda: False)
 
     with pytest.raises(ImportError) as exc_info:
         transform_image(img, (16, 16))

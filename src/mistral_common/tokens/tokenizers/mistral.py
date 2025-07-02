@@ -30,6 +30,11 @@ from mistral_common.tokens.tokenizers.base import (
     TokenizedType,
     TokenizerVersion,
 )
+from mistral_common.tokens.tokenizers.image import (
+    ImageConfig,
+    ImageEncoder,
+    SpecialImageIDs,
+)
 from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV1,
     InstructTokenizerV2,
@@ -37,39 +42,31 @@ from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV7,
     InstructTokenizerV11,
 )
-from mistral_common.tokens.tokenizers.multimodal import (
-    ImageEncoder,
-    MultimodalConfig,
-    MultiModalEncoder,
-    SpecialImageIDs,
-)
 from mistral_common.tokens.tokenizers.sentencepiece import (
     SentencePieceTokenizer,
-    get_mm_config,
+    get_image_config,
     is_sentencepiece,
 )
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekken
 from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hub
 
 
-def load_mm_encoder(
-    mm_config: MultimodalConfig, tokenizer: Union[Tekkenizer, SentencePieceTokenizer]
-) -> MultiModalEncoder:
-    r"""Load a multi-modal encoder from a config and a tokenizer.
+def load_image_encoder(image_config: ImageConfig, tokenizer: Union[Tekkenizer, SentencePieceTokenizer]) -> ImageEncoder:
+    r"""Load a image encoder from a config and a tokenizer.
 
     Args:
-        mm_config: The multi-modal config.
+        image_config: The image config.
         tokenizer: The tokenizer.
 
     Returns:
-        The multi-modal encoder.
+        The image encoder.
     """
     special_ids = SpecialImageIDs(
         img=tokenizer.get_control_token(SpecialTokens.img.value),
         img_break=tokenizer.get_control_token(SpecialTokens.img_break.value),
         img_end=tokenizer.get_control_token(SpecialTokens.img_end.value),
     )
-    return ImageEncoder(mm_config, special_ids)
+    return ImageEncoder(image_config, special_ids)
 
 
 class MistralTokenizer(
@@ -144,7 +141,7 @@ class MistralTokenizer(
         Args:
             is_tekken: Whether the tokenizer is a tekken tokenizer. See
                 [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer].
-            is_mm: Whether to load multimodal tokenizer.
+            is_mm: Whether to load image tokenizer.
 
         Returns:
             The Mistral tokenizer v3.
@@ -165,7 +162,7 @@ class MistralTokenizer(
         """Get the Mistral tokenizer v7.
 
         Args:
-            is_mm: Whether to load the multimodal tokenizer.
+            is_mm: Whether to load the image tokenizer.
 
         Returns:
             The Mistral tokenizer v7.
@@ -266,26 +263,26 @@ class MistralTokenizer(
 
         if is_tekken(tokenizer_filename):
             tokenizer = Tekkenizer.from_file(tokenizer_filename)
-            mm_config = tokenizer.multimodal
+            image_config = tokenizer.image
         elif is_sentencepiece(tokenizer_filename):
             tokenizer = SentencePieceTokenizer(tokenizer_filename)
-            mm_config = get_mm_config(tokenizer_filename)
+            image_config = get_image_config(tokenizer_filename)
         else:
             raise TokenizerException(f"Unrecognized tokenizer file: {tokenizer_filename}")
 
-        mm_encoder = load_mm_encoder(mm_config, tokenizer) if mm_config is not None else None
+        image_encoder = load_image_encoder(image_config, tokenizer) if image_config is not None else None
 
         request_normalizer = normalizer_for_tokenizer_version(tokenizer.version)
 
         if tokenizer.version == TokenizerVersion.v1:
-            assert mm_encoder is None, "Tokenizer version needs to be >= v3"
+            assert image_encoder is None, "Tokenizer version needs to be >= v3"
             return MistralTokenizer(
                 InstructTokenizerV1(tokenizer),
                 validator=MistralRequestValidator(mode=mode),
                 request_normalizer=request_normalizer,
             )
         elif tokenizer.version == TokenizerVersion.v2:
-            assert mm_encoder is None, "Tokenizer version needs to be >= v3"
+            assert image_encoder is None, "Tokenizer version needs to be >= v3"
             return MistralTokenizer(
                 InstructTokenizerV2(tokenizer),
                 validator=MistralRequestValidator(mode=mode),
@@ -293,19 +290,19 @@ class MistralTokenizer(
             )
         elif tokenizer.version == TokenizerVersion.v3:
             return MistralTokenizer(
-                InstructTokenizerV3(tokenizer, mm_encoder=mm_encoder),
+                InstructTokenizerV3(tokenizer, image_encoder=image_encoder),
                 validator=MistralRequestValidatorV3(mode=mode),
                 request_normalizer=request_normalizer,
             )
         elif tokenizer.version == TokenizerVersion.v7:
             return MistralTokenizer(
-                InstructTokenizerV7(tokenizer, mm_encoder=mm_encoder),
+                InstructTokenizerV7(tokenizer, image_encoder=image_encoder),
                 validator=MistralRequestValidatorV5(mode=mode),
                 request_normalizer=request_normalizer,
             )
         elif tokenizer.version == TokenizerVersion.v11:
             return MistralTokenizer(
-                InstructTokenizerV11(tokenizer, mm_encoder=mm_encoder),
+                InstructTokenizerV11(tokenizer, image_encoder=image_encoder),
                 validator=MistralRequestValidatorV5(mode=mode),
                 request_normalizer=request_normalizer,
             )
