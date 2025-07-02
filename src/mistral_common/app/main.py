@@ -1,7 +1,7 @@
 import importlib.metadata
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated, Any, Dict, List, Literal, Optional, Union, overload
+from typing import Annotated, Any, Dict, List, Optional, Union
 
 import click
 import uvicorn
@@ -78,7 +78,6 @@ class Settings(BaseSettings):
 
 main_router = APIRouter(tags=["app"])
 tokenize_router = APIRouter(prefix="/tokenize", tags=["tokenizer", "tokenize"])
-template_router = APIRouter(prefix="/apply-chat-template", tags=["tokenizer", "template"])
 decode_router = APIRouter(prefix="/detokenize", tags=["tokenizer", "detokenize"])
 
 
@@ -99,29 +98,10 @@ def get_info(settings: Annotated[Settings, Depends(get_settings)]) -> Dict[str, 
     return {"app_name": settings.app_name, "app_version": settings.app_version}
 
 
-@overload
 def _tokenize_request(
     request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
-    encode_as_int: Literal[True],
     settings: Annotated[Settings, Depends(get_settings)],
-) -> List[int]: ...
-@overload
-def _tokenize_request(
-    request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
-    encode_as_int: Literal[False],
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> str: ...
-@overload
-def _tokenize_request(
-    request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
-    encode_as_int: bool,
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> Union[List[int], str]: ...
-def _tokenize_request(
-    request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
-    encode_as_int: bool,
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> Union[List[int], str]:
+) -> List[int]:
     if isinstance(request, OpenAIChatCompletionRequest):
         try:
             request = ChatCompletionRequest.from_openai(**request.model_dump(exclude_none=True))
@@ -133,33 +113,17 @@ def _tokenize_request(
 
     tokenized = settings.tokenizer.encode_chat_completion(request)
     assert isinstance(tokenized, Tokenized), type(tokenized)
-    if encode_as_int:
-        return tokenized.tokens
-    else:
-        assert isinstance(tokenized.text, str)
-        return tokenized.text
+    return tokenized.tokens
 
 
-@overload
 def _tokenize_messages(
-    messages: list[ChatMessageType], encode_as_int: Literal[True], settings: Annotated[Settings, Depends(get_settings)]
-) -> List[int]: ...
-@overload
-def _tokenize_messages(
-    messages: list[ChatMessageType], encode_as_int: Literal[False], settings: Annotated[Settings, Depends(get_settings)]
-) -> str: ...
-@overload
-def _tokenize_messages(
-    messages: list[ChatMessageType], encode_as_int: bool, settings: Annotated[Settings, Depends(get_settings)]
-) -> Union[List[int], str]: ...
-def _tokenize_messages(
-    messages: list[ChatMessageType], encode_as_int: bool, settings: Annotated[Settings, Depends(get_settings)]
-) -> Union[List[int], str]:
+    messages: list[ChatMessageType], settings: Annotated[Settings, Depends(get_settings)]
+) -> List[int]:
     if len(messages) == 0:
         raise HTTPException(status_code=400, detail="Messages list cannot be empty.")
     request = ChatCompletionRequest(messages=messages)
 
-    return _tokenize_request(request, encode_as_int, settings)
+    return _tokenize_request(request, settings)
 
 
 @tokenize_router.post("/messages")
@@ -167,15 +131,7 @@ def tokenize_messages(
     settings: Annotated[Settings, Depends(get_settings)], messages: list[ChatMessageType] = Body(default_factory=list)
 ) -> list[int]:
     r"""Tokenize a list of messages."""
-    return _tokenize_messages(messages, encode_as_int=True, settings=settings)
-
-
-@template_router.post("/messages")
-def apply_template_to_messages(
-    settings: Annotated[Settings, Depends(get_settings)], messages: list[ChatMessageType] = Body(default_factory=list)
-) -> str:
-    r"""Apply the chat template to a list of messages."""
-    return _tokenize_messages(messages, encode_as_int=False, settings=settings)
+    return _tokenize_messages(messages, settings=settings)
 
 
 @tokenize_router.post("/prompt")
@@ -197,16 +153,7 @@ def tokenize_request(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> list[int]:
     r"""Tokenize a chat completion request."""
-    return _tokenize_request(request, encode_as_int=True, settings=settings)
-
-
-@template_router.post("/request")
-def apply_template_to_request(
-    request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> str:
-    r"""Apply the chat template to a chat completion request."""
-    return _tokenize_request(request, encode_as_int=False, settings=settings)
+    return _tokenize_request(request, settings=settings)
 
 
 @decode_router.post("/")
@@ -231,7 +178,6 @@ def create_app(tokenizer_path: Union[str, Path], validation_mode: ValidationMode
     app.include_router(tokenize_router)
     app.include_router(decode_router)
     app.include_router(main_router)
-    app.include_router(template_router)
 
     @lru_cache
     def get_settings_override() -> Settings:
