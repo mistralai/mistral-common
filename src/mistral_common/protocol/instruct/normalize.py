@@ -328,7 +328,7 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
     def _aggregate_system_prompts(self, request: ChatCompletionRequest[UATS]) -> Optional[str]:
         raise NotImplementedError("We should not aggregate system prompts")
 
-    def from_chat_completion_request(self, request: ChatCompletionRequest[UATS]) -> InstructRequestType:
+    def from_chat_completion_request(self, request: ChatCompletionRequest[UATS]) -> InstructRequestType:  # type: ignore
         r"""Converts a chat completion request to an instruct request.
 
         Args:
@@ -349,7 +349,11 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
             >>> instruct_request = normalizer.from_chat_completion_request(request)
         """
         messages = self._aggregate_messages(request)
-        return self._instruct_request_class(messages=messages, system_prompt=None, available_tools=request.tools)
+        return self._instruct_request_class(  # type: ignore
+            messages=messages,
+            system_prompt=None,
+            available_tools=request.tools,
+        )
 
 
 class InstructRequestNormalizerV13(InstructRequestNormalizerV7):
