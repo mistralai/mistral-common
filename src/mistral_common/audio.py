@@ -1,16 +1,17 @@
-from enum import Enum
+import base64
+import io
 import logging
 import math
-import io
-import numpy as np
-import base64
+from enum import Enum
 from typing import Tuple, Type
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 _soundfile_installed: bool
 
 try:
-    import soundfile
+    import soundfile  # noqa: F401
 
     _soundfile_installed = True
 except ImportError:
@@ -27,6 +28,7 @@ except Exception as e:
 AudioFormat: Type[Enum]
 if _soundfile_installed:
     import soundfile as sf
+
     # Get the available formats from soundfile
     available_formats = sf.available_formats()
 
@@ -260,20 +262,3 @@ class Audio:
         resampled = np.reshape(resampled[..., :target_length], [-1])
 
         return resampled
-
-    def resample(self, new_sampling_rate: int) -> None:
-        """Resample audio data to a new sampling rate."""
-        if self.sampling_rate == new_sampling_rate:
-            return
-
-        gcd = math.gcd(int(self.sampling_rate), int(new_sampling_rate))
-        kernel, width = Audio._get_resample_kernel(self.sampling_rate, new_sampling_rate, gcd)
-        self.audio_array = Audio._apply_resample_kernel(
-            self.audio_array,
-            self.sampling_rate,
-            new_sampling_rate,
-            gcd,
-            kernel,
-            width,
-        )
-        self.sampling_rate = new_sampling_rate

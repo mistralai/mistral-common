@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Type, TypedDict, Union
 
 import tiktoken
 
+from mistral_common.tokens.tokenizers.audio import AudioConfig
 from mistral_common.tokens.tokenizers.base import (
     SpecialTokenPolicy,
     SpecialTokens,
@@ -16,7 +17,6 @@ from mistral_common.tokens.tokenizers.base import (
     TokenizerVersion,
 )
 from mistral_common.tokens.tokenizers.image import ImageConfig
-from mistral_common.tokens.tokenizers.audio import AudioConfig
 
 logger = logging.getLogger(__name__)
 

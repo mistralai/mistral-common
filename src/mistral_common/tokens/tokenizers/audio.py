@@ -1,9 +1,9 @@
+import logging
 from dataclasses import dataclass
 from typing import Optional
-import logging
-from enum import Enum
 
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class AudioSpectrogramConfig:
@@ -18,7 +18,6 @@ class AudioSpectrogramConfig:
         assert self.num_mel_bins > 0
         assert self.hop_length > 0
         assert self.window_size > 0
-
 
 
 @dataclass

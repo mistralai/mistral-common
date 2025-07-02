@@ -5,9 +5,9 @@ from typing import Any, Dict, List, Literal, Optional, TypeVar, Union
 from pydantic import ConfigDict, Field
 from typing_extensions import Annotated, TypeAlias
 
+from mistral_common.audio import AudioFormat
 from mistral_common.base import MistralBase
 from mistral_common.image import SerializableImage
-from mistral_common.audio import AudioFormat
 from mistral_common.protocol.instruct.tool_calls import ToolCall
 
 
@@ -151,6 +151,7 @@ class RawAudio(MistralBase):
     # The format of the encoded audio data. Currently supports "wav" and "mp3".
     format: AudioFormat
 
+
 class AudioChunk(BaseContentChunk):
     type: Literal[ChunkTypes.input_audio] = ChunkTypes.input_audio
     input_audio: RawAudio
@@ -158,6 +159,7 @@ class AudioChunk(BaseContentChunk):
     @property
     def is_empty(self) -> bool:
         return not self.input_audio.data
+
 
 class TextChunk(BaseContentChunk):
     r"""Text chunk.
