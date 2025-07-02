@@ -11,7 +11,7 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.normalize import InstructRequestNormalizerV13
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
-from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
+from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.protocol.instruct.validator import MistralRequestValidatorV13
 from mistral_common.tokens.tokenizers.base import InstructRequest, InstructTokenizer, Tokenized, TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV11, InstructTokenizerV13
@@ -75,14 +75,13 @@ EXPECTED_TEXT_V13: str = (
 
 
 @pytest.fixture
-def available_tools() -> list[dict[str, Any]]:
+def available_tools() -> list[Tool]:
     return [
-        {
-            "type": "function",
-            "function": {
-                "name": "math_interpreter",
-                "description": "Get the value of an arithmetic expression.",
-                "parameters": {
+        Tool(
+            function=Function(
+                name="math_interpreter",
+                description="Get the value of an arithmetic expression.",
+                parameters={
                     "type": "object",
                     "properties": {
                         "expression": {
@@ -91,8 +90,8 @@ def available_tools() -> list[dict[str, Any]]:
                         }
                     },
                 },
-            },
-        }
+            )
+        )
     ]
 
 

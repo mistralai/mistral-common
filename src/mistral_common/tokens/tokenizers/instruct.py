@@ -913,9 +913,7 @@ class InstructTokenizerV13(InstructTokenizerV11):
         self, message: ToolMessage, is_before_last_user_message: bool
     ) -> Tuple[List[int], List[np.ndarray]]:
         assert message.tool_call_id is not None
-        tokens, images = self.encode_user_content(
-            message.content, is_last=False, system_prompt=None, force_img_first=None
-        )
+        tokens, images = self.encode_user_content(message.content, is_last=False)
         curr_tokens = [
             self.BEGIN_TOOL_RESULTS,
             *tokens,
