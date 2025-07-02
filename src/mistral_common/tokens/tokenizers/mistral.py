@@ -30,18 +30,17 @@ from mistral_common.tokens.tokenizers.base import (
     TokenizedType,
     TokenizerVersion,
 )
+from mistral_common.tokens.tokenizers.image import (
+    ImageConfig,
+    ImageEncoder,
+    SpecialImageIDs,
+)
 from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV1,
     InstructTokenizerV2,
     InstructTokenizerV3,
     InstructTokenizerV7,
     InstructTokenizerV11,
-)
-from mistral_common.tokens.tokenizers.image import (
-    ImageEncoder,
-    ImageConfig,
-    ImageEncoder,
-    SpecialImageIDs,
 )
 from mistral_common.tokens.tokenizers.sentencepiece import (
     SentencePieceTokenizer,
@@ -52,17 +51,15 @@ from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekken
 from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hub
 
 
-def load_image_encoder(
-    image_config: ImageConfig, tokenizer: Union[Tekkenizer, SentencePieceTokenizer]
-) -> ImageEncoder:
-    r"""Load a multi-modal encoder from a config and a tokenizer.
+def load_image_encoder(image_config: ImageConfig, tokenizer: Union[Tekkenizer, SentencePieceTokenizer]) -> ImageEncoder:
+    r"""Load a image encoder from a config and a tokenizer.
 
     Args:
-        image_config: The multi-modal config.
+        image_config: The image config.
         tokenizer: The tokenizer.
 
     Returns:
-        The multi-modal encoder.
+        The image encoder.
     """
     special_ids = SpecialImageIDs(
         img=tokenizer.get_control_token(SpecialTokens.img.value),

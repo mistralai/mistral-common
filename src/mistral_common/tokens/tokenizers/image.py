@@ -3,18 +3,13 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
-from typing import Tuple, Union
+from typing import List, Tuple, Union
 
 import numpy as np
 from PIL import Image
 
 from mistral_common.image import SerializableImage, download_image
 from mistral_common.protocol.instruct.messages import ImageChunk, ImageURLChunk
-from mistral_common.tokens.tokenizers.base import (
-    ImageEncoding,
-    ImageEncoder,
-    SpecialImageIDs,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +34,41 @@ except Exception as e:
 def is_cv2_installed() -> bool:
     r"""Check if OpenCV is installed."""
     return _cv2_installed
+
+
+@dataclass
+class ImageEncoding:
+    """A tokenized image.
+
+    Attributes:
+        tokens: The token ids.
+        image: The image as a numpy array.
+
+    Examples:
+        >>> import numpy as np
+        >>> image_encoding = ImageEncoding(tokens=[1, 2, 3], image=np.array([[0., 0.5, 1.]]))
+    """
+
+    tokens: List[int]
+    image: np.ndarray
+
+
+@dataclass
+class SpecialImageIDs:
+    """Special image tokens ids.
+
+    Attributes:
+        img: The image token id.
+        img_break: The image break token id.
+        img_end: The image end token id.
+
+    Examples:
+        >>> special_image_ids = SpecialImageIDs(img=1, img_break=2, img_end=3)
+    """
+
+    img: int
+    img_break: int
+    img_end: int
 
 
 def image_from_chunk(chunk: Union[ImageURLChunk, ImageChunk]) -> SerializableImage:
@@ -147,7 +177,7 @@ def transform_image(image: Image.Image, new_size: Tuple[int, int]) -> np.ndarray
     return normalize(np_image, DATASET_MEAN, DATASET_STD)
 
 
-class ImageEncoder(ImageEncoder):
+class ImageEncoder:
     r"""Image encoder for the image tokenizer."""
 
     def __init__(self, image_config: ImageConfig, special_ids: SpecialImageIDs) -> None:
@@ -159,6 +189,13 @@ class ImageEncoder(ImageEncoder):
         """
         self.image_config = image_config
         self.special_ids = special_ids
+
+    @property
+    def mm_config(self) -> ImageConfig:
+        # this property is deprecated, use image_config instead
+        # TODO(Patrick) - throw deprecation warning once
+        # changes implemented into vLLM and transformers
+        return self.image_config
 
     def _image_to_num_tokens(self, img: Image.Image) -> Tuple[int, int]:
         w: Union[int, float]

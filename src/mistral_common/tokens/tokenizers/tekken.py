@@ -251,11 +251,12 @@ class Tekkenizer(Tokenizer):
         untyped["special_tokens"] = special_tokens
 
         if mm := untyped.get("multimodal", None):
-            # TODO(Patrick) - enable warning once fixed in vllm & transformers
-            # warnings.warn(
-            #     "multimodal is deprecated. Please rename your tekken config to use image instead.",
-            #     FutureWarning,
-            # )
+            # deprecated - only allowed for tokenizers <= v11
+            if version > TokenizerVersion("v11"):
+                raise ValueError(
+                    f"The image config has to be called 'image' in {path} for tokenizers of version {version.value}."
+                )
+
             untyped["image"] = ImageConfig(**mm)
         elif image := untyped.get("image", None):
             untyped["image"] = ImageConfig(**image)

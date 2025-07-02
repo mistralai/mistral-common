@@ -30,7 +30,7 @@ from mistral_common.tokens.tokenizers.base import (
     TokenizedType,
     Tokenizer,
 )
-from mistral_common.tokens.tokenizers.image import MultiModalEncoder
+from mistral_common.tokens.tokenizers.image import ImageEncoder
 
 
 class InstructTokenizerBase(
@@ -38,16 +38,23 @@ class InstructTokenizerBase(
 ):
     r"""Base instruct tokenizer."""
 
-    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[MultiModalEncoder] = None):
+    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None):
         r"""Initialize the instruct tokenizer.
 
         Args:
             tokenizer: The tokenizer to use.
-            image_encoder: The multi-modal encoder to use if any.
+            image_encoder: The image encoder to use if any.
         """
         self.tokenizer = tokenizer
         self.image_encoder = image_encoder
         super().__init__(tokenizer, image_encoder)
+
+    @property
+    def mm_encoder(self) -> Optional[ImageEncoder]:
+        # this funtion is deprecated, use image_encoder instead
+        # TODO(Patrick) - throw a deprecation warning once
+        # changes applied to vllm and transformers
+        return self.image_encoder
 
     def start(self) -> List[int]:
         r"""Return the start tokens."""
@@ -201,7 +208,7 @@ class InstructTokenizerV1(
 ):
     r"""Instruct tokenizer V1.
 
-    This tokenizer has basic for messages. It does not support tools or multi-modal inputs.
+    This tokenizer has basic for messages. It does not support tools or image inputs.
     """
 
     def encode_user_message(
@@ -321,12 +328,12 @@ class InstructTokenizerV2(
     This tokenizer adds supports to images, tools and FIM requests.
     """
 
-    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[MultiModalEncoder] = None):
+    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None):
         r"""Initialize the tokenizer.
 
         Args:
             tokenizer: The tokenizer to use.
-            image_encoder: The multi-modal encoder to use.
+            image_encoder: The image encoder to use.
         """
         super().__init__(tokenizer, image_encoder)
         self.BEGIN_INST = self.tokenizer.get_control_token(SpecialTokens.begin_inst.value)
@@ -517,12 +524,12 @@ class InstructTokenizerV3(
     The only difference with V2 tokenizer is that it encodes the tool messages differently.
     """
 
-    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[MultiModalEncoder] = None) -> None:
+    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None) -> None:
         r"""Initialize the tokenizer.
 
         Args:
             tokenizer: The tokenizer to use.
-            image_encoder: The multi-modal encoder to use.
+            image_encoder: The image encoder to use.
         """
         super().__init__(tokenizer, image_encoder=image_encoder)
 
@@ -630,7 +637,7 @@ class InstructTokenizerV3(
                 content += chunk.text
                 tokens.extend(self.tokenizer.encode(content, bos=False, eos=False))
             else:
-                assert self.image_encoder is not None, "Make sure to define a multi-modal encoder at init"
+                assert self.image_encoder is not None, "Make sure to define a image encoder at init"
                 if content:
                     tokens.extend(self.tokenizer.encode(content, bos=False, eos=False))
 
@@ -652,12 +659,12 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
     """
 
-    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[MultiModalEncoder] = None) -> None:
+    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None) -> None:
         r"""Initialize the tokenizer.
 
         Args:
             tokenizer: The tokenizer to use.
-            image_encoder: The multi-modal encoder to use.
+            image_encoder: The image encoder to use.
         """
 
         super().__init__(tokenizer, image_encoder)
@@ -834,7 +841,7 @@ class InstructTokenizerV11(InstructTokenizerV7):
     def __init__(
         self,
         tokenizer: Tokenizer,
-        image_encoder: Optional[MultiModalEncoder] = None,
+        image_encoder: Optional[ImageEncoder] = None,
     ) -> None:
         super().__init__(tokenizer, image_encoder)
         self.ARGS = self.tokenizer.get_control_token(SpecialTokens.args.value)

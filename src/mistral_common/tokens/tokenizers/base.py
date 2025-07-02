@@ -1,9 +1,8 @@
 import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Generic, List, Optional, Protocol, Tuple, TypeVar, Union
+from typing import Generic, List, Optional, Tuple, TypeVar, Union
 
 import numpy as np
 from pydantic import ConfigDict
@@ -12,12 +11,11 @@ from mistral_common.base import MistralBase
 from mistral_common.protocol.instruct.messages import (
     AssistantMessageType,
     ContentChunk,
-    ImageChunk,
-    ImageURLChunk,
     UserMessage,
 )
 from mistral_common.protocol.instruct.tool_calls import Tool
 from mistral_common.tokens.instruct.request import FIMRequest, InstructRequest
+from mistral_common.tokens.tokenizers.image import ImageEncoder
 
 
 class SpecialTokens(str, Enum):
@@ -97,6 +95,7 @@ class TokenizerVersion(str, Enum):
         v2: The second version of the tokenizer that includes special control tokens [INST], [\INST].
         v3: The third version of the tokenizer that includes improved function calling.
         v7: The seventh version of the tokenizer that includes improved system prompt and function calling.
+        v11: The elevnth version of the tokenizer that has improved function calling
 
     Examples:
         >>> version = TokenizerVersion.v1
@@ -249,110 +248,12 @@ FIMRequestType = TypeVar("FIMRequestType", bound=FIMRequest)
 TokenizedType = TypeVar("TokenizedType", bound=Tokenized)
 
 
-@dataclass
-class ImageEncoding:
-    """A tokenized image.
-
-    Attributes:
-        tokens: The token ids.
-        image: The image as a numpy array.
-
-    Examples:
-        >>> import numpy as np
-        >>> image_encoding = ImageEncoding(tokens=[1, 2, 3], image=np.array([[0., 0.5, 1.]]))
-    """
-
-    tokens: List[int]
-    image: np.ndarray
-
-
-@dataclass
-class SpecialImageIDs:
-    """Special image tokens ids.
-
-    Attributes:
-        img: The image token id.
-        img_break: The image break token id.
-        img_end: The image end token id.
-
-    Examples:
-        >>> special_image_ids = SpecialImageIDs(img=1, img_break=2, img_end=3)
-    """
-
-    img: int
-    img_break: int
-    img_end: int
-
-    @staticmethod
-    def from_tokenizer(tokenizer: "Tokenizer") -> "SpecialImageIDs":
-        r"""Create a `SpecialImageIDs` from a `Tokenizer`.
-
-        Args:
-            tokenizer: The tokenizer to use.
-
-        Returns:
-            The special image tokens ids.
-        """
-        return SpecialImageIDs(
-            img=tokenizer.get_control_token(SpecialTokens.img.value),
-            img_break=tokenizer.get_control_token(SpecialTokens.img_break.value),
-            img_end=tokenizer.get_control_token(SpecialTokens.img_end.value),
-        )
-
-
-class ImageEncoder(Protocol):
-    r"""Protocol for multi-modal encoders.
-
-    Currently, only image encoders are supported.
-    """
-
-    def __call__(self, content: Union[ImageChunk, ImageURLChunk]) -> ImageEncoding:
-        """Encode the given content.
-
-        Args:
-            content: The content to be encoded.
-
-        Returns:
-            The encoded image content.
-        """
-        ...
-
-    @property
-    def image_token(self) -> int:
-        r"""The image token id."""
-        ...
-
-class AudioEncoder(Protocol):
-    def __call__(
-        self,
-        content: Union[AudioChunk, AudioTranscriptChunk],
-    ) -> Union[PreAudioEncoding, AudioEncoding]:
-        """
-        Encode the given content.
-
-        Args:
-            content (AudioChunk | AudioTranscriptChunk): The audio content to be encoded.
-            interleave_audio_transcript (bool): Whether to interleave audio and
-                transcript (if interleaving params and transcript are present).
-
-        Returns:
-            ChunkEncoding: The encoded content.
-        """
-        ...
-
-    @property
-    def begin_audio_token(self) -> int: ...
-
-    @property
-    def audio_token(self) -> int: ...
-
-
 class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]):
     r"""Base class for instruct tokenizers.
 
     Attributes:
         tokenizer: The tokenizer to use.
-        image_encoder: The multi-modal encoder to use if any.
+        image_encoder: The image encoder to use if any.
     """
 
     tokenizer: Tokenizer
@@ -363,7 +264,7 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
 
         Args:
             tokenizer: The tokenizer to use.
-            image_encoder: The multi-modal encoder to use if any.
+            image_encoder: The image encoder to use if any.
         """
 
     @abstractmethod
