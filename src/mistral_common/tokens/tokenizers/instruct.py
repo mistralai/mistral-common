@@ -13,6 +13,8 @@ from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     AssistantMessageType,
     ContentChunk,
+    ImageChunk,
+    ImageURLChunk,
     SystemMessage,
     TextChunk,
     ToolMessage,
@@ -81,9 +83,7 @@ class InstructTokenizerBase(
         return first_user_idx, last_user_idx
 
     @abstractmethod
-    def encode_tool_message(
-        self, message: ToolMessage, is_before_last_user_message: bool
-    ) -> Tuple[List[int], List[np.ndarray]]:
+    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
         r"""Encode a tool message.
 
         Raises:
@@ -151,8 +151,7 @@ class InstructTokenizerBase(
                 )
                 images.extend(new_images)
             elif isinstance(msg, ToolMessage):
-                new_tokens, new_images = self.encode_tool_message(msg, msg_idx < last_user_idx)
-                images.extend(new_images)
+                new_tokens = self.encode_tool_message(msg, msg_idx < last_user_idx)
             elif isinstance(msg, AssistantMessage):
                 continue_message = request.continue_final_message and (msg_idx == len(request.messages) - 1)
 
@@ -163,6 +162,8 @@ class InstructTokenizerBase(
                     prefix_ids = new_tokens
             elif isinstance(msg, SystemMessage):
                 new_tokens = self.encode_system_message(msg)
+            else:
+                raise TokenizerException(f"Unknown message type {type(msg)}")
 
             tokens_list.append(new_tokens)
 
@@ -277,9 +278,7 @@ class InstructTokenizerV1(
         tokens = self.tokenizer.encode(content, bos=False, eos=False)
         return tokens, []
 
-    def encode_tool_message(
-        self, message: ToolMessage, is_before_last_user_message: bool
-    ) -> Tuple[List[int], List[np.ndarray]]:
+    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
         r"""Encode a tool message.
 
         Raises:
@@ -308,7 +307,6 @@ class InstructTokenizerV1(
             raise InvalidAssistantMessageException(
                 "`continue_message` is only supported for assistant messages that have `prefix=False`."
             )
-
         elif message.content:
             curr_tokens = self.tokenizer.encode(message.content, bos=False, eos=False)
         else:
@@ -334,7 +332,7 @@ class InstructTokenizerV2(
     This tokenizer adds supports to images, tools and FIM requests.
     """
 
-    _message_position_to_encode_tools = UserMessagePosition.last
+    _user_message_position_to_encode_tools = UserMessagePosition.last
 
     def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None):
         r"""Initialize the tokenizer.
@@ -379,8 +377,8 @@ class InstructTokenizerV2(
         """
         assert message.content is not None
         do_encode_tools = False
-        do_encode_tools |= is_first and (self._message_position_to_encode_tools == UserMessagePosition.first)
-        do_encode_tools |= is_last and (self._message_position_to_encode_tools == UserMessagePosition.last)
+        do_encode_tools |= is_first and (self._user_message_position_to_encode_tools == UserMessagePosition.first)
+        do_encode_tools |= is_last and (self._user_message_position_to_encode_tools == UserMessagePosition.last)
         tools_tokens: List[int] = []
 
         if do_encode_tools and available_tools:
@@ -415,15 +413,12 @@ class InstructTokenizerV2(
     def _prepare_tool_result(self, tool_message: ToolMessage) -> Dict[str, Any]:
         r"""Bit of a hack due to the way tool results are tokenized."""
         assert tool_message.content is not None, "Tool message content cannot be None"
-        assert isinstance(tool_message.content, str), "Tool message content must be string"
         return {
             "name": tool_message.name,
             "content": self._parse_json_content(tool_message.content),
         }
 
-    def encode_tool_message(
-        self, message: ToolMessage, is_before_last_user_message: bool
-    ) -> Tuple[List[int], List[np.ndarray]]:
+    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
         r"""Encode a tool message.
 
         Args:
@@ -436,7 +431,7 @@ class InstructTokenizerV2(
         """
         if is_before_last_user_message:
             # don't tokenize last tool response before last user msg
-            return [], []
+            return []
 
         # Currently only supports single tool results
         tool_result_str = json.dumps([self._prepare_tool_result(message)], ensure_ascii=False)
@@ -445,7 +440,7 @@ class InstructTokenizerV2(
             *self.tokenizer.encode(tool_result_str, bos=False, eos=False),
             self.END_TOOL_RESULTS,
         ]
-        return curr_tokens, []
+        return curr_tokens
 
     def _prepare_function_call(self, tool_call: ToolCall) -> Dict[str, Any]:
         r"""Bit of a hack due to the way function calls are tokenized."""
@@ -456,6 +451,7 @@ class InstructTokenizerV2(
 
     def _encode_normal_content_assistant_message(self, message: AssistantMessageType) -> List[int]:
         assert message.content, f"Assistant message must have content. Got {message}"
+        assert isinstance(message.content, str), "Message content must be a string for tokenizer < V7"
         return self.tokenizer.encode(message.content.rstrip(" "), bos=False, eos=False)
 
     def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> List[int]:
@@ -561,7 +557,6 @@ class InstructTokenizerV3(
 
     def _prepare_tool_result(self, tool_message: ToolMessage) -> Dict[str, Any]:
         assert tool_message.content is not None, "Tool message content cannot be None"
-        assert isinstance(tool_message.content, str), "Tool message content must be string"
         assert tool_message.tool_call_id is not None, "Tool message has to have the tool call id defined in v3"
 
         return {
@@ -569,9 +564,7 @@ class InstructTokenizerV3(
             "call_id": tool_message.tool_call_id,
         }
 
-    def encode_tool_message(
-        self, message: ToolMessage, is_before_last_user_message: bool
-    ) -> Tuple[List[int], List[np.ndarray]]:
+    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
         r"""Encode a tool message.
 
         Note:
@@ -592,7 +585,7 @@ class InstructTokenizerV3(
             *self.tokenizer.encode(tool_result_str, bos=False, eos=False),
             self.END_TOOL_RESULTS,
         ]
-        return curr_tokens, []
+        return curr_tokens
 
     def encode_assistant_message(
         self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
@@ -639,7 +632,9 @@ class InstructTokenizerV3(
         images: List[np.ndarray] = []
 
         has_one_img_one_text_first = (
-            len(content) == 2 and isinstance(content[0], TextChunk) and not isinstance(content[1], TextChunk)
+            len(content) == 2
+            and isinstance(content[0], TextChunk)
+            and isinstance(content[1], (ImageURLChunk, ImageChunk))
         )
         if force_img_first and has_one_img_one_text_first:
             # make sure that if exactly one image and text chunk are passed we force the image chunk to be first
@@ -741,7 +736,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
             The encoded tokens.
         """
         assert message.content is not None
-        assert isinstance(message.content, str), "Message content must be normalized"
+        assert isinstance(message.content, str), "System message must be a string."
         tokens = [
             self.BEGIN_SYSTEM,
             *self.tokenizer.encode(message.content, bos=False, eos=False),
@@ -781,9 +776,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
             force_img_first=force_img_first,
         )
 
-    def encode_tool_message(
-        self, message: ToolMessage, is_before_last_user_message: bool
-    ) -> Tuple[List[int], List[np.ndarray]]:
+    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
         r"""Encode a tool message.
 
         Note:
@@ -798,7 +791,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
             The encoded tokens.
         """
         assert message.tool_call_id is not None
-        assert isinstance(message.content, str), "Tool message content must be string"
+        assert isinstance(message.content, str), "Message content must be normalized"
         tool_call_id_tokens = self.tokenizer.encode(message.tool_call_id, bos=False, eos=False)
         tokens = self.tokenizer.encode(message.content, bos=False, eos=False)
 
@@ -812,7 +805,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
             *tokens,
             self.END_TOOL_RESULTS,
         ]
-        return curr_tokens, []
+        return curr_tokens
 
     def encode_assistant_message(
         self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
@@ -837,12 +830,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
         curr_tokens: list = []
         if message.content:
-            if isinstance(message.content, str):
-                curr_tokens += self._encode_normal_content_assistant_message(message)
-            elif isinstance(message.content, list):
-                curr_tokens += self.encode_content_chunks(
-                    message.content, is_last=False, system_prompt=None, force_img_first=True
-                ).tokens
+            curr_tokens += self._encode_normal_content_assistant_message(message)
         if message.tool_calls:
             curr_tokens += self._encode_tool_calls_in_assistant_message(message)
         if not message.prefix and not continue_message:
@@ -889,13 +877,14 @@ class InstructTokenizerV11(InstructTokenizerV7):
 
 
 class InstructTokenizerV13(InstructTokenizerV11):
-    """
-    V13 updates
-        - available tools are tokenized at the first user message
-        - call id is no longer tokenized for tool calls or results
+    r"""Instruct tokenizer V13.
+
+    The difference with V11 tokenizer is that it encodes tool calls differently:
+        - available tools are tokenized at the first user message.
+        - call id is no longer tokenized for tool calls or results.
     """
 
-    _msg_pos_to_enc_tools = UserMessagePosition.first
+    _user_message_position_to_encode_tools = UserMessagePosition.first
 
     def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> List[int]:
         assert message.tool_calls, f"Assistant message must have tool calls. Got {message}"
@@ -912,14 +901,21 @@ class InstructTokenizerV13(InstructTokenizerV11):
             ]
         return curr_tokens
 
-    def encode_tool_message(
-        self, message: ToolMessage, is_before_last_user_message: bool
-    ) -> Tuple[List[int], List[np.ndarray]]:
-        assert message.tool_call_id is not None
-        tokens, images = self.encode_user_content(message.content, is_last=False)
+    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
+        r"""Encode a tool message.
+
+        Args:
+            message: The message to encode.
+            is_before_last_user_message: Not used.
+        Returns:
+            The encoded tokens.
+        """
+        assert message.tool_call_id is not None, "Tool call id must be provided for tokenizer >= v13"
+
+        tokens = self.tokenizer.encode(message.content, bos=False, eos=False)
         curr_tokens = [
             self.BEGIN_TOOL_RESULTS,
             *tokens,
             self.END_TOOL_RESULTS,
         ]
-        return curr_tokens, images
+        return curr_tokens
