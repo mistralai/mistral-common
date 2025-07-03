@@ -314,7 +314,7 @@ class AssistantMessage(BaseMessage):
     """
 
     role: Literal[Roles.assistant] = Roles.assistant
-    content: Optional[str] = None
+    content: Optional[Union[str, List[ContentChunk]]] = None
     tool_calls: Optional[List[ToolCall]] = None
     prefix: bool = False
 
@@ -323,8 +323,10 @@ class AssistantMessage(BaseMessage):
         out_dict: dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]] = {
             "role": self.role,
         }
-        if self.content is not None:
+        if isinstance(self.content, str):
             out_dict["content"] = self.content
+        elif isinstance(self.content, list):
+            out_dict["content"] = [chunk.to_openai() for chunk in self.content]
         if self.tool_calls is not None:
             out_dict["tool_calls"] = [tool_call.to_openai() for tool_call in self.tool_calls]
 
@@ -344,10 +346,17 @@ class AssistantMessage(BaseMessage):
             if openai_tool_calls is not None
             else None
         )
+        content = openai_message.get("content")
+        valid_content: Optional[Union[str, List[ContentChunk]]]
+        if isinstance(content, list):
+            valid_content = [_convert_openai_content_chunks(chunk) for chunk in content]
+        else:
+            valid_content = content
+
         return cls.model_validate(
             {
                 "role": openai_message["role"],
-                "content": openai_message.get("content"),
+                "content": valid_content,
                 "tool_calls": tools_calls,
             }
         )
@@ -387,6 +396,7 @@ class ToolMessage(BaseMessage):
 
     def to_openai(self) -> Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]:
         r"""Converts the message to the OpenAI format."""
+        assert self.tool_call_id is not None, "tool_call_id must be provided for tool messages."
         if isinstance(self.content, str):
             return {
                 "role": self.role,

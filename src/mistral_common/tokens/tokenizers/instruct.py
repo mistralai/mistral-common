@@ -889,10 +889,11 @@ class InstructTokenizerV11(InstructTokenizerV7):
 
 
 class InstructTokenizerV13(InstructTokenizerV11):
-    """
-    V13 updates
-        - available tools are tokenized at the first user message
-        - call id is no longer tokenized for tool calls or results
+    r"""Instruct tokenizer V13.
+
+    The difference with V11 tokenizer is that it encodes tool calls differently:
+        - available tools are tokenized at the first user message.
+        - call id is no longer tokenized for tool calls or results.
     """
 
     _msg_pos_to_enc_tools = UserMessagePosition.first
@@ -915,6 +916,14 @@ class InstructTokenizerV13(InstructTokenizerV11):
     def encode_tool_message(
         self, message: ToolMessage, is_before_last_user_message: bool
     ) -> Tuple[List[int], List[np.ndarray]]:
+        r"""Encode a tool message.
+
+        Args:
+            message: The message to encode.
+            is_before_last_user_message: Not used.
+        Returns:
+            The encoded tokens.
+        """
         assert message.tool_call_id is not None
         tokens, images = self.encode_user_content(message.content, is_last=False)
         curr_tokens = [

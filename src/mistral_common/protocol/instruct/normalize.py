@@ -92,7 +92,7 @@ class InstructRequestNormalizer(
         return normalized_content
 
     def _aggregate_content_chunks(self, messages: List[UATS]) -> Union[List[ContentChunk], str]:
-        """
+        r"""
         Just coalesce neighboring blocks of ContentChunks
         """
         all_content: List[ContentChunk] = []
@@ -104,11 +104,12 @@ class InstructRequestNormalizer(
                     self._user_message_class,
                     self._tool_message_class,
                     self._system_message_class,
+                    self._assistant_message_class,
                 ),
-            ), f"Expected user/tool/system message got {type(message)}"
+            ), f"Expected user/tool/assistant/system message got {type(message)}"
             if isinstance(message.content, str):
                 text_chunks.append(message.content)
-            else:  # it's a List[ContentChunk]
+            elif message.content is not None:  # it's a List[ContentChunk]
                 for chunk in message.content:
                     if isinstance(chunk, TextChunk):
                         text_chunks.append(chunk.text)
@@ -131,21 +132,44 @@ class InstructRequestNormalizer(
         return all_content
 
     def _aggregate_system_prompts(self, request: ChatCompletionRequest[UATS]) -> Optional[str]:
-        system_prompt: List[str] = []
+        system_prompts: List[SystemMessageType] = []
 
         for message in request.messages:
             if message.role == Roles.system and message.content:
-                system_prompt.append(self._aggregate_content_chunks(message.content))
+                system_prompts.append(message)
 
-        return "\n\n".join(system_prompt) if len(system_prompt) else None
+        system_prompt_content = self._aggregate_content_chunks(system_prompts)
 
-    def _aggregate_tool_messages(self, messages: List[UATS], latest_call_ids: List[str]) -> List[ToolMessage]:
-        tool_messages: List[ToolMessage] = []
+        if len(system_prompt_content) == 0:
+            return None
+
+        elif isinstance(system_prompt_content, str):
+            return system_prompt_content
+
+        elif isinstance(system_prompt_content, list):
+            if len(system_prompt_content) == 1 and isinstance(system_prompt_content[0], TextChunk):
+                return system_prompt_content[0].text
+
+        raise ValueError("System prompts should be strings or text chunks.")
+
+    def _aggregate_tool_messages(self, messages: List[UATS], latest_call_ids: List[str]) -> List[ToolMessageType]:
+        tool_messages: List[ToolMessageType] = []
         for message in messages:
-            assert isinstance(message, ToolMessage), "Expected tool message"
+            assert isinstance(message, self._tool_message_class), "Expected tool message"
             # we do not aggregate across messages but only per message
             normalized_content = self._aggregate_content_chunks(messages=[message])
-            tool_messages.append(ToolMessage(tool_call_id=message.tool_call_id, content=normalized_content))
+            if isinstance(normalized_content, str):
+                normalized_content = self._normalize_json_content(normalized_content)
+            else:
+                normalized_content = [
+                    TextChunk(text=self._normalize_json_content(chunk.text)) if isinstance(chunk, TextChunk) else chunk
+                    for chunk in normalized_content
+                ]
+            tool_messages.append(
+                self._tool_message_class(
+                    name=message.name, tool_call_id=message.tool_call_id, content=normalized_content
+                )
+            )
         return tool_messages
 
     def _normalize_tool_call(self, tool_call: ToolCall) -> ToolCall:
@@ -156,10 +180,11 @@ class InstructRequestNormalizer(
         )
 
     def _aggregate_assistant_messages(self, messages: List[UATS]) -> AssistantMessageType:
-        aggregated_content: List[str] = []
         tool_calls: List[ToolCall] = []
         prefix: bool = False
         weight: Optional[float] = None
+        aggregate_content: bool = False
+
         for message in messages:
             assert isinstance(message, self._assistant_message_class), "Expected assistant message"
 
@@ -171,8 +196,8 @@ class InstructRequestNormalizer(
                     normalized_tool_call = self._normalize_tool_call(tool_call)
                     tool_calls.append(normalized_tool_call)
 
-            if message.content:
-                aggregated_content.append(self._aggregate_content_chunks(message.content))
+            if message.content is not None:
+                aggregate_content = True
 
             prefix |= message.prefix
             if isinstance(message, FinetuningAssistantMessage):
@@ -183,8 +208,10 @@ class InstructRequestNormalizer(
                     )
                 weight = message.weight
 
+        aggregated_content = self._aggregate_content_chunks(messages=messages) if aggregate_content else None
+
         aggregated_message = self._assistant_message_class(
-            content="\n\n".join(aggregated_content) if len(aggregated_content) else None,
+            content=aggregated_content,
             tool_calls=tool_calls or None,
             prefix=prefix,
         )
@@ -194,7 +221,7 @@ class InstructRequestNormalizer(
         return aggregated_message
 
     def _aggregate_user_messages(self, messages: List[UATS]) -> UserMessageType:
-        """
+        r"""
         Just coalesce neighboring blocks of text
         """
         return self._user_message_class(content=self._aggregate_content_chunks(messages))
@@ -355,8 +382,17 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
 
 
 class InstructRequestNormalizerV13(InstructRequestNormalizerV7):
+    r"""Normalizer for the v13 tokenizer.
+
+    It reorders tool messages based on the tool call order.
+
+    Examples:
+        >>> normalizer = InstructRequestNormalizerV13.normalizer()
+    """
+
     @staticmethod
     def normalizer() -> "InstructRequestNormalizerV13":
+        r"""Returns a normalizer for the default instruct request."""
         return InstructRequestNormalizerV13(
             UserMessage,
             AssistantMessage,
@@ -380,7 +416,7 @@ class InstructRequestNormalizerV13(InstructRequestNormalizerV7):
 
 
 def normalizer_for_tokenizer_version(version: TokenizerVersion) -> InstructRequestNormalizer:
-    """Gets the appropriate normalizer for the given tokenizer version.
+    r"""Gets the appropriate normalizer for the given tokenizer version.
 
     Args:
         version: The tokenizer version to get the normalizer for.

@@ -285,6 +285,68 @@ def test_convert_tool_call() -> None:
                 ],
             ),
         ),
+        # Here we test converting image-chunk for assistant. This is not supported by OpenAI,
+        # but we relax it for more flexibility.
+        (
+            OpenAIAssistantMessage(
+                role="assistant",
+                content=[
+                    {"type": "text", "text": "Hi"},
+                    {  # type: ignore[list-item]
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://upload.wikimedia.org/wikipedia/commons/d/da/2015_Kaczka_krzy%C5%BCowka_w_wodzie_%28samiec%29.jpg",
+                            "detail": "auto",
+                        },
+                    },
+                ],
+            ),
+            AssistantMessage(
+                content=[
+                    TextChunk(text="Hi"),
+                    ImageURLChunk(
+                        image_url=ImageURL(
+                            url="https://upload.wikimedia.org/wikipedia/commons/d/da/2015_Kaczka_krzy%C5%BCowka_w_wodzie_%28samiec%29.jpg",
+                            detail="auto",
+                        )
+                    ),
+                ]
+            ),
+        ),
+        (
+            OpenAIToolMessage(role="tool", content="22", tool_call_id="VvvODy9mT"),
+            ToolMessage(tool_call_id="VvvODy9mT", content="22"),
+        ),
+        # Here we test converting image-chunk for tools. This is not supported by OpenAI,
+        # but we relax it for more flexibility.
+        (
+            OpenAIToolMessage(
+                role="tool",
+                content=[
+                    {"type": "text", "text": "22"},
+                    {  # type: ignore[typeddict-item]
+                        "type": "image_url",  # type: ignore[typeddict-item]
+                        "image_url": {
+                            "url": "https://upload.wikimedia.org/wikipedia/commons/d/da/2015_Kaczka_krzy%C5%BCowka_w_wodzie_%28samiec%29.jpg",
+                            "detail": "auto",
+                        },
+                    },
+                ],
+                tool_call_id="VvvODy9mT",
+            ),
+            ToolMessage(
+                tool_call_id="VvvODy9mT",
+                content=[
+                    TextChunk(text="22"),
+                    ImageURLChunk(
+                        image_url=ImageURL(
+                            url="https://upload.wikimedia.org/wikipedia/commons/d/da/2015_Kaczka_krzy%C5%BCowka_w_wodzie_%28samiec%29.jpg",
+                            detail="auto",
+                        )
+                    ),
+                ],
+            ),
+        ),
         (
             OpenAISystemMessage(role="system", content="You are a helpful assistant."),
             SystemMessage(content="You are a helpful assistant."),

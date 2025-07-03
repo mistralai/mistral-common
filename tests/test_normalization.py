@@ -1,5 +1,5 @@
 import json
-from typing import Dict, List
+from typing import Dict, List, Union
 
 import pytest
 
@@ -7,8 +7,12 @@ from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
     ChunkTypes,
+    ContentChunk,
     FinetuningAssistantMessage,
     FinetuningMessage,
+    ImageURL,
+    ImageURLChunk,
+    Roles,
     SystemMessage,
     TextChunk,
     ToolMessage,
@@ -125,7 +129,7 @@ class TestChatCompletionRequestNormalization:
         self,
         roles: List[str],
         expected_roles: List[str],
-        expected_content: List[str],
+        expected_content: List[Union[List[ContentChunk], str]],
         normalizer: InstructRequestNormalizer,
     ) -> None:
         letter_to_cls: Dict[str, ChatMessage] = {
@@ -238,6 +242,56 @@ class TestChatCompletionRequestNormalization:
 
         parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
         assert parsed_request.system_prompt == "chunk1\n\nchunk2\n\nchunk3"
+
+    @pytest.mark.parametrize(
+        "message_cls, role",
+        [
+            (UserMessage, Roles.user),
+            (AssistantMessage, Roles.assistant),
+            (ToolMessage, Roles.tool),
+        ],
+    )
+    def test_uat_aggregate_chunks(
+        self, message_cls: ChatMessage, role: Roles, normalizer: InstructRequestNormalizer
+    ) -> None:
+        message = message_cls.model_validate(
+            {
+                "content": [
+                    TextChunk(text="chunk1"),
+                    ImageURLChunk(image_url=ImageURL(url="url1", detail="low")),
+                    ImageURLChunk(image_url=ImageURL(url="url2", detail="low")),
+                    TextChunk(text="chunk2"),
+                    TextChunk(text="chunk3"),
+                    ImageURLChunk(image_url=ImageURL(url="url3", detail="low")),
+                ]
+            }
+        )
+        chat_completion_request = mock_chat_completion(
+            messages=[
+                SystemMessage(content=[TextChunk(text="system")]),
+                UserMessage(content=[TextChunk(text="user")]),
+                message,
+            ]
+        )
+        parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
+
+        aggregated_content = [
+            TextChunk(text="user\n\nchunk1" if role == Roles.user else "chunk1"),
+            ImageURLChunk(image_url=ImageURL(url="url1", detail="low")),
+            ImageURLChunk(image_url=ImageURL(url="url2", detail="low")),
+            TextChunk(text="chunk2\n\nchunk3"),
+            ImageURLChunk(image_url=ImageURL(url="url3", detail="low")),
+        ]
+
+        if role == Roles.user:
+            expected_messages = [message_cls.model_validate({"content": aggregated_content})]
+        else:
+            expected_messages = [
+                UserMessage(content="user"),
+                message_cls.model_validate({"content": aggregated_content}),
+            ]
+
+        assert parsed_request.messages == expected_messages
 
     def test_normalize_tools(self, normalizer: InstructRequestNormalizer) -> None:
         """
