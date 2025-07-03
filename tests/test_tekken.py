@@ -44,7 +44,7 @@ def get_special_tokens(tokenizer_version: TokenizerVersion, add_audio: bool = Fa
 
     # fill special tokens until 24
     special_tokens += [
-        SpecialTokenInfo(rank=i, token_str=f"<SPCECIAL_{i}>", is_control=True) for i in range(len(special_tokens), 24)
+        SpecialTokenInfo(rank=i, token_str=f"<SPECIAL_{i}>", is_control=True) for i in range(len(special_tokens), 24)
     ]
 
     if add_audio:

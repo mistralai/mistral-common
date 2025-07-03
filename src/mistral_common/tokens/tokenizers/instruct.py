@@ -266,6 +266,9 @@ class InstructTokenizerV1(
         curr_tokens, image, audio = self.encode_user_content(content=message_txt, is_last=False, system_prompt=None)
         return curr_tokens, image, audio
 
+    def encode_system_message(self, message: SystemMessage) -> List[int]:
+        raise NotImplementedError(f"System message encoding not implemented for {self.__class__.__name__}")
+
     def encode_user_content(
         self,
         content: Union[str, List[ContentChunk]],
