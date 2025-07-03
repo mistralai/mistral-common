@@ -709,9 +709,9 @@ class InstructTokenizerV7(InstructTokenizerV3):
         self.END_SYSTEM = self.tokenizer.get_control_token(SpecialTokens.end_system.value)
         self.BEGIN_TOOL_CONTENT = self.tokenizer.get_control_token(SpecialTokens.begin_tool_content.value)
 
-        self.TRANSCRIPTION = None
+        self.TRANSCRIBE = None
         if audio_encoder is not None:
-            self.TRANSCRIPTION = self.tokenizer.get_control_token(SpecialTokens.transcribe.value)
+            self.TRANSCRIBE = self.tokenizer.get_control_token(SpecialTokens.transcribe.value)
 
     def _truncate_for_max_tokens(
         self,
@@ -815,8 +815,9 @@ class InstructTokenizerV7(InstructTokenizerV3):
             return None
 
         chunks = message.content
-        transcription_params = [chunk.transcription_params for chunk in chunks if isinstance(chunk, AudioChunk)]
-        assert len(transcription_params) <= 1, f"Only one transcription params is allowed, not {message.content}"
+        transcription_params = [chunk.transcription_params for chunk in chunks if isinstance(chunk, AudioChunk) and chunk.transcription_params]
+        if len(transcription_params) > 1:
+            raise ValueError(f"Only one transcription params is allowed, not {len(transcription_params)}")
         return transcription_params[0] if transcription_params else None
 
     def _maybe_return_transcription_tokens(self, message: UserMessage) -> List[int]:
@@ -826,12 +827,12 @@ class InstructTokenizerV7(InstructTokenizerV3):
             ...
         else:
             content = message.content
-            if not sum(isinstance(chunk, AudioChunk) for chunk in content) == 1:
-                raise ValueError(f"Transcription request should have a single audio chunk in the user message, not {content}")
-            if not sum(isinstance(chunk, TextChunk) for chunk in content) <= 1:
-                raise ValueError(f"Transcription request should have at most one text chunk in the user message, not {content}")
+            if not (num_audio_chunks := sum(isinstance(chunk, AudioChunk) for chunk in content)) == 1:
+                raise ValueError(f"Transcription request should have a single audio chunk in the user message, not {num_audio_chunks}")
+            if not (num_text_chunks := sum(isinstance(chunk, TextChunk) for chunk in content)) <= 1:
+                raise ValueError(f"Transcription request should have at most one text chunk in the user message, not {num_text_chunks}")
             if not len(content) <= 2:
-                raise ValueError(f"Transcription request should have at most two content chunks in the user message, not {content}")
+                raise ValueError(f"Transcription request should have at most two content chunks in the user message, not {len(content)}")
 
             assert self.TRANSCRIBE is not None, (
                 "Make sure your tokenizer defines a `TRANSCRIBE` token when encoding audio chunks."
@@ -849,17 +850,35 @@ class InstructTokenizerV7(InstructTokenizerV3):
     def validate_messages(cls, messages: List[UATS]) -> None:
         # check if any message has transcription params
         has_transcription = any(isinstance(message, UserMessage) and cls._get_transcription_params(message) for message in messages)
+        has_audio = cls._has_audio(messages)
 
         if has_transcription:
             num_messages = len(messages)
             if num_messages == 1:
-                assert isinstance(messages[0], UserMessage)
+                if not isinstance(messages[0], UserMessage):
+                    raise ValueError(f"Expected UserMessage, got {messages[0].role}")
             elif num_messages == 2:
-                assert isinstance(messages[1], AssistantMessage)
+                if not isinstance(messages[0], UserMessage):
+                    raise ValueError(f"Expected first message to be UserMessage, got {messages[0].role}")
+                if not isinstance(messages[1], AssistantMessage):
+                    raise ValueError(f"Expected second message to be AssistantMessage, got {messages[1].role}")
             else:
-                raise ValueError(
-                    "TODO(Patrick)"
-                )
+                raise ValueError(f"Transcription request should have at most two messages, not {len(messages)}")
+        elif has_audio:
+            if any(isinstance(message, SystemMessage) for message in messages):
+                raise ValueError("System messages are not yet allowed when audio is present")
+
+            for message in messages:
+                if cls._has_audio([message]):
+                    if (num_audio_chunks := sum(isinstance(chunk, AudioChunk) for chunk in message.content)) != 1:
+                        raise ValueError(f"Expected exactly one audio chunk, got {num_audio_chunks}")
+                    if (num_text_chunks := sum(isinstance(chunk, TextChunk) for chunk in message.content)) > 1:
+                        raise ValueError(f"Expected at most one text chunk, got {num_text_chunks}")
+
+    @staticmethod
+    def _has_audio(messages: List[UATS]) -> bool:
+        return any(isinstance(message, UserMessage) and isinstance(message.content, list) and any(isinstance(chunk, AudioChunk) for chunk in message.content) for message in messages)
+
 
     def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
         r"""Encode a tool message.
@@ -922,27 +941,6 @@ class InstructTokenizerV7(InstructTokenizerV3):
             curr_tokens.append(self.tokenizer.eos_id)
 
         return curr_tokens
-
-    def encode_audio_chunk(
-        self,
-        chunk: AudioChunk,
-        tokens: List[int],
-        curr_content_str: str,
-        audios: List[Audio],
-        audios_segment_token_sizes: List[List[int]],
-    ) -> Tuple[List[int], str, List[Audio], List[List[int]]]:
-        assert self.audio_encoder is not None
-        tokens, curr_content_str = self._tokenize_content_and_append(tokens, curr_content_str)
-
-        audio_enc = self.audio_encoder(chunk)
-        assert audio_enc.tokens
-
-        tokens += audio_enc.tokens
-        audios.append(audio_enc.audio)
-        audios_segment_token_sizes.append(audio_enc.audio_segment_token_sizes)
-
-        return tokens, curr_content_str, audios, audios_segment_token_sizes
-
 
 
 class InstructTokenizerV11(InstructTokenizerV7):

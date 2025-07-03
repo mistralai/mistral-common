@@ -1,9 +1,10 @@
 import numpy as np
 import pytest
-from typing import Optional
+from typing import List, Optional
 
 from mistral_common.audio import AudioFormat
 from mistral_common.protocol.instruct.messages import (
+    UATS,
     AssistantMessage,
     AudioChunk,
     RawAudio,
@@ -97,8 +98,11 @@ def _get_specials(tekkenizer: InstructTokenizerV7) -> tuple[int, ...]:
     return BOS, EOS, BEGIN_INST, END_INST, AUDIO, BEGIN_AUDIO, TRANSCRIBE
 
 
+DUMMY_AUDIO = _get_audio_chunk(1.7)
+DUMMY_AUDIO_WITH_TRANSCRIPTION = _get_audio_chunk(1.7, add_transciption=True, language="en")
 
-def test_tokenize_assistant_message(tekkenizer: InstructTokenizerV7) -> None:
+
+def test_tokenize_user_assistant_message(tekkenizer: InstructTokenizerV7) -> None:
     duration = 1.7  # seconds
     frame_rate = 12.5
     audio_chunk = _get_audio_chunk(duration)
@@ -147,6 +151,110 @@ def test_tokenize_assistant_message(tekkenizer: InstructTokenizerV7) -> None:
     assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)
 
 
+@pytest.mark.parametrize("audio_first", [True, False])
+def test_tokenize_user_message(tekkenizer: InstructTokenizerV7, audio_first: bool) -> None:
+    duration = 1.7  # seconds
+    frame_rate = 12.5
+    audio_chunk = _get_audio_chunk(duration)
+    text_chunk = TextChunk(text="a")
+
+    num_expected_frames = int(np.ceil(duration * frame_rate))
+    chunks = [audio_chunk, text_chunk] if audio_first else [text_chunk, audio_chunk]
+
+    tokenized = tekkenizer.encode_instruct(
+        InstructRequest(
+            messages=[
+                UserMessage(content=chunks),
+            ],
+        )
+    )
+
+    BOS, EOS, BEGIN_INST, END_INST, AUDIO, BEGIN_AUDIO, _ = _get_specials(tekkenizer)
+
+    audio_toks = [BEGIN_AUDIO] + [AUDIO] * num_expected_frames
+
+    if audio_first:
+        assert tokenized.tokens == [
+            BOS,
+            BEGIN_INST,
+            *audio_toks,
+            197, # "a"
+            END_INST,
+        ]
+        assert tokenized.text == (
+            "<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "a[/INST]"
+        )
+    else:
+        assert tokenized.tokens == [
+            BOS,
+            BEGIN_INST,
+            197, # "a"
+            *audio_toks,
+            END_INST,
+        ]
+        assert tokenized.text == (
+            "<s>[INST]a[BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]"
+        )
+    assert len(tokenized.audios) == 1
+    audio_array = Audio.from_base64(audio_chunk.input_audio.data).audio_array
+    assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)
+
+def test_tokenize_multi_turn(tekkenizer: InstructTokenizerV7) -> None:
+    duration = 1.7  # seconds
+    frame_rate = 12.5
+    audio_chunk = _get_audio_chunk(duration)
+    text_chunk = TextChunk(text="a")
+
+    num_expected_frames = int(np.ceil(duration * frame_rate))
+    chunks = [audio_chunk, text_chunk]
+
+    tokenized = tekkenizer.encode_instruct(
+        InstructRequest(
+            messages=[
+                UserMessage(content=chunks),
+                AssistantMessage(content="c b"),
+                UserMessage(content=[audio_chunk]),
+                AssistantMessage(content="a f"),
+                UserMessage(content=[text_chunk]),
+                AssistantMessage(content="g"),
+                UserMessage(content=chunks),
+            ],
+        )
+    )
+
+    BOS, EOS, BEGIN_INST, END_INST, AUDIO, BEGIN_AUDIO, _ = _get_specials(tekkenizer)
+
+    audio_toks = [BEGIN_AUDIO] + [AUDIO] * num_expected_frames
+
+    assert tokenized.tokens == [
+        BOS,
+        BEGIN_INST,
+        *audio_toks,
+        197, # "a"
+        END_INST,
+        199, # "c"
+        132, # " "
+        198, # "b"
+        EOS,
+        BEGIN_INST,
+        *audio_toks,
+        END_INST,
+        197, # "a"
+        132, # " "
+        202, # "f"
+        EOS,
+        BEGIN_INST,
+        197, # "a"
+        END_INST,
+        203, # "g"
+        EOS,
+        BEGIN_INST,
+        *audio_toks,
+        197, # "a"
+        END_INST,
+    ]
+    assert len(tokenized.audios) == 3
+
 def test_no_audio_in_system_message_before_v7() -> None:
     path = str(MistralTokenizer._data_path() / "tekken_240911.json")
     tokenizer = MistralTokenizer.from_file(path).instruct_tokenizer
@@ -176,153 +284,30 @@ def test_no_audio_in_system_message_before_v7() -> None:
         )
 
 
-def test_tokenize_transcribe(tekkenizer: InstructTokenizerV7) -> None:
-    duration = 1.7  # seconds
-    frame_rate = 12.5
-    audio_chunk = _get_audio_chunk(duration, add_transciption=True)
-    num_expected_frames = int(np.ceil(duration * frame_rate))
-
-    tokenized = tekkenizer.encode_instruct(
-        InstructRequest(
-            messages=[
-                UserMessage(
-                    content=[audio_chunk]
-                ),
-                AssistantMessage(
-                    content="a b c d",
-                ),
+@pytest.mark.parametrize(
+    ("messages", "match_regex"),
+    [
+        (
+            [
+                SystemMessage(content="a b c d"),
+                UserMessage(content=[TextChunk(text="a"), DUMMY_AUDIO]),
             ],
-        )
-    )
-
-    BOS, EOS, BEGIN_INST, END_INST, AUDIO, BEGIN_AUDIO, TRANSCRIBE = _get_specials(tekkenizer)
-
-    audio_toks = [BEGIN_AUDIO] + [AUDIO] * num_expected_frames
-
-    print(tokenized.tokens)
-    assert tokenized.tokens == [
-        BOS,
-        BEGIN_INST,
-        *audio_toks,
-        END_INST,
-        TRANSCRIBE,
-        1097,  # "a"
-        1289,  # " b"
-        1272,  # " c"
-        1266,  # " d"
-        EOS,
-    ]
-    assert tokenized.text == (
-        "<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST][TRANSCRIBE]a b c d</s>"
-    )
-    assert len(tokenized.audios) == 1
-    audio_array = Audio.from_base64(audio_chunk.input_audio.data).audio_array
-    assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)
-    assert len(tokenized.audios_tokens_with_pattern) == 0  # Only used in training.
-    assert tokenized.audios_segment_token_sizes == [
-        [num_expected_frames],
-    ]
-
-
-def test_tokenize_transcribe_with_lang(tekkenizer: InstructTokenizerV7) -> None:
-    duration = 1.7  # seconds
-    frame_rate = 12.5
-    audio_chunk = _get_audio_chunk(duration, add_transciption=True, language="en")
-    num_expected_frames = int(np.ceil(duration * frame_rate))
-
-    tokenized = tekkenizer.encode_instruct(
-        InstructRequest(
-            messages=[
-                UserMessage(
-                    content=[audio_chunk]
-                ),
-                AssistantMessage(
-                    content="a b c d",
-                ),
+            "System messages are not yet allowed when audio is present"
+        ),
+        (
+            [
+                UserMessage(content=[DUMMY_AUDIO, TextChunk(text="a"), DUMMY_AUDIO]),
             ],
-        )
-    )
-
-    BOS, EOS, BEGIN_INST, END_INST, AUDIO, BEGIN_AUDIO, TRANSCRIBE = _get_specials(tekkenizer)
-
-    audio_toks = [BEGIN_AUDIO] + [AUDIO] * num_expected_frames
-
-    assert tokenized.tokens == [
-        BOS,
-        BEGIN_INST,
-        *audio_toks,
-        END_INST,
-        9909,  # "lang"
-        1058,  # ":"
-        1262,  # "en"
-        TRANSCRIBE,
-        1097,  # "a"
-        1289,  # " b"
-        1272,  # " c"
-        1266,  # " d"
-        EOS,
-    ]
-    assert tokenized.text == (
-        "<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]lang:en[TRANSCRIBE]a b c d</s>"
-    )
-    assert len(tokenized.audios) == 1
-    audio_array = Audio.from_base64(audio_chunk.input_audio.data).audio_array
-    assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)
-    assert len(tokenized.audios_tokens_with_pattern) == 0  # Only used in training.
-    assert tokenized.audios_segment_token_sizes == [
-        [num_expected_frames],
-    ]
-
-
-def test_tokenize_transcribe_with_lang_and_text_prompt(tekkenizer: InstructTokenizerV7) -> None:
-    duration = 1.7  # seconds
-    frame_rate = 12.5
-    audio_chunk = _get_audio_chunk(duration, add_transciption=True, language="en")
-    num_expected_frames = int(np.ceil(duration * frame_rate))
-
-    tokenized = tekkenizer.encode_instruct(
-        InstructRequest(
-            messages=[
-                UserMessage(
-                    content=[
-                        audio_chunk,
-                        TextChunk(text="a"),
-                    ]
-                ),
-                AssistantMessage(
-                    content="a b c d",
-                ),
+            "Expected exactly one audio chunk, got 2"
+        ),
+        (
+            [
+                UserMessage(content=[TextChunk(text="a"), DUMMY_AUDIO, TextChunk(text="a")]),
             ],
-        )
-    )
-
-    BOS, EOS, BEGIN_INST, END_INST, AUDIO, BEGIN_AUDIO, TRANSCRIBE = _get_specials(tekkenizer)
-
-    audio_toks = [BEGIN_AUDIO] + [AUDIO] * num_expected_frames
-
-    assert tokenized.tokens == [
-        BOS,
-        BEGIN_INST,
-        *audio_toks,
-        1097,  # "a"
-        END_INST,
-        9909,  # "lang"
-        1058,  # ":"
-        1262,  # "en"
-        TRANSCRIBE,
-        1097,  # "a"
-        1289,  # " b"
-        1272,  # " c"
-        1266,  # " d"
-        EOS,
+            "Expected at most one text chunk, got 2"
+        ),
     ]
-    assert tokenized.text == (
-        "<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "a[/INST]lang:en[TRANSCRIBE]a b c d</s>"
-    )
-    assert len(tokenized.audios) == 1
-    audio_array = Audio.from_base64(audio_chunk.input_audio.data).audio_array
-    assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)
-    assert len(tokenized.audios_tokens_with_pattern) == 0  # Only used in training.
-    assert tokenized.audios_segment_token_sizes == [
-        [num_expected_frames],
-    ]
+)
+def test_tokenize_audio_raise(tekkenizer: InstructTokenizerV7, messages: List[UATS], match_regex: str) -> None:
+    with pytest.raises(ValueError, match=match_regex):
+        tekkenizer.encode_instruct(InstructRequest(messages=messages))
