@@ -45,7 +45,12 @@ class InstructTokenizerBase(
 ):
     r"""Base instruct tokenizer."""
 
-    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None, audio_encoder: Optional[AudioEncoder] = None):
+    def __init__(
+        self,
+        tokenizer: Tokenizer,
+        image_encoder: Optional[ImageEncoder] = None,
+        audio_encoder: Optional[AudioEncoder] = None,
+    ):
         r"""Initialize the instruct tokenizer.
 
         Args:
@@ -350,7 +355,12 @@ class InstructTokenizerV2(
     This tokenizer adds supports to images, tools and FIM requests.
     """
 
-    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None, audio_encoder: Optional[AudioEncoder] = None):
+    def __init__(
+        self,
+        tokenizer: Tokenizer,
+        image_encoder: Optional[ImageEncoder] = None,
+        audio_encoder: Optional[AudioEncoder] = None,
+    ):
         r"""Initialize the tokenizer.
 
         Args:
@@ -547,7 +557,12 @@ class InstructTokenizerV3(
     The only difference with V2 tokenizer is that it encodes the tool messages differently.
     """
 
-    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None, audio_encoder: Optional[AudioEncoder] = None):
+    def __init__(
+        self,
+        tokenizer: Tokenizer,
+        image_encoder: Optional[ImageEncoder] = None,
+        audio_encoder: Optional[AudioEncoder] = None,
+    ):
         r"""Initialize the tokenizer.
 
         Args:
@@ -646,7 +661,9 @@ class InstructTokenizerV3(
         audio: List[Audio] = []
 
         has_one_img_one_text_first = (
-            len(content) == 2 and isinstance(content[0], TextChunk) and isinstance(content[1], (ImageChunk, ImageURLChunk))
+            len(content) == 2
+            and isinstance(content[0], TextChunk)
+            and isinstance(content[1], (ImageChunk, ImageURLChunk))
         )
         if force_img_first and has_one_img_one_text_first:
             # make sure that if exactly one image and text chunk are passed we force the image chunk to be first
@@ -672,7 +689,9 @@ class InstructTokenizerV3(
                 tokens.extend(img_encoding.tokens)
                 images.append(img_encoding.image)
             elif isinstance(chunk, AudioChunk):
-                assert not content_str, f"It is not possible that `content` is non-empty when chunk is of type {type(chunk)}."
+                assert not content_str, (
+                    f"It is not possible that `content` is non-empty when chunk is of type {type(chunk)}."
+                )
                 # the following is only possible for >= v7
                 assert self.audio_encoder is not None, "Make sure to define a audio encoder at init"
                 audio_encoding = self.audio_encoder(chunk)
@@ -695,7 +714,12 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
     """
 
-    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None, audio_encoder: Optional[AudioEncoder] = None) -> None:
+    def __init__(
+        self,
+        tokenizer: Tokenizer,
+        image_encoder: Optional[ImageEncoder] = None,
+        audio_encoder: Optional[AudioEncoder] = None,
+    ) -> None:
         r"""Initialize the tokenizer.
 
         Args:
@@ -815,7 +839,11 @@ class InstructTokenizerV7(InstructTokenizerV3):
             return None
 
         chunks = message.content
-        transcription_params = [chunk.transcription_params for chunk in chunks if isinstance(chunk, AudioChunk) and chunk.transcription_params]
+        transcription_params = [
+            chunk.transcription_params
+            for chunk in chunks
+            if isinstance(chunk, AudioChunk) and chunk.transcription_params
+        ]
         if len(transcription_params) > 1:
             raise ValueError(f"Only one transcription params is allowed, not {len(transcription_params)}")
         return transcription_params[0] if transcription_params else None
@@ -828,11 +856,20 @@ class InstructTokenizerV7(InstructTokenizerV3):
         else:
             content = message.content
             if not (num_audio_chunks := sum(isinstance(chunk, AudioChunk) for chunk in content)) == 1:
-                raise ValueError(f"Transcription request should have a single audio chunk in the user message, not {num_audio_chunks}")
+                raise ValueError(
+                    "Transcription request should have a single "
+                    f"audio chunk in the user message, not {num_audio_chunks}"
+                )
             if not (num_text_chunks := sum(isinstance(chunk, TextChunk) for chunk in content)) <= 1:
-                raise ValueError(f"Transcription request should have at most one text chunk in the user message, not {num_text_chunks}")
+                raise ValueError(
+                    "Transcription request should have at most "
+                    f"one text chunk in the user message, not {num_text_chunks}"
+                )
             if not len(content) <= 2:
-                raise ValueError(f"Transcription request should have at most two content chunks in the user message, not {len(content)}")
+                raise ValueError(
+                    "Transcription request should have at most two content "
+                    f"chunks in the user message, not {len(content)}"
+                )
 
             assert self.TRANSCRIBE is not None, (
                 "Make sure your tokenizer defines a `TRANSCRIBE` token when encoding audio chunks."
@@ -849,7 +886,9 @@ class InstructTokenizerV7(InstructTokenizerV3):
     @classmethod
     def validate_messages(cls, messages: List[UATS]) -> None:
         # check if any message has transcription params
-        has_transcription = any(isinstance(message, UserMessage) and cls._get_transcription_params(message) for message in messages)
+        has_transcription = any(
+            isinstance(message, UserMessage) and cls._get_transcription_params(message) for message in messages
+        )
         has_audio = cls._has_audio(messages)
 
         if has_transcription:
@@ -877,8 +916,12 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
     @staticmethod
     def _has_audio(messages: List[UATS]) -> bool:
-        return any(isinstance(message, UserMessage) and isinstance(message.content, list) and any(isinstance(chunk, AudioChunk) for chunk in message.content) for message in messages)
-
+        return any(
+            isinstance(message, UserMessage)
+            and isinstance(message.content, list)
+            and any(isinstance(chunk, AudioChunk) for chunk in message.content)
+            for message in messages
+        )
 
     def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
         r"""Encode a tool message.

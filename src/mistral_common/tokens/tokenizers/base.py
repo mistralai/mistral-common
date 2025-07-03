@@ -164,7 +164,7 @@ class Tokenized(MistralBase):
     text: Optional[str] = None
     prefix_ids: Optional[List[int]] = None
     images: List[np.ndarray] = Field(default_factory=list)
-    audios: List[Audio] = Field(default_factory=list) 
+    audios: List[Audio] = Field(default_factory=list)
 
 
 class Tokenizer(ABC):
@@ -268,7 +268,9 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
     image_encoder: Optional[ImageEncoder]
     audio_encoder: Optional[AudioEncoder]
 
-    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder], audio_encoder: Optional[AudioEncoder]) -> None:
+    def __init__(
+        self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder], audio_encoder: Optional[AudioEncoder]
+    ) -> None:
         r"""Initialize the instruct tokenizer.
 
         Args:

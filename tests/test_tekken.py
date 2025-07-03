@@ -71,9 +71,7 @@ def get_special_tokens(tokenizer_version: TokenizerVersion, add_audio: bool = Fa
     ]
 
     if add_audio:
-        special_tokens += [
-            SpecialTokenInfo(rank=34, token_str=SpecialTokens.transcribe, is_control=True)
-        ]
+        special_tokens += [SpecialTokenInfo(rank=34, token_str=SpecialTokens.transcribe, is_control=True)]
 
     return special_tokens
 

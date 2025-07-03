@@ -46,6 +46,7 @@ def no_audio_tekkenizer() -> InstructTokenizerV7:
     )
     return InstructTokenizerV7(tokenizer)
 
+
 @pytest.fixture
 def with_audio_tekkenizer() -> InstructTokenizerV7:
     return _get_tekkenizer_with_audio()
@@ -361,11 +362,14 @@ def test_encode_chat_completion() -> None:
     ],
 )
 @pytest.mark.parametrize("tekkenizer", ["no_audio_tekkenizer", "with_audio_tekkenizer"])
-def test_truncation(request: pytest.FixtureRequest, tekkenizer: str, messages: List[ChatMessage], truncated_text: str) -> None:
+def test_truncation(
+    request: pytest.FixtureRequest, tekkenizer: str, messages: List[ChatMessage], truncated_text: str
+) -> None:
     tekkenizer = request.getfixturevalue(tekkenizer)
 
     tokenized = tekkenizer.encode_instruct(InstructRequest(messages=messages, truncate_at_max_tokens=15))
     assert tokenized.text == truncated_text, f"{tokenized.text} != {truncated_text}"
+
 
 @pytest.mark.parametrize(
     "messages",

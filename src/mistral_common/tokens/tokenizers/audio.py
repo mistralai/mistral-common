@@ -1,8 +1,9 @@
 import logging
-from dataclasses import dataclass
-from typing import Optional, List
-import numpy as np
 import math
+from dataclasses import dataclass
+from typing import List, Optional
+
+import numpy as np
 
 from mistral_common.audio import Audio
 from mistral_common.protocol.instruct.messages import AudioChunk
@@ -62,6 +63,7 @@ class AudioEncoding:
     tokens: List[int]
     # Original audio waveform data.
     audio: Audio
+
 
 @dataclass
 class SpecialAudioIDs:

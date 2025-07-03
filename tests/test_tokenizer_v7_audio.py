@@ -1,6 +1,7 @@
+from typing import List, Optional
+
 import numpy as np
 import pytest
-from typing import List, Optional
 
 from mistral_common.audio import AudioFormat
 from mistral_common.protocol.instruct.messages import (
@@ -15,25 +16,23 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.tokens.tokenizers.audio import (
     Audio,
-    SpecialAudioIDs,
-)
-from mistral_common.tokens.tokenizers.base import (
-    InstructRequest,
-    SpecialTokens,
-)
-from mistral_common.tokens.tokenizers.instruct import (
-    InstructTokenizerV7,
-)
-from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.audio import (
     AudioConfig,
     AudioEncoder,
     AudioSpectrogramConfig,
     SpecialAudioIDs,
 )
-from mistral_common.tokens.tokenizers.base import InstructRequest, TokenizerVersion
+from mistral_common.tokens.tokenizers.base import (
+    InstructRequest,
+    SpecialTokens,
+    TokenizerVersion,
+)
+from mistral_common.tokens.tokenizers.instruct import (
+    InstructTokenizerV7,
+)
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import _quick_vocab, get_special_tokens
+
 
 def _get_tekkenizer_with_audio() -> InstructTokenizerV7:
     special_tokens = get_special_tokens(tokenizer_version=TokenizerVersion.v7, add_audio=True)
@@ -63,6 +62,7 @@ def _get_tekkenizer_with_audio() -> InstructTokenizerV7:
 
     return InstructTokenizerV7(tokenizer, audio_encoder=audio_encoder)
 
+
 @pytest.fixture(scope="session")
 def tekkenizer() -> InstructTokenizerV7:
     return _get_tekkenizer_with_audio()
@@ -86,6 +86,7 @@ def _get_audio_chunk(duration: float, add_transciption: bool = False, language: 
         ),
         transcription_params=transcription_params,
     )
+
 
 def _get_specials(tekkenizer: InstructTokenizerV7) -> tuple[int, ...]:
     BOS = tekkenizer.tokenizer.get_control_token(SpecialTokens.bos.value)
@@ -119,9 +120,7 @@ def test_tokenize_user_assistant_message(tekkenizer: InstructTokenizerV7) -> Non
                         audio_chunk,
                     ]
                 ),
-                AssistantMessage(
-                    content="c b d"
-                ),
+                AssistantMessage(content="c b d"),
             ],
         )
     )
@@ -136,16 +135,14 @@ def test_tokenize_user_assistant_message(tekkenizer: InstructTokenizerV7) -> Non
         197,  # a
         *audio_toks,
         END_INST,
-        199, # "c"
-        132, # " "
-        198, # "b"
-        132, # " "
-        200, # "d"
+        199,  # "c"
+        132,  # " "
+        198,  # "b"
+        132,  # " "
+        200,  # "d"
         EOS,
     ]
-    assert tokenized.text == (
-        "<s>[INST]a[BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]c b d</s>"
-    )
+    assert tokenized.text == ("<s>[INST]a[BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]c b d</s>")
     assert len(tokenized.audios) == 1
     audio_array = Audio.from_base64(audio_chunk.input_audio.data).audio_array
     assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)
@@ -178,26 +175,23 @@ def test_tokenize_user_message(tekkenizer: InstructTokenizerV7, audio_first: boo
             BOS,
             BEGIN_INST,
             *audio_toks,
-            197, # "a"
+            197,  # "a"
             END_INST,
         ]
-        assert tokenized.text == (
-            "<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "a[/INST]"
-        )
+        assert tokenized.text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "a[/INST]")
     else:
         assert tokenized.tokens == [
             BOS,
             BEGIN_INST,
-            197, # "a"
+            197,  # "a"
             *audio_toks,
             END_INST,
         ]
-        assert tokenized.text == (
-            "<s>[INST]a[BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]"
-        )
+        assert tokenized.text == ("<s>[INST]a[BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]")
     assert len(tokenized.audios) == 1
     audio_array = Audio.from_base64(audio_chunk.input_audio.data).audio_array
     assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)
+
 
 def test_tokenize_multi_turn(tekkenizer: InstructTokenizerV7) -> None:
     duration = 1.7  # seconds
@@ -230,30 +224,31 @@ def test_tokenize_multi_turn(tekkenizer: InstructTokenizerV7) -> None:
         BOS,
         BEGIN_INST,
         *audio_toks,
-        197, # "a"
+        197,  # "a"
         END_INST,
-        199, # "c"
-        132, # " "
-        198, # "b"
+        199,  # "c"
+        132,  # " "
+        198,  # "b"
         EOS,
         BEGIN_INST,
         *audio_toks,
         END_INST,
-        197, # "a"
-        132, # " "
-        202, # "f"
+        197,  # "a"
+        132,  # " "
+        202,  # "f"
         EOS,
         BEGIN_INST,
-        197, # "a"
+        197,  # "a"
         END_INST,
-        203, # "g"
+        203,  # "g"
         EOS,
         BEGIN_INST,
         *audio_toks,
-        197, # "a"
+        197,  # "a"
         END_INST,
     ]
     assert len(tokenized.audios) == 3
+
 
 def test_no_audio_in_system_message_before_v7() -> None:
     path = str(MistralTokenizer._data_path() / "tekken_240911.json")
@@ -267,9 +262,7 @@ def test_no_audio_in_system_message_before_v7() -> None:
         # we don't allow system
         tokenizer.encode_instruct(
             InstructRequest(
-                messages=[
-                    SystemMessage(content="hello")
-                ],
+                messages=[SystemMessage(content="hello")],
             )
         )
 
@@ -292,21 +285,21 @@ def test_no_audio_in_system_message_before_v7() -> None:
                 SystemMessage(content="a b c d"),
                 UserMessage(content=[TextChunk(text="a"), DUMMY_AUDIO]),
             ],
-            "System messages are not yet allowed when audio is present"
+            "System messages are not yet allowed when audio is present",
         ),
         (
             [
                 UserMessage(content=[DUMMY_AUDIO, TextChunk(text="a"), DUMMY_AUDIO]),
             ],
-            "Expected exactly one audio chunk, got 2"
+            "Expected exactly one audio chunk, got 2",
         ),
         (
             [
                 UserMessage(content=[TextChunk(text="a"), DUMMY_AUDIO, TextChunk(text="a")]),
             ],
-            "Expected at most one text chunk, got 2"
+            "Expected at most one text chunk, got 2",
         ),
-    ]
+    ],
 )
 def test_tokenize_audio_raise(tekkenizer: InstructTokenizerV7, messages: List[UATS], match_regex: str) -> None:
     with pytest.raises(ValueError, match=match_regex):

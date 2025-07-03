@@ -162,7 +162,6 @@ class AudioChunk(BaseContentChunk):
 
     transcription_params: Optional[TranscriptionParams] = None
 
-
     @property
     def is_empty(self) -> bool:
         return not self.input_audio.data
