@@ -191,7 +191,7 @@ class TextChunk(BaseContentChunk):
         return cls.model_validate(messages)
 
 
-ContentChunk = Annotated[Union[TextChunk, ImageChunk, ImageURLChunk], Field(discriminator="type")]
+ContentChunk = Annotated[Union[TextChunk, ImageChunk, ImageURLChunk, AudioChunk], Field(discriminator="type")]
 
 
 def _convert_openai_content_chunks(openai_content_chunks: Dict[str, Union[str, Dict[str, str]]]) -> ContentChunk:

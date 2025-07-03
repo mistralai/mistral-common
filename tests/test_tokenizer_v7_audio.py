@@ -7,6 +7,7 @@ from typing import Type
 import numpy as np
 import pytest
 
+from mistral_common.audio import AudioFormat
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     AudioChunk,
@@ -88,14 +89,13 @@ def test_tokenize_assistant_message(tekkenizer: InstructTokenizerV7) -> None:
         audio_array=rng.uniform(low=-1, high=1, size=[signal_length]),
         sampling_rate=sampling_rate,
     )
+    format = AudioFormat("WAV")
     audio_chunk = AudioChunk(
         input_audio=RawAudio(
-            format="wav",
-            data=audio.to_base64(format="wav"),
+            format=format,
+            data=format,
         )
     )
-    text_chunk = TextChunk(text="can you hear me")
-
     tokenized = tekkenizer.encode_instruct(
         InstructRequest(
             messages=[
@@ -108,10 +108,9 @@ def test_tokenize_assistant_message(tekkenizer: InstructTokenizerV7) -> None:
                     ]
                 ),
                 AssistantMessage(
-                    content=[text_chunk],
+                    content="can you hear me"
                 ),
             ],
-            output_modalities=[Modality.AUDIO],
         )
     )
 
