@@ -10,15 +10,14 @@ import pytest
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     AudioChunk,
-    AudioTranscriptChunk,
     RawAudio,
     SystemMessage,
     TextChunk,
     UserMessage,
 )
-from mistral_common.protocol.instruct.request import Modality, TranscriptionParams
 from mistral_common.tokens.tokenizers.audio import (
     Audio,
+    SpecialAudioIDs,
 )
 from mistral_common.tokens.tokenizers.base import (
     InstructRequest,
@@ -26,31 +25,32 @@ from mistral_common.tokens.tokenizers.base import (
 )
 from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerBase,
-    InstructTokenizerV4,
-    InstructTokenizerV5,
-    InstructTokenizerV6,
+    InstructTokenizerV3,
     InstructTokenizerV7,
 )
-from mistral_common.tokens.tokenizers.mistral import (
-    MistralTokenizer,
-    load_audio_encoder,
-)
-from mistral_common.tokens.tokenizers.multimodal import (
-    AudioCodebookConfig,
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from mistral_common.tokens.tokenizers.audio import (
     AudioConfig,
     AudioEncoder,
     AudioSpectrogramConfig,
+    SpecialAudioIDs,
 )
 from mistral_common.tokens.tokenizers.base import InstructRequest, TokenizerVersion
-from mistral_common.tokens.tokenizers.tekken import Tekkenizer
+from mistral_common.tokens.tokenizers.tekken import SpecialTokenInfo, Tekkenizer
 from tests.test_tekken import _quick_vocab
 
 
 @pytest.fixture(scope="session")
 def tekkenizer() -> InstructTokenizerV7:
+    special_tokens = list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS)
+    special_tokens += [
+        SpecialTokenInfo(rank=24, token_str=SpecialTokens.audio, is_control=True),
+        SpecialTokenInfo(rank=25, token_str=SpecialTokens.begin_audio, is_control=True),
+        SpecialTokenInfo(rank=34, token_str=SpecialTokens.transcribe, is_control=True),
+    ]
     tokenizer = Tekkenizer(
         _quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
-        list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS),
+        special_tokens,
         pattern=r".+",  # single token, whole string
         vocab_size=256 + 100,
         num_special_tokens=100,
@@ -66,65 +66,22 @@ def tekkenizer() -> InstructTokenizerV7:
         ),
         chunk_length_s=30.0,
     )
-    audio_encoder = AudioEncoder(audio_config)
+    special_audio_ids = SpecialAudioIDs(
+        audio=tokenizer.get_control_token(SpecialTokens.audio.value),
+        begin_audio=tokenizer.get_control_token(SpecialTokens.begin_audio.value),
+    )
+    audio_encoder = AudioEncoder(audio_config, special_audio_ids)
     return InstructTokenizerV7(tokenizer, audio_encoder=audio_encoder)
 
 
-def _load_mm_tekenizer() -> Tekkenizer:
-    with tempfile.NamedTemporaryFile(mode="w+", suffix=".json", delete=True) as temp_json_file:
-        # Load the original JSON data
-        original_json_path = MistralTokenizer._data_path() / "tekken_mm_240930.json"
-        with open(original_json_path, "r") as original_file:
-            data = json.load(original_file)
-
-        # Update <SPECIAL_34> --> [TRANSCRIBE]
-        # Manipulate t  e JSON data (example: change a key value)
-        data["special_tokens"][34]["token_str"] = "[TRANSCRIBE]"
-
-        # Write the manipulated data to the temporary JSON file
-        temp_json_file.write(json.dumps(data, ensure_ascii=False))
-        temp_json_file_path = Path(temp_json_file.name)
-
-        mm_tekkenizer = Tekkenizer.from_file(temp_json_file_path)
-    return mm_tekkenizer
-
-
-@pytest.fixture(scope="session")
-def tekkenizer_with_spectrogram_and_transcribe() -> InstructTokenizerV7:
-    mm_tekkenizer = _load_mm_tekenizer()
-
-    audio_encoder = load_audio_encoder(
-        AudioConfig(
-            sampling_rate=24000,
-            frame_rate=12.5,
-            # audio spectrograms for spectrogram-based models
-            audio_encoding_config=AudioSpectrogramConfig(
-                num_mel_bins=128,
-                window_size=400,
-                hop_length=160,
-            ),
-        ),
-        mm_tekkenizer,
-    )
-    assert isinstance(audio_encoder, AudioEncoder), type(audio_encoder)
-    assert isinstance(audio_encoder.encoding_config, AudioSpectrogramConfig), type(audio_encoder.encoding_config)
-    return InstructTokenizerV7(tokenizer=mm_tekkenizer, audio_encoder=audio_encoder)
-
-
-@pytest.fixture(params=["tekkenizer_with_codebook_and_transcribe", "tekkenizer_with_spectrogram_and_transcribe"])
-def parameterized_tekkenizer(request: pytest.FixtureRequest) -> InstructTokenizerV7:
-    return request.getfixturevalue(request.param)
-
-
-def test_tokenize_assistant_message(parameterized_tekkenizer: InstructTokenizerV7) -> None:
+def test_tokenize_assistant_message(tekkenizer: InstructTokenizerV7) -> None:
     duration = 1.7  # seconds
     sampling_rate = 24000
     signal_length = int(duration * sampling_rate)
     frame_rate = 12.5
-    assert isinstance(parameterized_tekkenizer.audio_encoder, AudioEncoder)
-    num_codebooks = 9 if isinstance(parameterized_tekkenizer.audio_encoder.encoding_config, AudioCodebookConfig) else 1
+    assert isinstance(tekkenizer.audio_encoder, AudioEncoder)
     num_expected_frames = int(np.ceil(duration * frame_rate))
-    num_exp_audio_special_toks = num_expected_frames + (num_codebooks - 1)
+    num_exp_audio_special_toks = num_expected_frames
 
     rng = np.random.default_rng(0)
     audio = Audio(
@@ -139,7 +96,7 @@ def test_tokenize_assistant_message(parameterized_tekkenizer: InstructTokenizerV
     )
     text_chunk = TextChunk(text="can you hear me")
 
-    tokenized = parameterized_tekkenizer.encode_instruct(
+    tokenized = tekkenizer.encode_instruct(
         InstructRequest(
             messages=[
                 UserMessage(
@@ -158,12 +115,12 @@ def test_tokenize_assistant_message(parameterized_tekkenizer: InstructTokenizerV
         )
     )
 
-    BOS = parameterized_tekkenizer.tokenizer.get_control_token(SpecialTokens.bos.value)
-    EOS = parameterized_tekkenizer.tokenizer.get_control_token(SpecialTokens.eos.value)
-    BEGIN_INST = parameterized_tekkenizer.tokenizer.get_control_token(SpecialTokens.begin_inst.value)
-    END_INST = parameterized_tekkenizer.tokenizer.get_control_token(SpecialTokens.end_inst.value)
-    AUDIO = parameterized_tekkenizer.tokenizer.get_control_token(SpecialTokens.audio.value)
-    BEGIN_AUDIO = parameterized_tekkenizer.tokenizer.get_control_token(SpecialTokens.begin_audio.value)
+    BOS = tekkenizer.tokenizer.get_control_token(SpecialTokens.bos.value)
+    EOS = tekkenizer.tokenizer.get_control_token(SpecialTokens.eos.value)
+    BEGIN_INST = tekkenizer.tokenizer.get_control_token(SpecialTokens.begin_inst.value)
+    END_INST = tekkenizer.tokenizer.get_control_token(SpecialTokens.end_inst.value)
+    AUDIO = tekkenizer.tokenizer.get_control_token(SpecialTokens.audio.value)
+    BEGIN_AUDIO = tekkenizer.tokenizer.get_control_token(SpecialTokens.begin_audio.value)
 
     audio_toks = [BEGIN_AUDIO] + [AUDIO] * num_exp_audio_special_toks
 
@@ -548,7 +505,7 @@ def test_tokenize_audio_system_message_multiple_audios_should_fail(
 
 @pytest.mark.parametrize(
     "tokenizer_cls",
-    [InstructTokenizerV4, InstructTokenizerV5, InstructTokenizerV6],
+    [InstructTokenizerV3]
 )
 def test_no_audio_in_system_message_before_v7(tokenizer_cls: Type[InstructTokenizerBase]) -> None:
     duration = 1.7  # seconds

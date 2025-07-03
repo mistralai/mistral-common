@@ -355,9 +355,7 @@ class InstructTokenizerV2(
             image_encoder: The image encoder to use.
             audio_encoder: The audio encoder to use.
         """
-        assert image_encoder is None, "Image encoder not supported for tokenizer V2"
-        assert audio_encoder is None, "Audio encoder not supported for tokenizer V2"
-        super().__init__(tokenizer, None, None)
+        super().__init__(tokenizer, image_encoder, audio_encoder)
         self.BEGIN_INST = self.tokenizer.get_control_token(SpecialTokens.begin_inst.value)
         self.END_INST = self.tokenizer.get_control_token(SpecialTokens.end_inst.value)
         self.BEGIN_AVAILABLE_TOOLS = self.tokenizer.get_control_token(SpecialTokens.begin_tools.value)
@@ -554,8 +552,7 @@ class InstructTokenizerV3(
             image_encoder: The image encoder to use.
             audio_encoder: The audio encoder to use.
         """
-        assert audio_encoder is None, "Audio encoder not supported for tokenizer V3"
-        super().__init__(tokenizer, image_encoder=image_encoder, audio_encoder=None)
+        super().__init__(tokenizer, image_encoder=image_encoder, audio_encoder=audio_encoder)
 
     def _prepare_function_call(self, tool_call: ToolCall) -> Dict[str, Any]:
         function_call = {
@@ -819,7 +816,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
         assert len(transcription_params) <= 1, f"Only one transcription params is allowed, not {message.content}"
         return transcription_params[0] if transcription_params else None
 
-    def _maybe_transcription_request_tokens(self, message: UserMessage) -> List[int]:
+    def _maybe_return_transcription_tokens(self, message: UserMessage) -> List[int]:
         suffix_tokens: List[int] = []
         if (transcription := self._get_transcription_params(content := message.content)):
             # no transcription -> no tokens
