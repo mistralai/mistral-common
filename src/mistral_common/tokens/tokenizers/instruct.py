@@ -13,6 +13,8 @@ from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     AssistantMessageType,
     ContentChunk,
+    ImageChunk,
+    ImageURLChunk,
     SystemMessage,
     TextChunk,
     ToolMessage,
@@ -94,7 +96,7 @@ class InstructTokenizerBase(
     @abstractmethod
     def encode_assistant_message(
         self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
-    ) -> List[int]:
+    ) -> Tuple[List[int], List[np.ndarray]]:
         r"""Encode an assistant message.
 
         Raises:
@@ -156,13 +158,16 @@ class InstructTokenizerBase(
             elif isinstance(msg, AssistantMessage):
                 continue_message = request.continue_final_message and (msg_idx == len(request.messages) - 1)
 
-                new_tokens = self.encode_assistant_message(
+                new_tokens, new_images = self.encode_assistant_message(
                     msg, msg_idx < last_user_idx, continue_message=continue_message
                 )
+                images.extend(new_images)
                 if msg_idx == len(request.messages) - 1:
                     prefix_ids = new_tokens
             elif isinstance(msg, SystemMessage):
                 new_tokens = self.encode_system_message(msg)
+            else:
+                raise TokenizerException(f"Unknown message type {type(msg)}")
 
             tokens_list.append(new_tokens)
 
@@ -289,7 +294,7 @@ class InstructTokenizerV1(
 
     def encode_assistant_message(
         self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
-    ) -> List[int]:
+    ) -> Tuple[List[int], List[np.ndarray]]:
         r"""Encode an assistant message.
 
         Args:
@@ -308,14 +313,14 @@ class InstructTokenizerV1(
             raise InvalidAssistantMessageException(
                 "`continue_message` is only supported for assistant messages that have `prefix=False`."
             )
-
         elif message.content:
+            assert isinstance(message.content, str), "Message content must be a string for tokenizer < v7."
             curr_tokens = self.tokenizer.encode(message.content, bos=False, eos=False)
         else:
             raise TokenizerException(f"{message.content} // {message.tool_calls}")
         if not message.prefix and not continue_message:
             curr_tokens.append(self.tokenizer.eos_id)
-        return curr_tokens
+        return curr_tokens, []
 
     def encode_fim(self, request: FIMRequest) -> Tokenized:
         r"""Encode a FIM request.
@@ -334,7 +339,7 @@ class InstructTokenizerV2(
     This tokenizer adds supports to images, tools and FIM requests.
     """
 
-    _message_position_to_encode_tools = UserMessagePosition.last
+    _user_message_position_to_encode_tools = UserMessagePosition.last
 
     def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder] = None):
         r"""Initialize the tokenizer.
@@ -379,8 +384,8 @@ class InstructTokenizerV2(
         """
         assert message.content is not None
         do_encode_tools = False
-        do_encode_tools |= is_first and (self._message_position_to_encode_tools == UserMessagePosition.first)
-        do_encode_tools |= is_last and (self._message_position_to_encode_tools == UserMessagePosition.last)
+        do_encode_tools |= is_first and (self._user_message_position_to_encode_tools == UserMessagePosition.first)
+        do_encode_tools |= is_last and (self._user_message_position_to_encode_tools == UserMessagePosition.last)
         tools_tokens: List[int] = []
 
         if do_encode_tools and available_tools:
@@ -456,6 +461,7 @@ class InstructTokenizerV2(
 
     def _encode_normal_content_assistant_message(self, message: AssistantMessageType) -> List[int]:
         assert message.content, f"Assistant message must have content. Got {message}"
+        assert isinstance(message.content, str), "Message content must be a string for tokenizer < V7"
         return self.tokenizer.encode(message.content.rstrip(" "), bos=False, eos=False)
 
     def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> List[int]:
@@ -472,7 +478,7 @@ class InstructTokenizerV2(
 
     def encode_assistant_message(
         self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
-    ) -> List[int]:
+    ) -> Tuple[List[int], List[np.ndarray]]:
         r"""Encode an assistant message.
 
         Args:
@@ -495,7 +501,7 @@ class InstructTokenizerV2(
         if message.tool_calls:
             if is_before_last_user_message:
                 # don't tokenize tool call before last user message
-                return []
+                return [], []
             curr_tokens = self._encode_tool_calls_in_assistant_message(message)
         elif message.content:
             curr_tokens = self._encode_normal_content_assistant_message(message)
@@ -503,7 +509,7 @@ class InstructTokenizerV2(
             raise TokenizerException(f"Invalid assistant message: {message.content}")
         if not message.prefix and not continue_message:
             curr_tokens.append(self.tokenizer.eos_id)
-        return curr_tokens
+        return curr_tokens, []
 
     def _encode_infilling(self, text: str) -> List[int]:
         r"""Remove prefix space in the case of SentencePieceTokenizers."""
@@ -561,7 +567,7 @@ class InstructTokenizerV3(
 
     def _prepare_tool_result(self, tool_message: ToolMessage) -> Dict[str, Any]:
         assert tool_message.content is not None, "Tool message content cannot be None"
-        assert isinstance(tool_message.content, str), "Tool message content must be string"
+        assert isinstance(tool_message.content, str), "Tool message content must be string for tokenizer < v13"
         assert tool_message.tool_call_id is not None, "Tool message has to have the tool call id defined in v3"
 
         return {
@@ -596,7 +602,7 @@ class InstructTokenizerV3(
 
     def encode_assistant_message(
         self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
-    ) -> List[int]:
+    ) -> Tuple[List[int], List[np.ndarray]]:
         r"""Encode an assistant message.
 
         Note:
@@ -639,7 +645,9 @@ class InstructTokenizerV3(
         images: List[np.ndarray] = []
 
         has_one_img_one_text_first = (
-            len(content) == 2 and isinstance(content[0], TextChunk) and not isinstance(content[1], TextChunk)
+            len(content) == 2
+            and isinstance(content[0], TextChunk)
+            and isinstance(content[1], (ImageURLChunk, ImageChunk))
         )
         if force_img_first and has_one_img_one_text_first:
             # make sure that if exactly one image and text chunk are passed we force the image chunk to be first
@@ -741,7 +749,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
             The encoded tokens.
         """
         assert message.content is not None
-        assert isinstance(message.content, str), "Message content must be normalized"
+        assert isinstance(message.content, str), "System message must be a string."
         tokens = [
             self.BEGIN_SYSTEM,
             *self.tokenizer.encode(message.content, bos=False, eos=False),
@@ -798,7 +806,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
             The encoded tokens.
         """
         assert message.tool_call_id is not None
-        assert isinstance(message.content, str), "Tool message content must be string"
+        assert isinstance(message.content, str), "Tool message content must be string for tokenizer < v13"
         tool_call_id_tokens = self.tokenizer.encode(message.tool_call_id, bos=False, eos=False)
         tokens = self.tokenizer.encode(message.content, bos=False, eos=False)
 
@@ -814,9 +822,41 @@ class InstructTokenizerV7(InstructTokenizerV3):
         ]
         return curr_tokens, []
 
+    def _encode_chunk_content(
+        self,
+        content: Union[str, List[ContentChunk]],
+        force_img_first: bool = False,
+    ) -> Tuple[List[int], List[np.ndarray]]:
+        if isinstance(content, str):
+            return self.tokenizer.encode(content, bos=False, eos=False), []
+
+        tokens: List[int] = []
+        images: List[np.ndarray] = []
+
+        has_one_img_one_text_first = (
+            len(content) == 2
+            and isinstance(content[0], TextChunk)
+            and isinstance(content[1], (ImageURLChunk, ImageChunk))
+        )
+        if force_img_first and has_one_img_one_text_first:
+            # make sure that if exactly one image and text chunk are passed we force the image chunk to be first
+            content = [content[1], content[0]]
+
+        for chunk in content:
+            if isinstance(chunk, TextChunk):
+                tokens.extend(self.tokenizer.encode(chunk.text, bos=False, eos=False))
+            elif isinstance(chunk, (ImageURLChunk, ImageChunk)):
+                assert self.image_encoder is not None, "Make sure to define a image encoder at init"
+                img_encoding = self.image_encoder(chunk)
+
+                tokens.extend(img_encoding.tokens)
+                images.append(img_encoding.image)
+
+        return tokens, images
+
     def encode_assistant_message(
         self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
-    ) -> List[int]:
+    ) -> Tuple[List[int], List[np.ndarray]]:
         r"""Encode an assistant message.
 
         Args:
@@ -836,19 +876,22 @@ class InstructTokenizerV7(InstructTokenizerV3):
             )
 
         curr_tokens: list = []
+        curr_images: list = []
         if message.content:
             if isinstance(message.content, str):
                 curr_tokens += self._encode_normal_content_assistant_message(message)
             elif isinstance(message.content, list):
-                curr_tokens += self.encode_content_chunks(
-                    message.content, is_last=False, system_prompt=None, force_img_first=True
-                ).tokens
+                tokenized = self._encode_chunk_content(message.content, force_img_first=True)
+                curr_tokens += tokenized[0]
+                curr_images += tokenized[1]
+            else:
+                raise TokenizerException(f"Invalid assistant message content: {message.content}")
         if message.tool_calls:
             curr_tokens += self._encode_tool_calls_in_assistant_message(message)
         if not message.prefix and not continue_message:
             curr_tokens.append(self.tokenizer.eos_id)
 
-        return curr_tokens
+        return curr_tokens, curr_images
 
 
 class InstructTokenizerV11(InstructTokenizerV7):
@@ -896,7 +939,7 @@ class InstructTokenizerV13(InstructTokenizerV11):
         - call id is no longer tokenized for tool calls or results.
     """
 
-    _msg_pos_to_enc_tools = UserMessagePosition.first
+    _user_message_position_to_encode_tools = UserMessagePosition.first
 
     def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> List[int]:
         assert message.tool_calls, f"Assistant message must have tool calls. Got {message}"
@@ -924,8 +967,9 @@ class InstructTokenizerV13(InstructTokenizerV11):
         Returns:
             The encoded tokens.
         """
-        assert message.tool_call_id is not None
-        tokens, images = self.encode_user_content(message.content, is_last=False)
+        assert message.tool_call_id is not None, "Tool call id must be provided for tokenizer >= v13"
+
+        tokens, images = self._encode_chunk_content(message.content, force_img_first=True)
         curr_tokens = [
             self.BEGIN_TOOL_RESULTS,
             *tokens,

@@ -97,6 +97,47 @@ def test_tokenize_assistant_message(spm_tokenizer: InstructTokenizerV7) -> None:
     )
 
 
+def test_tokenize_assistant_message_with_image(spm_tokenizer: InstructTokenizerV7) -> None:
+    tokenized = spm_tokenizer.encode_instruct(
+        InstructRequest(
+            messages=[
+                UserMessage(
+                    content=[
+                        TextChunk(
+                            text="a",
+                        ),
+                        ImageChunk(image=Image.new("RGB", (4, 4), "red")),
+                    ]
+                ),
+                AssistantMessage(
+                    content=[
+                        TextChunk(text="b"),
+                        ImageChunk(image=Image.new("RGB", (4, 4), "red")),
+                    ]
+                ),
+            ],
+        )
+    )
+    _im = 10
+    _im_break = 14
+    _im_end = 15
+    img_tokens = [_im, _im, _im_break, _im, _im, _im_end]
+    assert tokenized.tokens == [
+        1,  # bos
+        3,  # begin_inst
+        *img_tokens,
+        1032,  # a
+        4,  # end_inst
+        *img_tokens,
+        1055,  # b
+        2,  # eos
+    ]
+    assert (
+        tokenized.text
+        == "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁a[/INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁b</s>"  # noqa
+    )
+
+
 def test_tokenize_assistant_message_continue_final_message(spm_tokenizer: InstructTokenizerV7) -> None:
     tokenized = spm_tokenizer.encode_instruct(
         InstructRequest(
