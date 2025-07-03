@@ -256,8 +256,6 @@ def test_no_audio_in_system_message_before_v7() -> None:
 
     duration = 1.7  # seconds
     audio_chunk = _get_audio_chunk(duration)
-    text_chunk = TextChunk(text="you are a helpful voice assistant")
-
     with pytest.raises(NotImplementedError):
         # we don't allow system
         tokenizer.encode_instruct(
