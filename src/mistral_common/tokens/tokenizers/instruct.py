@@ -643,7 +643,7 @@ class InstructTokenizerV3(
         audio: List[Audio] = []
 
         has_one_img_one_text_first = (
-            len(content) == 2 and isinstance(content[0], TextChunk) and not isinstance(content[1], TextChunk)
+            len(content) == 2 and isinstance(content[0], TextChunk) and isinstance(content[1], (ImageChunk, ImageURLChunk))
         )
         if force_img_first and has_one_img_one_text_first:
             # make sure that if exactly one image and text chunk are passed we force the image chunk to be first
@@ -651,25 +651,25 @@ class InstructTokenizerV3(
 
         first_chunk = True
         for chunk in content:
-            content = ""
+            content_str = ""
             if first_chunk and is_last and system_prompt:
                 first_chunk = False
-                content = system_prompt + "\n\n"
+                content_str = system_prompt + "\n\n"
 
             if isinstance(chunk, TextChunk):
-                content += chunk.text
-                tokens.extend(self.tokenizer.encode(content, bos=False, eos=False))
+                content_str += chunk.text
+                tokens.extend(self.tokenizer.encode(content_str, bos=False, eos=False))
             elif isinstance(chunk, (ImageChunk, ImageURLChunk)):
                 assert self.image_encoder is not None, "Make sure to define a image encoder at init"
-                if content:
-                    tokens.extend(self.tokenizer.encode(content, bos=False, eos=False))
+                if content_str:
+                    tokens.extend(self.tokenizer.encode(content_str, bos=False, eos=False))
 
                 img_encoding = self.image_encoder(chunk)
 
                 tokens.extend(img_encoding.tokens)
                 images.append(img_encoding.image)
             elif isinstance(chunk, AudioChunk):
-                assert not content, f"It is not possible that `content` is non-empty when chunk is of type {type(chunk)}."
+                assert not content_str, f"It is not possible that `content` is non-empty when chunk is of type {type(chunk)}."
                 # the following is only possible for >= v7
                 assert self.audio_encoder is not None, "Make sure to define a audio encoder at init"
                 audio_encoding = self.audio_encoder(chunk)

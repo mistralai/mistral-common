@@ -34,20 +34,46 @@ def _get_deprecated_special_tokens() -> List[SpecialTokenInfo]:
     return list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS)
 
 
-def get_special_tokens(tokenizer_version: TokenizerVersion) -> List[SpecialTokenInfo]:
+def get_special_tokens(tokenizer_version: TokenizerVersion, add_audio: bool = False) -> List[SpecialTokenInfo]:
     special_tokens = list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS)
-    if tokenizer_version <= TokenizerVersion.v7:
+    if tokenizer_version < TokenizerVersion.v7 and add_audio:
+        raise ValueError("Audio tokens are only supported in v7 and above")
+
+    if tokenizer_version <= TokenizerVersion.v7 and not add_audio:
         return special_tokens
 
+    # fill special tokens until 24
+    special_tokens += [
+        SpecialTokenInfo(rank=i, token_str=f"<SPCECIAL_{i}>", is_control=True) for i in range(len(special_tokens), 24)
+    ]
+
+    if add_audio:
+        # add audio tokes
+        special_tokens += [
+            SpecialTokenInfo(rank=24, token_str=SpecialTokens.audio, is_control=True),
+            SpecialTokenInfo(rank=25, token_str=SpecialTokens.begin_audio, is_control=True),
+        ]
+
+    # fill special tokens until 32
     special_tokens += [
         SpecialTokenInfo(rank=i, token_str=f"<SPCECIAL_{i}>", is_control=True) for i in range(len(special_tokens), 32)
     ]
 
-    # new special tokens
+    if tokenizer_version > TokenizerVersion.v7:
+        special_tokens += [
+            SpecialTokenInfo(rank=32, token_str=SpecialTokens.args, is_control=True),
+            SpecialTokenInfo(rank=33, token_str=SpecialTokens.call_id, is_control=True),
+        ]
+
+    # fill special tokens until 34
     special_tokens += [
-        SpecialTokenInfo(rank=32, token_str=SpecialTokens.args, is_control=True),
-        SpecialTokenInfo(rank=33, token_str=SpecialTokens.call_id, is_control=True),
+        SpecialTokenInfo(rank=i, token_str=f"<SPCECIAL_{i}>", is_control=True) for i in range(len(special_tokens), 34)
     ]
+
+    if add_audio:
+        special_tokens += [
+            SpecialTokenInfo(rank=34, token_str=SpecialTokens.transcribe, is_control=True)
+        ]
 
     return special_tokens
 

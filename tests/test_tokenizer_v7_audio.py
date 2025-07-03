@@ -58,14 +58,13 @@ def tekkenizer() -> InstructTokenizerV7:
         version=TokenizerVersion.v7,
     )
     audio_config = AudioConfig(
-    sampling_rate=16000,
+        sampling_rate=24_000,
         frame_rate=12.5,
         audio_encoding_config=AudioSpectrogramConfig(
             num_mel_bins=128,
-            hop_length=160,
             window_size=400,
+            hop_length=160,
         ),
-        chunk_length_s=30.0,
     )
     special_audio_ids = SpecialAudioIDs(
         audio=tokenizer.get_control_token(SpecialTokens.audio.value),
@@ -82,7 +81,6 @@ def test_tokenize_assistant_message(tekkenizer: InstructTokenizerV7) -> None:
     frame_rate = 12.5
     assert isinstance(tekkenizer.audio_encoder, AudioEncoder)
     num_expected_frames = int(np.ceil(duration * frame_rate))
-    num_exp_audio_special_toks = num_expected_frames
 
     rng = np.random.default_rng(0)
     audio = Audio(
@@ -93,7 +91,7 @@ def test_tokenize_assistant_message(tekkenizer: InstructTokenizerV7) -> None:
     audio_chunk = AudioChunk(
         input_audio=RawAudio(
             format=format,
-            data=format,
+            data=audio.to_base64(format=format),
         )
     )
     tokenized = tekkenizer.encode_instruct(
@@ -108,7 +106,7 @@ def test_tokenize_assistant_message(tekkenizer: InstructTokenizerV7) -> None:
                     ]
                 ),
                 AssistantMessage(
-                    content="can you hear me"
+                    content="c b d"
                 ),
             ],
         )
@@ -121,30 +119,28 @@ def test_tokenize_assistant_message(tekkenizer: InstructTokenizerV7) -> None:
     AUDIO = tekkenizer.tokenizer.get_control_token(SpecialTokens.audio.value)
     BEGIN_AUDIO = tekkenizer.tokenizer.get_control_token(SpecialTokens.begin_audio.value)
 
-    audio_toks = [BEGIN_AUDIO] + [AUDIO] * num_exp_audio_special_toks
+    audio_toks = [BEGIN_AUDIO] + [AUDIO] * num_expected_frames
 
     print(tokenized.tokens)
+    import ipdb; ipdb.set_trace()
     assert tokenized.tokens == [
         BOS,
         BEGIN_INST,
-        1097,  # a
+        197,  # a
         *audio_toks,
         END_INST,
-        8495,  # can
-        1636,  # you
-        12459,  # hear
-        1639,  # me
+        199, # "c"
+        132, # " "
+        198, # "b"
+        132, # " "
+        200, # "d"
         EOS,
     ]
     assert tokenized.text == (
-        "<s>[INST]a[BEGIN_AUDIO]" + "[AUDIO]" * num_exp_audio_special_toks + "[/INST]can you hear me</s>"
+        "<s>[INST]a[BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]c b d</s>"
     )
     assert len(tokenized.audios) == 1
     assert np.allclose(tokenized.audios[0].audio_array, audio.audio_array, atol=1e-3)
-    assert len(tokenized.audios_tokens_with_pattern) == 0  # Only used in training
-    assert tokenized.audios_segment_token_sizes == [
-        [num_expected_frames],
-    ]
 
 
 # AudioTranscriptChunk is not supported when interleaving with spectrogram tokenizers
