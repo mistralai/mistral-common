@@ -19,8 +19,6 @@ from mistral_common.protocol.instruct.messages import (
 from mistral_common.protocol.instruct.request import Modality, TranscriptionParams
 from mistral_common.tokens.tokenizers.audio import (
     Audio,
-    AudioCodebookPattern,
-    AudioTranscriptInterleavePattern,
 )
 from mistral_common.tokens.tokenizers.base import (
     InstructRequest,

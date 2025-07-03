@@ -152,9 +152,16 @@ class RawAudio(MistralBase):
     format: AudioFormat
 
 
+class TranscriptionParams(MistralBase):
+    language: Optional[str] = None
+
+
 class AudioChunk(BaseContentChunk):
     type: Literal[ChunkTypes.input_audio] = ChunkTypes.input_audio
     input_audio: RawAudio
+
+    transcription_params: Optional[TranscriptionParams] = None
+
 
     @property
     def is_empty(self) -> bool:

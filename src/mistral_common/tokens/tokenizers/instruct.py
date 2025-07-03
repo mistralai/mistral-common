@@ -11,6 +11,7 @@ from mistral_common.exceptions import (
     TokenizerException,
 )
 from mistral_common.protocol.instruct.messages import (
+    UATS,
     AssistantMessage,
     AssistantMessageType,
     AudioChunk,
@@ -20,6 +21,7 @@ from mistral_common.protocol.instruct.messages import (
     SystemMessage,
     TextChunk,
     ToolMessage,
+    TranscriptionParams,
     UserMessage,
 )
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolCall
@@ -115,6 +117,11 @@ class InstructTokenizerBase(
         # Tokenizer ⩽ V3 does not support truncation
         return
 
+    @classmethod
+    def validate_messages(cls, messages: List[UATS]) -> None:
+        # for v7 we start validates messages
+        ...
+
     def encode_instruct(
         self,
         request: InstructRequest[AssistantMessageType, Tool],
@@ -132,6 +139,9 @@ class InstructTokenizerBase(
         audios: List[Audio] = []
         prefix_ids: Optional[List[int]] = None
         tokens_list: List[Optional[List[int]]] = []
+
+        # validate messages
+        self.validate_messages(request.messages)
 
         # find last user message
         first_user_idx, last_user_idx = self.find_first_last_user(request)
@@ -699,6 +709,10 @@ class InstructTokenizerV7(InstructTokenizerV3):
         self.END_SYSTEM = self.tokenizer.get_control_token(SpecialTokens.end_system.value)
         self.BEGIN_TOOL_CONTENT = self.tokenizer.get_control_token(SpecialTokens.begin_tool_content.value)
 
+        self.TRANSCRIPTION = None
+        if audio_encoder is not None:
+            self.TRANSCRIPTION = self.tokenizer.get_control_token(SpecialTokens.transcribe.value)
+
     def _truncate_for_max_tokens(
         self,
         tokenized_messages: List[Optional[List[int]]],
@@ -781,7 +795,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
             The encoded tokens and the list of images.
         """
         assert system_prompt is None, "in Tokenizer V7 we don't encode system prompts in user messages"
-        return super().encode_user_message(
+        tokens, images, audio = super().encode_user_message(
             message,
             available_tools,
             is_last=is_last,
@@ -789,6 +803,62 @@ class InstructTokenizerV7(InstructTokenizerV3):
             system_prompt=None,
             force_img_first=force_img_first,
         )
+
+        # v7 allows for transcription, potentially add it here
+        tokens += self._maybe_return_transcription_tokens(message)
+
+        return tokens, images, audio
+
+    @staticmethod
+    def _get_transcription_params(message: UserMessage) -> TranscriptionParams | None:
+        if not isinstance(message.content, list):
+            return None
+
+        chunks = message.content
+        transcription_params = [chunk.transcription_params for chunk in chunks if isinstance(chunk, AudioChunk)]
+        assert len(transcription_params) <= 1, f"Only one transcription params is allowed, not {message.content}"
+        return transcription_params[0] if transcription_params else None
+
+    def _maybe_transcription_request_tokens(self, message: UserMessage) -> List[int]:
+        suffix_tokens: List[int] = []
+        if (transcription := self._get_transcription_params(content := message.content)):
+            # no transcription -> no tokens
+            ...
+        else:
+            if not sum(isinstance(chunk, AudioChunk) for chunk in content) == 1:
+                raise ValueError(f"Transcription request should have a single audio chunk in the user message, not {content}")
+            if not sum(isinstance(chunk, TextChunk) for chunk in content) <= 1:
+                raise ValueError(f"Transcription request should have at most one text chunk in the user message, not {content}")
+            if not len(content) <= 2:
+                raise ValueError(f"Transcription request should have at most two content chunks in the user message, not {content}")
+
+            assert self.TRANSCRIBE is not None, (
+                "Make sure your tokenizer defines a `TRANSCRIBE` token when encoding audio chunks."
+            )
+
+            if transcription.language is not None:
+                language_string = f"lang:{transcription.language}"  # no space.
+                suffix_tokens += self.tokenizer.encode(language_string, bos=False, eos=False)
+
+            suffix_tokens += [self.TRANSCRIBE]
+
+        return suffix_tokens
+
+    @classmethod
+    def validate_messages(cls, messages: List[UATS]) -> None:
+        # check if any message has transcription params
+        has_transcription = any(isinstance(message, UserMessage) and cls._get_transcription_params(message) for message in messages)
+
+        if has_transcription:
+            num_messages = len(messages)
+            if num_messages == 1:
+                assert isinstance(messages[0], UserMessage)
+            elif num_messages == 2:
+                assert isinstance(messages[1], AssistantMessage)
+            else:
+                raise ValueError(
+                    "TODO(Patrick)"
+                )
 
     def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
         r"""Encode a tool message.
