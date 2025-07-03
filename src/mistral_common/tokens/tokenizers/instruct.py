@@ -818,10 +818,11 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
     def _maybe_return_transcription_tokens(self, message: UserMessage) -> List[int]:
         suffix_tokens: List[int] = []
-        if (transcription := self._get_transcription_params(content := message.content)):
+        if not (transcription := self._get_transcription_params(message)):
             # no transcription -> no tokens
             ...
         else:
+            content = message.content
             if not sum(isinstance(chunk, AudioChunk) for chunk in content) == 1:
                 raise ValueError(f"Transcription request should have a single audio chunk in the user message, not {content}")
             if not sum(isinstance(chunk, TextChunk) for chunk in content) <= 1:
