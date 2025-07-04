@@ -22,10 +22,13 @@ dependencies = [
     "requests>=2.0.0",
     "numpy>=1.22,<1.25; python_version<'3.9'",
     "numpy>=1.25; python_version>='3.9'",
+    "pydantic-extra-types[pycountry]>=2.10.5",
 ]
 
 [project.optional-dependencies]
 opencv = ["opencv-python-headless>=4.0.0"]
+image = ["opencv-python-headless>=4.0.0"]
+audio = ["soundfile>=0.12.1"]
 hf-hub = ["huggingface-hub>=0.32.4"]
 
 [dependency-groups]
