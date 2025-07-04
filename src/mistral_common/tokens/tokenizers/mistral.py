@@ -20,7 +20,7 @@ from mistral_common.protocol.instruct.validator import (
     MistralRequestValidatorV5,
     ValidationMode,
 )
-from mistral_common.tokens.instruct.request import FIMRequest
+from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.tokens.tokenizers.audio import AudioEncoder, SpecialAudioIDs
 from mistral_common.tokens.tokenizers.base import (
     InstructRequest,

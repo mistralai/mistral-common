@@ -92,10 +92,10 @@ tokenizer.encode_chat_completion(request)
 
 Fill In the Middle (FIM) is a task where the model is given a prefix and a suffix and is asked to fill in the middle. This is useful for code completion, where the model is given a prefix of code and is asked to complete the code.
 
-A pydantic class [FIMRequest][mistral_common.tokens.instruct.request.FIMRequest] is defined to ease the creation of these requests.
+A pydantic class [FIMRequest][mistral_common.protocol.fim.request.FIMRequest] is defined to ease the creation of these requests.
 
 ```python
-from mistral_common.tokens.instruct.request import FIMRequest
+from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 request = FIMRequest(
