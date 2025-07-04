@@ -18,7 +18,7 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.tool_calls import FunctionCall, Tool, ToolCall
-from mistral_common.tokens.instruct.request import InstructRequest
+from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.tokens.tokenizers.base import InstructRequestType, TokenizerVersion
 
 

@@ -15,7 +15,8 @@ from mistral_common.protocol.instruct.messages import (
     UserMessage,
 )
 from mistral_common.protocol.instruct.tool_calls import Tool
-from mistral_common.protocol.instruct.request import FIMRequest, InstructRequest
+from mistral_common.protocol.instruct.request import InstructRequest
+from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.tokens.tokenizers.audio import AudioEncoder
 from mistral_common.tokens.tokenizers.image import ImageEncoder
 
