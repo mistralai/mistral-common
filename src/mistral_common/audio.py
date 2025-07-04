@@ -19,12 +19,21 @@ except ImportError:
 try:
     import soxr  # noqa: F401
 
-    _soundfile_installed = True
+    _soxr_installed = True
 except ImportError:
-    _soundfile_installed = False
+    _soxr_installed = False
+
+
+def is_soundfile_installed() -> bool:
+    return _soundfile_installed
+
+
+def is_soxr_installed() -> bool:
+    return _soxr_installed
+
 
 AudioFormat: Type[Enum]
-if _soundfile_installed:
+if is_soundfile_installed():
     import soundfile as sf
 
     # Get the available formats from soundfile
@@ -60,7 +69,9 @@ class Audio:
 
     @staticmethod
     def from_base64(audio_base64: str) -> "Audio":
-        assert _soundfile_installed, "soundfile has to be installed to use this function"
+        if not is_soundfile_installed():
+            raise ImportError("soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'")
+
         audio_bytes = base64.b64decode(audio_base64)
 
         # Read the bytes into an audio file.
@@ -70,7 +81,9 @@ class Audio:
         return Audio(audio_array=audio_array, sampling_rate=sampling_rate)
 
     def to_base64(self, format: AudioFormat) -> str:
-        assert _soundfile_installed, "soundfile has to be installed to use this function"
+        if not is_soundfile_installed():
+            raise ImportError("soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'")
+
         with io.BytesIO() as audio_file:
             sf.write(audio_file, self.audio_array, self.sampling_rate, format=format.value)
             audio_file.seek(0)
@@ -81,6 +94,8 @@ class Audio:
         if self.sampling_rate == new_sampling_rate:
             return
 
-        assert _soundfile_installed, "soundfile has to be installed to use this function"
+        if not is_soxr_installed():
+            raise ImportError("soxr is required for this function. Install it with 'pip install mistral-common[soxr]'")
+
         self.audio_array = soxr.resample(self.audio_array, self.sampling_rate, new_sampling_rate, quality="HQ")
         self.sampling_rate = new_sampling_rate
