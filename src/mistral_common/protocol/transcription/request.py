@@ -16,5 +16,5 @@ class TranscriptionRequest(BaseCompletionRequest):
         description=(
             "The language of the input audio. Supplying the input language "
             "in ISO-639-1 format will improve accuracy and latency."
-        )
+        ),
     )
