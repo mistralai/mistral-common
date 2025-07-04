@@ -18,6 +18,7 @@ from mistral_common.protocol.instruct.validator import (
     MistralRequestValidator,
     MistralRequestValidatorV3,
     MistralRequestValidatorV5,
+    MistralRequestValidatorV13,
     ValidationMode,
 )
 from mistral_common.protocol.fim.request import FIMRequest
@@ -43,6 +44,7 @@ from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV3,
     InstructTokenizerV7,
     InstructTokenizerV11,
+    InstructTokenizerV13,
 )
 from mistral_common.tokens.tokenizers.sentencepiece import (
     SentencePieceTokenizer,
@@ -334,6 +336,12 @@ class MistralTokenizer(
             return MistralTokenizer(
                 InstructTokenizerV11(tokenizer, image_encoder=image_encoder, audio_encoder=audio_encoder),
                 validator=MistralRequestValidatorV5(mode=mode),
+                request_normalizer=request_normalizer,
+            )
+        elif tokenizer.version == TokenizerVersion.v13:
+            return MistralTokenizer(
+                InstructTokenizerV13(tokenizer, image_encoder=image_encoder),
+                validator=MistralRequestValidatorV13(mode=mode),
                 request_normalizer=request_normalizer,
             )
 

@@ -286,6 +286,10 @@ def test_convert_tool_call() -> None:
             ),
         ),
         (
+            OpenAIToolMessage(role="tool", content="22", tool_call_id="VvvODy9mT"),
+            ToolMessage(tool_call_id="VvvODy9mT", content="22"),
+        ),
+        (
             OpenAISystemMessage(role="system", content="You are a helpful assistant."),
             SystemMessage(content="You are a helpful assistant."),
         ),

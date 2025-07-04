@@ -301,27 +301,18 @@ class SystemMessage(BaseMessage):
     """
 
     role: Literal[Roles.system] = Roles.system
-    content: Union[str, List[ContentChunk]]
+    content: str
 
     def to_openai(self) -> Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]:
         r"""Converts the message to the OpenAI format."""
-        if isinstance(self.content, str):
-            return {"role": self.role, "content": self.content}
-        return {"role": self.role, "content": [chunk.to_openai() for chunk in self.content]}
+        return self.model_dump()
 
     @classmethod
     def from_openai(
         cls, openai_message: Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]
     ) -> "SystemMessage":
         r"""Converts the OpenAI message to the Mistral format."""
-        if isinstance(openai_message["content"], str):
-            return cls.model_validate(openai_message)
-        return cls.model_validate(
-            {
-                "role": openai_message["role"],
-                "content": [_convert_openai_content_chunks(chunk) for chunk in openai_message["content"]],
-            }
-        )
+        return cls.model_validate(openai_message)
 
 
 class AssistantMessage(BaseMessage):
@@ -368,6 +359,7 @@ class AssistantMessage(BaseMessage):
             if openai_tool_calls is not None
             else None
         )
+
         return cls.model_validate(
             {
                 "role": openai_message["role"],
