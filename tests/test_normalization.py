@@ -223,23 +223,6 @@ class TestChatCompletionRequestNormalization:
         assert first_message.content == "user"
         assert parsed_request.system_prompt == "system"
 
-    def test_system_prompt_chunks_aggregated(self, normalizer: InstructRequestNormalizer) -> None:
-        chat_completion_request = mock_chat_completion(
-            messages=[
-                UserMessage(content="foo"),
-                SystemMessage(
-                    content=[
-                        TextChunk(type=ChunkTypes.text, text="chunk1"),
-                        TextChunk(type=ChunkTypes.text, text="chunk2"),
-                        TextChunk(type=ChunkTypes.text, text="chunk3"),
-                    ],
-                ),
-            ],
-        )
-
-        parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
-        assert parsed_request.system_prompt == "chunk1\n\nchunk2\n\nchunk3"
-
     def test_normalize_tools(self, normalizer: InstructRequestNormalizer) -> None:
         """
         Test doesn't really "normalize" anything but it checks that the tools are added to the

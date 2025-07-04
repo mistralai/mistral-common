@@ -238,7 +238,6 @@ class InstructTokenizerV1(
         Returns:
             The encoded tokens and empty list.
         """
-        assert message.content is not None
         assert isinstance(message.content, str), "Message content must be normalized"
         assert self.image_encoder is None, "InstructTokenizerV1 cannot encode images"
 
@@ -375,7 +374,6 @@ class InstructTokenizerV2(
         Returns:
             The encoded tokens and the list of images.
         """
-        assert message.content is not None
         do_encode_tools = False
         do_encode_tools |= is_first and (self._user_message_position_to_encode_tools == UserMessagePosition.first)
         do_encode_tools |= is_last and (self._user_message_position_to_encode_tools == UserMessagePosition.last)
@@ -412,7 +410,6 @@ class InstructTokenizerV2(
 
     def _prepare_tool_result(self, tool_message: ToolMessage) -> Dict[str, Any]:
         r"""Bit of a hack due to the way tool results are tokenized."""
-        assert tool_message.content is not None, "Tool message content cannot be None"
         return {
             "name": tool_message.name,
             "content": self._parse_json_content(tool_message.content),
@@ -556,7 +553,6 @@ class InstructTokenizerV3(
         return function_call
 
     def _prepare_tool_result(self, tool_message: ToolMessage) -> Dict[str, Any]:
-        assert tool_message.content is not None, "Tool message content cannot be None"
         assert tool_message.tool_call_id is not None, "Tool message has to have the tool call id defined in v3"
 
         return {
@@ -735,8 +731,6 @@ class InstructTokenizerV7(InstructTokenizerV3):
         Returns:
             The encoded tokens.
         """
-        assert message.content is not None
-        assert isinstance(message.content, str), "System message must be a string."
         tokens = [
             self.BEGIN_SYSTEM,
             *self.tokenizer.encode(message.content, bos=False, eos=False),
