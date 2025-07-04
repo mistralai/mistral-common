@@ -158,7 +158,7 @@ class AudioChunk(BaseContentChunk):
 
     @validator("input_audio")
     def should_not_be_empty(cls, v: RawAudio) -> RawAudio:
-        if not v.input_audio.data.strip():
+        if not v.data.strip():
             raise ValueError(f"`InputAudio` should not be empty. Got: {v}`")
 
         return v

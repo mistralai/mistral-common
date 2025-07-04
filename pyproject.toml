@@ -30,9 +30,6 @@ opencv = ["opencv-python-headless>=4.0.0"]
 soundfile = ["soundfile>=0.12.1"]
 soxr = ["soxr>=0.5.0"]
 
-image = [opencv]
-audio = [soundfile, soxr]
-
 hf-hub = ["huggingface-hub>=0.32.4"]
 
 [dependency-groups]

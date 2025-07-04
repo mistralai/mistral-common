@@ -6,10 +6,6 @@ from mistral_common.protocol.base import BaseCompletionRequest
 from mistral_common.protocol.instruct.messages import AudioChunk
 
 
-class TranscriptionGranularity(Enum):
-    SEGMENT = "segment"
-
-
 class TranscriptionRequest(BaseCompletionRequest):
     id: Optional[str] = None
     model: str
@@ -17,4 +13,3 @@ class TranscriptionRequest(BaseCompletionRequest):
     language: Optional[LanguageAlpha2] = Field(...,
         description="The language of the input audio. Supplying the input language in ISO-639-1 format will improve accuracy and latency.",
     )
-    timestamps_granularity: TranscriptionGranularity = TranscriptionGranularity.SEGMENT

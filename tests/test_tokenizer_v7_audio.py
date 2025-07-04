@@ -11,7 +11,6 @@ from mistral_common.protocol.instruct.messages import (
     RawAudio,
     SystemMessage,
     TextChunk,
-    TranscriptionParams,
     UserMessage,
 )
 from mistral_common.tokens.tokenizers.audio import (
@@ -68,7 +67,9 @@ def tekkenizer() -> InstructTokenizerV7:
     return _get_tekkenizer_with_audio()
 
 
-def _get_audio_chunk(duration: float, add_transciption: bool = False, language: Optional[str] = None) -> AudioChunk:
+def _get_audio_chunk(duration: float) -> AudioChunk:
+    format = AudioFormat("WAV")
+
     sampling_rate = 24000
     signal_length = int(duration * sampling_rate)
     rng = np.random.default_rng(0)
@@ -76,17 +77,13 @@ def _get_audio_chunk(duration: float, add_transciption: bool = False, language: 
         audio_array=rng.uniform(low=-1, high=1, size=[signal_length]),
         sampling_rate=sampling_rate,
     )
-    format = AudioFormat("WAV")
-    transcription_params = TranscriptionParams(language=language) if add_transciption else None
 
     return AudioChunk(
         input_audio=RawAudio(
             format=format,
             data=audio.to_base64(format=format),
         ),
-        transcription_params=transcription_params,
     )
-
 
 def _get_specials(tekkenizer: InstructTokenizerV7) -> tuple[int, ...]:
     BOS = tekkenizer.tokenizer.get_control_token(SpecialTokens.bos.value)
@@ -100,7 +97,6 @@ def _get_specials(tekkenizer: InstructTokenizerV7) -> tuple[int, ...]:
 
 
 DUMMY_AUDIO = _get_audio_chunk(1.7)
-DUMMY_AUDIO_WITH_TRANSCRIPTION = _get_audio_chunk(1.7, add_transciption=True, language="en")
 
 
 def test_tokenize_user_assistant_message(tekkenizer: InstructTokenizerV7) -> None:

@@ -21,7 +21,6 @@ from mistral_common.protocol.instruct.messages import (
     SystemMessage,
     TextChunk,
     ToolMessage,
-    TranscriptionParams,
     UserMessage,
 )
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolCall
@@ -836,19 +835,21 @@ class InstructTokenizerV7(InstructTokenizerV3):
         return tokens, images, audio
 
     def encode_transcription(self, request: TranscriptionRequest) -> Tokenized:
-        tokenized = self.encode_user_message(
+        prefix = self.start()
+        tokens, _, audio = self.encode_user_message(
             UserMessage(content=[request.audio]),
             available_tools=[],
             is_last=True,
             is_first=True,
             system_prompt=None,
         )
-        tokens: List[int] = tokenized.tokens
+
+        tokens = [*prefix, *tokens]
         if request.language is not None:
             language_string = f"lang:{request.language}"  # no space.
             tokens += self.tokenizer.encode(language_string, bos=False, eos=False)
-        tokens.append(self.token_transcribe)
-        return Tokenized(tokens=tokens, text=self.tokenizer._to_string(tokens))
+        tokens.append(self.TRANSCRIBE)
+        return Tokenized(tokens=tokens, text=self.tokenizer._to_string(tokens), audios=audio)
 
     @classmethod
     def validate_messages(cls, messages: List[UATS]) -> None:
