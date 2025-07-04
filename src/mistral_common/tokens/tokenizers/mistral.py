@@ -21,6 +21,7 @@ from mistral_common.protocol.instruct.validator import (
     ValidationMode,
 )
 from mistral_common.protocol.fim.request import FIMRequest
+from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import AudioEncoder, SpecialAudioIDs
 from mistral_common.tokens.tokenizers.base import (
     InstructRequest,
@@ -368,6 +369,17 @@ class MistralTokenizer(
             instruct_request.truncate_at_max_tokens = max_model_input_len
 
         return self.instruct_tokenizer.encode_instruct(instruct_request)
+
+    def encode_transcription(self, request: TranscriptionRequest) -> TokenizedType:
+        r"""Encodes a transcription request.
+
+        Args:
+            request: The transcription request to encode.
+
+        Returns:
+            The encoded transcription request.
+        """
+        return self.instruct_tokenizer.encode_transcription(request)
 
     def encode_fim(self, request: FIMRequest) -> TokenizedType:
         r"""Encodes a fill in the middle request.

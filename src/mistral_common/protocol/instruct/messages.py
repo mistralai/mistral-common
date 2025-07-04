@@ -2,7 +2,7 @@ import re
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, TypeVar, Union
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, validator
 from typing_extensions import Annotated, TypeAlias
 
 from mistral_common.audio import AudioFormat
@@ -152,19 +152,18 @@ class RawAudio(MistralBase):
     format: AudioFormat
 
 
-class TranscriptionParams(MistralBase):
-    language: Optional[str] = None
-
-
 class AudioChunk(BaseContentChunk):
     type: Literal[ChunkTypes.input_audio] = ChunkTypes.input_audio
     input_audio: RawAudio
 
-    transcription_params: Optional[TranscriptionParams] = None
+    @validator("input_audio")
+    def should_not_be_empty(cls, v: RawAudio) -> RawAudio:
+        if not v.input_audio.data.strip():
+            raise ValueError(f"`InputAudio` should not be empty. Got: {v}`")
 
-    @property
-    def is_empty(self) -> bool:
-        return not self.input_audio.data
+        return v
+
+
 
 
 class TextChunk(BaseContentChunk):

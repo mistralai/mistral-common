@@ -27,6 +27,7 @@ from mistral_common.protocol.instruct.messages import (
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolCall
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.fim.request import FIMRequest
+from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import AudioEncoder
 from mistral_common.tokens.tokenizers.base import (
     FIMRequestType,
@@ -235,7 +236,6 @@ class InstructTokenizerV1(
 
     This tokenizer has basic for messages. It does not support tools or image inputs.
     """
-
     def encode_user_message(
         self,
         message: UserMessage,
@@ -345,7 +345,11 @@ class InstructTokenizerV1(
         Raises:
            TokenizerException: The FIM request is not implemented for this version.
         """
-        raise TokenizerException("FIM not available for tokenizer V1")
+        raise TokenizerException(f"FIM not available for {self.tokenizer.version}")
+
+    def encode_transcription(self, request: TranscriptionRequest) -> Tokenized:
+        raise TokenizerException(f"Transcription not available for {self.tokenizer.version}")
+
 
 
 class InstructTokenizerV2(
@@ -829,82 +833,26 @@ class InstructTokenizerV7(InstructTokenizerV3):
             force_img_first=force_img_first,
         )
 
-        # v7 allows for transcription, potentially add it here
-        tokens += self._maybe_return_transcription_tokens(message)
-
         return tokens, images, audio
 
-    @staticmethod
-    def _get_transcription_params(message: UserMessage) -> TranscriptionParams | None:
-        if not isinstance(message.content, list):
-            return None
-
-        chunks = message.content
-        transcription_params = [
-            chunk.transcription_params
-            for chunk in chunks
-            if isinstance(chunk, AudioChunk) and chunk.transcription_params
-        ]
-        if len(transcription_params) > 1:
-            raise ValueError(f"Only one transcription params is allowed, not {len(transcription_params)}")
-        return transcription_params[0] if transcription_params else None
-
-    def _maybe_return_transcription_tokens(self, message: UserMessage) -> List[int]:
-        suffix_tokens: List[int] = []
-        if not (transcription := self._get_transcription_params(message)):
-            # no transcription -> no tokens
-            ...
-        else:
-            content = message.content
-            if not (num_audio_chunks := sum(isinstance(chunk, AudioChunk) for chunk in content)) == 1:
-                raise ValueError(
-                    "Transcription request should have a single "
-                    f"audio chunk in the user message, not {num_audio_chunks}"
-                )
-            if not (num_text_chunks := sum(isinstance(chunk, TextChunk) for chunk in content)) <= 1:
-                raise ValueError(
-                    "Transcription request should have at most "
-                    f"one text chunk in the user message, not {num_text_chunks}"
-                )
-            if not len(content) <= 2:
-                raise ValueError(
-                    "Transcription request should have at most two content "
-                    f"chunks in the user message, not {len(content)}"
-                )
-
-            assert self.TRANSCRIBE is not None, (
-                "Make sure your tokenizer defines a `TRANSCRIBE` token when encoding audio chunks."
-            )
-
-            if transcription.language is not None:
-                language_string = f"lang:{transcription.language}"  # no space.
-                suffix_tokens += self.tokenizer.encode(language_string, bos=False, eos=False)
-
-            suffix_tokens += [self.TRANSCRIBE]
-
-        return suffix_tokens
+    def encode_transcription(self, request: TranscriptionRequest) -> Tokenized:
+        tokenized = self.encode_user_message(
+            UserMessage(content=[request.audio]),
+            available_tools=[],
+            is_last=True,
+            is_first=True,
+            system_prompt=None,
+        )
+        tokens: List[int] = tokenized.tokens
+        if request.language is not None:
+            language_string = f"lang:{request.language}"  # no space.
+            tokens += self.tokenizer.encode(language_string, bos=False, eos=False)
+        tokens.append(self.token_transcribe)
+        return Tokenized(tokens=tokens, text=self.tokenizer._to_string(tokens))
 
     @classmethod
     def validate_messages(cls, messages: List[UATS]) -> None:
-        # check if any message has transcription params
-        has_transcription = any(
-            isinstance(message, UserMessage) and cls._get_transcription_params(message) for message in messages
-        )
-        has_audio = cls._has_audio(messages)
-
-        if has_transcription:
-            num_messages = len(messages)
-            if num_messages == 1:
-                if not isinstance(messages[0], UserMessage):
-                    raise ValueError(f"Expected UserMessage, got {messages[0].role}")
-            elif num_messages == 2:
-                if not isinstance(messages[0], UserMessage):
-                    raise ValueError(f"Expected first message to be UserMessage, got {messages[0].role}")
-                if not isinstance(messages[1], AssistantMessage):
-                    raise ValueError(f"Expected second message to be AssistantMessage, got {messages[1].role}")
-            else:
-                raise ValueError(f"Transcription request should have at most two messages, not {len(messages)}")
-        elif has_audio:
+        if cls._has_audio(messages):
             if any(isinstance(message, SystemMessage) for message in messages):
                 raise ValueError("System messages are not yet allowed when audio is present")
 
