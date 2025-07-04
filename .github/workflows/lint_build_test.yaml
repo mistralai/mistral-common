@@ -45,7 +45,7 @@ jobs:
       # Install
       - name: Install Dependencies
         run: |
-          uv sync --frozen --extra opencv --extra hf-hub --group dev
+          uv sync --frozen --extra opencv --extra hf-hub --extra soundfile --extra soxr --group dev
           uv pip install --editable .
 
       # Ruff Linter
