@@ -1,26 +1,12 @@
-from typing import Any, Dict, Generic, List, Optional, Union
+# this file is deprecated
+import warnings
 
-from mistral_common.base import MistralBase
-from mistral_common.protocol.instruct.converters import (
-    _check_openai_fields_names,
-    _is_openai_field_name,
-    convert_openai_messages,
-    convert_openai_tools,
+from mistral_common.protocol.fim.request import FimRequest  # noqa: F401 
+from mistral_common.protocol.instruct.request import InstructRequest  # noqa: F401
+
+warnings.warn(
+    "This file is deprecated and will be deleted in v1.9.0, please import as follows instead: \n"
+    "`from mistral_common.protocol.fim.request import FimRequest` \n or \n"
+    "`from mistral_common.protocol.instruct.request import InstructRequest`",
+    FutureWarning
 )
-from mistral_common.protocol.instruct.messages import ChatMessage, ChatMessageType
-from mistral_common.protocol.instruct.tool_calls import ToolType
-
-
-class FIMRequest(MistralBase):
-    r"""A valid Fill in the Middle completion request to be tokenized.
-
-    Attributes:
-        prompt: The prompt to be completed.
-        suffix: The suffix of the prompt. If provided, the model will generate text between the prompt and the suffix.
-
-    Examples:
-        >>> request = FIMRequest(prompt="Hello, my name is", suffix=" and I live in New York.")
-    """
-
-    prompt: str
-    suffix: Optional[str] = None
