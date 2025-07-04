@@ -164,8 +164,6 @@ class AudioChunk(BaseContentChunk):
         return v
 
 
-
-
 class TextChunk(BaseContentChunk):
     r"""Text chunk.
 

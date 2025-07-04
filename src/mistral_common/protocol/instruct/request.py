@@ -195,7 +195,6 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         )
 
 
-
 class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
     """A valid Instruct request to be tokenized.
 

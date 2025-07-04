@@ -20,9 +20,8 @@ from mistral_common.protocol.instruct.normalize import (
     InstructRequestNormalizerV7,
     InstructRequestNormalizerV13,
 )
-from mistral_common.protocol.instruct.request import ChatCompletionRequest
+from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
-from mistral_common.protocol.instruct.request import InstructRequest
 
 
 def mock_chat_completion(messages: List[ChatMessage]) -> ChatCompletionRequest:

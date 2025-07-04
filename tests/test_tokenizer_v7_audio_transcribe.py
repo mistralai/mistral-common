@@ -1,22 +1,14 @@
-from typing import List, Optional
+from typing import Optional
 
 import numpy as np
 import pytest
 
-from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.protocol.instruct.messages import (
-    UATS,
-    AssistantMessage,
-    SystemMessage,
     AudioChunk,
-    TextChunk,
-    UserMessage,
 )
+from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import (
     Audio,
-)
-from mistral_common.tokens.tokenizers.base import (
-    InstructRequest,
 )
 from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV7,
@@ -29,15 +21,16 @@ from tests.test_tokenizer_v7_audio import (
 
 # DUMMY_AUDIO_WITH_TRANSCRIPTION = _get_audio_chunk(1.7, add_transciption=True, language="en")
 
+
 @pytest.fixture(scope="session")
 def tekkenizer() -> InstructTokenizerV7:
     return _get_tekkenizer_with_audio()
+
 
 def get_transcription_request(duration: float, language: Optional[str] = None) -> AudioChunk:
     audio_chunk = _get_audio_chunk(duration)
 
     return TranscriptionRequest(model="dummy", audio=audio_chunk, language=language)
-
 
 
 def test_tokenize_transcribe(tekkenizer: InstructTokenizerV7) -> None:
@@ -59,9 +52,7 @@ def test_tokenize_transcribe(tekkenizer: InstructTokenizerV7) -> None:
         END_INST,
         TRANSCRIBE,
     ]
-    assert tokenized.text == (
-        "<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST][TRANSCRIBE]"
-    )
+    assert tokenized.text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST][TRANSCRIBE]")
     assert len(tokenized.audios) == 1
     audio_array = Audio.from_base64(request.audio.input_audio.data).audio_array
     assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)
@@ -93,9 +84,7 @@ def test_tokenize_transcribe_with_lang(tekkenizer: InstructTokenizerV7) -> None:
         210,
         TRANSCRIBE,
     ]
-    assert tokenized.text == (
-        "<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]lang:en[TRANSCRIBE]"
-    )
+    assert tokenized.text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]lang:en[TRANSCRIBE]")
     assert len(tokenized.audios) == 1
     audio_array = Audio.from_base64(request.audio.input_audio.data).audio_array
     assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)

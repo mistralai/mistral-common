@@ -10,6 +10,7 @@ from mistral_common.exceptions import (
     InvalidMessageStructureException,
     TokenizerException,
 )
+from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.instruct.messages import (
     UATS,
     AssistantMessage,
@@ -23,9 +24,8 @@ from mistral_common.protocol.instruct.messages import (
     ToolMessage,
     UserMessage,
 )
-from mistral_common.protocol.instruct.tool_calls import Tool, ToolCall
 from mistral_common.protocol.instruct.request import InstructRequest
-from mistral_common.protocol.fim.request import FIMRequest
+from mistral_common.protocol.instruct.tool_calls import Tool, ToolCall
 from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import AudioEncoder
 from mistral_common.tokens.tokenizers.base import (
@@ -238,6 +238,7 @@ class InstructTokenizerV1(
 
     This tokenizer has basic for messages. It does not support tools or image inputs.
     """
+
     def encode_user_message(
         self,
         message: UserMessage,
@@ -351,7 +352,6 @@ class InstructTokenizerV1(
         raise TokenizerException(f"Transcription not available for {self.tokenizer.version}")
 
 
-
 class InstructTokenizerV2(
     InstructTokenizerV1, Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]
 ):
@@ -359,6 +359,7 @@ class InstructTokenizerV2(
 
     This tokenizer adds supports to images, tools and FIM requests.
     """
+
     _user_message_position_to_encode_tools = UserMessagePosition.last
 
     def __init__(
@@ -367,7 +368,6 @@ class InstructTokenizerV2(
         image_encoder: Optional[ImageEncoder] = None,
         audio_encoder: Optional[AudioEncoder] = None,
     ):
-
         r"""Initialize the tokenizer.
 
         Args:
@@ -669,9 +669,7 @@ class InstructTokenizerV3(
         images: List[np.ndarray] = []
         audio: List[Audio] = []
 
-        has_one_img_one_text_first = (
-            len(content) == 2 and isinstance(content[1], (ImageChunk, ImageURLChunk))
-        )
+        has_one_img_one_text_first = len(content) == 2 and isinstance(content[1], (ImageChunk, ImageURLChunk))
         if force_img_first and has_one_img_one_text_first:
             # make sure that if exactly one image and text chunk are passed we force the image chunk to be first
             content = [content[1], content[0]]

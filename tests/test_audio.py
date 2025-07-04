@@ -1,8 +1,11 @@
 import numpy as np
+
 from mistral_common.audio import Audio, AudioFormat
+
 
 def sin_wave(sampling_rate: int, duration: float) -> np.ndarray:
     return np.sin(np.ones([int(duration * sampling_rate)]))
+
 
 def test_audio_resample() -> None:
     sampling_rate = 44_000
@@ -40,4 +43,3 @@ def test_audio_base64() -> None:
 
     assert audio.sampling_rate == new_audio.sampling_rate
     assert np.allclose(audio.audio_array, new_audio.audio_array, atol=1e-5)
-

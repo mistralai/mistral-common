@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, Union
 from mistral_common.exceptions import (
     TokenizerException,
 )
+from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.instruct.messages import (
     UATS,
     AssistantMessageType,
@@ -21,7 +22,6 @@ from mistral_common.protocol.instruct.validator import (
     MistralRequestValidatorV13,
     ValidationMode,
 )
-from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import AudioEncoder, SpecialAudioIDs
 from mistral_common.tokens.tokenizers.base import (

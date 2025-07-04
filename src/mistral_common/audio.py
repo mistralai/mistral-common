@@ -70,7 +70,9 @@ class Audio:
     @staticmethod
     def from_base64(audio_base64: str) -> "Audio":
         if not is_soundfile_installed():
-            raise ImportError("soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'")
+            raise ImportError(
+                "soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'"
+            )
 
         audio_bytes = base64.b64decode(audio_base64)
 
@@ -82,7 +84,9 @@ class Audio:
 
     def to_base64(self, format: AudioFormat) -> str:
         if not is_soundfile_installed():
-            raise ImportError("soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'")
+            raise ImportError(
+                "soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'"
+            )
 
         with io.BytesIO() as audio_file:
             sf.write(audio_file, self.audio_array, self.sampling_rate, format=format.value)

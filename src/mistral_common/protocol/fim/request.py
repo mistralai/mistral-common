@@ -1,4 +1,5 @@
 from typing import Optional
+
 from mistral_common.protocol.base import BaseCompletionRequest
 
 

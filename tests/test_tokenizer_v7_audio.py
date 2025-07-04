@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List
 
 import numpy as np
 import pytest
@@ -84,6 +84,7 @@ def _get_audio_chunk(duration: float) -> AudioChunk:
             data=audio.to_base64(format=format),
         ),
     )
+
 
 def _get_specials(tekkenizer: InstructTokenizerV7) -> tuple[int, ...]:
     BOS = tekkenizer.tokenizer.get_control_token(SpecialTokens.bos.value)
