@@ -18,6 +18,13 @@ from mistral_common.tokens.instruct.request import FIMRequest, InstructRequest
 from mistral_common.tokens.tokenizers.image import ImageEncoder
 
 
+class UserMessagePosition(str, Enum):
+    """Where to encode available tools"""
+
+    first = "first"
+    last = "last"
+
+
 class SpecialTokens(str, Enum):
     r"""[DEPRECATED] Enum of special tokens used in the tokenizer.
 
@@ -95,7 +102,8 @@ class TokenizerVersion(str, Enum):
         v2: The second version of the tokenizer that includes special control tokens [INST], [\INST].
         v3: The third version of the tokenizer that includes improved function calling.
         v7: The seventh version of the tokenizer that includes improved system prompt and function calling.
-        v11: The elevnth version of the tokenizer that has improved function calling
+        v11: The eleventh version of the tokenizer that includes improved function calling.
+        v13: The thirteenth version of the tokenizer that includes no call id tokenization and better prompt caching.
 
     Examples:
         >>> version = TokenizerVersion.v1
@@ -134,9 +142,10 @@ class TokenizerVersion(str, Enum):
 
     v1 = "v1"  # vocab_size = 32000
     v2 = "v2"  # vocab_size = 32768 with special control tokens [INST], [\INST]
-    v3 = "v3"  # vocab_size = 32768 (spm) OR 128000 (tekken) with improved function calling
-    v7 = "v7"  # vocab_size = 32768 (spm) or 128000 (tekken) with improved system prompt and function calling
-    v11 = "v11"  # vocab_size = 32768 (spm) or 128000 (tekken) with improved function calling
+    v3 = "v3"  # vocab_size = 32768 (spm) OR 131072 (tekken) with improved function calling
+    v7 = "v7"  # vocab_size = 32768 (spm) or 131072 (tekken) with improved system prompt and function calling
+    v11 = "v11"  # 131072 (tekken) with improved function calling
+    v13 = "v13"  # 131072 (tekken) with no call id and better prompt caching
 
 
 class Tokenized(MistralBase):

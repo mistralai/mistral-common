@@ -1,6 +1,6 @@
 import re
 from enum import Enum
-from typing import Generic, List
+from typing import Generic, List, Set
 
 from jsonschema import Draft7Validator, SchemaError
 
@@ -402,3 +402,52 @@ class MistralRequestValidatorV5(MistralRequestValidatorV3):
     """
 
     _allow_tool_call_and_content: bool = True
+
+
+class MistralRequestValidatorV13(MistralRequestValidatorV5):
+    def _validate_tool_calls_followed_by_tool_messages(self, messages: List[UATS]) -> None:
+        """
+        Checks:
+        - That the number and ids of tool calls and tool messages are the same
+        - That the tool calls are followed by tool messages
+        - That tool calls have distinct ids for a given assistant message
+        """
+        prev_role = None
+        expected_tool_ids: Set[str] = set()
+        observed_tool_ids: Set[str] = set()
+        for message in messages:
+            if prev_role is None:
+                prev_role = message.role
+                continue
+
+            if message.role == Roles.tool:
+                tool_call_id = message.tool_call_id
+                if tool_call_id in observed_tool_ids:
+                    raise InvalidMessageStructureException(f"Duplicate tool call id {tool_call_id} in tool results")
+                if tool_call_id not in expected_tool_ids:
+                    raise InvalidMessageStructureException(f"Unexpected tool call id {tool_call_id} in tool results")
+                observed_tool_ids.add(tool_call_id)
+
+            elif message.role == Roles.assistant:
+                # if we have an assistant message and we have not recieved all the function calls
+                # we need to raise an exception
+                if len(expected_tool_ids) != len(observed_tool_ids):
+                    raise InvalidMessageStructureException("Not the same number of function calls and responses")
+
+                expected_tool_ids.clear()
+                observed_tool_ids.clear()
+                if message.tool_calls is not None:
+                    # Validate that the number of function calls and ids are the same
+                    for tool_call in message.tool_calls:
+                        if tool_call.id in expected_tool_ids:
+                            raise InvalidMessageStructureException(
+                                f"Duplicate tool call id {tool_call.id} in assistant message"
+                            )
+                        expected_tool_ids.add(tool_call.id)
+
+            prev_role = message.role
+
+        if len(expected_tool_ids) != len(observed_tool_ids) and self._mode == ValidationMode.serving:
+            raise InvalidMessageStructureException("Not the same number of function calls and responses")
+        elif len(expected_tool_ids) < len(observed_tool_ids) and self._mode == ValidationMode.finetuning:
+            raise InvalidMessageStructureException("More tool responses than tool calls")

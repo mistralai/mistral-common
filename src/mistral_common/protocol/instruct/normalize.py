@@ -106,8 +106,8 @@ class InstructRequestNormalizer(
 
         return "\n\n".join(system_prompt) if len(system_prompt) else None
 
-    def _aggregate_tool_messages(self, messages: List[UATS]) -> List[ToolMessageType]:
-        """
+    def _aggregate_tool_messages(self, messages: List[UATS], latest_call_ids: List[str]) -> List[ToolMessageType]:
+        r"""
         We currently do not do any aggregation for tool messages, but we normalize the json content
         """
         tool_messages: List[ToolMessageType] = []
@@ -200,9 +200,11 @@ class InstructRequestNormalizer(
 
         return self._user_message_class(content=all_content)
 
-    def _aggregate_role(self, messages: List[UATS], role: Optional[Roles]) -> Sequence[UATS]:
+    def _aggregate_role(
+        self, messages: List[UATS], role: Optional[Roles], latest_call_ids: List[str]
+    ) -> Sequence[UATS]:
         if role == Roles.tool:
-            return self._aggregate_tool_messages(messages)
+            return self._aggregate_tool_messages(messages, latest_call_ids)
         elif role == Roles.assistant:
             return [self._aggregate_assistant_messages(messages)]
         elif role == Roles.user:
@@ -215,19 +217,32 @@ class InstructRequestNormalizer(
         messages_to_aggregate: List[UATS] = []
         current_role: Optional[Roles] = None
         current_weight: Optional[float] = None
+        latest_call_ids: List[str] = []
 
         # Collect consecutive lists of messages with the same role and weight
         for message in request.messages:
             new_weight = getattr(message, "weight", None)
             if current_role != message.role or (new_weight != current_weight):
-                aggregated_messages.extend(self._aggregate_role(messages_to_aggregate, current_role))
+                aggregated_messages.extend(self._aggregate_role(messages_to_aggregate, current_role, latest_call_ids))
+
+                if current_role == Roles.assistant:
+                    assistant_message = aggregated_messages[-1]
+                    assert isinstance(aggregated_messages[-1], AssistantMessage)
+                    if assistant_message.tool_calls is not None:
+                        for tool_call in assistant_message.tool_calls:
+                            latest_call_ids.append(tool_call.id)
+
+                elif current_role == Roles.tool:
+                    # reordering only depends on the latest aggregated assistant message
+                    latest_call_ids.clear()
+
                 messages_to_aggregate.clear()
             current_weight = new_weight
             current_role = message.role
             messages_to_aggregate.append(message)
 
         # Add the last set of messages
-        aggregated_messages.extend(self._aggregate_role(messages_to_aggregate, current_role))
+        aggregated_messages.extend(self._aggregate_role(messages_to_aggregate, current_role, latest_call_ids))
 
         # If the first message is not a user message, or we didn't aggregate
         # anything (all system messages) for example, add an empty user message
@@ -294,9 +309,11 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
             InstructRequest[UATS, Tool],
         )
 
-    def _aggregate_role(self, messages: List[UATS], role: Optional[Roles]) -> Sequence[UATS]:
+    def _aggregate_role(
+        self, messages: List[UATS], role: Optional[Roles], latest_call_ids: list[str]
+    ) -> Sequence[UATS]:
         if role == Roles.tool:
-            return self._aggregate_tool_messages(messages)
+            return self._aggregate_tool_messages(messages, latest_call_ids)
         elif role == Roles.assistant:
             return [self._aggregate_assistant_messages(messages)]
         elif role == Roles.user:
@@ -334,8 +351,42 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
         return self._instruct_request_class(messages=messages, system_prompt=None, available_tools=request.tools)  # type: ignore[no-any-return]
 
 
+class InstructRequestNormalizerV13(InstructRequestNormalizerV7):
+    r"""Normalizer for the v13 tokenizer.
+
+    It reorders tool messages based on the tool call order.
+
+    Examples:
+        >>> normalizer = InstructRequestNormalizerV13.normalizer()
+    """
+
+    @staticmethod
+    def normalizer() -> "InstructRequestNormalizerV13":
+        r"""Returns a normalizer for the default instruct request."""
+        return InstructRequestNormalizerV13(
+            UserMessage,
+            AssistantMessage,
+            ToolMessage,
+            SystemMessage,
+            InstructRequest[UATS, Tool],
+        )
+
+    def _aggregate_tool_messages(self, messages: List[UATS], latest_call_ids: List[str]) -> List[ToolMessageType]:
+        tool_messages: List[ToolMessageType] = super()._aggregate_tool_messages(messages, latest_call_ids)
+        id_to_tool_call_idx = {call_id: idx for idx, call_id in enumerate(latest_call_ids)}
+        id_to_tool_result_idx = {message.tool_call_id: idx for idx, message in enumerate(tool_messages)}
+        # First order by tool call idx and then by tool result idx
+        tool_messages.sort(
+            key=lambda msg: (
+                id_to_tool_call_idx.get(msg.tool_call_id or "null", float("inf")),
+                id_to_tool_result_idx[msg.tool_call_id],
+            ),
+        )
+        return tool_messages
+
+
 def normalizer_for_tokenizer_version(version: TokenizerVersion) -> InstructRequestNormalizer:
-    """Gets the appropriate normalizer for the given tokenizer version.
+    r"""Gets the appropriate normalizer for the given tokenizer version.
 
     Args:
         version: The tokenizer version to get the normalizer for.
@@ -350,4 +401,6 @@ def normalizer_for_tokenizer_version(version: TokenizerVersion) -> InstructReque
         return InstructRequestNormalizer.normalizer()
     elif version in {TokenizerVersion.v7, TokenizerVersion.v11}:
         return InstructRequestNormalizerV7.normalizer()
+    elif version == TokenizerVersion.v13:
+        return InstructRequestNormalizerV13.normalizer()
     raise ValueError(f"Unknown tokenizer version {version}")
