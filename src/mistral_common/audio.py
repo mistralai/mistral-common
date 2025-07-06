@@ -123,7 +123,7 @@ class Audio:
         assert format in self._expected_format_values, f"{format=} not in {self._expected_format_values=}"
 
         with io.BytesIO() as audio_file:
-            sf.write(audio_file, self.audio_array, self.sampling_rate, format=AudioFormat(format.upper()))
+            sf.write(audio_file, self.audio_array, self.sampling_rate, format=format.upper())
             audio_file.seek(0)
             return base64.b64encode(audio_file.read()).decode("utf-8")
 
