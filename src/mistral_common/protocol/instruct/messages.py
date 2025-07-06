@@ -153,9 +153,9 @@ class RawAudio(MistralBase):
 
     @validator("format")
     def should_not_be_empty(cls, v: str) -> str:
-        expected_format = [v.value for v in AudioFormat.__members__.values()]
+        expected_format = [v.value.lower() for v in AudioFormat.__members__.values()]
         if v not in expected_format:
-            raise ValueError(f"`format` should be one of {AudioFormat.__members__.values()}. Got: {v}`")
+            raise ValueError(f"`format` should be one of {expected_format}. Got: {v}`")
 
         return v
 

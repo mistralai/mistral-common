@@ -42,16 +42,17 @@ if is_soundfile_installed():
     available_formats = sf.available_formats()
 
     # Create an Enum dynamically
-    AudioFormat = Enum("AudioFormat", {format_name.lower(): format_name.lower() for format_name in available_formats})
+    AudioFormat = Enum("AudioFormat", {format_name: format_name for format_name in available_formats})
 else:
     AudioFormat = Enum("AudioFormat", {"none": "none"})
 
 
 class Audio:
-    def __init__(self, audio_array: np.ndarray, sampling_rate: int, format: AudioFormat) -> None:
+    def __init__(self, audio_array: np.ndarray, sampling_rate: int, format: str) -> None:
         self.audio_array = audio_array
         self.sampling_rate = sampling_rate
         self.format = format
+        self._expected_format_values = [v.value.lower() for v in AudioFormat.__members__.values()]
         self._check_valid()
 
     def __repr__(self) -> str:
@@ -64,6 +65,7 @@ class Audio:
     def _check_valid(self) -> None:
         assert isinstance(self.audio_array, np.ndarray), type(np.ndarray)
         assert self.audio_array.ndim == 1, f"{self.audio_array.ndim=}"
+        assert self.format in self._expected_format_values, f"{self.format=} not in {self._expected_format_values=}"
 
     @property
     def duration(self) -> float:
@@ -98,7 +100,9 @@ class Audio:
     def _from_bytes(audio_bytes: bytes, strict: bool) -> "Audio":
         # Read the bytes into an audio file.
         with io.BytesIO(audio_bytes) as audio_file:
-            format = AudioFormat(sf.info(audio_file).format.lower())
+            format_enum = AudioFormat(sf.info(audio_file).format)
+            format = format_enum.value.lower()
+
             audio_array, sampling_rate = sf.read(audio_file)
 
         # convert ster
@@ -110,14 +114,16 @@ class Audio:
 
         return Audio(audio_array=audio_array, sampling_rate=sampling_rate, format=format)
 
-    def to_base64(self, format: AudioFormat) -> str:
+    def to_base64(self, format: str) -> str:
         if not is_soundfile_installed():
             raise ImportError(
                 "soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'"
             )
 
+        assert format in self._expected_format_values, f"{format=} not in {self._expected_format_values=}"
+
         with io.BytesIO() as audio_file:
-            sf.write(audio_file, self.audio_array, self.sampling_rate, format=format.value)
+            sf.write(audio_file, self.audio_array, self.sampling_rate, format=AudioFormat(format.upper()))
             audio_file.seek(0)
             return base64.b64encode(audio_file.read()).decode("utf-8")
 
