@@ -172,6 +172,15 @@ class AudioChunk(BaseContentChunk):
 
         return cls(input_audio=raw_audio)
 
+    def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
+        r"""Converts the chunk to the OpenAI format."""
+        return self.model_dump()
+
+    @classmethod
+    def from_openai(cls, messages: Dict[str, Union[str, Dict[str, str]]]) -> "TextChunk":
+        r"""Converts the OpenAI chunk to the Mistral format."""
+        return cls.model_validate(messages)
+
 
 
 class TextChunk(BaseContentChunk):
