@@ -71,31 +71,44 @@ class Audio:
         return self.audio_array.shape[0] / self.sampling_rate
 
     @staticmethod
-    def from_base64(audio_base64: str) -> "Audio":
+    def from_base64(audio_base64: str, strict: bool = True) -> "Audio":
         if not is_soundfile_installed():
             raise ImportError(
                 "soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'"
             )
 
         audio_bytes = base64.b64decode(audio_base64)
-        return Audio._from_bytes(audio_bytes)
+        return Audio._from_bytes(audio_bytes, strict=strict)
 
     @staticmethod
-    def from_file(file: str) -> "Audio":
+    def from_file(file: str, strict: bool = True) -> "Audio":
+        if not is_soundfile_installed():
+            raise ImportError(
+                "soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'"
+            )
+
         assert Path(file).exists(), f"{file=} does not exist"
 
         with open(file, "rb") as f:
             audio_bytes = f.read()
 
-        return Audio._from_bytes(audio_bytes)
+        return Audio._from_bytes(audio_bytes, strict=strict)
 
     @staticmethod
-    def _from_bytes(audio_bytes: bytes) -> "Audio":
+    def _from_bytes(audio_bytes: bytes, strict: bool) -> "Audio":
         # Read the bytes into an audio file.
         with io.BytesIO(audio_bytes) as audio_file:
+            format = AudioFormat(sf.info(audio_file).format)
             audio_array, sampling_rate = sf.read(audio_file)
 
-        return Audio(audio_array=audio_array, sampling_rate=sampling_rate)
+        # convert ster
+        if audio_array.ndim != 1:
+            if strict:
+                raise ValueError(f"{audio_array.ndim=}")
+            else:
+                audio_array = audio_array.mean(axis=1)
+
+        return Audio(audio_array=audio_array, sampling_rate=sampling_rate, format=format)
 
     def to_base64(self, format: AudioFormat) -> str:
         if not is_soundfile_installed():
