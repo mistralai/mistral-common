@@ -98,7 +98,7 @@ class Audio:
     def _from_bytes(audio_bytes: bytes, strict: bool) -> "Audio":
         # Read the bytes into an audio file.
         with io.BytesIO(audio_bytes) as audio_file:
-            format = AudioFormat(sf.info(audio_file).format)
+            format = AudioFormat(sf.info(audio_file).format.lower())
             audio_array, sampling_rate = sf.read(audio_file)
 
         # convert ster
