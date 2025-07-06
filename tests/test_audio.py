@@ -38,7 +38,7 @@ def test_audio_base64() -> None:
         sampling_rate=sampling_rate,
     )
 
-    for format in [AudioFormat.MP3, AudioFormat.WAV]:
+    for format in [AudioFormat.mp3, AudioFormat.wav]:
         base64_str = audio.to_base64(format)
         new_audio = Audio.from_base64(base64_str)
 

@@ -174,15 +174,11 @@ class AudioChunk(BaseContentChunk):
 
     def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
         r"""Converts the chunk to the OpenAI format."""
-        model_dict = self.model_dump()
-        model_dict['input_audio']['format'] = model_dict['input_audio']['format'].lower()
-
-        return model_dict
+        return self.model_dump()
 
     @classmethod
     def from_openai(cls, openai_chunk: Dict[str, Union[Optional[str], Dict[str, Optional[str]]]]) -> "TextChunk":
         r"""Converts the OpenAI chunk to the Mistral format."""
-        openai_chunk['input_audio']['format'] = openai_chunk['input_audio']['format'].upper()
         return cls.model_validate(openai_chunk)
 
 

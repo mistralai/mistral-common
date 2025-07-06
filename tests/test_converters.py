@@ -107,7 +107,7 @@ def test_convert_text_chunk() -> None:
 def test_convert_input_audio_chunk() -> None:
     audio_bytes = (0.5 * np.sin(2 * np.pi * np.arange(44100 * 1) * 440 / 44100)).astype(np.float32).tobytes()
     base64_data = base64.b64encode(audio_bytes).decode('utf-8')
-    audio = RawAudio(data=base64_data, format=AudioFormat.WAV)
+    audio = RawAudio(data=base64_data, format=AudioFormat.wav)
 
     chunk = AudioChunk(input_audio=audio)
     text_openai = chunk.to_openai()

@@ -42,9 +42,9 @@ if is_soundfile_installed():
     available_formats = sf.available_formats()
 
     # Create an Enum dynamically
-    AudioFormat = Enum("AudioFormat", {format_name: format_name for format_name in available_formats})
+    AudioFormat = Enum("AudioFormat", {format_name.lower(): format_name.lower() for format_name in available_formats})
 else:
-    AudioFormat = Enum("AudioFormat", {"NONE": "NONE"})
+    AudioFormat = Enum("AudioFormat", {"none": "none"})
 
 
 class Audio:
