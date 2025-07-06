@@ -3,6 +3,7 @@ import io
 import logging
 from enum import Enum
 from functools import cache
+from pathlib import Path
 from typing import Type
 
 import numpy as np
@@ -76,7 +77,19 @@ class Audio:
             )
 
         audio_bytes = base64.b64decode(audio_base64)
+        return Audio._from_bytes(audio_bytes)
 
+    @staticmethod
+    def from_file(file: str) -> "Audio":
+        assert Path(file).exist(), f"{file=} does not exist"
+
+        with open(file, "rb") as f:
+            audio_bytes = f.read()
+
+        return Audio._from_bytes(audio_bytes)
+
+    @staticmethod
+    def _from_bytes(audio_bytes: bytes) -> "Audio":
         # Read the bytes into an audio file.
         with io.BytesIO(audio_bytes) as audio_file:
             audio_array, sampling_rate = sf.read(audio_file)
