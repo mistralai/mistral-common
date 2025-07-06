@@ -4,7 +4,7 @@ import logging
 from enum import Enum
 from functools import cache
 from pathlib import Path
-from typing import Type
+from typing import Type, Optional
 
 import numpy as np
 
@@ -48,9 +48,10 @@ else:
 
 
 class Audio:
-    def __init__(self, audio_array: np.ndarray, sampling_rate: int) -> None:
+    def __init__(self, audio_array: np.ndarray, sampling_rate: int, format: AudioFormat) -> None:
         self.audio_array = audio_array
         self.sampling_rate = sampling_rate
+        self.format = format
         self._check_valid()
 
     def __repr__(self) -> str:

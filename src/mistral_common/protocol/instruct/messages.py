@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Literal, Optional, TypeVar, Union
 from pydantic import ConfigDict, Field, validator
 from typing_extensions import Annotated, TypeAlias
 
-from mistral_common.audio import AudioFormat
+from mistral_common.audio import AudioFormat, Audio
 from mistral_common.base import MistralBase
 from mistral_common.image import SerializableImage
 from mistral_common.protocol.instruct.tool_calls import ToolCall
@@ -162,6 +162,16 @@ class AudioChunk(BaseContentChunk):
             raise ValueError(f"`InputAudio` should not be empty. Got: {v}`")
 
         return v
+
+    @classmethod
+    def from_audio(cls, audio: Audio) -> "AudioChunk":
+        format = audio.format
+        data = audio.to_base64(format)
+
+        raw_audio = RawAudio(data=data, format=format)
+
+        return cls(input_audio=raw_audio)
+
 
 
 class TextChunk(BaseContentChunk):
