@@ -82,7 +82,7 @@ class Audio:
 
     @staticmethod
     def from_file(file: str) -> "Audio":
-        assert Path(file).exist(), f"{file=} does not exist"
+        assert Path(file).exists(), f"{file=} does not exist"
 
         with open(file, "rb") as f:
             audio_bytes = f.read()
