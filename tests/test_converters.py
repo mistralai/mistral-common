@@ -1,6 +1,8 @@
 from inspect import signature
 from pathlib import Path
+import base64
 from typing import Any, Dict, List, Optional, Type, Union
+import numpy as np
 
 import pytest
 from openai.resources.chat.completions.completions import Completions
@@ -13,6 +15,12 @@ from openai.types.chat.chat_completion_content_part_image_param import (
 from openai.types.chat.chat_completion_content_part_text_param import (
     ChatCompletionContentPartTextParam as OpenAITextChunk,
 )
+from openai.types.chat.chat_completion_content_part_text_param import (
+    ChatCompletionContentPartTextParam as OpenAITextChunk,
+)
+from openai.types.chat.chat_completion_content_part_input_audio_param import (
+    ChatCompletionContentPartInputAudioParam as OpenAIInputAudioChunk,
+)
 from openai.types.chat.chat_completion_message_tool_call_param import (
     ChatCompletionMessageToolCallParam as OpenAIToolCall,
 )
@@ -24,13 +32,16 @@ from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam as OpenAIUserMessage
 from PIL import Image
 
+from mistral_common.audio import AudioFormat
 from mistral_common.protocol.instruct.converters import _OPENAI_COMPLETION_FIELDS, _check_openai_fields_names
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
+    AudioChunk,
     ChatMessage,
     ImageChunk,
     ImageURL,
     ImageURLChunk,
+    RawAudio,
     SystemMessage,
     TextChunk,
     ToolMessage,
@@ -91,6 +102,20 @@ def test_convert_text_chunk() -> None:
 
     typeddict_openai = OpenAITextChunk(**chunk.to_openai())  # type: ignore[typeddict-item]
     assert TextChunk.from_openai(typeddict_openai) == chunk
+
+
+def test_convert_input_audio_chunk() -> None:
+    audio_bytes = (0.5 * np.sin(2 * np.pi * np.arange(44100 * 1) * 440 / 44100)).astype(np.float32).tobytes()
+    base64_data = base64.b64encode(audio_bytes).decode('utf-8')
+    audio = RawAudio(data=base64_data, format=AudioFormat.WAV)
+
+    chunk = AudioChunk(input_audio=audio)
+    text_openai = chunk.to_openai()
+
+    assert AudioChunk.from_openai(text_openai) == chunk
+
+    typeddict_openai = OpenAIInputAudioChunk(**chunk.to_openai())  # type: ignore[typeddict-item]
+    assert AudioChunk.from_openai(typeddict_openai) == chunk
 
 
 @pytest.mark.parametrize(
