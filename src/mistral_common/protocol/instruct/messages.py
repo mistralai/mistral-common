@@ -149,7 +149,16 @@ class RawAudio(MistralBase):
     data: str
 
     # The format of the encoded audio data. Currently supports "wav" and "mp3".
-    format: AudioFormat
+    format: str
+
+    @validator("format")
+    def should_not_be_empty(cls, v: str) -> str:
+        expected_format = [v.value for v in AudioFormat.__members__.values()]
+        if v not in expected_format:
+            raise ValueError(f"`format` should be one of {AudioFormat.__members__.values()}. Got: {v}`")
+
+        return v
+
 
 
 class AudioChunk(BaseContentChunk):
