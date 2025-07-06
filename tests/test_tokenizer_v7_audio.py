@@ -68,7 +68,7 @@ def tekkenizer() -> InstructTokenizerV7:
 
 
 def _get_audio_chunk(duration: float) -> AudioChunk:
-    format = AudioFormat("wav")
+    format = "wav"
 
     sampling_rate = 24000
     signal_length = int(duration * sampling_rate)
@@ -76,6 +76,7 @@ def _get_audio_chunk(duration: float) -> AudioChunk:
     audio = Audio(
         audio_array=rng.uniform(low=-1, high=1, size=[signal_length]),
         sampling_rate=sampling_rate,
+        format=format,
     )
 
     return AudioChunk(

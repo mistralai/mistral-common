@@ -100,12 +100,15 @@ class Audio:
     def _from_bytes(audio_bytes: bytes, strict: bool) -> "Audio":
         # Read the bytes into an audio file.
         with io.BytesIO(audio_bytes) as audio_file:
-            format_enum = AudioFormat(sf.info(audio_file).format)
-            format = format_enum.value.lower()
+            with sf.SoundFile(audio_file) as f:
+                # Read the entire audio data
+                audio_array = f.read(dtype="float32")  # or another dtype as needed
+                sampling_rate = f.samplerate
+                audio_format = f.format
 
-            audio_array, sampling_rate = sf.read(audio_file)
+        format_enum = AudioFormat(audio_format)
+        format = format_enum.value.lower()
 
-        # convert ster
         if audio_array.ndim != 1:
             if strict:
                 raise ValueError(f"{audio_array.ndim=}")
