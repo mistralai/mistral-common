@@ -174,12 +174,16 @@ class AudioChunk(BaseContentChunk):
 
     def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
         r"""Converts the chunk to the OpenAI format."""
-        return self.model_dump()
+        model_dict = self.model_dump()
+        model_dict['input_audio']['format'] = model_dict['input_audio']['format'].lower()
+
+        return model_dict
 
     @classmethod
-    def from_openai(cls, messages: Dict[str, Union[str, Dict[str, str]]]) -> "TextChunk":
+    def from_openai(cls, openai_chunk: Dict[str, Union[Optional[str], Dict[str, Optional[str]]]]) -> "TextChunk":
         r"""Converts the OpenAI chunk to the Mistral format."""
-        return cls.model_validate(messages)
+        openai_chunk['input_audio']['format'] = openai_chunk['input_audio']['format'].upper()
+        return cls.model_validate(openai_chunk)
 
 
 
@@ -201,9 +205,9 @@ class TextChunk(BaseContentChunk):
         return self.model_dump()
 
     @classmethod
-    def from_openai(cls, messages: Dict[str, Union[str, Dict[str, str]]]) -> "TextChunk":
+    def from_openai(cls, openai_chunk: Dict[str, Optional[str]]) -> "TextChunk":
         r"""Converts the OpenAI chunk to the Mistral format."""
-        return cls.model_validate(messages)
+        return cls.model_validate(openai_chunk)
 
 
 ContentChunk = Annotated[Union[TextChunk, ImageChunk, ImageURLChunk, AudioChunk], Field(discriminator="type")]
