@@ -614,18 +614,16 @@ def test_convert_requests(
 
 
 @pytest.mark.parametrize(
-    ["audio", "id", "language", "stream"],
+    ["audio", "language", "stream"],
     [
-        (DUMMY_AUDIO_CHUNK, None, None, False),
-        (DUMMY_AUDIO_CHUNK, "123456789", None, False),
-        (DUMMY_AUDIO_CHUNK, "123456789", "en", False),
-        (DUMMY_AUDIO_CHUNK, "123456789", "en", True),
+        (DUMMY_AUDIO_CHUNK, None, False),
+        (DUMMY_AUDIO_CHUNK, "en", False),
+        (DUMMY_AUDIO_CHUNK, "en", True),
     ]
 )
-def test_convert_transcription(audio: AudioChunk, id: Optional[str], language: Optional[str], stream: bool) -> None:
+def test_convert_transcription(audio: AudioChunk, language: Optional[str], stream: bool) -> None:
     seed: int = 43
-    top_p: float = 0.95
-    request = TranscriptionRequest(audio=audio, id=id, language=language, model="model", random_seed=seed, top_p=top_p)
+    request = TranscriptionRequest(audio=audio, language=language, model="model", random_seed=seed)
     openai_request = request.to_openai(stream=stream)
 
     assert request == TranscriptionRequest.from_openai(openai_request)

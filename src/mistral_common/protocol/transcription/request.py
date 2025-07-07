@@ -50,6 +50,10 @@ class TranscriptionRequest(BaseCompletionRequest):
         openai_request["seed"] = openai_request.pop("random_seed")
         openai_request.update(kwargs)
 
+        # remove mistral-specific
+        openai_request.pop("id", None)
+        openai_request.pop("max_tokens", None)
+
         return openai_request
 
     @classmethod
@@ -58,8 +62,12 @@ class TranscriptionRequest(BaseCompletionRequest):
         seed = openai_request.get("seed")
         converted_dict = {k: v for k,v in openai_request.items() if k in cls.model_fields}
 
-        _audio = Audio._from_bytes(file.getvalue(), strict=strict)
+        if isinstance(file, io.BytesIO):
+            _bytes = file.getvalue()
+        else:
+            _bytes = file.file.read()
 
+        _audio = Audio._from_bytes(_bytes, strict=strict)
         audio_chunk = AudioChunk.from_audio(_audio)
 
         converted_dict["audio"] = audio_chunk
