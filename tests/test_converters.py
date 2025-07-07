@@ -1,10 +1,13 @@
 from inspect import signature
 from pathlib import Path
+import io
 import base64
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Type, Union, List
 import numpy as np
 
 import pytest
+from mistral_common.protocol.transcription.request import TranscriptionRequest
+from mistral_common.audio import Audio
 from openai.resources.chat.completions.completions import Completions
 from openai.types.chat.chat_completion_assistant_message_param import (
     ChatCompletionAssistantMessageParam as OpenAIAssistantMessage,
@@ -30,6 +33,7 @@ from openai.types.chat.chat_completion_system_message_param import (
 from openai.types.chat.chat_completion_tool_message_param import ChatCompletionToolMessageParam as OpenAIToolMessage
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam as OpenAITool
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam as OpenAIUserMessage
+from openai.types.audio.transcription_create_params import TranscriptionCreateParamsBase as OpenAITranscriptionRequest
 from PIL import Image
 
 from mistral_common.audio import AudioFormat
@@ -53,6 +57,31 @@ from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, 
 CURRENT_FILE_PATH = Path(__file__).resolve()
 ROOT_PATH = CURRENT_FILE_PATH.parents[1]
 LOGO_PATH = ROOT_PATH / "docs" / "assets" / "logo_favicon.png"
+
+
+def _get_audio_chunk() -> AudioChunk:
+    import soundfile as sf
+    sample_rate = 44100  # Sample rate in Hz
+    duration = 3  # Duration in seconds
+    frequency = 440  # Frequency of the sine wave in Hz
+
+    # Time array
+    t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+
+    audio_data = 0.5 * np.sin(2 * np.pi * frequency * t)
+
+    # Write to in-memory buffer
+    buffer = io.BytesIO()
+    sf.write(buffer, audio_data, sample_rate, format='WAV')
+
+    buffer.seek(0)
+    data, sr = sf.read(buffer)
+
+    audio = Audio(audio_array=data, sampling_rate=sr, format="wav")
+
+    return AudioChunk.from_audio(audio)
+
+DUMMY_AUDIO_CHUNK = _get_audio_chunk()
 
 
 def test_openai_chat_fields() -> None:
@@ -105,11 +134,7 @@ def test_convert_text_chunk() -> None:
 
 
 def test_convert_input_audio_chunk() -> None:
-    audio_bytes = (0.5 * np.sin(2 * np.pi * np.arange(44100 * 1) * 440 / 44100)).astype(np.float32).tobytes()
-    base64_data = base64.b64encode(audio_bytes).decode('utf-8')
-    audio = RawAudio(data=base64_data, format="wav")
-
-    chunk = AudioChunk(input_audio=audio)
+    chunk = DUMMY_AUDIO_CHUNK
     text_openai = chunk.to_openai()
 
     assert AudioChunk.from_openai(text_openai) == chunk
@@ -585,3 +610,27 @@ def test_convert_requests(
         assert len(tools) == len(reconstructed_tools)
         for i in range(len(tools)):
             assert reconstructed_tools[i] == tools[i]
+
+
+
+@pytest.mark.parametrize(
+    ["audio", "id", "language", "stream"],
+    [
+        (DUMMY_AUDIO_CHUNK, None, None, False),
+        (DUMMY_AUDIO_CHUNK, "123456789", None, False),
+        (DUMMY_AUDIO_CHUNK, "123456789", "en", False),
+        (DUMMY_AUDIO_CHUNK, "123456789", "en", True),
+    ]
+)
+def test_convert_transcription(audio: AudioChunk, id: Optional[str], language: Optional[str], stream: bool) -> None:
+    request = TranscriptionRequest(audio=audio, id=id, language=language, model="model")
+    openai_request = request.to_openai(stream=stream)
+
+    assert request == TranscriptionRequest.from_openai(openai_request)
+
+    openai_transcription = OpenAITranscriptionRequest(**openai_request)  # type: ignore[typeddict-item)
+
+    from_oai = TranscriptionRequest.from_openai(openai_transcription)
+    assert isinstance(from_oai, TranscriptionRequest)
+
+    assert request == from_oai
