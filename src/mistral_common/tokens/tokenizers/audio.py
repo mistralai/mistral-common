@@ -79,13 +79,9 @@ class AudioEncoder:
         self.encoding_config = audio_config.audio_encoding_config
         self.special_ids = special_ids
 
-    def pad(self, audio_array: np.ndarray) -> np.ndarray:
+    def pad(self, audio_array: np.ndarray, sampling_rate: int) -> np.ndarray:
         if self.audio_config.chunk_length_s:
-            # pad the audio to a multiple of chunk_length_s seconds
-            # padding token is zero (equivalent to silence in the audio space)
-            next_multiple_of_chunk_frames = (
-                math.ceil(audio_array.shape[-1] / self.audio_config.chunk_frames) * self.audio_config.chunk_frames
-            )
+            next_multiple_of_chunk_frames = self.next_multiple_of_chunk_frames(audio_array.shape[-1], sampling_rate)
             audio_array = np.pad(
                 audio_array, (0, next_multiple_of_chunk_frames - audio_array.shape[-1])
             )
@@ -97,11 +93,19 @@ class AudioEncoder:
 
         return audio_array
 
+    def next_multiple_of_chunk_frames(self, audio_array_len: int, sampling_rate: int) -> int:
+        assert sampling_rate == self.audio_config.sampling_rate, f"Expected {sampling_rate=} to be {self.audio_config.sampling_rate=}"
+        assert self.audio_config.chunk_length_s is not None, f"Can't call next_multiple_of_chunk_frames if {self.audio_config.chunk_length_s=}."
+
+        # pad the audio to a multiple of chunk_length_s seconds
+        # padding token is zero (equivalent to silence in the audio space)
+        return math.ceil(audio_array_len / self.audio_config.chunk_frames) * self.audio_config.chunk_frames
+
     def _encode_audio_chunk(self, content: AudioChunk) -> AudioEncoding:
         audio = Audio.from_base64(content.input_audio.data)
         audio.resample(self.audio_config.sampling_rate)
 
-        audio.audio_array = self.pad(audio.audio_array)
+        audio.audio_array = self.pad(audio.audio_array, self.audio_config.sampling_rate)
         signal_length = audio.audio_array.shape[0]
 
         # for spectrogram-based models, the waveform is downsampled by the hop_length when computing the log-mel
