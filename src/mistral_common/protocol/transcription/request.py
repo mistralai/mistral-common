@@ -60,7 +60,9 @@ class TranscriptionRequest(BaseCompletionRequest):
     def from_openai(cls, openai_request: Dict[str, Any], strict: bool = False) -> "TranscriptionRequest":
         file = openai_request.get("file")
         seed = openai_request.get("seed")
-        converted_dict = {k: v for k,v in openai_request.items() if k in cls.model_fields}
+        converted_dict = {k: v for k,v in openai_request.items() if (k in cls.model_fields and not (v is None and k in ["temperature", "top_p"]))}
+
+        
 
         if isinstance(file, io.BytesIO):
             _bytes = file.getvalue()
