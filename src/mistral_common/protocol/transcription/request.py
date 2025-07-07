@@ -22,7 +22,7 @@ class TranscriptionRequest(BaseCompletionRequest):
         ),
     )
 
-    def to_openai(self, **kwargs: Any) -> Dict[str, List[Dict[str, Any]]]:
+    def to_openai(self, exclude: tuple[str] = (), **kwargs: Any) -> Dict[str, List[Dict[str, Any]]]:
         r"""Convert the ranscription request into the OpenAI format.
 
         Args:
@@ -51,8 +51,10 @@ class TranscriptionRequest(BaseCompletionRequest):
         openai_request.update(kwargs)
 
         # remove mistral-specific
-        openai_request.pop("id", None)
-        openai_request.pop("max_tokens", None)
+        default_exclude = ("id", "max_tokens")
+        default_exclude += exclude
+        for k in default_exclude:
+            openai_request.pop(k, None)
 
         return openai_request
 
