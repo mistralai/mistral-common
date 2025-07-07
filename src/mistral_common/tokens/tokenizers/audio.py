@@ -79,7 +79,7 @@ class AudioEncoder:
         self.encoding_config = audio_config.audio_encoding_config
         self.special_ids = special_ids
 
-    def _pad(self, audio_array: np.ndarray) -> np.ndarray:
+    def pad(self, audio_array: np.ndarray) -> np.ndarray:
         if self.audio_config.chunk_length_s:
             # pad the audio to a multiple of chunk_length_s seconds
             # padding token is zero (equivalent to silence in the audio space)
@@ -97,12 +97,11 @@ class AudioEncoder:
 
         return audio_array
 
-
     def _encode_audio_chunk(self, content: AudioChunk) -> AudioEncoding:
         audio = Audio.from_base64(content.input_audio.data)
         audio.resample(self.audio_config.sampling_rate)
 
-        audio.audio_array = self._pad(audio.audio_array)
+        audio.audio_array = self.pad(audio.audio_array)
         signal_length = audio.audio_array.shape[0]
 
         # for spectrogram-based models, the waveform is downsampled by the hop_length when computing the log-mel
