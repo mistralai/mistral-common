@@ -55,6 +55,7 @@ class TranscriptionRequest(BaseCompletionRequest):
     @classmethod
     def from_openai(cls, openai_request: Dict[str, Any], strict: bool = False) -> "TranscriptionRequest":
         file = openai_request.get("file")
+        seed = openai_request.get("seed")
         converted_dict = {k: v for k,v in openai_request.items() if k in cls.model_fields}
 
         _audio = Audio._from_bytes(file.getvalue(), strict=strict)
@@ -62,5 +63,6 @@ class TranscriptionRequest(BaseCompletionRequest):
         audio_chunk = AudioChunk.from_audio(_audio)
 
         converted_dict["audio"] = audio_chunk
+        converted_dict["random_seed"] = seed
         return cls(**converted_dict)
 

@@ -623,7 +623,9 @@ def test_convert_requests(
     ]
 )
 def test_convert_transcription(audio: AudioChunk, id: Optional[str], language: Optional[str], stream: bool) -> None:
-    request = TranscriptionRequest(audio=audio, id=id, language=language, model="model")
+    seed: int = 43
+    top_p: float = 0.95
+    request = TranscriptionRequest(audio=audio, id=id, language=language, model="model", random_seed=seed, top_p=top_p)
     openai_request = request.to_openai(stream=stream)
 
     assert request == TranscriptionRequest.from_openai(openai_request)
