@@ -1,9 +1,12 @@
-from typing import Optional
+from typing import Optional, Any, Dict, List
+import base64
+import io
 
 from pydantic import Field
 from pydantic_extra_types.language_code import LanguageAlpha2
 
 from mistral_common.protocol.base import BaseCompletionRequest
+from mistral_common.audio import Audio, is_soundfile_installed
 from mistral_common.protocol.instruct.messages import AudioChunk
 
 
@@ -18,3 +21,46 @@ class TranscriptionRequest(BaseCompletionRequest):
             "in ISO-639-1 format will improve accuracy and latency."
         ),
     )
+
+    def to_openai(self, **kwargs: Any) -> Dict[str, List[Dict[str, Any]]]:
+        r"""Convert the ranscription request into the OpenAI format.
+
+        Args:
+            kwargs: Additional parameters to be added to the request.
+
+        Returns:
+            The request in the OpenAI format.
+        """  # noqa: E501
+        if not is_soundfile_installed():
+            raise ImportError(
+                "soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'"
+            )
+
+        import soundfile as sf
+
+        openai_request: Dict[str, Any] = self.model_dump(exclude="audio")
+        audio = Audio.from_base64(self.audio.input_audio.data)
+
+        buffer = io.BytesIO()
+        sf.write(buffer, audio.audio_array, audio.sampling_rate, format=audio.format)
+        # reset cursor to beginning
+        buffer.seek(0)
+
+        openai_request["file"] = buffer
+        openai_request["seed"] = openai_request.pop("random_seed")
+        openai_request.update(kwargs)
+
+        return openai_request
+
+    @classmethod
+    def from_openai(cls, openai_request: Dict[str, Any], strict: bool = False) -> "TranscriptionRequest":
+        file = openai_request.get("file")
+        converted_dict = {k: v for k,v in openai_request.items() if k in cls.model_fields}
+
+        _audio = Audio._from_bytes(file.getvalue(), strict=strict)
+
+        audio_chunk = AudioChunk.from_audio(_audio)
+
+        converted_dict["audio"] = audio_chunk
+        return cls(**converted_dict)
+
