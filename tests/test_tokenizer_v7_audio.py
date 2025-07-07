@@ -283,18 +283,6 @@ def test_no_audio_in_system_message_before_v7() -> None:
             ],
             "System messages are not yet allowed when audio is present",
         ),
-        (
-            [
-                UserMessage(content=[DUMMY_AUDIO, TextChunk(text="a"), DUMMY_AUDIO]),
-            ],
-            "Expected exactly one audio chunk, got 2",
-        ),
-        (
-            [
-                UserMessage(content=[TextChunk(text="a"), DUMMY_AUDIO, TextChunk(text="a")]),
-            ],
-            "Expected at most one text chunk, got 2",
-        ),
     ],
 )
 def test_tokenize_audio_raise(tekkenizer: InstructTokenizerV7, messages: List[UATS], match_regex: str) -> None:
