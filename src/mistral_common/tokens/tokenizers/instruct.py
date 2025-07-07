@@ -856,13 +856,6 @@ class InstructTokenizerV7(InstructTokenizerV3):
             if any(isinstance(message, SystemMessage) for message in messages):
                 raise ValueError("System messages are not yet allowed when audio is present")
 
-            for message in messages:
-                if cls._has_audio([message]):
-                    if (num_audio_chunks := sum(isinstance(chunk, AudioChunk) for chunk in message.content)) != 1:
-                        raise ValueError(f"Expected exactly one audio chunk, got {num_audio_chunks}")
-                    if (num_text_chunks := sum(isinstance(chunk, TextChunk) for chunk in message.content)) > 1:
-                        raise ValueError(f"Expected at most one text chunk, got {num_text_chunks}")
-
     @staticmethod
     def _has_audio(messages: List[UATS]) -> bool:
         return any(
