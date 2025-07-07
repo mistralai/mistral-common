@@ -65,6 +65,7 @@ class TranscriptionRequest(BaseCompletionRequest):
         if isinstance(file, io.BytesIO):
             _bytes = file.getvalue()
         else:
+            # for example if file is UploadFile, this should work
             _bytes = file.file.read()
 
         _audio = Audio._from_bytes(_bytes, strict=strict)
