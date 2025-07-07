@@ -79,25 +79,30 @@ class AudioEncoder:
         self.encoding_config = audio_config.audio_encoding_config
         self.special_ids = special_ids
 
-    def _encode_audio_chunk(self, content: AudioChunk) -> AudioEncoding:
-        audio = Audio.from_base64(content.input_audio.data)
-        audio.resample(self.audio_config.sampling_rate)
-
+    def _pad(self, audio_array: np.ndarray) -> np.ndarray:
         if self.audio_config.chunk_length_s:
             # pad the audio to a multiple of chunk_length_s seconds
             # padding token is zero (equivalent to silence in the audio space)
             next_multiple_of_chunk_frames = (
-                math.ceil(audio.audio_array.shape[-1] / self.audio_config.chunk_frames) * self.audio_config.chunk_frames
+                math.ceil(audio_array.shape[-1] / self.audio_config.chunk_frames) * self.audio_config.chunk_frames
             )
-            audio.audio_array = np.pad(
-                audio.audio_array, (0, next_multiple_of_chunk_frames - audio.audio_array.shape[-1])
+            audio_array = np.pad(
+                audio_array, (0, next_multiple_of_chunk_frames - audio_array.shape[-1])
             )
-        elif audio.audio_array.shape[-1] < self.encoding_config.window_size:
+        elif audio_array.shape[-1] < self.encoding_config.window_size:
             # minimum length for audios is at least one spectrogram frame
-            audio.audio_array = np.pad(
-                audio.audio_array, (0, self.encoding_config.window_size - audio.audio_array.shape[-1])
+            audio_array = np.pad(
+                audio_array, (0, self.encoding_config.window_size - audio_array.shape[-1])
             )
 
+        return audio_array
+
+
+    def _encode_audio_chunk(self, content: AudioChunk) -> AudioEncoding:
+        audio = Audio.from_base64(content.input_audio.data)
+        audio.resample(self.audio_config.sampling_rate)
+
+        audio.audio_array = self._pad(audio.audio_array)
         signal_length = audio.audio_array.shape[0]
 
         # for spectrogram-based models, the waveform is downsampled by the hop_length when computing the log-mel
