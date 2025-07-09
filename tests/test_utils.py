@@ -7,7 +7,11 @@ import huggingface_hub as huggingface_hub
 import pytest
 import requests
 
-from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hub, list_local_hf_repo_files
+from mistral_common.app.utils import find_content_tool_calls, split_integer_list_by_value
+from mistral_common.tokens.tokenizers.utils import (
+    download_tokenizer_from_hf_hub,
+    list_local_hf_repo_files,
+)
 
 
 def _create_temporary_hf_model_cache(repo_id: str) -> Path:
