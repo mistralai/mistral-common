@@ -6,12 +6,15 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.testclient import TestClient
 
 from mistral_common.app.main import OpenAIChatCompletionRequest, Settings, create_app, get_settings
+from mistral_common.app.utils import find_content_tool_calls, split_integer_list_by_value
 from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, SystemMessage, UserMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.tool_calls import Function, Tool
 from mistral_common.protocol.instruct.validator import ValidationMode
-from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenizer, TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from mistral_common.tokens.tokenizers.tekken import Tekkenizer
+from tests.test_tekken import _quick_vocab, get_special_tokens
 
 
 @pytest.fixture(scope="module")
@@ -269,3 +272,65 @@ def test_detokenize_tokens(tokenizer_fixture: str, client_fixture: str, request:
         "/detokenize", json={"tokens": encoded_prompt, "special_token_policy": SpecialTokenPolicy.RAISE}
     )
     assert response_special_error.status_code == 400
+
+
+def test_split_integer_list_by_value() -> None:
+    # Test 1: One split
+    assert split_integer_list_by_value([1, 2, 3, 4, 5], 3), ([1, 2], [3, 4, 5])
+
+    # Test 2: No value
+    assert split_integer_list_by_value([1, 2, 3, 4, 5], 6), ([1, 2, 3, 4, 5],)
+
+    # Test 3: No split
+    assert split_integer_list_by_value([1, 2, 3, 4, 5], 1), [1, 2, 3, 4, 5]
+
+    # Test 4: Multiple splits
+    assert split_integer_list_by_value([1, 2, 3, 4, 5, 3, 5, 6, 7], 3), ([1, 2], [3, 4, 5], [3, 5, 6, 7])
+
+
+def test_find_content_tool_calls() -> None:
+    # Test 1: No tool calls
+    tokens = [1, 2, 3, 4, 5]
+    assert find_content_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ())
+
+    # Test 2: One tool call
+    tokens = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    assert find_content_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ([6, 7, 8, 9, 10],))
+
+    # Test 3: Multiple tool calls
+    tokens = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 6, 11, 12, 13, 14]
+    assert find_content_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ([6, 7, 8, 9, 10], [6, 11, 12, 13, 14]))
+
+    # Test 4: No content
+    tokens = [6, 7, 8, 9, 10]
+    assert find_content_tool_calls(tokens, 6) == ([], ([6, 7, 8, 9, 10],))
+
+@pytest.mark.parametrize(
+    "tokenizer", (
+        MistralTokenizer.v1().instruct_tokenizer.tokenizer,
+        MistralTokenizer.v2().instruct_tokenizer.tokenizer,
+        MistralTokenizer.v3().instruct_tokenizer.tokenizer,
+        MistralTokenizer.v7().instruct_tokenizer.tokenizer,
+        Tekkenizer(
+        _quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
+        special_tokens= get_special_tokens(TokenizerVersion.v11)
+,
+        pattern=r".+",  # single token, whole string
+        vocab_size=256 + 100,
+        num_special_tokens=100,
+        version=TokenizerVersion.v11,
+    ),
+    Tekkenizer(
+        _quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
+        special_tokens= get_special_tokens(TokenizerVersion.v13)
+,
+        pattern=r".+",  # single token, whole string
+        vocab_size=256 + 100,
+        num_special_tokens=100,
+        version=TokenizerVersion.v11,
+    )
+    )
+)
+def test_decode_tool_calls(tokenizer: Tokenizer) -> None:
+    # Test 1: No tool calls
+    pass    

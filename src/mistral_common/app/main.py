@@ -10,7 +10,8 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, ValidationError
 from pydantic_settings import BaseSettings
 
-from mistral_common.protocol.instruct.messages import ChatMessageType
+from mistral_common.app.utils import InvalidtoolCallError, decode_tool_call, find_content_tool_calls
+from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessageType
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenized
@@ -170,6 +171,38 @@ def detokenize_tokens(
         return settings.tokenizer.decode(tokens, special_token_policy=special_token_policy)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@decode_router.post("/assistant")
+def detokenize_to_assistant_message(
+    settings: Annotated[Settings, Depends(get_settings)],
+    tokens: list[int] = Body(default_factory=list),
+) -> AssistantMessage:
+    r"""Detokenize a list of tokens to an assistant message.
+
+    Parse tool calls from the tokens and extract content before the first tool call.
+    """
+    if len(tokens) == 0:
+        raise HTTPException(status_code=400, detail="Tokens list cannot be empty.")
+
+    content_tokens, tool_calls_tokens = find_content_tool_calls(
+        tokens, settings.tokenizer.instruct_tokenizer.tokenizer.get_control_token("[TOOL_CALLS]")
+    )
+
+    if content_tokens:
+        content = settings.tokenizer.decode(content_tokens, special_token_policy=SpecialTokenPolicy.IGNORE)
+    else:
+        content = None
+
+    if tool_calls_tokens:
+        try:
+            tool_calls = decode_tool_call(tool_calls_tokens, settings.tokenizer.instruct_tokenizer.tokenizer)
+        except InvalidtoolCallError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    else:
+        tool_calls = None
+
+    return AssistantMessage(content=content, tool_calls=tool_calls)
 
 
 def create_app(tokenizer_path: Union[str, Path], validation_mode: ValidationMode) -> FastAPI:
