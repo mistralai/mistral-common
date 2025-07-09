@@ -6,3 +6,4 @@ global-exclude *.pyc
 
 # Prune out any __pycache__ directories entirely
 prune src/mistral_common/**/__pycache__
+prune src/mistral_common/**/.mypy_cache

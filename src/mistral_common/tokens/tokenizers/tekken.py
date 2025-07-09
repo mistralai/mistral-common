@@ -311,7 +311,7 @@ class Tekkenizer(Tokenizer):
 
         warnings.warn(
             (
-                "The attributed `special_token_policy` is deprecated and will be removed in 1.7.0. "
+                "The attributed `special_token_policy` is deprecated and will be removed in 1.10.0. "
                 "Please pass a special token policy explicitly to the relevant methods."
             ),
             FutureWarning,
@@ -422,7 +422,7 @@ class Tekkenizer(Tokenizer):
             special_token_policy: The policy for handling special tokens.
                 Use the tokenizer's [attribute][mistral_common.tokens.tokenizers.tekken.Tekkenizer.special_token_policy]
                 if `None`. Passing `None` is deprecated and will be changed
-                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
+                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.10.0`.
 
         Returns:
             The decoded string.
@@ -436,7 +436,7 @@ class Tekkenizer(Tokenizer):
             warnings.warn(
                 (
                     f"Using the tokenizer's special token policy ({self._special_token_policy}) is deprecated. "
-                    "It will be removed in 1.7.0. "
+                    "It will be removed in 1.10.0. "
                     "Please pass a special token policy explicitly. "
                     "Future default will be SpecialTokenPolicy.IGNORE."
                 ),
@@ -455,7 +455,7 @@ class Tekkenizer(Tokenizer):
         """
         warnings.warn(
             (
-                "`to_string` is deprecated and will be removed in 1.7.0. "
+                "`to_string` is deprecated and will be removed in 1.10.0. "
                 "Use `decode` with `special_token_policy=SpecialTokenPolicy.KEEP` instead."
             ),
             FutureWarning,
@@ -477,7 +477,7 @@ class Tekkenizer(Tokenizer):
             special_token_policy: The policy for handling special tokens.
                 Use the tokenizer's [attribute][mistral_common.tokens.tokenizers.tekken.Tekkenizer.special_token_policy]
                 if `None`. Passing `None` is deprecated and will be changed
-                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
+                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.10.0`.
 
         Returns:
             The byte representation of the token.
@@ -486,7 +486,7 @@ class Tekkenizer(Tokenizer):
             warnings.warn(
                 (
                     f"Using the tokenizer's special token policy ({self._special_token_policy}) is deprecated. "
-                    "It will be removed in 1.7.0. "
+                    "It will be removed in 1.10.0. "
                     "Please pass a special token policy explicitly. "
                     "Future default will be SpecialTokenPolicy.IGNORE."
                 ),

@@ -185,7 +185,7 @@ class MistralTokenizer(
         Args:
             model: The model name.
             strict: Whether to use strict model name matching. If `False`, the model name is matched as a substring.
-                This is deprecated and will be removed in `mistral_common=1.7.0`.
+                This is deprecated and will be removed in `mistral_common=1.10.0`.
 
         Returns:
             The Mistral tokenizer for the given model.
@@ -194,13 +194,13 @@ class MistralTokenizer(
             warnings.warn(
                 "Calling `MistralTokenizer.from_model(..., strict=False)` is deprecated as it can lead to incorrect "
                 "tokenizers. It is strongly recommended to use MistralTokenizer.from_model(..., strict=True)` "
-                "which will become the default in `mistral_common=1.7.0`."
+                "which will become the default in `mistral_common=1.10.0`."
                 "If you are using `mistral_common` for open-sourced model weights, we recommend using "
                 "`MistralTokenizer.from_file('<path/to/tokenizer/file>')` instead.",
                 FutureWarning,
             )
 
-            # TODO(Delete this code in mistral_common >= 1.7.0
+            # TODO(Delete this code in mistral_common >= 1.10.0
             # Prefix search the model name mapping
             for model_name, tokenizer_cls in MODEL_NAME_TO_TOKENIZER_CLS.items():
                 if model_name in model.lower():
@@ -365,7 +365,7 @@ class MistralTokenizer(
         Args:
             tokens: The tokens to decode.
             special_token_policy: The policy to use for special tokens. Passing `None` is deprecated and will be changed
-                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
+                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.10.0`.
 
         Returns:
             The decoded string.
@@ -393,7 +393,7 @@ MODEL_NAME_TO_TOKENIZER_CLS: Dict[str, Callable[[], MistralTokenizer]] = {
     "codestral-2405": MistralTokenizer.v3,
     "codestral-mamba-2407": MistralTokenizer.v3,
     "pixtral-12b-2409": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
-    # The following are deprecated - only left for backward comp. Delete in >= 1.7.0
+    # The following are deprecated - only left for backward comp. Delete in >= 1.10.0
     "open-mistral-7b": MistralTokenizer.v1,
     "open-mixtral-8x7b": MistralTokenizer.v1,
     "mistral-embed": MistralTokenizer.v1,
