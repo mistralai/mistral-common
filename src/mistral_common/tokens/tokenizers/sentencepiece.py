@@ -157,7 +157,7 @@ class SentencePieceTokenizer(Tokenizer):
             tokens: The list of token ids.
             special_token_policy: The policy to use for special tokens. If `None`, the default policy
                 is `SpecialTokenPolicy.IGNORE`.  Passing `None` is deprecated and will be changed
-                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
+                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.10.0`.
 
         Returns:
             The decoded string.
@@ -171,7 +171,7 @@ class SentencePieceTokenizer(Tokenizer):
             warnings.warn(
                 (
                     "Using the tokenizer's special token policy `None` is deprecated. "
-                    "It will be removed in 1.7.0. "
+                    "It will be removed in 1.10.0. "
                     "Please pass a special token policy explicitly. "
                     "Future default will be SpecialTokenPolicy.IGNORE."
                 ),
@@ -218,7 +218,7 @@ class SentencePieceTokenizer(Tokenizer):
         """
         warnings.warn(
             (
-                "`to_string` is deprecated and will be removed in 1.7.0. "
+                "`to_string` is deprecated and will be removed in 1.10.0. "
                 "Use `decode` with `special_token_policy=SpecialTokenPolicy.KEEP` instead."
             ),
             FutureWarning,
