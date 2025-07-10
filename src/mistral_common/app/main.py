@@ -1,4 +1,5 @@
 import importlib.metadata
+import json
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, Optional, Union
@@ -10,12 +11,12 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, ValidationError
 from pydantic_settings import BaseSettings
 
-from mistral_common.app.utils import InvalidtoolCallError, decode_tool_calls, find_content_tool_calls
 from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessageType
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from mistral_common.tools import decode_tool_calls, find_content_tool_calls
 
 
 class OpenAIChatCompletionRequest(BaseModel):
@@ -182,6 +183,10 @@ def detokenize_tokens(
         raise HTTPException(status_code=400, detail="Tokens list cannot be empty.")
 
     if as_message:
+        if special_token_policy != SpecialTokenPolicy.IGNORE:
+            raise HTTPException(
+                status_code=400, detail="Special token policy must be IGNORE when detokenizing to message."
+            )
         return detokenize_to_assistant_message(settings, tokens)
 
     try:
@@ -219,7 +224,7 @@ def detokenize_to_assistant_message(
     if tool_calls_tokens:
         try:
             tool_calls = decode_tool_calls(tool_calls_tokens, settings.tokenizer.instruct_tokenizer.tokenizer)
-        except InvalidtoolCallError as e:
+        except (ValueError, json.JSONDecodeError) as e:
             raise HTTPException(status_code=400, detail=str(e))
     else:
         tool_calls = None
