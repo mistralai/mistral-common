@@ -29,7 +29,7 @@ def _split_integer_list_by_value(list_: List[int], value: int) -> Tuple[List[int
         >>> _split_integer_list_by_value([1, 2, 3, 4, 5], 6)
         ([1, 2, 3, 4, 5],)
         >>> _split_integer_list_by_value([1, 2, 3, 4, 5], 1)
-        ([1, 2, 3, 4, 5])
+        ([1, 2, 3, 4, 5],)
         >>> _split_integer_list_by_value([1, 2, 3, 4, 5, 3, 5, 6, 7], 3)
         ([1, 2], [3, 4, 5], [3, 5, 6, 7])
     """
