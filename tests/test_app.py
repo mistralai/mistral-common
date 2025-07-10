@@ -1,4 +1,4 @@
-from typing import Union
+from typing import List, Union
 
 import pytest
 from fastapi import FastAPI
@@ -6,28 +6,19 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.testclient import TestClient
 
 from mistral_common.app.main import OpenAIChatCompletionRequest, Settings, create_app, get_settings
-from mistral_common.app.utils import decode_tool_calls, find_content_tool_calls, split_integer_list_by_value
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
     SystemMessage,
-    ToolMessage,
     UserMessage,
 )
-from mistral_common.protocol.instruct.normalize import InstructRequestNormalizerV7, InstructRequestNormalizerV13
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.protocol.instruct.validator import (
-    MistralRequestValidatorV5,
-    MistralRequestValidatorV13,
     ValidationMode,
 )
-from mistral_common.tokens.instruct.request import InstructRequest
-from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, TokenizerVersion
-from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV11, InstructTokenizerV13
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-from tests.test_tekken import _quick_vocab, get_special_tokens
 
 
 @pytest.fixture(scope="module")
@@ -287,143 +278,74 @@ def test_detokenize_tokens(tokenizer_fixture: str, client_fixture: str, request:
     assert response_special_error.status_code == 400
 
 
-def test_split_integer_list_by_value() -> None:
-    # Test 1: One split
-    assert split_integer_list_by_value([1, 2, 3, 4, 5], 3), ([1, 2], [3, 4, 5])
-
-    # Test 2: No value
-    assert split_integer_list_by_value([1, 2, 3, 4, 5], 6), ([1, 2, 3, 4, 5],)
-
-    # Test 3: No split
-    assert split_integer_list_by_value([1, 2, 3, 4, 5], 1), [1, 2, 3, 4, 5]
-
-    # Test 4: Multiple splits
-    assert split_integer_list_by_value([1, 2, 3, 4, 5, 3, 5, 6, 7], 3), ([1, 2], [3, 4, 5], [3, 5, 6, 7])
-
-
-def test_find_content_tool_calls() -> None:
-    # Test 1: No tool calls
-    tokens = [1, 2, 3, 4, 5]
-    assert find_content_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ())
-
-    # Test 2: One tool call
-    tokens = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    assert find_content_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ([6, 7, 8, 9, 10],))
-
-    # Test 3: Multiple tool calls
-    tokens = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 6, 11, 12, 13, 14]
-    assert find_content_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ([6, 7, 8, 9, 10], [6, 11, 12, 13, 14]))
-
-    # Test 4: No content
-    tokens = [6, 7, 8, 9, 10]
-    assert find_content_tool_calls(tokens, 6) == ([], ([6, 7, 8, 9, 10],))
-
-
 @pytest.mark.parametrize(
-    "tokenizer",
-    (
-        MistralTokenizer.v2(),
-        MistralTokenizer.v3(),
-        MistralTokenizer.v7(),
-        MistralTokenizer(
-            instruct_tokenizer=InstructTokenizerV11(
-                Tekkenizer(
-                    _quick_vocab(
-                        [
-                            b"Hello",
-                            b",",
-                            b" ",
-                            b"world",
-                            b"!",
-                            b"How",
-                            b"can",
-                            b"I",
-                            b"assist",
-                            b"you",
-                            b"today",
-                            b"?",
-                            b'"',
-                            b"a",
-                            b"b",
-                            b"c",
-                            b"d",
-                            b"{",
-                            b"}",
-                            b":",
-                        ]
-                    ),
-                    special_tokens=get_special_tokens(TokenizerVersion.v11),
-                    pattern=r".+",  # single token, whole string
-                    vocab_size=256 + 100,
-                    num_special_tokens=100,
-                    version=TokenizerVersion.v11,
-                ),
-            ),
-            validator=MistralRequestValidatorV5(),
-            request_normalizer=InstructRequestNormalizerV7(
-                UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest
-            ),
-        ),
-        MistralTokenizer(
-            instruct_tokenizer=InstructTokenizerV13(
-                Tekkenizer(
-                    _quick_vocab(
-                        [
-                            b"Hello",
-                            b",",
-                            b" ",
-                            b"world",
-                            b"!",
-                            b"How",
-                            b"can",
-                            b"I",
-                            b"assist",
-                            b"you",
-                            b"today",
-                            b"?",
-                            b'"',
-                            b"a",
-                            b"b",
-                            b"c",
-                            b"d",
-                            b"{",
-                            b"}",
-                            b"1",
-                            b"2",
-                            b"call",
-                            b"_",
-                            b":",
-                        ]
-                    ),
-                    special_tokens=get_special_tokens(TokenizerVersion.v13),
-                    pattern=r".+",  # single token, whole string
-                    vocab_size=256 + 100,
-                    num_special_tokens=100,
-                    version=TokenizerVersion.v11,
-                )
-            ),
-            validator=MistralRequestValidatorV13(),
-            request_normalizer=InstructRequestNormalizerV13(
-                UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest
-            ),
-        ),
-    ),
+    ["tokenizer_fixture", "client_fixture"], [("tekken_tokenizer", "tekken_client"), ("spm_tokenizer", "spm_client")]
 )
-def test_decode_tool_calls(tokenizer: MistralTokenizer) -> None:
+def test_detokenize_assistant_message(
+    tokenizer_fixture: str, client_fixture: str, request: pytest.FixtureRequest
+) -> None:
+    # Test 1:
+    # Detokenize only content
+    tokenizer: MistralTokenizer = request.getfixturevalue(tokenizer_fixture)
+    client: TestClient = request.getfixturevalue(client_fixture)
+    content = "Hello, world!"
+    encoded_content = tokenizer.instruct_tokenizer.tokenizer.encode(content, bos=True, eos=True)
+    response = client.post("/detokenize/", json={"tokens": encoded_content, "as_message": True})
+    assert response.status_code == 200
+
+    assert AssistantMessage.model_validate(response.json()) == AssistantMessage(content=content)
+
+    # Test 2:
+    # Detokenize content and tool calls
+    content = "Hello, world!"
     tool_calls = [
-        ToolCall(id="call_1", function=FunctionCall(name="ab", arguments="{}")),
-        ToolCall(id="call_2", function=FunctionCall(name="cd", arguments='{"a": "b", "c": "d"}')),
+        ToolCall(
+            id="call_1",
+            function=FunctionCall(name="get_current_weather", arguments='{"location": "Paris"}'),
+        ),
+        ToolCall(
+            id="call_2",
+            function=FunctionCall(
+                name="git_clone", arguments='{"repository": "https://github.com/mistralai/mistral-common"}'
+            ),
+        ),
     ]
-
-    encoded_tool_calls = tokenizer.instruct_tokenizer._encode_tool_calls_in_assistant_message( # type: ignore[attr-defined]
+    encoded_content = tokenizer.instruct_tokenizer.tokenizer.encode(content, bos=True, eos=True)
+    encoded_tool_calls: List[int] = tokenizer.instruct_tokenizer._encode_tool_calls_in_assistant_message(  # type: ignore[attr-defined]
         AssistantMessage(tool_calls=tool_calls)
     )
+    encoded_tokens = encoded_content + encoded_tool_calls
 
-    print(encoded_tool_calls)
-    print(tokenizer.decode(encoded_tool_calls, SpecialTokenPolicy.KEEP))
+    response = client.post("/detokenize/", json={"tokens": encoded_tokens, "as_message": True})
+    assert response.status_code == 200
+    assert AssistantMessage.model_validate(response.json()) == AssistantMessage(content=content, tool_calls=tool_calls)
 
-    encoded_tool_calls = tokenizer.instruct_tokenizer._encode_tool_calls_in_assistant_message( # type: ignore[attr-defined]
+    # Test 3:
+    # Detokenize only tool calls
+    encoded_tokens = tokenizer.instruct_tokenizer._encode_tool_calls_in_assistant_message(  # type: ignore[attr-defined]
         AssistantMessage(tool_calls=tool_calls)
     )
+    response = client.post("/detokenize/", json={"tokens": encoded_tokens, "as_message": True})
+    assert response.status_code == 200
+    assert AssistantMessage.model_validate(response.json()) == AssistantMessage(tool_calls=tool_calls)
 
-    assert decode_tool_calls(encoded_tool_calls, tokenizer.instruct_tokenizer.tokenizer) == tool_calls
+    # Test 4:
+    # Detokenize empty tokens
+    response = client.post("/detokenize/", json={"tokens": [], "as_message": True})
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Tokens list cannot be empty."
+
+    # Test 5:
+    # Detokenize tokens with special token policy not ignore.
+    response = client.post(
+        "/detokenize/",
+        json={"tokens": encoded_tokens, "as_message": True, "special_token_policy": SpecialTokenPolicy.KEEP},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Special token policy must be IGNORE when detokenizing to message."
+
+    # Test 6:
+    # Wrong tool call format
+    response = client.post("/detokenize/", json={"tokens": encoded_tool_calls[:-1], "as_message": True})
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid tool call tokenization. Expected a JSON list of tool calls."
