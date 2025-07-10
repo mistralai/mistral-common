@@ -6,12 +6,25 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.testclient import TestClient
 
 from mistral_common.app.main import OpenAIChatCompletionRequest, Settings, create_app, get_settings
-from mistral_common.app.utils import find_content_tool_calls, split_integer_list_by_value
-from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, SystemMessage, UserMessage
+from mistral_common.app.utils import decode_tool_calls, find_content_tool_calls, split_integer_list_by_value
+from mistral_common.protocol.instruct.messages import (
+    AssistantMessage,
+    ChatMessage,
+    SystemMessage,
+    ToolMessage,
+    UserMessage,
+)
+from mistral_common.protocol.instruct.normalize import InstructRequestNormalizerV7, InstructRequestNormalizerV13
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
-from mistral_common.protocol.instruct.tool_calls import Function, Tool
-from mistral_common.protocol.instruct.validator import ValidationMode
-from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenizer, TokenizerVersion
+from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
+from mistral_common.protocol.instruct.validator import (
+    MistralRequestValidatorV5,
+    MistralRequestValidatorV13,
+    ValidationMode,
+)
+from mistral_common.tokens.instruct.request import InstructRequest
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, TokenizerVersion
+from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV11, InstructTokenizerV13
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import _quick_vocab, get_special_tokens
@@ -305,32 +318,112 @@ def test_find_content_tool_calls() -> None:
     tokens = [6, 7, 8, 9, 10]
     assert find_content_tool_calls(tokens, 6) == ([], ([6, 7, 8, 9, 10],))
 
+
 @pytest.mark.parametrize(
-    "tokenizer", (
-        MistralTokenizer.v1().instruct_tokenizer.tokenizer,
-        MistralTokenizer.v2().instruct_tokenizer.tokenizer,
-        MistralTokenizer.v3().instruct_tokenizer.tokenizer,
-        MistralTokenizer.v7().instruct_tokenizer.tokenizer,
-        Tekkenizer(
-        _quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
-        special_tokens= get_special_tokens(TokenizerVersion.v11)
-,
-        pattern=r".+",  # single token, whole string
-        vocab_size=256 + 100,
-        num_special_tokens=100,
-        version=TokenizerVersion.v11,
+    "tokenizer",
+    (
+        MistralTokenizer.v2(),
+        MistralTokenizer.v3(),
+        MistralTokenizer.v7(),
+        MistralTokenizer(
+            instruct_tokenizer=InstructTokenizerV11(
+                Tekkenizer(
+                    _quick_vocab(
+                        [
+                            b"Hello",
+                            b",",
+                            b" ",
+                            b"world",
+                            b"!",
+                            b"How",
+                            b"can",
+                            b"I",
+                            b"assist",
+                            b"you",
+                            b"today",
+                            b"?",
+                            b'"',
+                            b"a",
+                            b"b",
+                            b"c",
+                            b"d",
+                            b"{",
+                            b"}",
+                            b":",
+                        ]
+                    ),
+                    special_tokens=get_special_tokens(TokenizerVersion.v11),
+                    pattern=r".+",  # single token, whole string
+                    vocab_size=256 + 100,
+                    num_special_tokens=100,
+                    version=TokenizerVersion.v11,
+                ),
+            ),
+            validator=MistralRequestValidatorV5(),
+            request_normalizer=InstructRequestNormalizerV7(
+                UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest
+            ),
+        ),
+        MistralTokenizer(
+            instruct_tokenizer=InstructTokenizerV13(
+                Tekkenizer(
+                    _quick_vocab(
+                        [
+                            b"Hello",
+                            b",",
+                            b" ",
+                            b"world",
+                            b"!",
+                            b"How",
+                            b"can",
+                            b"I",
+                            b"assist",
+                            b"you",
+                            b"today",
+                            b"?",
+                            b'"',
+                            b"a",
+                            b"b",
+                            b"c",
+                            b"d",
+                            b"{",
+                            b"}",
+                            b"1",
+                            b"2",
+                            b"call",
+                            b"_",
+                            b":",
+                        ]
+                    ),
+                    special_tokens=get_special_tokens(TokenizerVersion.v13),
+                    pattern=r".+",  # single token, whole string
+                    vocab_size=256 + 100,
+                    num_special_tokens=100,
+                    version=TokenizerVersion.v11,
+                )
+            ),
+            validator=MistralRequestValidatorV13(),
+            request_normalizer=InstructRequestNormalizerV13(
+                UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest
+            ),
+        ),
     ),
-    Tekkenizer(
-        _quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
-        special_tokens= get_special_tokens(TokenizerVersion.v13)
-,
-        pattern=r".+",  # single token, whole string
-        vocab_size=256 + 100,
-        num_special_tokens=100,
-        version=TokenizerVersion.v11,
-    )
-    )
 )
-def test_decode_tool_calls(tokenizer: Tokenizer) -> None:
-    # Test 1: No tool calls
-    pass    
+def test_decode_tool_calls(tokenizer: MistralTokenizer) -> None:
+    tool_calls = [
+        ToolCall(id="call_1", function=FunctionCall(name="ab", arguments="{}")),
+        ToolCall(id="call_2", function=FunctionCall(name="cd", arguments='{"a": "b", "c": "d"}')),
+    ]
+
+    encoded_tool_calls = tokenizer.instruct_tokenizer._encode_tool_calls_in_assistant_message( # type: ignore[attr-defined]
+        AssistantMessage(tool_calls=tool_calls)
+    )
+
+    print(encoded_tool_calls)
+    print(tokenizer.decode(encoded_tool_calls, SpecialTokenPolicy.KEEP))
+
+    encoded_tool_calls = tokenizer.instruct_tokenizer._encode_tool_calls_in_assistant_message( # type: ignore[attr-defined]
+        AssistantMessage(tool_calls=tool_calls)
+    )
+
+    assert decode_tool_calls(encoded_tool_calls, tokenizer.instruct_tokenizer.tokenizer) == tool_calls

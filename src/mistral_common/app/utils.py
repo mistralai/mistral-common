@@ -61,12 +61,13 @@ def find_content_tool_calls(tokens: List[int], tool_call_token_id: int) -> tuple
     return content_tokens, tools_calls_tokens
 
 
-def decode_tool_call(tool_call_tokens: Sequence[list[int]], tokenizer: Tokenizer) -> List[ToolCall]:
+def decode_tool_calls(tool_call_tokens: Sequence[list[int]], tokenizer: Tokenizer) -> List[ToolCall]:
     r"""Decode a list of tool call tokens into a list of tool calls."""
     tools_calls = []
     for tool_call in tool_call_tokens:
-        if tokenizer.version in [
-            TokenizerVersion.v1,
+        if tokenizer.version == TokenizerVersion.v1:
+            raise InvalidtoolCallError("Tool calls are not supported for tokenizer version v1.")
+        elif tokenizer.version in [
             TokenizerVersion.v2,
             TokenizerVersion.v3,
             TokenizerVersion.v7,

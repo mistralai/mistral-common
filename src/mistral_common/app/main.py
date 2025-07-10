@@ -10,7 +10,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, ValidationError
 from pydantic_settings import BaseSettings
 
-from mistral_common.app.utils import InvalidtoolCallError, decode_tool_call, find_content_tool_calls
+from mistral_common.app.utils import InvalidtoolCallError, decode_tool_calls, find_content_tool_calls
 from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessageType
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import ValidationMode
@@ -161,11 +161,28 @@ def tokenize_request(
 def detokenize_tokens(
     settings: Annotated[Settings, Depends(get_settings)],
     tokens: list[int] = Body(default_factory=list),
+    as_message: bool = Body(default=False),
     special_token_policy: SpecialTokenPolicy = Body(default=SpecialTokenPolicy.IGNORE),
-) -> str:
-    r"""Detokenize a list of tokens."""
+) -> Union[str, AssistantMessage]:
+    r"""Detokenize a list of tokens.
+
+    If `as_message` is `True`, the tokens are detokenized to an assistant message. It will parse tool calls from the
+    tokens and extract content before the first tool call.
+    Otherwise, the tokens are detokenized to a string.
+
+    Args:
+        tokens: The tokens to detokenize.
+        as_message: Whether to detokenize to an assistant message.
+        special_token_policy: The policy to use for special tokens.
+
+    Returns:
+        The detokenized string or assistant message.
+    """
     if len(tokens) == 0:
         raise HTTPException(status_code=400, detail="Tokens list cannot be empty.")
+
+    if as_message:
+        return detokenize_to_assistant_message(settings, tokens)
 
     try:
         return settings.tokenizer.decode(tokens, special_token_policy=special_token_policy)
@@ -173,7 +190,6 @@ def detokenize_tokens(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@decode_router.post("/assistant")
 def detokenize_to_assistant_message(
     settings: Annotated[Settings, Depends(get_settings)],
     tokens: list[int] = Body(default_factory=list),
@@ -181,6 +197,12 @@ def detokenize_to_assistant_message(
     r"""Detokenize a list of tokens to an assistant message.
 
     Parse tool calls from the tokens and extract content before the first tool call.
+
+    Args:
+        tokens: The tokens to detokenize.
+
+    Returns:
+        The detokenized assistant message.
     """
     if len(tokens) == 0:
         raise HTTPException(status_code=400, detail="Tokens list cannot be empty.")
@@ -196,7 +218,7 @@ def detokenize_to_assistant_message(
 
     if tool_calls_tokens:
         try:
-            tool_calls = decode_tool_call(tool_calls_tokens, settings.tokenizer.instruct_tokenizer.tokenizer)
+            tool_calls = decode_tool_calls(tool_calls_tokens, settings.tokenizer.instruct_tokenizer.tokenizer)
         except InvalidtoolCallError as e:
             raise HTTPException(status_code=400, detail=str(e))
     else:
