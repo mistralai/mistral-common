@@ -16,7 +16,7 @@ from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tools import decode_tool_calls, find_content_tool_calls
+from mistral_common.tools import decode_tool_calls, split_content_and_tool_calls
 
 
 class OpenAIChatCompletionRequest(BaseModel):
@@ -212,7 +212,7 @@ def detokenize_to_assistant_message(
     if len(tokens) == 0:
         raise HTTPException(status_code=400, detail="Tokens list cannot be empty.")
 
-    content_tokens, tool_calls_tokens = find_content_tool_calls(
+    content_tokens, tool_calls_tokens = split_content_and_tool_calls(
         tokens, settings.tokenizer.instruct_tokenizer.tokenizer.get_control_token("[TOOL_CALLS]")
     )
 
