@@ -16,7 +16,7 @@ from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tools import decode_tool_calls, split_content_and_tool_calls
+from mistral_common.tokens.tokenizers.tools import decode_tool_calls, split_content_and_tool_calls
 
 
 class OpenAIChatCompletionRequest(BaseModel):
