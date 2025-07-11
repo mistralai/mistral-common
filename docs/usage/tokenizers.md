@@ -66,7 +66,7 @@ Special tokens are tokens that have a special meaning for the model. They are us
 - `[IMG_END]`: End of an image
 - ...
 
-These tokens are defined in the tokenizer configuration file (recommended) or at instantiation for the [Tekkenizer](mistral_common.tokens.tokenizers.tekken.Tekkenizer) (deprecated).
+These tokens are defined in the tokenizer configuration file (recommended) or at instantiation for the [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer] (deprecated).
 
 In `mistral-common`, special tokens are never encoded directly. This means that:
 
