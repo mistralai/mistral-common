@@ -46,7 +46,6 @@ jobs:
       - name: Install Dependencies
         run: |
           uv sync --frozen --all-extras --group dev
-          uv pip install --editable .
 
       # Ruff Linter
       - name: Ruff Linter
