@@ -79,7 +79,8 @@ def _get_audio_chunk() -> AudioChunk:
 
     audio = Audio(audio_array=data, sampling_rate=sr, format="wav")
 
-    return AudioChunk.from_audio(audio)
+    raw_audio = RawAudio.from_audio(audio)
+    return AudioChunk(input_audio=raw_audio)
 
 DUMMY_AUDIO_CHUNK = _get_audio_chunk()
 

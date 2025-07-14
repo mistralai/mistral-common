@@ -30,7 +30,7 @@ def tekkenizer() -> InstructTokenizerV7:
 def get_transcription_request(duration: float, language: Optional[str] = None) -> AudioChunk:
     audio_chunk = _get_audio_chunk(duration)
 
-    return TranscriptionRequest(model="dummy", audio=audio_chunk, language=language)
+    return TranscriptionRequest(model="dummy", audio=audio_chunk.input_audio, language=language)
 
 
 def test_tokenize_transcribe(tekkenizer: InstructTokenizerV7) -> None:
@@ -54,7 +54,7 @@ def test_tokenize_transcribe(tekkenizer: InstructTokenizerV7) -> None:
     ]
     assert tokenized.text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST][TRANSCRIBE]")
     assert len(tokenized.audios) == 1
-    audio_array = Audio.from_base64(request.audio.input_audio.data).audio_array
+    audio_array = Audio.from_base64(request.audio.data).audio_array
     assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)
 
 
@@ -86,5 +86,5 @@ def test_tokenize_transcribe_with_lang(tekkenizer: InstructTokenizerV7) -> None:
     ]
     assert tokenized.text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]lang:en[TRANSCRIBE]")
     assert len(tokenized.audios) == 1
-    audio_array = Audio.from_base64(request.audio.input_audio.data).audio_array
+    audio_array = Audio.from_base64(request.audio.data).audio_array
     assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)

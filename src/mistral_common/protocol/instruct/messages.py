@@ -152,6 +152,14 @@ class RawAudio(MistralBase):
     format: str
     duration: Optional[float] = None
 
+    @classmethod
+    def from_audio(cls, audio: Audio) -> "AudioChunk":
+        format = audio.format
+        duration = audio.duration
+        data = audio.to_base64(format)
+
+        return cls(data=data, format=format, duration=duration)
+
     @validator("format")
     def should_not_be_empty(cls, v: str) -> str:
         if v not in EXPECTED_FORMAT_VALUES:
@@ -171,16 +179,6 @@ class AudioChunk(BaseContentChunk):
             raise ValueError(f"`InputAudio` should not be empty. Got: {v}`")
 
         return v
-
-    @classmethod
-    def from_audio(cls, audio: Audio) -> "AudioChunk":
-        format = audio.format
-        duration = audio.duration
-        data = audio.to_base64(format)
-
-        raw_audio = RawAudio(data=data, format=format, duration=duration)
-
-        return cls(input_audio=raw_audio)
 
     def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
         r"""Converts the chunk to the OpenAI format."""
