@@ -220,7 +220,7 @@ class InstructTokenizerBase(
                 [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer] and `SpecialTokenPolicy.IGNORE`
                 for [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer].
                 Note that passing `None` will be deprecated and `special_token_policy` will default to
-                `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
+                `SpecialTokenPolicy.IGNORE` in `mistral_common=1.10.0`.
 
         Returns:
             The decoded string.
