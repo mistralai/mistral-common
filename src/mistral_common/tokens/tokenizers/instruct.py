@@ -58,6 +58,7 @@ class InstructTokenizerBase(
         Args:
             tokenizer: The tokenizer to use.
             image_encoder: The image encoder to use if any.
+            audio_encoder: The audio encoder to use.
         """
         self.tokenizer = tokenizer
         self.image_encoder = image_encoder
@@ -834,6 +835,20 @@ class InstructTokenizerV7(InstructTokenizerV3):
         return tokens, images, audio
 
     def encode_transcription(self, request: TranscriptionRequest) -> Tokenized:
+        r"""
+        Encodes an audio transcription request into a tokenized format.
+
+        This method processes a transcription request containing audio data,
+        encodes the user message, and returns the tokenized output.
+
+        Args:
+            request: The transcription request object containing
+                the audio data to be encoded.
+
+        Returns:
+            Tokenized: The tokenized representation of the audio data, including processed audio and tokens
+        """
+
         prefix = self.start()
         tokens, _, audio = self.encode_user_message(
             UserMessage(content=[AudioChunk(input_audio=request.audio)]),

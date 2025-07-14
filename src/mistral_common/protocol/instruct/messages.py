@@ -145,12 +145,30 @@ class ImageURLChunk(BaseContentChunk):
 
 
 class RawAudio(MistralBase):
-    # Base64 encoded audio data.
+    r"""Base64 encoded audio data.
+
+    This class represents raw audio data encoded in base64 format.
+
+    Attributes:
+        data: The base64 encoded audio data, which can be a string or bytes.
+        format: The format of the audio data.
+
+    Examples:
+        >>> audio = RawAudio(data="base64_encoded_audio_data", format="mp3")
+    """
     data: str | bytes
     format: str
 
     @classmethod
     def from_audio(cls, audio: Audio) -> "AudioChunk":
+        """Creates a RawAudio instance from an Audio object.
+
+        Args:
+            audio: An Audio object containing audio data, format, and duration.
+
+        Returns:
+            An AudioChunk instance initialized with the audio data.
+        """
         format = audio.format
         duration = audio.duration
         data = audio.to_base64(format)
@@ -167,6 +185,17 @@ class RawAudio(MistralBase):
 
 
 class AudioChunk(BaseContentChunk):
+    r"""Audio chunk containing raw audio data.
+
+    This class represents a chunk of audio data that can be used as input.
+
+    Attributes:
+        type: The type of the chunk, which is always ChunkTypes.input_audio.
+        input_audio: The RawAudio object containing the audio data.
+
+    Examples:
+        >>> audio_chunk = AudioChunk(input_audio=RawAudio(data="base64_encoded_audio_data", format="mp3"))
+    """
     type: Literal[ChunkTypes.input_audio] = ChunkTypes.input_audio
     input_audio: RawAudio
 
@@ -179,15 +208,34 @@ class AudioChunk(BaseContentChunk):
 
     @classmethod
     def from_audio(cls, audio: Audio) -> "AudioChunk":
+        """Creates an AudioChunk instance from an Audio object.
+
+        Args:
+            audio: An Audio object containing audio data.
+
+        Returns:
+            An AudioChunk instance initialized with the audio data.
+        """
         return cls(input_audio=RawAudio.from_audio(audio))
 
     def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
-        r"""Converts the chunk to the OpenAI format."""
+        r"""Converts the chunk to the OpenAI format.
+
+        Returns:
+            A dictionary representing the audio chunk in the OpenAI format.
+        """
         return self.model_dump()
 
     @classmethod
     def from_openai(cls, openai_chunk: Dict[str, Union[Optional[str], Dict[str, Optional[str]]]]) -> "TextChunk":
-        r"""Converts the OpenAI chunk to the Mistral format."""
+        r"""Converts the OpenAI chunk to the Mistral format.
+
+        Args:
+            openai_chunk: A dictionary representing the audio chunk in the OpenAI format.
+
+        Returns:
+            An AudioChunk instance initialized with the data from the OpenAI chunk.
+        """
         return cls.model_validate(openai_chunk)
 
 

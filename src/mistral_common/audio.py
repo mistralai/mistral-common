@@ -56,6 +56,13 @@ EXPECTED_FORMAT_VALUES = [v.value.lower() for v in AudioFormat.__members__.value
 
 class Audio:
     def __init__(self, audio_array: np.ndarray, sampling_rate: int, format: str) -> None:
+        """Initialize an Audio instance with audio data, sampling rate, and format.
+
+        Args:
+            audio_array: The audio data as a numpy array.
+            sampling_rate: The sampling rate of the audio in Hz.
+            format: The format of the audio file.
+        """
         self.audio_array = audio_array
         self.sampling_rate = sampling_rate
         self.format = format
@@ -79,11 +86,25 @@ class Audio:
 
     @property
     def duration(self) -> float:
+        """Calculate the duration of the audio in seconds.
+
+        Returns:
+            float: The duration of the audio in seconds.
+        """
         # in seconds
         return self.audio_array.shape[0] / self.sampling_rate
 
     @staticmethod
     def from_base64(audio_base64: str, strict: bool = True) -> "Audio":
+        """Create an Audio instance from a base64 encoded string.
+
+        Args:
+            audio_base64: The base64 encoded audio data.
+            strict: Whether to strictly enforce mono audio. Defaults to True.
+
+        Returns:
+            Audio: An instance of the Audio class.
+        """
         if not is_soundfile_installed():
             raise ImportError(
                 "soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'"
@@ -94,6 +115,15 @@ class Audio:
 
     @staticmethod
     def from_file(file: str, strict: bool = True) -> "Audio":
+        """Create an Audio instance from an audio file.
+
+        Args:
+            file: Path to the audio file.
+            strict: Whether to strictly enforce mono audio. Defaults to True.
+
+        Returns:
+            Audio: An instance of the Audio class.
+        """
         if not is_soundfile_installed():
             raise ImportError(
                 "soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'"
@@ -108,6 +138,15 @@ class Audio:
 
     @staticmethod
     def from_bytes(audio_bytes: bytes, strict: bool = True) -> "Audio":
+        """Create an Audio instance from bytes.
+
+        Args:
+            audio_bytes: The audio data as bytes.
+            strict: Whether to strictly enforce mono audio. Defaults to True.
+
+        Returns:
+            Audio: An instance of the Audio class.
+        """
         # Read the bytes into an audio file.
         with io.BytesIO(audio_bytes) as audio_file:
             with sf.SoundFile(audio_file) as f:
@@ -128,6 +167,14 @@ class Audio:
         return Audio(audio_array=audio_array, sampling_rate=sampling_rate, format=format)
 
     def to_base64(self, format: str) -> str:
+        """Convert the audio data to a base64 encoded string.
+
+        Args:
+            format: The format to encode the audio in.
+
+        Returns:
+            str: The base64 encoded audio data.
+        """
         if not is_soundfile_installed():
             raise ImportError(
                 "soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'"
@@ -142,6 +189,14 @@ class Audio:
 
     @staticmethod
     def from_raw_audio(audio: "RawAudio") -> "Audio":
+        """Create an Audio instance from a RawAudio object.
+
+        Args:
+            audio: The RawAudio object containing audio data.
+
+        Returns:
+            Audio: An instance of the Audio class.
+        """
         if isinstance(audio.data, bytes):
             return Audio.from_bytes(audio.data)
         elif isinstance(audio.data, str):
@@ -151,7 +206,11 @@ class Audio:
 
 
     def resample(self, new_sampling_rate: int) -> None:
-        """Resample audio data to a new sampling rate."""
+        """Resample audio data to a new sampling rate.
+
+        Args:
+            new_sampling_rate: The new sampling rate to resample the audio to.
+        """
         if self.sampling_rate == new_sampling_rate:
             return
 
@@ -166,8 +225,7 @@ def hertz_to_mel(freq: float | np.ndarray) -> float | np.ndarray:
     """
     Convert frequency from hertz to mels using the "slaney" mel-scale.
     Args:
-        freq (`float` or `np.ndarray`):
-            The frequency, or multiple frequencies, in hertz (Hz).
+        freq: The frequency, or multiple frequencies, in hertz (Hz).
     Returns:
         `float` or `np.ndarray`: The frequencies on the mel scale.
     """
@@ -230,6 +288,24 @@ def mel_filter_bank(
     max_frequency: float,
     sampling_rate: int,
 ) -> np.ndarray:
+    r"""
+    Create a Mel filter bank matrix for converting frequency bins to the Mel scale.
+
+    This function generates a filter bank matrix that can be used to transform a
+    spectrum represented in frequency bins to the Mel scale. The Mel scale is a
+    perceptual scale of pitches judged by listeners to be equal in distance from one another.
+
+    Args:
+        num_frequency_bins: The number of frequency bins in the input spectrum.
+        num_mel_bins: The number of desired Mel bins in the output.
+        min_frequency: The minimum frequency (in Hz) to consider.
+        max_frequency: The maximum frequency (in Hz) to consider.
+        sampling_rate: The sampling rate of the audio signal.
+
+    Returns:
+        np.ndarray: A filter bank matrix of shape (num_mel_bins, num_frequency_bins)
+                  that can be used to project frequency bin energies onto Mel bins.
+    """
     if num_frequency_bins < 2:
         raise ValueError(f"Require num_frequency_bins: {num_frequency_bins} >= 2")
 

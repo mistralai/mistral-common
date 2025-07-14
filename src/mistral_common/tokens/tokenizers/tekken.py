@@ -296,6 +296,11 @@ class Tekkenizer(Tokenizer):
 
     @property
     def audio(self) -> Optional[AudioConfig]:
+        r"""The audio configuration of the tokenizer.
+
+        Returns:
+            Optional[AudioConfig]: The audio configuration object if it exists, otherwise None.
+        """
         return self._audio_config
 
     @audio.setter

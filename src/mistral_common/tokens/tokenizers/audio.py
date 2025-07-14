@@ -13,6 +13,14 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class AudioSpectrogramConfig:
+    """
+    Configuration for generating an audio spectrogram.
+
+    Attributes:
+        num_mel_bins: Number of mel bins, typically 80 or 128.
+        hop_length: Length of the overlapping windows for the STFT used to obtain the Mel Frequency coefficients, typically 160.
+        window_size: Window size of the Fourier transform, typically 400.
+    """
     # Number of mel bins, typically 80 or 128
     num_mel_bins: int
     # Length of the overlapping windows for the STFT used to obtain the Mel Frequency coefficients, typically 160
@@ -28,6 +36,15 @@ class AudioSpectrogramConfig:
 
 @dataclass
 class AudioConfig:
+    """
+    Configuration for audio processing.
+
+    Attributes:
+        sampling_rate: Sampling rate of the audio.
+        frame_rate: Number of frames per second accepted by the tokenizer model.
+        audio_encoding_config: Configuration for audio spectrogram.
+        chunk_length_s: Whether to pad an audio into multiples of chunk_length_s seconds (optional).
+    """
     sampling_rate: int
     # number of frames per second accepted by the tokenizer model.
     frame_rate: float
@@ -47,11 +64,13 @@ class AudioConfig:
 
     @property
     def chunk_frames(self) -> int:
+        """Calculate the number of frames per chunk."""
         assert self.chunk_length_s is not None, f"Can't call chunk_frames if {self.chunk_length_s=}."
         return int(self.chunk_length_s * self.sampling_rate)
 
     @property
     def audio_length_per_tok(self) -> int:
+        """Calculate the length of audio per token."""
         downsample_factor = self.sampling_rate // self.frame_rate
         downsample_factor /= self.audio_encoding_config.hop_length
         return int(downsample_factor)
@@ -59,6 +78,13 @@ class AudioConfig:
 
 @dataclass
 class AudioEncoding:
+    """
+    Encapsulates the tokens and audio data for an audio chunk.
+
+    Attributes:
+        tokens: Text tokens corresponding to this audio chunk.
+        audio: Original audio waveform data.
+    """
     # Text tokens corresponding to this audio chunk
     tokens: List[int]
     # Original audio waveform data.
@@ -67,19 +93,43 @@ class AudioEncoding:
 
 @dataclass
 class SpecialAudioIDs:
-    r"""Special text tokens corresponding to audio token sequence."""
+    r"""
+    Special text tokens corresponding to audio token sequence.
+
+    Attributes:
+        audio: Token representing audio.
+        begin_audio: Token representing the beginning of audio.
+    """
 
     audio: int
     begin_audio: int
 
 
 class AudioEncoder:
+    """
+    Encodes audio chunks into a format suitable for further processing.
+
+    Attributes:
+        audio_config: Configuration for audio processing.
+        encoding_config: Configuration for audio spectrogram.
+        special_ids: Special tokens for audio encoding.
+    """
     def __init__(self, audio_config: AudioConfig, special_ids: SpecialAudioIDs) -> None:
         self.audio_config = audio_config
         self.encoding_config = audio_config.audio_encoding_config
         self.special_ids = special_ids
 
     def pad(self, audio_array: np.ndarray, sampling_rate: int) -> np.ndarray:
+        """
+        Pad the audio array to the desired length.
+
+        Args:
+            audio_array: Audio data as a numpy array.
+            sampling_rate: Sampling rate of the audio.
+
+        Returns:
+            np.ndarray: Padded audio array.
+        """
         if self.audio_config.chunk_length_s:
             next_multiple_of_chunk_frames = self.next_multiple_of_chunk_frames(audio_array.shape[-1], sampling_rate)
             audio_array = np.pad(
@@ -94,6 +144,16 @@ class AudioEncoder:
         return audio_array
 
     def next_multiple_of_chunk_frames(self, audio_array_len: int, sampling_rate: int) -> int:
+        """
+        Calculate the next multiple of chunk frames.
+
+        Args:
+            audio_array_len: Length of the audio array.
+            sampling_rate: Sampling rate of the audio.
+
+        Returns:
+            int: The next multiple of chunk frames.
+        """
         assert sampling_rate == self.audio_config.sampling_rate, f"Expected {sampling_rate=} to be {self.audio_config.sampling_rate=}"
         assert self.audio_config.chunk_length_s is not None, f"Can't call next_multiple_of_chunk_frames if {self.audio_config.chunk_length_s=}."
 
@@ -121,12 +181,23 @@ class AudioEncoder:
         )
 
     def __call__(self, content: AudioChunk) -> AudioEncoding:
+        """
+        Call the encoder on an audio chunk.
+
+        Args:
+            content: Audio chunk to encode.
+
+        Returns:
+            AudioEncoding: Encoded audio data and tokens.
+        """
         return self._encode_audio_chunk(content)
 
     @property
     def audio_token(self) -> int:
+        """Get the audio token."""
         return self.special_ids.audio
 
     @property
     def begin_audio_token(self) -> int:
+        """Get the begin audio token."""
         return self.special_ids.begin_audio
