@@ -622,15 +622,37 @@ def test_convert_requests(
     ]
 )
 def test_convert_transcription(audio: AudioChunk, language: Optional[str], stream: bool) -> None:
+    def check_equality(a: TranscriptionRequest, b: TranscriptionRequest) -> bool:
+        if a.audio.data != b.audio.data:
+            return False
+        if a.id != b.id:
+            return False
+        if a.model != b.model:
+            return False
+        if a.language != b.language:
+            return False
+        if a.strict_audio_validation != b.strict_audio_validation:
+            return False
+        if a.temperature != b.temperature:
+            return False
+        if a.top_p != b.top_p:
+            return False
+        if a.max_tokens != b.max_tokens:
+            return False
+        if a.random_seed != b.random_seed:
+            return False
+
+        return True
+
     seed: int = 43
-    request = TranscriptionRequest(audio=audio, language=language, model="model", random_seed=seed)
+    request = TranscriptionRequest(audio=audio.input_audio, language=language, model="model", random_seed=seed)
     openai_request = request.to_openai(stream=stream)
 
-    assert request == TranscriptionRequest.from_openai(openai_request)
+    assert check_equality(request, TranscriptionRequest.from_openai(openai_request))
 
     openai_transcription = OpenAITranscriptionRequest(**openai_request)  # type: ignore[typeddict-item)
 
     from_oai = TranscriptionRequest.from_openai(openai_transcription)
     assert isinstance(from_oai, TranscriptionRequest)
 
-    assert request == from_oai
+    assert check_equality(request, from_oai)

@@ -757,8 +757,15 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+audio = [
+    { name = "soundfile" },
+    { name = "soxr" },
+]
 hf-hub = [
     { name = "huggingface-hub" },
+]
+image = [
+    { name = "opencv-python-headless" },
 ]
 opencv = [
     { name = "opencv-python-headless" },
@@ -798,6 +805,9 @@ docs = [
 requires-dist = [
     { name = "huggingface-hub", marker = "extra == 'hf-hub'", specifier = ">=0.32.4" },
     { name = "jsonschema", specifier = ">=4.21.1" },
+    { name = "mistral-common", extras = ["opencv"], marker = "extra == 'image'" },
+    { name = "mistral-common", extras = ["soundfile"], marker = "extra == 'audio'" },
+    { name = "mistral-common", extras = ["soxr"], marker = "extra == 'audio'" },
     { name = "numpy", marker = "python_full_version < '3.9'", specifier = ">=1.22,<1.25" },
     { name = "numpy", marker = "python_full_version >= '3.9'", specifier = ">=1.25" },
     { name = "opencv-python-headless", marker = "extra == 'opencv'", specifier = ">=4.0.0" },
@@ -811,7 +821,7 @@ requires-dist = [
     { name = "tiktoken", specifier = ">=0.7.0" },
     { name = "typing-extensions", specifier = ">=4.11.0" },
 ]
-provides-extras = ["opencv", "soundfile", "soxr", "hf-hub"]
+provides-extras = ["opencv", "soundfile", "soxr", "audio", "image", "hf-hub"]
 
 [package.metadata.requires-dev]
 dev = [

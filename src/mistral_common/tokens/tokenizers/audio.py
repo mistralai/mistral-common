@@ -100,7 +100,7 @@ class AudioEncoder:
         return math.ceil(audio_array_len / self.audio_config.chunk_frames) * self.audio_config.chunk_frames
 
     def _encode_audio_chunk(self, content: AudioChunk) -> AudioEncoding:
-        audio = Audio.from_base64(content.input_audio.data)
+        audio = Audio.from_raw_audio(content.input_audio)
         audio.resample(self.audio_config.sampling_rate)
 
         audio.audio_array = self.pad(audio.audio_array, self.audio_config.sampling_rate)

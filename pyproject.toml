@@ -29,6 +29,8 @@ dependencies = [
 opencv = ["opencv-python-headless>=4.0.0"]
 soundfile = ["soundfile>=0.12.1"]
 soxr = ["soxr>=0.5.0"]
+audio = ["mistral_common[soundfile]", "mistral_common[soxr]"]
+image = ["mistral_common[opencv]"]
 
 hf-hub = ["huggingface-hub>=0.32.4"]
 

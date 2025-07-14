@@ -34,8 +34,10 @@ def test_audio_base64() -> None:
     sampling_rate = 16_000
     original_array = sin_wave(sampling_rate, 3.3)
 
-    # for format in ["mp3", "wav"]:
-    for format in ["wav", "mp3"]:
+    LOSSY = ["mp3"]
+    LOSSLESS = ["wav"]
+
+    for format in LOSSY + LOSSLESS:
         audio = Audio(
             audio_array=original_array,
             sampling_rate=sampling_rate,
@@ -46,7 +48,16 @@ def test_audio_base64() -> None:
         new_audio = Audio.from_base64(base64_str)
 
         assert audio.sampling_rate == new_audio.sampling_rate
-        assert np.allclose(audio.audio_array, new_audio.audio_array, atol=1e-5)
+        if format in LOSSLESS:
+            assert np.allclose(audio.audio_array, new_audio.audio_array, atol=1e-5)
+        elif format in LOSSY:
+            def rmse(a: np.ndarray, b: np.ndarray) -> float:
+                return float(np.sqrt(np.mean((a - b)**2)))
+
+            assert rmse(audio.audio_array, new_audio.audio_array) < 5e-3
+        else:
+            raise ValueError(f"Unknown format {format}")
+
 
 
 @pytest.mark.parametrize(

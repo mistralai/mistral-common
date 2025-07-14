@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Literal, Optional, TypeVar, Union
 from pydantic import ConfigDict, Field, validator
 from typing_extensions import Annotated, TypeAlias
 
-from mistral_common.audio import AudioFormat, Audio
+from mistral_common.audio import EXPECTED_FORMAT_VALUES, AudioFormat, Audio
 from mistral_common.base import MistralBase
 from mistral_common.image import SerializableImage
 from mistral_common.protocol.instruct.tool_calls import ToolCall
@@ -146,7 +146,7 @@ class ImageURLChunk(BaseContentChunk):
 
 class RawAudio(MistralBase):
     # Base64 encoded audio data.
-    data: str
+    data: str | bytes
 
     # The format of the encoded audio data. Can be anything supported by `soundfile`
     format: str
@@ -154,9 +154,8 @@ class RawAudio(MistralBase):
 
     @validator("format")
     def should_not_be_empty(cls, v: str) -> str:
-        expected_format = [v.value.lower() for v in AudioFormat.__members__.values()]
-        if v not in expected_format:
-            raise ValueError(f"`format` should be one of {expected_format}. Got: {v}`")
+        if v not in EXPECTED_FORMAT_VALUES:
+            raise ValueError(f"`format` should be one of {EXPECTED_FORMAT_VALUES}. Got: {v}`")
 
         return v
 

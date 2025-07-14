@@ -836,7 +836,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
     def encode_transcription(self, request: TranscriptionRequest) -> Tokenized:
         prefix = self.start()
         tokens, _, audio = self.encode_user_message(
-            UserMessage(content=[request.audio]),
+            UserMessage(content=[AudioChunk(input_audio=request.audio)]),
             available_tools=[],
             is_last=True,
             is_first=True,

@@ -4,9 +4,12 @@ import logging
 from enum import Enum
 from functools import cache
 from pathlib import Path
-from typing import Type, Optional
+from typing import Type, Optional, TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from mistral_common.protocol.instruct.messages import RawAudio
 
 logger = logging.getLogger(__name__)
 _soundfile_installed: bool
@@ -47,13 +50,15 @@ if is_soundfile_installed():
 else:
     AudioFormat = Enum("AudioFormat", {"none": "none"})
 
+EXPECTED_FORMAT_VALUES = [v.value.lower() for v in AudioFormat.__members__.values()]
+
+
 
 class Audio:
     def __init__(self, audio_array: np.ndarray, sampling_rate: int, format: str) -> None:
         self.audio_array = audio_array
         self.sampling_rate = sampling_rate
         self.format = format
-        self._expected_format_values = [v.value.lower() for v in AudioFormat.__members__.values()]
         self._check_valid()
 
     def __repr__(self) -> str:
@@ -66,7 +71,11 @@ class Audio:
     def _check_valid(self) -> None:
         assert isinstance(self.audio_array, np.ndarray), type(np.ndarray)
         assert self.audio_array.ndim == 1, f"{self.audio_array.ndim=}"
-        assert self.format in self._expected_format_values, f"{self.format=} not in {self._expected_format_values=}"
+        if not is_soundfile_installed():
+            raise ImportError(
+                "soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'"
+            )
+        assert self.format in EXPECTED_FORMAT_VALUES, f"{self.format=} not in {EXPECTED_FORMAT_VALUES=}"
 
     @property
     def duration(self) -> float:
@@ -81,7 +90,7 @@ class Audio:
             )
 
         audio_bytes = base64.b64decode(audio_base64)
-        return Audio._from_bytes(audio_bytes, strict=strict)
+        return Audio.from_bytes(audio_bytes, strict=strict)
 
     @staticmethod
     def from_file(file: str, strict: bool = True) -> "Audio":
@@ -95,10 +104,10 @@ class Audio:
         with open(file, "rb") as f:
             audio_bytes = f.read()
 
-        return Audio._from_bytes(audio_bytes, strict=strict)
+        return Audio.from_bytes(audio_bytes, strict=strict)
 
     @staticmethod
-    def _from_bytes(audio_bytes: bytes, strict: bool) -> "Audio":
+    def from_bytes(audio_bytes: bytes, strict: bool = True) -> "Audio":
         # Read the bytes into an audio file.
         with io.BytesIO(audio_bytes) as audio_file:
             with sf.SoundFile(audio_file) as f:
@@ -124,12 +133,22 @@ class Audio:
                 "soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'"
             )
 
-        assert format in self._expected_format_values, f"{format=} not in {self._expected_format_values=}"
+        assert format in EXPECTED_FORMAT_VALUES, f"{format=} not in {EXPECTED_FORMAT_VALUES=}"
 
         with io.BytesIO() as audio_file:
             sf.write(audio_file, self.audio_array, self.sampling_rate, format=format.upper())
             audio_file.seek(0)
             return base64.b64encode(audio_file.read()).decode("utf-8")
+
+    @staticmethod
+    def from_raw_audio(audio: "RawAudio") -> "Audio":
+        if isinstance(audio.data, bytes):
+            return Audio.from_bytes(audio.data)
+        elif isinstance(audio.data, str):
+            return Audio.from_base64(audio.data)
+        else:
+            raise ValueError(f"Unsupported audio data type: {type(audio.data)}")
+
 
     def resample(self, new_sampling_rate: int) -> None:
         """Resample audio data to a new sampling rate."""
