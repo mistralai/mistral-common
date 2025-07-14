@@ -148,24 +148,12 @@ class RawAudio(MistralBase):
     # Base64 encoded audio data.
     data: str | bytes
 
-    # The format of the encoded audio data. Can be anything supported by `soundfile`
-    format: str
-    duration: Optional[float] = None
-
     @classmethod
     def from_audio(cls, audio: Audio) -> "AudioChunk":
-        format = audio.format
-        duration = audio.duration
-        data = audio.to_base64(format)
+        data = audio.to_base64(audio.format)
 
-        return cls(data=data, format=format, duration=duration)
+        return cls(data=data)
 
-    @validator("format")
-    def should_not_be_empty(cls, v: str) -> str:
-        if v not in EXPECTED_FORMAT_VALUES:
-            raise ValueError(f"`format` should be one of {EXPECTED_FORMAT_VALUES}. Got: {v}`")
-
-        return v
 
 
 
@@ -179,6 +167,10 @@ class AudioChunk(BaseContentChunk):
             raise ValueError(f"`InputAudio` should not be empty. Got: {v}`")
 
         return v
+
+    @classmethod
+    def from_audio(cls, audio: Audio) -> "AudioChunk":
+        return cls(input_audio=RawAudio.from_audio(audio))
 
     def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
         r"""Converts the chunk to the OpenAI format."""
@@ -231,6 +223,8 @@ def _convert_openai_content_chunks(openai_content_chunks: Dict[str, Union[str, D
         return ImageURLChunk.from_openai(openai_content_chunks)
     elif content_type == ChunkTypes.image:
         return ImageChunk.from_openai(openai_content_chunks)
+    elif content_type == ChunkTypes.input_audio:
+        return AudioChunk.from_openai(openai_content_chunks)
     else:
         raise ValueError(f"Unknown content chunk type: {content_type}")
 

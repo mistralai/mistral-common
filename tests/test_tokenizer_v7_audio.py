@@ -81,8 +81,7 @@ def _get_audio_chunk(duration: float) -> AudioChunk:
 
     return AudioChunk(
         input_audio=RawAudio(
-            format=format,
-            data=audio.to_base64(format=format),
+            data=audio.to_base64(format)
         ),
     )
 

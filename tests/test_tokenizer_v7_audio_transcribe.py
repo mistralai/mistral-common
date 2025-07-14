@@ -19,8 +19,6 @@ from tests.test_tokenizer_v7_audio import (
     _get_tekkenizer_with_audio,
 )
 
-# DUMMY_AUDIO_WITH_TRANSCRIPTION = _get_audio_chunk(1.7, add_transciption=True, language="en")
-
 
 @pytest.fixture(scope="session")
 def tekkenizer() -> InstructTokenizerV7:

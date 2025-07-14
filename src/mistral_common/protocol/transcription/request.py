@@ -78,7 +78,7 @@ class TranscriptionRequest(BaseCompletionRequest):
 
         audio = Audio.from_bytes(audio_bytes, strict=False)
         audio_str = audio.to_base64(audio.format)
-        raw_audio = RawAudio(data=audio_str, format=audio.format)
+        raw_audio = RawAudio(data=audio_str)
 
         converted_dict["audio"] = raw_audio
         converted_dict["random_seed"] = seed
