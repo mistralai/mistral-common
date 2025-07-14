@@ -147,13 +147,22 @@ class ImageURLChunk(BaseContentChunk):
 class RawAudio(MistralBase):
     # Base64 encoded audio data.
     data: str | bytes
+    format: str
 
     @classmethod
     def from_audio(cls, audio: Audio) -> "AudioChunk":
-        data = audio.to_base64(audio.format)
+        format = audio.format
+        duration = audio.duration
+        data = audio.to_base64(format)
 
-        return cls(data=data)
+        return cls(data=data, format=format)
 
+    @validator("format")
+    def should_not_be_empty(cls, v: str) -> str:
+        if v not in EXPECTED_FORMAT_VALUES:
+            raise ValueError(f"`format` should be one of {EXPECTED_FORMAT_VALUES}. Got: {v}`")
+
+        return v
 
 
 
