@@ -79,8 +79,6 @@ class SpecialTokens(str, Enum):
     begin_tool_content = "[TOOL_CONTENT]"
     args = "[ARGS]"
     call_id = "[CALL_ID]"
-    # Audio
-    # TODO(Patrick) - check what is actually needed here
     audio = "[AUDIO]"
     begin_audio = "[BEGIN_AUDIO]"
     transcribe = "[TRANSCRIBE]"

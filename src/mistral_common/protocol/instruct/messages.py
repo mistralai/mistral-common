@@ -148,7 +148,7 @@ class RawAudio(MistralBase):
     # Base64 encoded audio data.
     data: str
 
-    # The format of the encoded audio data. Currently supports "wav" and "mp3".
+    # The format of the encoded audio data. Can be anything supported by `soundfile`
     format: str
     duration: Optional[float] = None
 
@@ -176,7 +176,7 @@ class AudioChunk(BaseContentChunk):
     @classmethod
     def from_audio(cls, audio: Audio) -> "AudioChunk":
         format = audio.format
-        duration = audio.audio_array.shape[-1] / audio.sampling_rate
+        duration = audio.duration
         data = audio.to_base64(format)
 
         raw_audio = RawAudio(data=data, format=format, duration=duration)

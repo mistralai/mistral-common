@@ -11,6 +11,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 _soundfile_installed: bool
 
+# TODO(Patrick, Julien): refactor import checks to avoid redundancy
 try:
     import soundfile  # noqa: F401
 
@@ -102,7 +103,7 @@ class Audio:
         with io.BytesIO(audio_bytes) as audio_file:
             with sf.SoundFile(audio_file) as f:
                 # Read the entire audio data
-                audio_array = f.read(dtype="float32")  # or another dtype as needed
+                audio_array = f.read(dtype="float32")
                 sampling_rate = f.samplerate
                 audio_format = f.format
 
@@ -157,7 +158,7 @@ def hertz_to_mel(freq: float | np.ndarray) -> float | np.ndarray:
     mels = 3.0 * freq / 200.0
 
     if isinstance(freq, np.ndarray):
-        assert isinstance(mels, np.ndarray)
+        assert isinstance(mels, np.ndarray), type(mels)
         log_region = freq >= min_log_hertz
         mels[log_region] = min_log_mel + np.log(freq[log_region] / min_log_hertz) * logstep
     elif freq >= min_log_hertz:
@@ -170,10 +171,10 @@ def mel_to_hertz(mels: np.ndarray) -> np.ndarray:
     """
     Convert frequency from mels to hertz using the "slaney" mel-scale.
     Args:
-        mels (`np.ndarray`):
+        mels:
             The frequency, or multiple frequencies, in mels.
     Returns:
-        `float` or `np.ndarray`: The frequencies in hertz.
+        The frequencies in hertz.
     """
     min_log_hertz = 1000.0
     min_log_mel = 15.0
@@ -190,12 +191,10 @@ def _create_triangular_filter_bank(fft_freqs: np.ndarray, filter_freqs: np.ndarr
     Creates a triangular filter bank.
     Adapted from *torchaudio* and *librosa*.
     Args:
-        fft_freqs (`np.ndarray` of shape `(num_frequency_bins,)`):
-            Discrete frequencies of the FFT bins in Hz.
-        filter_freqs (`np.ndarray` of shape `(num_mel_filters,)`):
-            Center frequencies of the triangular filters to create, in Hz.
+        fft_freqs: Discrete frequencies of the FFT bins in Hz.
+        filter_freqs: Center frequencies of the triangular filters to create, in Hz.
     Returns:
-        `np.ndarray` of shape `(num_frequency_bins, num_mel_filters)`
+        array of shape `(num_frequency_bins, num_mel_filters)`
     """
     filter_diff = np.diff(filter_freqs)
     slopes = np.expand_dims(filter_freqs, 0) - np.expand_dims(fft_freqs, 1)

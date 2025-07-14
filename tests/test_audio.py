@@ -35,7 +35,7 @@ def test_audio_base64() -> None:
     original_array = sin_wave(sampling_rate, 3.3)
 
     # for format in ["mp3", "wav"]:
-    for format in ["wav"]:
+    for format in ["wav", "mp3"]:
         audio = Audio(
             audio_array=original_array,
             sampling_rate=sampling_rate,
@@ -45,8 +45,8 @@ def test_audio_base64() -> None:
         base64_str = audio.to_base64(format)
         new_audio = Audio.from_base64(base64_str)
 
-    assert audio.sampling_rate == new_audio.sampling_rate
-    assert np.allclose(audio.audio_array, new_audio.audio_array, atol=1e-5)
+        assert audio.sampling_rate == new_audio.sampling_rate
+        assert np.allclose(audio.audio_array, new_audio.audio_array, atol=1e-5)
 
 
 @pytest.mark.parametrize(

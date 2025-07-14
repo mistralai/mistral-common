@@ -21,9 +21,9 @@ class AudioSpectrogramConfig:
     window_size: int
 
     def __post_init__(self) -> None:
-        assert self.num_mel_bins > 0
-        assert self.hop_length > 0
-        assert self.window_size > 0
+        assert self.num_mel_bins > 0, self.num_mel_bins
+        assert self.hop_length > 0, self.hope_length
+        assert self.window_size > 0, self.window_size
 
 
 @dataclass
@@ -36,11 +36,11 @@ class AudioConfig:
     chunk_length_s: Optional[float] = None
 
     def __post_init__(self) -> None:
-        assert self.frame_rate > 0
-        assert self.sampling_rate > 0
+        assert self.frame_rate > 0, self.frame_rate
+        assert self.sampling_rate > 0, self.sampling_rate
 
         if self.chunk_length_s is not None:
-            assert self.chunk_length_s > 0
+            assert self.chunk_length_s > 0, self.chunk_length_s
             assert self.chunk_frames > 0, (
                 f"chunk_length_s and sampling_rate must both be > 0, got {self.chunk_length_s} and {self.sampling_rate}"
             )
@@ -67,7 +67,7 @@ class AudioEncoding:
 
 @dataclass
 class SpecialAudioIDs:
-    """Special text tokens corresponding to audio token sequence."""
+    r"""Special text tokens corresponding to audio token sequence."""
 
     audio: int
     begin_audio: int
@@ -97,8 +97,6 @@ class AudioEncoder:
         assert sampling_rate == self.audio_config.sampling_rate, f"Expected {sampling_rate=} to be {self.audio_config.sampling_rate=}"
         assert self.audio_config.chunk_length_s is not None, f"Can't call next_multiple_of_chunk_frames if {self.audio_config.chunk_length_s=}."
 
-        # pad the audio to a multiple of chunk_length_s seconds
-        # padding token is zero (equivalent to silence in the audio space)
         return math.ceil(audio_array_len / self.audio_config.chunk_frames) * self.audio_config.chunk_frames
 
     def _encode_audio_chunk(self, content: AudioChunk) -> AudioEncoding:
