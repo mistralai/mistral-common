@@ -285,7 +285,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
             # Rename available_tools to tools
             openai_request["tools"] = [tool.to_openai() for tool in self.available_tools]
 
-        if self.truncate_at_max_tokens is not None:  # Rename to max_tokens
+        if self.truncate_at_max_tokens is not None:
             raise NotImplementedError("Truncating at max tokens is not implemented for OpenAI requests.")
 
         openai_request.update(kwargs)
