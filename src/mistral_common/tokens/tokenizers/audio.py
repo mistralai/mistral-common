@@ -12,6 +12,17 @@ from mistral_common.protocol.instruct.messages import AudioChunk, AudioURLChunk
 
 logger = logging.getLogger(__name__)
 
+_URL_SCHEMES = {
+    "http",
+    "https",
+    "ftp",
+    "s3",  # AWS S3
+    "gs",  # Google Cloud Storage
+    "azure",  # e.g. azure://container/blob
+    "wasbs",
+    "abfs",  # Azure Blob/ADLS
+}
+
 
 @dataclass
 class AudioSpectrogramConfig:
@@ -188,14 +199,14 @@ class AudioEncoder:
 
         try:
             url_path = Path(url)
+            exist_path = url_path.exists()
         except OSError:  # File name too long
-            url_path = None
+            exist_path = False
 
-        if url_path and url_path.exists():
+        if exist_path:
             audio = Audio.from_file(url)
-        elif urlparse(url).scheme:
+        elif urlparse(url).scheme in _URL_SCHEMES:
             audio = Audio.from_url(url)
-
         else:
             try:
                 audio = Audio.from_base64(url)

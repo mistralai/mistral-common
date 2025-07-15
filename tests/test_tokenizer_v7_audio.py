@@ -1,6 +1,7 @@
 import tempfile
 from pathlib import Path
 from typing import List
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -315,15 +316,14 @@ def test_encode_audio_url_chunk(tekkenizer: InstructTokenizerV7) -> None:
     )
 
     # Test with a local path
-    with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-        with sf.SoundFile(tmp.name, "w", samplerate=sampling_rate, channels=1) as f:
-            f.write(original_array)
-        print(tmp.name, Path(tmp.name).exists())
-        audio_local = tekkenizer.audio_encoder(
-            AudioURLChunk(
-                audio_url=tmp.name,
-            )
+    tmp = tempfile.NamedTemporaryFile(suffix=".wav")
+    with sf.SoundFile(tmp.name, "w", samplerate=sampling_rate, channels=1) as f:
+        f.write(original_array)
+    audio_local = tekkenizer.audio_encoder(
+        AudioURLChunk(
+            audio_url=tmp.name,
         )
+    )
     assert isinstance(audio_local, AudioEncoding)
 
     # Test with base64 string
@@ -344,15 +344,17 @@ def test_encode_audio_url_chunk(tekkenizer: InstructTokenizerV7) -> None:
 
     # Test with an invalid URL
     with pytest.raises(
-        ValueError, match=("Either the url is not valid or decoding failed: https://example.com/invalid_audio.wav")
+        ValueError, match=r"Either the URL is not valid or decoding failed: https://example.com/invalid_audio.wav"
     ):
         tekkenizer.audio_encoder(AudioURLChunk(audio_url="https://example.com/invalid_audio.wav"))
 
     # Test valid URL
-    url = "https://download.samplelib.com/mp3/sample-3s.mp3"
-    audio_url = tekkenizer.audio_encoder(
-        AudioURLChunk(
-            audio_url=url,
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.content = Path(tmp.name).read_bytes()
+        audio_url = tekkenizer.audio_encoder(
+            AudioURLChunk(
+                audio_url="https://example.com/valid_audio.wav",
+            ),
         )
-    )
-    assert isinstance(audio_url, AudioEncoding)
+        assert isinstance(audio_url, AudioEncoding)
