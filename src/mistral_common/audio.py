@@ -290,8 +290,7 @@ def mel_filter_bank(
     max_frequency: float,
     sampling_rate: int,
 ) -> np.ndarray:
-    r"""
-    Create a Mel filter bank matrix for converting frequency bins to the Mel scale.
+    r"""Create a Mel filter bank matrix for converting frequency bins to the Mel scale.
 
     This function generates a filter bank matrix that can be used to transform a
     spectrum represented in frequency bins to the Mel scale. The Mel scale is a
@@ -305,8 +304,8 @@ def mel_filter_bank(
         sampling_rate: The sampling rate of the audio signal.
 
     Returns:
-        np.ndarray: A filter bank matrix of shape (num_mel_bins, num_frequency_bins)
-                  that can be used to project frequency bin energies onto Mel bins.
+        A filter bank matrix of shape (num_mel_bins, num_frequency_bins)
+        that can be used to project frequency bin energies onto Mel bins.
     """
     if num_frequency_bins < 2:
         raise ValueError(f"Require num_frequency_bins: {num_frequency_bins} >= 2")
