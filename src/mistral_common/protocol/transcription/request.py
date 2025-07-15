@@ -46,7 +46,7 @@ class TranscriptionRequest(BaseCompletionRequest):
             kwargs: Additional parameters to be added to the request.
 
         Returns:
-            Dict[str, Any]: The request in the OpenAI format.
+            The request in the OpenAI format.
 
         Raises:
             ImportError: If the required soundfile library is not installed.
