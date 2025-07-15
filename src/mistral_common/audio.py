@@ -95,14 +95,14 @@ class Audio:
 
     @staticmethod
     def from_base64(audio_base64: str, strict: bool = True) -> "Audio":
-        """Create an Audio instance from a base64 encoded string.
+        r"""Create an Audio instance from a base64 encoded string.
 
         Args:
             audio_base64: The base64 encoded audio data.
             strict: Whether to strictly enforce mono audio. Defaults to True.
 
         Returns:
-            Audio: An instance of the Audio class.
+            An instance of the Audio class.
         """
         if not is_soundfile_installed():
             raise ImportError(
