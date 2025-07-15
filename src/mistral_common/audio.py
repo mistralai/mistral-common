@@ -137,14 +137,14 @@ class Audio:
 
     @staticmethod
     def from_bytes(audio_bytes: bytes, strict: bool = True) -> "Audio":
-        """Create an Audio instance from bytes.
+        r"""Create an Audio instance from bytes.
 
         Args:
             audio_bytes: The audio data as bytes.
             strict: Whether to strictly enforce mono audio. Defaults to True.
 
         Returns:
-            Audio: An instance of the Audio class.
+            An instance of the Audio class.
         """
         # Read the bytes into an audio file.
         with io.BytesIO(audio_bytes) as audio_file:
