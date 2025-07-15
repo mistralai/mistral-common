@@ -94,8 +94,7 @@ class AudioEncoding:
 
 @dataclass
 class SpecialAudioIDs:
-    r"""
-    Special text tokens corresponding to audio token sequence.
+    r"""Special text tokens corresponding to audio token sequence.
 
     Attributes:
         audio: Token representing audio.
