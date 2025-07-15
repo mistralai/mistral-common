@@ -139,15 +139,14 @@ class AudioEncoder:
         return audio_array
 
     def next_multiple_of_chunk_frames(self, audio_array_len: int, sampling_rate: int) -> int:
-        """
-        Calculate the next multiple of chunk frames.
+        r"""Calculate the next multiple of chunk frames.
 
         Args:
             audio_array_len: Length of the audio array.
             sampling_rate: Sampling rate of the audio.
 
         Returns:
-            int: The next multiple of chunk frames.
+            The next multiple of chunk frames.
         """
         assert sampling_rate == self.audio_config.sampling_rate, (
             f"Expected {sampling_rate=} to be {self.audio_config.sampling_rate=}"
