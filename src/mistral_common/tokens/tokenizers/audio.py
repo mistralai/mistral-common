@@ -108,8 +108,7 @@ class SpecialAudioIDs:
 
 
 class AudioEncoder:
-    """
-    Encodes audio chunks into a format suitable for further processing.
+    r"""Encodes audio chunks into a format suitable for further processing.
 
     Attributes:
         audio_config: Configuration for audio processing.
