@@ -95,7 +95,7 @@ class TranscriptionRequest(BaseCompletionRequest):
             strict: A flag indicating whether to perform strict validation of the audio data.
 
         Returns:
-            TranscriptionRequest: An instance of TranscriptionRequest.
+           An instance of TranscriptionRequest.
         """
         file = openai_request.get("file")
         seed = openai_request.get("seed")
