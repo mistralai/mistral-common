@@ -219,7 +219,7 @@ class Audio:
         self.sampling_rate = new_sampling_rate
 
 
-def hertz_to_mel(freq: Union[float, np.ndarray]) -> float | np.ndarray:
+def hertz_to_mel(freq: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
     """
     Convert frequency from hertz to mels using the "slaney" mel-scale.
     Args:
