@@ -10,7 +10,7 @@ from mistral_common.protocol.instruct.messages import RawAudio
 
 
 class TranscriptionRequest(BaseCompletionRequest):
-    """A class representing a request for audio transcription.
+    r"""A class representing a request for audio transcription.
 
     This class handles the conversion of audio data into a format suitable for transcription
     using the OpenAI API. It includes methods to convert the request to and from the OpenAI format.
