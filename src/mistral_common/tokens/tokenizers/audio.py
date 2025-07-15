@@ -65,7 +65,7 @@ class AudioConfig:
 
     @property
     def chunk_frames(self) -> int:
-        """Calculate the number of frames per chunk."""
+        r"""Calculate the number of frames per chunk."""
         assert self.chunk_length_s is not None, f"Can't call chunk_frames if {self.chunk_length_s=}."
         return int(self.chunk_length_s * self.sampling_rate)
 
