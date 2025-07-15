@@ -196,5 +196,5 @@ class AudioEncoder:
 
     @property
     def begin_audio_token(self) -> int:
-        """Get the begin audio token."""
+        r"""Get the begin audio token."""
         return self.special_ids.begin_audio
