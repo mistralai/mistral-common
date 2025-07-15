@@ -244,11 +244,11 @@ def hertz_to_mel(freq: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
 
 
 def mel_to_hertz(mels: np.ndarray) -> np.ndarray:
-    """
-    Convert frequency from mels to hertz using the "slaney" mel-scale.
+    r""" Convert frequency from mels to hertz using the "slaney" mel-scale.
+    
     Args:
-        mels:
-            The frequency, or multiple frequencies, in mels.
+        mels: The frequency, or multiple frequencies, in mels.
+    
     Returns:
         The frequencies in hertz.
     """
