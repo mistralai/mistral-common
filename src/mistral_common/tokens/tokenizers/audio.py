@@ -13,8 +13,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class AudioSpectrogramConfig:
-    """
-    Configuration for generating an audio spectrogram.
+    r"""Configuration for generating an audio spectrogram.
 
     Attributes:
         num_mel_bins: Number of mel bins, typically 80 or 128.
