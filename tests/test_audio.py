@@ -69,11 +69,13 @@ def test_audio_base64() -> None:
         (10000.0, 15.0 + np.log(10000.0 / 1000.0) * 27.0 / np.log(6.4)),  # Log region
     ],
 )
-def test_hertz_to_mel_single_value(freq, expected_mel):
-    assert abs(hertz_to_mel(freq) - expected_mel) < 1e-6
+def test_hertz_to_mel_single_value(freq: float, expected_mel: float) -> None:
+    mel = hertz_to_mel(freq)
+    assert isinstance(mel, float)
+    assert abs(mel - expected_mel) < 1e-6
 
 
-def test_hertz_to_mel_array():
+def test_hertz_to_mel_array() -> None:
     # Test with an array of frequency values
     freq_array = np.array([100.0, 1000.0, 4000.0])
     expected_mel_array = np.array(
@@ -86,7 +88,7 @@ def test_hertz_to_mel_array():
     np.testing.assert_array_equal(hertz_to_mel(freq_array), expected_mel_array)
 
 
-def test_mel_filter_bank():
+def test_mel_filter_bank() -> None:
     # Test mel_filter_bank function
     num_frequency_bins = 256
     num_mel_bins = 20

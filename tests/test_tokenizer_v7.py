@@ -25,7 +25,7 @@ from mistral_common.protocol.instruct.validator import (
     MistralRequestValidatorV5,
     ValidationMode,
 )
-from mistral_common.tokens.tokenizers.base import InstructRequest, TokenizerVersion
+from mistral_common.tokens.tokenizers.base import InstructRequest, InstructTokenizer, TokenizerVersion
 from mistral_common.tokens.tokenizers.image import ImageEncoder
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
@@ -365,9 +365,9 @@ def test_encode_chat_completion() -> None:
 def test_truncation(
     request: pytest.FixtureRequest, tekkenizer: str, messages: List[ChatMessage], truncated_text: str
 ) -> None:
-    tekkenizer = request.getfixturevalue(tekkenizer)
+    tokenizer: InstructTokenizer = request.getfixturevalue(tekkenizer)
 
-    tokenized = tekkenizer.encode_instruct(InstructRequest(messages=messages, truncate_at_max_tokens=15))
+    tokenized = tokenizer.encode_instruct(InstructRequest(messages=messages, truncate_at_max_tokens=15))
     assert tokenized.text == truncated_text, f"{tokenized.text} != {truncated_text}"
 
 
@@ -386,9 +386,9 @@ def test_truncation(
 )
 @pytest.mark.parametrize("tekkenizer", ["no_audio_tekkenizer", "with_audio_tekkenizer"])
 def test_truncation_failed(request: pytest.FixtureRequest, tekkenizer: str, messages: List[ChatMessage]) -> None:
-    tekkenizer = request.getfixturevalue(tekkenizer)
+    tokenizer = request.getfixturevalue(tekkenizer)
     with pytest.raises(TokenizerException):
-        tekkenizer.encode_instruct(InstructRequest(messages=messages, truncate_at_max_tokens=9))
+        tokenizer.encode_instruct(InstructRequest(messages=messages, truncate_at_max_tokens=9))
 
 
 def test_from_model() -> None:
@@ -432,8 +432,8 @@ def test_from_model() -> None:
 
 @pytest.mark.parametrize("tekkenizer", ["no_audio_tekkenizer", "with_audio_tekkenizer"])
 def test_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkenizer: str) -> None:
-    tekkenizer = request.getfixturevalue(tekkenizer)
-    request: InstructRequest = InstructRequest(
+    tokenizer = request.getfixturevalue(tekkenizer)
+    instruct_request: InstructRequest = InstructRequest(
         available_tools=[
             Tool(function=Function(name="t1", parameters={})),
             Tool(function=Function(name="t2", parameters={})),
@@ -449,7 +449,7 @@ def test_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkeni
             ),
         ],
     )
-    tokenized = tekkenizer.encode_instruct(request)
+    tokenized = tokenizer.encode_instruct(instruct_request)
     tokens = tokenized.tokens
     text = tokenized.text
 
@@ -463,14 +463,14 @@ def test_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkeni
     )
 
     # make sure it also works end to end
-    tools = request.available_tools
+    tools = instruct_request.available_tools
     chat_completion_request = ChatCompletionRequest(
-        **request.model_dump(exclude={"system_prompt", "truncate_at_max_tokens", "available_tools"}), tools=tools
+        **instruct_request.model_dump(exclude={"system_prompt", "truncate_at_max_tokens", "available_tools"}), tools=tools
     )
     validator = MistralRequestValidatorV5(mode=ValidationMode.finetuning)
     normalizer = InstructRequestNormalizerV7.normalizer()
 
-    mistral_tokenizer = MistralTokenizer(tekkenizer, validator, normalizer)
+    mistral_tokenizer = MistralTokenizer(tokenizer, validator, normalizer)
     tokens_2 = mistral_tokenizer.encode_chat_completion(chat_completion_request)
 
     assert tokens == tokens_2.tokens

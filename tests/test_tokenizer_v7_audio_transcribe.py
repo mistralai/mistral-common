@@ -1,6 +1,7 @@
 from typing import Optional
 
 import numpy as np
+from pydantic_extra_types.language_code import LanguageAlpha2
 import pytest
 
 from mistral_common.protocol.instruct.messages import (
@@ -25,7 +26,7 @@ def tekkenizer() -> InstructTokenizerV7:
     return _get_tekkenizer_with_audio()
 
 
-def get_transcription_request(duration: float, language: Optional[str] = None) -> AudioChunk:
+def get_transcription_request(duration: float, language: Optional[LanguageAlpha2] = None) -> TranscriptionRequest:
     audio_chunk = _get_audio_chunk(duration)
 
     return TranscriptionRequest(model="dummy", audio=audio_chunk.input_audio, language=language)
@@ -52,7 +53,9 @@ def test_tokenize_transcribe(tekkenizer: InstructTokenizerV7) -> None:
     ]
     assert tokenized.text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST][TRANSCRIBE]")
     assert len(tokenized.audios) == 1
-    audio_array = Audio.from_base64(request.audio.data).audio_array
+    base64_audio = request.audio.data
+    assert isinstance(base64_audio, str)
+    audio_array = Audio.from_base64(base64_audio).audio_array
     assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)
 
 
@@ -61,7 +64,7 @@ def test_tokenize_transcribe_with_lang(tekkenizer: InstructTokenizerV7) -> None:
     frame_rate = 12.5
     num_expected_frames = int(np.ceil(duration * frame_rate))
 
-    request = get_transcription_request(duration, language="en")
+    request = get_transcription_request(duration, language=LanguageAlpha2("en"))
 
     tokenized = tekkenizer.encode_transcription(request)
     BOS, _, BEGIN_INST, END_INST, AUDIO, BEGIN_AUDIO, TRANSCRIBE = _get_specials(tekkenizer)
@@ -84,5 +87,7 @@ def test_tokenize_transcribe_with_lang(tekkenizer: InstructTokenizerV7) -> None:
     ]
     assert tokenized.text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]lang:en[TRANSCRIBE]")
     assert len(tokenized.audios) == 1
-    audio_array = Audio.from_base64(request.audio.data).audio_array
+    base64_audio = request.audio.data
+    assert isinstance(base64_audio, str)
+    audio_array = Audio.from_base64(base64_audio).audio_array
     assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)

@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Type, TypedDict, Union
 
 import tiktoken
 
+from mistral_common.audio import Audio
 from mistral_common.tokens.tokenizers.audio import AudioConfig, AudioSpectrogramConfig
 from mistral_common.tokens.tokenizers.base import (
     SpecialTokenPolicy,
@@ -92,6 +93,7 @@ class ModelData(TypedDict):
     version: int
     type: str
     image: ImageConfig
+    audio: AudioConfig
 
 
 class Tekkenizer(Tokenizer):

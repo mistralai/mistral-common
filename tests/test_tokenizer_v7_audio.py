@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union
 
 import numpy as np
 import pytest
@@ -7,6 +7,7 @@ from mistral_common.protocol.instruct.messages import (
     UATS,
     AssistantMessage,
     AudioChunk,
+    ContentChunk,
     RawAudio,
     SystemMessage,
     TextChunk,
@@ -141,7 +142,9 @@ def test_tokenize_user_assistant_message(tekkenizer: InstructTokenizerV7) -> Non
     ]
     assert tokenized.text == ("<s>[INST]a[BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]c b d</s>")
     assert len(tokenized.audios) == 1
-    audio_array = Audio.from_base64(audio_chunk.input_audio.data).audio_array
+    base64_str = audio_chunk.input_audio.data
+    assert isinstance(base64_str, str)
+    audio_array = Audio.from_base64(base64_str).audio_array
     assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)
 
 
@@ -153,7 +156,7 @@ def test_tokenize_user_message(tekkenizer: InstructTokenizerV7, audio_first: boo
     text_chunk = TextChunk(text="a")
 
     num_expected_frames = int(np.ceil(duration * frame_rate))
-    chunks = [audio_chunk, text_chunk] if audio_first else [text_chunk, audio_chunk]
+    chunks: List[ContentChunk] = [audio_chunk, text_chunk] if audio_first else [text_chunk, audio_chunk]
 
     tokenized = tekkenizer.encode_instruct(
         InstructRequest(
@@ -186,7 +189,9 @@ def test_tokenize_user_message(tekkenizer: InstructTokenizerV7, audio_first: boo
         ]
         assert tokenized.text == ("<s>[INST]a[BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]")
     assert len(tokenized.audios) == 1
-    audio_array = Audio.from_base64(audio_chunk.input_audio.data).audio_array
+    base64_str = audio_chunk.input_audio.data
+    assert isinstance(base64_str, str)
+    audio_array = Audio.from_base64(base64_str).audio_array
     assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)
 
 
@@ -197,7 +202,7 @@ def test_tokenize_multi_turn(tekkenizer: InstructTokenizerV7) -> None:
     text_chunk = TextChunk(text="a")
 
     num_expected_frames = int(np.ceil(duration * frame_rate))
-    chunks = [audio_chunk, text_chunk]
+    chunks: List[ContentChunk] = [audio_chunk, text_chunk]
 
     tokenized = tekkenizer.encode_instruct(
         InstructRequest(

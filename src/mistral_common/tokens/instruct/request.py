@@ -1,7 +1,7 @@
 # this file is deprecated
 import warnings
 
-from mistral_common.protocol.fim.request import FimRequest  # noqa: F401
+from mistral_common.protocol.fim.request import FIMRequest  # noqa: F401
 from mistral_common.protocol.instruct.request import InstructRequest  # noqa: F401
 
 warnings.warn(

@@ -23,7 +23,7 @@ from mistral_common.protocol.instruct.validator import (
     ValidationMode,
 )
 from mistral_common.protocol.transcription.request import TranscriptionRequest
-from mistral_common.tokens.tokenizers.audio import AudioEncoder, SpecialAudioIDs
+from mistral_common.tokens.tokenizers.audio import AudioConfig, AudioEncoder, SpecialAudioIDs
 from mistral_common.tokens.tokenizers.base import (
     InstructRequest,
     InstructRequestType,
@@ -73,7 +73,7 @@ def load_image_encoder(image_config: ImageConfig, tokenizer: Union[Tekkenizer, S
     return ImageEncoder(image_config, special_ids)
 
 
-def load_audio_encoder(audio_config: ImageConfig, tokenizer: Tekkenizer) -> AudioEncoder:
+def load_audio_encoder(audio_config: AudioConfig, tokenizer: Tekkenizer) -> AudioEncoder:
     r"""Load a audio encoder from a config and a tokenizer.
 
     Args:

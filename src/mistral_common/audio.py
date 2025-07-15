@@ -38,7 +38,6 @@ def is_soxr_installed() -> bool:
     return _soxr_installed
 
 
-AudioFormat: Type[Enum]
 if is_soundfile_installed():
     import soundfile as sf
 
@@ -46,9 +45,9 @@ if is_soundfile_installed():
     available_formats = sf.available_formats()
 
     # Create an Enum dynamically
-    AudioFormat = Enum("AudioFormat", {format_name: format_name for format_name in available_formats})
+    AudioFormat = Enum("AudioFormat", {format_name: format_name for format_name in available_formats})  # type: ignore[misc]
 else:
-    AudioFormat = Enum("AudioFormat", {"none": "none"})
+    AudioFormat = Enum("AudioFormat", {"none": "none"})  # type: ignore[no-redef]
 
 EXPECTED_FORMAT_VALUES = [v.value.lower() for v in AudioFormat.__members__.values()]
 

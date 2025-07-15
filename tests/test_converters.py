@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, Union
 
 import numpy as np
+from pydantic_extra_types.language_code import LanguageAlpha2
 import pytest
 from openai.resources.chat.completions.completions import Completions
 from openai.types.audio.transcription_create_params import TranscriptionCreateParamsBase as OpenAITranscriptionRequest
@@ -618,7 +619,7 @@ def test_convert_requests(
         (DUMMY_AUDIO_CHUNK, "en", True),
     ],
 )
-def test_convert_transcription(audio: AudioChunk, language: Optional[str], stream: bool) -> None:
+def test_convert_transcription(audio: AudioChunk, language: Optional[LanguageAlpha2], stream: bool) -> None:
     def check_equality(a: TranscriptionRequest, b: TranscriptionRequest) -> bool:
         if a.audio.data != b.audio.data:
             return False
@@ -647,7 +648,7 @@ def test_convert_transcription(audio: AudioChunk, language: Optional[str], strea
 
     assert check_equality(request, TranscriptionRequest.from_openai(openai_request))
 
-    openai_transcription = OpenAITranscriptionRequest(**openai_request)  # type: ignore[typeddict-item)
+    openai_transcription = OpenAITranscriptionRequest(**openai_request)  # type: ignore
 
     from_oai = TranscriptionRequest.from_openai(openai_transcription)
     assert isinstance(from_oai, TranscriptionRequest)

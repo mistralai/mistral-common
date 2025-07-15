@@ -849,6 +849,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
             Tokenized: The tokenized representation of the audio data, including processed audio and tokens
         """
 
+        assert self.TRANSCRIBE is not None, f"{self.__class__.__name__} needs to have a TRANSCRIBE token"
         prefix = self.start()
         tokens, _, audio = self.encode_user_message(
             UserMessage(content=[AudioChunk(input_audio=request.audio)]),
@@ -862,6 +863,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
         if request.language is not None:
             language_string = f"lang:{request.language}"  # no space.
             tokens += self.tokenizer.encode(language_string, bos=False, eos=False)
+
         tokens.append(self.TRANSCRIBE)
         return Tokenized(tokens=tokens, text=self.tokenizer._to_string(tokens), audios=audio)
 
