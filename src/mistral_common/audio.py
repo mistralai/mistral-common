@@ -220,12 +220,13 @@ class Audio:
 
 
 def hertz_to_mel(freq: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
-    """
-    Convert frequency from hertz to mels using the "slaney" mel-scale.
+    r"""Convert frequency from hertz to mels using the "slaney" mel-scale.
+    
     Args:
         freq: The frequency, or multiple frequencies, in hertz (Hz).
+    
     Returns:
-        `float` or `np.ndarray`: The frequencies on the mel scale.
+        The frequencies on the mel scale.
     """
     min_log_hertz = 1000.0
     min_log_mel = 15.0
