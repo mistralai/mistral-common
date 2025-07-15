@@ -34,7 +34,6 @@ def test_audio_resample() -> None:
 
 
 def test_from_url_or_string() -> None:
-    # TODO: Add a test with a valid URL and validate base64
     sampling_rate = 44100
     original_array = sin_wave(sampling_rate, 1)
 
@@ -68,6 +67,11 @@ def test_from_url_or_string() -> None:
         ValueError, match=("Either the url is not valid or decoding failed: https://example.com/invalid_audio.wav")
     ):
         Audio.from_url_or_string("https://example.com/invalid_audio.wav")
+
+    # Test valid URL
+    url = "https://download.samplelib.com/mp3/sample-3s.mp3"
+    audio_url = Audio.from_url_or_string(url, strict=False)
+    assert isinstance(audio_url, Audio)
 
 
 @pytest.mark.parametrize("prefix", [True, False])
