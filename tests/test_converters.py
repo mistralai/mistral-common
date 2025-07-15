@@ -36,6 +36,8 @@ from mistral_common.protocol.instruct.converters import _OPENAI_COMPLETION_FIELD
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     AudioChunk,
+    AudioURL,
+    AudioURLChunk,
     ChatMessage,
     ImageChunk,
     ImageURL,
@@ -53,6 +55,7 @@ from mistral_common.protocol.transcription.request import TranscriptionRequest
 CURRENT_FILE_PATH = Path(__file__).resolve()
 ROOT_PATH = CURRENT_FILE_PATH.parents[1]
 LOGO_PATH = ROOT_PATH / "docs" / "assets" / "logo_favicon.png"
+AUDIO_SAMPLE_URL = "https://freetestdata.com/wp-content/uploads/2021/09/Free_Test_Data_100KB_MP3.mp3"
 
 
 def _get_audio_chunk() -> AudioChunk:
@@ -81,6 +84,15 @@ def _get_audio_chunk() -> AudioChunk:
 
 
 DUMMY_AUDIO_CHUNK = _get_audio_chunk()
+assert isinstance(DUMMY_AUDIO_CHUNK.input_audio.data, str)
+DUMMY_AUDIO_URL_CHUNK_BASE64 = AudioURLChunk(audio_url=AudioURL(url=DUMMY_AUDIO_CHUNK.input_audio.data))
+DUMMY_AUDIO_URL_CHUNK_BASE64_STR = AudioURLChunk(audio_url=DUMMY_AUDIO_CHUNK.input_audio.data)
+DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX = AudioURLChunk(
+    audio_url=AudioURL(
+        url=f"data:audio/{DUMMY_AUDIO_CHUNK.input_audio.format};base64,{DUMMY_AUDIO_CHUNK.input_audio.data}"
+    )
+)
+DUMMY_AUDIO_URL_CHUNK_URL = AudioURLChunk(audio_url=AudioURL(url=AUDIO_SAMPLE_URL))
 
 
 def test_openai_chat_fields() -> None:
@@ -188,6 +200,56 @@ def test_convert_image_url_chunk(openai_image_url_chunk: Dict, image_url_chunk: 
         image_url_chunk.image_url = ImageURL(url=image_url_chunk.image_url, detail=None)
 
     assert ImageURLChunk.from_openai(typeddict_openai) == image_url_chunk
+
+
+@pytest.mark.parametrize(
+    ["vllm_audio_url_chunk", "audio_url_chunk"],
+    [
+        (
+            {
+                "type": "audio_url",
+                "audio_url": {
+                    "url": "https://freetestdata.com/wp-content/uploads/2021/09/Free_Test_Data_100KB_MP3.mp3"
+                },
+            },
+            DUMMY_AUDIO_URL_CHUNK_URL,
+        ),
+        (
+            {
+                "type": "audio_url",
+                "audio_url": {"url": DUMMY_AUDIO_CHUNK.input_audio.data},
+            },
+            DUMMY_AUDIO_URL_CHUNK_BASE64,
+        ),
+        (
+            {
+                "type": "audio_url",
+                "audio_url": {"url": DUMMY_AUDIO_CHUNK.input_audio.data},
+            },
+            DUMMY_AUDIO_URL_CHUNK_BASE64_STR,
+        ),
+        (
+            {
+                "type": "audio_url",
+                "audio_url": {
+                    "url": (
+                        f"data:audio/{DUMMY_AUDIO_CHUNK.input_audio.format};base64,{DUMMY_AUDIO_CHUNK.input_audio.data}"
+                    )
+                },
+            },
+            DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX,
+        ),
+    ],
+)
+def test_convert_audio_url_chunk(vllm_audio_url_chunk: Dict, audio_url_chunk: AudioURLChunk) -> None:
+    assert audio_url_chunk.to_openai() == vllm_audio_url_chunk
+    if not isinstance(audio_url_chunk.audio_url, AudioURL):
+        audio_url_from_openai = AudioURLChunk.from_openai(vllm_audio_url_chunk)
+        assert isinstance(audio_url_from_openai.audio_url, AudioURL)
+        assert audio_url_from_openai.audio_url.url == audio_url_chunk.audio_url
+        assert audio_url_from_openai.type == audio_url_chunk.type
+    else:
+        assert AudioURLChunk.from_openai(vllm_audio_url_chunk) == audio_url_chunk
 
 
 def test_convert_tool() -> None:
@@ -552,6 +614,64 @@ def test_convert_openai_message_to_message_and_back(openai_message: Dict, messag
                     )
                 )
             ],
+        ),
+        (
+            [
+                OpenAIUserMessage({"role": "user", "content": "Listen to this"}),
+                OpenAIAssistantMessage(
+                    {
+                        "role": "assistant",
+                        "content": "Pass the URL please.",
+                    }
+                ),
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Here it is !"},
+                        {
+                            "type": "audio_url",
+                            "audio_url": {
+                                "url": AUDIO_SAMPLE_URL,
+                            },
+                        },
+                        {"type": "text", "text": "What do you think also of these ones?"},
+                        {
+                            "type": "audio_url",
+                            "audio_url": {
+                                "url": DUMMY_AUDIO_URL_CHUNK_URL.audio_url.url,
+                            },
+                        },
+                        {
+                            "type": "audio_url",
+                            "audio_url": {
+                                "url": DUMMY_AUDIO_URL_CHUNK_BASE64.audio_url.url,
+                            },
+                        },
+                        {
+                            "type": "audio_url",
+                            "audio_url": {
+                                "url": DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX.audio_url.url,
+                            },
+                        },
+                    ],
+                },
+            ],
+            [
+                UserMessage(content="Listen to this"),
+                AssistantMessage(content="Pass the URL please."),
+                UserMessage(
+                    content=[
+                        TextChunk(text="Here it is !"),
+                        AudioURLChunk(audio_url=AudioURL(url=AUDIO_SAMPLE_URL)),
+                        TextChunk(text="What do you think also of these ones?"),
+                        DUMMY_AUDIO_URL_CHUNK_URL,
+                        DUMMY_AUDIO_URL_CHUNK_BASE64,
+                        DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX,
+                    ]
+                ),
+            ],
+            None,
+            None,
         ),
     ],
 )

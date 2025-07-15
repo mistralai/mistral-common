@@ -2,7 +2,7 @@ import re
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, TypeVar, Union
 
-from pydantic import ConfigDict, Field, ValidationError, validator
+from pydantic import ConfigDict, Field, ValidationError, field_validator
 from typing_extensions import Annotated, TypeAlias
 
 from mistral_common.audio import EXPECTED_FORMAT_VALUES, Audio
@@ -18,6 +18,8 @@ class ChunkTypes(str, Enum):
        text: A text chunk.
        image: An image chunk.
        image_url: An image url chunk.
+       input_audio: An input audio chunk.
+       audio_url: An audio url chunk.
 
     Examples:
         >>> from mistral_common.protocol.instruct.messages import ChunkTypes
@@ -28,6 +30,7 @@ class ChunkTypes(str, Enum):
     image = "image"
     image_url = "image_url"
     input_audio = "input_audio"
+    audio_url = "audio_url"
 
 
 class BaseContentChunk(MistralBase):
@@ -39,7 +42,7 @@ class BaseContentChunk(MistralBase):
        type: The type of the chunk.
     """
 
-    type: Literal[ChunkTypes.text, ChunkTypes.image, ChunkTypes.image_url, ChunkTypes.input_audio]
+    type: Literal[ChunkTypes.text, ChunkTypes.image, ChunkTypes.image_url, ChunkTypes.input_audio, ChunkTypes.audio_url]
 
     def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
         r"""Converts the chunk to the OpenAI format.
@@ -161,26 +164,62 @@ class RawAudio(MistralBase):
     format: str
 
     @classmethod
-    def from_audio(cls, audio: Audio) -> "RawAudio":
+    def from_audio(cls, audio: Audio, prefix: bool = False) -> "RawAudio":
         """Creates a RawAudio instance from an Audio object.
 
         Args:
             audio: An Audio object containing audio data, format, and duration.
+            prefix: Whether to add a prefix to the base64 encoded data.
+                The prefix is of the form `data:audio/<format>;base64,`.
 
         Returns:
             An AudioChunk instance initialized with the audio data.
         """
         format = audio.format
-        data = audio.to_base64(format)
+        data = audio.to_base64(format, prefix)
 
         return cls(data=data, format=format)
 
-    @validator("format")
+    @field_validator("format")
     def should_not_be_empty(cls, v: str) -> str:
         if v not in EXPECTED_FORMAT_VALUES:
             raise ValidationError(f"`format` should be one of {EXPECTED_FORMAT_VALUES}. Got: {v}`")
 
         return v
+
+
+class AudioURL(MistralBase):
+    r"""Audio URL.
+
+    Attributes:
+        url: The URL of the audio file.
+    """
+
+    url: str
+
+
+class AudioURLChunk(BaseContentChunk):
+    r"""Audio URL chunk.
+
+    Attributes:
+        type: The type of the chunk, which is always `ChunkTypes.audio_url`.
+        audio_url: The URL of the audio file.
+    """
+
+    type: Literal[ChunkTypes.audio_url] = ChunkTypes.audio_url
+    audio_url: Union[str, AudioURL]
+
+    def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
+        r"""Converts the chunk to the OpenAI format."""
+        if isinstance(self.audio_url, AudioURL):
+            return self.model_dump()
+        else:
+            return {"type": self.type, "audio_url": {"url": self.audio_url}}
+
+    @classmethod
+    def from_openai(cls, openai_chunk: Dict[str, Union[str, Dict[str, str]]]) -> "AudioURLChunk":
+        r"""Converts the OpenAI chunk to the Mistral format."""
+        return cls.model_validate(openai_chunk)
 
 
 class AudioChunk(BaseContentChunk):
@@ -199,10 +238,10 @@ class AudioChunk(BaseContentChunk):
     type: Literal[ChunkTypes.input_audio] = ChunkTypes.input_audio
     input_audio: RawAudio
 
-    @validator("input_audio")
+    @field_validator("input_audio")
     def should_not_be_empty(cls, v: RawAudio) -> RawAudio:
         if not v.data.strip():
-            raise ValueError(f"`InputAudio` should not be empty. Got: {v}`")
+            raise ValidationError(f"`InputAudio` should not be empty. Got: {v}`")
 
         return v
 
@@ -224,7 +263,13 @@ class AudioChunk(BaseContentChunk):
         Returns:
             A dictionary representing the audio chunk in the OpenAI format.
         """
-        return self.model_dump()
+        content = (
+            self.input_audio.data.decode("utf-8") if isinstance(self.input_audio.data, bytes) else self.input_audio.data
+        )
+        return {
+            "type": self.type,
+            "input_audio": RawAudio(data=content, format=self.input_audio.format).model_dump(),
+        }
 
     @classmethod
     def from_openai(cls, openai_chunk: Dict[str, Union[str, Dict[str, str]]]) -> "AudioChunk":
@@ -262,7 +307,9 @@ class TextChunk(BaseContentChunk):
         return cls.model_validate(openai_chunk)
 
 
-ContentChunk = Annotated[Union[TextChunk, ImageChunk, ImageURLChunk, AudioChunk], Field(discriminator="type")]
+ContentChunk = Annotated[
+    Union[TextChunk, ImageChunk, ImageURLChunk, AudioChunk, AudioURLChunk], Field(discriminator="type")
+]
 
 
 def _convert_openai_content_chunks(openai_content_chunks: Dict[str, Union[str, Dict[str, str]]]) -> ContentChunk:
@@ -281,6 +328,8 @@ def _convert_openai_content_chunks(openai_content_chunks: Dict[str, Union[str, D
         return ImageChunk.from_openai(openai_content_chunks)
     elif content_type == ChunkTypes.input_audio:
         return AudioChunk.from_openai(openai_content_chunks)
+    elif content_type == ChunkTypes.audio_url:
+        return AudioURLChunk.from_openai(openai_content_chunks)
     else:
         raise ValueError(f"Unknown content chunk type: {content_type}")
 

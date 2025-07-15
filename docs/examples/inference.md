@@ -148,7 +148,7 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.audio import Audio
 from huggingface_hub import hf_hub_download
 
-repo_id = "mistralai/voxtral-mini"
+repo_id = "mistralai/Voxtral-Mini-3B-2507"
 tokenizer = MistralTokenizer.from_hf_hub(repo_id)
 
 obama_file = hf_hub_download("patrickvonplaten/audio_samples", "obama.mp3", repo_type="dataset")
@@ -206,7 +206,7 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 from huggingface_hub import hf_hub_download
 
-repo_id = "mistralai/voxtral-mini"
+repo_id = "mistralai/Voxtral-Mini-3B-2507"
 tokenizer = MistralTokenizer.from_hf_hub(repo_id)
 
 obama_file = hf_hub_download("patrickvonplaten/audio_samples", "obama.mp3", repo_type="dataset")

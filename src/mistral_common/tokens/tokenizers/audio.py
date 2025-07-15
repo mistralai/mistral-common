@@ -1,12 +1,12 @@
 import logging
 import math
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import numpy as np
 
 from mistral_common.audio import Audio
-from mistral_common.protocol.instruct.messages import AudioChunk
+from mistral_common.protocol.instruct.messages import AudioChunk, AudioURL, AudioURLChunk
 
 logger = logging.getLogger(__name__)
 
@@ -157,8 +157,13 @@ class AudioEncoder:
 
         return math.ceil(audio_array_len / self.audio_config.chunk_frames) * self.audio_config.chunk_frames
 
-    def _encode_audio_chunk(self, content: AudioChunk) -> AudioEncoding:
-        audio = Audio.from_raw_audio(content.input_audio)
+    def _encode_audio_chunk(self, content: Union[AudioChunk, AudioURLChunk]) -> AudioEncoding:
+        if isinstance(content, AudioURLChunk):
+            audio = Audio.from_url_or_string(
+                content.audio_url.url if isinstance(content.audio_url, AudioURL) else content.audio_url
+            )
+        else:
+            audio = Audio.from_raw_audio(content.input_audio)
         audio.resample(self.audio_config.sampling_rate)
 
         audio.audio_array = self.pad(audio.audio_array, self.audio_config.sampling_rate)
@@ -178,7 +183,7 @@ class AudioEncoder:
             audio=audio,
         )
 
-    def __call__(self, content: AudioChunk) -> AudioEncoding:
+    def __call__(self, content: Union[AudioChunk, AudioURLChunk]) -> AudioEncoding:
         r"""Call the encoder on an audio chunk.
 
         Args:

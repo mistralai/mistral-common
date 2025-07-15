@@ -1,5 +1,8 @@
+import tempfile
+
 import numpy as np
 import pytest
+import soundfile as sf
 
 from mistral_common.audio import Audio, hertz_to_mel, mel_filter_bank
 
@@ -30,7 +33,45 @@ def test_audio_resample() -> None:
     assert np.allclose(audio.audio_array[:10], expected_resampled_array, atol=1e-3)
 
 
-def test_audio_base64() -> None:
+def test_from_url_or_string() -> None:
+    # TODO: Add a test with a valid URL and validate base64
+    sampling_rate = 44100
+    original_array = sin_wave(sampling_rate, 1)
+
+    audio = Audio(
+        audio_array=original_array,
+        sampling_rate=sampling_rate,
+        format="wav",
+    )
+
+    # Test with a local path
+    with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
+        with sf.SoundFile(tmp.name, "w", samplerate=sampling_rate, channels=1) as f:
+            f.write(original_array)
+        audio_local = Audio.from_url_or_string(tmp.name)
+    assert isinstance(audio_local, Audio)
+    assert np.allclose(audio_local.audio_array, original_array, atol=1e-5)
+    assert audio_local.sampling_rate == sampling_rate
+
+    # Test with base64 string
+    audio_base64 = Audio.from_url_or_string(audio.to_base64("mp3"))
+    assert isinstance(audio_base64, Audio)
+    assert audio_base64.sampling_rate == sampling_rate
+
+    # Test with base64 string with prefix
+    audio_base64_prefix = Audio.from_url_or_string(audio.to_base64("mp3", prefix=True))
+    assert isinstance(audio_base64_prefix, Audio)
+    assert audio_base64_prefix.sampling_rate == sampling_rate
+
+    # Test with an invalid URL
+    with pytest.raises(
+        ValueError, match=("Either the url is not valid or decoding failed: https://example.com/invalid_audio.wav")
+    ):
+        Audio.from_url_or_string("https://example.com/invalid_audio.wav")
+
+
+@pytest.mark.parametrize("prefix", [True, False])
+def test_audio_base64(prefix: bool) -> None:
     sampling_rate = 16_000
     original_array = sin_wave(sampling_rate, 3.3)
 
@@ -44,8 +85,11 @@ def test_audio_base64() -> None:
             format=format,
         )
 
-        base64_str = audio.to_base64(format)
+        base64_str = audio.to_base64(format, prefix)
         new_audio = Audio.from_base64(base64_str)
+
+        if prefix:
+            assert base64_str.startswith(f"data:audio/{format};base64,")
 
         assert audio.sampling_rate == new_audio.sampling_rate
         if format in LOSSLESS:
