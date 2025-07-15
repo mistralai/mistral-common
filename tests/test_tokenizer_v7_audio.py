@@ -1,12 +1,16 @@
+import tempfile
+from pathlib import Path
 from typing import List
 
 import numpy as np
 import pytest
+import soundfile as sf
 
 from mistral_common.protocol.instruct.messages import (
     UATS,
     AssistantMessage,
     AudioChunk,
+    AudioURLChunk,
     ContentChunk,
     RawAudio,
     SystemMessage,
@@ -17,6 +21,7 @@ from mistral_common.tokens.tokenizers.audio import (
     Audio,
     AudioConfig,
     AudioEncoder,
+    AudioEncoding,
     AudioSpectrogramConfig,
     SpecialAudioIDs,
 )
@@ -292,3 +297,62 @@ def test_no_audio_in_system_message_before_v7() -> None:
 def test_tokenize_audio_raise(tekkenizer: InstructTokenizerV7, messages: List[UATS], match_regex: str) -> None:
     with pytest.raises(ValueError, match=match_regex):
         tekkenizer.encode_instruct(InstructRequest(messages=messages))
+
+
+def sin_wave(sampling_rate: int, duration: float) -> np.ndarray:
+    return np.sin(np.ones([int(duration * sampling_rate)]))
+
+
+def test_encode_audio_url_chunk(tekkenizer: InstructTokenizerV7) -> None:
+    assert tekkenizer.audio_encoder is not None
+    sampling_rate = 44100
+    original_array = sin_wave(sampling_rate, 1)
+
+    audio = Audio(
+        audio_array=original_array,
+        sampling_rate=sampling_rate,
+        format="wav",
+    )
+
+    # Test with a local path
+    with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
+        with sf.SoundFile(tmp.name, "w", samplerate=sampling_rate, channels=1) as f:
+            f.write(original_array)
+        print(tmp.name, Path(tmp.name).exists())
+        audio_local = tekkenizer.audio_encoder(
+            AudioURLChunk(
+                audio_url=tmp.name,
+            )
+        )
+    assert isinstance(audio_local, AudioEncoding)
+
+    # Test with base64 string
+    audio_base64 = tekkenizer.audio_encoder(
+        AudioURLChunk(
+            audio_url=audio.to_base64("mp3"),
+        )
+    )
+    assert isinstance(audio_base64, AudioEncoding)
+
+    # Test with base64 string with prefix
+    audio_base64_prefix = tekkenizer.audio_encoder(
+        AudioURLChunk(
+            audio_url=audio.to_base64("mp3", prefix=True),
+        )
+    )
+    assert isinstance(audio_base64_prefix, AudioEncoding)
+
+    # Test with an invalid URL
+    with pytest.raises(
+        ValueError, match=("Either the url is not valid or decoding failed: https://example.com/invalid_audio.wav")
+    ):
+        tekkenizer.audio_encoder(AudioURLChunk(audio_url="https://example.com/invalid_audio.wav"))
+
+    # Test valid URL
+    url = "https://download.samplelib.com/mp3/sample-3s.mp3"
+    audio_url = tekkenizer.audio_encoder(
+        AudioURLChunk(
+            audio_url=url,
+        )
+    )
+    assert isinstance(audio_url, AudioEncoding)

@@ -164,19 +164,17 @@ class RawAudio(MistralBase):
     format: str
 
     @classmethod
-    def from_audio(cls, audio: Audio, prefix: bool = False) -> "RawAudio":
+    def from_audio(cls, audio: Audio) -> "RawAudio":
         """Creates a RawAudio instance from an Audio object.
 
         Args:
             audio: An Audio object containing audio data, format, and duration.
-            prefix: Whether to add a prefix to the base64 encoded data.
-                The prefix is of the form `data:audio/<format>;base64,`.
 
         Returns:
             An AudioChunk instance initialized with the audio data.
         """
         format = audio.format
-        data = audio.to_base64(format, prefix)
+        data = audio.to_base64(format, False)
 
         return cls(data=data, format=format)
 

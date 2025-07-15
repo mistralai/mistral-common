@@ -96,33 +96,22 @@ class Audio:
         return duration
 
     @staticmethod
-    def from_url_or_base64_string(url_or_string: str, strict: bool = True) -> "Audio":
-        r"""Create an Audio instance from a URL or a base64 encoded string.
+    def from_url(url: str, strict: bool = True) -> "Audio":
+        r"""Create an Audio instance from a URL.
 
         Args:
-            url_or_string: The URL or base64 encoded string of the audio file.
+            url: The URL of the audio file.
             strict: Whether to strictly enforce mono audio.
 
         Returns:
             An instance of the Audio class.
         """
         try:
-            return Audio.from_file(url_or_string, strict=strict)
-        except (FileNotFoundError, OSError):
-            pass
-
-        try:
-            response = requests.get(url_or_string)
+            response = requests.get(url)
             response.raise_for_status()
-        except requests.RequestException:
-            pass
-        else:
             return Audio.from_bytes(response.content, strict=strict)
-
-        try:
-            return Audio.from_base64(url_or_string, strict=strict)
         except Exception as e:
-            raise ValueError(f"Either the url is not valid or decoding failed: {url_or_string}") from e
+            raise ValueError(f"Either the URL is not valid or decoding failed: {url}") from e
 
     @staticmethod
     def from_base64(audio_base64: str, strict: bool = True) -> "Audio":
