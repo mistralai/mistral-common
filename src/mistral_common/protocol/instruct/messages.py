@@ -208,7 +208,7 @@ class AudioChunk(BaseContentChunk):
 
     @classmethod
     def from_audio(cls, audio: Audio) -> "AudioChunk":
-        """Creates an AudioChunk instance from an Audio object.
+        r"""Creates an AudioChunk instance from an Audio object.
 
         Args:
             audio: An Audio object containing audio data.
