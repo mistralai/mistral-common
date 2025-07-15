@@ -204,7 +204,7 @@ class Audio:
             raise ValueError(f"Unsupported audio data type: {type(audio.data)}")
 
     def resample(self, new_sampling_rate: int) -> None:
-        """Resample audio data to a new sampling rate.
+        r"""Resample audio data to a new sampling rate.
 
         Args:
             new_sampling_rate: The new sampling rate to resample the audio to.
