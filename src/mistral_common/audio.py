@@ -188,13 +188,13 @@ class Audio:
 
     @staticmethod
     def from_raw_audio(audio: "RawAudio") -> "Audio":
-        """Create an Audio instance from a RawAudio object.
+        r"""Create an Audio instance from a RawAudio object.
 
         Args:
             audio: The RawAudio object containing audio data.
 
         Returns:
-            Audio: An instance of the Audio class.
+            An instance of the Audio class.
         """
         if isinstance(audio.data, bytes):
             return Audio.from_bytes(audio.data)
