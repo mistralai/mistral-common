@@ -71,7 +71,7 @@ class AudioConfig:
 
     @property
     def audio_length_per_tok(self) -> int:
-        """Calculate the length of audio per token."""
+        r"""Calculate the length of audio per token."""
         downsample_factor = self.sampling_rate // self.frame_rate
         downsample_factor /= self.audio_encoding_config.hop_length
         return int(downsample_factor)
