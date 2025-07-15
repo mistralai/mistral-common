@@ -42,14 +42,14 @@ class AudioConfig:
     Attributes:
         sampling_rate: Sampling rate of the audio.
         frame_rate: Number of frames per second accepted by the tokenizer model.
-        audio_encoding_config: Configuration for audio spectrogram.
+        encoding_config: Configuration for audio spectrogram.
         chunk_length_s: Whether to pad an audio into multiples of chunk_length_s seconds (optional).
     """
 
     sampling_rate: int
     # number of frames per second accepted by the tokenizer model.
     frame_rate: float
-    audio_encoding_config: AudioSpectrogramConfig
+    encoding_config: AudioSpectrogramConfig
     # Whether to pad an audio into multiples of chunk_length_s seconds
     chunk_length_s: Optional[float] = None
 
@@ -73,7 +73,7 @@ class AudioConfig:
     def audio_length_per_tok(self) -> int:
         r"""Calculate the length of audio per token."""
         downsample_factor = self.sampling_rate // self.frame_rate
-        downsample_factor /= self.audio_encoding_config.hop_length
+        downsample_factor /= self.encoding_config.hop_length
         return int(downsample_factor)
 
 
@@ -116,7 +116,7 @@ class AudioEncoder:
 
     def __init__(self, audio_config: AudioConfig, special_ids: SpecialAudioIDs) -> None:
         self.audio_config = audio_config
-        self.encoding_config = audio_config.audio_encoding_config
+        self.encoding_config = audio_config.encoding_config
         self.special_ids = special_ids
 
     def pad(self, audio_array: np.ndarray, sampling_rate: int) -> np.ndarray:

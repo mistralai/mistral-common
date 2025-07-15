@@ -47,7 +47,7 @@ def _get_tekkenizer_with_audio() -> InstructTokenizerV7:
     audio_config = AudioConfig(
         sampling_rate=24_000,
         frame_rate=12.5,
-        audio_encoding_config=AudioSpectrogramConfig(
+        encoding_config=AudioSpectrogramConfig(
             num_mel_bins=128,
             window_size=400,
             hop_length=160,
