@@ -166,13 +166,13 @@ class Audio:
         return Audio(audio_array=audio_array, sampling_rate=sampling_rate, format=format)
 
     def to_base64(self, format: str) -> str:
-        """Convert the audio data to a base64 encoded string.
+        r"""Convert the audio data to a base64 encoded string.
 
         Args:
             format: The format to encode the audio in.
 
         Returns:
-            str: The base64 encoded audio data.
+            The base64 encoded audio data.
         """
         if not is_soundfile_installed():
             raise ImportError(
