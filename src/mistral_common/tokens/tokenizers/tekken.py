@@ -267,7 +267,7 @@ class Tekkenizer(Tokenizer):
             untyped["image"] = ImageConfig(**image)
 
         if audio := untyped.get("audio"):
-            encoding_config = audio.pop("encoding_config")
+            encoding_config = audio.pop("audio_encoding_config")
             encoding_config = AudioSpectrogramConfig(**encoding_config)
             untyped["audio"] = AudioConfig(encoding_config=encoding_config, **audio)
 
