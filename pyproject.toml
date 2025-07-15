@@ -76,6 +76,12 @@ warn_return_any = true
 warn_unused_ignores = true
 exclude = ["docs", "tools", "build"]
 
+[mypy-soundfile]
+ignore_missing_imports = true
+
+[mypy-soxr]
+ignore_missing_imports = true
+
 [[tool.mypy.overrides]]
 module = ["sentencepiece.*", "cv2", "cv2.*"]
 ignore_missing_imports = true
