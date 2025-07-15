@@ -335,7 +335,7 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         is_first: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray]]:
+    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
         r"""Encode a user message.
 
         Args:
@@ -358,7 +358,7 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         is_last: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray]]:
+    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
         r"""Encode a user content.
 
         Args:

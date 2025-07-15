@@ -18,9 +18,11 @@ class AudioSpectrogramConfig:
 
     Attributes:
         num_mel_bins: Number of mel bins, typically 80 or 128.
-        hop_length: Length of the overlapping windows for the STFT used to obtain the Mel Frequency coefficients, typically 160.
+        hop_length: Length of the overlapping windows for
+            the STFT used to obtain the Mel Frequency coefficients, typically 160.
         window_size: Window size of the Fourier transform, typically 400.
     """
+
     # Number of mel bins, typically 80 or 128
     num_mel_bins: int
     # Length of the overlapping windows for the STFT used to obtain the Mel Frequency coefficients, typically 160
@@ -30,7 +32,7 @@ class AudioSpectrogramConfig:
 
     def __post_init__(self) -> None:
         assert self.num_mel_bins > 0, self.num_mel_bins
-        assert self.hop_length > 0, self.hope_length
+        assert self.hop_length > 0, self.hop_length
         assert self.window_size > 0, self.window_size
 
 
@@ -45,6 +47,7 @@ class AudioConfig:
         audio_encoding_config: Configuration for audio spectrogram.
         chunk_length_s: Whether to pad an audio into multiples of chunk_length_s seconds (optional).
     """
+
     sampling_rate: int
     # number of frames per second accepted by the tokenizer model.
     frame_rate: float
@@ -85,6 +88,7 @@ class AudioEncoding:
         tokens: Text tokens corresponding to this audio chunk.
         audio: Original audio waveform data.
     """
+
     # Text tokens corresponding to this audio chunk
     tokens: List[int]
     # Original audio waveform data.
@@ -114,6 +118,7 @@ class AudioEncoder:
         encoding_config: Configuration for audio spectrogram.
         special_ids: Special tokens for audio encoding.
     """
+
     def __init__(self, audio_config: AudioConfig, special_ids: SpecialAudioIDs) -> None:
         self.audio_config = audio_config
         self.encoding_config = audio_config.audio_encoding_config
@@ -132,14 +137,10 @@ class AudioEncoder:
         """
         if self.audio_config.chunk_length_s:
             next_multiple_of_chunk_frames = self.next_multiple_of_chunk_frames(audio_array.shape[-1], sampling_rate)
-            audio_array = np.pad(
-                audio_array, (0, next_multiple_of_chunk_frames - audio_array.shape[-1])
-            )
+            audio_array = np.pad(audio_array, (0, next_multiple_of_chunk_frames - audio_array.shape[-1]))
         elif audio_array.shape[-1] < self.encoding_config.window_size:
             # minimum length for audios is at least one spectrogram frame
-            audio_array = np.pad(
-                audio_array, (0, self.encoding_config.window_size - audio_array.shape[-1])
-            )
+            audio_array = np.pad(audio_array, (0, self.encoding_config.window_size - audio_array.shape[-1]))
 
         return audio_array
 
@@ -154,8 +155,12 @@ class AudioEncoder:
         Returns:
             int: The next multiple of chunk frames.
         """
-        assert sampling_rate == self.audio_config.sampling_rate, f"Expected {sampling_rate=} to be {self.audio_config.sampling_rate=}"
-        assert self.audio_config.chunk_length_s is not None, f"Can't call next_multiple_of_chunk_frames if {self.audio_config.chunk_length_s=}."
+        assert sampling_rate == self.audio_config.sampling_rate, (
+            f"Expected {sampling_rate=} to be {self.audio_config.sampling_rate=}"
+        )
+        assert self.audio_config.chunk_length_s is not None, (
+            f"Can't call next_multiple_of_chunk_frames if {self.audio_config.chunk_length_s=}."
+        )
 
         return math.ceil(audio_array_len / self.audio_config.chunk_frames) * self.audio_config.chunk_frames
 

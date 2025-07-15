@@ -1,28 +1,23 @@
+import io
 from inspect import signature
 from pathlib import Path
-import io
-import base64
-from typing import Any, Dict, List, Optional, Type, Union, List
-import numpy as np
+from typing import Any, Dict, List, Optional, Type, Union
 
+import numpy as np
 import pytest
-from mistral_common.protocol.transcription.request import TranscriptionRequest
-from mistral_common.audio import Audio
 from openai.resources.chat.completions.completions import Completions
+from openai.types.audio.transcription_create_params import TranscriptionCreateParamsBase as OpenAITranscriptionRequest
 from openai.types.chat.chat_completion_assistant_message_param import (
     ChatCompletionAssistantMessageParam as OpenAIAssistantMessage,
 )
 from openai.types.chat.chat_completion_content_part_image_param import (
     ChatCompletionContentPartImageParam as OpenAIImageChunk,
 )
-from openai.types.chat.chat_completion_content_part_text_param import (
-    ChatCompletionContentPartTextParam as OpenAITextChunk,
-)
-from openai.types.chat.chat_completion_content_part_text_param import (
-    ChatCompletionContentPartTextParam as OpenAITextChunk,
-)
 from openai.types.chat.chat_completion_content_part_input_audio_param import (
     ChatCompletionContentPartInputAudioParam as OpenAIInputAudioChunk,
+)
+from openai.types.chat.chat_completion_content_part_text_param import (
+    ChatCompletionContentPartTextParam as OpenAITextChunk,
 )
 from openai.types.chat.chat_completion_message_tool_call_param import (
     ChatCompletionMessageToolCallParam as OpenAIToolCall,
@@ -33,10 +28,9 @@ from openai.types.chat.chat_completion_system_message_param import (
 from openai.types.chat.chat_completion_tool_message_param import ChatCompletionToolMessageParam as OpenAIToolMessage
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam as OpenAITool
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam as OpenAIUserMessage
-from openai.types.audio.transcription_create_params import TranscriptionCreateParamsBase as OpenAITranscriptionRequest
 from PIL import Image
 
-from mistral_common.audio import AudioFormat
+from mistral_common.audio import Audio
 from mistral_common.protocol.instruct.converters import _OPENAI_COMPLETION_FIELDS, _check_openai_fields_names
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
@@ -53,6 +47,7 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
+from mistral_common.protocol.transcription.request import TranscriptionRequest
 
 CURRENT_FILE_PATH = Path(__file__).resolve()
 ROOT_PATH = CURRENT_FILE_PATH.parents[1]
@@ -61,6 +56,7 @@ LOGO_PATH = ROOT_PATH / "docs" / "assets" / "logo_favicon.png"
 
 def _get_audio_chunk() -> AudioChunk:
     import soundfile as sf
+
     sample_rate = 44100  # Sample rate in Hz
     duration = 3  # Duration in seconds
     frequency = 440  # Frequency of the sine wave in Hz
@@ -72,7 +68,7 @@ def _get_audio_chunk() -> AudioChunk:
 
     # Write to in-memory buffer
     buffer = io.BytesIO()
-    sf.write(buffer, audio_data, sample_rate, format='WAV')
+    sf.write(buffer, audio_data, sample_rate, format="WAV")
 
     buffer.seek(0)
     data, sr = sf.read(buffer)
@@ -81,6 +77,7 @@ def _get_audio_chunk() -> AudioChunk:
 
     raw_audio = RawAudio.from_audio(audio)
     return AudioChunk(input_audio=raw_audio)
+
 
 DUMMY_AUDIO_CHUNK = _get_audio_chunk()
 
@@ -613,14 +610,13 @@ def test_convert_requests(
             assert reconstructed_tools[i] == tools[i]
 
 
-
 @pytest.mark.parametrize(
     ["audio", "language", "stream"],
     [
         (DUMMY_AUDIO_CHUNK, None, False),
         (DUMMY_AUDIO_CHUNK, "en", False),
         (DUMMY_AUDIO_CHUNK, "en", True),
-    ]
+    ],
 )
 def test_convert_transcription(audio: AudioChunk, language: Optional[str], stream: bool) -> None:
     def check_equality(a: TranscriptionRequest, b: TranscriptionRequest) -> bool:

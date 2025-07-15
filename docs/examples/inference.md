@@ -1,14 +1,18 @@
-# Examples
+# Inference
 
 We have a few examples of how to use the library with our models:
 
 - [Chat Completion](#chat-completion)
+  - [Text only](##text-only)
+  - [Image](#image)
+  - [Function calling](#function-calling)
+  - [Audio](#audio)
 - [Fill-in-the-middle (FIM) Completion](#fim)
 - [Audio Transcription](#audio-transcription)
 
-# Chat Completion
+## Chat Completion
 
-## Text-only
+### Text-only
 
 ```python
 from mistral_common.protocol.instruct.messages import (
@@ -17,7 +21,7 @@ from mistral_common.protocol.instruct.messages import (
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
-from mistral_common.tokens.tokenizer.mistral import MistralTokenizer
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 repo_id = "mistralai/Mistral-Large-Instruct-2411"
 tokenizer = MistralTokenizer.from_hf_hub(repo_id)
@@ -40,7 +44,7 @@ print(tokenized.text)
 ```
 
 
-## Image
+### Image
 
 ```python
 from mistral_common.protocol.instruct.messages import (
@@ -51,7 +55,7 @@ from mistral_common.protocol.instruct.messages import (
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
-from mistral_common.tokens.tokenizer.mistral import MistralTokenizer
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 repo_id = "mistralai/Mistral-Small-3.2-24B-Instruct-2506"
 tokenizer = MistralTokenizer.from_hf_hub(repo_id)
@@ -75,14 +79,17 @@ messages = [
     ),
 ]
 request = ChatCompletionRequest(messages=messages)
+tokenized = tokenizer.encode_chat_completion(request)
+
 # pass tokenized.tokens to your favorite image model
 print(tokenized.tokens)
 print(tokenized.images)
 
 # print text to visually see tokens
 print(tokenized.text)
+```
 
-## Function calling
+### Function calling
 
 ```python
 from mistral_common.protocol.instruct.messages import (
@@ -91,7 +98,7 @@ from mistral_common.protocol.instruct.messages import (
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
-from mistral_common.tokens.tokenizer.mistral import MistralTokenizer
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.protocol.instruct.tool_calls import Function, Tool
 
 repo_id = "mistralai/Mistral-Small-3.2-24B-Instruct-2506"
@@ -132,10 +139,12 @@ print(tokenized.tokens)
 print(tokenized.text)
 ```
 
-## Audio
+### Audio
 
 ```py
 from mistral_common.protocol.instruct.messages import TextChunk, AudioChunk, UserMessage, AssistantMessage, RawAudio
+from mistral_common.protocol.instruct.request import ChatCompletionRequest
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.audio import Audio
 from huggingface_hub import hf_hub_download
 
@@ -164,11 +173,11 @@ print(tokenized.audios)
 print(tokenized.text)
 ```
 
-# FIM
+## FIM
 
 ```python
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.instruct.request import FIMRequest
+from mistral_common.protocol.fim.request import FIMRequest
 
 tokenizer = MistralTokenizer.from_hf_hub("mistralai/Codestral-22B-v0.1")
 
@@ -187,12 +196,14 @@ print(tokenized.text)
 ```
 
 
-# Audio Transcription
+## Audio Transcription
 
 ```python
 from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.protocol.instruct.messages import RawAudio
 from mistral_common.audio import Audio
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+
 from huggingface_hub import hf_hub_download
 
 repo_id = "mistralai/voxtral-mini"
@@ -202,13 +213,13 @@ obama_file = hf_hub_download("patrickvonplaten/audio_samples", "obama.mp3", repo
 audio = Audio.from_file(obama_file, strict=False)
 
 audio = RawAudio.from_audio(audio)
-request = TranscriptionRequest(model=model, audio=audio, language="en").to_openai(exclude=("top_p", "seed"))
+request = TranscriptionRequest(model=repo_id, audio=audio, language="en")
 
 tokenized = tokenizer.encode_transcription(request)
 
 # pass tokenized.tokens to your favorite audio model
 print(tokenized.tokens)
-print(tokenized.audio)
+print(tokenized.audios)
 
 # print text to visually see tokens
 print(tokenized.text)

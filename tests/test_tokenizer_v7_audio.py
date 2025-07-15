@@ -3,7 +3,6 @@ from typing import List
 import numpy as np
 import pytest
 
-from mistral_common.audio import AudioFormat
 from mistral_common.protocol.instruct.messages import (
     UATS,
     AssistantMessage,

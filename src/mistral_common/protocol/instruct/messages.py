@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Literal, Optional, TypeVar, Union
 from pydantic import ConfigDict, Field, validator
 from typing_extensions import Annotated, TypeAlias
 
-from mistral_common.audio import EXPECTED_FORMAT_VALUES, AudioFormat, Audio
+from mistral_common.audio import EXPECTED_FORMAT_VALUES, Audio
 from mistral_common.base import MistralBase
 from mistral_common.image import SerializableImage
 from mistral_common.protocol.instruct.tool_calls import ToolCall
@@ -39,7 +39,7 @@ class BaseContentChunk(MistralBase):
        type: The type of the chunk.
     """
 
-    type: Literal[ChunkTypes.text, ChunkTypes.image, ChunkTypes.image_url]
+    type: Literal[ChunkTypes.text, ChunkTypes.image, ChunkTypes.image_url, ChunkTypes.input_audio]
 
     def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
         r"""Converts the chunk to the OpenAI format.
@@ -156,11 +156,12 @@ class RawAudio(MistralBase):
     Examples:
         >>> audio = RawAudio(data="base64_encoded_audio_data", format="mp3")
     """
+
     data: str | bytes
     format: str
 
     @classmethod
-    def from_audio(cls, audio: Audio) -> "AudioChunk":
+    def from_audio(cls, audio: Audio) -> "RawAudio":
         """Creates a RawAudio instance from an Audio object.
 
         Args:
@@ -170,7 +171,6 @@ class RawAudio(MistralBase):
             An AudioChunk instance initialized with the audio data.
         """
         format = audio.format
-        duration = audio.duration
         data = audio.to_base64(format)
 
         return cls(data=data, format=format)
@@ -181,7 +181,6 @@ class RawAudio(MistralBase):
             raise ValueError(f"`format` should be one of {EXPECTED_FORMAT_VALUES}. Got: {v}`")
 
         return v
-
 
 
 class AudioChunk(BaseContentChunk):
@@ -196,6 +195,7 @@ class AudioChunk(BaseContentChunk):
     Examples:
         >>> audio_chunk = AudioChunk(input_audio=RawAudio(data="base64_encoded_audio_data", format="mp3"))
     """
+
     type: Literal[ChunkTypes.input_audio] = ChunkTypes.input_audio
     input_audio: RawAudio
 
@@ -227,7 +227,7 @@ class AudioChunk(BaseContentChunk):
         return self.model_dump()
 
     @classmethod
-    def from_openai(cls, openai_chunk: Dict[str, Union[Optional[str], Dict[str, Optional[str]]]]) -> "TextChunk":
+    def from_openai(cls, openai_chunk: Dict[str, Union[str, Dict[str, str]]]) -> "AudioChunk":
         r"""Converts the OpenAI chunk to the Mistral format.
 
         Args:
@@ -237,7 +237,6 @@ class AudioChunk(BaseContentChunk):
             An AudioChunk instance initialized with the data from the OpenAI chunk.
         """
         return cls.model_validate(openai_chunk)
-
 
 
 class TextChunk(BaseContentChunk):
@@ -258,7 +257,7 @@ class TextChunk(BaseContentChunk):
         return self.model_dump()
 
     @classmethod
-    def from_openai(cls, openai_chunk: Dict[str, Optional[str]]) -> "TextChunk":
+    def from_openai(cls, openai_chunk: Dict[str, Union[str, Dict[str, str]]]) -> "TextChunk":
         r"""Converts the OpenAI chunk to the Mistral format."""
         return cls.model_validate(openai_chunk)
 

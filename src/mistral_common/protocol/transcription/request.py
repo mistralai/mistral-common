@@ -1,13 +1,12 @@
-from typing import BinaryIO, Optional, Any, Dict, List
-import base64
 import io
+from typing import Any, Dict, List, Optional
 
 from pydantic import Field
 from pydantic_extra_types.language_code import LanguageAlpha2
 
-from mistral_common.protocol.base import BaseCompletionRequest
 from mistral_common.audio import Audio, is_soundfile_installed
-from mistral_common.protocol.instruct.messages import AudioChunk, RawAudio
+from mistral_common.protocol.base import BaseCompletionRequest
+from mistral_common.protocol.instruct.messages import RawAudio
 
 
 class TranscriptionRequest(BaseCompletionRequest):
@@ -23,6 +22,7 @@ class TranscriptionRequest(BaseCompletionRequest):
         language: The language of the input audio in ISO-639-1 format (optional).
         strict_audio_validation: A flag indicating whether to perform strict validation of the audio data.
     """
+
     id: Optional[str] = None
     model: str
     audio: RawAudio
@@ -35,7 +35,7 @@ class TranscriptionRequest(BaseCompletionRequest):
     )
     strict_audio_validation: bool = True
 
-    def to_openai(self, exclude: tuple[str] = (), **kwargs: Any) -> Dict[str, List[Dict[str, Any]]]:
+    def to_openai(self, exclude: tuple = (), **kwargs: Any) -> Dict[str, List[Dict[str, Any]]]:
         r"""Convert the transcription request into the OpenAI format.
 
         This method prepares the transcription request data for compatibility with the OpenAI API.
@@ -51,7 +51,7 @@ class TranscriptionRequest(BaseCompletionRequest):
         Raises:
             ImportError: If the required soundfile library is not installed.
         """
-        openai_request: Dict[str, Any] = self.model_dump(exclude="audio")
+        openai_request: Dict[str, Any] = self.model_dump(exclude={"audio"})
 
         if not is_soundfile_installed():
             raise ImportError(
@@ -99,8 +99,13 @@ class TranscriptionRequest(BaseCompletionRequest):
         """
         file = openai_request.get("file")
         seed = openai_request.get("seed")
-        converted_dict = {k: v for k,v in openai_request.items() if (k in cls.model_fields and not (v is None and k in ["temperature", "top_p"]))}
+        converted_dict = {
+            k: v
+            for k, v in openai_request.items()
+            if (k in cls.model_fields and not (v is None and k in ["temperature", "top_p"]))
+        }
 
+        assert file is not None, file
         if isinstance(file, io.BytesIO):
             audio_bytes = file.getvalue()
         else:
@@ -114,4 +119,3 @@ class TranscriptionRequest(BaseCompletionRequest):
         converted_dict["audio"] = raw_audio
         converted_dict["random_seed"] = seed
         return cls(**converted_dict)
-

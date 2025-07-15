@@ -4,7 +4,7 @@ import logging
 from enum import Enum
 from functools import cache
 from pathlib import Path
-from typing import Type, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Type
 
 import numpy as np
 
@@ -53,7 +53,6 @@ else:
 EXPECTED_FORMAT_VALUES = [v.value.lower() for v in AudioFormat.__members__.values()]
 
 
-
 class Audio:
     def __init__(self, audio_array: np.ndarray, sampling_rate: int, format: str) -> None:
         """Initialize an Audio instance with audio data, sampling rate, and format.
@@ -92,7 +91,8 @@ class Audio:
             float: The duration of the audio in seconds.
         """
         # in seconds
-        return self.audio_array.shape[0] / self.sampling_rate
+        duration: float = self.audio_array.shape[0] / self.sampling_rate
+        return duration
 
     @staticmethod
     def from_base64(audio_base64: str, strict: bool = True) -> "Audio":
@@ -204,7 +204,6 @@ class Audio:
         else:
             raise ValueError(f"Unsupported audio data type: {type(audio.data)}")
 
-
     def resample(self, new_sampling_rate: int) -> None:
         """Resample audio data to a new sampling rate.
 
@@ -277,7 +276,8 @@ def _create_triangular_filter_bank(fft_freqs: np.ndarray, filter_freqs: np.ndarr
     slopes = np.expand_dims(filter_freqs, 0) - np.expand_dims(fft_freqs, 1)
     down_slopes = -slopes[:, :-2] / filter_diff[:-1]
     up_slopes = slopes[:, 2:] / filter_diff[1:]
-    return np.maximum(np.zeros(1), np.minimum(down_slopes, up_slopes))
+    filter_bank: np.ndarray = np.maximum(np.zeros(1), np.minimum(down_slopes, up_slopes))
+    return filter_bank
 
 
 @cache

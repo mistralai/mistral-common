@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from mistral_common.audio import Audio, AudioFormat, hertz_to_mel, mel_filter_bank
+from mistral_common.audio import Audio, hertz_to_mel, mel_filter_bank
 
 
 def sin_wave(sampling_rate: int, duration: float) -> np.ndarray:
@@ -51,13 +51,13 @@ def test_audio_base64() -> None:
         if format in LOSSLESS:
             assert np.allclose(audio.audio_array, new_audio.audio_array, atol=1e-5)
         elif format in LOSSY:
+
             def rmse(a: np.ndarray, b: np.ndarray) -> float:
-                return float(np.sqrt(np.mean((a - b)**2)))
+                return float(np.sqrt(np.mean((a - b) ** 2)))
 
             assert rmse(audio.audio_array, new_audio.audio_array) < 5e-3
         else:
             raise ValueError(f"Unknown format {format}")
-
 
 
 @pytest.mark.parametrize(
