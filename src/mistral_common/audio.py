@@ -84,10 +84,10 @@ class Audio:
 
     @property
     def duration(self) -> float:
-        """Calculate the duration of the audio in seconds.
+        r"""Calculate the duration of the audio in seconds.
 
         Returns:
-            float: The duration of the audio in seconds.
+           The duration of the audio in seconds.
         """
         # in seconds
         duration: float = self.audio_array.shape[0] / self.sampling_rate
