@@ -2,7 +2,7 @@ import re
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, TypeVar, Union
 
-from pydantic import ConfigDict, Field, validator
+from pydantic import ConfigDict, Field, validator, ValidationError
 from typing_extensions import Annotated, TypeAlias
 
 from mistral_common.audio import EXPECTED_FORMAT_VALUES, Audio

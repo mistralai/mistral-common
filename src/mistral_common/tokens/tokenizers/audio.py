@@ -120,7 +120,7 @@ class AudioEncoder:
         self.special_ids = special_ids
 
     def pad(self, audio_array: np.ndarray, sampling_rate: int) -> np.ndarray:
-        r""" Pad the audio array to the desired length.
+        r"""Pad the audio array to the desired length.
 
         Args:
             audio_array: Audio data as a numpy array.

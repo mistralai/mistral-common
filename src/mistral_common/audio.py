@@ -221,10 +221,10 @@ class Audio:
 
 def hertz_to_mel(freq: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
     r"""Convert frequency from hertz to mels using the "slaney" mel-scale.
-    
+
     Args:
         freq: The frequency, or multiple frequencies, in hertz (Hz).
-    
+
     Returns:
         The frequencies on the mel scale.
     """
@@ -244,11 +244,11 @@ def hertz_to_mel(freq: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
 
 
 def mel_to_hertz(mels: np.ndarray) -> np.ndarray:
-    r""" Convert frequency from mels to hertz using the "slaney" mel-scale.
-    
+    r"""Convert frequency from mels to hertz using the "slaney" mel-scale.
+
     Args:
         mels: The frequency, or multiple frequencies, in mels.
-    
+
     Returns:
         The frequencies in hertz.
     """
@@ -270,7 +270,7 @@ def _create_triangular_filter_bank(fft_freqs: np.ndarray, filter_freqs: np.ndarr
     Args:
         fft_freqs: Discrete frequencies of the FFT bins in Hz.
         filter_freqs: Center frequencies of the triangular filters to create, in Hz.
- 
+
     Returns:
         array of shape `(num_frequency_bins, num_mel_filters)`
     """
