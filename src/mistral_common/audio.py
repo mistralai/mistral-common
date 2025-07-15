@@ -96,11 +96,11 @@ class Audio:
         return duration
 
     @staticmethod
-    def from_url_or_string(url_or_string: str, strict: bool = True) -> "Audio":
-        r"""Create an Audio instance from a URL.
+    def from_url_or_base64_string(url_or_string: str, strict: bool = True) -> "Audio":
+        r"""Create an Audio instance from a URL or a base64 encoded string.
 
         Args:
-            url_or_string: The URL of the audio file.
+            url_or_string: The URL or base64 encoded string of the audio file.
             strict: Whether to strictly enforce mono audio.
 
         Returns:

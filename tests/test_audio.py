@@ -33,7 +33,7 @@ def test_audio_resample() -> None:
     assert np.allclose(audio.audio_array[:10], expected_resampled_array, atol=1e-3)
 
 
-def test_from_url_or_string() -> None:
+def test_from_url_or_base64_string() -> None:
     sampling_rate = 44100
     original_array = sin_wave(sampling_rate, 1)
 
@@ -47,18 +47,18 @@ def test_from_url_or_string() -> None:
     with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
         with sf.SoundFile(tmp.name, "w", samplerate=sampling_rate, channels=1) as f:
             f.write(original_array)
-        audio_local = Audio.from_url_or_string(tmp.name)
+        audio_local = Audio.from_url_or_base64_string(tmp.name)
     assert isinstance(audio_local, Audio)
     assert np.allclose(audio_local.audio_array, original_array, atol=1e-5)
     assert audio_local.sampling_rate == sampling_rate
 
     # Test with base64 string
-    audio_base64 = Audio.from_url_or_string(audio.to_base64("mp3"))
+    audio_base64 = Audio.from_url_or_base64_string(audio.to_base64("mp3"))
     assert isinstance(audio_base64, Audio)
     assert audio_base64.sampling_rate == sampling_rate
 
     # Test with base64 string with prefix
-    audio_base64_prefix = Audio.from_url_or_string(audio.to_base64("mp3", prefix=True))
+    audio_base64_prefix = Audio.from_url_or_base64_string(audio.to_base64("mp3", prefix=True))
     assert isinstance(audio_base64_prefix, Audio)
     assert audio_base64_prefix.sampling_rate == sampling_rate
 
@@ -66,11 +66,11 @@ def test_from_url_or_string() -> None:
     with pytest.raises(
         ValueError, match=("Either the url is not valid or decoding failed: https://example.com/invalid_audio.wav")
     ):
-        Audio.from_url_or_string("https://example.com/invalid_audio.wav")
+        Audio.from_url_or_base64_string("https://example.com/invalid_audio.wav")
 
     # Test valid URL
     url = "https://download.samplelib.com/mp3/sample-3s.mp3"
-    audio_url = Audio.from_url_or_string(url, strict=False)
+    audio_url = Audio.from_url_or_base64_string(url, strict=False)
     assert isinstance(audio_url, Audio)
 
 

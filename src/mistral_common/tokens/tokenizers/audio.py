@@ -159,7 +159,7 @@ class AudioEncoder:
 
     def _encode_audio_chunk(self, content: Union[AudioChunk, AudioURLChunk]) -> AudioEncoding:
         if isinstance(content, AudioURLChunk):
-            audio = Audio.from_url_or_string(
+            audio = Audio.from_url_or_base64_string(
                 content.audio_url.url if isinstance(content.audio_url, AudioURL) else content.audio_url
             )
         else:
