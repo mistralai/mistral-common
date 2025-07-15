@@ -464,8 +464,9 @@ def test_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkeni
 
     # make sure it also works end to end
     tools = instruct_request.available_tools
+    exclude = {"system_prompt", "truncate_at_max_tokens", "available_tools"}
     chat_completion_request = ChatCompletionRequest(
-        **instruct_request.model_dump(exclude={"system_prompt", "truncate_at_max_tokens", "available_tools"}), tools=tools
+        **instruct_request.model_dump(exclude=exclude), tools=tools
     )
     validator = MistralRequestValidatorV5(mode=ValidationMode.finetuning)
     normalizer = InstructRequestNormalizerV7.normalizer()
