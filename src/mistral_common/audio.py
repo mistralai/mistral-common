@@ -114,14 +114,14 @@ class Audio:
 
     @staticmethod
     def from_file(file: str, strict: bool = True) -> "Audio":
-        """Create an Audio instance from an audio file.
+        r"""Create an Audio instance from an audio file.
 
         Args:
             file: Path to the audio file.
             strict: Whether to strictly enforce mono audio. Defaults to True.
 
         Returns:
-            Audio: An instance of the Audio class.
+            An instance of the Audio class.
         """
         if not is_soundfile_installed():
             raise ImportError(
