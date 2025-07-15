@@ -263,12 +263,14 @@ def mel_to_hertz(mels: np.ndarray) -> np.ndarray:
 
 
 def _create_triangular_filter_bank(fft_freqs: np.ndarray, filter_freqs: np.ndarray) -> np.ndarray:
-    """
-    Creates a triangular filter bank.
+    r"""Creates a triangular filter bank.
+
     Adapted from *torchaudio* and *librosa*.
+
     Args:
         fft_freqs: Discrete frequencies of the FFT bins in Hz.
         filter_freqs: Center frequencies of the triangular filters to create, in Hz.
+ 
     Returns:
         array of shape `(num_frequency_bins, num_mel_filters)`
     """
