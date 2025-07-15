@@ -157,7 +157,7 @@ class RawAudio(MistralBase):
         >>> audio = RawAudio(data="base64_encoded_audio_data", format="mp3")
     """
 
-    data: str | bytes
+    data: Union[str, bytes]
     format: str
 
     @classmethod

@@ -4,7 +4,7 @@ import logging
 from enum import Enum
 from functools import cache
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
 import numpy as np
 
@@ -219,7 +219,7 @@ class Audio:
         self.sampling_rate = new_sampling_rate
 
 
-def hertz_to_mel(freq: float | np.ndarray) -> float | np.ndarray:
+def hertz_to_mel(freq: Union[float, np.ndarray]) -> float | np.ndarray:
     """
     Convert frequency from hertz to mels using the "slaney" mel-scale.
     Args:
