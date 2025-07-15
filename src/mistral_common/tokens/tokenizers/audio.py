@@ -179,14 +179,13 @@ class AudioEncoder:
         )
 
     def __call__(self, content: AudioChunk) -> AudioEncoding:
-        """
-        Call the encoder on an audio chunk.
+        r"""Call the encoder on an audio chunk.
 
         Args:
             content: Audio chunk to encode.
 
         Returns:
-            AudioEncoding: Encoded audio data and tokens.
+            Encoded audio data and tokens.
         """
         return self._encode_audio_chunk(content)
 
