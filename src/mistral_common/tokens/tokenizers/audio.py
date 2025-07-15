@@ -79,8 +79,7 @@ class AudioConfig:
 
 @dataclass
 class AudioEncoding:
-    """
-    Encapsulates the tokens and audio data for an audio chunk.
+    r"""Encapsulates the tokens and audio data for an audio chunk.
 
     Attributes:
         tokens: Text tokens corresponding to this audio chunk.
