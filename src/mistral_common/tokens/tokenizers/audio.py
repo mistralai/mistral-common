@@ -37,8 +37,7 @@ class AudioSpectrogramConfig:
 
 @dataclass
 class AudioConfig:
-    """
-    Configuration for audio processing.
+    r"""Configuration for audio processing.
 
     Attributes:
         sampling_rate: Sampling rate of the audio.
