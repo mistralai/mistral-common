@@ -1,12 +1,9 @@
 from typing import Optional
 
 import numpy as np
-from pydantic_extra_types.language_code import LanguageAlpha2
 import pytest
+from pydantic_extra_types.language_code import LanguageAlpha2
 
-from mistral_common.protocol.instruct.messages import (
-    AudioChunk,
-)
 from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import (
     Audio,

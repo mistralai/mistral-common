@@ -4,7 +4,7 @@ import logging
 from enum import Enum
 from functools import cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Type
+from typing import TYPE_CHECKING
 
 import numpy as np
 

@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, Union
 
 import numpy as np
-from pydantic_extra_types.language_code import LanguageAlpha2
 import pytest
 from openai.resources.chat.completions.completions import Completions
 from openai.types.audio.transcription_create_params import TranscriptionCreateParamsBase as OpenAITranscriptionRequest
@@ -30,6 +29,7 @@ from openai.types.chat.chat_completion_tool_message_param import ChatCompletionT
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam as OpenAITool
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam as OpenAIUserMessage
 from PIL import Image
+from pydantic_extra_types.language_code import LanguageAlpha2
 
 from mistral_common.audio import Audio
 from mistral_common.protocol.instruct.converters import _OPENAI_COMPLETION_FIELDS, _check_openai_fields_names
