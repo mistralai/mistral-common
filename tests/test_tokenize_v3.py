@@ -6,8 +6,8 @@ import pytest
 
 from mistral_common.exceptions import InvalidAssistantMessageException, InvalidMessageStructureException
 from mistral_common.protocol.instruct.messages import AssistantMessage, ToolMessage, UserMessage
+from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
-from mistral_common.tokens.instruct.request import InstructRequest
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.sentencepiece import (

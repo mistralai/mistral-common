@@ -5,16 +5,20 @@ from pathlib import Path
 from typing import Generic, List, Optional, Tuple, TypeVar, Union
 
 import numpy as np
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 
+from mistral_common.audio import Audio
 from mistral_common.base import MistralBase
+from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.instruct.messages import (
     AssistantMessageType,
     ContentChunk,
     UserMessage,
 )
+from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Tool
-from mistral_common.tokens.instruct.request import FIMRequest, InstructRequest
+from mistral_common.protocol.transcription.request import TranscriptionRequest
+from mistral_common.tokens.tokenizers.audio import AudioEncoder
 from mistral_common.tokens.tokenizers.image import ImageEncoder
 
 
@@ -76,6 +80,9 @@ class SpecialTokens(str, Enum):
     begin_tool_content = "[TOOL_CONTENT]"
     args = "[ARGS]"
     call_id = "[CALL_ID]"
+    audio = "[AUDIO]"
+    begin_audio = "[BEGIN_AUDIO]"
+    transcribe = "[TRANSCRIBE]"
 
 
 class SpecialTokenPolicy(int, Enum):
@@ -165,7 +172,8 @@ class Tokenized(MistralBase):
     tokens: List[int]
     text: Optional[str] = None
     prefix_ids: Optional[List[int]] = None
-    images: List[np.ndarray] = []
+    images: List[np.ndarray] = Field(default_factory=list)
+    audios: List[Audio] = Field(default_factory=list)
 
 
 class Tokenizer(ABC):
@@ -267,13 +275,17 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
 
     tokenizer: Tokenizer
     image_encoder: Optional[ImageEncoder]
+    audio_encoder: Optional[AudioEncoder]
 
-    def __init__(self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder]) -> None:
+    def __init__(
+        self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder], audio_encoder: Optional[AudioEncoder]
+    ) -> None:
         r"""Initialize the instruct tokenizer.
 
         Args:
             tokenizer: The tokenizer to use.
             image_encoder: The image encoder to use if any.
+            audio_encoder: The audio encoder to use if any.
         """
 
     @abstractmethod
@@ -286,6 +298,23 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         Returns:
             The tokenized instruct request.
         """
+
+    @abstractmethod
+    def encode_transcription(self, request: TranscriptionRequest) -> TokenizedType:
+        r"""
+        Encodes an audio transcription request into a tokenized format.
+
+        This method processes a transcription request containing audio data,
+        encodes the user message, and returns the tokenized output.
+
+        Args:
+            request: The transcription request object containing
+                the audio data to be encoded.
+
+        Returns:
+            Tokenized: The tokenized representation of the audio data, including processed audio and tokens
+        """
+        ...
 
     @abstractmethod
     def decode(self, tokens: List[int], special_token_policy: Optional[SpecialTokenPolicy] = None) -> str:
@@ -324,7 +353,7 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         is_first: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray]]:
+    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
         r"""Encode a user message.
 
         Args:
@@ -347,7 +376,7 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         is_last: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray]]:
+    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
         r"""Encode a user content.
 
         Args:

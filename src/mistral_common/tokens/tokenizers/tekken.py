@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Type, TypedDict, Union
 
 import tiktoken
 
+from mistral_common.tokens.tokenizers.audio import AudioConfig, AudioSpectrogramConfig
 from mistral_common.tokens.tokenizers.base import (
     SpecialTokenPolicy,
     SpecialTokens,
@@ -91,6 +92,7 @@ class ModelData(TypedDict):
     version: int
     type: str
     image: ImageConfig
+    audio: AudioConfig
 
 
 class Tekkenizer(Tokenizer):
@@ -139,6 +141,7 @@ class Tekkenizer(Tokenizer):
         name: str = "tekkenizer",
         _path: Optional[Union[str, Path]] = None,
         image_config: Optional[ImageConfig] = None,
+        audio_config: Optional[AudioConfig] = None,
     ):
         r"""Initialize the tekken tokenizer.
 
@@ -194,7 +197,10 @@ class Tekkenizer(Tokenizer):
         )
 
         self._version = version
+
         self._image_config = image_config
+        self._audio_config = audio_config
+
         self._all_special_tokens = special_tokens
         self._special_tokens_reverse_vocab = {t["token_str"]: t["rank"] for t in special_tokens}
         self._vocab = [self.id_to_piece(i) for i in range(vocab_size)]
@@ -249,7 +255,7 @@ class Tekkenizer(Tokenizer):
 
         untyped["special_tokens"] = special_tokens
 
-        if mm := untyped.get("multimodal", None):
+        if mm := untyped.get("multimodal"):
             # deprecated - only allowed for tokenizers <= v11
             if version > TokenizerVersion("v11"):
                 raise ValueError(
@@ -257,8 +263,13 @@ class Tekkenizer(Tokenizer):
                 )
 
             untyped["image"] = ImageConfig(**mm)
-        elif image := untyped.get("image", None):
+        elif image := untyped.get("image"):
             untyped["image"] = ImageConfig(**image)
+
+        if audio := untyped.get("audio"):
+            encoding_config = audio.pop("audio_encoding_config")
+            encoding_config = AudioSpectrogramConfig(**encoding_config)
+            untyped["audio"] = AudioConfig(encoding_config=encoding_config, **audio)
 
         model_data: ModelData = untyped
 
@@ -271,6 +282,7 @@ class Tekkenizer(Tokenizer):
             version=version,
             name=path.name.replace(".json", ""),
             image_config=model_data.get("image"),
+            audio_config=model_data.get("audio"),
             _path=path,
         )
 
@@ -282,6 +294,19 @@ class Tekkenizer(Tokenizer):
     @image.setter
     def image(self, value: ImageConfig) -> None:
         raise ValueError("Can only set Image config at init")
+
+    @property
+    def audio(self) -> Optional[AudioConfig]:
+        r"""The audio configuration of the tokenizer.
+
+        Returns:
+             The audio configuration object if it exists, otherwise None.
+        """
+        return self._audio_config
+
+    @audio.setter
+    def audio(self, value: AudioConfig) -> None:
+        raise ValueError("Can only set Audio config at init")
 
     @property
     def num_special_tokens(self) -> int:

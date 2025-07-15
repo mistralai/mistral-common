@@ -1,14 +1,20 @@
+import io
 from inspect import signature
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, Union
 
+import numpy as np
 import pytest
 from openai.resources.chat.completions.completions import Completions
+from openai.types.audio.transcription_create_params import TranscriptionCreateParamsBase as OpenAITranscriptionRequest
 from openai.types.chat.chat_completion_assistant_message_param import (
     ChatCompletionAssistantMessageParam as OpenAIAssistantMessage,
 )
 from openai.types.chat.chat_completion_content_part_image_param import (
     ChatCompletionContentPartImageParam as OpenAIImageChunk,
+)
+from openai.types.chat.chat_completion_content_part_input_audio_param import (
+    ChatCompletionContentPartInputAudioParam as OpenAIInputAudioChunk,
 )
 from openai.types.chat.chat_completion_content_part_text_param import (
     ChatCompletionContentPartTextParam as OpenAITextChunk,
@@ -23,26 +29,58 @@ from openai.types.chat.chat_completion_tool_message_param import ChatCompletionT
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam as OpenAITool
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam as OpenAIUserMessage
 from PIL import Image
+from pydantic_extra_types.language_code import LanguageAlpha2
 
+from mistral_common.audio import Audio
 from mistral_common.protocol.instruct.converters import _OPENAI_COMPLETION_FIELDS, _check_openai_fields_names
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
+    AudioChunk,
     ChatMessage,
     ImageChunk,
     ImageURL,
     ImageURLChunk,
+    RawAudio,
     SystemMessage,
     TextChunk,
     ToolMessage,
     UserMessage,
 )
-from mistral_common.protocol.instruct.request import ChatCompletionRequest
+from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
-from mistral_common.tokens.instruct.request import InstructRequest
+from mistral_common.protocol.transcription.request import TranscriptionRequest
 
 CURRENT_FILE_PATH = Path(__file__).resolve()
 ROOT_PATH = CURRENT_FILE_PATH.parents[1]
 LOGO_PATH = ROOT_PATH / "docs" / "assets" / "logo_favicon.png"
+
+
+def _get_audio_chunk() -> AudioChunk:
+    import soundfile as sf
+
+    sample_rate = 44100  # Sample rate in Hz
+    duration = 3  # Duration in seconds
+    frequency = 440  # Frequency of the sine wave in Hz
+
+    # Time array
+    t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+
+    audio_data = 0.5 * np.sin(2 * np.pi * frequency * t)
+
+    # Write to in-memory buffer
+    buffer = io.BytesIO()
+    sf.write(buffer, audio_data, sample_rate, format="WAV")
+
+    buffer.seek(0)
+    data, sr = sf.read(buffer)
+
+    audio = Audio(audio_array=data, sampling_rate=sr, format="wav")
+
+    raw_audio = RawAudio.from_audio(audio)
+    return AudioChunk(input_audio=raw_audio)
+
+
+DUMMY_AUDIO_CHUNK = _get_audio_chunk()
 
 
 def test_openai_chat_fields() -> None:
@@ -92,6 +130,16 @@ def test_convert_text_chunk() -> None:
 
     typeddict_openai = OpenAITextChunk(**chunk.to_openai())  # type: ignore[typeddict-item]
     assert TextChunk.from_openai(typeddict_openai) == chunk
+
+
+def test_convert_input_audio_chunk() -> None:
+    chunk = DUMMY_AUDIO_CHUNK
+    text_openai = chunk.to_openai()
+
+    assert AudioChunk.from_openai(text_openai) == chunk
+
+    typeddict_openai = OpenAIInputAudioChunk(**chunk.to_openai())  # type: ignore[typeddict-item]
+    assert AudioChunk.from_openai(typeddict_openai) == chunk
 
 
 @pytest.mark.parametrize(
@@ -561,3 +609,48 @@ def test_convert_requests(
         assert len(tools) == len(reconstructed_tools)
         for i in range(len(tools)):
             assert reconstructed_tools[i] == tools[i]
+
+
+@pytest.mark.parametrize(
+    ["audio", "language", "stream"],
+    [
+        (DUMMY_AUDIO_CHUNK, None, False),
+        (DUMMY_AUDIO_CHUNK, "en", False),
+        (DUMMY_AUDIO_CHUNK, "en", True),
+    ],
+)
+def test_convert_transcription(audio: AudioChunk, language: Optional[LanguageAlpha2], stream: bool) -> None:
+    def check_equality(a: TranscriptionRequest, b: TranscriptionRequest) -> bool:
+        if a.audio.data != b.audio.data:
+            return False
+        if a.id != b.id:
+            return False
+        if a.model != b.model:
+            return False
+        if a.language != b.language:
+            return False
+        if a.strict_audio_validation != b.strict_audio_validation:
+            return False
+        if a.temperature != b.temperature:
+            return False
+        if a.top_p != b.top_p:
+            return False
+        if a.max_tokens != b.max_tokens:
+            return False
+        if a.random_seed != b.random_seed:
+            return False
+
+        return True
+
+    seed: int = 43
+    request = TranscriptionRequest(audio=audio.input_audio, language=language, model="model", random_seed=seed)
+    openai_request = request.to_openai(stream=stream)
+
+    assert check_equality(request, TranscriptionRequest.from_openai(openai_request))
+
+    openai_transcription = OpenAITranscriptionRequest(**openai_request)  # type: ignore
+
+    from_oai = TranscriptionRequest.from_openai(openai_transcription)
+    assert isinstance(from_oai, TranscriptionRequest)
+
+    assert check_equality(request, from_oai)
