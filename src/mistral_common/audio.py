@@ -54,7 +54,7 @@ EXPECTED_FORMAT_VALUES = [v.value.lower() for v in AudioFormat.__members__.value
 
 class Audio:
     def __init__(self, audio_array: np.ndarray, sampling_rate: int, format: str) -> None:
-        """Initialize an Audio instance with audio data, sampling rate, and format.
+        r"""Initialize an Audio instance with audio data, sampling rate, and format.
 
         Args:
             audio_array: The audio data as a numpy array.
