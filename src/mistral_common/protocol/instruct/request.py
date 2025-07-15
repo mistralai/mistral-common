@@ -196,7 +196,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
 
 
 class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
-    """A valid Instruct request to be tokenized.
+    r"""A valid Instruct request to be tokenized.
 
     Attributes:
         messages: The history of the conversation.
