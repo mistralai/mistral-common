@@ -18,7 +18,7 @@ _URL_SCHEMES = {
     "ftp",
     "s3",  # AWS S3
     "gs",  # Google Cloud Storage
-    "azure",  # e.g. azure://container/blob
+    "azure", 
     "wasbs",
     "abfs",  # Azure Blob/ADLS
 }
