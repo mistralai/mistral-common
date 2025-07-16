@@ -1,5 +1,8 @@
+import tempfile
+
 import numpy as np
 import pytest
+import soundfile as sf
 
 from mistral_common.audio import Audio, hertz_to_mel, mel_filter_bank
 
@@ -30,7 +33,37 @@ def test_audio_resample() -> None:
     assert np.allclose(audio.audio_array[:10], expected_resampled_array, atol=1e-3)
 
 
-def test_audio_base64() -> None:
+def test_from_file() -> None:
+    sampling_rate = 44100
+    original_array = sin_wave(sampling_rate, 1)
+
+    # Test with a local path
+    with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
+        with sf.SoundFile(tmp.name, "w", samplerate=sampling_rate, channels=1) as f:
+            f.write(original_array)
+        audio_local = Audio.from_file(tmp.name)
+    assert isinstance(audio_local, Audio)
+    assert np.allclose(audio_local.audio_array, original_array, atol=1e-5)
+    assert audio_local.sampling_rate == sampling_rate
+
+
+def test_from_url() -> None:
+    # Test with an invalid URL
+    with pytest.raises(ValueError, match=("Failed to download audio from URL: https://example.com/invalid_audio.wav")):
+        Audio.from_url("https://example.com/invalid_audio.wav")
+
+    # Test with an invalid content
+    with pytest.raises(ValueError, match="Failed to create Audio instance from URL: https://example.com ."):
+        Audio.from_url("https://example.com")
+
+    # Test valid URL
+    url = "https://download.samplelib.com/mp3/sample-3s.mp3"
+    audio_url = Audio.from_url(url, strict=False)
+    assert isinstance(audio_url, Audio)
+
+
+@pytest.mark.parametrize("prefix", [True, False])
+def test_audio_base64(prefix: bool) -> None:
     sampling_rate = 16_000
     original_array = sin_wave(sampling_rate, 3.3)
 
@@ -44,8 +77,11 @@ def test_audio_base64() -> None:
             format=format,
         )
 
-        base64_str = audio.to_base64(format)
+        base64_str = audio.to_base64(format, prefix)
         new_audio = Audio.from_base64(base64_str)
+
+        if prefix:
+            assert base64_str.startswith(f"data:audio/{format};base64,")
 
         assert audio.sampling_rate == new_audio.sampling_rate
         if format in LOSSLESS:

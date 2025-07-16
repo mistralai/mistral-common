@@ -1,12 +1,14 @@
 import base64
 import io
 import logging
+import re
 from enum import Enum
 from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Union
 
 import numpy as np
+import requests
 
 if TYPE_CHECKING:
     from mistral_common.protocol.instruct.messages import RawAudio
@@ -94,6 +96,26 @@ class Audio:
         return duration
 
     @staticmethod
+    def from_url(url: str, strict: bool = True) -> "Audio":
+        r"""Create an Audio instance from a URL.
+
+        Args:
+            url: The URL of the audio file.
+            strict: Whether to strictly enforce mono audio.
+
+        Returns:
+            An instance of the Audio class.
+        """
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            return Audio.from_bytes(response.content, strict=strict)
+        except requests.RequestException as e:  # Something went wrong with the request.
+            raise ValueError(f"Failed to download audio from URL: {url}") from e
+        except Exception as e:  # Something went wrong with the audio file.
+            raise ValueError(f"Failed to create Audio instance from URL: {url} .") from e
+
+    @staticmethod
     def from_base64(audio_base64: str, strict: bool = True) -> "Audio":
         r"""Create an Audio instance from a base64 encoded string.
 
@@ -109,7 +131,14 @@ class Audio:
                 "soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'"
             )
 
-        audio_bytes = base64.b64decode(audio_base64)
+        if re.match(r"^data:audio/\w+;base64,", audio_base64):  # Remove the prefix if it exists
+            audio_base64 = audio_base64.split(",")[1]
+
+        try:
+            audio_bytes = base64.b64decode(audio_base64)
+        except Exception as e:
+            raise ValueError("base64 decoding failed. Please check the input string is a valid base64.") from e
+
         return Audio.from_bytes(audio_bytes, strict=strict)
 
     @staticmethod
@@ -128,7 +157,11 @@ class Audio:
                 "soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'"
             )
 
-        assert Path(file).exists(), f"{file=} does not exist"
+        if isinstance(file, str) and file.startswith("file://"):
+            file = file[7:]
+
+        if not Path(file).exists():
+            raise FileNotFoundError(f"{file=} does not exist")
 
         with open(file, "rb") as f:
             audio_bytes = f.read()
@@ -165,11 +198,12 @@ class Audio:
 
         return Audio(audio_array=audio_array, sampling_rate=sampling_rate, format=format)
 
-    def to_base64(self, format: str) -> str:
+    def to_base64(self, format: str, prefix: bool = False) -> str:
         r"""Convert the audio data to a base64 encoded string.
 
         Args:
             format: The format to encode the audio in.
+            prefix: Whether to add a data prefix to the base64 encoded string.
 
         Returns:
             The base64 encoded audio data.
@@ -184,7 +218,10 @@ class Audio:
         with io.BytesIO() as audio_file:
             sf.write(audio_file, self.audio_array, self.sampling_rate, format=format.upper())
             audio_file.seek(0)
-            return base64.b64encode(audio_file.read()).decode("utf-8")
+            base64_str = base64.b64encode(audio_file.read()).decode("utf-8")
+        if prefix:
+            base64_str = f"data:audio/{format.lower()};base64,{base64_str}"
+        return base64_str
 
     @staticmethod
     def from_raw_audio(audio: "RawAudio") -> "Audio":

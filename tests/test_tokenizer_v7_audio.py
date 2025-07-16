@@ -1,12 +1,18 @@
+import tempfile
+from pathlib import Path
 from typing import List
+from unittest.mock import patch
 
 import numpy as np
 import pytest
+import soundfile as sf
 
 from mistral_common.protocol.instruct.messages import (
     UATS,
     AssistantMessage,
     AudioChunk,
+    AudioURL,
+    AudioURLChunk,
     ContentChunk,
     RawAudio,
     SystemMessage,
@@ -65,6 +71,60 @@ def _get_tekkenizer_with_audio() -> InstructTokenizerV7:
 @pytest.fixture(scope="session")
 def tekkenizer() -> InstructTokenizerV7:
     return _get_tekkenizer_with_audio()
+
+
+def sin_wave(sampling_rate: int, duration: float) -> np.ndarray:
+    return np.sin(np.ones([int(duration * sampling_rate)]))
+
+
+@pytest.fixture(scope="session")
+def sample_audio() -> Audio:
+    sampling_rate = 44100
+    original_array = sin_wave(sampling_rate, 1)
+
+    audio = Audio(
+        audio_array=original_array,
+        sampling_rate=sampling_rate,
+        format="wav",
+    )
+    return audio
+
+
+@pytest.fixture(scope="session")
+def sample_audio_file(sample_audio: Audio) -> Path:
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+        sf.write(f.name, sample_audio.audio_array, sample_audio.sampling_rate)
+        return Path(f.name)
+
+
+@pytest.fixture(scope="session")
+def sample_audio_url_chunk_path(sample_audio_file: Path) -> AudioURLChunk:
+    return AudioURLChunk(audio_url=str(sample_audio_file))
+
+
+@pytest.fixture(scope="session")
+def sample_audio_url_chunk_path_file(sample_audio_file: Path) -> AudioURLChunk:
+    return AudioURLChunk(audio_url=AudioURL(url=f"file://{sample_audio_file}"))
+
+
+@pytest.fixture(scope="session")
+def sample_audio_url_chunk_http() -> AudioURLChunk:
+    return AudioURLChunk(audio_url=AudioURL(url="http://example.com/audio.wav"))
+
+
+@pytest.fixture(scope="session")
+def sample_audio_url_chunk_https() -> AudioURLChunk:
+    return AudioURLChunk(audio_url=AudioURL(url="https://example.com/audio.wav"))
+
+
+@pytest.fixture(scope="session")
+def sample_audio_url_chunk_base64(sample_audio: Audio) -> AudioURLChunk:
+    return AudioURLChunk(audio_url=AudioURL(url=sample_audio.to_base64("wav")))
+
+
+@pytest.fixture(scope="session")
+def sample_audio_url_chunk_base64_prefix(sample_audio: Audio) -> AudioURLChunk:
+    return AudioURLChunk(audio_url=AudioURL(url=f"data:audio/wav;base64,{sample_audio.to_base64('wav')}"))
 
 
 def _get_audio_chunk(duration: float) -> AudioChunk:
@@ -292,3 +352,74 @@ def test_no_audio_in_system_message_before_v7() -> None:
 def test_tokenize_audio_raise(tekkenizer: InstructTokenizerV7, messages: List[UATS], match_regex: str) -> None:
     with pytest.raises(ValueError, match=match_regex):
         tekkenizer.encode_instruct(InstructRequest(messages=messages))
+
+
+@pytest.mark.parametrize(
+    "audio_url_chunk",
+    [
+        pytest.param("sample_audio_url_chunk_path", id="path"),
+        pytest.param("sample_audio_url_chunk_path_file", id="path_file"),
+        pytest.param("sample_audio_url_chunk_http", id="http"),
+        pytest.param("sample_audio_url_chunk_https", id="https"),
+        pytest.param("sample_audio_url_chunk_base64", id="base64"),
+        pytest.param("sample_audio_url_chunk_base64_prefix", id="base64_prefix"),
+    ],
+)
+def test_tokenize_audio_url_chunk(
+    tekkenizer: InstructTokenizerV7, request: pytest.FixtureRequest, audio_url_chunk: str
+) -> None:
+    audio_url_chunk_fixture: AudioURLChunk = request.getfixturevalue(audio_url_chunk)
+    audio_url_chunk_path_fixture: AudioURLChunk = request.getfixturevalue("sample_audio_url_chunk_path")
+
+    with patch("mistral_common.audio.requests.get") as mock_get:
+        mock_get.return_value.content = Path(audio_url_chunk_path_fixture.url).read_bytes()
+        mock_get.return_value.status_code = 200
+
+        tokenized = tekkenizer.encode_instruct(
+            InstructRequest(
+                messages=[
+                    UserMessage(content=[audio_url_chunk_fixture]),
+                    AssistantMessage(content="c b d"),
+                ],
+            )
+        )
+
+    BOS, EOS, BEGIN_INST, END_INST, AUDIO, BEGIN_AUDIO, _ = _get_specials(tekkenizer)
+
+    num_expected_frames = int(np.ceil(1 * 12.5))
+
+    audio_toks = [BEGIN_AUDIO] + [AUDIO] * num_expected_frames
+
+    assert len(tokenized.audios) == 1
+    assert isinstance(tokenized.audios[0], Audio)
+    assert tokenized.audios[0].sampling_rate == 24000
+    assert tokenized.audios[0].format == "wav"
+    assert tokenized.audios[0].audio_array.shape == (24000,)
+    assert tokenized.text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * (len(audio_toks) - 1) + "[/INST]c b d</s>")
+    assert tokenized.tokens == [
+        BOS,
+        BEGIN_INST,
+        *audio_toks,
+        END_INST,
+        199,  # "c"
+        132,  # " "
+        198,  # "b"
+        132,  # " "
+        200,  # "d"
+        EOS,
+    ]
+
+
+def test_encode_invalid_audio_url_chunk(tekkenizer: InstructTokenizerV7) -> None:
+    assert tekkenizer.audio_encoder is not None
+    # Test with an invalid URL
+    with pytest.raises(ValueError, match=r"Failed to download audio from URL: https://example.com/invalid_audio.wav"):
+        tekkenizer.audio_encoder(AudioURLChunk(audio_url="https://example.com/invalid_audio.wav"))
+
+    # Test with an invalid base64 string
+    with pytest.raises(ValueError, match=r"base64 decoding failed. Please check the input string is a valid base64."):
+        tekkenizer.audio_encoder(AudioURLChunk(audio_url="data:audio/wav;base64,invalid_base64_string"))
+
+    # Test with an invalide file path
+    with pytest.raises(FileNotFoundError, match=r"file='invalid_file_path.wav' does not exist"):
+        tekkenizer.audio_encoder(AudioURLChunk(audio_url="file://invalid_file_path.wav"))

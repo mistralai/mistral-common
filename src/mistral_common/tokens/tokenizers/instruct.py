@@ -16,6 +16,7 @@ from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     AssistantMessageType,
     AudioChunk,
+    AudioURLChunk,
     ContentChunk,
     ImageChunk,
     ImageURLChunk,
@@ -694,7 +695,7 @@ class InstructTokenizerV3(
 
                 tokens.extend(img_encoding.tokens)
                 images.append(img_encoding.image)
-            elif isinstance(chunk, AudioChunk):
+            elif isinstance(chunk, (AudioChunk, AudioURLChunk)):
                 assert not content_str, (
                     f"It is not possible that `content` is non-empty when chunk is of type {type(chunk)}."
                 )

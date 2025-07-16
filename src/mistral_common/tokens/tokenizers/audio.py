@@ -1,12 +1,12 @@
 import logging
 import math
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import numpy as np
 
 from mistral_common.audio import Audio
-from mistral_common.protocol.instruct.messages import AudioChunk
+from mistral_common.protocol.instruct.messages import AudioChunk, AudioURLChunk, AudioURLType
 
 logger = logging.getLogger(__name__)
 
@@ -157,8 +157,7 @@ class AudioEncoder:
 
         return math.ceil(audio_array_len / self.audio_config.chunk_frames) * self.audio_config.chunk_frames
 
-    def _encode_audio_chunk(self, content: AudioChunk) -> AudioEncoding:
-        audio = Audio.from_raw_audio(content.input_audio)
+    def _encode_audio(self, audio: Audio) -> AudioEncoding:
         audio.resample(self.audio_config.sampling_rate)
 
         audio.audio_array = self.pad(audio.audio_array, self.audio_config.sampling_rate)
@@ -178,16 +177,37 @@ class AudioEncoder:
             audio=audio,
         )
 
-    def __call__(self, content: AudioChunk) -> AudioEncoding:
-        r"""Call the encoder on an audio chunk.
+    def _encode_audio_chunk(self, content: AudioChunk) -> AudioEncoding:
+        audio = Audio.from_raw_audio(content.input_audio)
+        return self._encode_audio(audio)
+
+    def _encode_audio_url_chunk(self, content: AudioURLChunk) -> AudioEncoding:
+        url_type = content.get_url_type()
+
+        if url_type in {AudioURLType.file, AudioURLType.file_uri}:
+            audio = Audio.from_file(content.url)
+        elif url_type == AudioURLType.url:
+            audio = Audio.from_url(content.url)
+        else:
+            audio = Audio.from_base64(content.url)
+
+        return self._encode_audio(audio)
+
+    def __call__(self, content: Union[AudioChunk, AudioURLChunk]) -> AudioEncoding:
+        r"""Call the encoder on an audio chunk or URL chunk.
 
         Args:
-            content: Audio chunk to encode.
+            content: Audio or URL chunk to encode.
 
         Returns:
             Encoded audio data and tokens.
         """
-        return self._encode_audio_chunk(content)
+        if isinstance(content, AudioURLChunk):
+            return self._encode_audio_url_chunk(content)
+        elif isinstance(content, AudioChunk):
+            return self._encode_audio_chunk(content)
+        else:
+            raise ValueError(f"Unsupported content type: {type(content)}")
 
     @property
     def audio_token(self) -> int:
