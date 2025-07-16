@@ -245,7 +245,7 @@ class AudioURLChunk(BaseContentChunk):
             The type of the audio URL.
         """
         url_scheme = urlparse(self.url).scheme
-        if  url_scheme in {"http", "https"}:
+        if url_scheme in {"http", "https"}:
             return AudioURLType.url
         elif url_scheme == "data":
             return AudioURLType.base64
