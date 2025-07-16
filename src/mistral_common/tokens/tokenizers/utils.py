@@ -71,6 +71,26 @@ def list_local_hf_repo_files(repo_id: str, revision: Optional[str]) -> list[str]
     return []
 
 
+def filter_valid_tokenizer_files(files: List[str]) -> List[str]:
+    r"""Filter the valid tokenizer files from a list of files."""
+    valid_tokenizer_files = []
+
+    instruct_versions = list(TokenizerVersion.__members__)
+    mm_versions = list(MultiModalVersion.__members__) + [""]  # allow no mm version
+    sentencepiece_suffixes = [f".model.{v}{m}" for v in instruct_versions for m in mm_versions] + [".model"]
+
+    for file in files:
+        pathlib_repo_file = Path(file)
+        file_name = pathlib_repo_file.name
+        suffix = "".join(pathlib_repo_file.suffixes)
+        if file_name == "tekken.json":
+            valid_tokenizer_files.append(file_name)
+        elif suffix in sentencepiece_suffixes:
+            valid_tokenizer_files.append(file_name)
+
+    return valid_tokenizer_files
+
+
 def download_tokenizer_from_hf_hub(
     repo_id: str,
     cache_dir: Optional[Union[str, Path]] = None,
@@ -133,21 +153,7 @@ def download_tokenizer_from_hf_hub(
                 " the revision or try to download the tokenizer without setting `local_files_only` to `True`."
             )
 
-    valid_tokenizer_files = []
-    tokenizer_file: str
-
-    instruct_versions = list(TokenizerVersion.__members__)
-    mm_versions = list(MultiModalVersion.__members__) + [""]  # allow no mm version
-    sentencepiece_suffixes = [f".model.{v}{m}" for v in instruct_versions for m in mm_versions] + [".model"]
-
-    for repo_file in repo_files:
-        pathlib_repo_file = Path(repo_file)
-        file_name = pathlib_repo_file.name
-        suffix = "".join(pathlib_repo_file.suffixes)
-        if file_name == "tekken.json":
-            valid_tokenizer_files.append(file_name)
-        elif suffix in sentencepiece_suffixes:
-            valid_tokenizer_files.append(file_name)
+    valid_tokenizer_files = filter_valid_tokenizer_files(repo_files)
 
     if len(valid_tokenizer_files) == 0:
         raise ValueError(f"No tokenizer file found for model ID: {repo_id}")
