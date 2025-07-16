@@ -209,7 +209,7 @@ def test_convert_image_url_chunk(openai_image_url_chunk: Dict, image_url_chunk: 
             {
                 "type": "audio_url",
                 "audio_url": {
-                    "url": "https://freetestdata.com/wp-content/uploads/2021/09/Free_Test_Data_100KB_MP3.mp3"
+                    "url": AUDIO_SAMPLE_URL
                 },
             },
             DUMMY_AUDIO_URL_CHUNK_URL,
