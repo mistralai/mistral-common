@@ -1,6 +1,8 @@
 import re
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, TypeVar, Union
+from urllib.parse import urlparse
 
 from pydantic import ConfigDict, Field, ValidationError, field_validator
 from typing_extensions import Annotated, TypeAlias
@@ -196,6 +198,22 @@ class AudioURL(MistralBase):
     url: str
 
 
+class AudioURLType(str, Enum):
+    r"""Enum for the types of audio URLs.
+
+    Attributes:
+        url: A URL.
+        base64: A base64 encoded audio. Can be prefixed with `data:audio/<format>;base64,`.
+        file: A file path.
+        file_uri: A file URI (eg. `file:///path/to/file`).
+    """
+
+    url = "url"
+    base64 = "base64"
+    file = "file"
+    file_uri = "file_uri"
+
+
 class AudioURLChunk(BaseContentChunk):
     r"""Audio URL chunk.
 
@@ -206,6 +224,44 @@ class AudioURLChunk(BaseContentChunk):
 
     type: Literal[ChunkTypes.audio_url] = ChunkTypes.audio_url
     audio_url: Union[str, AudioURL]
+
+    @property
+    def url(self) -> str:
+        if isinstance(self.audio_url, AudioURL):
+            return self.audio_url.url
+        return self.audio_url
+
+    def get_url_type(self) -> AudioURLType:
+        r"""Returns the type of the audio URL.
+
+        Note:
+            URLs should be either:
+            - a valid URL (http:// or https://)
+            - a valid file path (e.g. /path/to/file)
+            - a valid file URI (e.g. file:///path/to/file)
+            - a base64 encoded audio. It is assumed to be base64 encoded if it is not a valid URL or file path.
+
+        Returns:
+            The type of the audio URL.
+        """
+        url_scheme = urlparse(self.url).scheme
+        if  url_scheme in {"http", "https"}:
+            return AudioURLType.url
+        elif url_scheme == "data":
+            return AudioURLType.base64
+        elif url_scheme == "file":
+            return AudioURLType.file_uri
+
+        try:
+            url_path = Path(self.url)
+            exist_path = url_path.exists()
+        except OSError:  # File name too long
+            exist_path = False
+
+        if exist_path:
+            return AudioURLType.file
+
+        return AudioURLType.base64
 
     def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
         r"""Converts the chunk to the OpenAI format."""

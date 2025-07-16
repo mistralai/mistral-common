@@ -110,8 +110,11 @@ class Audio:
             response = requests.get(url)
             response.raise_for_status()
             return Audio.from_bytes(response.content, strict=strict)
-        except Exception as e:
-            raise ValueError(f"Either the URL is not valid or decoding failed: {url}") from e
+        except requests.RequestException as e: # Something went wrong with the request.
+            raise ValueError(f"Failed to download audio from URL: {url}") from e
+        except Exception as e: # Something went wrong with the audio file.
+            raise ValueError(f"Failed to create Audio instance from URL: {url} .") from e
+        
 
     @staticmethod
     def from_base64(audio_base64: str, strict: bool = True) -> "Audio":
@@ -132,7 +135,11 @@ class Audio:
         if re.match(r"^data:audio/\w+;base64,", audio_base64):  # Remove the prefix if it exists
             audio_base64 = audio_base64.split(",")[1]
 
-        audio_bytes = base64.b64decode(audio_base64)
+        try:
+            audio_bytes = base64.b64decode(audio_base64)
+        except Exception as e:
+            raise ValueError(f"base64 decoding failed. Please check the input string is a valid base64.") from e
+
         return Audio.from_bytes(audio_bytes, strict=strict)
 
     @staticmethod

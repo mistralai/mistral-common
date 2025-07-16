@@ -49,10 +49,12 @@ def test_from_file() -> None:
 
 def test_from_url() -> None:
     # Test with an invalid URL
-    with pytest.raises(
-        ValueError, match=("Either the URL is not valid or decoding failed: https://example.com/invalid_audio.wav")
-    ):
+    with pytest.raises(ValueError, match=("Failed to download audio from URL: https://example.com/invalid_audio.wav")):
         Audio.from_url("https://example.com/invalid_audio.wav")
+
+    # Test with an invalid content
+    with pytest.raises(ValueError, match="Failed to create Audio instance from URL: https://example.com ."):
+        Audio.from_url("https://example.com")
 
     # Test valid URL
     url = "https://download.samplelib.com/mp3/sample-3s.mp3"

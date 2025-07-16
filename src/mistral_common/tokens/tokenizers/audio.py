@@ -1,27 +1,14 @@
 import logging
 import math
 from dataclasses import dataclass
-from pathlib import Path
 from typing import List, Optional, Union
-from urllib.parse import urlparse
 
 import numpy as np
 
 from mistral_common.audio import Audio
-from mistral_common.protocol.instruct.messages import AudioChunk, AudioURLChunk
+from mistral_common.protocol.instruct.messages import AudioChunk, AudioURLChunk, AudioURLType
 
 logger = logging.getLogger(__name__)
-
-_URL_SCHEMES = {
-    "http",
-    "https",
-    "ftp",
-    "s3",
-    "gs",
-    "azure",
-    "wasbs",
-    "abfs",
-}
 
 
 @dataclass
@@ -195,28 +182,17 @@ class AudioEncoder:
         return self._encode_audio(audio)
 
     def _encode_audio_url_chunk(self, content: AudioURLChunk) -> AudioEncoding:
-        url = content.audio_url if isinstance(content.audio_url, str) else content.audio_url.url
+        url_type = content.get_url_type()
 
-        try:
-            url_path = Path(url)
-            exist_path = url_path.exists()
-        except OSError:  # File name too long
-            exist_path = False
-
-        if exist_path:
+        if url_type == AudioURLType.file:
+            audio = Audio.from_file(content.url)
+        elif url_type == AudioURLType.file_uri:
+            url = content.url.replace("file://", "")
             audio = Audio.from_file(url)
-        elif urlparse(url).scheme in _URL_SCHEMES:
-            audio = Audio.from_url(url)
+        elif url_type == AudioURLType.url:
+            audio = Audio.from_url(content.url)
         else:
-            try:
-                audio = Audio.from_base64(url)
-            except Exception:
-                raise ValueError(
-                    (
-                        "Failed to decode audio from the provided AudioURLChunk. Please ensure the URL is a local file "
-                        "path, a valid URL, or a base64-encoded audio string."
-                    )
-                )
+            audio = Audio.from_base64(content.url)
 
         return self._encode_audio(audio)
 
