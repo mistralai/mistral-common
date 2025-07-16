@@ -184,11 +184,8 @@ class AudioEncoder:
     def _encode_audio_url_chunk(self, content: AudioURLChunk) -> AudioEncoding:
         url_type = content.get_url_type()
 
-        if url_type == AudioURLType.file:
+        if url_type in {AudioURLType.file, AudioURLType.file_uri}:
             audio = Audio.from_file(content.url)
-        elif url_type == AudioURLType.file_uri:
-            url = content.url.replace("file://", "")
-            audio = Audio.from_file(url)
         elif url_type == AudioURLType.url:
             audio = Audio.from_url(content.url)
         else:

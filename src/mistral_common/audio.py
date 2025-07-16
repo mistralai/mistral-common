@@ -158,6 +158,9 @@ class Audio:
                 "soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'"
             )
 
+        if isinstance(file, str) and file.startswith("file://"):
+            file = file[7:]
+
         if not Path(file).exists():
             raise FileNotFoundError(f"{file=} does not exist")
 

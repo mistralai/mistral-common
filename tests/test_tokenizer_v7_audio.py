@@ -392,7 +392,6 @@ def test_tokenize_audio_url_chunk(
 
     assert len(tokenized.audios) == 1
     assert isinstance(tokenized.audios[0], Audio)
-    assert len(tokenized.audios[0].audio_array) > 0
     assert tokenized.audios[0].sampling_rate == 24000
     assert tokenized.audios[0].format == "wav"
     assert tokenized.audios[0].audio_array.shape == (24000,)
