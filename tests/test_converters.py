@@ -208,9 +208,7 @@ def test_convert_image_url_chunk(openai_image_url_chunk: Dict, image_url_chunk: 
         (
             {
                 "type": "audio_url",
-                "audio_url": {
-                    "url": AUDIO_SAMPLE_URL
-                },
+                "audio_url": {"url": AUDIO_SAMPLE_URL},
             },
             DUMMY_AUDIO_URL_CHUNK_URL,
         ),
