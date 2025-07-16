@@ -16,11 +16,11 @@ _URL_SCHEMES = {
     "http",
     "https",
     "ftp",
-    "s3",  # AWS S3
-    "gs",  # Google Cloud Storage
-    "azure", 
+    "s3",
+    "gs",
+    "azure",
     "wasbs",
-    "abfs",  # Azure Blob/ADLS
+    "abfs",
 }
 
 
