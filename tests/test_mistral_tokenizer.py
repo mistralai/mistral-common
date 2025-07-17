@@ -1,9 +1,11 @@
-from typing import Optional, Union
+import multiprocessing
+from typing import List, Optional, Tuple, Union
 from unittest.mock import patch
 
 import pytest
 
 from mistral_common.exceptions import TokenizerException
+from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy
 from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV1,
@@ -84,7 +86,11 @@ class TestMistralToknizer:
 
     def test_from_hf_hub(self) -> None:
         def _mocked_hf_download(
-            repo_id: str, token: Optional[Union[bool, str]] = None, revision: Optional[str] = None
+            repo_id: str,
+            token: Optional[Union[bool, str]] = None,
+            revision: Optional[str] = None,
+            force_download: bool = False,
+            local_files_only: bool = False,
         ) -> str:
             if repo_id == "mistralai/Mistral-7B-Instruct-v0.1":
                 return str(MistralTokenizer._data_path() / "tokenizer.model.v1")
@@ -99,3 +105,41 @@ class TestMistralToknizer:
 
             tokenizer = MistralTokenizer.from_hf_hub("mistralai/Pixtral-Large-Instruct-2411")
             assert isinstance(tokenizer.instruct_tokenizer, InstructTokenizerV3)
+
+
+def _worker_decode_function(
+    tokenizer_instance_and_token_ids_and_validation_mode: Tuple[MistralTokenizer, List[int], ValidationMode],
+) -> str:
+    tokenizer_instance, token_ids, validation_mode = tokenizer_instance_and_token_ids_and_validation_mode
+    assert tokenizer_instance._chat_completion_request_validator._mode == validation_mode
+    return tokenizer_instance.decode(token_ids)
+
+
+@pytest.mark.parametrize(
+    ["tokenizer_file", "validation_mode", "token_ids", "expected"],
+    [
+        (
+            "tokenizer.model.v1",
+            ValidationMode.test,
+            [1, 733, 16289, 28793, 17121, 22526, 13, 13, 28708, 733, 28748, 16289, 28793],
+            "[INST] SYSTEM\n\na [/INST]",
+        ),
+        (
+            "tekken_240911.json",
+            ValidationMode.finetuning,
+            [1091, 3174, 3074, 1093, 126205, 1267, 1097, 1766, 1047, 3174, 3074, 1093],
+            "[INST] SYSTEM\n\na [/INST]",
+        ),
+    ],
+)
+def test_tokenizer_is_pickleable_with_multiprocessing(
+    tokenizer_file: str, validation_mode: ValidationMode, token_ids: List[int], expected: str
+) -> None:
+    tokenizer_path = str(MistralTokenizer._data_path() / tokenizer_file)
+    tokenizer = MistralTokenizer.from_file(tokenizer_path, validation_mode)
+
+    with multiprocessing.Pool(processes=2) as pool:
+        results = pool.map(_worker_decode_function, [(tokenizer, token_ids, validation_mode)])
+
+    assert len(results) == 1
+    assert results[0] == expected

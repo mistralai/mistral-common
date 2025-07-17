@@ -1,22 +1,32 @@
 import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from enum import Enum
-from typing import Generic, List, Optional, Protocol, Tuple, TypeVar, Union
+from pathlib import Path
+from typing import Generic, List, Optional, Tuple, TypeVar, Union
 
 import numpy as np
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 
+from mistral_common.audio import Audio
 from mistral_common.base import MistralBase
+from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.instruct.messages import (
     AssistantMessageType,
     ContentChunk,
-    ImageChunk,
-    ImageURLChunk,
     UserMessage,
 )
+from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Tool
-from mistral_common.tokens.instruct.request import FIMRequest, InstructRequest
+from mistral_common.protocol.transcription.request import TranscriptionRequest
+from mistral_common.tokens.tokenizers.audio import AudioEncoder
+from mistral_common.tokens.tokenizers.image import ImageEncoder
+
+
+class UserMessagePosition(str, Enum):
+    """Where to encode available tools"""
+
+    first = "first"
+    last = "last"
 
 
 class SpecialTokens(str, Enum):
@@ -70,6 +80,9 @@ class SpecialTokens(str, Enum):
     begin_tool_content = "[TOOL_CONTENT]"
     args = "[ARGS]"
     call_id = "[CALL_ID]"
+    audio = "[AUDIO]"
+    begin_audio = "[BEGIN_AUDIO]"
+    transcribe = "[TRANSCRIBE]"
 
 
 class SpecialTokenPolicy(int, Enum):
@@ -96,6 +109,8 @@ class TokenizerVersion(str, Enum):
         v2: The second version of the tokenizer that includes special control tokens [INST], [\INST].
         v3: The third version of the tokenizer that includes improved function calling.
         v7: The seventh version of the tokenizer that includes improved system prompt and function calling.
+        v11: The eleventh version of the tokenizer that includes improved function calling.
+        v13: The thirteenth version of the tokenizer that includes no call id tokenization and better prompt caching.
 
     Examples:
         >>> version = TokenizerVersion.v1
@@ -134,9 +149,10 @@ class TokenizerVersion(str, Enum):
 
     v1 = "v1"  # vocab_size = 32000
     v2 = "v2"  # vocab_size = 32768 with special control tokens [INST], [\INST]
-    v3 = "v3"  # vocab_size = 32768 (spm) OR 128000 (tekken) with improved function calling
-    v7 = "v7"  # vocab_size = 32768 (spm) or 128000 (tekken) with improved system prompt and function calling
-    v11 = "v11"  # vocab_size = 32768 (spm) or 128000 (tekken) with improved function calling
+    v3 = "v3"  # vocab_size = 32768 (spm) OR 131072 (tekken) with improved function calling
+    v7 = "v7"  # vocab_size = 32768 (spm) or 131072 (tekken) with improved system prompt and function calling
+    v11 = "v11"  # 131072 (tekken) with improved function calling
+    v13 = "v13"  # 131072 (tekken) with no call id and better prompt caching
 
 
 class Tokenized(MistralBase):
@@ -156,7 +172,8 @@ class Tokenized(MistralBase):
     tokens: List[int]
     text: Optional[str] = None
     prefix_ids: Optional[List[int]] = None
-    images: List[np.ndarray] = []
+    images: List[np.ndarray] = Field(default_factory=list)
+    audios: List[Audio] = Field(default_factory=list)
 
 
 class Tokenizer(ABC):
@@ -208,7 +225,7 @@ class Tokenizer(ABC):
                 [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer] and `SpecialTokenPolicy.IGNORE`
                 for [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer].
                 Note that passing `None` will be deprecated and `special_token_policy` will default to
-                `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
+                `SpecialTokenPolicy.IGNORE` in `mistral_common=1.10.0`.
 
         Returns:
             The decoded string.
@@ -236,84 +253,16 @@ class Tokenizer(ABC):
     @abstractmethod
     def _to_string(self, tokens: List[int]) -> str: ...
 
+    @property
+    @abstractmethod
+    def file_path(self) -> Path:
+        r"""The file path of the tokenizer."""
+        ...
+
 
 InstructRequestType = TypeVar("InstructRequestType", bound=InstructRequest)
 FIMRequestType = TypeVar("FIMRequestType", bound=FIMRequest)
 TokenizedType = TypeVar("TokenizedType", bound=Tokenized)
-
-
-@dataclass
-class ImageEncoding:
-    """A tokenized image.
-
-    Attributes:
-        tokens: The token ids.
-        image: The image as a numpy array.
-
-    Examples:
-        >>> import numpy as np
-        >>> image_encoding = ImageEncoding(tokens=[1, 2, 3], image=np.array([[0., 0.5, 1.]]))
-    """
-
-    tokens: List[int]
-    image: np.ndarray
-
-
-@dataclass
-class SpecialImageIDs:
-    """Special image tokens ids.
-
-    Attributes:
-        img: The image token id.
-        img_break: The image break token id.
-        img_end: The image end token id.
-
-    Examples:
-        >>> special_image_ids = SpecialImageIDs(img=1, img_break=2, img_end=3)
-    """
-
-    img: int
-    img_break: int
-    img_end: int
-
-    @staticmethod
-    def from_tokenizer(tokenizer: "Tokenizer") -> "SpecialImageIDs":
-        r"""Create a `SpecialImageIDs` from a `Tokenizer`.
-
-        Args:
-            tokenizer: The tokenizer to use.
-
-        Returns:
-            The special image tokens ids.
-        """
-        return SpecialImageIDs(
-            img=tokenizer.get_control_token(SpecialTokens.img.value),
-            img_break=tokenizer.get_control_token(SpecialTokens.img_break.value),
-            img_end=tokenizer.get_control_token(SpecialTokens.img_end.value),
-        )
-
-
-class MultiModalEncoder(Protocol):
-    r"""Protocol for multi-modal encoders.
-
-    Currently, only image encoders are supported.
-    """
-
-    def __call__(self, content: Union[ImageChunk, ImageURLChunk]) -> ImageEncoding:
-        """Encode the given content.
-
-        Args:
-            content: The content to be encoded.
-
-        Returns:
-            The encoded image content.
-        """
-        ...
-
-    @property
-    def image_token(self) -> int:
-        r"""The image token id."""
-        ...
 
 
 class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]):
@@ -321,18 +270,22 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
 
     Attributes:
         tokenizer: The tokenizer to use.
-        mm_encoder: The multi-modal encoder to use if any.
+        image_encoder: The image encoder to use if any.
     """
 
     tokenizer: Tokenizer
-    mm_encoder: Optional[MultiModalEncoder]
+    image_encoder: Optional[ImageEncoder]
+    audio_encoder: Optional[AudioEncoder]
 
-    def __init__(self, tokenizer: Tokenizer, mm_encoder: Optional[MultiModalEncoder]) -> None:
+    def __init__(
+        self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder], audio_encoder: Optional[AudioEncoder]
+    ) -> None:
         r"""Initialize the instruct tokenizer.
 
         Args:
             tokenizer: The tokenizer to use.
-            mm_encoder: The multi-modal encoder to use if any.
+            image_encoder: The image encoder to use if any.
+            audio_encoder: The audio encoder to use if any.
         """
 
     @abstractmethod
@@ -347,6 +300,23 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         """
 
     @abstractmethod
+    def encode_transcription(self, request: TranscriptionRequest) -> TokenizedType:
+        r"""
+        Encodes an audio transcription request into a tokenized format.
+
+        This method processes a transcription request containing audio data,
+        encodes the user message, and returns the tokenized output.
+
+        Args:
+            request: The transcription request object containing
+                the audio data to be encoded.
+
+        Returns:
+            Tokenized: The tokenized representation of the audio data, including processed audio and tokens
+        """
+        ...
+
+    @abstractmethod
     def decode(self, tokens: List[int], special_token_policy: Optional[SpecialTokenPolicy] = None) -> str:
         r"""Convert token ids to string
 
@@ -357,7 +327,7 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
                 [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer] and `SpecialTokenPolicy.IGNORE`
                 for [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer].
                 Note that passing `None` will be deprecated and `special_token_policy` will default to
-                `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
+                `SpecialTokenPolicy.IGNORE` in `mistral_common=1.10.0`.
 
         Returns:
             The decoded string.
@@ -383,7 +353,7 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         is_first: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray]]:
+    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
         r"""Encode a user message.
 
         Args:
@@ -406,7 +376,7 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         is_last: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray]]:
+    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
         r"""Encode a user content.
 
         Args:

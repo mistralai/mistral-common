@@ -1,11 +1,12 @@
 import json
 import warnings
 from pathlib import Path
-from typing import Callable, Dict, Generic, List, Optional, Union
+from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, Union
 
 from mistral_common.exceptions import (
     TokenizerException,
 )
+from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.instruct.messages import (
     UATS,
     AssistantMessageType,
@@ -20,9 +21,11 @@ from mistral_common.protocol.instruct.validator import (
     MistralRequestValidator,
     MistralRequestValidatorV3,
     MistralRequestValidatorV5,
+    MistralRequestValidatorV13,
     ValidationMode,
 )
-from mistral_common.tokens.instruct.request import FIMRequest
+from mistral_common.protocol.transcription.request import TranscriptionRequest
+from mistral_common.tokens.tokenizers.audio import AudioConfig, AudioEncoder, SpecialAudioIDs
 from mistral_common.tokens.tokenizers.base import (
     InstructRequest,
     InstructRequestType,
@@ -32,46 +35,61 @@ from mistral_common.tokens.tokenizers.base import (
     TokenizedType,
     TokenizerVersion,
 )
+from mistral_common.tokens.tokenizers.image import (
+    ImageConfig,
+    ImageEncoder,
+    SpecialImageIDs,
+)
 from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV1,
     InstructTokenizerV2,
     InstructTokenizerV3,
     InstructTokenizerV7,
     InstructTokenizerV11,
-)
-from mistral_common.tokens.tokenizers.multimodal import (
-    ImageEncoder,
-    MultimodalConfig,
-    MultiModalEncoder,
-    SpecialImageIDs,
+    InstructTokenizerV13,
 )
 from mistral_common.tokens.tokenizers.sentencepiece import (
     SentencePieceTokenizer,
-    get_mm_config,
+    get_image_config,
     is_sentencepiece,
 )
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekken
 from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hub
 
 
-def load_mm_encoder(
-    mm_config: MultimodalConfig, tokenizer: Union[Tekkenizer, SentencePieceTokenizer]
-) -> MultiModalEncoder:
-    r"""Load a multi-modal encoder from a config and a tokenizer.
+def load_image_encoder(image_config: ImageConfig, tokenizer: Union[Tekkenizer, SentencePieceTokenizer]) -> ImageEncoder:
+    r"""Load a image encoder from a config and a tokenizer.
 
     Args:
-        mm_config: The multi-modal config.
+        image_config: The image config.
         tokenizer: The tokenizer.
 
     Returns:
-        The multi-modal encoder.
+        The image encoder.
     """
     special_ids = SpecialImageIDs(
         img=tokenizer.get_control_token(SpecialTokens.img.value),
         img_break=tokenizer.get_control_token(SpecialTokens.img_break.value),
         img_end=tokenizer.get_control_token(SpecialTokens.img_end.value),
     )
-    return ImageEncoder(mm_config, special_ids)
+    return ImageEncoder(image_config, special_ids)
+
+
+def load_audio_encoder(audio_config: AudioConfig, tokenizer: Tekkenizer) -> AudioEncoder:
+    r"""Load a audio encoder from a config and a tokenizer.
+
+    Args:
+        audio_config: The audio config.
+        tokenizer: The tokenizer.
+
+    Returns:
+        The audio encoder.
+    """
+    special_ids = SpecialAudioIDs(
+        audio=tokenizer.get_control_token(SpecialTokens.audio.value),
+        begin_audio=tokenizer.get_control_token(SpecialTokens.begin_audio.value),
+    )
+    return AudioEncoder(audio_config, special_ids)
 
 
 class MistralTokenizer(
@@ -111,6 +129,18 @@ class MistralTokenizer(
             instruct_tokenizer
         )
 
+    def __reduce__(self) -> Tuple[Callable, Tuple[Any, ...]]:
+        """
+        Provides a recipe for pickling (serializing) this object, which is necessary for use with multiprocessing.
+
+        Returns:
+            A tuple of the factory function and the arguments to reconstruct the object from its source file.
+        """
+        return MistralTokenizer.from_file, (
+            self.instruct_tokenizer.tokenizer.file_path,
+            self._chat_completion_request_validator._mode,
+        )
+
     @classmethod
     def _data_path(cls) -> Path:
         return Path(__file__).parents[2] / "data"
@@ -134,7 +164,7 @@ class MistralTokenizer(
         Args:
             is_tekken: Whether the tokenizer is a tekken tokenizer. See
                 [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer].
-            is_mm: Whether to load multimodal tokenizer.
+            is_mm: Whether to load image tokenizer.
 
         Returns:
             The Mistral tokenizer v3.
@@ -155,7 +185,7 @@ class MistralTokenizer(
         """Get the Mistral tokenizer v7.
 
         Args:
-            is_mm: Whether to load the multimodal tokenizer.
+            is_mm: Whether to load the image tokenizer.
 
         Returns:
             The Mistral tokenizer v7.
@@ -176,7 +206,7 @@ class MistralTokenizer(
         Args:
             model: The model name.
             strict: Whether to use strict model name matching. If `False`, the model name is matched as a substring.
-                This is deprecated and will be removed in `mistral_common=1.7.0`.
+                This is deprecated and will be removed in `mistral_common=1.10.0`.
 
         Returns:
             The Mistral tokenizer for the given model.
@@ -185,13 +215,13 @@ class MistralTokenizer(
             warnings.warn(
                 "Calling `MistralTokenizer.from_model(..., strict=False)` is deprecated as it can lead to incorrect "
                 "tokenizers. It is strongly recommended to use MistralTokenizer.from_model(..., strict=True)` "
-                "which will become the default in `mistral_common=1.7.0`."
+                "which will become the default in `mistral_common=1.10.0`."
                 "If you are using `mistral_common` for open-sourced model weights, we recommend using "
                 "`MistralTokenizer.from_file('<path/to/tokenizer/file>')` instead.",
                 FutureWarning,
             )
 
-            # TODO(Delete this code in mistral_common >= 1.7.0
+            # TODO(Delete this code in mistral_common >= 1.10.0
             # Prefix search the model name mapping
             for model_name, tokenizer_cls in MODEL_NAME_TO_TOKENIZER_CLS.items():
                 if model_name in model.lower():
@@ -207,6 +237,8 @@ class MistralTokenizer(
         repo_id: str,
         token: Optional[Union[bool, str]] = None,
         revision: Optional[str] = None,
+        force_download: bool = False,
+        local_files_only: bool = False,
         mode: ValidationMode = ValidationMode.test,
     ) -> "MistralTokenizer":
         r"""Download the Mistral tokenizer for a given Hugging Face repository ID.
@@ -218,17 +250,27 @@ class MistralTokenizer(
             token: The Hugging Face token to use to download the tokenizer.
             revision: The revision of the model to use. If `None`, the latest revision will be used.
             mode: The validation mode to use.
+            force_download: Whether to force the download of the tokenizer. If `True`, the tokenizer will be downloaded
+                even if it is already cached.
+            local_files_only: Whether to only use local files. If `True`, the tokenizer will be downloaded only if it is
+                already cached.
 
         Returns:
             The Mistral tokenizer for the given model.
         """
-        tokenizer_path = download_tokenizer_from_hf_hub(repo_id=repo_id, token=token, revision=revision)
+        tokenizer_path = download_tokenizer_from_hf_hub(
+            repo_id=repo_id,
+            token=token,
+            revision=revision,
+            force_download=force_download,
+            local_files_only=local_files_only,
+        )
         return MistralTokenizer.from_file(tokenizer_path, mode=mode)
 
     @classmethod
     def from_file(
         cls,
-        tokenizer_filename: str,
+        tokenizer_filename: Union[str, Path],
         mode: ValidationMode = ValidationMode.test,
     ) -> "MistralTokenizer":
         r"""Loads a tokenizer from a file.
@@ -244,47 +286,64 @@ class MistralTokenizer(
 
         if is_tekken(tokenizer_filename):
             tokenizer = Tekkenizer.from_file(tokenizer_filename)
-            mm_config = tokenizer.multimodal
+            image_config = tokenizer.image
+            audio_config = tokenizer.audio
         elif is_sentencepiece(tokenizer_filename):
             tokenizer = SentencePieceTokenizer(tokenizer_filename)
-            mm_config = get_mm_config(tokenizer_filename)
+            image_config = get_image_config(tokenizer_filename)
+            # spm can't have audio
+            audio_config = None
         else:
             raise TokenizerException(f"Unrecognized tokenizer file: {tokenizer_filename}")
 
-        mm_encoder = load_mm_encoder(mm_config, tokenizer) if mm_config is not None else None
+        image_encoder = load_image_encoder(image_config, tokenizer) if image_config is not None else None
+
+        audio_encoder = None
+        if audio_config is not None:
+            assert isinstance(tokenizer, Tekkenizer), "Audio is only supported for tekken tokenizers"
+            audio_encoder = load_audio_encoder(audio_config, tokenizer)
 
         request_normalizer = normalizer_for_tokenizer_version(tokenizer.version)
 
         if tokenizer.version == TokenizerVersion.v1:
-            assert mm_encoder is None, "Tokenizer version needs to be >= v3"
+            assert image_encoder is None, "Tokenizer version needs to be >= v3"
+            assert audio_encoder is None, "Tokenizer version needs to be >= v7"
             return MistralTokenizer(
                 InstructTokenizerV1(tokenizer),
                 validator=MistralRequestValidator(mode=mode),
                 request_normalizer=request_normalizer,
             )
         elif tokenizer.version == TokenizerVersion.v2:
-            assert mm_encoder is None, "Tokenizer version needs to be >= v3"
+            assert image_encoder is None, "Tokenizer version needs to be >= v3"
+            assert audio_encoder is None, "Tokenizer version needs to be >= v7"
             return MistralTokenizer(
                 InstructTokenizerV2(tokenizer),
                 validator=MistralRequestValidator(mode=mode),
                 request_normalizer=request_normalizer,
             )
         elif tokenizer.version == TokenizerVersion.v3:
+            assert audio_encoder is None, "Tokenizer version needs to be >= v7"
             return MistralTokenizer(
-                InstructTokenizerV3(tokenizer, mm_encoder=mm_encoder),
+                InstructTokenizerV3(tokenizer, image_encoder=image_encoder),
                 validator=MistralRequestValidatorV3(mode=mode),
                 request_normalizer=request_normalizer,
             )
         elif tokenizer.version == TokenizerVersion.v7:
             return MistralTokenizer(
-                InstructTokenizerV7(tokenizer, mm_encoder=mm_encoder),
+                InstructTokenizerV7(tokenizer, image_encoder=image_encoder, audio_encoder=audio_encoder),
                 validator=MistralRequestValidatorV5(mode=mode),
                 request_normalizer=request_normalizer,
             )
         elif tokenizer.version == TokenizerVersion.v11:
             return MistralTokenizer(
-                InstructTokenizerV11(tokenizer, mm_encoder=mm_encoder),
+                InstructTokenizerV11(tokenizer, image_encoder=image_encoder, audio_encoder=audio_encoder),
                 validator=MistralRequestValidatorV5(mode=mode),
+                request_normalizer=request_normalizer,
+            )
+        elif tokenizer.version == TokenizerVersion.v13:
+            return MistralTokenizer(
+                InstructTokenizerV13(tokenizer, image_encoder=image_encoder),
+                validator=MistralRequestValidatorV13(mode=mode),
                 request_normalizer=request_normalizer,
             )
 
@@ -307,7 +366,7 @@ class MistralTokenizer(
         validated_request = self._chat_completion_request_validator.validate_request(request)
 
         if max_model_input_len is None and request.truncate_for_context_length:
-            # the max_model_input_len arg should not be optionnal ;
+            # the max_model_input_len arg should not be optional ;
             # but this function is used in many small scripts that have no use
             # for truncation, and don't provide the max model len
             raise TokenizerException(
@@ -320,6 +379,17 @@ class MistralTokenizer(
             instruct_request.truncate_at_max_tokens = max_model_input_len
 
         return self.instruct_tokenizer.encode_instruct(instruct_request)
+
+    def encode_transcription(self, request: TranscriptionRequest) -> TokenizedType:
+        r"""Encodes a transcription request.
+
+        Args:
+            request: The transcription request to encode.
+
+        Returns:
+            The encoded transcription request.
+        """
+        return self.instruct_tokenizer.encode_transcription(request)
 
     def encode_fim(self, request: FIMRequest) -> TokenizedType:
         r"""Encodes a fill in the middle request.
@@ -380,7 +450,7 @@ class MistralTokenizer(
         Args:
             tokens: The tokens to decode.
             special_token_policy: The policy to use for special tokens. Passing `None` is deprecated and will be changed
-                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
+                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.10.0`.
 
         Returns:
             The decoded string.
@@ -408,7 +478,7 @@ MODEL_NAME_TO_TOKENIZER_CLS: Dict[str, Callable[[], MistralTokenizer]] = {
     "codestral-2405": MistralTokenizer.v3,
     "codestral-mamba-2407": MistralTokenizer.v3,
     "pixtral-12b-2409": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
-    # The following are deprecated - only left for backward comp. Delete in >= 1.7.0
+    # The following are deprecated - only left for backward comp. Delete in >= 1.10.0
     "open-mistral-7b": MistralTokenizer.v1,
     "open-mixtral-8x7b": MistralTokenizer.v1,
     "mistral-embed": MistralTokenizer.v1,

@@ -52,4 +52,4 @@ All of our features are tested to ensure best usage. But if you encounter a bug,
 
 ## License
 
-This library is licensed under the Apache 2.0 License. See the [LICENSE](../LICENSE) file for more information.
+This library is licensed under the Apache 2.0 License. See the [LICENCE](./LICENCE) file for more information.

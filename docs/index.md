@@ -20,15 +20,12 @@ This library is for you if you want to:
 - use our models in your own application.
 - build your own models and want to use the same tokenization and validation code as we do.
 
-See the [complete list of models](./models.md) that we released and the tokenizers that you can use with them.
-
 ## Table of contents
 
 Explore the following sections:
 
+- [Quickstart](./examples/inference.md) for simple code snippets to use the library for different tasks.
 - [Usage](./usage/index.md) section to install and use the library.
-- [Examples](./examples/index.md) section to see how to use the library with our models.
-- [Models](./models.md) section to see the list of models that we released and the tokenizers that you can use with them.
 - [Code Reference][mistral_common.base] section to see the code documentation.
 
 ## Launch the documentation locally

@@ -9,13 +9,14 @@ from typing import Dict, List, Optional, Type, TypedDict, Union
 
 import tiktoken
 
+from mistral_common.tokens.tokenizers.audio import AudioConfig, AudioSpectrogramConfig
 from mistral_common.tokens.tokenizers.base import (
     SpecialTokenPolicy,
     SpecialTokens,
     Tokenizer,
     TokenizerVersion,
 )
-from mistral_common.tokens.tokenizers.multimodal import MultimodalConfig
+from mistral_common.tokens.tokenizers.image import ImageConfig
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ class ModelData(TypedDict):
         config: The configuration of the tokenizer.
         version: The version of the tokenizer.
         type: The type of the tokenizer.
-        multimodal: The multimodal configuration of the tokenizer.
+        image: The image configuration of the tokenizer.
     """
 
     vocab: List[TokenInfo]
@@ -90,7 +91,8 @@ class ModelData(TypedDict):
     config: TekkenConfig
     version: int
     type: str
-    multimodal: MultimodalConfig
+    image: ImageConfig
+    audio: AudioConfig
 
 
 class Tekkenizer(Tokenizer):
@@ -137,8 +139,9 @@ class Tekkenizer(Tokenizer):
         version: TokenizerVersion,
         *,
         name: str = "tekkenizer",
-        _path: Optional[str] = None,
-        mm_config: Optional[MultimodalConfig] = None,
+        _path: Optional[Union[str, Path]] = None,
+        image_config: Optional[ImageConfig] = None,
+        audio_config: Optional[AudioConfig] = None,
     ):
         r"""Initialize the tekken tokenizer.
 
@@ -150,7 +153,7 @@ class Tekkenizer(Tokenizer):
             num_special_tokens: The number of special tokens of the tokenizer.
             version: The version of the tokenizer.
             name: The name of the tokenizer.
-            mm_config: The multimodal configuration of the tokenizer.
+            image_config: The image configuration of the tokenizer.
         """
         assert vocab_size <= len(vocab) + num_special_tokens, (
             vocab_size,
@@ -194,11 +197,22 @@ class Tekkenizer(Tokenizer):
         )
 
         self._version = version
-        self._mm_config = mm_config
+
+        self._image_config = image_config
+        self._audio_config = audio_config
+
         self._all_special_tokens = special_tokens
         self._special_tokens_reverse_vocab = {t["token_str"]: t["rank"] for t in special_tokens}
         self._vocab = [self.id_to_piece(i) for i in range(vocab_size)]
         self._special_token_policy = SpecialTokenPolicy.IGNORE
+        self._file_path = Path(_path) if _path is not None else None
+
+    @property
+    def file_path(self) -> Path:
+        r"""The path to the tokenizer file."""
+        if self._file_path is None:
+            raise ValueError("The tokenizer was not loaded from a file.")
+        return self._file_path
 
     @classmethod
     def from_file(cls: Type["Tekkenizer"], path: Union[str, Path]) -> "Tekkenizer":
@@ -213,7 +227,7 @@ class Tekkenizer(Tokenizer):
         if isinstance(path, str):
             path = Path(path)
         assert path.exists(), path
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             untyped = json.load(f)
 
         _version_str = untyped["config"].get("version")
@@ -228,27 +242,34 @@ class Tekkenizer(Tokenizer):
 
         special_tokens_dicts: Optional[List[SpecialTokenInfo]] = untyped.get("special_tokens", None)
         if special_tokens_dicts is None:
-            err_msg = (
-                f"Special tokens not found in {path} and default to {Tekkenizer.DEPRECATED_SPECIAL_TOKENS}. "
-                "This behavior will be deprecated going forward. "
-                "Please update your tokenizer file and include all special tokens you need."
-            )
             # Tokenizer > v7 should find special tokens in the tokenizer file
             if version > TokenizerVersion("v7"):
-                raise ValueError(err_msg)
-            else:
-                warnings.warn(
-                    err_msg,
-                    FutureWarning,
+                raise ValueError(
+                    f"Special tokens not found in {path}. "
+                    "Please update your tokenizer file and include all special tokens you need."
                 )
+            else:
                 special_tokens = list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS)
         else:
             special_tokens = [token for token in special_tokens_dicts]
 
         untyped["special_tokens"] = special_tokens
 
-        if mm := untyped.get("multimodal", None):
-            untyped["multimodal"] = MultimodalConfig(**mm)
+        if mm := untyped.get("multimodal"):
+            # deprecated - only allowed for tokenizers <= v11
+            if version > TokenizerVersion("v11"):
+                raise ValueError(
+                    f"The image config has to be called 'image' in {path} for tokenizers of version {version.value}."
+                )
+
+            untyped["image"] = ImageConfig(**mm)
+        elif image := untyped.get("image"):
+            untyped["image"] = ImageConfig(**image)
+
+        if audio := untyped.get("audio"):
+            encoding_config = audio.pop("audio_encoding_config")
+            encoding_config = AudioSpectrogramConfig(**encoding_config)
+            untyped["audio"] = AudioConfig(encoding_config=encoding_config, **audio)
 
         model_data: ModelData = untyped
 
@@ -260,17 +281,32 @@ class Tekkenizer(Tokenizer):
             num_special_tokens=model_data["config"]["default_num_special_tokens"],
             version=version,
             name=path.name.replace(".json", ""),
-            mm_config=model_data.get("multimodal"),
+            image_config=model_data.get("image"),
+            audio_config=model_data.get("audio"),
+            _path=path,
         )
 
     @property
-    def multimodal(self) -> Optional[MultimodalConfig]:
-        r"""The multimodal configuration of the tokenizer."""
-        return self._mm_config
+    def image(self) -> Optional[ImageConfig]:
+        r"""The image configuration of the tokenizer."""
+        return self._image_config
 
-    @multimodal.setter
-    def multimodal(self, value: MultimodalConfig) -> None:
-        raise ValueError("Can only set Multimodal config at init")
+    @image.setter
+    def image(self, value: ImageConfig) -> None:
+        raise ValueError("Can only set Image config at init")
+
+    @property
+    def audio(self) -> Optional[AudioConfig]:
+        r"""The audio configuration of the tokenizer.
+
+        Returns:
+             The audio configuration object if it exists, otherwise None.
+        """
+        return self._audio_config
+
+    @audio.setter
+    def audio(self, value: AudioConfig) -> None:
+        raise ValueError("Can only set Audio config at init")
 
     @property
     def num_special_tokens(self) -> int:
@@ -300,7 +336,7 @@ class Tekkenizer(Tokenizer):
 
         warnings.warn(
             (
-                "The attributed `special_token_policy` is deprecated and will be removed in 1.7.0. "
+                "The attributed `special_token_policy` is deprecated and will be removed in 1.10.0. "
                 "Please pass a special token policy explicitly to the relevant methods."
             ),
             FutureWarning,
@@ -411,7 +447,7 @@ class Tekkenizer(Tokenizer):
             special_token_policy: The policy for handling special tokens.
                 Use the tokenizer's [attribute][mistral_common.tokens.tokenizers.tekken.Tekkenizer.special_token_policy]
                 if `None`. Passing `None` is deprecated and will be changed
-                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
+                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.10.0`.
 
         Returns:
             The decoded string.
@@ -425,7 +461,7 @@ class Tekkenizer(Tokenizer):
             warnings.warn(
                 (
                     f"Using the tokenizer's special token policy ({self._special_token_policy}) is deprecated. "
-                    "It will be removed in 1.7.0. "
+                    "It will be removed in 1.10.0. "
                     "Please pass a special token policy explicitly. "
                     "Future default will be SpecialTokenPolicy.IGNORE."
                 ),
@@ -444,7 +480,7 @@ class Tekkenizer(Tokenizer):
         """
         warnings.warn(
             (
-                "`to_string` is deprecated and will be removed in 1.7.0. "
+                "`to_string` is deprecated and will be removed in 1.10.0. "
                 "Use `decode` with `special_token_policy=SpecialTokenPolicy.KEEP` instead."
             ),
             FutureWarning,
@@ -466,7 +502,7 @@ class Tekkenizer(Tokenizer):
             special_token_policy: The policy for handling special tokens.
                 Use the tokenizer's [attribute][mistral_common.tokens.tokenizers.tekken.Tekkenizer.special_token_policy]
                 if `None`. Passing `None` is deprecated and will be changed
-                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.7.0`.
+                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.10.0`.
 
         Returns:
             The byte representation of the token.
@@ -475,7 +511,7 @@ class Tekkenizer(Tokenizer):
             warnings.warn(
                 (
                     f"Using the tokenizer's special token policy ({self._special_token_policy}) is deprecated. "
-                    "It will be removed in 1.7.0. "
+                    "It will be removed in 1.10.0. "
                     "Please pass a special token policy explicitly. "
                     "Future default will be SpecialTokenPolicy.IGNORE."
                 ),

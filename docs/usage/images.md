@@ -1,6 +1,6 @@
 # Images
 
-Most of the recently released [Mistral models](../models.md) support image inputs. Images are represented as [BaseContentChunk][mistral_common.protocol.instruct.messages.BaseContentChunk] objects within the `messages` field of the [ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest]. Encoding an image via a [ImageEncoder][mistral_common.tokens.tokenizers.multimodal.ImageEncoder] will return:
+Most of the recently released [Mistral models](../models.md) support image inputs. Images are represented as [BaseContentChunk][mistral_common.protocol.instruct.messages.BaseContentChunk] objects within the `messages` field of the [ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest]. Encoding an image via a [ImageEncoder][mistral_common.tokens.tokenizers.image.ImageEncoder] will return:
 
 - a sequence of special tokens representing the image.
 - the image normalized as a numpy array.
@@ -13,21 +13,21 @@ Mistral Image encoders use Pillow to decode images and OpenCV to encode. Hence, 
 
 ## Use an Image encoder with our tokenizer
 
-Our tokenizers can an [ImageEncoder][mistral_common.tokens.tokenizers.multimodal.ImageEncoder] that is configured with [MultimodalConfig][mistral_common.tokens.tokenizers.multimodal.MultimodalConfig].
+Our tokenizers can an [ImageEncoder][mistral_common.tokens.tokenizers.image.ImageEncoder] that is configured with [ImageConfig][mistral_common.tokens.tokenizers.image.ImageConfig].
 
-The attributes of the [MultimodalConfig][mistral_common.tokens.tokenizers.multimodal.MultimodalConfig] configure how the images will be patched into tokens:
+The attributes of the [ImageConfig][mistral_common.tokens.tokenizers.image.ImageConfig] configure how the images will be patched into tokens:
 
 - `image_patch_size`: the square size of a patch in pixels to form one token. E.g if the image is 224x224 and the patch size is 14, then the image will be divided into 16x16 patches.
 - `max_image_size`: the maximum size of the image in pixels. If the image is larger, it will be resized to this size.
-- `spatial_merge_size`: the number of patches to merge into one token. This is useful to reduce the number of redudant tokens in the image. E.g if the image is 224x224 and the patch size is 14, then the image will be divided into 16x16 patches. If the spatial merge size is 2, then the image will be divided into 8x8 patches.
+- `spatial_merge_size`: the number of patches to merge into one token. This is useful to reduce the number of redundant tokens in the image. E.g if the image is 224x224 and the patch size is 14, then the image will be divided into 16x16 patches. If the spatial merge size is 2, then the image will be divided into 8x8 patches.
 
 ```python
 from mistral_common.protocol.instruct.messages import ImageURLChunk
-from mistral_common.tokens.tokenizers.multimodal import ImageEncoder, MultimodalConfig, SpecialImageIDs
+from mistral_common.tokens.tokenizers.image import ImageEncoder, ImageConfig, SpecialImageIDs
 
 special_ids = SpecialImageIDs(img=10, img_break=11, img_end=12)  # These are normally automatically set by the tokenizer
 
-config = MultimodalConfig(image_patch_size=14, max_image_size=224, spatial_merge_size=2)
+config = ImageConfig(image_patch_size=14, max_image_size=224, spatial_merge_size=2)
 
 image = ImageURLChunk(image_url="https://live.staticflickr.com/7250/7534338696_b33e941b7d_b.jpg")
 
