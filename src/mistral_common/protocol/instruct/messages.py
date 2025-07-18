@@ -104,7 +104,7 @@ class ImageURL(MistralBase):
        detail: The detail of the image.
 
     Examples:
-       >>> image_url = ImageURL(url="https://example.com/image.png")
+       >>> image_url = ImageURL(aoesnuth)
     """
 
     url: str
