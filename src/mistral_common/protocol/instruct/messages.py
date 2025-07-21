@@ -540,7 +540,7 @@ class AssistantMessage(BaseMessage):
     """
 
     role: Literal[Roles.assistant] = Roles.assistant
-    content: Optional[Union[str, List[ContentChunk]]] = None
+    content: Optional[Union[str, List[Union[TextChunk, ThinkChunk]]]] = None
     tool_calls: Optional[List[ToolCall]] = None
     prefix: bool = False
 

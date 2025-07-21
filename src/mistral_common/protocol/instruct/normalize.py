@@ -11,6 +11,7 @@ from mistral_common.protocol.instruct.messages import (
     SystemMessage,
     SystemMessageType,
     TextChunk,
+    ThinkChunk,
     ToolMessage,
     ToolMessageType,
     UserMessage,
@@ -130,7 +131,7 @@ class InstructRequestNormalizer(
         )
 
     def _aggregate_assistant_messages(self, messages: List[UATS]) -> AssistantMessageType:
-        aggregated_content: List[str] = []
+        aggregated_content: List[Union[TextChunk, ThinkChunk]] = []
         tool_calls: List[ToolCall] = []
         prefix: bool = False
         weight: Optional[float] = None
@@ -146,9 +147,24 @@ class InstructRequestNormalizer(
                     tool_calls.append(normalized_tool_call)
 
             if message.content:
-                aggregated_content.append(self._aggregate_content_chunks(message.content))
-
+                if isinstance(message.content, str):
+                    if len(aggregated_content) > 0 and isinstance(aggregated_content[-1], TextChunk):
+                        aggregated_content[-1].text += "\n\n" + message.content
+                    else:
+                        aggregated_content.append(TextChunk(text=message.content))
+                elif isinstance(message.content, list):
+                    for chunk in message.content:
+                        if isinstance(chunk, TextChunk):
+                            if len(aggregated_content) > 0 and isinstance(aggregated_content[-1], TextChunk):
+                                aggregated_content[-1].text += "\n\n" + chunk.text
+                            else:
+                                aggregated_content.append(chunk)
+                        elif isinstance(chunk, ThinkChunk):
+                            aggregated_content.append(chunk)
+                        else:
+                            raise ValueError(f"Unsupported chunk type {type(chunk)}")
             prefix |= message.prefix
+
             if isinstance(message, FinetuningAssistantMessage):
                 # Only FinetuningAssistantMessage can be weighted
                 if weight is not None:
@@ -157,8 +173,19 @@ class InstructRequestNormalizer(
                     )
                 weight = message.weight
 
+        print(aggregated_content)
+
+
+        normalized_content: Optional[Union[str, List[Union[TextChunk, ThinkChunk]]]]
+        if len(aggregated_content) == 1 and isinstance(aggregated_content[0], TextChunk):
+            normalized_content = aggregated_content[0].text
+        elif message.content is None:
+            normalized_content = None
+        else:
+            normalized_content = [chunk for chunk in aggregated_content]
+
         aggregated_message = self._assistant_message_class(
-            content="\n\n".join(aggregated_content) if len(aggregated_content) else None,
+            content=normalized_content,
             tool_calls=tool_calls or None,
             prefix=prefix,
         )

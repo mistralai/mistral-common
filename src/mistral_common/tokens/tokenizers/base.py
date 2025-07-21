@@ -83,8 +83,8 @@ class SpecialTokens(str, Enum):
     audio = "[AUDIO]"
     begin_audio = "[BEGIN_AUDIO]"
     transcribe = "[TRANSCRIBE]"
-    THINK = "[THINK]"
-    /THINK = "[/THINK]"
+    think = "[THINK]"
+    end_think = "[/THINK]"
 
 
 class SpecialTokenPolicy(int, Enum):
