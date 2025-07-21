@@ -353,6 +353,14 @@ class InstructTokenizerV1(
             curr_tokens.append(self.tokenizer.eos_id)
         return curr_tokens
 
+    def encode_think(self, chunk: ThinkChunk) -> List[int]:
+        r"""Encode a think chunk.
+
+        Raises:
+            TokenizerException: The think chunk is not implemented for this version.
+        """
+        raise TokenizerException("Think not implemented for tokenizer < V13.")
+
     def encode_fim(self, request: FIMRequest) -> Tokenized:
         r"""Encode a FIM request.
 
