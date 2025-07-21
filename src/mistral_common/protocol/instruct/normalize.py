@@ -175,7 +175,6 @@ class InstructRequestNormalizer(
 
         print(aggregated_content)
 
-
         normalized_content: Optional[Union[str, List[Union[TextChunk, ThinkChunk]]]]
         if len(aggregated_content) == 1 and isinstance(aggregated_content[0], TextChunk):
             normalized_content = aggregated_content[0].text
