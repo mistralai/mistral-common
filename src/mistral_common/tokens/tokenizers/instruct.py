@@ -1013,8 +1013,8 @@ class InstructTokenizerV13(InstructTokenizerV11):
         audio_encoder: Optional[AudioEncoder] = None,
     ) -> None:
         super().__init__(tokenizer, image_encoder, audio_encoder)
-        self.BEGIN_THINK = self.tokenizer.get_control_token(SpecialTokens.begin_think.value)
-        self.END_THINK = self.tokenizer.get_control_token(SpecialTokens.end_think.value)
+        self.THINK = self.tokenizer.get_control_token(SpecialTokens.THINK.value)
+        self./THINK = self.tokenizer.get_control_token(SpecialTokens./THINK.value)
 
     def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> List[int]:
         assert message.tool_calls, f"Assistant message must have tool calls. Got {message}"
@@ -1104,7 +1104,7 @@ class InstructTokenizerV13(InstructTokenizerV11):
             The encoded tokens.
         """
         tokens = self.tokenizer.encode(chunk.thinking.rstrip(" "), bos=False, eos=False)
-        think_tokens = [self.BEGIN_THINK, *tokens]
+        think_tokens = [self.THINK, *tokens]
         if chunk.closed:
-            think_tokens.append(self.END_THINK)
+            think_tokens.append(self./THINK)
         return think_tokens

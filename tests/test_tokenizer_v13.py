@@ -174,14 +174,14 @@ def test_encode_think_chunk(v13_tekkenizer: InstructTokenizerV13) -> None:
         ),
         (
             AssistantMessage(content=[TextChunk(text="A1"), ThinkChunk(thinking="R1")]),
-            "A1[BEGIN_THINK]R1[END_THINK]",
+            "A1[THINK]R1[/THINK]",
         ),
         (
             AssistantMessage(
                 content=[TextChunk(text="A1"), ThinkChunk(thinking="R1", closed=False)],
                 tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="F1", arguments="{'a': 1}"))],
             ),
-            "A1[BEGIN_THINK]R1[TOOL_CALLS]F1[ARGS]\"{'a': 1}\"",
+            "A1[THINK]R1[TOOL_CALLS]F1[ARGS]\"{'a': 1}\"",
         ),
     ],
 )

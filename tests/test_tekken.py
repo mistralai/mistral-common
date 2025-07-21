@@ -76,8 +76,8 @@ def get_special_tokens(tokenizer_version: TokenizerVersion, add_audio: bool = Fa
         special_tokens += [SpecialTokenInfo(rank=34, token_str=f"<SPCECIAL_{34}>", is_control=True)]
 
     special_tokens += [
-        SpecialTokenInfo(rank=35, token_str="[BEGIN_THINK]", is_control=True),
-        SpecialTokenInfo(rank=36, token_str="[END_THINK]", is_control=True),
+        SpecialTokenInfo(rank=35, token_str="[THINK]", is_control=True),
+        SpecialTokenInfo(rank=36, token_str="[/THINK]", is_control=True),
     ]
 
     return special_tokens
