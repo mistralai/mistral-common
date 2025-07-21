@@ -53,6 +53,13 @@ class SpecialTokens(str, Enum):
         begin_system: The beginning of system prompt token.
         end_system: The end of system prompt token.
         begin_tool_content: The beginning of tool content token.
+        args: The args token.
+        call_id: The call id token.
+        audio: The audio token.
+        begin_audio: The beginning of audio token.
+        transcribe: The transcribe token.
+        begin_think: The beginning of think token.
+        end_think: The end of think token.
 
     Examples:
         >>> unk = SpecialTokens.unk
@@ -83,7 +90,7 @@ class SpecialTokens(str, Enum):
     audio = "[AUDIO]"
     begin_audio = "[BEGIN_AUDIO]"
     transcribe = "[TRANSCRIBE]"
-    think = "[THINK]"
+    begin_think = "[THINK]"
     end_think = "[/THINK]"
 
 

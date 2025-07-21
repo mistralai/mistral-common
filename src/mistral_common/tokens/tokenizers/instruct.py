@@ -1015,7 +1015,7 @@ class InstructTokenizerV13(InstructTokenizerV11):
     ) -> None:
         super().__init__(tokenizer, image_encoder, audio_encoder)
         try:
-            self.BEGIN_THINK: Optional[int] = self.tokenizer.get_control_token(SpecialTokens.think.value)
+            self.BEGIN_THINK: Optional[int] = self.tokenizer.get_control_token(SpecialTokens.begin_think.value)
             self.END_THINK: Optional[int] = self.tokenizer.get_control_token(SpecialTokens.end_think.value)
         except ValueError:
             self.BEGIN_THINK = None
