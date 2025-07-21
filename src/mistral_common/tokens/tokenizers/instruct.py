@@ -22,6 +22,7 @@ from mistral_common.protocol.instruct.messages import (
     ImageURLChunk,
     SystemMessage,
     TextChunk,
+    ThinkChunk,
     ToolMessage,
     UserMessage,
 )
@@ -115,6 +116,15 @@ class InstructTokenizerBase(
             NotImplementedError: The assistant message is not implemented for the base tokenizer.
         """
         raise NotImplementedError("Assistant message not implemented")
+
+    @abstractmethod
+    def encode_think(self, chunk: ThinkChunk) -> List[int]:
+        r"""Encode a think chunk.
+
+        Raises:
+            NotImplementedError: The think chunk is not implemented for the base tokenizer.
+        """
+        raise NotImplementedError("Think chunk not implemented")
 
     def _truncate_for_max_tokens(
         self,
@@ -335,6 +345,7 @@ class InstructTokenizerV1(
                 "`continue_message` is only supported for assistant messages that have `prefix=False`."
             )
         elif message.content:
+            assert isinstance(message.content, str), "Message content must be a string for tokenizer < V13"
             curr_tokens = self.tokenizer.encode(message.content, bos=False, eos=False)
         else:
             raise TokenizerException(f"{message.content} // {message.tool_calls}")
@@ -995,6 +1006,16 @@ class InstructTokenizerV13(InstructTokenizerV11):
 
     _user_message_position_to_encode_tools = UserMessagePosition.first
 
+    def __init__(
+        self,
+        tokenizer: Tokenizer,
+        image_encoder: Optional[ImageEncoder] = None,
+        audio_encoder: Optional[AudioEncoder] = None,
+    ) -> None:
+        super().__init__(tokenizer, image_encoder, audio_encoder)
+        self.BEGIN_THINK = self.tokenizer.get_control_token(SpecialTokens.begin_think.value)
+        self.END_THINK = self.tokenizer.get_control_token(SpecialTokens.end_think.value)
+
     def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> List[int]:
         assert message.tool_calls, f"Assistant message must have tool calls. Got {message}"
         curr_tokens = []
@@ -1008,6 +1029,51 @@ class InstructTokenizerV13(InstructTokenizerV11):
                 self.ARGS,
                 *self.tokenizer.encode(json.dumps(prepared["arguments"], ensure_ascii=False), bos=False, eos=False),
             ]
+        return curr_tokens
+
+    def encode_assistant_message(
+        self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
+    ) -> List[int]:
+        r"""Encode an assistant message.
+
+        Args:
+            message: The message to encode.
+            is_before_last_user_message: Not used.
+            continue_message: Whether to continue the message generation.
+                Only use this if the assistant message is the last message.
+
+        Returns:
+            The encoded tokens.
+        """
+        if not message.content and not message.tool_calls:
+            raise InvalidAssistantMessageException("Invalid assistant message. Content and tool calls are empty.")
+        if continue_message and message.prefix:
+            raise InvalidAssistantMessageException(
+                "`continue_message` is only supported for assistant messages that have `prefix=False`."
+            )
+
+        # Encode content
+        curr_tokens = []
+        if isinstance(message.content, str):
+            curr_tokens += self.tokenizer.encode(message.content.rstrip(" "), bos=False, eos=False)
+        elif isinstance(message.content, list):
+            for chunk in message.content:
+                if isinstance(chunk, TextChunk):
+                    curr_tokens += self.tokenizer.encode(chunk.text.rstrip(" "), bos=False, eos=False)
+
+                elif isinstance(chunk, ThinkChunk):
+                    curr_tokens += self.encode_think(chunk)
+                else:
+                    raise ValueError(f"Unknown chunk type: {type(chunk)}")
+
+        # Encode tool calls
+        if message.tool_calls:
+            curr_tokens += self._encode_tool_calls_in_assistant_message(message)
+
+        # Add EOS if the message is not a prefix and not a continue message
+        if not message.prefix and not continue_message:
+            curr_tokens.append(self.tokenizer.eos_id)
+
         return curr_tokens
 
     def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
@@ -1028,3 +1094,17 @@ class InstructTokenizerV13(InstructTokenizerV11):
             self.END_TOOL_RESULTS,
         ]
         return curr_tokens
+
+    def encode_think(self, chunk: ThinkChunk) -> List[int]:
+        r"""Encode a thinking chunk.
+
+        Args:
+            chunk: The thinking chunk to encode.
+        Returns:
+            The encoded tokens.
+        """
+        tokens = self.tokenizer.encode(chunk.thinking.rstrip(" "), bos=False, eos=False)
+        think_tokens = [self.BEGIN_THINK, *tokens]
+        if chunk.closed:
+            think_tokens.append(self.END_THINK)
+        return think_tokens

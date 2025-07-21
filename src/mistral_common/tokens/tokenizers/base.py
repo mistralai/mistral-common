@@ -30,7 +30,7 @@ class UserMessagePosition(str, Enum):
 
 
 class SpecialTokens(str, Enum):
-    r"""[DEPRECATED] Enum of special tokens used in the tokenizer.
+    r"""Enum of special tokens used in the tokenizer.
 
     Attributes:
         unk: The unknown token.
@@ -83,6 +83,8 @@ class SpecialTokens(str, Enum):
     audio = "[AUDIO]"
     begin_audio = "[BEGIN_AUDIO]"
     transcribe = "[TRANSCRIBE]"
+    begin_think = "[BEGIN_THINK]"
+    end_think = "[END_THINK]"
 
 
 class SpecialTokenPolicy(int, Enum):

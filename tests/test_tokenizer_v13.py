@@ -1,9 +1,12 @@
 import pytest
 
+from mistral_common.exceptions import InvalidAssistantMessageException
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     BaseMessage,
     SystemMessage,
+    TextChunk,
+    ThinkChunk,
     ToolMessage,
     UserMessage,
 )
@@ -14,7 +17,7 @@ from mistral_common.protocol.instruct.validator import MistralRequestValidatorV1
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized, TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.tekken import Tekkenizer
+from mistral_common.tokens.tokenizers.tekken import SpecialTokenPolicy, Tekkenizer
 from tests.test_tekken import _quick_vocab, get_special_tokens
 
 
@@ -80,7 +83,7 @@ def messages() -> list[BaseMessage]:
         ),
         ToolMessage(content="R1", tool_call_id="123456789"),
         ToolMessage(content="R2", tool_call_id="999999999"),
-        AssistantMessage(content="A2"),
+        AssistantMessage(content=[TextChunk(text="A2"), ThinkChunk(thinking="R1")]),
         UserMessage(content="U2"),
     ]
 
@@ -131,8 +134,97 @@ def test_end_to_end_v13(
     assert tokenized_v13.text == EXPECTED_TEXT_V13, tokenized_v13.text
 
 
-def test_encode_tool_message(v13_tekkenizer: InstructTokenizer) -> None:
+def test_encode_tool_message(v13_tekkenizer: InstructTokenizerV13) -> None:
     tool_message = ToolMessage(content="R1", tool_call_id="123456789")
     assert isinstance(v13_tekkenizer, InstructTokenizerV13)
     encoded = v13_tekkenizer.encode_tool_message(tool_message, is_before_last_user_message=False)
     assert encoded == [7, 182, 149, 8]
+
+
+def test_encode_think_chunk(v13_tekkenizer: InstructTokenizerV13) -> None:
+    assert isinstance(v13_tekkenizer, InstructTokenizerV13)
+    think_chunk = ThinkChunk(
+        thinking="R1",
+    )
+    encoded = v13_tekkenizer.encode_think(think_chunk)
+    assert encoded == [35, 182, 149, 36]
+
+    think_chunk = ThinkChunk(
+        thinking="R1",
+        closed=False,
+    )
+    encoded = v13_tekkenizer.encode_think(think_chunk)
+    assert encoded == [35, 182, 149]
+
+
+@pytest.mark.parametrize(
+    "message, expected",
+    [
+        (
+            AssistantMessage(content="A1"),
+            "A1",
+        ),
+        (
+            AssistantMessage(content="A1", prefix=True),
+            "A1",
+        ),
+        (
+            AssistantMessage(content=[TextChunk(text="A1")]),
+            "A1",
+        ),
+        (
+            AssistantMessage(content=[TextChunk(text="A1"), ThinkChunk(thinking="R1")]),
+            "A1[BEGIN_THINK]R1[END_THINK]",
+        ),
+        (
+            AssistantMessage(
+                content=[TextChunk(text="A1"), ThinkChunk(thinking="R1", closed=False)],
+                tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="F1", arguments="{'a': 1}"))],
+            ),
+            "A1[BEGIN_THINK]R1[TOOL_CALLS]F1[ARGS]\"{'a': 1}\"",
+        ),
+    ],
+)
+@pytest.mark.parametrize("continue_final_message", [True, False])
+def test_tokenize_assistant_message(
+    v13_tekkenizer: InstructTokenizerV13, message: AssistantMessage, expected: str, continue_final_message: bool
+) -> None:
+    if not continue_final_message:
+        tokens = v13_tekkenizer.encode_assistant_message(
+            message, is_before_last_user_message=False, continue_message=continue_final_message
+        )
+        if not message.prefix:
+            expected += "</s>"
+    else:
+        if message.prefix:
+            with pytest.raises(
+                InvalidAssistantMessageException,
+                match="`continue_message` is only supported for assistant messages that have `prefix=False`.",
+            ):
+                v13_tekkenizer.encode_assistant_message(
+                    message, is_before_last_user_message=False, continue_message=continue_final_message
+                )
+            return
+        tokens = v13_tekkenizer.encode_assistant_message(
+            message, is_before_last_user_message=False, continue_message=continue_final_message
+        )
+    assert v13_tekkenizer.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP) == expected
+
+
+def test_tokenize_assistant_message_error(v13_tekkenizer: InstructTokenizerV13) -> None:
+    with pytest.raises(
+        InvalidAssistantMessageException, match="Invalid assistant message. Content and tool calls are empty."
+    ):
+        v13_tekkenizer.encode_assistant_message(
+            AssistantMessage(content="", tool_calls=[]), is_before_last_user_message=False, continue_message=False
+        )
+
+    with pytest.raises(
+        InvalidAssistantMessageException,
+        match="`continue_message` is only supported for assistant messages that have `prefix=False`.",
+    ):
+        v13_tekkenizer.encode_assistant_message(
+            AssistantMessage(content="z", tool_calls=[], prefix=True),
+            is_before_last_user_message=False,
+            continue_message=True,
+        )
