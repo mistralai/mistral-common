@@ -512,7 +512,7 @@ class SystemMessage(BaseMessage):
     """
 
     role: Literal[Roles.system] = Roles.system
-    content: str
+    content: Union[str, List[Union[TextChunk, ThinkChunk]]]
 
     def to_openai(self) -> Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]:
         r"""Converts the message to the OpenAI format."""

@@ -173,8 +173,6 @@ class InstructRequestNormalizer(
                     )
                 weight = message.weight
 
-        print(aggregated_content)
-
         normalized_content: Optional[Union[str, List[Union[TextChunk, ThinkChunk]]]]
         if len(aggregated_content) == 1 and isinstance(aggregated_content[0], TextChunk):
             normalized_content = aggregated_content[0].text
@@ -344,7 +342,11 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
         elif role == Roles.user:
             return [self._aggregate_user_messages(messages)]
         elif role == Roles.system:
-            return messages
+            return [
+                SystemMessage(content=self._aggregate_content_chunks(message.content))
+                for message in messages
+                if isinstance(message, self._system_message_class)
+            ]
         else:
             assert role is None and len(messages) == 0
             return []
@@ -395,6 +397,36 @@ class InstructRequestNormalizerV13(InstructRequestNormalizerV7):
             SystemMessage,
             InstructRequest[UATS, Tool],
         )
+
+    def _aggregate_role(
+        self, messages: List[UATS], role: Optional[Roles], latest_call_ids: List[str]
+    ) -> Sequence[UATS]:
+        if role == Roles.system:
+            return [
+                self._system_message_class(content=self._aggregate_content_chunks(message.content))
+                for message in messages
+                if isinstance(message, self._system_message_class)
+            ]
+        return super()._aggregate_role(messages, role, latest_call_ids)
+
+    def _aggregate_content_chunks(  # type: ignore[override]
+        self, content: Union[str, List[Union[TextChunk, ThinkChunk]]], chunk_join_str: str = "\n\n"
+    ) -> Union[str, List[Union[TextChunk, ThinkChunk]]]:
+        if isinstance(content, list):
+            aggregated_content: List[Union[TextChunk, ThinkChunk]] = []
+            for chunk in content:
+                if isinstance(chunk, TextChunk):
+                    if aggregated_content and isinstance(aggregated_content[-1], TextChunk):
+                        aggregated_content[-1].text += chunk_join_str + chunk.text
+                    else:
+                        aggregated_content.append(chunk)
+                else:
+                    aggregated_content.append(chunk)
+            if len(aggregated_content) == 1 and isinstance(aggregated_content[0], TextChunk):
+                return aggregated_content[0].text
+            return aggregated_content
+        else:
+            return content
 
     def _aggregate_tool_messages(self, messages: List[UATS], latest_call_ids: List[str]) -> List[ToolMessageType]:
         tool_messages: List[ToolMessageType] = super()._aggregate_tool_messages(messages, latest_call_ids)

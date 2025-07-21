@@ -50,7 +50,7 @@ def v13_tekkenizer_think() -> InstructTokenizerV13:
 
 
 EXPECTED_TEXT_V13: str = (
-    r"<s>[SYSTEM_PROMPT]S[/SYSTEM_PROMPT][AVAILABLE_TOOLS][{"
+    r"<s>[SYSTEM_PROMPT]S1[THINK]TS[/THINK]S2[/SYSTEM_PROMPT][AVAILABLE_TOOLS][{"
     r'"type": "function", "function": {"name": "math_interpreter", '
     r'"description": "Get the value of an arithmetic expression.", '
     r'"parameters": {"type": "object", "properties": {'
@@ -99,7 +99,7 @@ def available_tools() -> list[Tool]:
 @pytest.fixture
 def messages() -> list[BaseMessage]:
     return [
-        SystemMessage(content="S"),
+        SystemMessage(content=[TextChunk(text="S1"), ThinkChunk(thinking="TS"), TextChunk(text="S2")]),
         UserMessage(content="U1"),
         AssistantMessage(
             content="A1",
@@ -280,3 +280,45 @@ def test_tokenize_assistant_message_error(v13_tekkenizer: InstructTokenizerV13) 
             is_before_last_user_message=False,
             continue_message=True,
         )
+
+
+@pytest.mark.parametrize(
+    "message, expected",
+    [
+        (
+            SystemMessage(content="S1"),
+            "[SYSTEM_PROMPT]S1[/SYSTEM_PROMPT]",
+        ),
+        (
+            SystemMessage(content=[TextChunk(text="S1"), ThinkChunk(thinking="TS"), TextChunk(text="S2")]),
+            "[SYSTEM_PROMPT]S1[THINK]TS[/THINK]S2[/SYSTEM_PROMPT]",
+        ),
+        (
+            SystemMessage(
+                content=[
+                    TextChunk(text="S1"),
+                    TextChunk(text="S3"),
+                    ThinkChunk(thinking="TS", closed=True),
+                    ThinkChunk(thinking="TS", closed=True),
+                    TextChunk(text="S2"),
+                ]
+            ),
+            "[SYSTEM_PROMPT]S1S3[THINK]TS[/THINK][THINK]TS[/THINK]S2[/SYSTEM_PROMPT]",
+        ),
+        (
+            SystemMessage(
+                content=[
+                    TextChunk(text="S1"),
+                    TextChunk(text="S3"),
+                    ThinkChunk(thinking="TS", closed=False),
+                ]
+            ),
+            "[SYSTEM_PROMPT]S1S3[THINK]TS[/SYSTEM_PROMPT]",
+        ),
+    ],
+)
+def test_encode_system_message(
+    v13_tekkenizer_think: InstructTokenizerV13, message: SystemMessage, expected: str
+) -> None:
+    encoded = v13_tekkenizer_think.encode_system_message(message)
+    assert v13_tekkenizer_think.decode(encoded, special_token_policy=SpecialTokenPolicy.KEEP) == expected

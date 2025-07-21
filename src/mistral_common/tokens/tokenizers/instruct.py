@@ -805,6 +805,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
         Returns:
             The encoded tokens.
         """
+        assert isinstance(message.content, str), "Message content should be str for tokenizer < v13."
         tokens = [
             self.BEGIN_SYSTEM,
             *self.tokenizer.encode(message.content, bos=False, eos=False),
@@ -1014,8 +1015,8 @@ class InstructTokenizerV13(InstructTokenizerV11):
     ) -> None:
         super().__init__(tokenizer, image_encoder, audio_encoder)
         try:
-            self.BEGIN_THINK = self.tokenizer.get_control_token(SpecialTokens.think.value)
-            self.END_THINK = self.tokenizer.get_control_token(SpecialTokens.end_think.value)
+            self.BEGIN_THINK: Optional[int] = self.tokenizer.get_control_token(SpecialTokens.think.value)
+            self.END_THINK: Optional[int] = self.tokenizer.get_control_token(SpecialTokens.end_think.value)
         except ValueError:
             self.BEGIN_THINK = None
             self.END_THINK = None
@@ -1034,6 +1035,30 @@ class InstructTokenizerV13(InstructTokenizerV11):
                 *self.tokenizer.encode(json.dumps(prepared["arguments"], ensure_ascii=False), bos=False, eos=False),
             ]
         return curr_tokens
+
+    def encode_system_message(self, message: SystemMessage) -> List[int]:
+        r"""Encode a system message.
+
+        Args:
+            message: The message to encode.
+
+        Returns:
+            The encoded tokens.
+        """
+        if isinstance(message.content, str):
+            return super().encode_system_message(message)
+
+        tokens = [self.BEGIN_SYSTEM]
+        for chunk in message.content:
+            if isinstance(chunk, TextChunk):
+                tokens += self.tokenizer.encode(chunk.text, bos=False, eos=False)
+            elif isinstance(chunk, ThinkChunk):
+                tokens += self.encode_think(chunk)
+            else:
+                raise ValueError(f"Unsupported chunk type: {type(chunk)}")
+
+        tokens.append(self.END_SYSTEM)
+        return tokens
 
     def encode_assistant_message(
         self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
@@ -1108,6 +1133,7 @@ class InstructTokenizerV13(InstructTokenizerV11):
             The encoded tokens.
         """
         assert self.BEGIN_THINK is not None, "think tokens are not available for this tokenizer."
+        assert self.END_THINK is not None, "think tokens are not available for this tokenizer."
         tokens = self.tokenizer.encode(chunk.thinking.rstrip(" "), bos=False, eos=False)
         think_tokens = [self.BEGIN_THINK, *tokens]
         if chunk.closed:
