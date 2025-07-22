@@ -197,7 +197,6 @@ class InstructRequestNormalizer(
         else:
             normalized_content = None
 
-
         aggregated_message = self._assistant_message_class(
             content=normalized_content,
             tool_calls=tool_calls or None,

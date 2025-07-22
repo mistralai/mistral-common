@@ -42,6 +42,7 @@ from mistral_common.tokens.tokenizers.base import (
     UserMessagePosition,
 )
 from mistral_common.tokens.tokenizers.image import ImageEncoder
+from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 
 
 class InstructTokenizerBase(
@@ -547,6 +548,7 @@ class InstructTokenizerV2(
                 return []
             curr_tokens = self._encode_tool_calls_in_assistant_message(message)
         elif message.content:
+            assert isinstance(message.content, str), "Message content must be a string for tokenizer < V7"
             curr_tokens = self._encode_normal_content_assistant_message(message)
         else:
             raise TokenizerException(f"Invalid assistant message: {message.content}")
@@ -813,12 +815,20 @@ class InstructTokenizerV7(InstructTokenizerV3):
         Returns:
             The encoded tokens.
         """
-        assert isinstance(message.content, str), "Message content should be str for tokenizer < v13."
-        tokens = [
-            self.BEGIN_SYSTEM,
-            *self.tokenizer.encode(message.content, bos=False, eos=False),
-            self.END_SYSTEM,
-        ]
+
+        tokens = [self.BEGIN_SYSTEM]
+        if isinstance(message.content, str):
+            tokens += self.tokenizer.encode(message.content, bos=False, eos=False)
+        else:
+            for chunk in message.content:
+                if isinstance(chunk, TextChunk):
+                    tokens += self.tokenizer.encode(chunk.text, bos=False, eos=False)
+                elif isinstance(chunk, ThinkChunk):
+                    tokens += self.encode_think(chunk)
+                else:
+                    raise ValueError(f"Unsupported chunk type: {type(chunk)}")
+
+        tokens.append(self.END_SYSTEM)
         return tokens
 
     def encode_user_message(
@@ -957,8 +967,17 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
         curr_tokens: list = []
         if message.content:
-            assert isinstance(message.content, str), f"Message content must be a string. Got {message.content}"
-            curr_tokens += self._encode_normal_content_assistant_message(message)
+            if isinstance(message.content, str):
+                curr_tokens = self._encode_normal_content_assistant_message(message)
+            elif isinstance(message.content, list):
+                for chunk in message.content:
+                    if isinstance(chunk, TextChunk):
+                        curr_tokens += self.tokenizer.encode(chunk.text.rstrip(" "), bos=False, eos=False)
+
+                    elif isinstance(chunk, ThinkChunk):
+                        curr_tokens += self.encode_think(chunk)
+                    else:
+                        raise ValueError(f"Unknown chunk type: {type(chunk)}")
         if message.tool_calls:
             curr_tokens += self._encode_tool_calls_in_assistant_message(message)
         if not message.prefix and not continue_message:
@@ -1022,10 +1041,14 @@ class InstructTokenizerV13(InstructTokenizerV11):
         audio_encoder: Optional[AudioEncoder] = None,
     ) -> None:
         super().__init__(tokenizer, image_encoder, audio_encoder)
-        try:
-            self.BEGIN_THINK: Optional[int] = self.tokenizer.get_control_token(SpecialTokens.begin_think.value)
-            self.END_THINK: Optional[int] = self.tokenizer.get_control_token(SpecialTokens.end_think.value)
-        except ValueError:
+        assert isinstance(tokenizer, Tekkenizer), f"Tokenizer must be a Tekkenizer. Got {type(tokenizer)}"
+        if (
+            SpecialTokens.begin_think.value in tokenizer._special_tokens_reverse_vocab
+            and SpecialTokens.end_think.value in tokenizer._special_tokens_reverse_vocab
+        ):
+            self.BEGIN_THINK: Optional[int] = tokenizer.get_control_token(SpecialTokens.begin_think.value)
+            self.END_THINK: Optional[int] = tokenizer.get_control_token(SpecialTokens.end_think.value)
+        else:
             self.BEGIN_THINK = None
             self.END_THINK = None
 
@@ -1042,74 +1065,6 @@ class InstructTokenizerV13(InstructTokenizerV11):
                 self.ARGS,
                 *self.tokenizer.encode(json.dumps(prepared["arguments"], ensure_ascii=False), bos=False, eos=False),
             ]
-        return curr_tokens
-
-    def encode_system_message(self, message: SystemMessage) -> List[int]:
-        r"""Encode a system message.
-
-        Args:
-            message: The message to encode.
-
-        Returns:
-            The encoded tokens.
-        """
-        if isinstance(message.content, str):
-            return super().encode_system_message(message)
-
-        tokens = [self.BEGIN_SYSTEM]
-        for chunk in message.content:
-            if isinstance(chunk, TextChunk):
-                tokens += self.tokenizer.encode(chunk.text, bos=False, eos=False)
-            elif isinstance(chunk, ThinkChunk):
-                tokens += self.encode_think(chunk)
-            else:
-                raise ValueError(f"Unsupported chunk type: {type(chunk)}")
-
-        tokens.append(self.END_SYSTEM)
-        return tokens
-
-    def encode_assistant_message(
-        self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
-    ) -> List[int]:
-        r"""Encode an assistant message.
-
-        Args:
-            message: The message to encode.
-            is_before_last_user_message: Not used.
-            continue_message: Whether to continue the message generation.
-                Only use this if the assistant message is the last message.
-
-        Returns:
-            The encoded tokens.
-        """
-        if not message.content and not message.tool_calls:
-            raise InvalidAssistantMessageException("Invalid assistant message. Content and tool calls are empty.")
-        if continue_message and message.prefix:
-            raise InvalidAssistantMessageException(
-                "`continue_message` is only supported for assistant messages that have `prefix=False`."
-            )
-
-        # Encode content
-        curr_tokens = []
-        if isinstance(message.content, str):
-            curr_tokens += self.tokenizer.encode(message.content.rstrip(" "), bos=False, eos=False)
-        elif isinstance(message.content, list):
-            for chunk in message.content:
-                if isinstance(chunk, TextChunk):
-                    curr_tokens += self.tokenizer.encode(chunk.text.rstrip(" "), bos=False, eos=False)
-                elif isinstance(chunk, ThinkChunk):
-                    curr_tokens += self.encode_think(chunk)
-                else:
-                    raise ValueError(f"Unknown chunk type: {type(chunk)}")
-
-        # Encode tool calls
-        if message.tool_calls:
-            curr_tokens += self._encode_tool_calls_in_assistant_message(message)
-
-        # Add EOS if the message is not a prefix and not a continue message
-        if not message.prefix and not continue_message:
-            curr_tokens.append(self.tokenizer.eos_id)
-
         return curr_tokens
 
     def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:

@@ -1,6 +1,6 @@
 import pytest
 
-from mistral_common.exceptions import InvalidAssistantMessageException
+from mistral_common.exceptions import InvalidAssistantMessageException, TokenizerException
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     BaseMessage,
@@ -264,9 +264,7 @@ def test_tokenize_assistant_message(
 
 
 def test_tokenize_assistant_message_error(v13_tekkenizer: InstructTokenizerV13) -> None:
-    with pytest.raises(
-        InvalidAssistantMessageException, match="Invalid assistant message. Content and tool calls are empty."
-    ):
+    with pytest.raises(TokenizerException, match=r"Invalid assistant message"):
         v13_tekkenizer.encode_assistant_message(
             AssistantMessage(content="", tool_calls=[]), is_before_last_user_message=False, continue_message=False
         )
