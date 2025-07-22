@@ -160,6 +160,9 @@ class InstructRequestNormalizer(
             id=tool_call.id,
         )
 
+    def _aggregate_system_messages(self, messages: List[UATS]) -> List[SystemMessageType]:
+        return []
+
     def _aggregate_assistant_messages(self, messages: List[UATS]) -> AssistantMessageType:
         messages_contents: List[Union[str, TextChunk, ThinkChunk]] = []
         tool_calls: List[ToolCall] = []
@@ -249,7 +252,7 @@ class InstructRequestNormalizer(
         elif role == Roles.user:
             return [self._aggregate_user_messages(messages)]
         else:  # System messages are ignored
-            return []
+            return self._aggregate_system_messages(messages)
 
     def _aggregate_messages(self, request: ChatCompletionRequest[UATS]) -> List[UATS]:
         aggregated_messages: List[UATS] = []
@@ -348,6 +351,13 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
             InstructRequest[UATS, Tool],
         )
 
+    def _aggregate_system_messages(self, messages: List[UATS]) -> List[SystemMessageType]:
+        return [
+            self._system_message_class(content=self._aggregate_content_chunks(message.content))
+            for message in messages
+            if isinstance(message, self._system_message_class)
+        ]
+
     def _aggregate_role(
         self, messages: List[UATS], role: Optional[Roles], latest_call_ids: list[str]
     ) -> Sequence[UATS]:
@@ -358,11 +368,7 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
         elif role == Roles.user:
             return [self._aggregate_user_messages(messages)]
         elif role == Roles.system:
-            return [
-                SystemMessage(content=self._aggregate_content_chunks(message.content))
-                for message in messages
-                if isinstance(message, self._system_message_class)
-            ]
+            return self._aggregate_system_messages(messages)
         else:
             assert role is None and len(messages) == 0
             return []
@@ -413,17 +419,6 @@ class InstructRequestNormalizerV13(InstructRequestNormalizerV7):
             SystemMessage,
             InstructRequest[UATS, Tool],
         )
-
-    def _aggregate_role(
-        self, messages: List[UATS], role: Optional[Roles], latest_call_ids: List[str]
-    ) -> Sequence[UATS]:
-        if role == Roles.system:
-            return [
-                self._system_message_class(content=self._aggregate_content_chunks(message.content))
-                for message in messages
-                if isinstance(message, self._system_message_class)
-            ]
-        return super()._aggregate_role(messages, role, latest_call_ids)
 
     def _aggregate_tool_messages(self, messages: List[UATS], latest_call_ids: List[str]) -> List[ToolMessageType]:
         tool_messages: List[ToolMessageType] = super()._aggregate_tool_messages(messages, latest_call_ids)
