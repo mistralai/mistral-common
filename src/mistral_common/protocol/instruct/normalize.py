@@ -5,7 +5,6 @@ from mistral_common.protocol.instruct.messages import (
     UATS,
     AssistantMessage,
     AssistantMessageType,
-    ContentChunk,
     FinetuningAssistantMessage,
     Roles,
     SystemMessage,
@@ -14,6 +13,7 @@ from mistral_common.protocol.instruct.messages import (
     ThinkChunk,
     ToolMessage,
     ToolMessageType,
+    UserContentChunk,
     UserMessage,
     UserMessageType,
 )
@@ -111,7 +111,7 @@ class InstructRequestNormalizer(
                     chunk = TextChunk(text=chunk)
 
                 if isinstance(chunk, TextChunk):
-                    # TODO(Julien): Add a check for previous text chunks especially if one is open
+                    # TODO(Julien): Add a check for previous text chunks especially if one is open in validator.py
                     if aggregated_content and isinstance(aggregated_content[-1], TextChunk):
                         aggregated_content[-1].text += CHUNK_JOIN_STR + chunk.text
                     else:
@@ -215,7 +215,7 @@ class InstructRequestNormalizer(
         """
         Just coalesce neighboring blocks of text
         """
-        all_content: List[ContentChunk] = []
+        all_content: List[UserContentChunk] = []
         text_chunks: List[str] = []
         for message in messages:
             assert isinstance(message, self._user_message_class), f"Expected user message got {type(message)}"

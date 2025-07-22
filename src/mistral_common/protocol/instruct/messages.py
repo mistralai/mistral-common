@@ -395,6 +395,9 @@ class ThinkChunk(BaseContentChunk):
 ContentChunk = Annotated[
     Union[TextChunk, ImageChunk, ImageURLChunk, AudioChunk, AudioURLChunk, ThinkChunk], Field(discriminator="type")
 ]
+UserContentChunk = Annotated[
+    Union[TextChunk, ImageChunk, ImageURLChunk, AudioChunk, AudioURLChunk], Field(discriminator="type")
+]
 
 
 def _convert_openai_content_chunks(openai_content_chunks: Dict[str, Union[str, Dict[str, str]]]) -> ContentChunk:
@@ -478,7 +481,7 @@ class UserMessage(BaseMessage):
     """
 
     role: Literal[Roles.user] = Roles.user
-    content: Union[str, List[Union[TextChunk, ImageChunk, ImageURLChunk, AudioChunk, AudioURLChunk]]]
+    content: Union[str, List[UserContentChunk]]
 
     def to_openai(self) -> Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]:
         r"""Converts the message to the OpenAI format."""
