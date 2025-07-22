@@ -478,7 +478,7 @@ class UserMessage(BaseMessage):
     """
 
     role: Literal[Roles.user] = Roles.user
-    content: Union[str, List[ContentChunk]]
+    content: Union[str, List[Union[TextChunk, ImageChunk, ImageURLChunk, AudioChunk, AudioURLChunk]]]
 
     def to_openai(self) -> Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]:
         r"""Converts the message to the OpenAI format."""
