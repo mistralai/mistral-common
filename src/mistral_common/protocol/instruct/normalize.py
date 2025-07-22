@@ -1,5 +1,5 @@
 import json
-from typing import Generic, List, Optional, Sequence, Type, Union
+from typing import Generic, List, Optional, Sequence, Type, Union, overload
 
 from mistral_common.protocol.instruct.messages import (
     UATS,
@@ -91,18 +91,48 @@ class InstructRequestNormalizer(
             normalized_content = content
         return normalized_content
 
-    def _aggregate_content_chunks(self, content: Union[str, List[TextChunk]], chunk_join_str: str = "\n\n") -> str:
+    @overload
+    def _aggregate_content_chunks(
+        self, content: List[Union[str, TextChunk, ThinkChunk]], chunk_join_str: str = "\n\n"
+    ) -> Union[str, List[Union[TextChunk, ThinkChunk]]]: ...
+    @overload
+    def _aggregate_content_chunks(self, content: str, chunk_join_str: str = "\n\n") -> str: ...
+    @overload
+    def _aggregate_content_chunks(self, content: List[str], chunk_join_str: str = "\n\n") -> str: ...
+    def _aggregate_content_chunks(
+        self, content: Union[str, List[Union[str, TextChunk, ThinkChunk]], List[str]], chunk_join_str: str = "\n\n"
+    ) -> Union[str, List[Union[TextChunk, ThinkChunk]]]:
         if isinstance(content, list):
-            return chunk_join_str.join([chunk.text for chunk in content])
-        else:
+            aggregated_content: List[Union[TextChunk, ThinkChunk]] = []
+            for chunk in content:
+                if isinstance(chunk, str):
+                    chunk = TextChunk(text=chunk)
+
+                if isinstance(chunk, TextChunk):
+                    if aggregated_content and isinstance(aggregated_content[-1], TextChunk):
+                        aggregated_content[-1].text += chunk_join_str + chunk.text
+                    else:
+                        aggregated_content.append(chunk)
+                elif isinstance(chunk, ThinkChunk):
+                    aggregated_content.append(chunk)
+                else:
+                    raise ValueError(f"Unsupported chunk type {type(chunk)}")
+
+            if len(aggregated_content) == 1 and isinstance(aggregated_content[0], TextChunk):
+                return aggregated_content[0].text
+            return aggregated_content
+        elif isinstance(content, str):
             return content
+        else:
+            raise ValueError(f"Unsupported content type {type(content)}")
 
     def _aggregate_system_prompts(self, request: ChatCompletionRequest[UATS]) -> Optional[str]:
         system_prompt: List[str] = []
 
         for message in request.messages:
             if message.role == Roles.system and message.content:
-                system_prompt.append(self._aggregate_content_chunks(message.content))
+                aggregated_content = self._aggregate_content_chunks(message.content)
+                system_prompt.append(aggregated_content)
 
         return "\n\n".join(system_prompt) if len(system_prompt) else None
 
@@ -131,10 +161,11 @@ class InstructRequestNormalizer(
         )
 
     def _aggregate_assistant_messages(self, messages: List[UATS]) -> AssistantMessageType:
-        aggregated_content: List[Union[TextChunk, ThinkChunk]] = []
+        aggregated_content: List[Union[str, TextChunk, ThinkChunk]] = []
         tool_calls: List[ToolCall] = []
         prefix: bool = False
         weight: Optional[float] = None
+
         for message in messages:
             assert isinstance(message, self._assistant_message_class), "Expected assistant message"
 
@@ -146,23 +177,11 @@ class InstructRequestNormalizer(
                     normalized_tool_call = self._normalize_tool_call(tool_call)
                     tool_calls.append(normalized_tool_call)
 
-            if message.content:
-                if isinstance(message.content, str):
-                    if len(aggregated_content) > 0 and isinstance(aggregated_content[-1], TextChunk):
-                        aggregated_content[-1].text += "\n\n" + message.content
-                    else:
-                        aggregated_content.append(TextChunk(text=message.content))
-                elif isinstance(message.content, list):
-                    for chunk in message.content:
-                        if isinstance(chunk, TextChunk):
-                            if len(aggregated_content) > 0 and isinstance(aggregated_content[-1], TextChunk):
-                                aggregated_content[-1].text += "\n\n" + chunk.text
-                            else:
-                                aggregated_content.append(chunk)
-                        elif isinstance(chunk, ThinkChunk):
-                            aggregated_content.append(chunk)
-                        else:
-                            raise ValueError(f"Unsupported chunk type {type(chunk)}")
+            if isinstance(message.content, str):
+                aggregated_content.append(message.content)
+            elif message.content is not None:
+                aggregated_content.extend(message.content)
+
             prefix |= message.prefix
 
             if isinstance(message, FinetuningAssistantMessage):
@@ -173,13 +192,11 @@ class InstructRequestNormalizer(
                     )
                 weight = message.weight
 
-        normalized_content: Optional[Union[str, List[Union[TextChunk, ThinkChunk]]]]
-        if len(aggregated_content) == 1 and isinstance(aggregated_content[0], TextChunk):
-            normalized_content = aggregated_content[0].text
-        elif message.content is None:
-            normalized_content = None
+        if aggregated_content:
+            normalized_content = self._aggregate_content_chunks(aggregated_content)
         else:
-            normalized_content = [chunk for chunk in aggregated_content]
+            normalized_content = None
+
 
         aggregated_message = self._assistant_message_class(
             content=normalized_content,
@@ -408,25 +425,6 @@ class InstructRequestNormalizerV13(InstructRequestNormalizerV7):
                 if isinstance(message, self._system_message_class)
             ]
         return super()._aggregate_role(messages, role, latest_call_ids)
-
-    def _aggregate_content_chunks(  # type: ignore[override]
-        self, content: Union[str, List[Union[TextChunk, ThinkChunk]]], chunk_join_str: str = "\n\n"
-    ) -> Union[str, List[Union[TextChunk, ThinkChunk]]]:
-        if isinstance(content, list):
-            aggregated_content: List[Union[TextChunk, ThinkChunk]] = []
-            for chunk in content:
-                if isinstance(chunk, TextChunk):
-                    if aggregated_content and isinstance(aggregated_content[-1], TextChunk):
-                        aggregated_content[-1].text += chunk_join_str + chunk.text
-                    else:
-                        aggregated_content.append(chunk)
-                else:
-                    aggregated_content.append(chunk)
-            if len(aggregated_content) == 1 and isinstance(aggregated_content[0], TextChunk):
-                return aggregated_content[0].text
-            return aggregated_content
-        else:
-            return content
 
     def _aggregate_tool_messages(self, messages: List[UATS], latest_call_ids: List[str]) -> List[ToolMessageType]:
         tool_messages: List[ToolMessageType] = super()._aggregate_tool_messages(messages, latest_call_ids)
