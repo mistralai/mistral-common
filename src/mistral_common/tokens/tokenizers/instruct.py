@@ -670,38 +670,38 @@ class InstructTokenizerV3(
     @overload
     def _encode_content_chunk(
         self, chunk: Union[str, TextChunk, ThinkChunk], rstrip: bool
-    ) -> Tuple[List[int], None]: ...
+    ) -> Tuple[List[int], None, None]: ...
     @overload
     def _encode_content_chunk(
         self, chunk: Union[ImageChunk, ImageURLChunk], rstrip: bool
-    ) -> Tuple[List[int], np.ndarray]: ...
+    ) -> Tuple[List[int], np.ndarray, None]: ...
     @overload
     def _encode_content_chunk(
         self, chunk: Union[AudioChunk, AudioURLChunk], rstrip: bool
-    ) -> Tuple[List[int], Audio]: ...
+    ) -> Tuple[List[int], None, Audio]: ...
     def _encode_content_chunk(
         self, chunk: Union[str, ContentChunk], rstrip: bool
-    ) -> Union[Tuple[List[int], None], Tuple[List[int], np.ndarray], Tuple[List[int], Audio]]:
+    ) -> Union[Tuple[List[int], Optional[np.ndarray], Optional[Audio]]]:
         if isinstance(chunk, str):
             text = chunk.rstrip(" ") if rstrip else chunk
-            return self.tokenizer.encode(text, bos=False, eos=False), None
+            return self.tokenizer.encode(text, bos=False, eos=False), None, None
         elif isinstance(chunk, TextChunk):
             text = chunk.text.rstrip(" ") if rstrip else chunk.text
-            return self.tokenizer.encode(text, bos=False, eos=False), None
+            return self.tokenizer.encode(text, bos=False, eos=False), None, None
         elif isinstance(chunk, ThinkChunk):
-            return self.encode_think(chunk), None
+            return self.encode_think(chunk), None, None
         elif isinstance(chunk, (ImageChunk, ImageURLChunk)):
             assert self.image_encoder is not None, "Make sure to define a image encoder at init"
             img_encoding = self.image_encoder(chunk)
 
-            return img_encoding.tokens, img_encoding.image
+            return img_encoding.tokens, img_encoding.image, None
 
         elif isinstance(chunk, (AudioChunk, AudioURLChunk)):
             # the following is only possible for >= v7
             assert self.audio_encoder is not None, "Make sure to define a audio encoder at init"
             audio_encoding = self.audio_encoder(chunk)
 
-            return audio_encoding.tokens, audio_encoding.audio
+            return audio_encoding.tokens, None, audio_encoding.audio
         else:
             raise ValueError(f"Unknown chunk type: {chunk}")
 
@@ -716,15 +716,15 @@ class InstructTokenizerV3(
             if allowed_types and not isinstance(chunk, allowed_types):
                 raise ValueError(f"Invalid chunk type: {chunk}")
             if isinstance(chunk, (AudioChunk, AudioURLChunk)):
-                chunk_tokens, chunk_audio = self._encode_content_chunk(chunk, rstrip)
+                chunk_tokens, _, chunk_audio = self._encode_content_chunk(chunk, rstrip)
                 audio.append(chunk_audio)
                 tokens.extend(chunk_tokens)
             elif isinstance(chunk, (ImageChunk, ImageURLChunk)):
-                chunk_tokens, chunk_image = self._encode_content_chunk(chunk, rstrip)
+                chunk_tokens, chunk_image, _ = self._encode_content_chunk(chunk, rstrip)
                 images.append(chunk_image)
                 tokens.extend(chunk_tokens)
             elif isinstance(chunk, (TextChunk, ThinkChunk)):
-                chunk_tokens, _ = self._encode_content_chunk(chunk, rstrip)
+                chunk_tokens, _, _ = self._encode_content_chunk(chunk, rstrip)
                 tokens.extend(chunk_tokens)
             else:
                 raise ValueError(f"Unknown chunk type: {chunk}")
@@ -772,13 +772,13 @@ class InstructTokenizerV3(
                 assert not content_str, (
                     f"It is not possible that `content` is non-empty when chunk is of type {type(chunk)}."
                 )
-                chunk_tokens, chunk_audio = self._encode_content_chunk(chunk, rstrip=False)
+                chunk_tokens, _, chunk_audio = self._encode_content_chunk(chunk, rstrip=False)
                 audio.append(chunk_audio)
             elif isinstance(chunk, (ImageChunk, ImageURLChunk)):
-                chunk_tokens, chunk_image = self._encode_content_chunk(chunk, rstrip=False)
+                chunk_tokens, chunk_image, _ = self._encode_content_chunk(chunk, rstrip=False)
                 images.append(chunk_image)
             else:
-                chunk_tokens, _ = self._encode_content_chunk(chunk, rstrip=False)
+                chunk_tokens = self._encode_content_chunk(chunk, rstrip=False)[0]
             tokens.extend(chunk_tokens)
 
         return tokens, images, audio

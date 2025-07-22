@@ -21,6 +21,8 @@ from mistral_common.protocol.instruct.request import ChatCompletionRequest, Inst
 from mistral_common.protocol.instruct.tool_calls import FunctionCall, Tool, ToolCall
 from mistral_common.tokens.tokenizers.base import InstructRequestType, TokenizerVersion
 
+CHUNK_JOIN_STR = "\n\n"
+
 
 class InstructRequestNormalizer(
     Generic[UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType, InstructRequestType]
@@ -93,14 +95,14 @@ class InstructRequestNormalizer(
 
     @overload
     def _aggregate_content_chunks(
-        self, content: List[Union[str, TextChunk, ThinkChunk]], chunk_join_str: str = "\n\n"
+        self, content: List[Union[str, TextChunk, ThinkChunk]]
     ) -> Union[str, List[Union[TextChunk, ThinkChunk]]]: ...
     @overload
-    def _aggregate_content_chunks(self, content: str, chunk_join_str: str = "\n\n") -> str: ...
+    def _aggregate_content_chunks(self, content: str) -> str: ...
     @overload
-    def _aggregate_content_chunks(self, content: List[str], chunk_join_str: str = "\n\n") -> str: ...
+    def _aggregate_content_chunks(self, content: List[str]) -> str: ...
     def _aggregate_content_chunks(
-        self, content: Union[str, List[Union[str, TextChunk, ThinkChunk]], List[str]], chunk_join_str: str = "\n\n"
+        self, content: Union[str, List[Union[str, TextChunk, ThinkChunk]], List[str]]
     ) -> Union[str, List[Union[TextChunk, ThinkChunk]]]:
         if isinstance(content, list):
             aggregated_content: List[Union[TextChunk, ThinkChunk]] = []
@@ -109,8 +111,9 @@ class InstructRequestNormalizer(
                     chunk = TextChunk(text=chunk)
 
                 if isinstance(chunk, TextChunk):
+                    # TODO(Julien): Add a check for previous text chunks especially if one is open
                     if aggregated_content and isinstance(aggregated_content[-1], TextChunk):
-                        aggregated_content[-1].text += chunk_join_str + chunk.text
+                        aggregated_content[-1].text += CHUNK_JOIN_STR + chunk.text
                     else:
                         aggregated_content.append(chunk)
                 elif isinstance(chunk, ThinkChunk):
@@ -180,10 +183,8 @@ class InstructRequestNormalizer(
                     normalized_tool_call = self._normalize_tool_call(tool_call)
                     tool_calls.append(normalized_tool_call)
 
-            if isinstance(message.content, str):
-                messages_contents.append(message.content)
-            elif message.content is not None:
-                messages_contents.extend(message.content)
+            if (content := message.content) is not None:
+                messages_contents.extend([content] if isinstance(content, str) else content)
 
             prefix |= message.prefix
 
