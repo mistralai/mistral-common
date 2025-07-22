@@ -161,7 +161,7 @@ class InstructRequestNormalizer(
         )
 
     def _aggregate_assistant_messages(self, messages: List[UATS]) -> AssistantMessageType:
-        aggregated_content: List[Union[str, TextChunk, ThinkChunk]] = []
+        messages_contents: List[Union[str, TextChunk, ThinkChunk]] = []
         tool_calls: List[ToolCall] = []
         prefix: bool = False
         weight: Optional[float] = None
@@ -178,9 +178,9 @@ class InstructRequestNormalizer(
                     tool_calls.append(normalized_tool_call)
 
             if isinstance(message.content, str):
-                aggregated_content.append(message.content)
+                messages_contents.append(message.content)
             elif message.content is not None:
-                aggregated_content.extend(message.content)
+                messages_contents.extend(message.content)
 
             prefix |= message.prefix
 
@@ -192,13 +192,13 @@ class InstructRequestNormalizer(
                     )
                 weight = message.weight
 
-        if aggregated_content:
-            normalized_content = self._aggregate_content_chunks(aggregated_content)
+        if messages_contents:
+            aggregated_content = self._aggregate_content_chunks(messages_contents)
         else:
-            normalized_content = None
+            aggregated_content = None
 
         aggregated_message = self._assistant_message_class(
-            content=normalized_content,
+            content=aggregated_content,
             tool_calls=tool_calls or None,
             prefix=prefix,
         )
