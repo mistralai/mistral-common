@@ -12,7 +12,7 @@ from mistral_common.base import MistralBase
 from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.instruct.messages import (
     AssistantMessageType,
-    ContentChunk,
+    UserContentChunk,
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import InstructRequest
@@ -381,7 +381,7 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
     @abstractmethod
     def encode_user_content(
         self,
-        content: Union[str, List[ContentChunk]],
+        content: Union[str, List[UserContentChunk]],
         is_last: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,

@@ -24,6 +24,7 @@ from mistral_common.protocol.instruct.messages import (
     TextChunk,
     ThinkChunk,
     ToolMessage,
+    UserContentChunk,
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import InstructRequest
@@ -292,7 +293,7 @@ class InstructTokenizerV1(
 
     def encode_user_content(
         self,
-        content: Union[str, List[ContentChunk]],
+        content: Union[str, List[UserContentChunk]],
         is_last: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
@@ -724,7 +725,7 @@ class InstructTokenizerV3(
 
     def encode_user_content(
         self,
-        content: Union[str, List[ContentChunk]],
+        content: Union[str, List[UserContentChunk]],
         is_last: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
@@ -869,7 +870,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
     def encode_user_content(
         self,
-        content: Union[str, List[ContentChunk]],
+        content: Union[str, List[UserContentChunk]],
         is_last: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
