@@ -1097,7 +1097,6 @@ class InstructTokenizerV13(InstructTokenizerV11):
             for chunk in message.content:
                 if isinstance(chunk, TextChunk):
                     curr_tokens += self.tokenizer.encode(chunk.text.rstrip(" "), bos=False, eos=False)
-
                 elif isinstance(chunk, ThinkChunk):
                     curr_tokens += self.encode_think(chunk)
                 else:
