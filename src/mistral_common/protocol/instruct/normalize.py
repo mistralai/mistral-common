@@ -104,30 +104,30 @@ class InstructRequestNormalizer(
     def _aggregate_content_chunks(
         self, content: Union[str, List[Union[str, TextChunk, ThinkChunk]], List[str]]
     ) -> Union[str, List[Union[TextChunk, ThinkChunk]]]:
-        if isinstance(content, list):
-            aggregated_content: List[Union[TextChunk, ThinkChunk]] = []
-            for chunk in content:
-                if isinstance(chunk, str):
-                    chunk = TextChunk(text=chunk)
-
-                if isinstance(chunk, TextChunk):
-                    # TODO(Julien): Add a check for previous text chunks especially if one is open in validator.py
-                    if aggregated_content and isinstance(aggregated_content[-1], TextChunk):
-                        aggregated_content[-1].text += CHUNK_JOIN_STR + chunk.text
-                    else:
-                        aggregated_content.append(chunk)
-                elif isinstance(chunk, ThinkChunk):
-                    aggregated_content.append(chunk)
-                else:
-                    raise ValueError(f"Unsupported chunk type {type(chunk)}")
-
-            if len(aggregated_content) == 1 and isinstance(aggregated_content[0], TextChunk):
-                return aggregated_content[0].text
-            return aggregated_content
-        elif isinstance(content, str):
+        if isinstance(content, str):
             return content
-        else:
-            raise ValueError(f"Unsupported content type {type(content)}")
+
+        assert isinstance(content, list), f"Expected list, got {type(content)}"
+
+        aggregated_content: List[Union[TextChunk, ThinkChunk]] = []
+        for chunk in content:
+            if isinstance(chunk, str):
+                chunk = TextChunk(text=chunk)
+
+            if isinstance(chunk, TextChunk):
+                # TODO(Julien): Add a check for previous text chunks especially if one is open in validator.py
+                if aggregated_content and isinstance(aggregated_content[-1], TextChunk):
+                    aggregated_content[-1].text += CHUNK_JOIN_STR + chunk.text
+                else:
+                    aggregated_content.append(chunk)
+            elif isinstance(chunk, ThinkChunk):
+                aggregated_content.append(chunk)
+            else:
+                raise ValueError(f"Unsupported chunk type {type(chunk)}")
+
+        if len(aggregated_content) == 1 and isinstance(aggregated_content[0], TextChunk):
+            return aggregated_content[0].text
+        return aggregated_content
 
     def _aggregate_system_prompts(self, request: ChatCompletionRequest[UATS]) -> Optional[str]:
         system_prompt: List[str] = []
