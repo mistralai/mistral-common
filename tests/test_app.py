@@ -10,15 +10,23 @@ from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
     SystemMessage,
+    TextChunk,
+    ThinkChunk,
+    ToolMessage,
     UserMessage,
 )
-from mistral_common.protocol.instruct.request import ChatCompletionRequest
+from mistral_common.protocol.instruct.normalize import InstructRequestNormalizerV13
+from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.protocol.instruct.validator import (
+    MistralRequestValidatorV13,
     ValidationMode,
 )
-from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, TokenizerVersion
+from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from mistral_common.tokens.tokenizers.tekken import Tekkenizer
+from tests.test_tekken import _quick_vocab, get_special_tokens
 
 
 @pytest.fixture(scope="module")
@@ -39,6 +47,53 @@ def spm_tokenizer() -> MistralTokenizer:
 
 
 @pytest.fixture(scope="module")
+def mistral_tokenizer_v13() -> MistralTokenizer:
+    return MistralTokenizer(
+        instruct_tokenizer=InstructTokenizerV13(
+            Tekkenizer(
+                _quick_vocab(
+                    [
+                        b"Hello",
+                        b",",
+                        b" ",
+                        b"world",
+                        b"!",
+                        b"How",
+                        b"can",
+                        b"I",
+                        b"assist",
+                        b"you",
+                        b"today",
+                        b"?",
+                        b'"',
+                        b"a",
+                        b"b",
+                        b"c",
+                        b"d",
+                        b"{",
+                        b"}",
+                        b"1",
+                        b"2",
+                        b"call",
+                        b"_",
+                        b":",
+                    ]
+                ),
+                special_tokens=get_special_tokens(TokenizerVersion.v13, add_think=True),
+                pattern=r".+",  # single token, whole string
+                vocab_size=256 + 100,
+                num_special_tokens=100,
+                version=TokenizerVersion.v13,
+            )
+        ),
+        validator=MistralRequestValidatorV13(),
+        request_normalizer=InstructRequestNormalizerV13(
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest
+        ),
+    )
+
+
+@pytest.fixture(scope="module")
 def spm_app() -> FastAPI:
     return create_app(
         MistralTokenizer._data_path() / "mistral_instruct_tokenizer_241114.model.v7m1", ValidationMode.finetuning
@@ -48,6 +103,16 @@ def spm_app() -> FastAPI:
 @pytest.fixture(scope="module")
 def tekken_client(tekken_app: FastAPI) -> TestClient:
     return TestClient(tekken_app)
+
+
+@pytest.fixture(scope="module")
+def tekken_v13_app(mistral_tokenizer_v13: MistralTokenizer) -> FastAPI:
+    return create_app(mistral_tokenizer_v13)
+
+
+@pytest.fixture(scope="module")
+def tekken_v13_client(tekken_v13_app: FastAPI) -> TestClient:
+    return TestClient(tekken_v13_app)
 
 
 @pytest.fixture(scope="module")
@@ -278,22 +343,23 @@ def test_detokenize_tokens(tokenizer_fixture: str, client_fixture: str, request:
     assert response_special_error.status_code == 400
 
 
+@pytest.mark.parametrize("prefix", [False, True])
 @pytest.mark.parametrize(
     ["tokenizer_fixture", "client_fixture"], [("tekken_tokenizer", "tekken_client"), ("spm_tokenizer", "spm_client")]
 )
 def test_detokenize_assistant_message(
-    tokenizer_fixture: str, client_fixture: str, request: pytest.FixtureRequest
+    prefix: bool, tokenizer_fixture: str, client_fixture: str, request: pytest.FixtureRequest
 ) -> None:
     # Test 1:
     # Detokenize only content
     tokenizer: MistralTokenizer = request.getfixturevalue(tokenizer_fixture)
     client: TestClient = request.getfixturevalue(client_fixture)
     content = "Hello, world!"
-    encoded_content = tokenizer.instruct_tokenizer.tokenizer.encode(content, bos=True, eos=True)
+    encoded_content = tokenizer.instruct_tokenizer.tokenizer.encode(content, bos=True, eos=not prefix)
     response = client.post("/detokenize/", json={"tokens": encoded_content, "as_message": True})
     assert response.status_code == 200
 
-    assert AssistantMessage.model_validate(response.json()) == AssistantMessage(content=content)
+    assert AssistantMessage.model_validate(response.json()) == AssistantMessage(content=content, prefix=prefix)
 
     # Test 2:
     # Detokenize content and tool calls
@@ -310,24 +376,31 @@ def test_detokenize_assistant_message(
             ),
         ),
     ]
-    encoded_content = tokenizer.instruct_tokenizer.tokenizer.encode(content, bos=True, eos=True)
+    encoded_content = tokenizer.instruct_tokenizer.tokenizer.encode(content, bos=True, eos=False)
     encoded_tool_calls: List[int] = tokenizer.instruct_tokenizer._encode_tool_calls_in_assistant_message(  # type: ignore[attr-defined]
         AssistantMessage(tool_calls=tool_calls)
     )
+    if not prefix:
+        encoded_tool_calls.append(tokenizer.instruct_tokenizer.tokenizer.eos_id)
     encoded_tokens = encoded_content + encoded_tool_calls
 
     response = client.post("/detokenize/", json={"tokens": encoded_tokens, "as_message": True})
     assert response.status_code == 200
-    assert AssistantMessage.model_validate(response.json()) == AssistantMessage(content=content, tool_calls=tool_calls)
+    assert AssistantMessage.model_validate(response.json()) == AssistantMessage(
+        content=content, tool_calls=tool_calls, prefix=prefix
+    )
 
     # Test 3:
     # Detokenize only tool calls
     encoded_tokens = tokenizer.instruct_tokenizer._encode_tool_calls_in_assistant_message(  # type: ignore[attr-defined]
         AssistantMessage(tool_calls=tool_calls)
     )
+    if not prefix:
+        encoded_tokens.append(tokenizer.instruct_tokenizer.tokenizer.eos_id)
+
     response = client.post("/detokenize/", json={"tokens": encoded_tokens, "as_message": True})
     assert response.status_code == 200
-    assert AssistantMessage.model_validate(response.json()) == AssistantMessage(tool_calls=tool_calls)
+    assert AssistantMessage.model_validate(response.json()) == AssistantMessage(tool_calls=tool_calls, prefix=prefix)
 
     # Test 4:
     # Detokenize empty tokens
@@ -346,6 +419,72 @@ def test_detokenize_assistant_message(
 
     # Test 6:
     # Wrong tool call format
-    response = client.post("/detokenize/", json={"tokens": encoded_tool_calls[:-1], "as_message": True})
+    response = client.post(
+        "/detokenize/", json={"tokens": encoded_tool_calls[: (-2 if not prefix else -1)], "as_message": True}
+    )
     assert response.status_code == 400
     assert response.json()["detail"] == "Invalid tool call tokenization. Expected a JSON list of tool calls."
+
+
+@pytest.mark.parametrize(
+    "assistant_message",
+    [
+        AssistantMessage(
+            content=[
+                TextChunk(text="Hello, world!"),
+            ]
+        ),
+        AssistantMessage(
+            content=[
+                ThinkChunk(thinking="Let me think about this..."),
+            ]
+        ),
+        AssistantMessage(
+            content=[
+                TextChunk(text="Hello, world!"),
+                ThinkChunk(thinking="Let me think about this..."),
+                TextChunk(text="This is a complex question."),
+                ThinkChunk(thinking="I need to consider all options."),
+                TextChunk(text="Here is my final answer."),
+            ],
+        ),
+        AssistantMessage(
+            content=[
+                TextChunk(text="Hello, world!"),
+                ThinkChunk(thinking="Let me think about this..."),
+                TextChunk(text="This is a complex question."),
+                ThinkChunk(thinking="I need to consider all options.", closed=False),
+            ],
+            prefix=True,
+        ),
+        AssistantMessage(
+            content=[
+                TextChunk(text="Hello, world!"),
+                ThinkChunk(thinking="Let me think about this..."),
+                TextChunk(text="This is a complex question."),
+                ThinkChunk(thinking="I need to consider all options.", closed=False),
+            ],
+            prefix=True,
+            tool_calls=[
+                ToolCall(
+                    id="call_1",
+                    function=FunctionCall(name="get_current_weather", arguments='{"location": "Paris"}'),
+                ),
+            ],
+        ),
+    ],
+)
+def test_detokenize_assistant_message_think_chunks(
+    assistant_message: AssistantMessage, mistral_tokenizer_v13: MistralTokenizer, tekken_v13_client: TestClient
+) -> None:
+    encoded_tokens = mistral_tokenizer_v13.instruct_tokenizer.encode_assistant_message(assistant_message, False, False)  # type: ignore[attr-defined]
+
+    response = tekken_v13_client.post("/detokenize/", json={"tokens": encoded_tokens, "as_message": True})
+    assert response.status_code == 200
+
+    assistant_message.tool_calls = (
+        [ToolCall.model_validate(tool_call.model_dump(exclude={"id"})) for tool_call in assistant_message.tool_calls]
+        if assistant_message.tool_calls
+        else None
+    )
+    assert AssistantMessage.model_validate(response.json()) == assistant_message

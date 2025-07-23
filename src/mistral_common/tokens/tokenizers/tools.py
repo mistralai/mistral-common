@@ -3,6 +3,10 @@ from typing import List, Sequence, Tuple
 
 from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenizer, TokenizerVersion
+from mistral_common.tokens.tokenizers.utils import (
+    _split_integer_list_by_value,
+    _split_tokens_by_one_occurence_control_token,
+)
 
 
 class InvalidToolCallError(ValueError):
@@ -11,51 +15,6 @@ class InvalidToolCallError(ValueError):
 
 class InvalidArgsToolCallError(InvalidToolCallError):
     pass
-
-
-def _split_integer_list_by_value(list_: List[int], value: int) -> Tuple[List[int], ...]:
-    r"""Split a list of integers by a given value.
-
-    Args:
-        list_: The list to split.
-        value: The value to split the list by.
-
-    Returns:
-        A tuple of lists of integers.
-
-    Examples:
-        >>> _split_integer_list_by_value([1, 2, 3, 4, 5], 3)
-        ([1, 2], [3, 4, 5])
-        >>> _split_integer_list_by_value([1, 2, 3, 4, 5], 6)
-        ([1, 2, 3, 4, 5],)
-        >>> _split_integer_list_by_value([1, 2, 3, 4, 5], 1)
-        ([1, 2, 3, 4, 5],)
-        >>> _split_integer_list_by_value([1, 2, 3, 4, 5, 3, 5, 6, 7], 3)
-        ([1, 2], [3, 4, 5], [3, 5, 6, 7])
-    """
-    result = [list_[0]]
-    for i, item in enumerate(list_[1:]):
-        if item == value:
-            return (result, *_split_integer_list_by_value(list_[1 + i :], value))
-        result.append(item)
-    return (result,)
-
-
-def _split_tokens_by_one_occurence_control_token(
-    list_: List[int], tokenizer: Tokenizer, control_token: str
-) -> Tuple[List[int], List[int]]:
-    r"""Split a list of integers by a given control token.
-
-    Raises:
-        InvalidToolCallError: If the control token is not found in the list or if it is found more than once.
-    """
-    control_token_id = tokenizer.get_control_token(control_token)
-    first, *rest = _split_integer_list_by_value(list_, control_token_id)
-    if len(rest) == 0:
-        raise InvalidToolCallError(f"Control token {control_token} not found in the list of tokens.")
-    if len(rest) > 1:
-        raise InvalidToolCallError(f"Control token {control_token} found more than once in the list of tokens.")
-    return first, rest[0]
 
 
 def split_content_and_tool_calls(tokens: List[int], tool_call_token_id: int) -> tuple[List[int], Tuple[List[int], ...]]:
@@ -71,6 +30,9 @@ def split_content_and_tool_calls(tokens: List[int], tool_call_token_id: int) -> 
     Returns:
         A tuple containing the content and tool calls.
     """
+    if not tokens:
+        return [], ()
+
     maybe_content_and_tools_calls = _split_integer_list_by_value(tokens, tool_call_token_id)
 
     has_content = maybe_content_and_tools_calls[0][0] != tool_call_token_id
@@ -156,7 +118,6 @@ def _decode_tool_call_v11(tool_call_tokens: list[int], tokenizer: Tokenizer) -> 
     name, args = _split_tokens_by_one_occurence_control_token(tool_call_tokens, tokenizer, "[ARGS]")
     try:
         tool_call = ToolCall(
-            id="",
             function=FunctionCall(
                 name=tokenizer.decode(name, special_token_policy=SpecialTokenPolicy.IGNORE),
                 arguments=json.loads(tokenizer.decode(args, special_token_policy=SpecialTokenPolicy.IGNORE)),
@@ -187,7 +148,7 @@ def decode_tool_calls(tool_call_tokens: Sequence[list[int]], tokenizer: Tokenize
     for tool_call in tool_call_tokens:
         if tokenizer.version == TokenizerVersion.v1:
             raise ValueError("Tool calls are not supported for tokenizer version v1.")
-        elif tokenizer.version in [TokenizerVersion.v2, TokenizerVersion.v3, TokenizerVersion.v7]:
+        elif tokenizer.version <= TokenizerVersion.v7:
             tools_calls.extend(_decode_tool_calls_v2_up_to_v7(tool_call, tokenizer))
         elif tokenizer.version == TokenizerVersion.v11 and tokenizer.get_control_token("[CALL_ID]") in tool_call:
             tools_calls.append(_decode_tool_call_v11_with_call_id(tool_call, tokenizer))

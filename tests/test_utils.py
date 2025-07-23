@@ -7,7 +7,9 @@ import huggingface_hub as huggingface_hub
 import pytest
 import requests
 
+from mistral_common.tokens.tokenizers.tools import split_content_and_tool_calls
 from mistral_common.tokens.tokenizers.utils import (
+    _split_integer_list_by_value,
     download_tokenizer_from_hf_hub,
     list_local_hf_repo_files,
 )
@@ -27,6 +29,38 @@ def _create_temporary_hf_model_cache(repo_id: str) -> Path:
     (revision_folder / "tekken.json").write_text("{'test': 'test'}")
     (revision_folder / "file2.txt").write_text("test")
     return hub_folder
+
+
+def test_split_integer_list_by_value() -> None:
+    # Test 1: One split
+    assert _split_integer_list_by_value([1, 2, 3, 4, 5], 3) == ([1, 2], [3, 4, 5])
+
+    # Test 2: No value
+    assert _split_integer_list_by_value([1, 2, 3, 4, 5], 6) == ([1, 2, 3, 4, 5],)
+
+    # Test 3: No split
+    assert _split_integer_list_by_value([1, 2, 3, 4, 5], 1) == ([1, 2, 3, 4, 5],)
+
+    # Test 4: Multiple splits
+    assert _split_integer_list_by_value([1, 2, 3, 4, 5, 3, 5, 6, 7], 3) == ([1, 2], [3, 4, 5], [3, 5, 6, 7])
+
+
+def test_find_content_tool_calls() -> None:
+    # Test 1: No tool calls
+    tokens = [1, 2, 3, 4, 5]
+    assert split_content_and_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ())
+
+    # Test 2: One tool call
+    tokens = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    assert split_content_and_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ([6, 7, 8, 9, 10],))
+
+    # Test 3: Multiple tool calls
+    tokens = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 6, 11, 12, 13, 14]
+    assert split_content_and_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ([6, 7, 8, 9, 10], [6, 11, 12, 13, 14]))
+
+    # Test 4: No content
+    tokens = [6, 7, 8, 9, 10]
+    assert split_content_and_tool_calls(tokens, 6) == ([], ([6, 7, 8, 9, 10],))
 
 
 @patch("huggingface_hub.constants.HF_HUB_CACHE", "/tmp/hf_cache")
