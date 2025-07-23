@@ -379,15 +379,15 @@ def test_convert_think_chunk() -> None:
                 "role": "assistant",
                 "content": [
                     {"type": "text", "text": "Hi"},
-                    {"type": "thinking", "thinking": "Hello", "closed": False},
                     {"type": "thinking", "thinking": "Hello", "closed": True},
+                    {"type": "thinking", "thinking": "Hello", "closed": False},
                 ],
             },
             AssistantMessage(
                 content=[
                     TextChunk(text="Hi"),
-                    ThinkChunk(thinking="Hello", closed=False),
                     ThinkChunk(thinking="Hello", closed=True),
+                    ThinkChunk(thinking="Hello", closed=False),
                 ]
             ),
         ),
