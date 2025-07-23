@@ -12,6 +12,7 @@ from mistral_common.protocol.instruct.messages import (
     FinetuningMessage,
     SystemMessage,
     TextChunk,
+    ThinkChunk,
     ToolMessage,
     UserMessage,
 )
@@ -148,6 +149,41 @@ class TestChatCompletionRequestNormalization:
             assert isinstance(x, (UserMessage, AssistantMessage))
             assert x.content == expected
 
+    def check_merge_chunks(
+        self,
+        roles: List[str],
+        expected_roles: List[str],
+        expected_content: List[Union[List[ContentChunk], str]],
+        normalizer: InstructRequestNormalizer,
+    ) -> None:
+        letter_to_cls: Dict[str, ChatMessage] = {
+            "s": SystemMessage(content="s"),
+            "u": UserMessage(content="u"),
+            "a": AssistantMessage(content="a"),
+            "a2": AssistantMessage(
+                content=[
+                    TextChunk(text="a1"),
+                    TextChunk(text="a2"),
+                    ThinkChunk(thinking="t1"),
+                    ThinkChunk(thinking="t2"),
+                    TextChunk(text="a3"),
+                ]
+            ),
+        }
+
+        chat_completion_request = mock_chat_completion(
+            messages=[letter_to_cls[r] for r in roles],
+        )
+        parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
+        assert len(parsed_request.messages) == len(expected_roles)
+        assert [message.role for message in parsed_request.messages] == [
+            letter_to_cls[role].role for role in expected_roles
+        ]
+        assert len(expected_content) == len(parsed_request.messages)
+        for x, expected in zip(parsed_request.messages, expected_content):
+            assert isinstance(x, (UserMessage, AssistantMessage))
+            assert x.content == expected
+
     def test_message_aggregation(self, normalizer: InstructRequestNormalizer) -> None:
         self.check_merge(["s", "s", "s", "u"], ["u"], ["u"], normalizer)
         self.check_merge(["s", "s", "s", "u", "u"], ["u"], ["u\n\nu"], normalizer)
@@ -164,6 +200,22 @@ class TestChatCompletionRequestNormalization:
             ["s", "a", "u"],
             ["u", "a", "u"],
             ["", "a", "u"],
+            normalizer,
+        )
+
+        self.check_merge_chunks(
+            ["u", "a2", "u"],
+            ["u", "a", "u"],
+            [
+                "u",
+                [
+                    TextChunk(text="a1\n\na2"),
+                    ThinkChunk(thinking="t1"),
+                    ThinkChunk(thinking="t2"),
+                    TextChunk(text="a3"),
+                ],
+                "u",
+            ],
             normalizer,
         )
 
@@ -640,3 +692,49 @@ class TestChatCompletionRequestNormalizationV13:
             ToolMessage(content="D", tool_call_id="2"),
             ToolMessage(content="C", tool_call_id="1"),
         ]
+
+    @pytest.mark.parametrize(
+        ["system_message", "expected_system_message"],
+        [
+            (
+                SystemMessage(content="A"),
+                SystemMessage(content="A"),
+            ),
+            (
+                SystemMessage(content=[TextChunk(text="A")]),
+                SystemMessage(content="A"),
+            ),
+            (
+                SystemMessage(content=[TextChunk(text="A"), TextChunk(text="B")]),
+                SystemMessage(content="A\n\nB"),
+            ),
+            (
+                SystemMessage(content=[TextChunk(text="A"), TextChunk(text="B"), ThinkChunk(thinking="C")]),
+                SystemMessage(content=[TextChunk(text="A\n\nB"), ThinkChunk(thinking="C")]),
+            ),
+            (
+                SystemMessage(
+                    content=[
+                        TextChunk(text="A"),
+                        TextChunk(text="B"),
+                        ThinkChunk(thinking="C"),
+                        ThinkChunk(thinking="D"),
+                    ]
+                ),
+                SystemMessage(content=[TextChunk(text="A\n\nB"), ThinkChunk(thinking="C"), ThinkChunk(thinking="D")]),
+            ),
+        ],
+    )
+    def test_aggregate_system_prompt_content(
+        self,
+        normalizer_v13: InstructRequestNormalizerV13,
+        system_message: SystemMessage,
+        expected_system_message: SystemMessage,
+    ) -> None:
+        chat_completion_request: ChatCompletionRequest = self._mock_chat_completion(
+            messages=[system_message, UserMessage(content="B")]
+        )
+        parsed_request: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(
+            chat_completion_request
+        )
+        assert parsed_request.messages == [expected_system_message, UserMessage(content="B")]
