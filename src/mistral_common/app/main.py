@@ -254,7 +254,7 @@ def detokenize_to_assistant_message(
                     closed=chunk[-1] == end_think,
                 )
                 for chunk, is_think in content_or_think_tokens
-                if chunk != [eos]
+                if chunk != [eos] # Don't add a TextChunk with just the EOS token
             ]
 
     elif content_tokens:
@@ -267,6 +267,7 @@ def detokenize_to_assistant_message(
             raise HTTPException(status_code=400, detail=str(e))
     else:
         tool_calls = None
+
     has_eos = tokens[-1] == settings.tokenizer.instruct_tokenizer.tokenizer.eos_id
 
     return AssistantMessage(content=content, tool_calls=tool_calls, prefix=not has_eos)
