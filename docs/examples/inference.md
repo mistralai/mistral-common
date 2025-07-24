@@ -3,7 +3,7 @@
 We have a few examples of how to use the library with our models:
 
 - [Chat Completion](#chat-completion)
-  - [Text only](##text-only)
+  - [Text only](#text-only)
   - [Image](#image)
   - [Function calling](#function-calling)
   - [Audio](#audio)

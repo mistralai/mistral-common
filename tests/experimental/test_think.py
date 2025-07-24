@@ -2,7 +2,7 @@ from typing import List, Tuple
 
 import pytest
 
-from mistral_common.tokens.tokenizers.think import split_content_and_think_chunks
+from mistral_common.experimental.think import _split_content_and_think_chunks
 
 
 @pytest.mark.parametrize(
@@ -20,7 +20,7 @@ from mistral_common.tokens.tokenizers.think import split_content_and_think_chunk
     ],
 )
 def test_split_content_and_think_chunks(tokens: List[int], expected: List[Tuple[List[int], bool]]) -> None:
-    content_or_think_chunks = split_content_and_think_chunks(tokens, 100, 200)
+    content_or_think_chunks = _split_content_and_think_chunks(tokens, 100, 200)
     assert content_or_think_chunks == expected
 
 
@@ -33,4 +33,4 @@ def test_split_content_and_think_chunks(tokens: List[int], expected: List[Tuple[
 )
 def test_split_content_and_think_chunks_error(tokens: List[int], error_message: str) -> None:
     with pytest.raises(ValueError, match=error_message):
-        split_content_and_think_chunks(tokens, 100, 200)
+        _split_content_and_think_chunks(tokens, 100, 200)

@@ -2,6 +2,13 @@ from typing import List
 
 import pytest
 
+from mistral_common.experimental.tools import (
+    InvalidArgsToolCallError,
+    InvalidToolCallError,
+    _decode_tool_calls,
+    _split_content_and_tool_calls,
+    _split_integer_list_by_value,
+)
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     SystemMessage,
@@ -19,13 +26,6 @@ from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV11, InstructTokenizerV13
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-from mistral_common.tokens.tokenizers.tools import (
-    InvalidArgsToolCallError,
-    InvalidToolCallError,
-    _split_integer_list_by_value,
-    decode_tool_calls,
-    split_content_and_tool_calls,
-)
 from tests.test_tekken import _quick_vocab, get_special_tokens
 
 
@@ -120,19 +120,19 @@ def fixture_mistral_tokenizer_v13() -> MistralTokenizer:
 def test_find_content_tool_calls() -> None:
     # Test 1: No tool calls
     tokens = [1, 2, 3, 4, 5]
-    assert split_content_and_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ())
+    assert _split_content_and_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ())
 
     # Test 2: One tool call
     tokens = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    assert split_content_and_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ([6, 7, 8, 9, 10],))
+    assert _split_content_and_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ([6, 7, 8, 9, 10],))
 
     # Test 3: Multiple tool calls
     tokens = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 6, 11, 12, 13, 14]
-    assert split_content_and_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ([6, 7, 8, 9, 10], [6, 11, 12, 13, 14]))
+    assert _split_content_and_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ([6, 7, 8, 9, 10], [6, 11, 12, 13, 14]))
 
     # Test 4: No content
     tokens = [6, 7, 8, 9, 10]
-    assert split_content_and_tool_calls(tokens, 6) == ([], ([6, 7, 8, 9, 10],))
+    assert _split_content_and_tool_calls(tokens, 6) == ([], ([6, 7, 8, 9, 10],))
 
 
 @pytest.mark.parametrize(
@@ -205,7 +205,7 @@ def test_decode_tool_calls(tokenizer: MistralTokenizer, tool_calls: list[ToolCal
         encoded_tool_calls, tokenizer.instruct_tokenizer.tokenizer.get_control_token("[TOOL_CALLS]")
     )
 
-    decoded_tool_calls = decode_tool_calls(splitted_tool_calls, tokenizer.instruct_tokenizer.tokenizer)
+    decoded_tool_calls = _decode_tool_calls(splitted_tool_calls, tokenizer.instruct_tokenizer.tokenizer)
     if tokenizer.instruct_tokenizer.tokenizer.version != TokenizerVersion.v11:
         assert len(decoded_tool_calls) == len(tool_calls)
         for decoded_tool_call, tool_call in zip(decoded_tool_calls, tool_calls):
@@ -239,7 +239,7 @@ def test_decode_tool_calls(tokenizer: MistralTokenizer, tool_calls: list[ToolCal
         if tokenizer.instruct_tokenizer.tokenizer.version in versions_inf_v11
         else InvalidArgsToolCallError
     ):
-        decode_tool_calls(splitted_tool_calls, tokenizer.instruct_tokenizer.tokenizer)
+        _decode_tool_calls(splitted_tool_calls, tokenizer.instruct_tokenizer.tokenizer)
 
 
 def test_decode_tool_calls_v11_without_id() -> None:
@@ -258,6 +258,6 @@ def test_decode_tool_calls_v11_without_id() -> None:
 
     encoded_tool_call = encoded_tool_call[:call_id_index] + encoded_tool_call[args_token_index:]  # remove the id
 
-    decoded_tool_call = decode_tool_calls([encoded_tool_call], tokenizer.instruct_tokenizer.tokenizer)
+    decoded_tool_call = _decode_tool_calls([encoded_tool_call], tokenizer.instruct_tokenizer.tokenizer)
     assert len(decoded_tool_call) == 1
     assert decoded_tool_call[0].model_dump(exclude={"id"}) == tool_call.model_dump(exclude={"id"})

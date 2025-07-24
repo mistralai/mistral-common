@@ -50,7 +50,7 @@ tokenizer.encode("Plz tekkenize me", bos=True, eos=True)
 # [1, 4444, 1122, 16058, 3569, 2033, 1639, 2]
 ```
 
-See the [Examples section](../examples/index.md) for examples on how to use the tokenizers with our models.
+See the [Examples section](../examples/inference.md) for examples on how to use the tokenizers with our models.
 
 ## Special tokens
 

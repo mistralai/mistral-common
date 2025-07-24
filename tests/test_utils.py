@@ -8,7 +8,6 @@ import pytest
 import requests
 
 from mistral_common.tokens.tokenizers.utils import (
-    _split_integer_list_by_value,
     download_tokenizer_from_hf_hub,
     list_local_hf_repo_files,
 )
@@ -28,20 +27,6 @@ def _create_temporary_hf_model_cache(repo_id: str) -> Path:
     (revision_folder / "tekken.json").write_text("{'test': 'test'}")
     (revision_folder / "file2.txt").write_text("test")
     return hub_folder
-
-
-def test_split_integer_list_by_value() -> None:
-    # Test 1: One split
-    assert _split_integer_list_by_value([1, 2, 3, 4, 5], 3) == ([1, 2], [3, 4, 5])
-
-    # Test 2: No value
-    assert _split_integer_list_by_value([1, 2, 3, 4, 5], 6) == ([1, 2, 3, 4, 5],)
-
-    # Test 3: No split
-    assert _split_integer_list_by_value([1, 2, 3, 4, 5], 1) == ([1, 2, 3, 4, 5],)
-
-    # Test 4: Multiple splits
-    assert _split_integer_list_by_value([1, 2, 3, 4, 5, 3, 5, 6, 7], 3) == ([1, 2], [3, 4, 5], [3, 5, 6, 7])
 
 
 @patch("huggingface_hub.constants.HF_HUB_CACHE", "/tmp/hf_cache")

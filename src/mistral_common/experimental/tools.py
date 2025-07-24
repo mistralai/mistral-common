@@ -1,12 +1,12 @@
 import json
 from typing import List, Sequence, Tuple
 
-from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
-from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenizer, TokenizerVersion
-from mistral_common.tokens.tokenizers.utils import (
+from mistral_common.experimental.utils import (
     _split_integer_list_by_value,
     _split_tokens_by_one_occurence_control_token,
 )
+from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenizer, TokenizerVersion
 
 
 class InvalidToolCallError(ValueError):
@@ -17,7 +17,9 @@ class InvalidArgsToolCallError(InvalidToolCallError):
     pass
 
 
-def split_content_and_tool_calls(tokens: List[int], tool_call_token_id: int) -> tuple[List[int], Tuple[List[int], ...]]:
+def _split_content_and_tool_calls(
+    tokens: List[int], tool_call_token_id: int
+) -> tuple[List[int], Tuple[List[int], ...]]:
     r"""Split the content and tool calls from a list of tokens.
 
     The content is the first sequence of tokens that does not start with the tool call token ID.
@@ -128,7 +130,7 @@ def _decode_tool_call_v11(tool_call_tokens: list[int], tokenizer: Tokenizer) -> 
     return tool_call
 
 
-def decode_tool_calls(tool_call_tokens: Sequence[list[int]], tokenizer: Tokenizer) -> List[ToolCall]:
+def _decode_tool_calls(tool_call_tokens: Sequence[list[int]], tokenizer: Tokenizer) -> List[ToolCall]:
     r"""Decode a list of tool call tokens into a list of tool calls.
 
     Note:

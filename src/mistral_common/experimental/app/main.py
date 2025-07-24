@@ -2,7 +2,7 @@ import importlib.metadata
 import json
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated, Any, Dict, List, Optional, Union
+from typing import Annotated, Any, List, Optional, Union
 
 import click
 import uvicorn
@@ -11,14 +11,14 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, ValidationError
 from pydantic_settings import BaseSettings
 
-from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessageType, TextChunk, ThinkChunk
+from mistral_common.experimental.think import _split_content_and_think_chunks
+from mistral_common.experimental.tools import _decode_tool_calls, _split_content_and_tool_calls
+from mistral_common.protocol.instruct.messages import AssistantMessage, TextChunk, ThinkChunk
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenized, TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.think import split_content_and_think_chunks
-from mistral_common.tokens.tokenizers.tools import decode_tool_calls, split_content_and_tool_calls
 
 
 class OpenAIChatCompletionRequest(BaseModel):
@@ -102,16 +102,12 @@ def redirect_to_docs() -> RedirectResponse:
     return RedirectResponse(url="docs")
 
 
-@main_router.get("/info")
-def get_info(settings: Annotated[Settings, Depends(get_settings)]) -> Dict[str, str]:
-    r"""Get the information about the Mistral-common API."""
-    return {"app_name": settings.app_name, "app_version": settings.app_version}
-
-
-def _tokenize_request(
+@tokenize_router.post("/request")
+def tokenize_request(
     request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
     settings: Annotated[Settings, Depends(get_settings)],
-) -> List[int]:
+) -> list[int]:
+    r"""Tokenize a chat completion request."""
     if isinstance(request, OpenAIChatCompletionRequest):
         try:
             request = ChatCompletionRequest.from_openai(**request.model_dump(exclude_none=True))
@@ -126,62 +122,16 @@ def _tokenize_request(
     return tokenized.tokens
 
 
-def _tokenize_messages(
-    messages: list[ChatMessageType], settings: Annotated[Settings, Depends(get_settings)]
-) -> List[int]:
-    if len(messages) == 0:
-        raise HTTPException(status_code=400, detail="Messages list cannot be empty.")
-    request = ChatCompletionRequest(messages=messages)
-
-    return _tokenize_request(request, settings)
-
-
-@tokenize_router.post("/messages")
-def tokenize_messages(
-    settings: Annotated[Settings, Depends(get_settings)], messages: list[ChatMessageType] = Body(default_factory=list)
-) -> list[int]:
-    r"""Tokenize a list of messages."""
-    return _tokenize_messages(messages, settings=settings)
-
-
-@tokenize_router.post("/prompt")
-def tokenize_prompt(
-    settings: Annotated[Settings, Depends(get_settings)],
-    prompt: str = Body(default_factory=str),
-    add_special: bool = Body(default=True),
-) -> list[int]:
-    r"""Tokenize a prompt."""
-    if prompt == "":
-        raise HTTPException(status_code=400, detail="Prompt cannot be empty.")
-
-    return settings.tokenizer.instruct_tokenizer.tokenizer.encode(prompt, bos=add_special, eos=add_special)
-
-
-@tokenize_router.post("/request")
-def tokenize_request(
-    request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> list[int]:
-    r"""Tokenize a chat completion request."""
-    return _tokenize_request(request, settings=settings)
-
-
-@decode_router.post("/")
-def detokenize_tokens(
+@decode_router.post("/string")
+def detokenize_to_string(
     settings: Annotated[Settings, Depends(get_settings)],
     tokens: list[int] = Body(default_factory=list),
-    as_message: bool = Body(default=False),
     special_token_policy: SpecialTokenPolicy = Body(default=SpecialTokenPolicy.IGNORE),
-) -> Union[str, AssistantMessage]:
-    r"""Detokenize a list of tokens.
-
-    If `as_message` is `True`, the tokens are detokenized to an assistant message. It will parse tool calls from the
-    tokens and extract content before the first tool call.
-    Otherwise, the tokens are detokenized to a string.
+) -> str:
+    r"""Detokenize a list of tokens to a string.
 
     Args:
         tokens: The tokens to detokenize.
-        as_message: Whether to detokenize to an assistant message.
         special_token_policy: The policy to use for special tokens.
 
     Returns:
@@ -189,20 +139,13 @@ def detokenize_tokens(
     """
     if len(tokens) == 0:
         raise HTTPException(status_code=400, detail="Tokens list cannot be empty.")
-
-    if as_message:
-        if special_token_policy != SpecialTokenPolicy.IGNORE:
-            raise HTTPException(
-                status_code=400, detail="Special token policy must be IGNORE when detokenizing to message."
-            )
-        return detokenize_to_assistant_message(settings, tokens)
-
     try:
         return settings.tokenizer.decode(tokens, special_token_policy=special_token_policy)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@decode_router.post("/")
 def detokenize_to_assistant_message(
     settings: Annotated[Settings, Depends(get_settings)],
     tokens: list[int] = Body(default_factory=list),
@@ -221,7 +164,7 @@ def detokenize_to_assistant_message(
         raise HTTPException(status_code=400, detail="Tokens list cannot be empty.")
 
     if settings.tokenizer.instruct_tokenizer.tokenizer.version > TokenizerVersion.v1:
-        content_tokens, tool_calls_tokens = split_content_and_tool_calls(
+        content_tokens, tool_calls_tokens = _split_content_and_tool_calls(
             tokens, settings.tokenizer.instruct_tokenizer.tokenizer.get_control_token("[TOOL_CALLS]")
         )
     else:
@@ -239,7 +182,7 @@ def detokenize_to_assistant_message(
 
     if begin_think is not None and end_think is not None:
         try:
-            content_or_think_tokens = split_content_and_think_chunks(content_tokens, begin_think, end_think)
+            content_or_think_tokens = _split_content_and_think_chunks(content_tokens, begin_think, end_think)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -254,7 +197,7 @@ def detokenize_to_assistant_message(
                     closed=chunk[-1] == end_think,
                 )
                 for chunk, is_think in content_or_think_tokens
-                if chunk != [eos] # Don't add a TextChunk with just the EOS token
+                if chunk != [eos]  # Don't add a TextChunk with just the EOS token
             ]
 
     elif content_tokens:
@@ -262,7 +205,7 @@ def detokenize_to_assistant_message(
 
     if tool_calls_tokens:
         try:
-            tool_calls = decode_tool_calls(tool_calls_tokens, settings.tokenizer.instruct_tokenizer.tokenizer)
+            tool_calls = _decode_tool_calls(tool_calls_tokens, settings.tokenizer.instruct_tokenizer.tokenizer)
         except (ValueError, json.JSONDecodeError) as e:
             raise HTTPException(status_code=400, detail=str(e))
     else:

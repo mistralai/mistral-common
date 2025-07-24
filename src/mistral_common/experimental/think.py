@@ -1,7 +1,7 @@
 from typing import List, Tuple
 
 
-def split_content_and_think_chunks(
+def _split_content_and_think_chunks(
     tokens: List[int], begin_think_token_id: int, end_think_token_id: int
 ) -> List[Tuple[List[int], bool]]:
     r"""Split the content and think chunks from a list of tokens.
