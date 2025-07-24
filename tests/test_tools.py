@@ -24,6 +24,7 @@ from mistral_common.tokens.tokenizers.tools import (
     InvalidToolCallError,
     _split_integer_list_by_value,
     decode_tool_calls,
+    split_content_and_tool_calls,
 )
 from tests.test_tekken import _quick_vocab, get_special_tokens
 
@@ -114,6 +115,24 @@ def fixture_mistral_tokenizer_v13() -> MistralTokenizer:
             UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest
         ),
     )
+
+
+def test_find_content_tool_calls() -> None:
+    # Test 1: No tool calls
+    tokens = [1, 2, 3, 4, 5]
+    assert split_content_and_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ())
+
+    # Test 2: One tool call
+    tokens = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    assert split_content_and_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ([6, 7, 8, 9, 10],))
+
+    # Test 3: Multiple tool calls
+    tokens = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 6, 11, 12, 13, 14]
+    assert split_content_and_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ([6, 7, 8, 9, 10], [6, 11, 12, 13, 14]))
+
+    # Test 4: No content
+    tokens = [6, 7, 8, 9, 10]
+    assert split_content_and_tool_calls(tokens, 6) == ([], ([6, 7, 8, 9, 10],))
 
 
 @pytest.mark.parametrize(
