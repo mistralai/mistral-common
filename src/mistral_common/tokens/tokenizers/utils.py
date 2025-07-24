@@ -71,7 +71,7 @@ def list_local_hf_repo_files(repo_id: str, revision: Optional[str]) -> list[str]
     return []
 
 
-def filter_valid_tokenizer_files(files: List[str]) -> List[str]:
+def _filter_valid_tokenizer_files(files: List[str]) -> List[str]:
     r"""Filter the valid tokenizer files from a list of files."""
     valid_tokenizer_files = []
 
@@ -153,7 +153,7 @@ def download_tokenizer_from_hf_hub(
                 " the revision or try to download the tokenizer without setting `local_files_only` to `True`."
             )
 
-    valid_tokenizer_files = filter_valid_tokenizer_files(repo_files)
+    valid_tokenizer_files = _filter_valid_tokenizer_files(repo_files)
 
     if len(valid_tokenizer_files) == 0:
         raise ValueError(f"No tokenizer file found for model ID: {repo_id}")
