@@ -465,8 +465,7 @@ def test_generate(
         output_assistant_message = AssistantMessage(
             content=output_assistant_message.content,
             tool_calls=[
-                ToolCall(**tool_call.model_dump(exclude={"id"}))
-                for tool_call in output_assistant_message.tool_calls
+                ToolCall(**tool_call.model_dump(exclude={"id"})) for tool_call in output_assistant_message.tool_calls
             ],
         )
 
