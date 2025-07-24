@@ -35,7 +35,7 @@ hf-hub = ["huggingface-hub>=0.32.4"]
 server = ["fastapi[standard]>=0.115.12", "pydantic-settings >= 2.9.1", "click>=8.1.0"]
 
 [project.scripts]
-mistral_common = "mistral_common.experimental.app.main:serve_app"
+mistral_common = "mistral_common.experimental.app.main:cli"
 
 [dependency-groups]
 dev = [

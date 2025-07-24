@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Annotated, Any, List, Optional, Union
 
 import click
+import requests
 import uvicorn
 from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException
 from fastapi.responses import RedirectResponse
@@ -48,10 +49,18 @@ class Settings(BaseSettings):
     Attributes:
         app_name: The name of the application.
         app_version: The version of the application.
+        generation_host: The host to use for the generation API.
+        generation_port: The port to use for the generation API.
+        api_key: The API key to use for the generation API.
+        timeout: The timeout to use for the generation API.
     """
 
     app_name: str = "Mistral-common API"
     app_version: str = importlib.metadata.version("mistral-common")
+    generation_host: str = "127.0.0.1"
+    generation_port: int = 8080
+    api_key: str = ""
+    timeout: int = 60
 
     def model_post_init(self, context: Any) -> None:
         super().model_post_init(context)
@@ -89,6 +98,7 @@ class Settings(BaseSettings):
 main_router = APIRouter(tags=["app"])
 tokenize_router = APIRouter(prefix="/tokenize", tags=["tokenizer", "tokenize"])
 decode_router = APIRouter(prefix="/detokenize", tags=["tokenizer", "detokenize"])
+generation_router = APIRouter(prefix="/v1", tags=["Generation"])
 
 
 def get_settings() -> Settings:
@@ -97,13 +107,13 @@ def get_settings() -> Settings:
 
 
 @main_router.get("/")
-def redirect_to_docs() -> RedirectResponse:
+async def redirect_to_docs() -> RedirectResponse:
     r"""Redirect to the documentation."""
     return RedirectResponse(url="docs")
 
 
-@tokenize_router.post("/request")
-def tokenize_request(
+@tokenize_router.post("/")
+async def tokenize_request(
     request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> list[int]:
@@ -123,7 +133,7 @@ def tokenize_request(
 
 
 @decode_router.post("/string")
-def detokenize_to_string(
+async def detokenize_to_string(
     settings: Annotated[Settings, Depends(get_settings)],
     tokens: list[int] = Body(default_factory=list),
     special_token_policy: SpecialTokenPolicy = Body(default=SpecialTokenPolicy.IGNORE),
@@ -146,7 +156,7 @@ def detokenize_to_string(
 
 
 @decode_router.post("/")
-def detokenize_to_assistant_message(
+async def detokenize_to_assistant_message(
     settings: Annotated[Settings, Depends(get_settings)],
     tokens: list[int] = Body(default_factory=list),
 ) -> AssistantMessage:
@@ -162,6 +172,8 @@ def detokenize_to_assistant_message(
     """
     if len(tokens) == 0:
         raise HTTPException(status_code=400, detail="Tokens list cannot be empty.")
+
+    print(tokens)
 
     if settings.tokenizer.instruct_tokenizer.tokenizer.version > TokenizerVersion.v1:
         content_tokens, tool_calls_tokens = _split_content_and_tool_calls(
@@ -199,6 +211,8 @@ def detokenize_to_assistant_message(
                 for chunk, is_think in content_or_think_tokens
                 if chunk != [eos]  # Don't add a TextChunk with just the EOS token
             ]
+            if len(content) == 1 and isinstance(content[0], TextChunk):
+                content = content[0].text
 
     elif content_tokens:
         content = settings.tokenizer.decode(content_tokens, special_token_policy=SpecialTokenPolicy.IGNORE)
@@ -216,14 +230,74 @@ def detokenize_to_assistant_message(
     return AssistantMessage(content=content, tool_calls=tool_calls, prefix=not has_eos)
 
 
+@generation_router.post("/chat/completions")
+async def generate(
+    request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> AssistantMessage:
+    r"""Generate a chat completion.
+
+    Args:
+        request: The chat completion request.
+        settings: The settings for the Mistral-common API.
+
+    Returns:
+        The generated chat completion.
+    """
+    tokens_ids = await tokenize_request(request, settings)
+
+    exclude_fields = {"messages", "tools"}
+
+    if isinstance(request, ChatCompletionRequest):
+        request_json = request.to_openai()
+        request_json = {k: v for k, v in request_json.items() if k not in exclude_fields}
+    else:
+        request_json = request.model_dump(exclude_none=True, exclude=exclude_fields)
+
+    if request_json.get("stream", False):
+        raise HTTPException(status_code=400, detail="Streaming is not supported.")
+
+    try:
+        response = requests.post(
+            f"http://{settings.generation_host}:{settings.generation_port}/completions",
+            json={
+                "prompt": tokens_ids,
+                "return_tokens": True,
+                **request_json,
+            },
+            headers={"Authorization": f"Bearer {settings.api_key}"},
+            timeout=settings.timeout,
+        )
+    except requests.exceptions.Timeout:
+        raise HTTPException(status_code=504, detail="Generation API timeout.")
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=response.status_code, detail=response.text)
+
+    response_json = response.json()
+    print(response_json)
+    return await detokenize_to_assistant_message(settings, response_json["tokens"])
+
+
 def create_app(
-    tokenizer: Union[str, Path, MistralTokenizer], validation_mode: ValidationMode = ValidationMode.test
+    tokenizer: Union[str, Path, MistralTokenizer],
+    validation_mode: ValidationMode = ValidationMode.test,
+    generation_host: str = "127.0.0.1",
+    generation_port: int = 8080,
+    api_key: str = "",
+    timeout: int = 60,
 ) -> FastAPI:
     r"""Create a Mistral-common FastAPI app with the given tokenizer and validation mode.
 
     Args:
         tokenizer: The tokenizer path or a MistralTokenizer instance.
         validation_mode: The validation mode to use.
+        generation_host: The host of the generation API.
+        generation_port: The port of the generation API.
+        api_key: The API key of the generation API.
+        timeout: The timeout of the generation API.
 
     Returns:
         The Mistral-common FastAPI app.
@@ -235,10 +309,16 @@ def create_app(
     app.include_router(tokenize_router)
     app.include_router(decode_router)
     app.include_router(main_router)
+    app.include_router(generation_router)
 
     @lru_cache
     def get_settings_override() -> Settings:
-        settings = Settings()
+        settings = Settings(
+            generation_host=generation_host,
+            generation_port=generation_port,
+            api_key=api_key,
+            timeout=timeout,
+        )
         if isinstance(tokenizer, MistralTokenizer):
             settings.tokenizer = tokenizer
         else:
@@ -250,7 +330,13 @@ def create_app(
     return app
 
 
-@click.command(context_settings={"auto_envvar_prefix": "UVICORN"})
+@click.group()
+def cli() -> None:
+    r"""Mistral-common CLI."""
+    pass
+
+
+@cli.command(name="serve", context_settings={"auto_envvar_prefix": "UVICORN"})
 @click.argument("tokenizer_path", type=str)
 @click.argument(
     "validation_mode",
@@ -271,9 +357,55 @@ def create_app(
     help="Mistral-common API port",
     show_default=True,
 )
-def serve_app(
-    tokenizer_path: Union[str, Path], validation_mode: Union[ValidationMode, str], host: str, port: int
+@click.option(
+    "--generation-host",
+    type=str,
+    default="127.0.0.1",
+    help="Generation API host",
+    show_default=True,
+)
+@click.option(
+    "--generation-port",
+    type=int,
+    default=8080,
+    help="Generation API port",
+    show_default=True,
+)
+@click.option(
+    "--api-key",
+    type=str,
+    default="",
+    help="Generation API key",
+    show_default=True,
+)
+@click.option(
+    "--timeout",
+    type=int,
+    default=60,
+    help="Generation API key",
+    show_default=True,
+)
+def serve(
+    tokenizer_path: Union[str, Path],
+    validation_mode: Union[ValidationMode, str] = ValidationMode.test,
+    host: str = "127.0.0.1",
+    port: int = 0,
+    generation_host: str = "127.0.0.1",
+    generation_port: int = 8080,
+    api_key: str = "",
+    timeout: int = 60,
 ) -> None:
     r"""Serve the Mistral-common API with the given tokenizer path and validation mode."""
-    app = create_app(tokenizer_path, ValidationMode(validation_mode))
+    app = create_app(
+        tokenizer_path,
+        ValidationMode(validation_mode),
+        generation_host=generation_host,
+        generation_port=generation_port,
+        api_key=api_key,
+        timeout=timeout,
+    )
     uvicorn.run(app, host=host, port=port)
+
+
+if __name__ == "__main__":
+    cli()

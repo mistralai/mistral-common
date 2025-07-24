@@ -1,4 +1,5 @@
-from typing import List, Union
+from typing import Dict, List, Union
+from unittest.mock import patch
 
 import pytest
 from fastapi import FastAPI
@@ -232,7 +233,7 @@ def test_tokenize_request(
     tokens: list[int] = request.getfixturevalue(tokens_fixture)
     client: TestClient = request.getfixturevalue(client_fixture)
 
-    response = client.post("/tokenize/request", json=jsonable_encoder(chat_request))
+    response = client.post("/tokenize", json=jsonable_encoder(chat_request))
     assert response.status_code == 200
     assert response.json() == tokens
 
@@ -407,3 +408,70 @@ def test_detokenize_assistant_message_think_chunks(
         else None
     )
     assert AssistantMessage.model_validate(response.json()) == assistant_message
+
+
+class MockResponse:
+    def __init__(self, json_data: Union[List, Dict], status_code: int) -> None:
+        self.json_data = json_data
+        self.status_code = status_code
+
+    def json(self) -> Union[List, Dict]:
+        return self.json_data
+
+
+@pytest.mark.parametrize(
+    "generation_request",
+    [
+        {
+            "messages": [{"role": "user", "content": "Hello, world!"}],
+            "temperature": 0.1,
+        },
+        ChatCompletionRequest(messages=[UserMessage(content="Hello, world!")], temperature=0.1),
+        OpenAIChatCompletionRequest(
+            messages=[{"role": "user", "content": "Hello, world!"}],
+            tools=[{"type": "function", "function": {"name": "get_current_weather", "parameters": {}}}],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "output_assistant_message",
+    [
+        AssistantMessage(content="Hello, world!"),
+        AssistantMessage(
+            content="Hello, world!",
+            tool_calls=[ToolCall(id="1a2bc3d4e", function=FunctionCall(name="get_current_weather", arguments="{}"))],
+        ),
+        AssistantMessage(
+            content=[
+                TextChunk(text="Hello, world!"),
+                ThinkChunk(thinking="Let me think about this..."),
+                TextChunk(text="This is a complex question."),
+                ThinkChunk(thinking="I need to consider all options."),
+                TextChunk(text="Here is my final answer."),
+            ],
+        ),
+    ],
+)
+def test_generate(
+    mistral_tokenizer_v13: MistralTokenizer,
+    tekken_v13_client: TestClient,
+    generation_request: Union[dict, ChatCompletionRequest, OpenAIChatCompletionRequest],
+    output_assistant_message: AssistantMessage,
+) -> None:
+    output_tokens = mistral_tokenizer_v13.instruct_tokenizer.encode_assistant_message(  # type: ignore[attr-defined]
+        output_assistant_message, False, False
+    )
+    if output_assistant_message.tool_calls:
+        output_assistant_message = AssistantMessage(
+            content=output_assistant_message.content,
+            tool_calls=[
+                ToolCall(**tool_call.model_dump(exclude={"id"}))
+                for tool_call in output_assistant_message.tool_calls
+            ],
+        )
+
+    with patch("mistral_common.experimental.app.main.requests.post") as mock_generate:
+        mock_generate.return_value = MockResponse({"tokens": output_tokens}, 200)
+        response = tekken_v13_client.post("/v1/chat/completions", json=jsonable_encoder(generation_request))
+    assert response.status_code == 200
+    assert AssistantMessage(**response.json()) == output_assistant_message
