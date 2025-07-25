@@ -22,7 +22,6 @@ from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13
 main_router = APIRouter(tags=["app"])
 tokenize_router = APIRouter(prefix="/tokenize", tags=["tokenizer", "tokenize"])
 decode_router = APIRouter(prefix="/detokenize", tags=["tokenizer", "detokenize"])
-generation_router = APIRouter(prefix="/v1", tags=["Generation"])
 
 
 @main_router.get("/")
@@ -39,7 +38,8 @@ async def tokenize_request(
     r"""Tokenize a chat completion request."""
     if isinstance(request, OpenAIChatCompletionRequest):
         try:
-            request = ChatCompletionRequest.from_openai(**request.model_dump(exclude_none=True))
+            request.drop_extra_fields()
+            request = ChatCompletionRequest.from_openai(**request.model_dump())
         except (ValidationError, ValueError) as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -147,7 +147,7 @@ async def detokenize_to_assistant_message(
     return AssistantMessage(content=content, tool_calls=tool_calls, prefix=not has_eos)
 
 
-@generation_router.post("/chat/completions")
+@main_router.post("/chat/completions", tags=["chat", "completions"])
 async def generate(
     request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -161,16 +161,17 @@ async def generate(
     Returns:
         The generated chat completion.
     """
+    if isinstance(request, OpenAIChatCompletionRequest):
+        extra_fields = request.drop_extra_fields()
+        request = ChatCompletionRequest.from_openai(**request.model_dump())
+    else:
+        extra_fields = {}
     tokens_ids = await tokenize_request(request, settings)
 
     exclude_fields = {"messages", "tools"}
 
-    if isinstance(request, OpenAIChatCompletionRequest):
-        # We need to convert the OpenAI request to a Mistral request to ensure users didn't pass extra fields.
-        request_json = ChatCompletionRequest.from_openai(**request.model_dump()).to_openai()
-
-    elif isinstance(request, ChatCompletionRequest):
-        request_json = request.to_openai()
+    request_json = request.model_dump()
+    request_json.update(extra_fields)
 
     request_json = {k: v for k, v in request_json.items() if k not in exclude_fields}
 

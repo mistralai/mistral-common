@@ -80,7 +80,7 @@ The Swagger UI provides interactive documentation for all available endpoints.
 - **Request Body**: 
     - Chat completion request in either:
         - Mistral-common format ([ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest])
-        - OpenAI-compatible format ([OpenAIChatCompletionRequest][mistral_common.protocol.openai.request.OpenAIChatCompletionRequest]). Not all values used by OpenAI are supported.
+        - OpenAI-compatible format ([OpenAIChatCompletionRequest][mistral_common.protocol.openai.request.OpenAIChatCompletionRequest]). Streaming is not supported.
 - **Response**: List of token IDs
 
 Example requests:
@@ -209,7 +209,7 @@ print(response.json())
 - **Request Body**:
     - Chat completion request in either:
         - Mistral-common format ([ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest])
-        - OpenAI-compatible format ([OpenAIChatCompletionRequest][mistral_common.protocol.openai.request.OpenAIChatCompletionRequest]). Not all values used by OpenAI are supported.
+        - OpenAI-compatible format ([OpenAIChatCompletionRequest][mistral_common.protocol.openai.request.OpenAIChatCompletionRequest]). Streaming is not supported.
 - **Response**: Chat completion response in OpenAI-compatible format
 
 ## Issues and feedback

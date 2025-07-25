@@ -13,17 +13,14 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 class OpenAIChatCompletionRequest(BaseModel):
     r"""OpenAI chat completion request.
 
-    This class is used to parse the request body for the OpenAI chat completion endpoint. It is converted to a
-    [ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest] object in endpoints.
+    This class is used to parse the request body for the OpenAI chat completion endpoint.
 
     Attributes:
         messages: The messages to use for the chat completion.
         tools: The tools to use for the chat completion.
 
     Note:
-        This class accepts extra fields, as the
-        [from_openai][mistral_common.protocol.instruct.request.ChatCompletionRequest.from_openai] method will handle
-        raise an error if the extra fields are not supported.
+        This class accepts extra fields that are not validated.
     """
 
     messages: List[dict[str, Union[str, List[dict[str, Union[str, dict[str, Any]]]]]]]
@@ -32,6 +29,23 @@ class OpenAIChatCompletionRequest(BaseModel):
     # Allow extra fields as the `from_openai` method will handle them.
     # We never validate the input, so we don't need to worry about the extra fields.
     model_config = ConfigDict(extra="allow")
+
+    def drop_extra_fields(self) -> dict[str, Any]:
+        r"""Drop extra fields from the model.
+
+        This method is used to drop extra fields from the model, which are not defined in the model fields.
+
+        Returns:
+            The extra fields that were dropped from the model.
+        """
+        extra_fields = {
+            field: value
+            for field, value in self.model_dump().items()
+            if field not in type(self).model_fields
+        }
+
+        self.__dict__ = {k: v for k, v in self.__dict__.items() if k not in extra_fields}
+        return extra_fields
 
 
 class GenerationBackend(str, Enum):

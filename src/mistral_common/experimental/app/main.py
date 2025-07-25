@@ -13,7 +13,6 @@ from mistral_common.experimental.app.models import (
 )
 from mistral_common.experimental.app.routers import (
     decode_router,
-    generation_router,
     main_router,
     tokenize_router,
 )
@@ -51,7 +50,6 @@ def create_app(
     app.include_router(tokenize_router)
     app.include_router(decode_router)
     app.include_router(main_router)
-    app.include_router(generation_router)
 
     @lru_cache
     def get_settings_override() -> Settings:
