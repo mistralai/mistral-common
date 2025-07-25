@@ -42,7 +42,7 @@ pip install mistral-common[server]
 You can launch the server using the follwing CLI command:
 
 ```bash
-mistral_common mistralai/Magistral-Small-2507 [validation_mode] \
+mistral_common serve mistralai/Magistral-Small-2507 [validation_mode] \
 --host 127.0.0.1 --port 8000 \
 --engine-url http://127.0.0.1:8080 --engine-backend llama_cpp \
 --timeout 60
