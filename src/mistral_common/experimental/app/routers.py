@@ -165,11 +165,14 @@ async def generate(
 
     exclude_fields = {"messages", "tools"}
 
-    if isinstance(request, ChatCompletionRequest):
+    if isinstance(request, OpenAIChatCompletionRequest):
+        # We need to convert the OpenAI request to a Mistral request to ensure users didn't pass extra fields.
+        request_json = ChatCompletionRequest.from_openai(**request.model_dump()).to_openai()
+
+    elif isinstance(request, ChatCompletionRequest):
         request_json = request.to_openai()
-        request_json = {k: v for k, v in request_json.items() if k not in exclude_fields}
-    else:
-        request_json = request.model_dump(exclude_none=True, exclude=exclude_fields)
+
+    request_json = {k: v for k, v in request_json.items() if k not in exclude_fields}
 
     if request_json.get("stream", False):
         raise HTTPException(status_code=400, detail="Streaming is not supported.")
