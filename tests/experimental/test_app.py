@@ -1,12 +1,14 @@
-from typing import Dict, List, Union
+from typing import Dict, List, Optional, Union
 from unittest.mock import patch
 
 import pytest
+import requests
 from fastapi import FastAPI
 from fastapi.encoders import jsonable_encoder
 from fastapi.testclient import TestClient
 
-from mistral_common.experimental.app.main import OpenAIChatCompletionRequest, create_app
+from mistral_common.experimental.app.main import create_app
+from mistral_common.experimental.app.models import OpenAIChatCompletionRequest
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
@@ -407,15 +409,26 @@ def test_detokenize_assistant_message_think_chunks(
         if assistant_message.tool_calls
         else None
     )
+    if (
+        isinstance(assistant_message.content, list)
+        and len(assistant_message.content) == 1
+        and isinstance(assistant_message.content[0], TextChunk)
+    ):
+        assistant_message.content = assistant_message.content[0].text
     assert AssistantMessage.model_validate(response.json()) == assistant_message
 
 
 class MockResponse:
-    def __init__(self, json_data: Union[List, Dict], status_code: int) -> None:
+    def __init__(
+        self, status_code: int, json_data: Optional[Union[List, Dict]] = None, text: Optional[str] = None
+    ) -> None:
         self.json_data = json_data
         self.status_code = status_code
+        self.text = text
 
     def json(self) -> Union[List, Dict]:
+        if self.json_data is None:
+            raise ValueError("No JSON data available")
         return self.json_data
 
 
@@ -469,8 +482,34 @@ def test_generate(
             ],
         )
 
-    with patch("mistral_common.experimental.app.main.requests.post") as mock_generate:
-        mock_generate.return_value = MockResponse({"tokens": output_tokens}, 200)
+    with patch("mistral_common.experimental.app.routers.requests.post") as mock_generate:
+        mock_generate.return_value = MockResponse(200, {"tokens": output_tokens})
         response = tekken_v13_client.post("/v1/chat/completions", json=jsonable_encoder(generation_request))
     assert response.status_code == 200
     assert AssistantMessage(**response.json()) == output_assistant_message
+
+
+def test_generate_error(tekken_v13_client: TestClient) -> None:
+    with patch("mistral_common.experimental.app.routers.requests.post") as mock_generate:
+        mock_generate.return_value = MockResponse(400, text="Error")
+        response = tekken_v13_client.post(
+            "/v1/chat/completions", json={"messages": [{"role": "user", "content": "Hello, world!"}]}
+        )
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Error"}
+
+    with patch("mistral_common.experimental.app.routers.requests.post") as mock_generate:
+        mock_generate.side_effect = requests.exceptions.RequestException("Error")
+        response = tekken_v13_client.post(
+            "/v1/chat/completions", json={"messages": [{"role": "user", "content": "Hello, world!"}]}
+        )
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Error"}
+
+    with patch("mistral_common.experimental.app.routers.requests.post") as mock_generate:
+        mock_generate.side_effect = requests.exceptions.Timeout()
+        response = tekken_v13_client.post(
+            "/v1/chat/completions", json={"messages": [{"role": "user", "content": "Hello, world!"}]}
+        )
+    assert response.status_code == 504
+    assert response.json() == {"detail": "Generation API timeout."}
