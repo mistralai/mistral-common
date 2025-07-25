@@ -69,7 +69,6 @@ def create_app(
     get_settings_override()
     app.dependency_overrides[get_settings] = get_settings_override
 
-
     return app
 
 

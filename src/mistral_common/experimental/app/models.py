@@ -39,9 +39,7 @@ class OpenAIChatCompletionRequest(BaseModel):
             The extra fields that were dropped from the model.
         """
         extra_fields = {
-            field: value
-            for field, value in self.model_dump().items()
-            if field not in type(self).model_fields
+            field: value for field, value in self.model_dump().items() if field not in type(self).model_fields
         }
 
         self.__dict__ = {k: v for k, v in self.__dict__.items() if k not in extra_fields}
