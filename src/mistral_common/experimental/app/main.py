@@ -115,7 +115,7 @@ def cli() -> None:
     show_default=True,
 )
 @click.option(
-    "--generation-batckend",
+    "--generation-backend",
     type=click.Choice([mode.value for mode in GenerationBackend], case_sensitive=False),
     default=GenerationBackend.llama_cpp.value,
     help="Generation API backend",
