@@ -235,7 +235,7 @@ def test_tokenize_request(
     tokens: list[int] = request.getfixturevalue(tokens_fixture)
     client: TestClient = request.getfixturevalue(client_fixture)
 
-    response = client.post("/tokenize", json=jsonable_encoder(chat_request))
+    response = client.post("/v1/tokenize", json=jsonable_encoder(chat_request))
     assert response.status_code == 200
     assert response.json() == tokens
 
@@ -250,14 +250,14 @@ def test_detokenize_string(tokenizer_fixture: str, client_fixture: str, request:
     encoded_prompt = tokenizer.instruct_tokenizer.tokenizer.encode(prompt, bos=True, eos=True)
 
     response_with_special = client.post(
-        "/detokenize/string", json={"tokens": encoded_prompt, "special_token_policy": SpecialTokenPolicy.KEEP}
+        "/v1/detokenize/string", json={"tokens": encoded_prompt, "special_token_policy": SpecialTokenPolicy.KEEP}
     )
     assert response_with_special.status_code == 200
     assert response_with_special.json() == tokenizer.instruct_tokenizer.tokenizer.decode(
         encoded_prompt, special_token_policy=SpecialTokenPolicy.KEEP
     )
     response_without_special = client.post(
-        "/detokenize/string", json={"tokens": encoded_prompt, "special_token_policy": SpecialTokenPolicy.IGNORE}
+        "/v1/detokenize/string", json={"tokens": encoded_prompt, "special_token_policy": SpecialTokenPolicy.IGNORE}
     )
     assert response_without_special.status_code == 200
     assert response_without_special.json() == tokenizer.instruct_tokenizer.tokenizer.decode(
@@ -265,13 +265,13 @@ def test_detokenize_string(tokenizer_fixture: str, client_fixture: str, request:
     )
 
     response_empty_tokens = client.post(
-        "/detokenize/string", json={"tokens": [], "special_token_policy": SpecialTokenPolicy.IGNORE}
+        "/v1/detokenize/string", json={"tokens": [], "special_token_policy": SpecialTokenPolicy.IGNORE}
     )
     assert response_empty_tokens.status_code == 400
     assert response_empty_tokens.json()["detail"] == "Tokens list cannot be empty."
 
     response_special_error = client.post(
-        "/detokenize/string", json={"tokens": encoded_prompt, "special_token_policy": SpecialTokenPolicy.RAISE}
+        "/v1/detokenize/string", json={"tokens": encoded_prompt, "special_token_policy": SpecialTokenPolicy.RAISE}
     )
     assert response_special_error.status_code == 400
 
@@ -289,7 +289,7 @@ def test_detokenize_assistant_message(
     client: TestClient = request.getfixturevalue(client_fixture)
     content = "Hello, world!"
     encoded_content = tokenizer.instruct_tokenizer.tokenizer.encode(content, bos=True, eos=not prefix)
-    response = client.post("/detokenize/", json=encoded_content)
+    response = client.post("/v1/detokenize/", json=encoded_content)
     assert response.status_code == 200
 
     assert AssistantMessage.model_validate(response.json()) == AssistantMessage(content=content, prefix=prefix)
@@ -317,7 +317,7 @@ def test_detokenize_assistant_message(
         encoded_tool_calls.append(tokenizer.instruct_tokenizer.tokenizer.eos_id)
     encoded_tokens = encoded_content + encoded_tool_calls
 
-    response = client.post("/detokenize/", json=encoded_tokens)
+    response = client.post("/v1/detokenize/", json=encoded_tokens)
     assert response.status_code == 200
     assert AssistantMessage.model_validate(response.json()) == AssistantMessage(
         content=content, tool_calls=tool_calls, prefix=prefix
@@ -331,19 +331,19 @@ def test_detokenize_assistant_message(
     if not prefix:
         encoded_tokens.append(tokenizer.instruct_tokenizer.tokenizer.eos_id)
 
-    response = client.post("/detokenize/", json=encoded_tokens)
+    response = client.post("/v1/detokenize/", json=encoded_tokens)
     assert response.status_code == 200
     assert AssistantMessage.model_validate(response.json()) == AssistantMessage(tool_calls=tool_calls, prefix=prefix)
 
     # Test 4:
     # Detokenize empty tokens
-    response = client.post("/detokenize/", json=[])
+    response = client.post("/v1/detokenize/", json=[])
     assert response.status_code == 400
     assert response.json()["detail"] == "Tokens list cannot be empty."
 
     # Test 6:
     # Wrong tool call format
-    response = client.post("/detokenize/", json=encoded_tool_calls[: (-2 if not prefix else -1)])
+    response = client.post("/v1/detokenize/", json=encoded_tool_calls[: (-2 if not prefix else -1)])
     assert response.status_code == 400
     assert response.json()["detail"] == "Invalid tool call tokenization. Expected a JSON list of tool calls."
 
@@ -401,7 +401,7 @@ def test_detokenize_assistant_message_think_chunks(
 ) -> None:
     encoded_tokens = mistral_tokenizer_v13.instruct_tokenizer.encode_assistant_message(assistant_message, False, False)  # type: ignore[attr-defined]
 
-    response = tekken_v13_client.post("/detokenize/", json=encoded_tokens)
+    response = tekken_v13_client.post("/v1/detokenize/", json=encoded_tokens)
     assert response.status_code == 200
 
     assistant_message.tool_calls = (

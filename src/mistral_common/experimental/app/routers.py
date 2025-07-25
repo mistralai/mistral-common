@@ -20,8 +20,8 @@ from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenized,
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13
 
 main_router = APIRouter(tags=["app"])
-tokenize_router = APIRouter(prefix="/tokenize", tags=["tokenizer", "tokenize"])
-decode_router = APIRouter(prefix="/detokenize", tags=["tokenizer", "detokenize"])
+tokenize_router = APIRouter(prefix="/v1/tokenize", tags=["tokenizer", "tokenize"])
+decode_router = APIRouter(prefix="/v1/detokenize", tags=["tokenizer", "detokenize"])
 
 
 @main_router.get("/")

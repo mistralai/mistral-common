@@ -6,7 +6,7 @@ The `experimental` module provides access to a FastAPI server designed to handle
 
 1. **Tokenization**: Converting chat completion requests into token sequences
 2. **Detokenization**: Converting token sequences back into human-readable formats to an [AssistantMessage][mistral_common.protocol.instruct.messages.AssistantMessage] object or a raw string.
-3. **Generation**: Generating text from a [ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest] using a server backend.
+3. **Generation**: Generating text from a [ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest] using an engine backend.
 
 This API serves as a bridge between different providers and tokenization needs regardless of the provider programming language.
 
@@ -44,8 +44,8 @@ You can launch the server using the follwing CLI command:
 ```bash
 mistral_common mistralai/Magistral-Small-2507 [validation_mode] \
 --host 127.0.0.1 --port 8000 \
---generation-host 127.0.0.1 --generation-port 8080 --generation-backend llama_cpp \
---api-key "" --timeout 60
+--engine-url 127.0.0.1:8080 --engine-backend llama_cpp \
+--timeout 60
 ```
 
 #### Command Line Options
@@ -94,7 +94,7 @@ from mistral_common.protocol.instruct.messages import SystemMessage, TextChunk, 
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 
 # Simple request
-response = requests.post("http://localhost:8000/tokenize/request", json={
+response = requests.post("http://localhost:8000/v1/tokenize/request", json={
     "messages": [
         {"role": "user", "content": "Hello, how are you?"}
     ]
@@ -127,7 +127,7 @@ system_message = SystemMessage(
 
 
 response = requests.post(
-    "http://localhost:8000/tokenize/request",
+    "http://localhost:8000/v1/tokenize/request",
     json=jsonable_encoder(
         ChatCompletionRequest(messages=[
             system_message,
@@ -155,7 +155,7 @@ Example requests:
 import requests
 
 response = requests.post(
-    "http://localhost:8000/detokenize/",
+    "http://localhost:8000/v1/detokenize/",
     json=[1, 3, 22177, 1044, 2606, 1584, 1636, 1063, 4]
 )
 print(response.json())
@@ -163,7 +163,7 @@ print(response.json())
 
 # With think chunks
 response = requests.post(
-    "http://localhost:8000/detokenize/",
+    "http://localhost:8000/v1/detokenize/",
     json=[12598, 1639, 3648, 2314, 1494, 1046, 34, 6958, 1584, 1032, 1051, 1576, 1114, 1039, 1294, 51567, 33681, 3082, 35, 19587, 1051, 19587, 2]
 )
 print(response.json())
@@ -171,7 +171,7 @@ print(response.json())
 
 # With tool calls
 response = requests.post(
-    "http://localhost:8000/detokenize/",
+    "http://localhost:8000/v1/detokenize/",
     json=[9, 12296, 1095, 99571, 32, 38985, 1039, 3494, 4550, 1576, 1314, 3416, 33681, 2096, 1576, 27965, 4550, 1576, 1114, 1039, 27024, 2]
 )
 print(response.json())
@@ -193,7 +193,7 @@ Example request:
 ```python
 import requests
 
-response = requests.post("http://localhost:8000/detokenize/string", json={
+response = requests.post("http://localhost:8000/v1/detokenize/string", json={
     "tokens":[1, 3, 22177, 1044, 2606, 1584, 1636, 1063, 4],
     "special_token_policy": 1,
 })
@@ -211,6 +211,20 @@ print(response.json())
         - Mistral-common format ([ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest])
         - OpenAI-compatible format ([OpenAIChatCompletionRequest][mistral_common.protocol.openai.request.OpenAIChatCompletionRequest]). Streaming is not supported.
 - **Response**: Chat completion response in OpenAI-compatible format
+
+Example request:
+```python
+import requests
+
+response = requests.post("http://localhost:8000/v1/chat/completions", json={
+    "messages": [
+        {"role": "user", "content": "Hello, how are you?"}
+    ]
+})
+print(response.json())
+# {'role': 'assistant', 'content': 'Hello! I am doing well, thank you for asking.'}
+```
+
 
 ## Issues and feedback
 
