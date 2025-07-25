@@ -50,7 +50,7 @@ tokenizer.encode("Plz tekkenize me", bos=True, eos=True)
 # [1, 4444, 1122, 16058, 3569, 2033, 1639, 2]
 ```
 
-See the [Examples section](../examples/index.md) for examples on how to use the tokenizers with our models.
+See the [Examples section](../examples/inference.md) for examples on how to use the tokenizers with our models.
 
 ## Special tokens
 
@@ -66,7 +66,7 @@ Special tokens are tokens that have a special meaning for the model. They are us
 - `[IMG_END]`: End of an image
 - ...
 
-These tokens are defined in the tokenizer configuration file (recommended) or at instantiation for the [Tekkenizer](mistral_common.tokens.tokenizers.tekken.Tekkenizer) (deprecated).
+These tokens are defined in the tokenizer configuration file (recommended) or at instantiation for the [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer] (deprecated).
 
 In `mistral-common`, special tokens are never encoded directly. This means that:
 
