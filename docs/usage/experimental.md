@@ -6,7 +6,7 @@ The `experimental` module provides access to a FastAPI server designed to handle
 
 1. **Tokenization**: Converting chat completion requests into token sequences
 2. **Detokenization**: Converting token sequences back into human-readable formats to an [AssistantMessage][mistral_common.protocol.instruct.messages.AssistantMessage] object or a raw string.
-3. **Generation**: Generating text from a [ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest] using an engine backend.
+3. **Chat Completion**: Generating an [AssistantMessage][mistral_common.protocol.instruct.messages.AssistantMessage] from a [ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest] using an engine backend.
 
 This API serves as a bridge between different providers and tokenization needs regardless of the provider programming language.
 
@@ -44,7 +44,7 @@ You can launch the server using the follwing CLI command:
 ```bash
 mistral_common mistralai/Magistral-Small-2507 [validation_mode] \
 --host 127.0.0.1 --port 8000 \
---engine-url 127.0.0.1:8080 --engine-backend llama_cpp \
+--engine-url http://127.0.0.1:8080 --engine-backend llama_cpp \
 --timeout 60
 ```
 
@@ -54,11 +54,9 @@ mistral_common mistralai/Magistral-Small-2507 [validation_mode] \
 - `validation_mode`: Validation mode to use, choices in: "test", "finetuning", "serving" (Optional, defaults to `"test"`)
 - `--host`: API host (default: `127.0.0.1`)
 - `--port`: API port (default: `0` - auto-selects available port)
-- `--generation-host`: Generation server host (default: `127.0.0.1`)
-- `--generation-port`: Generation server port (default: `8080`)
-- `--generation-backend`: Generation backend to use (default: `llama_cpp`)
-- `--api-key`: API key for the generation server (default: `""`)
-- `--timeout`: Timeout for the generation server (default: `60`)
+- `--engine-url`: URL of the engine (default: `http://127.0.0.1:8080`)
+- `--engine-backend`: Engine backend to use (default: `llama_cpp`)
+- `--timeout`: Timeout for the engine (default: `60`)
 
 ## Available Routes
 
@@ -201,11 +199,11 @@ print(response.json())
 # <s>[INST]Hello, how are you?[/INST]
 ```
 
-### Generation
+### Chat Completions
 
 - **Route**: `/v1/chat/completions`
 - **Method**: POST
-- **Description**: Generates text from a chat completion request. This endpoint forwards the request to the generation server.
+- **Description**: Generates text from a chat completion request. This endpoint forwards the request to the engine server.
 - **Request Body**:
     - Chat completion request in either:
         - Mistral-common format ([ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest])
