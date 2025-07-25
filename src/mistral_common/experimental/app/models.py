@@ -13,6 +13,9 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 class OpenAIChatCompletionRequest(BaseModel):
     r"""OpenAI chat completion request.
 
+    This class is used to parse the request body for the OpenAI chat completion endpoint. It is converted to a
+    [ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest] object in endpoints.
+
     Attributes:
         messages: The messages to use for the chat completion.
         tools: The tools to use for the chat completion.
@@ -20,7 +23,7 @@ class OpenAIChatCompletionRequest(BaseModel):
     Note:
         This class accepts extra fields, as the
         [from_openai][mistral_common.protocol.instruct.request.ChatCompletionRequest.from_openai] method will handle
-        them.
+        raise an error if the extra fields are not supported.
     """
 
     messages: List[dict[str, Union[str, List[dict[str, Union[str, dict[str, Any]]]]]]]

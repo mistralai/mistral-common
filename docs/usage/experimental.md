@@ -6,6 +6,7 @@ The `experimental` module provides access to a FastAPI server designed to handle
 
 1. **Tokenization**: Converting chat completion requests into token sequences
 2. **Detokenization**: Converting token sequences back into human-readable formats to an [AssistantMessage][mistral_common.protocol.instruct.messages.AssistantMessage] object or a raw string.
+3. **Generation**: Generating text from a [ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest] using a server backend.
 
 This API serves as a bridge between different providers and tokenization needs regardless of the provider programming language.
 
@@ -41,7 +42,10 @@ pip install mistral-common[server]
 You can launch the server using the follwing CLI command:
 
 ```bash
-mistral_common mistralai/Magistral-Small-2507 [validation_mode] --host 127.0.0.1 --port 8000
+mistral_common mistralai/Magistral-Small-2507 [validation_mode] \
+--host 127.0.0.1 --port 8000 \
+--generation-host 127.0.0.1 --generation-port 8080 --generation-backend llama_cpp \
+--api-key "" --timeout 60
 ```
 
 #### Command Line Options
@@ -50,7 +54,11 @@ mistral_common mistralai/Magistral-Small-2507 [validation_mode] --host 127.0.0.1
 - `validation_mode`: Validation mode to use, choices in: "test", "finetuning", "serving" (Optional, defaults to `"test"`)
 - `--host`: API host (default: `127.0.0.1`)
 - `--port`: API port (default: `0` - auto-selects available port)
-
+- `--generation-host`: Generation server host (default: `127.0.0.1`)
+- `--generation-port`: Generation server port (default: `8080`)
+- `--generation-backend`: Generation backend to use (default: `llama_cpp`)
+- `--api-key`: API key for the generation server (default: `""`)
+- `--timeout`: Timeout for the generation server (default: `60`)
 
 ## Available Routes
 
@@ -72,7 +80,7 @@ The Swagger UI provides interactive documentation for all available endpoints.
 - **Request Body**: 
     - Chat completion request in either:
         - Mistral-common format ([ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest])
-        - OpenAI-compatible format
+        - OpenAI-compatible format ([OpenAIChatCompletionRequest][mistral_common.protocol.openai.request.OpenAIChatCompletionRequest]). Not all values used by OpenAI are supported.
 - **Response**: List of token IDs
 
 Example requests:
@@ -192,6 +200,17 @@ response = requests.post("http://localhost:8000/detokenize/string", json={
 print(response.json())
 # <s>[INST]Hello, how are you?[/INST]
 ```
+
+### Generation
+
+- **Route**: `/v1/chat/completions`
+- **Method**: POST
+- **Description**: Generates text from a chat completion request. This endpoint forwards the request to the generation server.
+- **Request Body**:
+    - Chat completion request in either:
+        - Mistral-common format ([ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest])
+        - OpenAI-compatible format ([OpenAIChatCompletionRequest][mistral_common.protocol.openai.request.OpenAIChatCompletionRequest]). Not all values used by OpenAI are supported.
+- **Response**: Chat completion response in OpenAI-compatible format
 
 ## Issues and feedback
 
