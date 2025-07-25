@@ -433,7 +433,7 @@ class MockResponse:
 
 
 @pytest.mark.parametrize(
-    "generation_request",
+    "engine_request",
     [
         {
             "messages": [{"role": "user", "content": "Hello, world!"}],
@@ -468,7 +468,7 @@ class MockResponse:
 def test_generate(
     mistral_tokenizer_v13: MistralTokenizer,
     tekken_v13_client: TestClient,
-    generation_request: Union[dict, ChatCompletionRequest, OpenAIChatCompletionRequest],
+    engine_request: Union[dict, ChatCompletionRequest, OpenAIChatCompletionRequest],
     output_assistant_message: AssistantMessage,
 ) -> None:
     output_tokens = mistral_tokenizer_v13.instruct_tokenizer.encode_assistant_message(  # type: ignore[attr-defined]
@@ -484,7 +484,7 @@ def test_generate(
 
     with patch("mistral_common.experimental.app.routers.requests.post") as mock_generate:
         mock_generate.return_value = MockResponse(200, {"tokens": output_tokens})
-        response = tekken_v13_client.post("/chat/completions", json=jsonable_encoder(generation_request))
+        response = tekken_v13_client.post("/v1/chat/completions", json=jsonable_encoder(engine_request))
     assert response.status_code == 200
     assert AssistantMessage(**response.json()) == output_assistant_message
 
@@ -493,7 +493,7 @@ def test_generate_error(tekken_v13_client: TestClient) -> None:
     with patch("mistral_common.experimental.app.routers.requests.post") as mock_generate:
         mock_generate.return_value = MockResponse(400, text="Error")
         response = tekken_v13_client.post(
-            "/chat/completions", json={"messages": [{"role": "user", "content": "Hello, world!"}]}
+            "/v1/chat/completions", json={"messages": [{"role": "user", "content": "Hello, world!"}]}
         )
     assert response.status_code == 400
     assert response.json() == {"detail": "Error"}
@@ -501,7 +501,7 @@ def test_generate_error(tekken_v13_client: TestClient) -> None:
     with patch("mistral_common.experimental.app.routers.requests.post") as mock_generate:
         mock_generate.side_effect = requests.exceptions.RequestException("Error")
         response = tekken_v13_client.post(
-            "/chat/completions", json={"messages": [{"role": "user", "content": "Hello, world!"}]}
+            "/v1/chat/completions", json={"messages": [{"role": "user", "content": "Hello, world!"}]}
         )
     assert response.status_code == 500
     assert response.json() == {"detail": "Error"}
@@ -509,7 +509,7 @@ def test_generate_error(tekken_v13_client: TestClient) -> None:
     with patch("mistral_common.experimental.app.routers.requests.post") as mock_generate:
         mock_generate.side_effect = requests.exceptions.Timeout()
         response = tekken_v13_client.post(
-            "/chat/completions", json={"messages": [{"role": "user", "content": "Hello, world!"}]}
+            "/v1/chat/completions", json={"messages": [{"role": "user", "content": "Hello, world!"}]}
         )
     assert response.status_code == 504
-    assert response.json() == {"detail": "Generation API timeout."}
+    assert response.json() == {"detail": "Timeout"}

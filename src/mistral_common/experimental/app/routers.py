@@ -7,7 +7,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import ValidationError
 
 from mistral_common.experimental.app.models import (
-    GenerationBackend,
+    EngineBackend,
     OpenAIChatCompletionRequest,
     Settings,
     get_settings,
@@ -147,7 +147,7 @@ async def detokenize_to_assistant_message(
     return AssistantMessage(content=content, tool_calls=tool_calls, prefix=not has_eos)
 
 
-@main_router.post("/chat/completions", tags=["chat", "completions"])
+@main_router.post("/v1/chat/completions", tags=["chat", "completions"])
 async def generate(
     request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -179,21 +179,20 @@ async def generate(
         raise HTTPException(status_code=400, detail="Streaming is not supported.")
 
     try:
-        if settings.generation_backend == GenerationBackend.llama_cpp:
+        if settings.engine_backend == EngineBackend.llama_cpp:
             response = requests.post(
-                f"http://{settings.generation_host}:{settings.generation_port}/completions",
+                f"{settings.engine_url}/completions",
                 json={
                     "prompt": tokens_ids,
                     "return_tokens": True,
                     **request_json,
                 },
-                headers={"Authorization": f"Bearer {settings.api_key}"},
                 timeout=settings.timeout,
             )
         else:
-            raise ValueError(f"Unsupported generation backend: {settings.generation_backend}")
+            raise ValueError(f"Unsupported engine backend: {settings.engine_backend}")
     except requests.exceptions.Timeout:
-        raise HTTPException(status_code=504, detail="Generation API timeout.")
+        raise HTTPException(status_code=504, detail="Timeout")
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=str(e))
 

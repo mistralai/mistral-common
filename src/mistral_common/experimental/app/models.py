@@ -46,8 +46,8 @@ class OpenAIChatCompletionRequest(BaseModel):
         return extra_fields
 
 
-class GenerationBackend(str, Enum):
-    r"""The generation backend to use.
+class EngineBackend(str, Enum):
+    r"""The engine backend to use.
 
     Attributes:
         llama_cpp: The llama.cpp backend.
@@ -62,25 +62,30 @@ class Settings(BaseSettings):
     Attributes:
         app_name: The name of the application.
         app_version: The version of the application.
-        generation_host: The host to use for the generation API.
-        generation_port: The port to use for the generation API.
-        api_key: The API key to use for the generation API.
-        timeout: The timeout to use for the generation API.
+        engine_url: The URL of the engine.
+        engine_backend: The backend to use for the engine.
+        timeout: The timeout to use for the engine API.
     """
 
     app_name: str = "Mistral-common API"
     app_version: str = importlib.metadata.version("mistral-common")
-    generation_host: str = "127.0.0.1"
-    generation_port: int = 8080
-    generation_backend: GenerationBackend = GenerationBackend.llama_cpp
+    engine_url: str = "127.0.0.1"
+    engine_backend: EngineBackend = EngineBackend.llama_cpp
     api_key: str = ""
     timeout: int = 60
 
-    @field_validator("generation_backend", mode="before")
+    @field_validator("engine_url", mode="before")
     @classmethod
-    def _validate_backend(cls, value: Union[str, GenerationBackend]) -> GenerationBackend:
+    def _validate_engine_url(cls, value: str) -> str:
+        if isinstance(value, str) and value.endswith("/"):
+            value = value[:-1]
+        return value
+
+    @field_validator("engine_backend", mode="before")
+    @classmethod
+    def _validate_backend(cls, value: Union[str, EngineBackend]) -> EngineBackend:
         if isinstance(value, str):
-            value = GenerationBackend(value)
+            value = EngineBackend(value)
         return value
 
     def model_post_init(self, context: Any) -> None:

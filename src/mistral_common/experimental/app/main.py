@@ -7,7 +7,7 @@ import uvicorn
 from fastapi import FastAPI
 
 from mistral_common.experimental.app.models import (
-    GenerationBackend,
+    EngineBackend,
     Settings,
     get_settings,
 )
@@ -23,10 +23,8 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 def create_app(
     tokenizer: Union[str, Path, MistralTokenizer],
     validation_mode: ValidationMode = ValidationMode.test,
-    generation_host: str = "127.0.0.1",
-    generation_port: int = 8080,
-    generation_backend: GenerationBackend = GenerationBackend.llama_cpp,
-    api_key: str = "",
+    engine_url: str = "127.0.0.1",
+    engine_backend: EngineBackend = EngineBackend.llama_cpp,
     timeout: int = 60,
 ) -> FastAPI:
     r"""Create a Mistral-common FastAPI app with the given tokenizer and validation mode.
@@ -34,11 +32,8 @@ def create_app(
     Args:
         tokenizer: The tokenizer path or a MistralTokenizer instance.
         validation_mode: The validation mode to use.
-        generation_host: The host of the generation API.
-        generation_port: The port of the generation API.
-        generation_backend: The backend of the generation API.
-        api_key: The API key of the generation API.
-        timeout: The timeout of the generation API.
+        engine_url: The URL of the engine API.
+        timeout: The timeout of the engine API.
 
     Returns:
         The Mistral-common FastAPI app.
@@ -54,10 +49,8 @@ def create_app(
     @lru_cache
     def get_settings_override() -> Settings:
         settings = Settings(
-            generation_host=generation_host,
-            generation_port=generation_port,
-            generation_backend=generation_backend,
-            api_key=api_key,
+            engine_url=engine_url,
+            engine_backend=engine_backend,
             timeout=timeout,
         )
         if isinstance(tokenizer, MistralTokenizer):
@@ -100,38 +93,24 @@ def cli() -> None:
     show_default=True,
 )
 @click.option(
-    "--generation-host",
+    "--engine-url",
     type=str,
-    default="127.0.0.1",
-    help="Generation API host",
+    default="http://127.0.0.1:8080",
+    help="Enginge URL",
     show_default=True,
 )
 @click.option(
-    "--generation-port",
-    type=int,
-    default=8080,
-    help="Generation API port",
-    show_default=True,
-)
-@click.option(
-    "--generation-backend",
-    type=click.Choice([mode.value for mode in GenerationBackend], case_sensitive=False),
-    default=GenerationBackend.llama_cpp.value,
-    help="Generation API backend",
-    show_default=True,
-)
-@click.option(
-    "--api-key",
-    type=str,
-    default="",
-    help="Generation API key",
+    "--engine-backend",
+    type=click.Choice([mode.value for mode in EngineBackend], case_sensitive=False),
+    default=EngineBackend.llama_cpp.value,
+    help="Engine API backend",
     show_default=True,
 )
 @click.option(
     "--timeout",
     type=int,
     default=60,
-    help="Generation API key",
+    help="Engine Timeout",
     show_default=True,
 )
 def serve(
@@ -139,20 +118,16 @@ def serve(
     validation_mode: Union[ValidationMode, str] = ValidationMode.test,
     host: str = "127.0.0.1",
     port: int = 0,
-    generation_host: str = "127.0.0.1",
-    generation_port: int = 8080,
-    generation_backend: str = GenerationBackend.llama_cpp.value,
-    api_key: str = "",
+    engine_url: str = "http://127.0.0.1:8080",
+    engine_backend: str = EngineBackend.llama_cpp.value,
     timeout: int = 60,
 ) -> None:
     r"""Serve the Mistral-common API with the given tokenizer path and validation mode."""
     app = create_app(
         tokenizer=tokenizer_path,
         validation_mode=ValidationMode(validation_mode),
-        generation_host=generation_host,
-        generation_port=generation_port,
-        generation_backend=GenerationBackend(generation_backend),
-        api_key=api_key,
+        engine_url=engine_url,
+        engine_backend=EngineBackend(engine_backend),
         timeout=timeout,
     )
     uvicorn.run(app, host=host, port=port)
