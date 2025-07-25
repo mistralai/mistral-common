@@ -110,7 +110,7 @@ def cli() -> None:
     "--timeout",
     type=int,
     default=60,
-    help="Engine Timeout",
+    help="Timeout",
     show_default=True,
 )
 def serve(
