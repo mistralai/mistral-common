@@ -66,7 +66,9 @@ def create_app(
             settings._load_tokenizer(tokenizer, validation_mode)
         return settings
 
+    get_settings_override()
     app.dependency_overrides[get_settings] = get_settings_override
+
 
     return app
 
