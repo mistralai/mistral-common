@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mistral_common"
-version = "1.8.1"
+version = "1.8.3"
 description = "Mistral-common is a library of common utilities for Mistral AI."
 authors = [{name = "bam4d", email = "bam4d@mistral.ai"}]
 license = "Apache-2.0"
@@ -20,8 +20,7 @@ dependencies = [
     "tiktoken>=0.7.0",
     "pillow>=10.3.0",
     "requests>=2.0.0",
-    "numpy>=1.22,<1.25; python_version<'3.9'",
-    "numpy>=1.25; python_version>='3.9'",
+    "numpy>=1.25",
     "pydantic-extra-types[pycountry]>=2.10.5",
 ]
 
@@ -33,6 +32,10 @@ audio = ["mistral_common[soundfile]", "mistral_common[soxr]"]
 image = ["mistral_common[opencv]"]
 
 hf-hub = ["huggingface-hub>=0.32.4"]
+server = ["fastapi[standard]>=0.115.12", "pydantic-settings >= 2.9.1", "click>=8.1.0"]
+
+[project.scripts]
+mistral_common = "mistral_common.experimental.app.main:cli"
 
 [dependency-groups]
 dev = [

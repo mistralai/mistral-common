@@ -108,4 +108,5 @@ nav:
     - "Tools": usage/tools.md
     - "Images": usage/images.md
     - "Tokenizers": usage/tokenizers.md
+    - "REST API (experimental)": usage/experimental.md
   - "Code reference": code_reference/

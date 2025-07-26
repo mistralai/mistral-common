@@ -45,6 +45,7 @@ from mistral_common.protocol.instruct.messages import (
     RawAudio,
     SystemMessage,
     TextChunk,
+    ThinkChunk,
     ToolMessage,
     UserMessage,
 )
@@ -330,6 +331,14 @@ def test_convert_tool_call() -> None:
     assert ToolCall.from_openai(typeddict_openai) == tool_call
 
 
+def test_convert_think_chunk() -> None:
+    chunk = ThinkChunk(thinking="Hello", closed=False)
+    text_openai = chunk.to_openai()
+
+    assert ThinkChunk.from_openai(text_openai) == chunk
+    assert text_openai == {"type": "thinking", "thinking": "Hello", "closed": False}
+
+
 @pytest.mark.parametrize(
     ["openai_message", "message"],
     [
@@ -366,6 +375,23 @@ def test_convert_tool_call() -> None:
         ),
         (OpenAIAssistantMessage(role="assistant", content="Hi"), AssistantMessage(content="Hi")),
         (
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "Hi"},
+                    {"type": "thinking", "thinking": "Hello", "closed": True},
+                    {"type": "thinking", "thinking": "Hello", "closed": False},
+                ],
+            },
+            AssistantMessage(
+                content=[
+                    TextChunk(text="Hi"),
+                    ThinkChunk(thinking="Hello", closed=True),
+                    ThinkChunk(thinking="Hello", closed=False),
+                ]
+            ),
+        ),
+        (
             OpenAIAssistantMessage(
                 role="assistant",
                 content="Hi",
@@ -400,6 +426,18 @@ def test_convert_tool_call() -> None:
         (
             OpenAISystemMessage(role="system", content="You are a helpful assistant."),
             SystemMessage(content="You are a helpful assistant."),
+        ),
+        (
+            {
+                "role": "system",
+                "content": [
+                    {"type": "text", "text": "You are a helpful assistant."},
+                    {"type": "thinking", "thinking": "Hello", "closed": False},
+                ],
+            },
+            SystemMessage(
+                content=[TextChunk(text="You are a helpful assistant."), ThinkChunk(thinking="Hello", closed=False)]
+            ),
         ),
     ],
 )

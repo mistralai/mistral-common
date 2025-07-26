@@ -243,7 +243,7 @@ class MistralTokenizer(
     ) -> "MistralTokenizer":
         r"""Download the Mistral tokenizer for a given Hugging Face repository ID.
 
-        See [here](../../../../models.md#list-of-open-models) for a list of our OSS models.
+        See [here](https://huggingface.co/mistralai/models) for a list of our OSS models.
 
         Args:
             repo_id: The Hugging Face repo ID.

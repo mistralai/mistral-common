@@ -12,7 +12,7 @@ from mistral_common.base import MistralBase
 from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.instruct.messages import (
     AssistantMessageType,
-    ContentChunk,
+    UserContentChunk,
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import InstructRequest
@@ -30,7 +30,7 @@ class UserMessagePosition(str, Enum):
 
 
 class SpecialTokens(str, Enum):
-    r"""[DEPRECATED] Enum of special tokens used in the tokenizer.
+    r"""Enum of special tokens used in the tokenizer.
 
     Attributes:
         unk: The unknown token.
@@ -53,6 +53,13 @@ class SpecialTokens(str, Enum):
         begin_system: The beginning of system prompt token.
         end_system: The end of system prompt token.
         begin_tool_content: The beginning of tool content token.
+        args: The args token.
+        call_id: The call id token.
+        audio: The audio token.
+        begin_audio: The beginning of audio token.
+        transcribe: The transcribe token.
+        begin_think: The beginning of think token.
+        end_think: The end of think token.
 
     Examples:
         >>> unk = SpecialTokens.unk
@@ -83,6 +90,8 @@ class SpecialTokens(str, Enum):
     audio = "[AUDIO]"
     begin_audio = "[BEGIN_AUDIO]"
     transcribe = "[TRANSCRIBE]"
+    begin_think = "[THINK]"
+    end_think = "[/THINK]"
 
 
 class SpecialTokenPolicy(int, Enum):
@@ -372,7 +381,7 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
     @abstractmethod
     def encode_user_content(
         self,
-        content: Union[str, List[ContentChunk]],
+        content: Union[str, List[UserContentChunk]],
         is_last: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,

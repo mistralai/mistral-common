@@ -33,6 +33,7 @@ class ChunkTypes(str, Enum):
     image_url = "image_url"
     input_audio = "input_audio"
     audio_url = "audio_url"
+    thinking = "thinking"
 
 
 class BaseContentChunk(MistralBase):
@@ -44,7 +45,14 @@ class BaseContentChunk(MistralBase):
        type: The type of the chunk.
     """
 
-    type: Literal[ChunkTypes.text, ChunkTypes.image, ChunkTypes.image_url, ChunkTypes.input_audio, ChunkTypes.audio_url]
+    type: Literal[
+        ChunkTypes.text,
+        ChunkTypes.image,
+        ChunkTypes.image_url,
+        ChunkTypes.input_audio,
+        ChunkTypes.audio_url,
+        ChunkTypes.thinking,
+    ]
 
     def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
         r"""Converts the chunk to the OpenAI format.
@@ -361,7 +369,33 @@ class TextChunk(BaseContentChunk):
         return cls.model_validate(openai_chunk)
 
 
+class ThinkChunk(BaseContentChunk):
+    r"""Thinking chunk.
+
+    Attributes:
+        type: The type of the chunk, which is always ChunkTypes.thinking.
+        thinking: The list of text chunks of the thinking.
+        closed: Whether the thinking chunk is closed or not.
+    """
+
+    type: Literal[ChunkTypes.thinking] = ChunkTypes.thinking
+    thinking: str
+    closed: bool = Field(default=True, description="Whether the thinking chunk is closed or not.")
+
+    def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
+        r"""Converts the chunk to the OpenAI format."""
+        return self.model_dump()
+
+    @classmethod
+    def from_openai(cls, openai_chunk: Dict[str, Union[str, Dict[str, str]]]) -> "ThinkChunk":
+        r"""Converts the OpenAI chunk to the Mistral format."""
+        return cls.model_validate(openai_chunk)
+
+
 ContentChunk = Annotated[
+    Union[TextChunk, ImageChunk, ImageURLChunk, AudioChunk, AudioURLChunk, ThinkChunk], Field(discriminator="type")
+]
+UserContentChunk = Annotated[
     Union[TextChunk, ImageChunk, ImageURLChunk, AudioChunk, AudioURLChunk], Field(discriminator="type")
 ]
 
@@ -384,6 +418,8 @@ def _convert_openai_content_chunks(openai_content_chunks: Dict[str, Union[str, D
         return AudioChunk.from_openai(openai_content_chunks)
     elif content_type == ChunkTypes.audio_url:
         return AudioURLChunk.from_openai(openai_content_chunks)
+    elif content_type == ChunkTypes.thinking:
+        return ThinkChunk.from_openai(openai_content_chunks)
     else:
         raise ValueError(f"Unknown content chunk type: {content_type}")
 
@@ -445,7 +481,7 @@ class UserMessage(BaseMessage):
     """
 
     role: Literal[Roles.user] = Roles.user
-    content: Union[str, List[ContentChunk]]
+    content: Union[str, List[UserContentChunk]]
 
     def to_openai(self) -> Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]:
         r"""Converts the message to the OpenAI format."""
@@ -479,7 +515,7 @@ class SystemMessage(BaseMessage):
     """
 
     role: Literal[Roles.system] = Roles.system
-    content: str
+    content: Union[str, List[Union[TextChunk, ThinkChunk]]]
 
     def to_openai(self) -> Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]:
         r"""Converts the message to the OpenAI format."""
@@ -507,7 +543,7 @@ class AssistantMessage(BaseMessage):
     """
 
     role: Literal[Roles.assistant] = Roles.assistant
-    content: Optional[str] = None
+    content: Optional[Union[str, List[Union[TextChunk, ThinkChunk]]]] = None
     tool_calls: Optional[List[ToolCall]] = None
     prefix: bool = False
 
@@ -516,8 +552,12 @@ class AssistantMessage(BaseMessage):
         out_dict: dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]] = {
             "role": self.role,
         }
-        if self.content is not None:
+        if self.content is None:
+            pass
+        elif isinstance(self.content, str):
             out_dict["content"] = self.content
+        else:
+            out_dict["content"] = [chunk.to_openai() for chunk in self.content]
         if self.tool_calls is not None:
             out_dict["tool_calls"] = [tool_call.to_openai() for tool_call in self.tool_calls]
 
@@ -537,11 +577,19 @@ class AssistantMessage(BaseMessage):
             if openai_tool_calls is not None
             else None
         )
+        openai_content = openai_message.get("content", None)
+        content: Optional[Union[str, List[ContentChunk]]] = None
+        if openai_content is None or isinstance(openai_content, str):
+            content = openai_content
+        elif isinstance(openai_content, list):
+            content = [_convert_openai_content_chunks(chunk) for chunk in openai_content]
+        else:
+            raise ValueError(f"Unknown content type: {type(openai_content)}")
 
         return cls.model_validate(
             {
                 "role": openai_message["role"],
-                "content": openai_message.get("content"),
+                "content": content,
                 "tool_calls": tools_calls,
             }
         )

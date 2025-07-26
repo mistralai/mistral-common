@@ -1,6 +1,6 @@
 import json
 from abc import abstractmethod
-from typing import Any, Dict, Generic, List, Optional, Tuple, Union
+from typing import Any, Dict, Generic, List, Optional, Sequence, Tuple, Union, overload
 
 import numpy as np
 
@@ -22,7 +22,9 @@ from mistral_common.protocol.instruct.messages import (
     ImageURLChunk,
     SystemMessage,
     TextChunk,
+    ThinkChunk,
     ToolMessage,
+    UserContentChunk,
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import InstructRequest
@@ -41,6 +43,7 @@ from mistral_common.tokens.tokenizers.base import (
     UserMessagePosition,
 )
 from mistral_common.tokens.tokenizers.image import ImageEncoder
+from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 
 
 class InstructTokenizerBase(
@@ -115,6 +118,15 @@ class InstructTokenizerBase(
             NotImplementedError: The assistant message is not implemented for the base tokenizer.
         """
         raise NotImplementedError("Assistant message not implemented")
+
+    @abstractmethod
+    def encode_think(self, chunk: ThinkChunk) -> List[int]:
+        r"""Encode a think chunk.
+
+        Raises:
+            NotImplementedError: The think chunk is not implemented for the base tokenizer.
+        """
+        raise NotImplementedError("Think chunk not implemented")
 
     def _truncate_for_max_tokens(
         self,
@@ -281,7 +293,7 @@ class InstructTokenizerV1(
 
     def encode_user_content(
         self,
-        content: Union[str, List[ContentChunk]],
+        content: Union[str, List[UserContentChunk]],
         is_last: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
@@ -335,12 +347,21 @@ class InstructTokenizerV1(
                 "`continue_message` is only supported for assistant messages that have `prefix=False`."
             )
         elif message.content:
+            assert isinstance(message.content, str), "Message content must be a string for tokenizer < V13"
             curr_tokens = self.tokenizer.encode(message.content, bos=False, eos=False)
         else:
             raise TokenizerException(f"{message.content} // {message.tool_calls}")
         if not message.prefix and not continue_message:
             curr_tokens.append(self.tokenizer.eos_id)
         return curr_tokens
+
+    def encode_think(self, chunk: ThinkChunk) -> List[int]:
+        r"""Encode a think chunk.
+
+        Raises:
+            TokenizerException: The think chunk is not implemented for this version.
+        """
+        raise TokenizerException("Think not implemented for tokenizer < V13.")
 
     def encode_fim(self, request: FIMRequest) -> Tokenized:
         r"""Encode a FIM request.
@@ -528,6 +549,7 @@ class InstructTokenizerV2(
                 return []
             curr_tokens = self._encode_tool_calls_in_assistant_message(message)
         elif message.content:
+            assert isinstance(message.content, str), "Message content must be a string for tokenizer < V7"
             curr_tokens = self._encode_normal_content_assistant_message(message)
         else:
             raise TokenizerException(f"Invalid assistant message: {message.content}")
@@ -646,9 +668,55 @@ class InstructTokenizerV3(
         """
         return super().encode_assistant_message(message, False, continue_message)
 
+    @overload
+    def _encode_content_chunk(self, chunk: Union[str, TextChunk, ThinkChunk]) -> Tuple[List[int], None, None]: ...
+    @overload
+    def _encode_content_chunk(self, chunk: Union[ImageChunk, ImageURLChunk]) -> Tuple[List[int], np.ndarray, None]: ...
+    @overload
+    def _encode_content_chunk(self, chunk: Union[AudioChunk, AudioURLChunk]) -> Tuple[List[int], None, Audio]: ...
+    def _encode_content_chunk(
+        self, chunk: Union[str, ContentChunk]
+    ) -> Union[Tuple[List[int], Optional[np.ndarray], Optional[Audio]]]:
+        if isinstance(chunk, str):
+            return self.tokenizer.encode(chunk, bos=False, eos=False), None, None
+        elif isinstance(chunk, TextChunk):
+            return self.tokenizer.encode(chunk.text, bos=False, eos=False), None, None
+        elif isinstance(chunk, ThinkChunk):
+            return self.encode_think(chunk), None, None
+        elif isinstance(chunk, (ImageChunk, ImageURLChunk)):
+            assert self.image_encoder is not None, "Make sure to define a image encoder at init"
+            img_encoding = self.image_encoder(chunk)
+
+            return img_encoding.tokens, img_encoding.image, None
+
+        elif isinstance(chunk, (AudioChunk, AudioURLChunk)):
+            # the following is only possible for >= v7
+            assert self.audio_encoder is not None, "Make sure to define a audio encoder at init"
+            audio_encoding = self.audio_encoder(chunk)
+
+            return audio_encoding.tokens, None, audio_encoding.audio
+        else:
+            raise ValueError(f"Unknown chunk type: {chunk}")
+
+    def _encode_content_chunks(
+        self, content: Sequence[ContentChunk]
+    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
+        tokens: List[int] = []
+        images: List[np.ndarray] = []
+        audio: List[Audio] = []
+
+        for chunk in content:
+            chunk_tokens, maybe_image, maybe_audio = self._encode_content_chunk(chunk)
+            tokens.extend(chunk_tokens)
+            if maybe_image is not None:
+                images.append(maybe_image)
+            if maybe_audio is not None:
+                audio.append(maybe_audio)
+        return tokens, images, audio
+
     def encode_user_content(
         self,
-        content: Union[str, List[ContentChunk]],
+        content: Union[str, List[UserContentChunk]],
         is_last: bool,
         system_prompt: Optional[str] = None,
         force_img_first: bool = False,
@@ -682,31 +750,20 @@ class InstructTokenizerV3(
             if first_chunk and is_last and system_prompt:
                 first_chunk = False
                 content_str = system_prompt + "\n\n"
+                tokens += self.tokenizer.encode(content_str, bos=False, eos=False)
 
-            if isinstance(chunk, TextChunk):
-                content_str += chunk.text
-                tokens.extend(self.tokenizer.encode(content_str, bos=False, eos=False))
-            elif isinstance(chunk, (ImageChunk, ImageURLChunk)):
-                assert self.image_encoder is not None, "Make sure to define a image encoder at init"
-                if content_str:
-                    tokens.extend(self.tokenizer.encode(content_str, bos=False, eos=False))
-
-                img_encoding = self.image_encoder(chunk)
-
-                tokens.extend(img_encoding.tokens)
-                images.append(img_encoding.image)
-            elif isinstance(chunk, (AudioChunk, AudioURLChunk)):
+            if isinstance(chunk, (AudioChunk, AudioURLChunk)):
                 assert not content_str, (
                     f"It is not possible that `content` is non-empty when chunk is of type {type(chunk)}."
                 )
-                # the following is only possible for >= v7
-                assert self.audio_encoder is not None, "Make sure to define a audio encoder at init"
-                audio_encoding = self.audio_encoder(chunk)
-
-                tokens.extend(audio_encoding.tokens)
-                audio.append(audio_encoding.audio)
+                chunk_tokens, _, chunk_audio = self._encode_content_chunk(chunk)
+                audio.append(chunk_audio)
+            elif isinstance(chunk, (ImageChunk, ImageURLChunk)):
+                chunk_tokens, chunk_image, _ = self._encode_content_chunk(chunk)
+                images.append(chunk_image)
             else:
-                raise ValueError(f"Unknown chunk type: {chunk}")
+                chunk_tokens = self._encode_content_chunk(chunk)[0]
+            tokens.extend(chunk_tokens)
 
         return tokens, images, audio
 
@@ -794,12 +851,44 @@ class InstructTokenizerV7(InstructTokenizerV3):
         Returns:
             The encoded tokens.
         """
-        tokens = [
-            self.BEGIN_SYSTEM,
-            *self.tokenizer.encode(message.content, bos=False, eos=False),
-            self.END_SYSTEM,
-        ]
+
+        tokens = [self.BEGIN_SYSTEM]
+        if isinstance(content := message.content, str):
+            content = [TextChunk(text=content)]
+        tokens += self._encode_content_chunks(content)[0]
+        tokens.append(self.END_SYSTEM)
         return tokens
+
+    def encode_user_content(
+        self,
+        content: Union[str, List[UserContentChunk]],
+        is_last: bool,
+        system_prompt: Optional[str] = None,
+        force_img_first: bool = False,
+    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
+        r"""Encode a user content.
+
+        Args:
+            content: The content to encode.
+            is_last: Whether the message is the last one.
+            system_prompt: The system prompt.
+            force_img_first: Whether to force the image to be first.
+
+        Returns:
+            The encoded tokens and the images.
+        """
+        assert system_prompt is None, "in Tokenizer V7 we don't encode system prompts in user messages"
+
+        if isinstance(content, str):
+            return super().encode_user_content(content, is_last, system_prompt)
+
+        has_one_img_one_text_first = len(content) == 2 and isinstance(content[1], (ImageChunk, ImageURLChunk))
+        if force_img_first and has_one_img_one_text_first:
+            # make sure that if exactly one image and text chunk are passed we force the image chunk to be first
+            content = [content[1], content[0]]
+
+        tokens, images, audio = self._encode_content_chunks(content)
+        return tokens, images, audio
 
     def encode_user_message(
         self,
@@ -824,6 +913,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
             The encoded tokens and the list of images.
         """
         assert system_prompt is None, "in Tokenizer V7 we don't encode system prompts in user messages"
+
         tokens, images, audio = super().encode_user_message(
             message,
             available_tools,
@@ -936,9 +1026,10 @@ class InstructTokenizerV7(InstructTokenizerV3):
             )
 
         curr_tokens: list = []
-        if message.content:
-            assert isinstance(message.content, str), f"Message content must be a string. Got {message.content}"
-            curr_tokens += self._encode_normal_content_assistant_message(message)
+        if isinstance(message.content, str):
+            curr_tokens = self._encode_normal_content_assistant_message(message)
+        elif isinstance(message.content, list):
+            curr_tokens += self._encode_content_chunks(message.content)[0]
         if message.tool_calls:
             curr_tokens += self._encode_tool_calls_in_assistant_message(message)
         if not message.prefix and not continue_message:
@@ -995,6 +1086,24 @@ class InstructTokenizerV13(InstructTokenizerV11):
 
     _user_message_position_to_encode_tools = UserMessagePosition.first
 
+    def __init__(
+        self,
+        tokenizer: Tokenizer,
+        image_encoder: Optional[ImageEncoder] = None,
+        audio_encoder: Optional[AudioEncoder] = None,
+    ) -> None:
+        super().__init__(tokenizer, image_encoder, audio_encoder)
+        assert isinstance(tokenizer, Tekkenizer), f"Tokenizer must be a Tekkenizer. Got {type(tokenizer)}"
+        if (
+            SpecialTokens.begin_think.value in tokenizer._special_tokens_reverse_vocab
+            and SpecialTokens.end_think.value in tokenizer._special_tokens_reverse_vocab
+        ):
+            self.BEGIN_THINK: Optional[int] = tokenizer.get_control_token(SpecialTokens.begin_think.value)
+            self.END_THINK: Optional[int] = tokenizer.get_control_token(SpecialTokens.end_think.value)
+        else:
+            self.BEGIN_THINK = None
+            self.END_THINK = None
+
     def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> List[int]:
         assert message.tool_calls, f"Assistant message must have tool calls. Got {message}"
         curr_tokens = []
@@ -1028,3 +1137,19 @@ class InstructTokenizerV13(InstructTokenizerV11):
             self.END_TOOL_RESULTS,
         ]
         return curr_tokens
+
+    def encode_think(self, chunk: ThinkChunk) -> List[int]:
+        r"""Encode a thinking chunk.
+
+        Args:
+            chunk: The thinking chunk to encode.
+        Returns:
+            The encoded tokens.
+        """
+        assert self.BEGIN_THINK is not None, "think tokens are not available for this tokenizer."
+        assert self.END_THINK is not None, "think tokens are not available for this tokenizer."
+        tokens = self.tokenizer.encode(chunk.thinking, bos=False, eos=False)
+        think_tokens = [self.BEGIN_THINK, *tokens]
+        if chunk.closed:
+            think_tokens.append(self.END_THINK)
+        return think_tokens
