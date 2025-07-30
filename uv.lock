@@ -904,6 +904,17 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+all = [
+    { name = "click", version = "8.1.8", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
+    { name = "click", version = "8.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
+    { name = "fastapi", extra = ["standard"] },
+    { name = "huggingface-hub" },
+    { name = "opencv-python-headless" },
+    { name = "pydantic-settings" },
+    { name = "sentencepiece" },
+    { name = "soundfile" },
+    { name = "soxr" },
+]
 audio = [
     { name = "soundfile" },
     { name = "soxr" },
@@ -963,7 +974,12 @@ requires-dist = [
     { name = "fastapi", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.115.12" },
     { name = "huggingface-hub", marker = "extra == 'hf-hub'", specifier = ">=0.32.4" },
     { name = "jsonschema", specifier = ">=4.21.1" },
+    { name = "mistral-common", extras = ["audio"], marker = "extra == 'all'" },
+    { name = "mistral-common", extras = ["hf-hub"], marker = "extra == 'all'" },
+    { name = "mistral-common", extras = ["image"], marker = "extra == 'all'" },
     { name = "mistral-common", extras = ["opencv"], marker = "extra == 'image'" },
+    { name = "mistral-common", extras = ["sentencepiece"], marker = "extra == 'all'" },
+    { name = "mistral-common", extras = ["server"], marker = "extra == 'all'" },
     { name = "mistral-common", extras = ["soundfile"], marker = "extra == 'audio'" },
     { name = "mistral-common", extras = ["soxr"], marker = "extra == 'audio'" },
     { name = "numpy", specifier = ">=1.25" },
@@ -979,7 +995,7 @@ requires-dist = [
     { name = "tiktoken", specifier = ">=0.7.0" },
     { name = "typing-extensions", specifier = ">=4.11.0" },
 ]
-provides-extras = ["opencv", "sentencepiece", "soundfile", "soxr", "audio", "image", "hf-hub", "server"]
+provides-extras = ["opencv", "sentencepiece", "soundfile", "soxr", "audio", "image", "hf-hub", "server", "all"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -34,6 +34,8 @@ image = ["mistral_common[opencv]"]
 hf-hub = ["huggingface-hub>=0.32.4"]
 server = ["fastapi[standard]>=0.115.12", "pydantic-settings >= 2.9.1", "click>=8.1.0"]
 
+all = ["mistral_common[image]", "mistral_common[audio]", "mistral_common[sentencepiece]", "mistral_common[hf-hub]", "mistral_common[server]"]
+
 [project.scripts]
 mistral_common = "mistral_common.experimental.app.main:cli"
 
