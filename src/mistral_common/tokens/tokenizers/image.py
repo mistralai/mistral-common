@@ -9,31 +9,14 @@ import numpy as np
 from PIL import Image
 
 from mistral_common.image import SerializableImage, download_image
+from mistral_common.imports import assert_opencv_installed, is_opencv_installed
 from mistral_common.protocol.instruct.messages import ImageChunk, ImageURLChunk
 
 logger = logging.getLogger(__name__)
 
 
-_cv2_installed: bool
-try:
+if is_opencv_installed():
     import cv2
-
-    _cv2_installed = True
-except ImportError:
-    _cv2_installed = False
-except Exception as e:
-    # cv2 has lots of import problems: https://github.com/opencv/opencv-python/issues/884
-    # for better UX, let's simply skip all errors that might arise from import for now
-    logger.warning(
-        f"Warning: Your installation of OpenCV appears to be broken: {e}."
-        "Please follow the instructions at https://github.com/opencv/opencv-python/issues/884 "
-        "to correct your environment. The import of cv2 has been skipped."
-    )
-
-
-def is_cv2_installed() -> bool:
-    r"""Check if OpenCV is installed."""
-    return _cv2_installed
 
 
 @dataclass
@@ -170,8 +153,7 @@ def transform_image(image: Image.Image, new_size: Tuple[int, int]) -> np.ndarray
     Returns:
         Transformed image with shape (C, H, W).
     """
-    if not is_cv2_installed():
-        raise ImportError("OpenCV is required for this function. Install it with 'pip install mistral-common[opencv]'")
+    assert_opencv_installed()
 
     np_image = cv2.resize(np.array(_convert_to_rgb(image), dtype=np.float32), new_size, interpolation=cv2.INTER_CUBIC)
     return normalize(np_image, DATASET_MEAN, DATASET_STD)

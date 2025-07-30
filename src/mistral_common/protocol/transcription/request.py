@@ -4,9 +4,13 @@ from typing import Any, Dict, List, Optional
 from pydantic import Field
 from pydantic_extra_types.language_code import LanguageAlpha2
 
-from mistral_common.audio import Audio, is_soundfile_installed
+from mistral_common.audio import Audio
+from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
 from mistral_common.protocol.base import BaseCompletionRequest
 from mistral_common.protocol.instruct.messages import RawAudio
+
+if is_soundfile_installed():
+    import soundfile as sf
 
 
 class TranscriptionRequest(BaseCompletionRequest):
@@ -53,12 +57,7 @@ class TranscriptionRequest(BaseCompletionRequest):
         """
         openai_request: Dict[str, Any] = self.model_dump(exclude={"audio"})
 
-        if not is_soundfile_installed():
-            raise ImportError(
-                "soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'"
-            )
-
-        import soundfile as sf
+        assert_soundfile_installed()
 
         if isinstance(self.audio.data, bytes):
             buffer = io.BytesIO(self.audio.data)

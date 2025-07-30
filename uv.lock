@@ -899,7 +899,6 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-extra-types", extra = ["pycountry"] },
     { name = "requests" },
-    { name = "sentencepiece" },
     { name = "tiktoken" },
     { name = "typing-extensions" },
 ]
@@ -917,6 +916,9 @@ image = [
 ]
 opencv = [
     { name = "opencv-python-headless" },
+]
+sentencepiece = [
+    { name = "sentencepiece" },
 ]
 server = [
     { name = "click", version = "8.1.8", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
@@ -971,13 +973,13 @@ requires-dist = [
     { name = "pydantic-extra-types", extras = ["pycountry"], specifier = ">=2.10.5" },
     { name = "pydantic-settings", marker = "extra == 'server'", specifier = ">=2.9.1" },
     { name = "requests", specifier = ">=2.0.0" },
-    { name = "sentencepiece", specifier = ">=0.2.0" },
+    { name = "sentencepiece", marker = "extra == 'sentencepiece'", specifier = ">=0.2.0" },
     { name = "soundfile", marker = "extra == 'soundfile'", specifier = ">=0.12.1" },
     { name = "soxr", marker = "extra == 'soxr'", specifier = ">=0.5.0" },
     { name = "tiktoken", specifier = ">=0.7.0" },
     { name = "typing-extensions", specifier = ">=4.11.0" },
 ]
-provides-extras = ["opencv", "soundfile", "soxr", "audio", "image", "hf-hub", "server"]
+provides-extras = ["opencv", "sentencepiece", "soundfile", "soxr", "audio", "image", "hf-hub", "server"]
 
 [package.metadata.requires-dev]
 dev = [

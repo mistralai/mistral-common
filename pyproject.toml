@@ -15,7 +15,6 @@ requires-python = ">=3.9.0,<3.14"
 dependencies = [
     "pydantic>=2.7,<3.0",
     "jsonschema>=4.21.1",
-    "sentencepiece>=0.2.0",
     "typing-extensions>=4.11.0",
     "tiktoken>=0.7.0",
     "pillow>=10.3.0",
@@ -26,6 +25,7 @@ dependencies = [
 
 [project.optional-dependencies]
 opencv = ["opencv-python-headless>=4.0.0"]
+sentencepiece = ["sentencepiece>=0.2.0"]
 soundfile = ["soundfile>=0.12.1"]
 soxr = ["soxr>=0.5.0"]
 audio = ["mistral_common[soundfile]", "mistral_common[soxr]"]
