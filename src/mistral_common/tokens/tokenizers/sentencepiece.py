@@ -18,7 +18,6 @@ if is_sentencepiece_installed():
     from sentencepiece import SentencePieceProcessor
 
 
-
 def is_sentencepiece(path: Union[str, Path]) -> bool:
     r"""Check if the given path is a SentencePiece model."""
     if isinstance(path, str):

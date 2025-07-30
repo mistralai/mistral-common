@@ -25,9 +25,10 @@ def is_hf_hub_installed() -> bool:
 def is_opencv_installed() -> bool:
     try:
         import cv2  # noqa: IOO1,F401
+
         cv2 = cv2
     except ImportError as e:
-        raise e # Should not happen, as we check for the package before importing
+        raise e  # Should not happen, as we check for the package before importing
     except Exception as e:
         # cv2 has lots of import problems: https://github.com/opencv/opencv-python/issues/884
         # for better UX, let's simply skip all errors that might arise from import for now
