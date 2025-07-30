@@ -24,9 +24,7 @@ def is_hf_hub_installed() -> bool:
 @lru_cache()
 def is_opencv_installed() -> bool:
     try:
-        import cv2  # noqa: IOO1,F401
-
-        cv2 = cv2
+        import cv2  # noqa: F401
     except ImportError:
         _cv2_available = False
     except Exception as e:
