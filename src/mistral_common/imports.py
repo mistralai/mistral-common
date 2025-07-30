@@ -60,13 +60,13 @@ def is_soxr_installed() -> bool:
 def assert_hf_hub_installed() -> None:
     assert_package_installed(
         "huggingface_hub",
-        "`huggingface_hub` is not installed. Please install it with `pip install mistral-common[hf_hub]`",
+        "`huggingface_hub` is not installed. Please install it with `pip install mistral-common[hf-hub]`",
     )
 
 
 def assert_opencv_installed() -> None:
     assert_package_installed(
-        "cv2", "`opencv` is not installed. Please install it with `pip install mistral-common[image]`"
+        "cv2", "`opencv` is not installed. Please install it with `pip install mistral-common[opencv]`"
     )
 
 
@@ -79,11 +79,11 @@ def assert_sentencepiece_installed() -> None:
 
 def assert_soundfile_installed() -> None:
     assert_package_installed(
-        "soundfile", "`soundfile` is not installed. Please install it with `pip install mistral-common[audio]`"
+        "soundfile", "`soundfile` is not installed. Please install it with `pip install mistral-common[soundfile]`"
     )
 
 
 def assert_soxr_installed() -> None:
     assert_package_installed(
-        "soxr", "`soxr` is not installed. Please install it with `pip install mistral-common[audio]`"
+        "soxr", "`soxr` is not installed. Please install it with `pip install mistral-common[soxr]`"
     )

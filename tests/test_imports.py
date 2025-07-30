@@ -30,12 +30,12 @@ _ASSERT_TO_TESTS = {
     (
         is_hf_hub_installed,
         assert_hf_hub_installed,
-        "`huggingface_hub` is not installed. Please install it with `pip install mistral-common[hf_hub]`",
+        "`huggingface_hub` is not installed. Please install it with `pip install mistral-common[hf-hub]`",
     ),
     (
         is_opencv_installed,
         assert_opencv_installed,
-        "`opencv` is not installed. Please install it with `pip install mistral-common[image]`",
+        "`opencv` is not installed. Please install it with `pip install mistral-common[opencv]`",
     ),
     (
         is_sentencepiece_installed,
@@ -45,12 +45,12 @@ _ASSERT_TO_TESTS = {
     (
         is_soundfile_installed,
         assert_soundfile_installed,
-        "`soundfile` is not installed. Please install it with `pip install mistral-common[audio]`",
+        "`soundfile` is not installed. Please install it with `pip install mistral-common[soundfile]`",
     ),
     (
         is_soxr_installed,
         assert_soxr_installed,
-        "`soxr` is not installed. Please install it with `pip install mistral-common[audio]`",
+        "`soxr` is not installed. Please install it with `pip install mistral-common[soxr]`",
     ),
 }
 
