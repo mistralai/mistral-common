@@ -83,8 +83,6 @@ def test_is_opencv_installed() -> None:
     # TODO(Julien): Find a way to mock import for testing wrong import
 
 
-
-
 @patch("mistral_common.imports.is_package_installed")
 @pytest.mark.parametrize("is_installed_fn", _IS_INSTALLED_TO_TESTS)
 def test_is_installed(mock_is_package_installed: MagicMock, is_installed_fn: _lru_cache_wrapper) -> None:
