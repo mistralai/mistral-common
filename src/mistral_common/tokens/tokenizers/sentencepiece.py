@@ -5,15 +5,17 @@ from functools import cached_property
 from pathlib import Path
 from typing import List, Optional, Set, Union
 
-from sentencepiece import SentencePieceProcessor
-
 from mistral_common.exceptions import TokenizerException
+from mistral_common.imports import assert_sentencepiece_installed, is_sentencepiece_installed
 from mistral_common.tokens.tokenizers.base import (
     SpecialTokenPolicy,
     Tokenizer,
     TokenizerVersion,
 )
 from mistral_common.tokens.tokenizers.image import ImageConfig, MultiModalVersion
+
+if is_sentencepiece_installed():
+    from sentencepiece import SentencePieceProcessor
 
 
 def is_sentencepiece(path: Union[str, Path]) -> bool:
@@ -75,6 +77,8 @@ class SentencePieceTokenizer(Tokenizer):
             model_path: The path to the `SentencePiece` model.
             tokenizer_version: The version of the tokenizer. If not provided, it will be inferred from the model path.
         """
+        assert_sentencepiece_installed()
+
         self._logger = logging.getLogger(self.__class__.__name__)
         # reload tokenizer
         assert os.path.isfile(model_path), model_path

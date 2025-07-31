@@ -10,35 +10,17 @@ from typing import TYPE_CHECKING, Union
 import numpy as np
 import requests
 
+from mistral_common.imports import (
+    assert_soundfile_installed,
+    assert_soxr_installed,
+    is_soundfile_installed,
+    is_soxr_installed,
+)
+
 if TYPE_CHECKING:
     from mistral_common.protocol.instruct.messages import RawAudio
 
 logger = logging.getLogger(__name__)
-_soundfile_installed: bool
-
-# TODO(Patrick, Julien): refactor import checks to avoid redundancy
-try:
-    import soundfile  # noqa: F401
-
-    _soundfile_installed = True
-except ImportError:
-    _soundfile_installed = False
-
-try:
-    import soxr  # noqa: F401
-
-    _soxr_installed = True
-except ImportError:
-    _soxr_installed = False
-
-
-def is_soundfile_installed() -> bool:
-    return _soundfile_installed
-
-
-def is_soxr_installed() -> bool:
-    return _soxr_installed
-
 
 if is_soundfile_installed():
     import soundfile as sf
@@ -50,6 +32,9 @@ if is_soundfile_installed():
     AudioFormat = Enum("AudioFormat", {format_name: format_name for format_name in available_formats})  # type: ignore[misc]
 else:
     AudioFormat = Enum("AudioFormat", {"none": "none"})  # type: ignore[no-redef]
+
+if is_soxr_installed():
+    import soxr
 
 EXPECTED_FORMAT_VALUES = [v.value.lower() for v in AudioFormat.__members__.values()]
 
@@ -78,10 +63,7 @@ class Audio:
     def _check_valid(self) -> None:
         assert isinstance(self.audio_array, np.ndarray), type(np.ndarray)
         assert self.audio_array.ndim == 1, f"{self.audio_array.ndim=}"
-        if not is_soundfile_installed():
-            raise ImportError(
-                "soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'"
-            )
+        assert_soundfile_installed()
         assert self.format in EXPECTED_FORMAT_VALUES, f"{self.format=} not in {EXPECTED_FORMAT_VALUES=}"
 
     @property
@@ -126,10 +108,7 @@ class Audio:
         Returns:
             An instance of the Audio class.
         """
-        if not is_soundfile_installed():
-            raise ImportError(
-                "soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'"
-            )
+        assert_soundfile_installed()
 
         if re.match(r"^data:audio/\w+;base64,", audio_base64):  # Remove the prefix if it exists
             audio_base64 = audio_base64.split(",")[1]
@@ -152,10 +131,7 @@ class Audio:
         Returns:
             An instance of the Audio class.
         """
-        if not is_soundfile_installed():
-            raise ImportError(
-                "soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'"
-            )
+        assert_soundfile_installed()
 
         if isinstance(file, str) and file.startswith("file://"):
             file = file[7:]
@@ -208,10 +184,7 @@ class Audio:
         Returns:
             The base64 encoded audio data.
         """
-        if not is_soundfile_installed():
-            raise ImportError(
-                "soundfile is required for this function. Install it with 'pip install mistral-common[soundfile]'"
-            )
+        assert_soundfile_installed()
 
         assert format in EXPECTED_FORMAT_VALUES, f"{format=} not in {EXPECTED_FORMAT_VALUES=}"
 
@@ -249,8 +222,7 @@ class Audio:
         if self.sampling_rate == new_sampling_rate:
             return
 
-        if not is_soxr_installed():
-            raise ImportError("soxr is required for this function. Install it with 'pip install mistral-common[soxr]'")
+        assert_soxr_installed()
 
         self.audio_array = soxr.resample(self.audio_array, self.sampling_rate, new_sampling_rate, quality="HQ")
         self.sampling_rate = new_sampling_rate
