@@ -6,6 +6,10 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
+def _get_dependency_error_message(package_name: str, dependency_group: str) -> str:
+    return f"`{package_name}` is not installed. Please install it with `pip install mistral-common[{dependency_group}]`"
+
+
 def is_package_installed(package_name: str) -> bool:
     return importlib.util.find_spec(package_name) is not None
 
@@ -57,32 +61,20 @@ def is_soxr_installed() -> bool:
 
 
 def assert_hf_hub_installed() -> None:
-    assert_package_installed(
-        "huggingface_hub",
-        "`huggingface_hub` is not installed. Please install it with `pip install mistral-common[hf-hub]`",
-    )
+    assert_package_installed("huggingface_hub", _get_dependency_error_message("huggingface_hub", "hf-hub"))
 
 
 def assert_opencv_installed() -> None:
-    assert_package_installed(
-        "cv2", "`opencv` is not installed. Please install it with `pip install mistral-common[opencv]`"
-    )
+    assert_package_installed("cv2", _get_dependency_error_message("opencv", "opencv"))
 
 
 def assert_sentencepiece_installed() -> None:
-    assert_package_installed(
-        "sentencepiece",
-        "`sentencepiece` is not installed. Please install it with `pip install mistral-common[sentencepiece]`",
-    )
+    assert_package_installed("sentencepiece", _get_dependency_error_message("sentencepiece", "sentencepiece"))
 
 
 def assert_soundfile_installed() -> None:
-    assert_package_installed(
-        "soundfile", "`soundfile` is not installed. Please install it with `pip install mistral-common[soundfile]`"
-    )
+    assert_package_installed("soundfile", _get_dependency_error_message("soundfile", "soundfile"))
 
 
 def assert_soxr_installed() -> None:
-    assert_package_installed(
-        "soxr", "`soxr` is not installed. Please install it with `pip install mistral-common[soxr]`"
-    )
+    assert_package_installed("soxr", _get_dependency_error_message("soxr", "soxr"))
