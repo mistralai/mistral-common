@@ -1,4 +1,8 @@
 name: Mistral Common CI
+
+permissions:
+  contents: read
+
 on:
   push:
     branches:
