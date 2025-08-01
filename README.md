@@ -63,9 +63,7 @@ For more information, please refer to the [documentation](https://mistralai.gith
 
 ## How to contribute ?
 
-We welcome contributions to this library. All of our features are tested to ensure best usage. But if you encounter a bug, find difficulties in using `mistral-common`. Please also open an issue.
-
-Please open an issue on our [GitHub repository](https://github.com/mistralai/mistral-common/issues) if you have any questions or suggestions.
+We welcome contributions to this library. All of our features are tested to ensure best usage. But if you encounter a bug, find difficulties in using `mistral-common`, please open an issue on our [GitHub repository](https://github.com/mistralai/mistral-common/issues).
 
 If you want to contribute to the code, please fork the repository and open a pull request. We will review your changes and merge them if they are relevant to the library.
 
