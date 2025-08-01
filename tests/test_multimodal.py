@@ -66,7 +66,7 @@ def test_image_encoder(spatial_merge_size: int, special_token_ids: SpecialImageI
     text_chunk = TextChunk(text="")
 
     with pytest.raises(AttributeError):
-        image_encoder(text_chunk)  # type: ignore
+        image_encoder(text_chunk)  # type: ignore[arg-type]
 
     output = image_encoder(img_chunk)
     tokens, image = output.tokens, output.image
@@ -86,7 +86,7 @@ def test_image_encoder(spatial_merge_size: int, special_token_ids: SpecialImageI
     text_chunk = TextChunk(text="")
 
     with pytest.raises(AttributeError):
-        image_encoder(text_chunk)  # type: ignore
+        image_encoder(text_chunk)  # type: ignore[arg-type]
 
     output = image_encoder(img_chunk)
     tokens, image = output.tokens, output.image

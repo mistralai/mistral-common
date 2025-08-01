@@ -9,7 +9,7 @@ import mkdocs_gen_files
 
 SRC_PATH = "./src/"
 REF_PATH = "code_reference"
-IGNORED_FILES = ["__init__.py", "__version__.py"]
+IGNORED_FILES = ["__init__.py", "multimodal.py"]
 nav = mkdocs_gen_files.Nav()
 
 for path in sorted(Path(SRC_PATH).rglob("*.py")):

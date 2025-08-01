@@ -71,3 +71,25 @@ jobs:
       - name: Doctests
         run: |
           uv run pytest --doctest-modules ./src
+  
+  build_docs:
+    if: ${{ github.event.pull_request.draft != true }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      
+      # Install
+      - name: Install Dependencies
+        run: |
+          uv sync --frozen --all-groups --group docs
+  
+      # Build Docs
+      - name: Build Docs
+        run: |
+          uv run mkdocs build --strict
