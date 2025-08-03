@@ -91,7 +91,7 @@ jobs:
       # Install
       - name: Install Dependencies
         run: |
-          uv sync --frozen --all-groups --group docs
+          uv sync --frozen --all-extras --group docs
   
       # Build Docs
       - name: Build Docs
