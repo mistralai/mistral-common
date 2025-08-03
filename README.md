@@ -39,16 +39,47 @@ This library is for you if you want to:
 
 You can install the library using pip:
 ```sh
-pip install mistral-common[opencv]
+pip install mistral-common
+```
+
+We propose different dependencies to install depending on your needs:
+- `image`: to use the image tokenizers.
+- `audio`: to use the audio tokenizers.
+- `hf-hub`: to download the tokenizers from the Hugging Face Hub.
+- `sentencepiece`: to allow the use of SentencePiece tokenizers. This is now optional as we only release `Tekken` tokenizers for recent models.
+- \[Experimental\] `server`: to use our tokenizers in a server mode.
+
+Each dependency is optional and can be installed separately or all together using the following commands:
+```sh
+pip install "mistral-common[image]"
+pip install "mistral-common[audio]"
+pip install "mistral-common[hf-hub]"
+pip install "mistral-common[sentencepiece]"
+pip install "mistral-common[server]"
+pip install "mistral-common[image,audio,hf-hub,sentencepiece,server]"
 ```
 
 For more information, please refer to the [documentation](https://mistralai.github.io/mistral-common/).
 
 ## How to contribute ?
 
-We welcome contributions to this library. Please open an issue on our [GitHub repository](https://github.com/mistralai/mistral-common/issues) if you have any questions or suggestions.
+We welcome contributions to this library. All of our features are tested to ensure best usage. But if you encounter a bug, find difficulties in using `mistral-common`, please open an issue on our [GitHub repository](https://github.com/mistralai/mistral-common/issues).
 
-All of our features are tested to ensure best usage. But if you encounter a bug, find difficulties in using `mistral-common`. Please also open an issue.
+If you want to contribute to the code, please fork the repository and open a pull request. We will review your changes and merge them if they are relevant to the library.
+
+```sh
+# Clone the repository
+git clone https://github.com/<your_fork_username>/mistral-common.git
+cd mistral-common
+
+# Create a virtual environment and install the dependencies
+uv venv
+source .venv/bin/activate
+uv sync --frozen --all-extras --group dev # --group docs if you want to build the documentation
+
+# Install the pre-commit hooks
+uv run pre-commit install
+```
 
 ## License
 
