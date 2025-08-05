@@ -18,7 +18,7 @@ from mistral_common.imports import (
 )
 
 if TYPE_CHECKING:
-    from mistral_common.protocol.instruct.messages import RawAudio
+    from mistral_common.protocol.instruct.chunk import RawAudio
 
 logger = logging.getLogger(__name__)
 

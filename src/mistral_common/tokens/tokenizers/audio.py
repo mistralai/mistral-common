@@ -6,7 +6,7 @@ from typing import List, Optional, Union
 import numpy as np
 
 from mistral_common.audio import Audio
-from mistral_common.protocol.instruct.messages import AudioChunk, AudioURLChunk, AudioURLType
+from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk, AudioURLType
 
 logger = logging.getLogger(__name__)
 

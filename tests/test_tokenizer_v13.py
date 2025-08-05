@@ -1,12 +1,14 @@
 import pytest
 
 from mistral_common.exceptions import InvalidAssistantMessageException, TokenizerException
+from mistral_common.protocol.instruct.chunk import (
+    TextChunk,
+    ThinkChunk,
+)
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     BaseMessage,
     SystemMessage,
-    TextChunk,
-    ThinkChunk,
     ToolMessage,
     UserMessage,
 )
