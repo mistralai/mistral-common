@@ -9,12 +9,14 @@ from fastapi.testclient import TestClient
 
 from mistral_common.experimental.app.main import create_app
 from mistral_common.experimental.app.models import OpenAIChatCompletionRequest
+from mistral_common.protocol.instruct.chunk import (
+    TextChunk,
+    ThinkChunk,
+)
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
     SystemMessage,
-    TextChunk,
-    ThinkChunk,
     ToolMessage,
     UserMessage,
 )

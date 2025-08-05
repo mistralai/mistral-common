@@ -7,7 +7,7 @@ import pytest
 import requests
 from PIL import Image
 
-from mistral_common.protocol.instruct.messages import (
+from mistral_common.protocol.instruct.chunk import (
     ImageChunk,
     ImageURLChunk,
     TextChunk,
