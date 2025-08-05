@@ -28,7 +28,7 @@ class TranscriptionRequest(BaseCompletionRequest):
     """
 
     id: Optional[str] = None
-    model: str
+    model: Optional[str] = None
     audio: RawAudio
     language: Optional[LanguageAlpha2] = Field(
         ...,
