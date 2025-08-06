@@ -1,6 +1,6 @@
 # Images
 
-Most of the recently released [Mistral models](https://huggingface.co/mistralai/models) support image inputs. Images are represented as [BaseContentChunk][mistral_common.protocol.instruct.messages.BaseContentChunk] objects within the `messages` field of the [ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest]. Encoding an image via a [ImageEncoder][mistral_common.tokens.tokenizers.image.ImageEncoder] will return:
+Most of the recently released [Mistral models](https://huggingface.co/mistralai/models) support image inputs. Images are represented as [BaseContentChunk][mistral_common.protocol.instruct.chunk.BaseContentChunk] objects within the `messages` field of the [ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest]. Encoding an image via a [ImageEncoder][mistral_common.tokens.tokenizers.image.ImageEncoder] will return:
 
 - a sequence of special tokens representing the image.
 - the image normalized as a numpy array.

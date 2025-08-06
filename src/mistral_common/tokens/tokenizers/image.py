@@ -10,7 +10,7 @@ from PIL import Image
 
 from mistral_common.image import SerializableImage, download_image
 from mistral_common.imports import assert_opencv_installed, is_opencv_installed
-from mistral_common.protocol.instruct.messages import ImageChunk, ImageURLChunk
+from mistral_common.protocol.instruct.chunk import ImageChunk, ImageURLChunk
 
 logger = logging.getLogger(__name__)
 
