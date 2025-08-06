@@ -23,7 +23,7 @@ class ChunkTypes(str, Enum):
        audio_url: An audio url chunk.
 
     Examples:
-        >>> from mistral_common.protocol.instruct.messages import ChunkTypes
+        >>> from mistral_common.protocol.instruct.chunk import ChunkTypes
         >>> chunk_type = ChunkTypes.text
     """
 
