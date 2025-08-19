@@ -166,6 +166,7 @@ class ChatCompletionStreamResponse(MistralBase):
         created: The creation time of the response.
         model: The model of the response.
         choices: The choices of the response.
+        p: Random padding to make the stream response of variable length, preventing side channel attacks.
         usage: The usage of the response.
 
     Examples:
@@ -186,4 +187,5 @@ class ChatCompletionStreamResponse(MistralBase):
     created: int = Field(default_factory=lambda: int(time.time()))
     model: str
     choices: List[ChatCompletionResponseStreamChoice]
+    p: Optional[str] = None
     usage: Optional[UsageInfo] = None
