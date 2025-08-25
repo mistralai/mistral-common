@@ -11,20 +11,22 @@ from mistral_common.exceptions import (
     TokenizerException,
 )
 from mistral_common.protocol.fim.request import FIMRequest
-from mistral_common.protocol.instruct.messages import (
-    UATS,
-    AssistantMessage,
-    AssistantMessageType,
+from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURLChunk,
     ContentChunk,
     ImageChunk,
     ImageURLChunk,
-    SystemMessage,
     TextChunk,
     ThinkChunk,
-    ToolMessage,
     UserContentChunk,
+)
+from mistral_common.protocol.instruct.messages import (
+    UATS,
+    AssistantMessage,
+    AssistantMessageType,
+    SystemMessage,
+    ToolMessage,
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import InstructRequest

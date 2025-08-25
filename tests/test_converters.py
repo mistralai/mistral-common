@@ -32,20 +32,22 @@ from PIL import Image
 from pydantic_extra_types.language_code import LanguageAlpha2
 
 from mistral_common.audio import Audio
-from mistral_common.protocol.instruct.converters import _OPENAI_COMPLETION_FIELDS, _check_openai_fields_names
-from mistral_common.protocol.instruct.messages import (
-    AssistantMessage,
+from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURL,
     AudioURLChunk,
-    ChatMessage,
     ImageChunk,
     ImageURL,
     ImageURLChunk,
     RawAudio,
-    SystemMessage,
     TextChunk,
     ThinkChunk,
+)
+from mistral_common.protocol.instruct.converters import _OPENAI_COMPLETION_FIELDS, _check_openai_fields_names
+from mistral_common.protocol.instruct.messages import (
+    AssistantMessage,
+    ChatMessage,
+    SystemMessage,
     ToolMessage,
     UserMessage,
 )

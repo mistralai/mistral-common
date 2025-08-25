@@ -15,9 +15,9 @@ We have a few examples of how to use the library with our models:
 ### Text-only
 
 ```python
+from mistral_common.protocol.instruct.chunk import TextChunk
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
-    TextChunk,
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
@@ -47,11 +47,13 @@ print(tokenized.text)
 ### Image
 
 ```python
+from mistral_common.protocol.instruct.chunk import (
+    ImageURLChunk,
+    TextChunk
+)
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
-    ImageURLChunk,
     SystemMessage,
-    TextChunk,
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
@@ -92,9 +94,9 @@ print(tokenized.text)
 ### Function calling
 
 ```python
+from mistral_common.protocol.instruct.chunk import TextChunk
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
-    TextChunk,
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
@@ -142,7 +144,8 @@ print(tokenized.text)
 ### Audio
 
 ```py
-from mistral_common.protocol.instruct.messages import TextChunk, AudioChunk, UserMessage, AssistantMessage, RawAudio
+from mistral_common.protocol.instruct.chunk import TextChunk, AudioChunk, RawAudio
+from mistral_common.protocol.instruct.messages import UserMessage, AssistantMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.audio import Audio
