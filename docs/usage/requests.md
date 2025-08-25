@@ -11,9 +11,9 @@ In `mistral-common`, we currently support the following requests types:
 - Instruct requests:
     - [Chat completion requests](#chat-completion).
     - [Fill-In-the-Middle completion](#fim).
-- [Embedding](#embedding) requests.
+- [Transcription requests](#transcription-request)
 
-Every instruct requests should be encoded with it's corresponding `encode_function` function by the tokenizers.
+Every instruct requests should be encoded with its corresponding `encode_function` function by the tokenizers.
 
 
 ## Chat completion
@@ -107,17 +107,28 @@ tokenizer = MistralTokenizer.v3()
 tokenizer.encode_fim(request)
 ```
 
-## Embedding
+## Transcription
 
-Embedding is a task where the model is given a text and is asked to return a vector representation of the text. This is useful for semantic search, where you want to find texts that are similar to a given text.
+Transcription is a task where the model is given an audio file and returns the text corresponding to the speech contained in the audio.
 
-A pydantic class [EmbeddingRequest][mistral_common.protocol.embedding.request.EmbeddingRequest] is defined to ease the creation of these requests.
+A pydantic class [TranscriptionRequest][mistral_common.protocol.transcription.request.TranscriptionRequest] is defined to ease the creation of these requests.
 
 ```python
-from mistral_common.protocol.embedding.request import EmbeddingRequest
+from mistral_common.protocol.transcription.request import TranscriptionRequest
+from mistral_common.protocol.instruct.messages import RawAudio
+from mistral_common.audio import Audio
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
-request = EmbeddingRequest(
-    model="mistral-small-2409",
-    input="Hello, world!",
-)
+from huggingface_hub import hf_hub_download
+
+repo_id = "mistralai/voxtral-mini"
+tokenizer = MistralTokenizer.from_hf_hub(repo_id)
+
+obama_file = hf_hub_download("patrickvonplaten/audio_samples", "obama.mp3", repo_type="dataset")
+audio = Audio.from_file(obama_file, strict=False)
+
+audio = RawAudio.from_audio(audio)
+request = TranscriptionRequest(model=repo_id, audio=audio, language="en")
+
+tokenizer.encode_transcription(request)
 ```
