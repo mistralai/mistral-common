@@ -113,7 +113,7 @@ def create_deprecate_cls_import(
         ClsDeprecated = type(cls_moved.__name__, (cls_moved,), {})
 
         def wrapped_init(self: T, *args: Any, **kwargs: Any) -> None:
-            warnings.warn(msg, FutureWarning)
+            warnings.warn(msg, FutureWarning, stacklevel=2)
             cls_moved.__init__(self, *args, **kwargs)
             return None
 
@@ -128,7 +128,7 @@ def create_deprecate_cls_import(
         EnumDeprecated = Enum(str(cls_moved.__name__), {k: v.value for k, v in cls_moved.__members__.items()})  # type: ignore[misc]
 
         def wrapped_getattribute(self: object, name: str) -> Any:
-            warnings.warn(msg, FutureWarning)
+            warnings.warn(msg, FutureWarning, stacklevel=2)
             return object.__getattribute__(self, name)
 
         EnumDeprecated.__getattribute__ = wrapped_getattribute  # type: ignore[method-assign]
