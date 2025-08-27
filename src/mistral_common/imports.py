@@ -4,7 +4,7 @@ import logging
 import warnings
 from enum import Enum
 from functools import lru_cache
-from typing import Any, Optional, Type, TypeVar, overload
+from typing import Any, Optional, Type, TypeVar, Union, overload
 
 from pydantic import BaseModel
 
@@ -97,8 +97,8 @@ def create_deprecate_cls_import(
     cls_moved: Type[Enum], prev_location: str, new_location: str, deprecate_version: str
 ) -> Type[Enum]: ...
 def create_deprecate_cls_import(
-    cls_moved: Type[T] | Type[Enum], prev_location: str, new_location: str, deprecate_version: str
-) -> Type[T] | Type[Enum]:
+    cls_moved: Union[Type[T], Type[Enum]], prev_location: str, new_location: str, deprecate_version: str
+) -> Union[Type[T], Type[Enum]]:
     msg = (
         f"{cls_moved.__name__} has moved to {new_location}. "
         f"It will be removed in {prev_location} in {deprecate_version}."
