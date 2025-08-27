@@ -5,6 +5,25 @@ from pydantic import Field
 from typing_extensions import Annotated, TypeAlias
 
 from mistral_common.base import MistralBase
+from mistral_common.imports import create_deprecate_cls_import
+from mistral_common.protocol.instruct.chunk import (
+    AudioChunk as ToDeprecateAudioChunk,
+)
+from mistral_common.protocol.instruct.chunk import (
+    AudioURL as ToDeprecateAudioURL,
+)
+from mistral_common.protocol.instruct.chunk import (
+    AudioURLChunk as ToDeprecateAudioURLChunk,
+)
+from mistral_common.protocol.instruct.chunk import (
+    AudioURLType as ToDeprecateAudioURLType,
+)
+from mistral_common.protocol.instruct.chunk import (
+    BaseContentChunk as ToDeprecateBaseContentChunk,
+)
+from mistral_common.protocol.instruct.chunk import (
+    ChunkTypes as ToDeprecateChunkTypes,
+)
 from mistral_common.protocol.instruct.chunk import (
     ContentChunk,
     TextChunk,
@@ -12,7 +31,38 @@ from mistral_common.protocol.instruct.chunk import (
     UserContentChunk,
     _convert_openai_content_chunks,
 )
+from mistral_common.protocol.instruct.chunk import (
+    ImageChunk as ToDeprecateImageChunk,
+)
+from mistral_common.protocol.instruct.chunk import (
+    ImageURL as ToDeprecateImageURL,
+)
+from mistral_common.protocol.instruct.chunk import (
+    ImageURLChunk as ToDeprecateImageURLChunk,
+)
+from mistral_common.protocol.instruct.chunk import (
+    RawAudio as ToDeprecateRawAudio,
+)
 from mistral_common.protocol.instruct.tool_calls import ToolCall
+
+AudioChunk = create_deprecate_cls_import(ToDeprecateAudioChunk, __name__, ToDeprecateAudioChunk.__module__, "1.10.0")
+AudioURL = create_deprecate_cls_import(ToDeprecateAudioURL, __name__, ToDeprecateAudioChunk.__module__, "1.10.0")
+AudioURLChunk = create_deprecate_cls_import(
+    ToDeprecateAudioURLChunk, __name__, ToDeprecateAudioChunk.__module__, "1.10.0"
+)
+AudioURLType = create_deprecate_cls_import(
+    ToDeprecateAudioURLType, __name__, ToDeprecateAudioChunk.__module__, "1.10.0"
+)
+BaseContentChunk = create_deprecate_cls_import(
+    ToDeprecateBaseContentChunk, __name__, ToDeprecateAudioChunk.__module__, "1.10.0"
+)
+ChunkTypes = create_deprecate_cls_import(ToDeprecateChunkTypes, __name__, ToDeprecateAudioChunk.__module__, "1.10.0")
+ImageURL = create_deprecate_cls_import(ToDeprecateImageURL, __name__, ToDeprecateAudioChunk.__module__, "1.10.0")
+ImageURLChunk = create_deprecate_cls_import(
+    ToDeprecateImageURLChunk, __name__, ToDeprecateAudioChunk.__module__, "1.10.0"
+)
+ImageChunk = create_deprecate_cls_import(ToDeprecateImageChunk, __name__, ToDeprecateAudioChunk.__module__, "1.10.0")
+RawAudio = create_deprecate_cls_import(ToDeprecateRawAudio, __name__, ToDeprecateAudioChunk.__module__, "1.10.0")
 
 
 class Roles(str, Enum):
