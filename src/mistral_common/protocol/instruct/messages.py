@@ -1,29 +1,11 @@
-from enum import Enum
-from typing import Any, Dict, List, Literal, Optional, TypeVar, Union
+import warnings
+from enum import Enum, EnumType
+from typing import Any, Dict, List, Literal, Optional, Type, TypeVar, Union
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 from typing_extensions import Annotated, TypeAlias
 
 from mistral_common.base import MistralBase
-from mistral_common.imports import create_deprecate_cls_import
-from mistral_common.protocol.instruct.chunk import (
-    AudioChunk as ToDeprecateAudioChunk,
-)
-from mistral_common.protocol.instruct.chunk import (
-    AudioURL as ToDeprecateAudioURL,
-)
-from mistral_common.protocol.instruct.chunk import (
-    AudioURLChunk as ToDeprecateAudioURLChunk,
-)
-from mistral_common.protocol.instruct.chunk import (
-    AudioURLType as ToDeprecateAudioURLType,
-)
-from mistral_common.protocol.instruct.chunk import (
-    BaseContentChunk as ToDeprecateBaseContentChunk,
-)
-from mistral_common.protocol.instruct.chunk import (
-    ChunkTypes as ToDeprecateChunkTypes,
-)
 from mistral_common.protocol.instruct.chunk import (
     ContentChunk,
     TextChunk,
@@ -31,38 +13,70 @@ from mistral_common.protocol.instruct.chunk import (
     UserContentChunk,
     _convert_openai_content_chunks,
 )
-from mistral_common.protocol.instruct.chunk import (
-    ImageChunk as ToDeprecateImageChunk,
-)
-from mistral_common.protocol.instruct.chunk import (
-    ImageURL as ToDeprecateImageURL,
-)
-from mistral_common.protocol.instruct.chunk import (
-    ImageURLChunk as ToDeprecateImageURLChunk,
-)
-from mistral_common.protocol.instruct.chunk import (
-    RawAudio as ToDeprecateRawAudio,
-)
 from mistral_common.protocol.instruct.tool_calls import ToolCall
 
-AudioChunk = create_deprecate_cls_import(ToDeprecateAudioChunk, __name__, ToDeprecateAudioChunk.__module__, "1.10.0")
-AudioURL = create_deprecate_cls_import(ToDeprecateAudioURL, __name__, ToDeprecateAudioURL.__module__, "1.10.0")
-AudioURLChunk = create_deprecate_cls_import(
-    ToDeprecateAudioURLChunk, __name__, ToDeprecateAudioURLChunk.__module__, "1.10.0"
+warnings.filterwarnings(
+    action="once",
+    category=FutureWarning,
+    message=r".*has moved to 'mistral_common.protocol.instruct.chunk'\. It will be removed.*",
 )
-AudioURLType = create_deprecate_cls_import(
-    ToDeprecateAudioURLType, __name__, ToDeprecateAudioURLType.__module__, "1.10.0"
-)
-BaseContentChunk = create_deprecate_cls_import(
-    ToDeprecateBaseContentChunk, __name__, ToDeprecateBaseContentChunk.__module__, "1.10.0"
-)
-ChunkTypes = create_deprecate_cls_import(ToDeprecateChunkTypes, __name__, ToDeprecateChunkTypes.__module__, "1.10.0")
-ImageURL = create_deprecate_cls_import(ToDeprecateImageURL, __name__, ToDeprecateImageURL.__module__, "1.10.0")
-ImageURLChunk = create_deprecate_cls_import(
-    ToDeprecateImageURLChunk, __name__, ToDeprecateImageURLChunk.__module__, "1.10.0"
-)
-ImageChunk = create_deprecate_cls_import(ToDeprecateImageChunk, __name__, ToDeprecateImageChunk.__module__, "1.10.0")
-RawAudio = create_deprecate_cls_import(ToDeprecateRawAudio, __name__, ToDeprecateRawAudio.__module__, "1.10.0")
+
+
+# TODO: Remove in 1.10.0
+# This is a temporary fix to allow for the deprecation of chunks in message module in favor to the chunk module.
+def __getattr__(name: str) -> Union[EnumType, Type[BaseModel]]:
+    msg = f"{name} has moved to 'mistral_common.protocol.instruct.chunk'. It will be removed in '{__name__}' in 1.10.0."
+    if name == "AudioURL":
+        from mistral_common.protocol.instruct.chunk import AudioURL
+
+        warnings.warn(msg, FutureWarning)
+        return AudioURL
+    elif name == "AudioURLChunk":
+        from mistral_common.protocol.instruct.chunk import AudioURLChunk
+
+        warnings.warn(msg, FutureWarning)
+        return AudioURLChunk
+    elif name == "AudioURLType":
+        from mistral_common.protocol.instruct.chunk import AudioURLType
+
+        warnings.warn(msg, FutureWarning)
+        return AudioURLType
+    elif name == "AudioChunk":
+        from mistral_common.protocol.instruct.chunk import AudioChunk
+
+        warnings.warn(msg, FutureWarning)
+        return AudioChunk
+    elif name == "BaseContentChunk":
+        from mistral_common.protocol.instruct.chunk import BaseContentChunk
+
+        warnings.warn(msg, FutureWarning)
+        return BaseContentChunk
+    elif name == "ChunkTypes":
+        from mistral_common.protocol.instruct.chunk import ChunkTypes
+
+        warnings.warn(msg, FutureWarning)
+        return ChunkTypes
+    elif name == "ImageURL":
+        from mistral_common.protocol.instruct.chunk import ImageURL
+
+        warnings.warn(msg, FutureWarning)
+        return ImageURL
+    elif name == "ImageURLChunk":
+        from mistral_common.protocol.instruct.chunk import ImageURLChunk
+
+        warnings.warn(msg, FutureWarning)
+        return ImageURLChunk
+    elif name == "ImageChunk":
+        from mistral_common.protocol.instruct.chunk import ImageChunk
+
+        warnings.warn(msg, FutureWarning)
+        return ImageChunk
+    elif name == "RawAudio":
+        from mistral_common.protocol.instruct.chunk import RawAudio
+
+        warnings.warn(msg, FutureWarning)
+        return RawAudio
+    raise AttributeError(f"module {__name__} has no attribute {name}")
 
 
 class Roles(str, Enum):

@@ -1,12 +1,7 @@
-import enum
 import importlib.util
 import logging
-import warnings
-from enum import Enum
 from functools import lru_cache
-from typing import Any, Optional, Type, TypeVar, Union, overload
-
-from pydantic import BaseModel
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -83,60 +78,3 @@ def assert_soundfile_installed() -> None:
 
 def assert_soxr_installed() -> None:
     assert_package_installed("soxr", _get_dependency_error_message("soxr", "soxr"))
-
-
-T = TypeVar("T", bound=BaseModel)
-
-
-@overload
-def create_deprecate_cls_import(
-    cls_moved: Type[T], prev_location: str, new_location: str, deprecate_version: str
-) -> Type[T]: ...
-@overload
-def create_deprecate_cls_import(
-    cls_moved: Type[Enum], prev_location: str, new_location: str, deprecate_version: str
-) -> Type[Enum]: ...
-def create_deprecate_cls_import(
-    cls_moved: Union[Type[T], Type[Enum]], prev_location: str, new_location: str, deprecate_version: str
-) -> Union[Type[T], Type[Enum]]:
-    msg = (
-        f"{cls_moved.__name__} has moved to {new_location}. "
-        f"It will be removed in {prev_location} in {deprecate_version}."
-    )
-    warnings.filterwarnings(
-        action="once",
-        category=FutureWarning,
-        message=msg,  # Replace `msg` with the actual warning message or a unique part of it
-    )
-
-    if isinstance(cls_moved, type) and not issubclass(cls_moved, enum.Enum):
-        ClsDeprecated = type(cls_moved.__name__, (cls_moved,), {})
-
-        def wrapped_init(self: T, *args: Any, **kwargs: Any) -> None:
-            warnings.warn(msg, FutureWarning, stacklevel=2)
-            cls_moved.__init__(self, *args, **kwargs)
-            return None
-
-        ClsDeprecated.__init__ = wrapped_init  # type: ignore[misc]
-        ClsDeprecated.__name__ = cls_moved.__name__
-        ClsDeprecated.__doc__ = cls_moved.__doc__
-        ClsDeprecated.__module__ = prev_location
-
-        return ClsDeprecated
-
-    elif isinstance(cls_moved, type) and issubclass(cls_moved, enum.Enum):
-        EnumDeprecated = Enum(str(cls_moved.__name__), {k: v.value for k, v in cls_moved.__members__.items()})  # type: ignore[misc]
-
-        def wrapped_getattribute(self: object, name: str) -> Any:
-            warnings.warn(msg, FutureWarning, stacklevel=2)
-            return object.__getattribute__(self, name)
-
-        EnumDeprecated.__getattribute__ = wrapped_getattribute  # type: ignore[method-assign]
-        EnumDeprecated.__name__ = cls_moved.__name__
-        EnumDeprecated.__doc__ = cls_moved.__doc__
-        EnumDeprecated.__module__ = prev_location
-
-        return EnumDeprecated
-
-    else:
-        raise TypeError(f"deprecated_import cannot be applied to object of type {type(cls_moved)}")
