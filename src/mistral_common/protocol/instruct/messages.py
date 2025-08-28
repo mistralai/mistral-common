@@ -1,8 +1,8 @@
 import warnings
-from enum import Enum, EnumType
-from typing import Any, Dict, List, Literal, Optional, Type, TypeVar, Union
+from enum import Enum
+from typing import Any, Dict, List, Literal, Optional, TypeVar, Union
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 from typing_extensions import Annotated, TypeAlias
 
 from mistral_common.base import MistralBase
@@ -24,7 +24,7 @@ warnings.filterwarnings(
 
 # TODO: Remove in 1.10.0
 # This is a temporary fix to allow for the deprecation of chunks in message module in favor to the chunk module.
-def __getattr__(name: str) -> Union[EnumType, Type[BaseModel]]:
+def __getattr__(name: str) -> Any:
     msg = f"{name} has moved to 'mistral_common.protocol.instruct.chunk'. It will be removed in '{__name__}' in 1.10.0."
     if name == "AudioURL":
         from mistral_common.protocol.instruct.chunk import AudioURL
