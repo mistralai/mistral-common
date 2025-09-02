@@ -22,8 +22,8 @@ warnings.filterwarnings(
 )
 
 
-# TODO: Remove in 1.10.0
-# This is a temporary fix to allow for the deprecation of chunks in message module in favor to the chunk module.
+# TODO(Julien): Remove in 1.10.0
+# This is a hacky temporary fix for the deprecation of chunks in message module in favor to the chunk module.
 def __getattr__(name: str) -> Any:
     msg = (
         f"{name} has moved to 'mistral_common.protocol.instruct.chunk'. It will be removed from '{__name__}' in 1.10.0."
