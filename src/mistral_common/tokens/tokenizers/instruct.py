@@ -1028,10 +1028,11 @@ class InstructTokenizerV7(InstructTokenizerV3):
             )
 
         curr_tokens: list = []
-        if isinstance(message.content, str):
-            curr_tokens = self._encode_normal_content_assistant_message(message)
-        elif isinstance(message.content, list):
-            curr_tokens += self._encode_content_chunks(message.content)[0]
+        if message.content:
+            if isinstance(message.content, str):
+                curr_tokens = self._encode_normal_content_assistant_message(message)
+            elif isinstance(message.content, list):
+                curr_tokens += self._encode_content_chunks(message.content)[0]
         if message.tool_calls:
             curr_tokens += self._encode_tool_calls_in_assistant_message(message)
         if not message.prefix and not continue_message:
