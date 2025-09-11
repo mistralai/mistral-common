@@ -7,7 +7,7 @@ from pydantic_extra_types.language_code import LanguageAlpha2
 from mistral_common.audio import Audio
 from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
 from mistral_common.protocol.base import BaseCompletionRequest
-from mistral_common.protocol.instruct.messages import RawAudio
+from mistral_common.protocol.instruct.chunk import RawAudio
 
 if is_soundfile_installed():
     import soundfile as sf

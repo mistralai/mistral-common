@@ -1,6 +1,11 @@
 import json
 from typing import Generic, List, Optional, Sequence, Type, Union, overload
 
+from mistral_common.protocol.instruct.chunk import (
+    TextChunk,
+    ThinkChunk,
+    UserContentChunk,
+)
 from mistral_common.protocol.instruct.messages import (
     UATS,
     AssistantMessage,
@@ -9,11 +14,8 @@ from mistral_common.protocol.instruct.messages import (
     Roles,
     SystemMessage,
     SystemMessageType,
-    TextChunk,
-    ThinkChunk,
     ToolMessage,
     ToolMessageType,
-    UserContentChunk,
     UserMessage,
     UserMessageType,
 )

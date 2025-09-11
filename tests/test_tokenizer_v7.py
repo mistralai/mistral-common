@@ -9,12 +9,14 @@ from mistral_common.exceptions import (
     InvalidMessageStructureException,
     TokenizerException,
 )
+from mistral_common.protocol.instruct.chunk import (
+    ImageChunk,
+    TextChunk,
+)
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
-    ImageChunk,
     SystemMessage,
-    TextChunk,
     ToolMessage,
     UserMessage,
 )

@@ -3,16 +3,18 @@ from typing import Dict, List, Union
 
 import pytest
 
+from mistral_common.protocol.instruct.chunk import (
+    ChunkTypes,
+    ContentChunk,
+    TextChunk,
+    ThinkChunk,
+)
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
-    ChunkTypes,
-    ContentChunk,
     FinetuningAssistantMessage,
     FinetuningMessage,
     SystemMessage,
-    TextChunk,
-    ThinkChunk,
     ToolMessage,
     UserMessage,
 )

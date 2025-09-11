@@ -7,16 +7,18 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from mistral_common.protocol.instruct.messages import (
-    UATS,
-    AssistantMessage,
+from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURL,
     AudioURLChunk,
     RawAudio,
-    SystemMessage,
     TextChunk,
     UserContentChunk,
+)
+from mistral_common.protocol.instruct.messages import (
+    UATS,
+    AssistantMessage,
+    SystemMessage,
     UserMessage,
 )
 from mistral_common.tokens.tokenizers.audio import (

@@ -4,12 +4,14 @@ from typing import List
 import pytest
 from PIL import Image
 
-from mistral_common.protocol.instruct.messages import (
-    AssistantMessage,
+from mistral_common.protocol.instruct.chunk import (
     ContentChunk,
     ImageChunk,
-    SystemMessage,
     TextChunk,
+)
+from mistral_common.protocol.instruct.messages import (
+    AssistantMessage,
+    SystemMessage,
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest

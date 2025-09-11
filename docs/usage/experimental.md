@@ -88,7 +88,8 @@ import requests
 
 from fastapi.encoders import jsonable_encoder
 
-from mistral_common.protocol.instruct.messages import SystemMessage, TextChunk, ThinkChunk, UserMessage
+from mistral_common.protocol.instruct.chunk import TextChunk, ThinkChunk
+from mistral_common.protocol.instruct.messages import SystemMessage, UserMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 
 # Simple request

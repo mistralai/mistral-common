@@ -10,9 +10,9 @@ from pydantic import ConfigDict, Field
 from mistral_common.audio import Audio
 from mistral_common.base import MistralBase
 from mistral_common.protocol.fim.request import FIMRequest
+from mistral_common.protocol.instruct.chunk import UserContentChunk
 from mistral_common.protocol.instruct.messages import (
     AssistantMessageType,
-    UserContentChunk,
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import InstructRequest
