@@ -1,5 +1,5 @@
 import json
-from typing import List
+from typing import List, Optional
 
 import pytest
 from PIL import Image
@@ -27,7 +27,7 @@ from mistral_common.protocol.instruct.validator import (
     MistralRequestValidatorV5,
     ValidationMode,
 )
-from mistral_common.tokens.tokenizers.base import InstructRequest, InstructTokenizer, TokenizerVersion
+from mistral_common.tokens.tokenizers.base import InstructRequest, InstructTokenizer, Tokenized, TokenizerVersion
 from mistral_common.tokens.tokenizers.image import ImageEncoder
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
@@ -103,6 +103,59 @@ def test_tokenize_assistant_message(spm_tokenizer: InstructTokenizerV7) -> None:
         tokenized.text
         == "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁a[/INST]▁b</s>[TOOL_RESULTS]▁b[TOOL_CONTENT]▁f[/TOOL_RESULTS]"  # noqa
     )
+
+
+def test_tokenize_empty_content_assistant_message(spm_tokenizer: InstructTokenizerV7) -> None:
+    for content in [None, ""]:
+        tool_calls: Optional[List[ToolCall]]
+        for tool_calls in [None, [], [ToolCall(function=FunctionCall(name="test_fn", arguments="{}"))]]:
+            instruct_request: InstructRequest = InstructRequest(
+                messages=[AssistantMessage(content=content, tool_calls=tool_calls, prefix=True)]
+            )
+            if not content and not tool_calls:
+                with pytest.raises(TokenizerException, match="Invalid assistant message:"):
+                    spm_tokenizer.encode_instruct(instruct_request)
+            else:
+                assert spm_tokenizer.encode_instruct(instruct_request) == Tokenized(
+                    tokens=[
+                        1,
+                        5,
+                        1501,
+                        7567,
+                        1629,
+                        2032,
+                        1113,
+                        2381,
+                        29498,
+                        6410,
+                        1316,
+                        1113,
+                        17452,
+                        2032,
+                        1139,
+                        1743,
+                        29561,
+                    ],
+                    text='<s>[TOOL_CALLS]▁[{"name":▁"test_fn",▁"arguments":▁{}}]',
+                    prefix_ids=[
+                        5,
+                        1501,
+                        7567,
+                        1629,
+                        2032,
+                        1113,
+                        2381,
+                        29498,
+                        6410,
+                        1316,
+                        1113,
+                        17452,
+                        2032,
+                        1139,
+                        1743,
+                        29561,
+                    ],
+                )
 
 
 def test_tokenize_assistant_message_continue_final_message(spm_tokenizer: InstructTokenizerV7) -> None:
