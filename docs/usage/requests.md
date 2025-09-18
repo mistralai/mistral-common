@@ -115,7 +115,7 @@ A pydantic class [TranscriptionRequest][mistral_common.protocol.transcription.re
 
 ```python
 from mistral_common.protocol.transcription.request import TranscriptionRequest
-from mistral_common.protocol.instruct.messages import RawAudio
+from mistral_common.protocol.instruct.chunk import RawAudio
 from mistral_common.audio import Audio
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 

@@ -203,7 +203,7 @@ print(tokenized.text)
 
 ```python
 from mistral_common.protocol.transcription.request import TranscriptionRequest
-from mistral_common.protocol.instruct.messages import RawAudio
+from mistral_common.protocol.instruct.chunk import RawAudio
 from mistral_common.audio import Audio
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
