@@ -175,7 +175,9 @@ async def generate(
     return await detokenize_to_assistant_message(settings, response_json["tokens"])
 
 @main_router.get("/v1/models", tags=["models"])
-async def get_models() -> dict:
+async def get_models(
+        settings: Annotated[Settings, Depends(get_settings)]
+) -> dict:
     """
     Get list of models from the engine.
     """
