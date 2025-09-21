@@ -2,6 +2,7 @@ import json
 from typing import Annotated, List, Optional, Union
 
 import httpx
+import requests
 from fastapi import APIRouter, Body, Depends, HTTPException 
 from fastapi.responses import RedirectResponse
 from pydantic import ValidationError
@@ -135,44 +136,49 @@ async def generate(
     request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AssistantMessage:
-    """Generate a chat completion."""
+    r"""Generate a chat completion.
+
+    Args:
+        request: The chat completion request.
+        settings: The settings for the Mistral-common API.
+
+    Returns:
+        The generated chat completion.
+    """
     if isinstance(request, OpenAIChatCompletionRequest):
         extra_fields = request.drop_extra_fields()
-        data = request.model_dump()
-
-        # 🚨 explicitly remove unsupported OpenAI fields
-        data.pop("stream", None)
-
-        request = ChatCompletionRequest.from_openai(**data)
+        request = ChatCompletionRequest.from_openai(**request.model_dump())
     else:
         extra_fields = {}
-
     tokens_ids = await tokenize_request(request, settings)
 
     exclude_fields = {"messages", "tools"}
-    request_json = {k: v for k, v in {**request.model_dump(), **extra_fields}.items() if k not in exclude_fields}
+
+    request_json = request.model_dump()
+    request_json.update(extra_fields)
+
+    request_json = {k: v for k, v in request_json.items() if k not in exclude_fields}
 
     if request_json.get("stream", False):
         raise HTTPException(status_code=400, detail="Streaming is not supported.")
-    
-    
-    if settings.engine_backend != EngineBackend.llama_cpp:
-        raise HTTPException(status_code=400, detail=f"Unsupported engine backend: {settings.engine_backend}")
 
     try:
-        async with httpx.AsyncClient(timeout=settings.timeout) as client:
-            response = await client.post(
+        if settings.engine_backend == EngineBackend.llama_cpp:
+            response = requests.post(
                 f"{settings.engine_url}/completions",
                 json={
                     "prompt": tokens_ids,
                     "return_tokens": True,
                     **request_json,
                 },
+                timeout=settings.timeout,
             )
-    except httpx.TimeoutException:
+        else:
+            raise ValueError(f"Unsupported engine backend: {settings.engine_backend}")
+    except requests.exceptions.Timeout:
         raise HTTPException(status_code=504, detail="Timeout")
-    except httpx.RequestError as e:
-        raise HTTPException(status_code=500, detail=f"Engine request error: {str(e)}")
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
     if response.status_code != 200:
         raise HTTPException(status_code=response.status_code, detail=response.text)
