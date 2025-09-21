@@ -144,6 +144,7 @@ async def generate(
 
     Returns:
         The generated chat completion.
+        
     """
     if isinstance(request, OpenAIChatCompletionRequest):
         extra_fields = request.drop_extra_fields()
