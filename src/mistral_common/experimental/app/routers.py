@@ -131,79 +131,177 @@ async def detokenize_to_assistant_message(
     return AssistantMessage(content=content, tool_calls=tool_calls, prefix=not has_eos)
 
 
+async def _handle_llama_cpp_request(
+    request_json: dict, 
+    tokens_ids: list[int], 
+    settings: Settings
+) -> dict:
+    """Handle Llama.cpp specific request formatting and execution."""
+    try:
+        response = requests.post(
+            f"{settings.engine_url}/completion",
+            json={
+                "prompt": tokens_ids,
+                "n_predict": request_json.get("max_tokens", -1),
+                "temperature": request_json.get("temperature", 0.7),
+                "top_p": request_json.get("top_p", 1.0),
+                "top_k": request_json.get("top_k", 40),
+                "repeat_penalty": request_json.get("frequency_penalty", 1.1),
+                "seed": request_json.get("seed", -1),
+                "stop": request_json.get("stop", []),
+                "stream": False,
+                "cache_prompt": True,
+                "return_tokens": True,
+                **{k: v for k, v in request_json.items() 
+                   if k not in ["max_tokens", "temperature", "top_p", "top_k", 
+                               "frequency_penalty", "seed", "stop"]}
+            },
+            timeout=settings.timeout,
+        )
+    except requests.exceptions.Timeout:
+        raise HTTPException(status_code=504, detail="Timeout from Llama.cpp server")
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Llama.cpp request error: {str(e)}")
+    
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=response.status_code, 
+            detail=f"Llama.cpp error: {response.text}"
+        )
+    
+    return response.json()
+
+
+async def _handle_vllm_request(
+    request_json: dict, 
+    tokens_ids: list[int], 
+    settings: Settings
+) -> dict:
+    """Handle vLLM specific request formatting and execution."""
+    # Convert tokens back to text for vLLM (it expects text input)
+    prompt_text = settings.tokenizer.decode(tokens_ids, special_token_policy=SpecialTokenPolicy.IGNORE)
+    
+    vllm_request = {
+        "model": request_json.get("model", "default"),
+        "prompt": prompt_text,
+        "max_tokens": request_json.get("max_tokens", 512),
+        "temperature": request_json.get("temperature", 0.7),
+        "top_p": request_json.get("top_p", 1.0),
+        "top_k": request_json.get("top_k", -1),
+        "frequency_penalty": request_json.get("frequency_penalty", 0.0),
+        "presence_penalty": request_json.get("presence_penalty", 0.0),
+        "seed": request_json.get("seed"),
+        "stop": request_json.get("stop", []),
+        "stream": False,
+        "echo": False,
+        "logprobs": request_json.get("logprobs"),
+        "top_logprobs": request_json.get("top_logprobs"),
+        **{k: v for k, v in request_json.items() 
+           if k not in ["model", "prompt", "max_tokens", "temperature", "top_p", 
+                       "top_k", "frequency_penalty", "presence_penalty", "seed", 
+                       "stop", "stream", "echo", "logprobs", "top_logprobs"]}
+    }
+    
+    # Remove None values
+    vllm_request = {k: v for k, v in vllm_request.items() if v is not None}
+    
+    try:
+        async with httpx.AsyncClient(timeout=settings.timeout) as client:
+            response = await client.post(
+                f"{settings.engine_url}/v1/completions",
+                json=vllm_request
+            )
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Timeout from vLLM server")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=500, detail=f"vLLM request error: {str(e)}")
+    
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=response.status_code, 
+            detail=f"vLLM error: {response.text}"
+        )
+    
+    response_json = response.json()
+    
+    # Extract the generated text and convert to tokens for consistent processing
+    if "choices" in response_json and len(response_json["choices"]) > 0:
+        generated_text = response_json["choices"][0]["text"]
+        # Tokenize the generated text to get tokens
+        generated_tokens = settings.tokenizer.encode(generated_text).tokens
+        return {"tokens": generated_tokens}
+    else:
+        raise HTTPException(status_code=500, detail="Invalid vLLM response format")
+
+
 @main_router.post("/v1/chat/completions", tags=["chat", "completions"])
 async def generate(
     request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AssistantMessage:
-    r"""Generate a chat completion.
+    """Generate a chat completion with support for multiple backends.
 
     Args:
         request: The chat completion request.
-        settings: The settings for the Mistral-common API.
+        settings: The settings for the API.
 
     Returns:
         The generated chat completion.
         
+    Supported backends:
+        - llama_cpp: Uses Llama.cpp server
+        - vllm: Uses vLLM server
     """
     if isinstance(request, OpenAIChatCompletionRequest):
         extra_fields = request.drop_extra_fields()
-        
         request = ChatCompletionRequest.from_openai(**request.model_dump())
     else:
         extra_fields = {}
+    
     tokens_ids = await tokenize_request(request, settings)
 
     exclude_fields = {"messages", "tools"}
-
     request_json = request.model_dump()
     request_json.update(extra_fields)
-
     request_json = {k: v for k, v in request_json.items() if k not in exclude_fields}
 
     if request_json.get("stream", False):
         raise HTTPException(status_code=400, detail="Streaming is not supported.")
 
-    try:
-        if settings.engine_backend == EngineBackend.llama_cpp:
-            response = requests.post(
-                f"{settings.engine_url}/completions",
-                json={
-                    "prompt": tokens_ids,
-                    "return_tokens": True,
-                    **request_json,
-                },
-                timeout=settings.timeout,
-            )
-        else:
-            raise ValueError(f"Unsupported engine backend: {settings.engine_backend}")
-    except requests.exceptions.Timeout:
-        raise HTTPException(status_code=504, detail="Timeout")
-    except requests.exceptions.RequestException as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-    if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail=response.text)
-
-    response_json = response.json()
-    return await detokenize_to_assistant_message(settings, response_json["tokens"])
-
-@main_router.get("/v1/models", tags=["models"])
-async def get_models(
-        settings: Annotated[Settings, Depends(get_settings)]
-) -> dict:
-    """
-    Get list of models from the engine.
-    """
-    if settings.engine_backend != EngineBackend.llama_cpp:
+    # Handle different engine backends
+    if settings.engine_backend == EngineBackend.llama_cpp:
+        response_json = await _handle_llama_cpp_request(request_json, tokens_ids, settings)
+    elif settings.engine_backend == EngineBackend.vllm:
+        response_json = await _handle_vllm_request(request_json, tokens_ids, settings)
+    else:
         raise HTTPException(
-            status_code=400,
+            status_code=400, 
             detail=f"Unsupported engine backend: {settings.engine_backend}"
         )
 
+    return await detokenize_to_assistant_message(settings, response_json["tokens"])
+
+
+@main_router.get("/v1/models", tags=["models"])
+async def get_models(
+    settings: Annotated[Settings, Depends(get_settings)]
+) -> dict:
+    """Get list of models from the engine backend.
+    
+    Supports both Llama.cpp and vLLM model listing.
+    """
     try:
-        async with httpx.AsyncClient(timeout=settings.timeout) as client:
-            response = await client.get(f"{settings.engine_url}/models")
+        if settings.engine_backend == EngineBackend.llama_cpp:
+            async with httpx.AsyncClient(timeout=settings.timeout) as client:
+                response = await client.get(f"{settings.engine_url}/models")
+        elif settings.engine_backend == EngineBackend.vllm:
+            async with httpx.AsyncClient(timeout=settings.timeout) as client:
+                response = await client.get(f"{settings.engine_url}/v1/models")
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported engine backend: {settings.engine_backend}"
+            )
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="Timeout from engine")
     except httpx.RequestError as e:
@@ -213,3 +311,64 @@ async def get_models(
         raise HTTPException(status_code=response.status_code, detail=response.text)
 
     return response.json()
+
+
+@main_router.get("/v1/engine/info", tags=["engine"])
+async def get_engine_info(
+    settings: Annotated[Settings, Depends(get_settings)]
+) -> dict:
+    """Get engine backend information and status."""
+    try:
+        if settings.engine_backend == EngineBackend.llama_cpp:
+            async with httpx.AsyncClient(timeout=settings.timeout) as client:
+                # Try to get props/stats from llama.cpp
+                try:
+                    props_response = await client.get(f"{settings.engine_url}/props")
+                    props_data = props_response.json() if props_response.status_code == 200 else {}
+                except:
+                    props_data = {}
+                
+                return {
+                    "backend": "llama_cpp",
+                    "engine_url": settings.engine_url,
+                    "status": "active",
+                    "properties": props_data
+                }
+                
+        elif settings.engine_backend == EngineBackend.vllm:
+            async with httpx.AsyncClient(timeout=settings.timeout) as client:
+                # Get vLLM version info
+                try:
+                    version_response = await client.get(f"{settings.engine_url}/version")
+                    version_data = version_response.json() if version_response.status_code == 200 else {}
+                except:
+                    version_data = {}
+                
+                return {
+                    "backend": "vllm",
+                    "engine_url": settings.engine_url,
+                    "status": "active",
+                    "version": version_data
+                }
+        else:
+            return {
+                "backend": str(settings.engine_backend),
+                "engine_url": settings.engine_url,
+                "status": "unknown",
+                "error": f"Unsupported engine backend: {settings.engine_backend}"
+            }
+            
+    except httpx.TimeoutException:
+        return {
+            "backend": str(settings.engine_backend),
+            "engine_url": settings.engine_url,
+            "status": "timeout",
+            "error": "Engine connection timeout"
+        }
+    except httpx.RequestError as e:
+        return {
+            "backend": str(settings.engine_backend),
+            "engine_url": settings.engine_url,
+            "status": "error",
+            "error": f"Engine connection error: {str(e)}"
+        }
