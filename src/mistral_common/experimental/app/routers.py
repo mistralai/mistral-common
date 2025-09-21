@@ -138,7 +138,12 @@ async def generate(
     """Generate a chat completion."""
     if isinstance(request, OpenAIChatCompletionRequest):
         extra_fields = request.drop_extra_fields()
-        request = ChatCompletionRequest.from_openai(**request.model_dump())
+        data = request.model_dump()
+
+        # 🚨 explicitly remove unsupported OpenAI fields
+        data.pop("stream", None)
+
+        request = ChatCompletionRequest.from_openai(**data)
     else:
         extra_fields = {}
 
@@ -149,7 +154,8 @@ async def generate(
 
     if request_json.get("stream", False):
         raise HTTPException(status_code=400, detail="Streaming is not supported.")
-
+    
+    
     if settings.engine_backend != EngineBackend.llama_cpp:
         raise HTTPException(status_code=400, detail=f"Unsupported engine backend: {settings.engine_backend}")
 
