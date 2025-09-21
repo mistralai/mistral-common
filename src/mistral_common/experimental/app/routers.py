@@ -90,6 +90,27 @@ async def tokenize_request(
     return TokenizeResponse(tokens=tokenized.tokens)
 
 
+# Internal function for getting tokens as list (used by generate function)
+async def _get_tokens_list(
+    request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
+    settings: Settings,
+) -> List[int]:
+    """Internal function to get tokens as a list."""
+    if isinstance(request, OpenAIChatCompletionRequest):
+        try:
+            request.drop_extra_fields()
+            request = ChatCompletionRequest.from_openai(**request.model_dump())
+        except (ValidationError, ValueError) as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    if not request.messages:
+        raise HTTPException(status_code=400, detail="Messages list cannot be empty.")
+
+    tokenized = settings.tokenizer.encode_chat_completion(request)
+    assert isinstance(tokenized, Tokenized), type(tokenized)
+    return tokenized.tokens
+
+
 @decode_router.post("/string", response_model=DetokenizeResponse)
 async def detokenize_to_string(
     settings: Annotated[Settings, Depends(get_settings)],
@@ -270,7 +291,7 @@ async def generate(
     try:
         if settings.engine_backend == EngineBackend.llama_cpp:
             # For llama.cpp, tokenize first
-            tokens_ids = await tokenize_request(request, settings)
+            tokens_ids = await _get_tokens_list(request, settings)
             
             response = requests.post(
                 f"{settings.engine_url}/completions",
