@@ -148,6 +148,7 @@ async def generate(
     """
     if isinstance(request, OpenAIChatCompletionRequest):
         extra_fields = request.drop_extra_fields()
+        
         request = ChatCompletionRequest.from_openai(**request.model_dump())
     else:
         extra_fields = {}

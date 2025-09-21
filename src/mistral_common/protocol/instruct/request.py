@@ -80,6 +80,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     tool_choice: ToolChoice = ToolChoice.auto
     truncate_for_context_length: bool = False
     continue_final_message: bool = False
+    stream: Optional[bool] = False
 
     def to_openai(self, **kwargs: Any) -> Dict[str, List[Dict[str, Any]]]:
         r"""Convert the request messages and tools into the OpenAI format.
@@ -177,6 +178,8 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         """
         if "seed" in kwargs and "random_seed" in kwargs:
             raise ValueError("Cannot specify both `seed` and `random_seed`.")
+        
+        kwargs["stream"] = kwargs.get("stream",cls.stream)
 
         random_seed = kwargs.pop("seed", None) or kwargs.pop("random_seed", None)
 

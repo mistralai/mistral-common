@@ -51,7 +51,7 @@ dev = [
     "types-Pillow>=10.2.0",
     "types-requests>=2.32",
     "coverage[toml]>=7.4.4",
-    "openai==1.84.0",
+    "openai>=1.84.0",
     "pre-commit>=4.0.0",
 ]
 
