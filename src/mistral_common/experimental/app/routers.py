@@ -1,11 +1,12 @@
 import json
 import time
-from typing import Annotated, List, Optional, Union, Dict, Any
+import uuid
+from typing import Annotated, List, Optional, Union, Dict, Any, AsyncGenerator
 
 import httpx
 import requests
 from fastapi import APIRouter, Body, Depends, HTTPException 
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
 
 from mistral_common.experimental.app.models import (
@@ -34,6 +35,12 @@ class ChatCompletionChoice(BaseModel):
     finish_reason: Optional[str] = None
     logprobs: Optional[Dict[str, Any]] = None
 
+class ChatCompletionChoiceDelta(BaseModel):
+    index: int
+    delta: ChatCompletionMessage
+    finish_reason: Optional[str] = None
+    logprobs: Optional[Dict[str, Any]] = None
+
 class ChatCompletionUsage(BaseModel):
     prompt_tokens: int
     completion_tokens: int
@@ -46,6 +53,15 @@ class ChatCompletionResponse(BaseModel):
     model: str
     choices: List[ChatCompletionChoice]
     usage: ChatCompletionUsage
+    system_fingerprint: Optional[str] = None
+
+class ChatCompletionStreamResponse(BaseModel):
+    id: str
+    object: str = "chat.completion.chunk"
+    created: int
+    model: str
+    choices: List[ChatCompletionChoiceDelta]
+    usage: Optional[ChatCompletionUsage] = None
     system_fingerprint: Optional[str] = None
 
 class TokenizeResponse(BaseModel):
@@ -261,11 +277,150 @@ def _create_openai_compatible_response(
     )
 
 
-@main_router.post("/v1/chat/completions", response_model=ChatCompletionResponse, tags=["chat", "completions"])
+def _create_stream_chunk(
+    content: Optional[str],
+    model_name: str,
+    request_id: str,
+    finish_reason: Optional[str] = None,
+    usage_stats: Optional[Dict[str, int]] = None
+) -> str:
+    """Create a streaming chunk in OpenAI format."""
+    
+    chunk = ChatCompletionStreamResponse(
+        id=request_id,
+        created=int(time.time()),
+        model=model_name,
+        choices=[
+            ChatCompletionChoiceDelta(
+                index=0,
+                delta=ChatCompletionMessage(
+                    role="assistant",
+                    content=content
+                ),
+                finish_reason=finish_reason
+            )
+        ],
+        usage=ChatCompletionUsage(**usage_stats) if usage_stats else None
+    )
+    
+    return f"data: {chunk.model_dump_json()}\n\n"
+
+
+async def _stream_llama_cpp_response(
+    tokens_ids: List[int],
+    request_json: Dict[str, Any],
+    settings: Settings,
+    model_name: str,
+    request_id: str
+) -> AsyncGenerator[str, None]:
+    """Stream response from llama.cpp backend."""
+    
+    # Add streaming parameters
+    stream_request = {
+        "prompt": tokens_ids,
+        "stream": True,
+        **request_json,
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=settings.timeout) as client:
+            async with client.stream(
+                "POST",
+                f"{settings.engine_url}/completions",
+                json=stream_request
+            ) as response:
+                if response.status_code != 200:
+                    raise HTTPException(status_code=response.status_code, detail=await response.aread())
+                
+                completion_tokens = 0
+                async for line in response.aiter_lines():
+                    if line.startswith("data: "):
+                        data_str = line[6:]  # Remove "data: " prefix
+                        
+                        if data_str.strip() == "[DONE]":
+                            # Send final chunk with usage stats
+                            usage_stats = {
+                                "prompt_tokens": len(tokens_ids),
+                                "completion_tokens": completion_tokens,
+                                "total_tokens": len(tokens_ids) + completion_tokens
+                            }
+                            yield _create_stream_chunk(
+                                content=None,
+                                model_name=model_name,
+                                request_id=request_id,
+                                finish_reason="stop",
+                                usage_stats=usage_stats
+                            )
+                            yield "data: [DONE]\n\n"
+                            break
+                        
+                        try:
+                            chunk_data = json.loads(data_str)
+                            content = chunk_data.get("content", "")
+                            
+                            if content:
+                                completion_tokens += 1
+                                yield _create_stream_chunk(
+                                    content=content,
+                                    model_name=model_name,
+                                    request_id=request_id
+                                )
+                                
+                        except json.JSONDecodeError:
+                            continue
+                            
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Timeout from engine")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=500, detail=f"Engine request error: {str(e)}")
+
+
+async def _stream_vllm_response(
+    openai_request: Dict[str, Any],
+    settings: Settings,
+    request_id: str
+) -> AsyncGenerator[str, None]:
+    """Stream response from vLLM backend."""
+    
+    try:
+        async with httpx.AsyncClient(timeout=settings.timeout) as client:
+            async with client.stream(
+                "POST",
+                f"{settings.engine_url}/v1/chat/completions",
+                json=openai_request
+            ) as response:
+                if response.status_code != 200:
+                    raise HTTPException(status_code=response.status_code, detail=await response.aread())
+                
+                async for line in response.aiter_lines():
+                    if line.startswith("data: "):
+                        data_str = line[6:]  # Remove "data: " prefix
+                        
+                        if data_str.strip() == "[DONE]":
+                            yield "data: [DONE]\n\n"
+                            break
+                        
+                        try:
+                            # vLLM already returns OpenAI-compatible format
+                            # Just need to ensure the request_id matches if needed
+                            chunk_data = json.loads(data_str)
+                            chunk_data["id"] = request_id  # Ensure consistent request ID
+                            yield f"data: {json.dumps(chunk_data)}\n\n"
+                            
+                        except json.JSONDecodeError:
+                            continue
+                            
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Timeout from engine")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=500, detail=f"Engine request error: {str(e)}")
+
+
+@main_router.post("/v1/chat/completions", tags=["chat", "completions"])
 async def generate(
     request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
     settings: Annotated[Settings, Depends(get_settings)],
-) -> ChatCompletionResponse:
+) -> Union[ChatCompletionResponse, StreamingResponse]:
     """Generate a chat completion with OpenAI-compatible response format."""
     
     if isinstance(request, OpenAIChatCompletionRequest):
@@ -278,72 +433,116 @@ async def generate(
         model_name = request.model or "unknown"
 
     # Generate request ID
-    request_id = f"chatcmpl-{int(time.time())}"
+    request_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
 
     exclude_fields = {"messages", "tools"}
     request_json = request.model_dump()
     request_json.update(extra_fields)
     request_json = {k: v for k, v in request_json.items() if k not in exclude_fields}
 
-    if request_json.get("stream", False):
-        raise HTTPException(status_code=400, detail="Streaming is not supported.")
+    # Check if streaming is requested
+    is_streaming = request_json.get("stream", False)
 
     try:
         if settings.engine_backend == EngineBackend.llama_cpp:
-            # For llama.cpp, tokenize first
-            tokens_ids = await _get_tokens_list(request, settings)
-            
-            response = requests.post(
-                f"{settings.engine_url}/completions",
-                json={
-                    "prompt": tokens_ids,
-                    "return_tokens": True,
-                    **request_json,
-                },
-                timeout=settings.timeout,
-            )
-            
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail=response.text)
-
-            response_json = response.json()
-            
-            # Get the generated tokens and convert to AssistantMessage
-            generated_tokens = response_json.get("tokens", [])
-            assistant_message = await detokenize_to_assistant_message(settings, generated_tokens)
-            
-            # Extract usage stats from llama.cpp response
-            usage_stats = {
-                "prompt_tokens": response_json.get("tokens_evaluated", 0),
-                "completion_tokens": len(generated_tokens),
-                "total_tokens": response_json.get("tokens_evaluated", 0) + len(generated_tokens)
-            }
-            
-        elif settings.engine_backend == EngineBackend.vllm:
-            # For vLLM, send the request directly as it's OpenAI compatible
-            async with httpx.AsyncClient(timeout=settings.timeout) as client:
-                # Convert back to OpenAI format for vLLM
-                openai_request = {
-                    "model": model_name,
-                    "messages": [msg.model_dump() for msg in request.messages],
-                    **request_json
-                }
+            if is_streaming:
+                # For streaming llama.cpp
+                tokens_ids = await _get_tokens_list(request, settings)
                 
-                if request.tools:
-                    openai_request["tools"] = [tool.model_dump() for tool in request.tools]
+                return StreamingResponse(
+                    _stream_llama_cpp_response(
+                        tokens_ids=tokens_ids,
+                        request_json=request_json,
+                        settings=settings,
+                        model_name=model_name,
+                        request_id=request_id
+                    ),
+                    media_type="text/plain",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "Connection": "keep-alive",
+                        "Content-Type": "text/event-stream"
+                    }
+                )
+            else:
+                # Non-streaming llama.cpp (existing logic)
+                tokens_ids = await _get_tokens_list(request, settings)
                 
-                response = await client.post(
-                    f"{settings.engine_url}/v1/chat/completions",
-                    json=openai_request
+                response = requests.post(
+                    f"{settings.engine_url}/completions",
+                    json={
+                        "prompt": tokens_ids,
+                        "return_tokens": True,
+                        **request_json,
+                    },
+                    timeout=settings.timeout,
                 )
                 
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail=response.text)
+                if response.status_code != 200:
+                    raise HTTPException(status_code=response.status_code, detail=response.text)
+
+                response_json = response.json()
+                
+                # Get the generated tokens and convert to AssistantMessage
+                generated_tokens = response_json.get("tokens", [])
+                assistant_message = await detokenize_to_assistant_message(settings, generated_tokens)
+                
+                # Extract usage stats from llama.cpp response
+                usage_stats = {
+                    "prompt_tokens": response_json.get("tokens_evaluated", 0),
+                    "completion_tokens": len(generated_tokens),
+                    "total_tokens": response_json.get("tokens_evaluated", 0) + len(generated_tokens)
+                }
+                
+                return _create_openai_compatible_response(
+                    assistant_message=assistant_message,
+                    model_name=model_name,
+                    request_id=request_id,
+                    usage_stats=usage_stats
+                )
             
-            # vLLM returns OpenAI-compatible format, so we can return it directly
-            # but we need to ensure it matches our response model
-            response_json = response.json()
-            return ChatCompletionResponse(**response_json)
+        elif settings.engine_backend == EngineBackend.vllm:
+            # Convert back to OpenAI format for vLLM
+            openai_request = {
+                "model": model_name,
+                "messages": [msg.model_dump() for msg in request.messages],
+                **request_json
+            }
+            
+            if request.tools:
+                openai_request["tools"] = [tool.model_dump() for tool in request.tools]
+            
+            if is_streaming:
+                # For streaming vLLM
+                return StreamingResponse(
+                    _stream_vllm_response(
+                        openai_request=openai_request,
+                        settings=settings,
+                        request_id=request_id
+                    ),
+                    media_type="text/plain",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "Connection": "keep-alive",
+                        "Content-Type": "text/event-stream"
+                    }
+                )
+            else:
+                # Non-streaming vLLM
+                async with httpx.AsyncClient(timeout=settings.timeout) as client:
+                    response = await client.post(
+                        f"{settings.engine_url}/v1/chat/completions",
+                        json=openai_request
+                    )
+                    
+                if response.status_code != 200:
+                    raise HTTPException(status_code=response.status_code, detail=response.text)
+                
+                # vLLM returns OpenAI-compatible format, so we can return it directly
+                # but we need to ensure it matches our response model
+                response_json = response.json()
+                response_json["id"] = request_id  # Ensure consistent request ID
+                return ChatCompletionResponse(**response_json)
             
         else:
             raise HTTPException(
@@ -359,14 +558,6 @@ async def generate(
         raise HTTPException(status_code=500, detail=f"Engine request error: {str(e)}")
     except httpx.RequestError as e:
         raise HTTPException(status_code=500, detail=f"Engine request error: {str(e)}")
-
-    # For llama.cpp, convert to OpenAI format
-    return _create_openai_compatible_response(
-        assistant_message=assistant_message,
-        model_name=model_name,
-        request_id=request_id,
-        usage_stats=usage_stats
-    )
 
 
 @main_router.get("/v1/models", response_model=ModelsResponse, tags=["models"])
