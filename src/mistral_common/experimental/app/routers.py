@@ -416,11 +416,11 @@ async def _stream_vllm_response(
         raise HTTPException(status_code=500, detail=f"Engine request error: {str(e)}")
 
 
-@main_router.post("/v1/chat/completions", tags=["chat", "completions"])
+@main_router.post("/v1/chat/completions", response_model=None, tags=["chat", "completions"])
 async def generate(
     request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
     settings: Annotated[Settings, Depends(get_settings)],
-) -> Union[ChatCompletionResponse, StreamingResponse]:
+):
     """Generate a chat completion with OpenAI-compatible response format."""
     
     if isinstance(request, OpenAIChatCompletionRequest):
