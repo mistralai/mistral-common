@@ -21,6 +21,7 @@ dependencies = [
     "requests>=2.0.0",
     "numpy>=1.25",
     "pydantic-extra-types[pycountry]>=2.10.5",
+    "httpx==0.28.1"
 ]
 
 [project.optional-dependencies]
