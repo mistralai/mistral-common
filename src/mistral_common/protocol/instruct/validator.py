@@ -31,6 +31,7 @@ from mistral_common.protocol.instruct.tool_calls import (
     Tool,
     ToolCall,
 )
+from mistral_common.tokens.tokenizers.base import TokenizerVersion
 
 
 class ValidationMode(Enum):
@@ -451,3 +452,19 @@ class MistralRequestValidatorV13(MistralRequestValidatorV5):
             raise InvalidMessageStructureException("Not the same number of function calls and responses")
         elif len(expected_tool_ids) < len(observed_tool_ids) and self._mode == ValidationMode.finetuning:
             raise InvalidMessageStructureException("More tool responses than tool calls")
+
+
+def get_validator(version: TokenizerVersion, mode: ValidationMode) -> MistralRequestValidator:
+    validator: MistralRequestValidator
+    if version <= TokenizerVersion.v2:
+        validator = MistralRequestValidator(mode=mode)
+    elif version <= TokenizerVersion.v3:
+        validator = MistralRequestValidatorV3(mode=mode)
+    elif version <= TokenizerVersion.v7:
+        validator = MistralRequestValidatorV5(mode=mode)
+    elif version <= TokenizerVersion.v13:
+        validator = MistralRequestValidatorV13(mode=mode)
+    else:
+        raise ValueError(f"Unsupported tokenizer version: {version}")
+
+    return validator
