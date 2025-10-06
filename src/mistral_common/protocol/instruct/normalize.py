@@ -456,3 +456,16 @@ def normalizer_for_tokenizer_version(version: TokenizerVersion) -> InstructReque
     elif version == TokenizerVersion.v13:
         return InstructRequestNormalizerV13.normalizer()
     raise ValueError(f"Unknown tokenizer version {version}")
+
+
+def get_normalizer(version: TokenizerVersion) -> InstructRequestNormalizer:
+    if version <= TokenizerVersion.v3:
+        normalizer_cls = InstructRequestNormalizer
+    elif version <= TokenizerVersion.v7:
+        normalizer_cls = InstructRequestNormalizerV7
+    elif version <= TokenizerVersion.v13:
+        normalizer_cls = InstructRequestNormalizerV13
+    else:
+        raise ValueError(f"Unsupported tokenizer version: {version}")
+
+    return normalizer_cls.normalizer()

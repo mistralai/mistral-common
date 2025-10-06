@@ -22,9 +22,11 @@ from mistral_common.protocol.instruct.normalize import (
     InstructRequestNormalizer,
     InstructRequestNormalizerV7,
     InstructRequestNormalizerV13,
+    get_normalizer,
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
+from mistral_common.tokens.tokenizers.base import TokenizerVersion
 
 
 def mock_chat_completion(messages: List[ChatMessage]) -> ChatCompletionRequest:
@@ -740,3 +742,19 @@ class TestChatCompletionRequestNormalizationV13:
             chat_completion_request
         )
         assert parsed_request.messages == [expected_system_message, UserMessage(content="B")]
+
+
+@pytest.mark.parametrize(
+    "version,expected_class",
+    [
+        (TokenizerVersion.v1, InstructRequestNormalizer),
+        (TokenizerVersion.v2, InstructRequestNormalizer),
+        (TokenizerVersion.v3, InstructRequestNormalizer),
+        (TokenizerVersion.v7, InstructRequestNormalizerV7),
+        (TokenizerVersion.v11, InstructRequestNormalizerV7),
+        (TokenizerVersion.v13, InstructRequestNormalizerV13),
+    ],
+)
+def test_get_normalizer_version_mapping(version: TokenizerVersion, expected_class: type) -> None:
+    normalizer = get_normalizer(version)
+    assert isinstance(normalizer, expected_class)
