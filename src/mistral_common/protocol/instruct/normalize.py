@@ -131,10 +131,10 @@ class InstructRequestNormalizer(
             return aggregated_content[0].text
         return aggregated_content
 
-    def _aggregate_system_prompts(self, request: ChatCompletionRequest[UATS]) -> Optional[str]:
+    def _aggregate_system_prompts(self, messages: List[UATS]) -> Optional[str]:
         system_prompt: List[str] = []
 
-        for message in request.messages:
+        for message in messages:
             if message.role == Roles.system and message.content:
                 aggregated_content = self._aggregate_content_chunks(message.content)
                 system_prompt.append(aggregated_content)
@@ -318,7 +318,7 @@ class InstructRequestNormalizer(
             >>> normalizer = InstructRequestNormalizer.normalizer()
             >>> instruct_request = normalizer.from_chat_completion_request(request)
         """
-        system_prompt = self._aggregate_system_prompts(request)
+        system_prompt = self._aggregate_system_prompts(request.messages)
         messages = self._aggregate_messages(request.messages)
 
         return self._instruct_request_class(
@@ -376,7 +376,7 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
             assert role is None and len(messages) == 0
             return []
 
-    def _aggregate_system_prompts(self, request: ChatCompletionRequest[UATS]) -> Optional[str]:
+    def _aggregate_system_prompts(self, messages: List[UATS]) -> Optional[str]:
         raise NotImplementedError("We should not aggregate system prompts")
 
     def from_chat_completion_request(self, request: ChatCompletionRequest[UATS]) -> InstructRequestType:  # type: ignore[type-var]
