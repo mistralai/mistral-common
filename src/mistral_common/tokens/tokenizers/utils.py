@@ -79,7 +79,7 @@ def _filter_valid_tokenizer_files(files: List[str]) -> List[tuple[str, str]]:
         files: The list of files to filter.
 
     Returns:
-        The list of valid tokenizer files.
+        The list of tuples of file names and paths to the valid tokenizer files.
     """
     valid_tokenizer_files = []
 
