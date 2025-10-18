@@ -1,3 +1,4 @@
+import builtins
 from functools import _lru_cache_wrapper
 from typing import Callable
 from unittest.mock import MagicMock, Mock, patch
@@ -77,10 +78,23 @@ def test_assert_package_installed(mock_is_package_installed: MagicMock) -> None:
 def test_is_opencv_installed() -> None:
     is_opencv_installed.cache_clear()
 
+    # Module OpenCV is installed.
     with patch.dict("sys.modules", {"cv2": Mock()}):
         assert is_opencv_installed() is True
     is_opencv_installed.cache_clear()
-    # TODO(Julien): Find a way to mock import for testing wrong import
+
+    # Module OpenCV is missing.
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "cv2":
+            raise ImportError("Simulated import error for cv2")
+        return real_import(name, *args, **kwargs)
+
+    with patch("builtins.__import__", side_effect=fake_import):
+        assert is_opencv_installed() is False
+
+    is_opencv_installed.cache_clear()
 
 
 @patch("mistral_common.imports.is_package_installed")
