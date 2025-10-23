@@ -219,7 +219,7 @@ class AssistantMessage(BaseMessage):
         r"""Converts the OpenAI message to the Mistral format."""
         openai_tool_calls = openai_message.get("tool_calls", None)
         if openai_tool_calls is None:
-            tools_calls: list[ToolCall] = []
+            tools_calls: list[ToolCall] | None = None
         elif isinstance(openai_tool_calls, list):
             tools_calls = []
             for openai_tool_call in openai_tool_calls or []:
