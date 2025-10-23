@@ -218,11 +218,14 @@ class AssistantMessage(BaseMessage):
     def from_openai(cls, openai_message: dict[str, str | list[dict[str, str | dict[str, Any]]]]) -> "AssistantMessage":
         r"""Converts the OpenAI message to the Mistral format."""
         openai_tool_calls = openai_message.get("tool_calls", None)
-        tools_calls = (
-            [ToolCall.from_openai(openai_tool_call) for openai_tool_call in openai_tool_calls]
-            if openai_tool_calls is not None
-            else None
-        )
+        if openai_tool_calls is None:
+            tools_calls: list[ToolCall] = []
+        elif isinstance(openai_tool_calls, list):
+            tools_calls = []
+            for openai_tool_call in openai_tool_calls or []:
+                tools_calls.append(ToolCall.from_openai(openai_tool_call))
+        else:
+            raise ValueError(f"tool_calls must be a list, got {type(openai_tool_calls)}")
         openai_content = openai_message.get("content", None)
         content: str | list[ContentChunk] | None = None
         if openai_content is None or isinstance(openai_content, str):
