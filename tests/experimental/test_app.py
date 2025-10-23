@@ -1,4 +1,3 @@
-from typing import Dict, List, Optional, Union
 from unittest.mock import patch
 
 import pytest
@@ -233,7 +232,7 @@ def test_redirect_to_docs(client_fixture: str, request: pytest.FixtureRequest) -
 def test_tokenize_request(
     client_fixture: str, request_fixture: str, tokens_fixture: str, request: pytest.FixtureRequest
 ) -> None:
-    chat_request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest] = request.getfixturevalue(request_fixture)
+    chat_request: ChatCompletionRequest | OpenAIChatCompletionRequest = request.getfixturevalue(request_fixture)
     tokens: list[int] = request.getfixturevalue(tokens_fixture)
     client: TestClient = request.getfixturevalue(client_fixture)
 
@@ -312,7 +311,7 @@ def test_detokenize_assistant_message(
         ),
     ]
     encoded_content = tokenizer.instruct_tokenizer.tokenizer.encode(content, bos=True, eos=False)
-    encoded_tool_calls: List[int] = tokenizer.instruct_tokenizer._encode_tool_calls_in_assistant_message(  # type: ignore[attr-defined]
+    encoded_tool_calls: list[int] = tokenizer.instruct_tokenizer._encode_tool_calls_in_assistant_message(  # type: ignore[attr-defined]
         AssistantMessage(tool_calls=tool_calls)
     )
     if not prefix:
@@ -421,14 +420,12 @@ def test_detokenize_assistant_message_think_chunks(
 
 
 class MockResponse:
-    def __init__(
-        self, status_code: int, json_data: Optional[Union[List, Dict]] = None, text: Optional[str] = None
-    ) -> None:
+    def __init__(self, status_code: int, json_data: list | dict | None = None, text: str | None = None) -> None:
         self.json_data = json_data
         self.status_code = status_code
         self.text = text
 
-    def json(self) -> Union[List, Dict]:
+    def json(self) -> list | dict:
         if self.json_data is None:
             raise ValueError("No JSON data available")
         return self.json_data
@@ -470,7 +467,7 @@ class MockResponse:
 def test_generate(
     mistral_tokenizer_v13: MistralTokenizer,
     tekken_v13_client: TestClient,
-    engine_request: Union[dict, ChatCompletionRequest, OpenAIChatCompletionRequest],
+    engine_request: dict | ChatCompletionRequest | OpenAIChatCompletionRequest,
     output_assistant_message: AssistantMessage,
 ) -> None:
     output_tokens = mistral_tokenizer_v13.instruct_tokenizer.encode_assistant_message(  # type: ignore[attr-defined]

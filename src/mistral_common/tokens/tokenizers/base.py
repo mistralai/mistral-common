@@ -2,7 +2,7 @@ import re
 from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import Generic, List, Optional, Tuple, TypeVar, Union
+from typing import Generic, TypeVar
 
 import numpy as np
 from pydantic import ConfigDict, Field
@@ -178,11 +178,11 @@ class Tokenized(MistralBase):
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    tokens: List[int]
-    text: Optional[str] = None
-    prefix_ids: Optional[List[int]] = None
-    images: List[np.ndarray] = Field(default_factory=list)
-    audios: List[Audio] = Field(default_factory=list)
+    tokens: list[int]
+    text: str | None = None
+    prefix_ids: list[int] | None = None
+    images: list[np.ndarray] = Field(default_factory=list)
+    audios: list[Audio] = Field(default_factory=list)
 
 
 class Tokenizer(ABC):
@@ -192,7 +192,7 @@ class Tokenizer(ABC):
         r"""Vocabulary size of the tokenizer."""
 
     @abstractmethod
-    def vocab(self) -> List[str]:
+    def vocab(self) -> list[str]:
         r"""All tokens in the vocabulary as strings."""
 
     @abstractmethod
@@ -220,11 +220,11 @@ class Tokenizer(ABC):
         r"""id of the Unk token."""
 
     @abstractmethod
-    def encode(self, s: str, bos: bool, eos: bool) -> List[int]:
+    def encode(self, s: str, bos: bool, eos: bool) -> list[int]:
         """Convert a string to a list of token ids."""
 
     @abstractmethod
-    def decode(self, tokens: List[int], special_token_policy: Optional[SpecialTokenPolicy] = None) -> str:
+    def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy | None = None) -> str:
         r"""Decode the token ids to a string.
 
         Args:
@@ -250,7 +250,7 @@ class Tokenizer(ABC):
         r"""Get the version of the tokenizer."""
 
     @abstractmethod
-    def to_string(self, tokens: List[int]) -> str:
+    def to_string(self, tokens: list[int]) -> str:
         r"""[DEPRECATED] Converts a list of token ids into a string, keeping special tokens.
 
         Use `decode` with `special_token_policy=SpecialTokenPolicy.KEEP` instead.
@@ -260,7 +260,7 @@ class Tokenizer(ABC):
         ...
 
     @abstractmethod
-    def _to_string(self, tokens: List[int]) -> str: ...
+    def _to_string(self, tokens: list[int]) -> str: ...
 
     @property
     @abstractmethod
@@ -283,11 +283,11 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
     """
 
     tokenizer: Tokenizer
-    image_encoder: Optional[ImageEncoder]
-    audio_encoder: Optional[AudioEncoder]
+    image_encoder: ImageEncoder | None
+    audio_encoder: AudioEncoder | None
 
     def __init__(
-        self, tokenizer: Tokenizer, image_encoder: Optional[ImageEncoder], audio_encoder: Optional[AudioEncoder]
+        self, tokenizer: Tokenizer, image_encoder: ImageEncoder | None, audio_encoder: AudioEncoder | None
     ) -> None:
         r"""Initialize the instruct tokenizer.
 
@@ -326,7 +326,7 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         ...
 
     @abstractmethod
-    def decode(self, tokens: List[int], special_token_policy: Optional[SpecialTokenPolicy] = None) -> str:
+    def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy | None = None) -> str:
         r"""Convert token ids to string
 
         Args:
@@ -357,12 +357,12 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
     def encode_user_message(
         self,
         message: UserMessage,
-        available_tools: Optional[List[Tool]],
+        available_tools: list[Tool] | None,
         is_last: bool,
         is_first: bool,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
+    ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a user message.
 
         Args:
@@ -381,11 +381,11 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
     @abstractmethod
     def encode_user_content(
         self,
-        content: Union[str, List[UserContentChunk]],
+        content: str | list[UserContentChunk],
         is_last: bool,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
+    ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a user content.
 
         Args:
@@ -400,4 +400,4 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         ...
 
     @abstractmethod
-    def _to_string(self, tokens: List[int]) -> str: ...
+    def _to_string(self, tokens: list[int]) -> str: ...

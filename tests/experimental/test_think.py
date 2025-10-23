@@ -1,5 +1,3 @@
-from typing import List, Tuple
-
 import pytest
 
 from mistral_common.experimental.think import _split_content_and_think_chunks
@@ -19,7 +17,7 @@ from mistral_common.experimental.think import _split_content_and_think_chunks
         ([100, 1, 2, 3, 200, 100, 5, 6, 7], [([100, 1, 2, 3, 200], True), ([100, 5, 6, 7], True)]),
     ],
 )
-def test_split_content_and_think_chunks(tokens: List[int], expected: List[Tuple[List[int], bool]]) -> None:
+def test_split_content_and_think_chunks(tokens: list[int], expected: list[tuple[list[int], bool]]) -> None:
     content_or_think_chunks = _split_content_and_think_chunks(tokens, 100, 200)
     assert content_or_think_chunks == expected
 
@@ -31,6 +29,6 @@ def test_split_content_and_think_chunks(tokens: List[int], expected: List[Tuple[
         ([100, 1, 2, 3, 200, 200, 5, 6, 7, 100], r"End think token found without a begin think token."),
     ],
 )
-def test_split_content_and_think_chunks_error(tokens: List[int], error_message: str) -> None:
+def test_split_content_and_think_chunks_error(tokens: list[int], error_message: str) -> None:
     with pytest.raises(ValueError, match=error_message):
         _split_content_and_think_chunks(tokens, 100, 200)

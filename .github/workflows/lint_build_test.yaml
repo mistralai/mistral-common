@@ -27,7 +27,6 @@ jobs:
       matrix:
         # Support all LTS versions of Python
         python-version: [
-          "3.9",
           "3.10",
           "3.11",
           "3.12",

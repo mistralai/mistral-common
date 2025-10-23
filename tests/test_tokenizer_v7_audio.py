@@ -1,6 +1,5 @@
 import tempfile
 from pathlib import Path
-from typing import List
 from unittest.mock import patch
 
 import numpy as np
@@ -218,7 +217,7 @@ def test_tokenize_user_message(tekkenizer: InstructTokenizerV7, audio_first: boo
     text_chunk = TextChunk(text="a")
 
     num_expected_frames = int(np.ceil(duration * frame_rate))
-    chunks: List[UserContentChunk] = [audio_chunk, text_chunk] if audio_first else [text_chunk, audio_chunk]
+    chunks: list[UserContentChunk] = [audio_chunk, text_chunk] if audio_first else [text_chunk, audio_chunk]
 
     tokenized = tekkenizer.encode_instruct(
         InstructRequest(
@@ -264,7 +263,7 @@ def test_tokenize_multi_turn(tekkenizer: InstructTokenizerV7) -> None:
     text_chunk = TextChunk(text="a")
 
     num_expected_frames = int(np.ceil(duration * frame_rate))
-    chunks: List[UserContentChunk] = [audio_chunk, text_chunk]
+    chunks: list[UserContentChunk] = [audio_chunk, text_chunk]
 
     tokenized = tekkenizer.encode_instruct(
         InstructRequest(
@@ -351,7 +350,7 @@ def test_no_audio_in_system_message_before_v7() -> None:
         ),
     ],
 )
-def test_tokenize_audio_raise(tekkenizer: InstructTokenizerV7, messages: List[UATS], match_regex: str) -> None:
+def test_tokenize_audio_raise(tekkenizer: InstructTokenizerV7, messages: list[UATS], match_regex: str) -> None:
     with pytest.raises(ValueError, match=match_regex):
         tekkenizer.encode_instruct(InstructRequest(messages=messages))
 

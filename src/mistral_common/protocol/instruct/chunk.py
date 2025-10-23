@@ -1,7 +1,7 @@
 import re
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Literal, Optional, Union
+from typing import Literal
 from urllib.parse import urlparse
 
 from pydantic import ConfigDict, Field, ValidationError, field_validator
@@ -53,7 +53,7 @@ class BaseContentChunk(MistralBase):
         ChunkTypes.thinking,
     ]
 
-    def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
+    def to_openai(self) -> dict[str, str | dict[str, str]]:
         r"""Converts the chunk to the OpenAI format.
 
         Should be implemented by subclasses.
@@ -61,7 +61,7 @@ class BaseContentChunk(MistralBase):
         raise NotImplementedError(f"to_openai method not implemented for {type(self).__name__}")
 
     @classmethod
-    def from_openai(cls, openai_chunk: Dict[str, Union[str, Dict[str, str]]]) -> "BaseContentChunk":
+    def from_openai(cls, openai_chunk: dict[str, str | dict[str, str]]) -> "BaseContentChunk":
         r"""Converts the OpenAI chunk to the Mistral format.
 
         Should be implemented by subclasses.
@@ -84,13 +84,13 @@ class ImageChunk(BaseContentChunk):
     image: SerializableImage
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
+    def to_openai(self) -> dict[str, str | dict[str, str]]:
         r"""Converts the chunk to the OpenAI format."""
         base64_image = self.model_dump(include={"image"}, context={"add_format_prefix": True})["image"]
         return {"type": "image_url", "image_url": {"url": base64_image}}
 
     @classmethod
-    def from_openai(cls, openai_chunk: Dict[str, Union[str, Dict[str, str]]]) -> "ImageChunk":
+    def from_openai(cls, openai_chunk: dict[str, str | dict[str, str]]) -> "ImageChunk":
         r"""Converts the OpenAI chunk to the Mistral format."""
         assert openai_chunk.get("type") == "image_url", openai_chunk
 
@@ -115,7 +115,7 @@ class ImageURL(MistralBase):
     """
 
     url: str
-    detail: Optional[str] = None
+    detail: str | None = None
 
 
 class ImageURLChunk(BaseContentChunk):
@@ -129,7 +129,7 @@ class ImageURLChunk(BaseContentChunk):
     """
 
     type: Literal[ChunkTypes.image_url] = ChunkTypes.image_url
-    image_url: Union[ImageURL, str]
+    image_url: ImageURL | str
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -138,20 +138,20 @@ class ImageURLChunk(BaseContentChunk):
             return self.image_url.url
         return self.image_url
 
-    def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
+    def to_openai(self) -> dict[str, str | dict[str, str]]:
         r"""Converts the chunk to the OpenAI format."""
         image_url_dict = {"url": self.get_url()}
         if isinstance(self.image_url, ImageURL) and self.image_url.detail is not None:
             image_url_dict["detail"] = self.image_url.detail
 
-        out_dict: Dict[str, Union[str, Dict[str, str]]] = {
+        out_dict: dict[str, str | dict[str, str]] = {
             "type": "image_url",
             "image_url": image_url_dict,
         }
         return out_dict
 
     @classmethod
-    def from_openai(cls, openai_chunk: Dict[str, Union[str, Dict[str, str]]]) -> "ImageURLChunk":
+    def from_openai(cls, openai_chunk: dict[str, str | dict[str, str]]) -> "ImageURLChunk":
         r"""Converts the OpenAI chunk to the Mistral format."""
         return cls.model_validate({"image_url": openai_chunk["image_url"]})
 
@@ -169,7 +169,7 @@ class RawAudio(MistralBase):
         >>> audio = RawAudio(data="base64_encoded_audio_data", format="mp3")
     """
 
-    data: Union[str, bytes]
+    data: str | bytes
     format: str
 
     @classmethod
@@ -230,7 +230,7 @@ class AudioURLChunk(BaseContentChunk):
     """
 
     type: Literal[ChunkTypes.audio_url] = ChunkTypes.audio_url
-    audio_url: Union[str, AudioURL]
+    audio_url: str | AudioURL
 
     @property
     def url(self) -> str:
@@ -270,7 +270,7 @@ class AudioURLChunk(BaseContentChunk):
 
         return AudioURLType.base64
 
-    def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
+    def to_openai(self) -> dict[str, str | dict[str, str]]:
         r"""Converts the chunk to the OpenAI format."""
         if isinstance(self.audio_url, AudioURL):
             return self.model_dump()
@@ -278,7 +278,7 @@ class AudioURLChunk(BaseContentChunk):
             return {"type": self.type, "audio_url": {"url": self.audio_url}}
 
     @classmethod
-    def from_openai(cls, openai_chunk: Dict[str, Union[str, Dict[str, str]]]) -> "AudioURLChunk":
+    def from_openai(cls, openai_chunk: dict[str, str | dict[str, str]]) -> "AudioURLChunk":
         r"""Converts the OpenAI chunk to the Mistral format."""
         return cls.model_validate(openai_chunk)
 
@@ -318,7 +318,7 @@ class AudioChunk(BaseContentChunk):
         """
         return cls(input_audio=RawAudio.from_audio(audio))
 
-    def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
+    def to_openai(self) -> dict[str, str | dict[str, str]]:
         r"""Converts the chunk to the OpenAI format.
 
         Returns:
@@ -333,7 +333,7 @@ class AudioChunk(BaseContentChunk):
         }
 
     @classmethod
-    def from_openai(cls, openai_chunk: Dict[str, Union[str, Dict[str, str]]]) -> "AudioChunk":
+    def from_openai(cls, openai_chunk: dict[str, str | dict[str, str]]) -> "AudioChunk":
         r"""Converts the OpenAI chunk to the Mistral format.
 
         Args:
@@ -358,12 +358,12 @@ class TextChunk(BaseContentChunk):
     type: Literal[ChunkTypes.text] = ChunkTypes.text
     text: str
 
-    def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
+    def to_openai(self) -> dict[str, str | dict[str, str]]:
         r"""Converts the chunk to the OpenAI format."""
         return self.model_dump()
 
     @classmethod
-    def from_openai(cls, openai_chunk: Dict[str, Union[str, Dict[str, str]]]) -> "TextChunk":
+    def from_openai(cls, openai_chunk: dict[str, str | dict[str, str]]) -> "TextChunk":
         r"""Converts the OpenAI chunk to the Mistral format."""
         return cls.model_validate(openai_chunk)
 
@@ -381,25 +381,25 @@ class ThinkChunk(BaseContentChunk):
     thinking: str
     closed: bool = Field(default=True, description="Whether the thinking chunk is closed or not.")
 
-    def to_openai(self) -> Dict[str, Union[str, Dict[str, str]]]:
+    def to_openai(self) -> dict[str, str | dict[str, str]]:
         r"""Converts the chunk to the OpenAI format."""
         return self.model_dump()
 
     @classmethod
-    def from_openai(cls, openai_chunk: Dict[str, Union[str, Dict[str, str]]]) -> "ThinkChunk":
+    def from_openai(cls, openai_chunk: dict[str, str | dict[str, str]]) -> "ThinkChunk":
         r"""Converts the OpenAI chunk to the Mistral format."""
         return cls.model_validate(openai_chunk)
 
 
 ContentChunk = Annotated[
-    Union[TextChunk, ImageChunk, ImageURLChunk, AudioChunk, AudioURLChunk, ThinkChunk], Field(discriminator="type")
+    TextChunk | ImageChunk | ImageURLChunk | AudioChunk | AudioURLChunk | ThinkChunk, Field(discriminator="type")
 ]
 UserContentChunk = Annotated[
-    Union[TextChunk, ImageChunk, ImageURLChunk, AudioChunk, AudioURLChunk], Field(discriminator="type")
+    TextChunk | ImageChunk | ImageURLChunk | AudioChunk | AudioURLChunk, Field(discriminator="type")
 ]
 
 
-def _convert_openai_content_chunks(openai_content_chunks: Dict[str, Union[str, Dict[str, str]]]) -> ContentChunk:
+def _convert_openai_content_chunks(openai_content_chunks: dict[str, str | dict[str, str]]) -> ContentChunk:
     content_type_str = openai_content_chunks.get("type")
 
     if content_type_str is None:

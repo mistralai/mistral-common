@@ -1,5 +1,5 @@
 import io
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import Field
 from pydantic_extra_types.language_code import LanguageAlpha2
@@ -27,10 +27,10 @@ class TranscriptionRequest(BaseCompletionRequest):
         strict_audio_validation: A flag indicating whether to perform strict validation of the audio data.
     """
 
-    id: Optional[str] = None
-    model: Optional[str] = None
+    id: str | None = None
+    model: str | None = None
     audio: RawAudio
-    language: Optional[LanguageAlpha2] = Field(
+    language: LanguageAlpha2 | None = Field(
         ...,
         description=(
             "The language of the input audio. Supplying the input language "
@@ -39,7 +39,7 @@ class TranscriptionRequest(BaseCompletionRequest):
     )
     strict_audio_validation: bool = True
 
-    def to_openai(self, exclude: tuple = (), **kwargs: Any) -> Dict[str, List[Dict[str, Any]]]:
+    def to_openai(self, exclude: tuple = (), **kwargs: Any) -> dict[str, list[dict[str, Any]]]:
         r"""Convert the transcription request into the OpenAI format.
 
         This method prepares the transcription request data for compatibility with the OpenAI API.
@@ -55,7 +55,7 @@ class TranscriptionRequest(BaseCompletionRequest):
         Raises:
             ImportError: If the required soundfile library is not installed.
         """
-        openai_request: Dict[str, Any] = self.model_dump(exclude={"audio"})
+        openai_request: dict[str, Any] = self.model_dump(exclude={"audio"})
 
         assert_soundfile_installed()
 
@@ -83,7 +83,7 @@ class TranscriptionRequest(BaseCompletionRequest):
         return openai_request
 
     @classmethod
-    def from_openai(cls, openai_request: Dict[str, Any], strict: bool = False) -> "TranscriptionRequest":
+    def from_openai(cls, openai_request: dict[str, Any], strict: bool = False) -> "TranscriptionRequest":
         r"""Create a TranscriptionRequest instance from an OpenAI request dictionary.
 
         This method converts an OpenAI request dictionary into a TranscriptionRequest instance,
