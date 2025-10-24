@@ -1,6 +1,6 @@
 import builtins
 from functools import _lru_cache_wrapper
-from typing import Callable
+from typing import Any, Callable
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
@@ -86,7 +86,7 @@ def test_is_opencv_installed() -> None:
     # Module OpenCV is missing.
     real_import = builtins.__import__
 
-    def fake_import(name, *args, **kwargs):
+    def fake_import(name: str, *args: Any, **kwargs: Any):
         if name == "cv2":
             raise ImportError("Simulated import error for cv2")
         return real_import(name, *args, **kwargs)
