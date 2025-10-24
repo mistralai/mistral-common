@@ -1,7 +1,6 @@
 import logging
 import math
 from dataclasses import dataclass
-from typing import List, Optional, Union
 
 import numpy as np
 
@@ -51,7 +50,7 @@ class AudioConfig:
     frame_rate: float
     encoding_config: AudioSpectrogramConfig
     # Whether to pad an audio into multiples of chunk_length_s seconds
-    chunk_length_s: Optional[float] = None
+    chunk_length_s: float | None = None
 
     def __post_init__(self) -> None:
         assert self.frame_rate > 0, self.frame_rate
@@ -87,7 +86,7 @@ class AudioEncoding:
     """
 
     # Text tokens corresponding to this audio chunk
-    tokens: List[int]
+    tokens: list[int]
     # Original audio waveform data.
     audio: Audio
 
@@ -193,7 +192,7 @@ class AudioEncoder:
 
         return self._encode_audio(audio)
 
-    def __call__(self, content: Union[AudioChunk, AudioURLChunk]) -> AudioEncoding:
+    def __call__(self, content: AudioChunk | AudioURLChunk) -> AudioEncoding:
         r"""Call the encoder on an audio chunk or URL chunk.
 
         Args:

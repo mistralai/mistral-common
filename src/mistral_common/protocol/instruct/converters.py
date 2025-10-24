@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Set, Union
+from typing import Any
 
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
@@ -11,8 +11,8 @@ from mistral_common.protocol.instruct.tool_calls import Tool
 
 
 def convert_openai_messages(
-    messages: List[Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]],
-) -> List[ChatMessage]:
+    messages: list[dict[str, str | list[dict[str, str | dict[str, Any]]]]],
+) -> list[ChatMessage]:
     r"""Convert OpenAI messages to Mistral messages.
 
     Args:
@@ -21,7 +21,7 @@ def convert_openai_messages(
     Returns:
         The Mistral messages.
     """
-    converted_messages: List[ChatMessage] = []
+    converted_messages: list[ChatMessage] = []
     for openai_message in messages:
         message_role = openai_message.get("role")
         message: ChatMessage
@@ -40,8 +40,8 @@ def convert_openai_messages(
 
 
 def convert_openai_tools(
-    tools: List[Dict[str, Any]],
-) -> List[Tool]:
+    tools: list[dict[str, Any]],
+) -> list[Tool]:
     r"""Convert OpenAI tools to Mistral tools.
 
     Args:
@@ -54,7 +54,7 @@ def convert_openai_tools(
     return converted_tools
 
 
-def _check_openai_fields_names(valid_fields_names: Set[str], names: Set[str]) -> None:
+def _check_openai_fields_names(valid_fields_names: set[str], names: set[str]) -> None:
     r"""Check if the names are valid field names.
 
     Names are valid if they are inside the `valid_fields_names` set or chat completion OpenAI fields. If the names are
@@ -93,7 +93,7 @@ def _is_openai_field_name(name: str) -> bool:
     return name in _OPENAI_COMPLETION_FIELDS
 
 
-_OPENAI_COMPLETION_FIELDS: Set[str] = {
+_OPENAI_COMPLETION_FIELDS: set[str] = {
     "messages",
     "model",
     "audio",

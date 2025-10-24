@@ -3,7 +3,6 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
-from typing import List, Tuple, Union
 
 import numpy as np
 from PIL import Image
@@ -32,7 +31,7 @@ class ImageEncoding:
         >>> image_encoding = ImageEncoding(tokens=[1, 2, 3], image=np.array([[0., 0.5, 1.]]))
     """
 
-    tokens: List[int]
+    tokens: list[int]
     image: np.ndarray
 
 
@@ -54,7 +53,7 @@ class SpecialImageIDs:
     img_end: int
 
 
-def image_from_chunk(chunk: Union[ImageURLChunk, ImageChunk]) -> SerializableImage:
+def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
     r"""Get a serializable image from a chunk.
 
     Args:
@@ -120,8 +119,8 @@ def _convert_to_rgb(image: Image.Image) -> Image.Image:
 
 def normalize(
     np_image: np.ndarray,
-    mean: Tuple[float, float, float],
-    std: Tuple[float, float, float],
+    mean: tuple[float, float, float],
+    std: tuple[float, float, float],
 ) -> np.ndarray:
     r"""Normalize a tensor image with mean and standard deviation.
 
@@ -143,7 +142,7 @@ def normalize(
     return np_image.transpose(2, 0, 1)
 
 
-def transform_image(image: Image.Image, new_size: Tuple[int, int]) -> np.ndarray:
+def transform_image(image: Image.Image, new_size: tuple[int, int]) -> np.ndarray:
     r"""Transform an image to a numpy array with the given size.
 
     Args:
@@ -179,9 +178,9 @@ class ImageEncoder:
         # changes implemented into vLLM and transformers
         return self.image_config
 
-    def _image_to_num_tokens(self, img: Image.Image) -> Tuple[int, int]:
-        w: Union[int, float]
-        h: Union[int, float]
+    def _image_to_num_tokens(self, img: Image.Image) -> tuple[int, int]:
+        w: int | float
+        h: int | float
 
         w, h = img.size
         ratio = max(h / self.image_config.max_image_size, w / self.image_config.max_image_size)
@@ -194,7 +193,7 @@ class ImageEncoder:
 
         return width_tokens, height_tokens
 
-    def __call__(self, content: Union[ImageChunk, ImageURLChunk]) -> ImageEncoding:
+    def __call__(self, content: ImageChunk | ImageURLChunk) -> ImageEncoding:
         r"""Converts an image chunk to an image encoding.
 
         Args:

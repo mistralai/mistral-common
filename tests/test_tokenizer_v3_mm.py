@@ -1,5 +1,4 @@
 import sys
-from typing import List
 
 import pytest
 from PIL import Image
@@ -19,7 +18,7 @@ from mistral_common.tokens.tokenizers.base import Tokenized
 from mistral_common.tokens.tokenizers.image import ImageEncoder
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
-text_alignment_requests: List[ChatCompletionRequest] = [
+text_alignment_requests: list[ChatCompletionRequest] = [
     ChatCompletionRequest(
         messages=[
             UserMessage(content="hello"),
@@ -45,7 +44,7 @@ text_alignment_requests: List[ChatCompletionRequest] = [
 ]
 
 img = Image.new("RGB", (4, 4), "red")
-img_requests: List[ChatCompletionRequest] = [
+img_requests: list[ChatCompletionRequest] = [
     ChatCompletionRequest(
         messages=[
             UserMessage(content=[TextChunk(text="a"), ImageChunk(image=img)]),
@@ -99,7 +98,7 @@ img_requests: List[ChatCompletionRequest] = [
         ]
     ),
 ]
-text_requests: List[ChatCompletionRequest] = [
+text_requests: list[ChatCompletionRequest] = [
     ChatCompletionRequest(
         messages=[
             UserMessage(content="hello"),
@@ -175,9 +174,9 @@ def test_swap_text_image_special_case(mm_tokenizer: MistralTokenizer) -> None:
     assert not are_requests_same(mm_tokenizer, [request_text_first, request_img_first])
 
 
-def are_requests_same(mm_tokenizer: MistralTokenizer, requests: List[ChatCompletionRequest]) -> bool:
+def are_requests_same(mm_tokenizer: MistralTokenizer, requests: list[ChatCompletionRequest]) -> bool:
     assert mm_tokenizer.instruct_tokenizer.image_encoder is not None
-    outputs: List[Tokenized] = []
+    outputs: list[Tokenized] = []
     for request in requests:
         outputs.append(mm_tokenizer.encode_chat_completion(request))
 
@@ -209,7 +208,7 @@ def test_mm_normalizer(
                 assert count_expected_chunks(message.content) == len(norm_message.content)
 
 
-def count_expected_chunks(elements: List[ContentChunk]) -> int:
+def count_expected_chunks(elements: list[ContentChunk]) -> int:
     """
     Count the number of chunks in the list, treating consecutive TextChunks as a single chunk.
     """

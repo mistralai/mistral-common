@@ -1,5 +1,4 @@
 import json
-from typing import List, Optional
 
 import pytest
 from PIL import Image
@@ -107,7 +106,7 @@ def test_tokenize_assistant_message(spm_tokenizer: InstructTokenizerV7) -> None:
 
 def test_tokenize_empty_content_assistant_message(spm_tokenizer: InstructTokenizerV7) -> None:
     for content in [None, ""]:
-        tool_calls: Optional[List[ToolCall]]
+        tool_calls: list[ToolCall] | None
         for tool_calls in [None, [], [ToolCall(function=FunctionCall(name="test_fn", arguments="{}"))]]:
             instruct_request: InstructRequest = InstructRequest(
                 messages=[AssistantMessage(content=content, tool_calls=tool_calls, prefix=True)]
@@ -275,7 +274,7 @@ def test_tokenize_assistant_message_continue_final_message(spm_tokenizer: Instru
         ),
     ],
 )
-def test_encode_spm(spm_tokenizer: InstructTokenizerV7, messages: List[ChatMessage], expected_text: str) -> None:
+def test_encode_spm(spm_tokenizer: InstructTokenizerV7, messages: list[ChatMessage], expected_text: str) -> None:
     tokenized = spm_tokenizer.encode_instruct(
         InstructRequest(
             available_tools=[
@@ -418,7 +417,7 @@ def test_encode_chat_completion() -> None:
 )
 @pytest.mark.parametrize("tekkenizer", ["no_audio_tekkenizer", "with_audio_tekkenizer"])
 def test_truncation(
-    request: pytest.FixtureRequest, tekkenizer: str, messages: List[ChatMessage], truncated_text: str
+    request: pytest.FixtureRequest, tekkenizer: str, messages: list[ChatMessage], truncated_text: str
 ) -> None:
     tokenizer: InstructTokenizer = request.getfixturevalue(tekkenizer)
 
@@ -440,7 +439,7 @@ def test_truncation(
     ],
 )
 @pytest.mark.parametrize("tekkenizer", ["no_audio_tekkenizer", "with_audio_tekkenizer"])
-def test_truncation_failed(request: pytest.FixtureRequest, tekkenizer: str, messages: List[ChatMessage]) -> None:
+def test_truncation_failed(request: pytest.FixtureRequest, tekkenizer: str, messages: list[ChatMessage]) -> None:
     tokenizer = request.getfixturevalue(tekkenizer)
     with pytest.raises(TokenizerException):
         tokenizer.encode_instruct(InstructRequest(messages=messages, truncate_at_max_tokens=9))

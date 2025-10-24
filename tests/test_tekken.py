@@ -2,7 +2,7 @@ import base64
 import json
 import re
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import Sequence
 
 import pytest
 
@@ -17,7 +17,7 @@ from mistral_common.tokens.tokenizers.tekken import (
 )
 
 
-def _quick_vocab(extra_toks: Sequence[bytes] = ()) -> List[TokenInfo]:
+def _quick_vocab(extra_toks: Sequence[bytes] = ()) -> list[TokenInfo]:
     vocab = [TokenInfo(rank=i, token_bytes=base64.b64encode(bytes([i])).decode(), token_str=chr(i)) for i in range(256)]
     for i, tok in enumerate(extra_toks):
         vocab.append(
@@ -30,13 +30,13 @@ def _quick_vocab(extra_toks: Sequence[bytes] = ()) -> List[TokenInfo]:
     return vocab
 
 
-def _get_deprecated_special_tokens() -> List[SpecialTokenInfo]:
+def _get_deprecated_special_tokens() -> list[SpecialTokenInfo]:
     return list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS)
 
 
 def get_special_tokens(
     tokenizer_version: TokenizerVersion, add_audio: bool = False, add_think: bool = False
-) -> List[SpecialTokenInfo]:
+) -> list[SpecialTokenInfo]:
     special_tokens = list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS)
     if tokenizer_version < TokenizerVersion.v7 and add_audio:
         raise ValueError("Audio tokens are only supported in v7 and above")
@@ -92,11 +92,11 @@ def get_special_tokens(
 
 def _write_tekkenizer_model(
     tmp_path: Path,
-    vocab: Optional[List[TokenInfo]] = None,
-    special_tokens: Optional[List[SpecialTokenInfo]] = None,
+    vocab: list[TokenInfo] | None = None,
+    special_tokens: list[SpecialTokenInfo] | None = None,
     pattern: str = ".",
     num_special_tokens: int = 100,
-    version: Optional[str] = "v3",
+    version: str | None = "v3",
 ) -> None:
     # Create the vocab.json file
     if vocab is None:

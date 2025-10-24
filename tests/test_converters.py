@@ -1,7 +1,7 @@
 import io
 from inspect import signature
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any
 
 import numpy as np
 import pytest
@@ -188,7 +188,7 @@ def test_convert_input_audio_chunk() -> None:
         ),
     ],
 )
-def test_convert_image_url_chunk(openai_image_url_chunk: Dict, image_url_chunk: ImageURLChunk) -> None:
+def test_convert_image_url_chunk(openai_image_url_chunk: dict, image_url_chunk: ImageURLChunk) -> None:
     assert image_url_chunk.to_openai() == openai_image_url_chunk
     if not isinstance(image_url_chunk.image_url, ImageURL):
         image_url_from_openai = ImageURLChunk.from_openai(openai_image_url_chunk)
@@ -242,7 +242,7 @@ def test_convert_image_url_chunk(openai_image_url_chunk: Dict, image_url_chunk: 
         ),
     ],
 )
-def test_convert_audio_url_chunk(vllm_audio_url_chunk: Dict, audio_url_chunk: AudioURLChunk) -> None:
+def test_convert_audio_url_chunk(vllm_audio_url_chunk: dict, audio_url_chunk: AudioURLChunk) -> None:
     assert audio_url_chunk.to_openai() == vllm_audio_url_chunk
     if not isinstance(audio_url_chunk.audio_url, AudioURL):
         audio_url_from_openai = AudioURLChunk.from_openai(vllm_audio_url_chunk)
@@ -443,7 +443,7 @@ def test_convert_think_chunk() -> None:
         ),
     ],
 )
-def test_convert_openai_message_to_message_and_back(openai_message: Dict, message: ChatMessage) -> None:
+def test_convert_openai_message_to_message_and_back(openai_message: dict, message: ChatMessage) -> None:
     assert type(message).from_openai(openai_message) == message
     assert message.to_openai() == openai_message
 
@@ -714,13 +714,13 @@ def test_convert_openai_message_to_message_and_back(openai_message: Dict, messag
     ],
 )
 def test_convert_requests(
-    openai_messages: List[Dict[str, Any]],
-    messages: List[ChatMessage],
-    openai_tools: Optional[List[Dict[str, Any]]],
-    tools: Optional[List[Tool]],
-    request_cls: Type[Union[ChatCompletionRequest, InstructRequest]],
+    openai_messages: list[dict[str, Any]],
+    messages: list[ChatMessage],
+    openai_tools: list[dict[str, Any]] | None,
+    tools: list[Tool] | None,
+    request_cls: type[ChatCompletionRequest | InstructRequest],
 ) -> None:
-    request: Union[ChatCompletionRequest, InstructRequest]
+    request: ChatCompletionRequest | InstructRequest
     if request_cls == ChatCompletionRequest:
         request = ChatCompletionRequest(
             messages=messages,
@@ -746,7 +746,7 @@ def test_convert_requests(
     stream = openai_request.pop("stream")
     assert stream is True
 
-    reconstructed_request: Union[ChatCompletionRequest, InstructRequest] = type(request).from_openai(**openai_request)
+    reconstructed_request: ChatCompletionRequest | InstructRequest = type(request).from_openai(**openai_request)
 
     for i, reconstructed_message in enumerate(reconstructed_request.messages):
         if isinstance(reconstructed_message, (SystemMessage, UserMessage, AssistantMessage)):
@@ -777,7 +777,7 @@ def test_convert_requests(
         (DUMMY_AUDIO_CHUNK, "en", True),
     ],
 )
-def test_convert_transcription(audio: AudioChunk, language: Optional[LanguageAlpha2], stream: bool) -> None:
+def test_convert_transcription(audio: AudioChunk, language: LanguageAlpha2 | None, stream: bool) -> None:
     def check_equality(a: TranscriptionRequest, b: TranscriptionRequest) -> bool:
         if a.audio.data != b.audio.data:
             return False

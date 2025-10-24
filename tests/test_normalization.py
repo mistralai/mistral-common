@@ -1,5 +1,4 @@
 import json
-from typing import Dict, List, Union
 
 import pytest
 
@@ -29,7 +28,7 @@ from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, 
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 
 
-def mock_chat_completion(messages: List[ChatMessage]) -> ChatCompletionRequest:
+def mock_chat_completion(messages: list[ChatMessage]) -> ChatCompletionRequest:
     return ChatCompletionRequest(
         model="test",
         messages=messages,
@@ -128,12 +127,12 @@ class TestChatCompletionRequestNormalization:
 
     def check_merge(
         self,
-        roles: List[str],
-        expected_roles: List[str],
-        expected_content: List[Union[List[ContentChunk], str]],
+        roles: list[str],
+        expected_roles: list[str],
+        expected_content: list[list[ContentChunk] | str],
         normalizer: InstructRequestNormalizer,
     ) -> None:
-        letter_to_cls: Dict[str, ChatMessage] = {
+        letter_to_cls: dict[str, ChatMessage] = {
             "s": SystemMessage(content="s"),
             "u": UserMessage(content="u"),
             "a": AssistantMessage(content="a"),
@@ -155,12 +154,12 @@ class TestChatCompletionRequestNormalization:
 
     def check_merge_chunks(
         self,
-        roles: List[str],
-        expected_roles: List[str],
-        expected_content: List[Union[List[ContentChunk], str]],
+        roles: list[str],
+        expected_roles: list[str],
+        expected_content: list[list[ContentChunk] | str],
         normalizer: InstructRequestNormalizer,
     ) -> None:
-        letter_to_cls: Dict[str, ChatMessage] = {
+        letter_to_cls: dict[str, ChatMessage] = {
             "s": SystemMessage(content="s"),
             "u": UserMessage(content="u"),
             "a": AssistantMessage(content="a"),
@@ -516,7 +515,7 @@ class TestChatCompletionRequestNormalizationV13:
     def normalizer_v13(self) -> InstructRequestNormalizerV13:
         return InstructRequestNormalizerV13(UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest)
 
-    def _mock_chat_completion(self, messages: List[ChatMessage]) -> ChatCompletionRequest:
+    def _mock_chat_completion(self, messages: list[ChatMessage]) -> ChatCompletionRequest:
         return ChatCompletionRequest(
             model="test",
             messages=messages,

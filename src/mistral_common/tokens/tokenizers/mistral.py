@@ -1,6 +1,6 @@
 import warnings
 from pathlib import Path
-from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, Union
+from typing import Any, Callable, Generic
 
 from mistral_common.exceptions import (
     TokenizerException,
@@ -55,7 +55,7 @@ from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekken
 from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hub
 
 
-def load_image_encoder(image_config: ImageConfig, tokenizer: Union[Tekkenizer, SentencePieceTokenizer]) -> ImageEncoder:
+def load_image_encoder(image_config: ImageConfig, tokenizer: Tekkenizer | SentencePieceTokenizer) -> ImageEncoder:
     r"""Load a image encoder from a config and a tokenizer.
 
     Args:
@@ -127,7 +127,7 @@ class MistralTokenizer(
             instruct_tokenizer
         )
 
-    def __reduce__(self) -> Tuple[Callable, Tuple[Any, ...]]:
+    def __reduce__(self) -> tuple[Callable, tuple[Any, ...]]:
         """
         Provides a recipe for pickling (serializing) this object, which is necessary for use with multiprocessing.
 
@@ -233,8 +233,8 @@ class MistralTokenizer(
     @staticmethod
     def from_hf_hub(
         repo_id: str,
-        token: Optional[Union[bool, str]] = None,
-        revision: Optional[str] = None,
+        token: bool | str | None = None,
+        revision: str | None = None,
         force_download: bool = False,
         local_files_only: bool = False,
         mode: ValidationMode = ValidationMode.test,
@@ -268,7 +268,7 @@ class MistralTokenizer(
     @classmethod
     def from_file(
         cls,
-        tokenizer_filename: Union[str, Path],
+        tokenizer_filename: str | Path,
         mode: ValidationMode = ValidationMode.test,
     ) -> "MistralTokenizer":
         r"""Loads a tokenizer from a file.
@@ -280,7 +280,7 @@ class MistralTokenizer(
         Returns:
             The loaded tokenizer.
         """
-        tokenizer: Union[SentencePieceTokenizer, Tekkenizer]
+        tokenizer: SentencePieceTokenizer | Tekkenizer
 
         if is_tekken(tokenizer_filename):
             tokenizer = Tekkenizer.from_file(tokenizer_filename)
@@ -348,7 +348,7 @@ class MistralTokenizer(
         raise TokenizerException(f"Unrecognized tokenizer filename: {tokenizer_filename}")
 
     def encode_chat_completion(
-        self, request: ChatCompletionRequest[UATS], max_model_input_len: Optional[int] = None
+        self, request: ChatCompletionRequest[UATS], max_model_input_len: int | None = None
     ) -> TokenizedType:
         r"""Encodes a chat completion request.
 
@@ -400,7 +400,7 @@ class MistralTokenizer(
         """
         return self.instruct_tokenizer.encode_fim(request)
 
-    def decode(self, tokens: List[int], special_token_policy: Optional[SpecialTokenPolicy] = None) -> str:
+    def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy | None = None) -> str:
         r"""Decodes a list of tokens into a string.
 
         Args:
@@ -413,11 +413,11 @@ class MistralTokenizer(
         """
         return self.instruct_tokenizer.decode(tokens, special_token_policy=special_token_policy)
 
-    def _to_string(self, tokens: List[int]) -> str:
+    def _to_string(self, tokens: list[int]) -> str:
         return self.instruct_tokenizer._to_string(tokens)
 
 
-MODEL_NAME_TO_TOKENIZER_CLS: Dict[str, Callable[[], MistralTokenizer]] = {
+MODEL_NAME_TO_TOKENIZER_CLS: dict[str, Callable[[], MistralTokenizer]] = {
     "ministral-8b-2410": lambda: MistralTokenizer.v3(is_tekken=True),
     "mistral-tiny-2312": MistralTokenizer.v2,
     "open-mistral-nemo-2407": lambda: MistralTokenizer.v3(is_tekken=True),

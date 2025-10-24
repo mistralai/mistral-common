@@ -1,25 +1,22 @@
-from typing import List, Tuple
-
-
 def _split_content_and_think_chunks(
-    tokens: List[int], begin_think_token_id: int, end_think_token_id: int
-) -> List[Tuple[List[int], bool]]:
+    tokens: list[int], begin_think_token_id: int, end_think_token_id: int
+) -> list[tuple[list[int], bool]]:
     r"""Split the content and think chunks from a list of tokens.
 
     Args:
-        tokens: List of tokens.
+        tokens: list of tokens.
         begin_think_token_id: The token id for the begin think token.
         end_think_token_id: The token id for the end think token.
 
     Returns:
-        List of tuples, where each tuple contains a list of tokens and a boolean indicating if the chunk is a think
+        list of tuples, where each tuple contains a list of tokens and a boolean indicating if the chunk is a think
         chunk.
     """
     if not tokens:
         return []
 
-    content_chunks: List[Tuple[List[int], bool]] = []
-    current_content: List[int] = []
+    content_chunks: list[tuple[list[int], bool]] = []
+    current_content: list[int] = []
 
     in_think_chunk = False
     for token in tokens:

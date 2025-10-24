@@ -1,5 +1,3 @@
-from typing import List
-
 import pytest
 
 from mistral_common.experimental.tools import (
@@ -246,7 +244,7 @@ def test_decode_tool_calls_v11_without_id() -> None:
     tokenizer = fixture_mistral_tokenizer_v11()
     tool_call = ToolCall(id="call_1", function=FunctionCall(name="ab", arguments="{}"))
 
-    encoded_tool_call: List[int] = tokenizer.instruct_tokenizer._encode_tool_calls_in_assistant_message(  # type: ignore[attr-defined]
+    encoded_tool_call: list[int] = tokenizer.instruct_tokenizer._encode_tool_calls_in_assistant_message(  # type: ignore[attr-defined]
         AssistantMessage(tool_calls=[tool_call])
     )
 

@@ -1,6 +1,6 @@
 import json
 from enum import Enum
-from typing import Any, Dict, TypeVar, Union
+from typing import Any, TypeVar
 
 from pydantic import field_validator
 
@@ -35,7 +35,7 @@ class Function(MistralBase):
 
     name: str
     description: str = ""
-    parameters: Dict[str, Any]
+    parameters: dict[str, Any]
 
 
 class ToolTypes(str, Enum):
@@ -98,11 +98,11 @@ class Tool(MistralBase):
     type: ToolTypes = ToolTypes.function
     function: Function
 
-    def to_openai(self) -> Dict[str, Any]:
+    def to_openai(self) -> dict[str, Any]:
         return self.model_dump()
 
     @classmethod
-    def from_openai(cls, openai_tool: Dict[str, Any]) -> "Tool":
+    def from_openai(cls, openai_tool: dict[str, Any]) -> "Tool":
         return cls.model_validate(openai_tool)
 
 
@@ -124,7 +124,7 @@ class FunctionCall(MistralBase):
     arguments: str
 
     @field_validator("arguments", mode="before")
-    def validate_arguments(cls, v: Union[str, Dict[str, Any]]) -> str:
+    def validate_arguments(cls, v: str | dict[str, Any]) -> str:
         """Convert arguments to a JSON string if they are a dictionary.
 
         Args:
@@ -160,11 +160,11 @@ class ToolCall(MistralBase):
     type: ToolTypes = ToolTypes.function
     function: FunctionCall
 
-    def to_openai(self) -> Dict[str, Any]:
+    def to_openai(self) -> dict[str, Any]:
         return self.model_dump()
 
     @classmethod
-    def from_openai(cls, tool_call: Dict[str, Any]) -> "ToolCall":
+    def from_openai(cls, tool_call: dict[str, Any]) -> "ToolCall":
         return cls.model_validate(tool_call)
 
 

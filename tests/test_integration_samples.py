@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import pytest
 
@@ -14,7 +14,7 @@ def samples_dir() -> Path:
     return Path(__file__).parent.joinpath("data").joinpath("samples")
 
 
-def load_sample(samples_dir: Path, sample_name: str, version: int) -> Tuple[Any, str, Any]:
+def load_sample(samples_dir: Path, sample_name: str, version: int) -> tuple[Any, str, Any]:
     with open(samples_dir / f"{sample_name}/sample.json", "r") as f:
         sample = json.load(f)
 
@@ -58,7 +58,7 @@ def get_tokenizer(version: int) -> MistralTokenizer:
     ],
 )
 @pytest.mark.parametrize("version", [1, 2, 3], ids=["v1", "v2", "v3"])
-def test_samples(sample: Dict[str, Any], version: int, samples_dir: Path) -> None:
+def test_samples(sample: dict[str, Any], version: int, samples_dir: Path) -> None:
     if version not in sample["versions"]:
         pytest.skip(f"Sample {sample['sample_name']} not available for version {version}")
 

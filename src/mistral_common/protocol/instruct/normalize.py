@@ -1,5 +1,5 @@
 import json
-from typing import Generic, List, Optional, Sequence, Type, Union, overload
+from typing import Generic, Sequence, overload
 
 from mistral_common.protocol.instruct.chunk import (
     TextChunk,
@@ -47,11 +47,11 @@ class InstructRequestNormalizer(
 
     def __init__(
         self,
-        user_message_class: Type[UserMessageType],
-        assistant_message_class: Type[AssistantMessageType],
-        tool_message_class: Type[ToolMessageType],
-        system_message_class: Type[SystemMessageType],
-        instruct_request_class: Type[InstructRequestType],
+        user_message_class: type[UserMessageType],
+        assistant_message_class: type[AssistantMessageType],
+        tool_message_class: type[ToolMessageType],
+        system_message_class: type[SystemMessageType],
+        instruct_request_class: type[InstructRequestType],
     ):
         r"""Initializes the normalizer with the appropriate message classes.
 
@@ -84,7 +84,7 @@ class InstructRequestNormalizer(
             InstructRequest[UATS, Tool],
         )
 
-    def _normalize_json_content(self, content: Optional[str]) -> str:
+    def _normalize_json_content(self, content: str | None) -> str:
         if content is None or len(content) == 0:
             return "{}"
 
@@ -97,21 +97,21 @@ class InstructRequestNormalizer(
 
     @overload
     def _aggregate_content_chunks(
-        self, content: List[Union[str, TextChunk, ThinkChunk]]
-    ) -> Union[str, List[Union[TextChunk, ThinkChunk]]]: ...
+        self, content: list[str | TextChunk | ThinkChunk]
+    ) -> str | list[TextChunk | ThinkChunk]: ...
     @overload
     def _aggregate_content_chunks(self, content: str) -> str: ...
     @overload
-    def _aggregate_content_chunks(self, content: List[str]) -> str: ...
+    def _aggregate_content_chunks(self, content: list[str]) -> str: ...
     def _aggregate_content_chunks(
-        self, content: Union[str, List[Union[str, TextChunk, ThinkChunk]], List[str]]
-    ) -> Union[str, List[Union[TextChunk, ThinkChunk]]]:
+        self, content: str | list[str | TextChunk | ThinkChunk] | list[str]
+    ) -> str | list[TextChunk | ThinkChunk]:
         if isinstance(content, str):
             return content
 
         assert isinstance(content, list), f"Expected list, got {type(content)}"
 
-        aggregated_content: List[Union[TextChunk, ThinkChunk]] = []
+        aggregated_content: list[TextChunk | ThinkChunk] = []
         for chunk in content:
             if isinstance(chunk, str):
                 chunk = TextChunk(text=chunk)
@@ -131,8 +131,8 @@ class InstructRequestNormalizer(
             return aggregated_content[0].text
         return aggregated_content
 
-    def _aggregate_system_prompts(self, messages: List[UATS]) -> Optional[str]:
-        system_prompt: List[str] = []
+    def _aggregate_system_prompts(self, messages: list[UATS]) -> str | None:
+        system_prompt: list[str] = []
 
         for message in messages:
             if message.role == Roles.system and message.content:
@@ -141,11 +141,11 @@ class InstructRequestNormalizer(
 
         return "\n\n".join(system_prompt) if len(system_prompt) else None
 
-    def _aggregate_tool_messages(self, messages: List[UATS], latest_call_ids: List[str]) -> List[ToolMessageType]:
+    def _aggregate_tool_messages(self, messages: list[UATS], latest_call_ids: list[str]) -> list[ToolMessageType]:
         r"""
         We currently do not do any aggregation for tool messages, but we normalize the json content
         """
-        tool_messages: List[ToolMessageType] = []
+        tool_messages: list[ToolMessageType] = []
         for message in messages:
             assert isinstance(message, self._tool_message_class), "Expected tool message"
             content = self._aggregate_content_chunks(message.content)
@@ -165,14 +165,14 @@ class InstructRequestNormalizer(
             id=tool_call.id,
         )
 
-    def _aggregate_system_messages(self, messages: List[UATS]) -> List[SystemMessageType]:
+    def _aggregate_system_messages(self, messages: list[UATS]) -> list[SystemMessageType]:
         return []
 
-    def _aggregate_assistant_messages(self, messages: List[UATS]) -> AssistantMessageType:
-        messages_contents: List[Union[str, TextChunk, ThinkChunk]] = []
-        tool_calls: List[ToolCall] = []
+    def _aggregate_assistant_messages(self, messages: list[UATS]) -> AssistantMessageType:
+        messages_contents: list[str | TextChunk | ThinkChunk] = []
+        tool_calls: list[ToolCall] = []
         prefix: bool = False
-        weight: Optional[float] = None
+        weight: float | None = None
 
         for message in messages:
             assert isinstance(message, self._assistant_message_class), "Expected assistant message"
@@ -213,17 +213,17 @@ class InstructRequestNormalizer(
             aggregated_message.weight = weight
         return aggregated_message
 
-    def _aggregate_user_messages(self, messages: List[UATS]) -> UserMessageType:
+    def _aggregate_user_messages(self, messages: list[UATS]) -> UserMessageType:
         """
         Just coalesce neighboring blocks of text
         """
-        all_content: List[UserContentChunk] = []
-        text_chunks: List[str] = []
+        all_content: list[UserContentChunk] = []
+        text_chunks: list[str] = []
         for message in messages:
             assert isinstance(message, self._user_message_class), f"Expected user message got {type(message)}"
             if isinstance(message.content, str):
                 text_chunks.append(message.content)
-            else:  # it's a List[ContentChunk]
+            else:  # it's a list[ContentChunk]
                 for chunk in message.content:
                     if isinstance(chunk, TextChunk):
                         text_chunks.append(chunk.text)
@@ -240,14 +240,12 @@ class InstructRequestNormalizer(
             return self._user_message_class(content=text_content)
 
         if text_content:
-            # else we return a List of content chunks
+            # else we return a list of content chunks
             all_content.append(TextChunk(text=text_content))
 
         return self._user_message_class(content=all_content)
 
-    def _aggregate_role(
-        self, messages: List[UATS], role: Optional[Roles], latest_call_ids: List[str]
-    ) -> Sequence[UATS]:
+    def _aggregate_role(self, messages: list[UATS], role: Roles | None, latest_call_ids: list[str]) -> Sequence[UATS]:
         if role == Roles.tool:
             return self._aggregate_tool_messages(messages, latest_call_ids)
         elif role == Roles.assistant:
@@ -257,12 +255,12 @@ class InstructRequestNormalizer(
         else:  # System messages are ignored
             return self._aggregate_system_messages(messages)
 
-    def _aggregate_messages(self, messages: List[UATS]) -> List[UATS]:
-        aggregated_messages: List[UATS] = []
-        messages_to_aggregate: List[UATS] = []
-        current_role: Optional[Roles] = None
-        current_weight: Optional[float] = None
-        latest_call_ids: List[str] = []
+    def _aggregate_messages(self, messages: list[UATS]) -> list[UATS]:
+        aggregated_messages: list[UATS] = []
+        messages_to_aggregate: list[UATS] = []
+        current_role: Roles | None = None
+        current_weight: float | None = None
+        latest_call_ids: list[str] = []
 
         # Collect consecutive lists of messages with the same role and weight
         for message in messages:
@@ -354,16 +352,14 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
             InstructRequest[UATS, Tool],
         )
 
-    def _aggregate_system_messages(self, messages: List[UATS]) -> List[SystemMessageType]:
+    def _aggregate_system_messages(self, messages: list[UATS]) -> list[SystemMessageType]:
         return [
             self._system_message_class(content=self._aggregate_content_chunks(message.content))
             for message in messages
             if isinstance(message, self._system_message_class)
         ]
 
-    def _aggregate_role(
-        self, messages: List[UATS], role: Optional[Roles], latest_call_ids: list[str]
-    ) -> Sequence[UATS]:
+    def _aggregate_role(self, messages: list[UATS], role: Roles | None, latest_call_ids: list[str]) -> Sequence[UATS]:
         if role == Roles.tool:
             return self._aggregate_tool_messages(messages, latest_call_ids)
         elif role == Roles.assistant:
@@ -376,7 +372,7 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
             assert role is None and len(messages) == 0
             return []
 
-    def _aggregate_system_prompts(self, messages: List[UATS]) -> Optional[str]:
+    def _aggregate_system_prompts(self, messages: list[UATS]) -> str | None:
         raise NotImplementedError("We should not aggregate system prompts")
 
     def from_chat_completion_request(self, request: ChatCompletionRequest[UATS]) -> InstructRequestType:  # type: ignore[type-var]
@@ -423,8 +419,8 @@ class InstructRequestNormalizerV13(InstructRequestNormalizerV7):
             InstructRequest[UATS, Tool],
         )
 
-    def _aggregate_tool_messages(self, messages: List[UATS], latest_call_ids: List[str]) -> List[ToolMessageType]:
-        tool_messages: List[ToolMessageType] = super()._aggregate_tool_messages(messages, latest_call_ids)
+    def _aggregate_tool_messages(self, messages: list[UATS], latest_call_ids: list[str]) -> list[ToolMessageType]:
+        tool_messages: list[ToolMessageType] = super()._aggregate_tool_messages(messages, latest_call_ids)
         id_to_tool_call_idx = {call_id: idx for idx, call_id in enumerate(latest_call_ids)}
         id_to_tool_result_idx = {message.tool_call_id: idx for idx, message in enumerate(tool_messages)}
         # First order by tool call idx and then by tool result idx

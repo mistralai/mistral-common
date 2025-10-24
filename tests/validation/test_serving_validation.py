@@ -1,5 +1,3 @@
-from typing import Optional
-
 import pytest
 
 from mistral_common.exceptions import (
@@ -47,7 +45,7 @@ class TestValidateAssistantMessage:
 
     @pytest.mark.parametrize("content,tool_calls", [("", None), (None, None), ("", []), (None, [])])
     def test_no_content_and_no_tool_calls(
-        self, content: Optional[str], tool_calls: Optional[list], validator: MistralRequestValidator
+        self, content: str | None, tool_calls: list | None, validator: MistralRequestValidator
     ) -> None:
         with pytest.raises(
             InvalidAssistantMessageException,

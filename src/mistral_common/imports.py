@@ -1,7 +1,6 @@
 import importlib.util
 import logging
 from functools import lru_cache
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +13,7 @@ def is_package_installed(package_name: str) -> bool:
     return importlib.util.find_spec(package_name) is not None
 
 
-def assert_package_installed(package_name: str, error_message: Optional[str] = None) -> None:
+def assert_package_installed(package_name: str, error_message: str | None = None) -> None:
     if not is_package_installed(package_name):
         error_message = error_message or f"Package '{package_name}' is required but not installed."
         raise ImportError(error_message)

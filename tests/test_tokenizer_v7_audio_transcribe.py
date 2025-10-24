@@ -1,5 +1,3 @@
-from typing import Optional
-
 import numpy as np
 import pytest
 from pydantic_extra_types.language_code import LanguageAlpha2
@@ -23,7 +21,7 @@ def tekkenizer() -> InstructTokenizerV7:
     return _get_tekkenizer_with_audio()
 
 
-def get_transcription_request(duration: float, language: Optional[LanguageAlpha2] = None) -> TranscriptionRequest:
+def get_transcription_request(duration: float, language: LanguageAlpha2 | None = None) -> TranscriptionRequest:
     audio_chunk = _get_audio_chunk(duration)
 
     return TranscriptionRequest(model="dummy", audio=audio_chunk.input_audio, language=language)

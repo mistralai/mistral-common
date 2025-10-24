@@ -1,5 +1,4 @@
 import multiprocessing
-from typing import List, Optional, Tuple, Union
 from unittest.mock import patch
 
 import pytest
@@ -47,7 +46,7 @@ class TestMistralToknizer:
             (SpecialTokenPolicy.RAISE, True),
         ],
     )
-    def test_decode(self, special_token_policy: Optional[SpecialTokenPolicy], is_tekken: bool) -> None:
+    def test_decode(self, special_token_policy: SpecialTokenPolicy | None, is_tekken: bool) -> None:
         tokenizer = MistralTokenizer.v3(is_tekken=is_tekken)
 
         prompt = "This is a complicated te$t, ain't it?"
@@ -87,8 +86,8 @@ class TestMistralToknizer:
     def test_from_hf_hub(self) -> None:
         def _mocked_hf_download(
             repo_id: str,
-            token: Optional[Union[bool, str]] = None,
-            revision: Optional[str] = None,
+            token: bool | str | None = None,
+            revision: str | None = None,
             force_download: bool = False,
             local_files_only: bool = False,
         ) -> str:
@@ -108,7 +107,7 @@ class TestMistralToknizer:
 
 
 def _worker_decode_function(
-    tokenizer_instance_and_token_ids_and_validation_mode: Tuple[MistralTokenizer, List[int], ValidationMode],
+    tokenizer_instance_and_token_ids_and_validation_mode: tuple[MistralTokenizer, list[int], ValidationMode],
 ) -> str:
     tokenizer_instance, token_ids, validation_mode = tokenizer_instance_and_token_ids_and_validation_mode
     assert tokenizer_instance._chat_completion_request_validator._mode == validation_mode
@@ -133,7 +132,7 @@ def _worker_decode_function(
     ],
 )
 def test_tokenizer_is_pickleable_with_multiprocessing(
-    tokenizer_file: str, validation_mode: ValidationMode, token_ids: List[int], expected: str
+    tokenizer_file: str, validation_mode: ValidationMode, token_ids: list[int], expected: str
 ) -> None:
     tokenizer_path = str(MistralTokenizer._data_path() / tokenizer_file)
     tokenizer = MistralTokenizer.from_file(tokenizer_path, validation_mode)
