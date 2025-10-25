@@ -1,6 +1,7 @@
 import json
 from typing import Dict, List, Union
 
+import numpy as np
 import pytest
 
 from mistral_common.protocol.instruct.chunk import (
@@ -27,6 +28,7 @@ from mistral_common.protocol.instruct.normalize import (
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
+from mistral_common.tokens.tokenizers.image import DATASET_MEAN, DATASET_STD, normalize
 
 
 def mock_chat_completion(messages: List[ChatMessage]) -> ChatCompletionRequest:
@@ -742,6 +744,39 @@ class TestChatCompletionRequestNormalizationV13:
             chat_completion_request
         )
         assert parsed_request.messages == [expected_system_message, UserMessage(content="B")]
+
+
+class TestImageNormalize:
+    def test_normalize_shape(self) -> None:
+        height, width = 12, 8
+        image = np.random.default_rng(seed=0).uniform(0, 255, size=(height, width, 3)).astype(np.float32)
+
+        normalized = normalize(image, DATASET_MEAN, DATASET_STD)
+
+        assert normalized.shape == (3, height, width)
+
+    @pytest.mark.parametrize("pixel_value", [0.0, 128.0, 255.0])
+    def test_normalize_uniform_value(self, pixel_value: float) -> None:
+        height, width = 7, 5
+        image = np.full((height, width, 3), pixel_value, dtype=np.float32)
+
+        normalized = normalize(image, DATASET_MEAN, DATASET_STD)
+
+        pixel = pixel_value / 255.0
+        expected = ((pixel - np.array(DATASET_MEAN)) / np.array(DATASET_STD)).reshape(3, 1, 1)
+        assert np.allclose(normalized, expected, atol=1e-6)
+
+    def test_normalize_invalid_channels(self) -> None:
+        image = np.zeros((4, 4, 4), dtype=np.float32)
+
+        with pytest.raises(AssertionError):
+            normalize(image, DATASET_MEAN, DATASET_STD)
+
+    def test_normalize_invalid_dimensions(self) -> None:
+        image = np.zeros((4, 4), dtype=np.float32)
+
+        with pytest.raises(AssertionError):
+            normalize(image, DATASET_MEAN, DATASET_STD)
 
 
 @pytest.mark.parametrize(
