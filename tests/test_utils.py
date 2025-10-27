@@ -77,7 +77,7 @@ def test_list_local_hf_repo_files() -> None:
         (["unvalid1.txt", "unvalid2.txt"], None),
     ],
 )
-def test_get_one_valid_tokenizer_files_abs(files: list[str], expected: Optional[str]) -> None:
+def test_get_one_valid_tokenizer_files_abs(files: list[str], expected: str | None) -> None:
     if expected is None:
         with pytest.raises(ValueError):
             get_one_valid_tokenizer_file(files=files)
