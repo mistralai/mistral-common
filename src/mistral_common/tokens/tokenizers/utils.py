@@ -11,6 +11,7 @@ from mistral_common.tokens.tokenizers.image import MultiModalVersion
 _hub_installed: bool
 try:
     import huggingface_hub
+    import huggingface_hub.constants
 
     _hub_installed = True
 except ImportError:
@@ -71,8 +72,15 @@ def list_local_hf_repo_files(repo_id: str, revision: str | None) -> list[str]:
     return []
 
 
-def _filter_valid_tokenizer_files(files: list[str]) -> list[str]:
-    r"""Filter the valid tokenizer files from a list of files."""
+def _filter_valid_tokenizer_files(files: list[str]) -> list[tuple[str, str]]:
+    r"""Filter the valid tokenizer files from a list of files.
+
+    Args:
+        files: The list of files to filter.
+
+    Returns:
+        The list of tuples of file names and paths to the valid tokenizer files.
+    """
     valid_tokenizer_files = []
 
     instruct_versions = list(TokenizerVersion.__members__)
@@ -80,15 +88,41 @@ def _filter_valid_tokenizer_files(files: list[str]) -> list[str]:
     sentencepiece_suffixes = [f".model.{v}{m}" for v in instruct_versions for m in mm_versions] + [".model"]
 
     for file in files:
-        pathlib_repo_file = Path(file)
-        file_name = pathlib_repo_file.name
-        suffix = "".join(pathlib_repo_file.suffixes)
+        pathlib_file = Path(file)
+        file_name = pathlib_file.name
+        suffix = "".join(pathlib_file.suffixes)
         if file_name == "tekken.json":
-            valid_tokenizer_files.append(file_name)
+            valid_tokenizer_files.append((file_name, file))
         elif suffix in sentencepiece_suffixes:
-            valid_tokenizer_files.append(file_name)
+            valid_tokenizer_files.append((file_name, file))
 
     return valid_tokenizer_files
+
+
+def get_one_valid_tokenizer_file(files: list[str]) -> str:
+    r"""Get one valid tokenizer file from a list of files.
+
+    Args:
+        files: The list of files to filter.
+
+    Returns:
+        The path to the tokenizer file.
+    """
+    valid_tokenizer_file_names_and_files = _filter_valid_tokenizer_files(files)
+
+    if len(valid_tokenizer_file_names_and_files) == 0:
+        raise ValueError("No tokenizer file found.")
+    # If there are multiple tokenizer files, we use tekken.json if it exists, otherwise the versioned one.
+    if len(valid_tokenizer_file_names_and_files) > 1:
+        for file_name, tokenizer_file in valid_tokenizer_file_names_and_files:
+            if "tekken.json" == file_name:
+                return tokenizer_file
+        tokenizer_file = sorted(valid_tokenizer_file_names_and_files, key=lambda x: x[0])[-1][1]
+        logger.warning(f"Multiple valid tokenizer files found. Using {tokenizer_file}.")
+    else:
+        tokenizer_file = valid_tokenizer_file_names_and_files[0][1]
+
+    return tokenizer_file
 
 
 def download_tokenizer_from_hf_hub(
@@ -153,19 +187,10 @@ def download_tokenizer_from_hf_hub(
                 " the revision or try to download the tokenizer without setting `local_files_only` to `True`."
             )
 
-    valid_tokenizer_files = _filter_valid_tokenizer_files(repo_files)
-
-    if len(valid_tokenizer_files) == 0:
-        raise ValueError(f"No tokenizer file found for model ID: {repo_id}")
-    # If there are multiple tokenizer files, we use tekken.json if it exists, otherwise the versioned one.
-    if len(valid_tokenizer_files) > 1:
-        if "tekken.json" in valid_tokenizer_files:
-            tokenizer_file = "tekken.json"
-        else:
-            tokenizer_file = sorted(valid_tokenizer_files)[-1]
-        logger.warning(f"Multiple tokenizer files found for model ID: {repo_id}. Using {tokenizer_file}.")
-    else:
-        tokenizer_file = valid_tokenizer_files[0]
+    try:
+        tokenizer_file = get_one_valid_tokenizer_file(files=repo_files)
+    except ValueError:
+        raise ValueError(f"No valid tokenizer file found in the repo {repo_id}.")
 
     tokenizer_path = huggingface_hub.hf_hub_download(
         repo_id=repo_id,
