@@ -193,25 +193,25 @@ class SentencePieceTokenizer(Tokenizer):
         return self._model.id_to_piece(token_id)  # type: ignore
 
     def _decode_with_special_tokens(self, tokens: List[int], special_token_policy: SpecialTokenPolicy) -> str:
-        text = ""
+        text_list = []
         curr_tokens: List[int] = []
         for tok in tokens:
             if tok in self._control_tokens:
                 if special_token_policy == SpecialTokenPolicy.RAISE:
                     raise ValueError("Decoding `tokens` that contain special tokens with special_token_policy=RAISE.")
                 if curr_tokens:
-                    text += "".join([self.id_to_piece(tok) for tok in curr_tokens])
+                    text_list.extend([self.id_to_piece(tok) for tok in curr_tokens])
                     curr_tokens = []
 
-                text += self.id_to_piece(tok)
+                text_list.append(self.id_to_piece(tok))
 
             else:
                 curr_tokens.append(tok)
 
         if curr_tokens:
-            text += "".join([self.id_to_piece(tok) for tok in curr_tokens])
+            text_list.extend([self.id_to_piece(tok) for tok in curr_tokens])
 
-        return text
+        return "".join(text_list)
 
     def to_string(self, tokens: List[int]) -> str:
         r"""[DEPRECATED] Converts a list of token ids into a string, keeping special tokens.
