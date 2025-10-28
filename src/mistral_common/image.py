@@ -1,6 +1,5 @@
 import base64
 import io
-from typing import Union
 
 import requests
 from PIL import Image
@@ -35,7 +34,7 @@ def download_image(url: str) -> Image.Image:
         raise RuntimeError(f"Error converting to PIL image: {e}")
 
 
-def maybe_load_image_from_str_or_bytes(x: Union[Image.Image, str, bytes]) -> Image.Image:
+def maybe_load_image_from_str_or_bytes(x: Image.Image | str | bytes) -> Image.Image:
     r"""Load an image from a string or bytes.
 
     If the input is already a PIL Image, return it as is.

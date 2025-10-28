@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Iterator, List, Optional, Union
+from typing import Iterator
 
 import requests
 
@@ -28,7 +28,7 @@ def _assert_hub_installed() -> None:
         )
 
 
-def chunks(lst: List[str], chunk_size: int) -> Iterator[List[str]]:
+def chunks(lst: list[str], chunk_size: int) -> Iterator[list[str]]:
     r"""Chunk a list into smaller lists of a given size.
 
     Args:
@@ -45,8 +45,8 @@ def chunks(lst: List[str], chunk_size: int) -> Iterator[List[str]]:
         yield lst[i : i + chunk_size]
 
 
-def list_local_hf_repo_files(repo_id: str, revision: Optional[str]) -> list[str]:
-    r"""List the files of a local Hugging Face repo.
+def list_local_hf_repo_files(repo_id: str, revision: str | None) -> list[str]:
+    r"""list the files of a local Hugging Face repo.
 
     Args:
         repo_id: The Hugging Face repo ID.
@@ -72,7 +72,7 @@ def list_local_hf_repo_files(repo_id: str, revision: Optional[str]) -> list[str]
     return []
 
 
-def _filter_valid_tokenizer_files(files: List[str]) -> List[tuple[str, str]]:
+def _filter_valid_tokenizer_files(files: list[str]) -> list[tuple[str, str]]:
     r"""Filter the valid tokenizer files from a list of files.
 
     Args:
@@ -99,7 +99,7 @@ def _filter_valid_tokenizer_files(files: List[str]) -> List[tuple[str, str]]:
     return valid_tokenizer_files
 
 
-def get_one_valid_tokenizer_file(files: List[str]) -> str:
+def get_one_valid_tokenizer_file(files: list[str]) -> str:
     r"""Get one valid tokenizer file from a list of files.
 
     Args:
@@ -127,9 +127,9 @@ def get_one_valid_tokenizer_file(files: List[str]) -> str:
 
 def download_tokenizer_from_hf_hub(
     repo_id: str,
-    cache_dir: Optional[Union[str, Path]] = None,
-    token: Optional[Union[bool, str]] = None,
-    revision: Optional[str] = None,
+    cache_dir: str | Path | None = None,
+    token: bool | str | None = None,
+    revision: str | None = None,
     force_download: bool = False,
     local_files_only: bool = False,
 ) -> str:

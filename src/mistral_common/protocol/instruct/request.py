@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Dict, Generic, List, Optional, Union
+from typing import Any, Generic
 
 from pydantic import Field
 
@@ -73,15 +73,15 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         ... )
     """
 
-    model: Optional[str] = None
-    messages: List[ChatMessageType]
+    model: str | None = None
+    messages: list[ChatMessageType]
     response_format: ResponseFormat = Field(default_factory=ResponseFormat)
-    tools: Optional[List[Tool]] = None
+    tools: list[Tool] | None = None
     tool_choice: ToolChoice = ToolChoice.auto
     truncate_for_context_length: bool = False
     continue_final_message: bool = False
 
-    def to_openai(self, **kwargs: Any) -> Dict[str, List[Dict[str, Any]]]:
+    def to_openai(self, **kwargs: Any) -> dict[str, list[dict[str, Any]]]:
         r"""Convert the request messages and tools into the OpenAI format.
 
         Args:
@@ -118,7 +118,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         """  # noqa: E501
 
         # Handle messages and tools separately.
-        openai_request: Dict[str, Any] = self.model_dump(
+        openai_request: dict[str, Any] = self.model_dump(
             exclude={"messages", "tools", "truncate_for_context_length"}, exclude_none=True
         )
 
@@ -157,8 +157,8 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     @classmethod
     def from_openai(
         cls,
-        messages: List[Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]],
-        tools: Optional[List[Dict[str, Any]]] = None,
+        messages: list[dict[str, str | list[dict[str, str | dict[str, Any]]]]],
+        tools: list[dict[str, Any]] | None = None,
         continue_final_message: bool = False,
         **kwargs: Any,
     ) -> "ChatCompletionRequest":
@@ -212,13 +212,13 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         ... )
     """
 
-    messages: List[ChatMessageType]
-    system_prompt: Optional[str] = None
-    available_tools: Optional[List[ToolType]] = None
-    truncate_at_max_tokens: Optional[int] = None
+    messages: list[ChatMessageType]
+    system_prompt: str | None = None
+    available_tools: list[ToolType] | None = None
+    truncate_at_max_tokens: int | None = None
     continue_final_message: bool = False
 
-    def to_openai(self, **kwargs: Any) -> Dict[str, List[Dict[str, Any]]]:
+    def to_openai(self, **kwargs: Any) -> dict[str, list[dict[str, Any]]]:
         r"""Convert the request messages and tools into the OpenAI format.
 
         Args:
@@ -257,7 +257,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         """  # noqa: E501
 
         # Handle messages, tools, and truncate_at_max_tokens separately.
-        openai_request: Dict[str, Any] = self.model_dump(
+        openai_request: dict[str, Any] = self.model_dump(
             exclude={"messages", "available_tools", "truncate_at_max_tokens"}, exclude_none=True
         )
 
@@ -295,8 +295,8 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
     @classmethod
     def from_openai(
         cls,
-        messages: List[Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, Any]]]]]]],
-        tools: Optional[List[Dict[str, Any]]] = None,
+        messages: list[dict[str, str | list[dict[str, str | dict[str, Any]]]]],
+        tools: list[dict[str, Any]] | None = None,
         continue_final_message: bool = False,
         **kwargs: Any,
     ) -> "InstructRequest":

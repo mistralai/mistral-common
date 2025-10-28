@@ -1,6 +1,3 @@
-from typing import Optional
-
-
 class MistralCommonException(Exception):
     r"""Base class for all Mistral exceptions.
 
@@ -12,7 +9,7 @@ class MistralCommonException(Exception):
 
     def __init__(
         self,
-        message: Optional[str] = None,
+        message: str | None = None,
     ) -> None:
         r"""Initialize the `MistralCommonException` with an optional message.
 

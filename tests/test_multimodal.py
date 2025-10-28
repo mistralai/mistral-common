@@ -1,6 +1,5 @@
 import base64
 from io import BytesIO
-from typing import Tuple
 
 import numpy as np
 import pytest
@@ -116,7 +115,7 @@ def test_image_encoder(spatial_merge_size: int, special_token_ids: SpecialImageI
         ((2133, 3422), 2),
     ],
 )
-def test_image_processing(special_token_ids: SpecialImageIDs, size: Tuple[int, int], spatial_merge_size: int) -> None:
+def test_image_processing(special_token_ids: SpecialImageIDs, size: tuple[int, int], spatial_merge_size: int) -> None:
     image_config = ImageConfig(
         image_patch_size=16 // spatial_merge_size, max_image_size=1024, spatial_merge_size=spatial_merge_size
     )

@@ -1,7 +1,7 @@
 import importlib.metadata
 from enum import Enum
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, field_validator
 from pydantic_settings import BaseSettings
@@ -23,8 +23,8 @@ class OpenAIChatCompletionRequest(BaseModel):
         This class accepts extra fields that are not validated.
     """
 
-    messages: List[dict[str, Union[str, List[dict[str, Union[str, dict[str, Any]]]]]]]
-    tools: Optional[List[dict[str, Any]]] = None
+    messages: list[dict[str, str | list[dict[str, str | dict[str, Any]]]]]
+    tools: list[dict[str, Any]] | None = None
 
     # Allow extra fields as the `from_openai` method will handle them.
     # We never validate the input, so we don't need to worry about the extra fields.
@@ -83,16 +83,16 @@ class Settings(BaseSettings):
 
     @field_validator("engine_backend", mode="before")
     @classmethod
-    def _validate_backend(cls, value: Union[str, EngineBackend]) -> EngineBackend:
+    def _validate_backend(cls, value: str | EngineBackend) -> EngineBackend:
         if isinstance(value, str):
             value = EngineBackend(value)
         return value
 
     def model_post_init(self, context: Any) -> None:
         super().model_post_init(context)
-        self._tokenizer: Optional[MistralTokenizer] = None
+        self._tokenizer: MistralTokenizer | None = None
 
-    def _load_tokenizer(self, tokenizer_path: Union[str, Path], validation_mode: ValidationMode) -> None:
+    def _load_tokenizer(self, tokenizer_path: str | Path, validation_mode: ValidationMode) -> None:
         if tokenizer_path == "":
             raise ValueError("Tokenizer path must be set via the environment variable `TOKENIZER_PATH`.")
         elif self._tokenizer is not None:

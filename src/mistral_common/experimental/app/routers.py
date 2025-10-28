@@ -1,5 +1,5 @@
 import json
-from typing import Annotated, List, Optional, Union
+from typing import Annotated
 
 import requests
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -33,7 +33,7 @@ async def redirect_to_docs() -> RedirectResponse:
 
 @tokenize_router.post("/")
 async def tokenize_request(
-    request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
+    request: ChatCompletionRequest | OpenAIChatCompletionRequest,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> list[int]:
     r"""Tokenize a chat completion request."""
@@ -100,7 +100,7 @@ async def detokenize_to_assistant_message(
     else:
         content_tokens, tool_calls_tokens = tokens, ()
 
-    content: Optional[Union[str, List[Union[TextChunk, ThinkChunk]]]] = None
+    content: str | list[TextChunk | ThinkChunk] | None = None
 
     if settings.tokenizer.instruct_tokenizer.tokenizer.version >= TokenizerVersion.v13:
         assert isinstance(settings.tokenizer.instruct_tokenizer, InstructTokenizerV13)
@@ -150,7 +150,7 @@ async def detokenize_to_assistant_message(
 
 @main_router.post("/v1/chat/completions", tags=["chat", "completions"])
 async def generate(
-    request: Union[ChatCompletionRequest, OpenAIChatCompletionRequest],
+    request: ChatCompletionRequest | OpenAIChatCompletionRequest,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AssistantMessage:
     r"""Generate a chat completion.

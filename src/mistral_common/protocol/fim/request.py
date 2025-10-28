@@ -1,5 +1,3 @@
-from typing import Optional
-
 from mistral_common.protocol.base import BaseCompletionRequest
 
 
@@ -15,4 +13,4 @@ class FIMRequest(BaseCompletionRequest):
     """
 
     prompt: str
-    suffix: Optional[str] = None
+    suffix: str | None = None

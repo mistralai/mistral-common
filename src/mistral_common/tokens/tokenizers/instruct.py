@@ -1,6 +1,6 @@
 import json
 from abc import abstractmethod
-from typing import Any, Dict, Generic, List, Optional, Sequence, Tuple, Union, overload
+from typing import Any, Generic, Sequence, overload
 
 import numpy as np
 
@@ -56,8 +56,8 @@ class InstructTokenizerBase(
     def __init__(
         self,
         tokenizer: Tokenizer,
-        image_encoder: Optional[ImageEncoder] = None,
-        audio_encoder: Optional[AudioEncoder] = None,
+        image_encoder: ImageEncoder | None = None,
+        audio_encoder: AudioEncoder | None = None,
     ):
         r"""Initialize the instruct tokenizer.
 
@@ -72,18 +72,18 @@ class InstructTokenizerBase(
         super().__init__(tokenizer, image_encoder, audio_encoder)
 
     @property
-    def mm_encoder(self) -> Optional[ImageEncoder]:
+    def mm_encoder(self) -> ImageEncoder | None:
         # this funtion is deprecated, use image_encoder instead
         # TODO(Patrick) - throw a deprecation warning once
         # changes applied to vllm and transformers
         return self.image_encoder
 
-    def start(self) -> List[int]:
+    def start(self) -> list[int]:
         r"""Return the start tokens."""
         return [self.tokenizer.bos_id]
 
     @staticmethod
-    def find_first_last_user(request: InstructRequest) -> Tuple[int, int]:
+    def find_first_last_user(request: InstructRequest) -> tuple[int, int]:
         r"""Find the first and last user message in the request.
 
         Args:
@@ -102,7 +102,7 @@ class InstructTokenizerBase(
         return first_user_idx, last_user_idx
 
     @abstractmethod
-    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
+    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> list[int]:
         r"""Encode a tool message.
 
         Raises:
@@ -113,7 +113,7 @@ class InstructTokenizerBase(
     @abstractmethod
     def encode_assistant_message(
         self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
-    ) -> List[int]:
+    ) -> list[int]:
         r"""Encode an assistant message.
 
         Raises:
@@ -122,7 +122,7 @@ class InstructTokenizerBase(
         raise NotImplementedError("Assistant message not implemented")
 
     @abstractmethod
-    def encode_think(self, chunk: ThinkChunk) -> List[int]:
+    def encode_think(self, chunk: ThinkChunk) -> list[int]:
         r"""Encode a think chunk.
 
         Raises:
@@ -132,8 +132,8 @@ class InstructTokenizerBase(
 
     def _truncate_for_max_tokens(
         self,
-        tokenized: List[Optional[List[int]]],
-        messages: List[AssistantMessageType],
+        tokenized: list[list[int] | None],
+        messages: list[AssistantMessageType],
         max_tokens: int,
         last_user_message_index: int,
     ) -> None:
@@ -141,7 +141,7 @@ class InstructTokenizerBase(
         return
 
     @classmethod
-    def validate_messages(cls, messages: List[UATS]) -> None:
+    def validate_messages(cls, messages: list[UATS]) -> None:
         # for v7 we start validates messages
         ...
 
@@ -158,10 +158,10 @@ class InstructTokenizerBase(
             The encoded tokens.
         """
         # init at bos
-        images: List[np.ndarray] = []
-        audios: List[Audio] = []
-        prefix_ids: Optional[List[int]] = None
-        tokens_list: List[Optional[List[int]]] = []
+        images: list[np.ndarray] = []
+        audios: list[Audio] = []
+        prefix_ids: list[int] | None = None
+        tokens_list: list[list[int] | None] = []
 
         # validate messages
         self.validate_messages(request.messages)
@@ -226,7 +226,7 @@ class InstructTokenizerBase(
             audios=audios,
         )
 
-    def decode(self, tokens: List[int], special_token_policy: Optional[SpecialTokenPolicy] = None) -> str:
+    def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy | None = None) -> str:
         r"""Decode tokens to a string.
 
         Args:
@@ -243,7 +243,7 @@ class InstructTokenizerBase(
         """
         return self.tokenizer.decode(tokens, special_token_policy=special_token_policy)
 
-    def _to_string(self, tokens: List[int]) -> str:
+    def _to_string(self, tokens: list[int]) -> str:
         return self.tokenizer._to_string(tokens)
 
 
@@ -258,12 +258,12 @@ class InstructTokenizerV1(
     def encode_user_message(
         self,
         message: UserMessage,
-        available_tools: Optional[List[Tool]],
+        available_tools: list[Tool] | None,
         is_last: bool,
         is_first: bool,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
+    ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a user message.
 
         Args:
@@ -290,16 +290,16 @@ class InstructTokenizerV1(
         curr_tokens, image, audio = self.encode_user_content(content=message_txt, is_last=False, system_prompt=None)
         return curr_tokens, image, audio
 
-    def encode_system_message(self, message: SystemMessage) -> List[int]:
+    def encode_system_message(self, message: SystemMessage) -> list[int]:
         raise NotImplementedError(f"System message encoding not implemented for {self.__class__.__name__}")
 
     def encode_user_content(
         self,
-        content: Union[str, List[UserContentChunk]],
+        content: str | list[UserContentChunk],
         is_last: bool,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
+    ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a user content.
 
         Args:
@@ -319,7 +319,7 @@ class InstructTokenizerV1(
         tokens = self.tokenizer.encode(content, bos=False, eos=False)
         return tokens, [], []
 
-    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
+    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> list[int]:
         r"""Encode a tool message.
 
         Raises:
@@ -329,7 +329,7 @@ class InstructTokenizerV1(
 
     def encode_assistant_message(
         self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
-    ) -> List[int]:
+    ) -> list[int]:
         r"""Encode an assistant message.
 
         Args:
@@ -357,7 +357,7 @@ class InstructTokenizerV1(
             curr_tokens.append(self.tokenizer.eos_id)
         return curr_tokens
 
-    def encode_think(self, chunk: ThinkChunk) -> List[int]:
+    def encode_think(self, chunk: ThinkChunk) -> list[int]:
         r"""Encode a think chunk.
 
         Raises:
@@ -390,8 +390,8 @@ class InstructTokenizerV2(
     def __init__(
         self,
         tokenizer: Tokenizer,
-        image_encoder: Optional[ImageEncoder] = None,
-        audio_encoder: Optional[AudioEncoder] = None,
+        image_encoder: ImageEncoder | None = None,
+        audio_encoder: AudioEncoder | None = None,
     ):
         r"""Initialize the tokenizer.
 
@@ -415,12 +415,12 @@ class InstructTokenizerV2(
     def encode_user_message(
         self,
         message: UserMessage,
-        available_tools: Optional[List[Tool]],
+        available_tools: list[Tool] | None,
         is_last: bool,
         is_first: bool,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
+    ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a user message.
 
         Args:
@@ -437,7 +437,7 @@ class InstructTokenizerV2(
         do_encode_tools = False
         do_encode_tools |= is_first and (self._user_message_position_to_encode_tools == UserMessagePosition.first)
         do_encode_tools |= is_last and (self._user_message_position_to_encode_tools == UserMessagePosition.last)
-        tools_tokens: List[int] = []
+        tools_tokens: list[int] = []
 
         if do_encode_tools and available_tools:
             tools = [tool.model_dump() for tool in available_tools]
@@ -468,14 +468,14 @@ class InstructTokenizerV2(
         except json.JSONDecodeError:
             return content
 
-    def _prepare_tool_result(self, tool_message: ToolMessage) -> Dict[str, Any]:
+    def _prepare_tool_result(self, tool_message: ToolMessage) -> dict[str, Any]:
         r"""Bit of a hack due to the way tool results are tokenized."""
         return {
             "name": tool_message.name,
             "content": self._parse_json_content(tool_message.content),
         }
 
-    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
+    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> list[int]:
         r"""Encode a tool message.
 
         Args:
@@ -499,19 +499,19 @@ class InstructTokenizerV2(
         ]
         return curr_tokens
 
-    def _prepare_function_call(self, tool_call: ToolCall) -> Dict[str, Any]:
+    def _prepare_function_call(self, tool_call: ToolCall) -> dict[str, Any]:
         r"""Bit of a hack due to the way function calls are tokenized."""
         return {
             "name": tool_call.function.name,
             "arguments": self._parse_json_content(tool_call.function.arguments),
         }
 
-    def _encode_normal_content_assistant_message(self, message: AssistantMessageType) -> List[int]:
+    def _encode_normal_content_assistant_message(self, message: AssistantMessageType) -> list[int]:
         assert message.content, f"Assistant message must have content. Got {message}"
         assert isinstance(message.content, str), "Message content must be a string for tokenizer < V7"
         return self.tokenizer.encode(message.content.rstrip(" "), bos=False, eos=False)
 
-    def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> List[int]:
+    def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> list[int]:
         assert message.tool_calls, f"Assistant message must have tool calls. Got {message}"
         prepared_tool_calls = []
         for tool_call in message.tool_calls:
@@ -525,7 +525,7 @@ class InstructTokenizerV2(
 
     def encode_assistant_message(
         self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
-    ) -> List[int]:
+    ) -> list[int]:
         r"""Encode an assistant message.
 
         Args:
@@ -559,7 +559,7 @@ class InstructTokenizerV2(
             curr_tokens.append(self.tokenizer.eos_id)
         return curr_tokens
 
-    def _encode_infilling(self, text: str) -> List[int]:
+    def _encode_infilling(self, text: str) -> list[int]:
         r"""Remove prefix space in the case of SentencePieceTokenizers."""
 
         return self.tokenizer.encode("☺" + text, bos=False, eos=False)[2:]
@@ -596,8 +596,8 @@ class InstructTokenizerV3(
     def __init__(
         self,
         tokenizer: Tokenizer,
-        image_encoder: Optional[ImageEncoder] = None,
-        audio_encoder: Optional[AudioEncoder] = None,
+        image_encoder: ImageEncoder | None = None,
+        audio_encoder: AudioEncoder | None = None,
     ):
         r"""Initialize the tokenizer.
 
@@ -608,7 +608,7 @@ class InstructTokenizerV3(
         """
         super().__init__(tokenizer, image_encoder=image_encoder, audio_encoder=audio_encoder)
 
-    def _prepare_function_call(self, tool_call: ToolCall) -> Dict[str, Any]:
+    def _prepare_function_call(self, tool_call: ToolCall) -> dict[str, Any]:
         function_call = {
             "name": tool_call.function.name,
             "arguments": self._parse_json_content(tool_call.function.arguments),
@@ -619,7 +619,7 @@ class InstructTokenizerV3(
 
         return function_call
 
-    def _prepare_tool_result(self, tool_message: ToolMessage) -> Dict[str, Any]:
+    def _prepare_tool_result(self, tool_message: ToolMessage) -> dict[str, Any]:
         assert tool_message.tool_call_id is not None, "Tool message has to have the tool call id defined in v3"
 
         return {
@@ -627,7 +627,7 @@ class InstructTokenizerV3(
             "call_id": tool_message.tool_call_id,
         }
 
-    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
+    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> list[int]:
         r"""Encode a tool message.
 
         Note:
@@ -652,7 +652,7 @@ class InstructTokenizerV3(
 
     def encode_assistant_message(
         self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
-    ) -> List[int]:
+    ) -> list[int]:
         r"""Encode an assistant message.
 
         Note:
@@ -671,14 +671,12 @@ class InstructTokenizerV3(
         return super().encode_assistant_message(message, False, continue_message)
 
     @overload
-    def _encode_content_chunk(self, chunk: Union[str, TextChunk, ThinkChunk]) -> Tuple[List[int], None, None]: ...
+    def _encode_content_chunk(self, chunk: str | TextChunk | ThinkChunk) -> tuple[list[int], None, None]: ...
     @overload
-    def _encode_content_chunk(self, chunk: Union[ImageChunk, ImageURLChunk]) -> Tuple[List[int], np.ndarray, None]: ...
+    def _encode_content_chunk(self, chunk: ImageChunk | ImageURLChunk) -> tuple[list[int], np.ndarray, None]: ...
     @overload
-    def _encode_content_chunk(self, chunk: Union[AudioChunk, AudioURLChunk]) -> Tuple[List[int], None, Audio]: ...
-    def _encode_content_chunk(
-        self, chunk: Union[str, ContentChunk]
-    ) -> Union[Tuple[List[int], Optional[np.ndarray], Optional[Audio]]]:
+    def _encode_content_chunk(self, chunk: AudioChunk | AudioURLChunk) -> tuple[list[int], None, Audio]: ...
+    def _encode_content_chunk(self, chunk: str | ContentChunk) -> tuple[list[int], np.ndarray | None, Audio | None]:
         if isinstance(chunk, str):
             return self.tokenizer.encode(chunk, bos=False, eos=False), None, None
         elif isinstance(chunk, TextChunk):
@@ -702,10 +700,10 @@ class InstructTokenizerV3(
 
     def _encode_content_chunks(
         self, content: Sequence[ContentChunk]
-    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
-        tokens: List[int] = []
-        images: List[np.ndarray] = []
-        audio: List[Audio] = []
+    ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
+        tokens: list[int] = []
+        images: list[np.ndarray] = []
+        audio: list[Audio] = []
 
         for chunk in content:
             chunk_tokens, maybe_image, maybe_audio = self._encode_content_chunk(chunk)
@@ -718,11 +716,11 @@ class InstructTokenizerV3(
 
     def encode_user_content(
         self,
-        content: Union[str, List[UserContentChunk]],
+        content: str | list[UserContentChunk],
         is_last: bool,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
+    ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a user content.
 
         Args:
@@ -737,9 +735,9 @@ class InstructTokenizerV3(
         if isinstance(content, str):
             return super().encode_user_content(content, is_last, system_prompt)
 
-        tokens: List[int] = []
-        images: List[np.ndarray] = []
-        audio: List[Audio] = []
+        tokens: list[int] = []
+        images: list[np.ndarray] = []
+        audio: list[Audio] = []
 
         has_one_img_one_text_first = len(content) == 2 and isinstance(content[1], (ImageChunk, ImageURLChunk))
         if force_img_first and has_one_img_one_text_first:
@@ -783,8 +781,8 @@ class InstructTokenizerV7(InstructTokenizerV3):
     def __init__(
         self,
         tokenizer: Tokenizer,
-        image_encoder: Optional[ImageEncoder] = None,
-        audio_encoder: Optional[AudioEncoder] = None,
+        image_encoder: ImageEncoder | None = None,
+        audio_encoder: AudioEncoder | None = None,
     ) -> None:
         r"""Initialize the tokenizer.
 
@@ -805,8 +803,8 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
     def _truncate_for_max_tokens(
         self,
-        tokenized_messages: List[Optional[List[int]]],
-        messages: List[AssistantMessageType],
+        tokenized_messages: list[list[int] | None],
+        messages: list[AssistantMessageType],
         max_tokens: int,
         last_user_message_index: int,
     ) -> None:
@@ -844,7 +842,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
         if to_drop > 0:
             raise TokenizerException("Input couldn't fit in truncate_at_max_token")
 
-    def encode_system_message(self, message: SystemMessage) -> List[int]:
+    def encode_system_message(self, message: SystemMessage) -> list[int]:
         r"""Encode a system message.
 
         Args:
@@ -863,11 +861,11 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
     def encode_user_content(
         self,
-        content: Union[str, List[UserContentChunk]],
+        content: str | list[UserContentChunk],
         is_last: bool,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
+    ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a user content.
 
         Args:
@@ -895,12 +893,12 @@ class InstructTokenizerV7(InstructTokenizerV3):
     def encode_user_message(
         self,
         message: UserMessage,
-        available_tools: Optional[List[Tool]],
+        available_tools: list[Tool] | None,
         is_last: bool,
         is_first: bool,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         force_img_first: bool = False,
-    ) -> Tuple[List[int], List[np.ndarray], List[Audio]]:
+    ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a user message.
 
         Args:
@@ -961,13 +959,13 @@ class InstructTokenizerV7(InstructTokenizerV3):
         return Tokenized(tokens=tokens, text=self.tokenizer._to_string(tokens), audios=audio)
 
     @classmethod
-    def validate_messages(cls, messages: List[UATS]) -> None:
+    def validate_messages(cls, messages: list[UATS]) -> None:
         if cls._has_audio(messages):
             if any(isinstance(message, SystemMessage) for message in messages):
                 raise ValueError("System messages are not yet allowed when audio is present")
 
     @staticmethod
-    def _has_audio(messages: List[UATS]) -> bool:
+    def _has_audio(messages: list[UATS]) -> bool:
         return any(
             isinstance(message, UserMessage)
             and isinstance(message.content, list)
@@ -975,7 +973,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
             for message in messages
         )
 
-    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
+    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> list[int]:
         r"""Encode a tool message.
 
         Note:
@@ -1008,7 +1006,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
     def encode_assistant_message(
         self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
-    ) -> List[int]:
+    ) -> list[int]:
         r"""Encode an assistant message.
 
         Args:
@@ -1052,14 +1050,14 @@ class InstructTokenizerV11(InstructTokenizerV7):
     def __init__(
         self,
         tokenizer: Tokenizer,
-        image_encoder: Optional[ImageEncoder] = None,
-        audio_encoder: Optional[AudioEncoder] = None,
+        image_encoder: ImageEncoder | None = None,
+        audio_encoder: AudioEncoder | None = None,
     ) -> None:
         super().__init__(tokenizer, image_encoder, audio_encoder)
         self.ARGS = self.tokenizer.get_control_token(SpecialTokens.args.value)
         self.CALL_ID = self.tokenizer.get_control_token(SpecialTokens.call_id.value)
 
-    def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> List[int]:
+    def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> list[int]:
         assert message.tool_calls, f"Assistant message must have tool calls. Got {message}"
         curr_tokens = []
         for tool_call in message.tool_calls:
@@ -1092,8 +1090,8 @@ class InstructTokenizerV13(InstructTokenizerV11):
     def __init__(
         self,
         tokenizer: Tokenizer,
-        image_encoder: Optional[ImageEncoder] = None,
-        audio_encoder: Optional[AudioEncoder] = None,
+        image_encoder: ImageEncoder | None = None,
+        audio_encoder: AudioEncoder | None = None,
     ) -> None:
         super().__init__(tokenizer, image_encoder, audio_encoder)
         assert isinstance(tokenizer, Tekkenizer), f"Tokenizer must be a Tekkenizer. Got {type(tokenizer)}"
@@ -1101,13 +1099,13 @@ class InstructTokenizerV13(InstructTokenizerV11):
             SpecialTokens.begin_think.value in tokenizer._special_tokens_reverse_vocab
             and SpecialTokens.end_think.value in tokenizer._special_tokens_reverse_vocab
         ):
-            self.BEGIN_THINK: Optional[int] = tokenizer.get_control_token(SpecialTokens.begin_think.value)
-            self.END_THINK: Optional[int] = tokenizer.get_control_token(SpecialTokens.end_think.value)
+            self.BEGIN_THINK: int | None = tokenizer.get_control_token(SpecialTokens.begin_think.value)
+            self.END_THINK: int | None = tokenizer.get_control_token(SpecialTokens.end_think.value)
         else:
             self.BEGIN_THINK = None
             self.END_THINK = None
 
-    def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> List[int]:
+    def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> list[int]:
         assert message.tool_calls, f"Assistant message must have tool calls. Got {message}"
         curr_tokens = []
         for tool_call in message.tool_calls:
@@ -1122,7 +1120,7 @@ class InstructTokenizerV13(InstructTokenizerV11):
             ]
         return curr_tokens
 
-    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> List[int]:
+    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> list[int]:
         r"""Encode a tool message.
 
         Args:
@@ -1141,7 +1139,7 @@ class InstructTokenizerV13(InstructTokenizerV11):
         ]
         return curr_tokens
 
-    def encode_think(self, chunk: ThinkChunk) -> List[int]:
+    def encode_think(self, chunk: ThinkChunk) -> list[int]:
         r"""Encode a thinking chunk.
 
         Args:

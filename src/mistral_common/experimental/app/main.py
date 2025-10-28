@@ -1,6 +1,5 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import Union
 
 import click
 import uvicorn
@@ -21,7 +20,7 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 
 def create_app(
-    tokenizer: Union[str, Path, MistralTokenizer],
+    tokenizer: str | Path | MistralTokenizer,
     validation_mode: ValidationMode = ValidationMode.test,
     engine_url: str = "127.0.0.1",
     engine_backend: EngineBackend = EngineBackend.llama_cpp,
@@ -114,8 +113,8 @@ def cli() -> None:
     show_default=True,
 )
 def serve(
-    tokenizer_path: Union[str, Path],
-    validation_mode: Union[ValidationMode, str] = ValidationMode.test,
+    tokenizer_path: str | Path,
+    validation_mode: ValidationMode | str = ValidationMode.test,
     host: str = "127.0.0.1",
     port: int = 0,
     engine_url: str = "http://127.0.0.1:8080",
