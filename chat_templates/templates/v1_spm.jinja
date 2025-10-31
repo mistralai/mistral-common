@@ -1,0 +1,87 @@
+{#- Default system message if no system prompt is passed. #}
+{%- set default_system_message = '' %}
+
+{#- Begin of sequence token. #}
+{{- bos_token }}
+
+{#- Handle system prompt if it exists. #}
+{#- System prompt supports text content or text chunks. #}
+{%- if messages[0]['role'] == 'system' %}
+    {%- if messages[0]['content'] is string %}
+        {%- set system_message = messages[0]['content'] %}
+    {%- else %}        
+        {%- for block in messages[0]['content'] %}
+            {%- if block['type'] == 'text' %}
+                {% set system_message = system_message + block['text'] %}
+            {%- else %}
+                {{- raise_exception('Only text chunks are supported in system message contents.') }}
+            {%- endif %}
+        {%- endfor %}
+    {%- endif %}
+    {%- set loop_messages = messages[1:] %}
+{%- else %}
+    {%- set system_message = default_system_message %}
+    {%- set loop_messages = messages %}
+{%- endif%}
+
+{#- Checks for alternating user/assistant messages. #}
+{%- set ns = namespace(index=0) %}
+{%- for message in loop_messages %}
+    {%- if message.role == 'user' or message.role == 'assistant' %}
+        {%- if (message['role'] == 'user') != (ns.index % 2 == 0) %}
+            {{- raise_exception('After the optional system message, conversation roles must alternate user/assistant/user/assistant/...') }}
+        {%- endif %}
+        {%- set ns.index = ns.index + 1 %}
+    {%- endif %}
+{%- endfor %}
+
+{#- Handle conversation messages. #}
+{%- for message in loop_messages %}
+    {#- User messages supports text content. #}
+    {%- if message['role'] == 'user' %}
+        {{- ' [INST] ' }}
+        {%- if loop.index0 == 0 and system_message != '' %}
+            {{- system_message + '\n\n' }}
+        {%- endif %}
+        {%- if message['content'] is string %}
+            {{- message['content']}}
+        {%- elif message['content'] | length > 0 %}
+            {%- for block in  message['content'] %}
+                {%- if block['type'] == 'text' %}
+                    {{- block['text'] }}
+                {%- else %}
+                    {{- raise_exception('Only text chunks are supported in user message content.') }}
+                {%- endif %}
+            {%- endfor %}
+        {%- else %}
+            {{- raise_exception('User message must have a string or a list of chunks in content') }}
+        {%- endif %}
+        {{- ' [/INST]' }}
+        {%- if loop.index < loop.length %}
+            {{- " " }}
+        {%- endif %}
+
+    {#- Assistant messages supports text content or text chunks. #}
+    {%- elif message['role'] == 'assistant' %}
+        {%- if message['content'] is string and message['content'] != '' %}
+            {{- message['content'] }}
+        {%- elif message['content'] | length > 0 %}
+            {%- for block in message['content'] %}
+                {%- if block['type'] == 'text' %}
+                    {{- block['text'] }}
+                {%- else %}
+                    {{- raise_exception('Only text chunks are supported in assistant message contents.') }}
+                {%- endif %}
+            {%- endfor %}
+            {#- End of sequence token for each assistant messages. #}
+        {%- else %}
+            {{- raise_exception('Assistant message content must be non-empty.') }}
+        {%- endif %}
+        {{- eos_token}}
+
+
+    {#- Raise exception for unsupported roles. #}
+    {%- else %}
+        {{- raise_exception('Only user and assistant roles are supported, got ' + message['role']) }}
+    {%- endif %}
+{%- endfor %}
