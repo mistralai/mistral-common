@@ -279,6 +279,8 @@ class ToolMessage(BaseMessage):
     def to_openai(self) -> dict[str, str | list[dict[str, str | dict[str, Any]]]]:
         r"""Converts the message to the OpenAI format."""
         assert self.tool_call_id is not None, "tool_call_id must be provided for tool messages."
+        if self.name is not None:
+            return self.model_dump()
         return self.model_dump(exclude={"name"})
 
     @classmethod
