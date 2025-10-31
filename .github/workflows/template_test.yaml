@@ -1,0 +1,47 @@
+name: Mistral Common Chat templates CI
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "chat_templates/**"
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+    paths:
+      - "chat_templates/**"
+    
+  jobs:
+  build_lint_test:
+    if: ${{ github.event.pull_request.draft != true }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: 3.13
+      
+      - name: Check uv lock
+        run: |
+          uv lock --check
+
+      # Install
+      - name: Install Dependencies
+        run: |
+          uv sync --frozen --all-extras --group dev
+          uv pip install transformers
+
+      # PyTest
+      - name: Tests
+        run: |
+          uv run pytest chat_templates/test_chat_templates.py
