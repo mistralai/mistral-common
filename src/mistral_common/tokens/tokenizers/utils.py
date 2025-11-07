@@ -163,7 +163,7 @@ def download_tokenizer_from_hf_hub(
     if not local_files_only:
         try:
             hf_api = huggingface_hub.HfApi()
-            repo_files = hf_api.list_repo_files(repo_id)
+            repo_files = hf_api.list_repo_files(repo_id, revision=revision, token=token)
             local_files_only = False
         except (requests.ConnectionError, requests.HTTPError, requests.Timeout) as e:
             if force_download:
