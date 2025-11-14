@@ -215,6 +215,20 @@ def _get_mistral_sentenpiece(
     return mistral_tokenizer
 
 
+def _get_mistral_tokenizer(
+    spm: bool,
+    tokenizer_version: TokenizerVersion,
+    validation_mode: ValidationMode,
+    image: bool,
+    audio: bool,
+    think: bool,
+) -> MistralTokenizer:
+    if spm:
+        return _get_mistral_sentenpiece(tokenizer_version, validation_mode, image)
+    else:
+        return _get_mistral_tekkenizer(tokenizer_version, validation_mode, image, audio, think)
+
+
 def encode_transformers(chat_template: str, chat_request: ChatCompletionRequest) -> str:
     openai_request = chat_request.to_openai()
     return render_jinja_template(
@@ -1235,7 +1249,9 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
         ),
     ],
 )
-def test_chat_template_tekken(
+@pytest.mark.parametrize("spm", [True, False])
+def test_chat_template(
+    spm: bool,
     version: TokenizerVersion,
     mode: ValidationMode,
     image: bool,
@@ -1243,10 +1259,12 @@ def test_chat_template_tekken(
     think: bool,
     conversations: list[ChatCompletionRequest],
 ) -> None:
-    mistral_tokenizer = _get_mistral_tekkenizer(
-        tokenizer_version=version, validation_mode=mode, image=image, audio=audio, think=think
+    if spm and (version >= TokenizerVersion.v11 or audio):
+        pytest.skip("SPM tokenizer is not supported for tokenizer versions v11 and above or audio")
+    mistral_tokenizer = _get_mistral_tokenizer(
+        spm=spm, tokenizer_version=version, validation_mode=mode, image=image, audio=audio, think=think
     )
-    chat_template = get_chat_template(False, version, image, audio, think)
+    chat_template = get_chat_template(spm, version, image, audio, think)
     if version <= TokenizerVersion.v2:
         for conv in conversations:
             for message in conv.messages:
@@ -1270,206 +1288,9 @@ def test_chat_template_tekken(
             )
 
             mistral_common_encoded = encode_instruct_mistral_common(
-                mistral_tokenizer.instruct_tokenizer, instruct_conversation, False
+                mistral_tokenizer.instruct_tokenizer, instruct_conversation, spm
             )
         else:
-            mistral_common_encoded = encode_mistral_common(mistral_tokenizer, conversation, False)
+            mistral_common_encoded = encode_mistral_common(mistral_tokenizer, conversation, spm)
         transformers_encoded = encode_transformers(chat_template, conversation)
-        assert mistral_common_encoded == transformers_encoded
-
-
-@pytest.mark.parametrize(
-    "version,mode,image,conversations",
-    [
-        (
-            TokenizerVersion.v1,
-            ValidationMode.test,
-            False,
-            [REQUEST_ONE_TURN_TEST, REQUEST_MULTI_TURN_TEST, REQUEST_MULTI_TURN_WITH_SYSTEM_TEST],
-        ),
-        (
-            TokenizerVersion.v1,
-            ValidationMode.finetuning,
-            False,
-            [REQUEST_ONE_TURN_TRAIN, REQUEST_MULTI_TURN_TRAIN, REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN],
-        ),
-        (
-            TokenizerVersion.v2,
-            ValidationMode.test,
-            False,
-            [
-                REQUEST_ONE_TURN_TEST,
-                REQUEST_MULTI_TURN_TEST,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
-            ],
-        ),
-        (
-            TokenizerVersion.v2,
-            ValidationMode.finetuning,
-            False,
-            [
-                REQUEST_ONE_TURN_TRAIN,
-                REQUEST_MULTI_TURN_TRAIN,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-            ],
-        ),
-        (
-            TokenizerVersion.v3,
-            ValidationMode.test,
-            False,
-            [
-                REQUEST_ONE_TURN_TEST,
-                REQUEST_MULTI_TURN_TEST,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
-            ],
-        ),
-        (
-            TokenizerVersion.v3,
-            ValidationMode.finetuning,
-            False,
-            [
-                REQUEST_ONE_TURN_TRAIN,
-                REQUEST_MULTI_TURN_TRAIN,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-            ],
-        ),
-        (
-            TokenizerVersion.v3,
-            ValidationMode.test,
-            True,
-            [
-                REQUEST_ONE_TURN_TEST,
-                REQUEST_MULTI_TURN_TEST,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
-                REQUEST_MULTI_TURN_IMAGE_URL_TEST,
-                REQUEST_MULTI_TURN_IMAGE_TEST,
-            ],
-        ),
-        (
-            TokenizerVersion.v3,
-            ValidationMode.finetuning,
-            True,
-            [
-                REQUEST_ONE_TURN_TRAIN,
-                REQUEST_MULTI_TURN_TRAIN,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-                REQUEST_MULTI_TURN_IMAGE_URL_TRAIN,
-                REQUEST_MULTI_TURN_IMAGE_TRAIN,
-            ],
-        ),
-        (
-            TokenizerVersion.v7,
-            ValidationMode.test,
-            False,
-            [
-                REQUEST_ONE_TURN_TEST,
-                REQUEST_MULTI_TURN_TEST,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
-            ],
-        ),
-        (
-            TokenizerVersion.v7,
-            ValidationMode.finetuning,
-            False,
-            [
-                REQUEST_ONE_TURN_TRAIN,
-                REQUEST_MULTI_TURN_TRAIN,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-            ],
-        ),
-        (
-            TokenizerVersion.v7,
-            ValidationMode.test,
-            True,
-            [
-                REQUEST_ONE_TURN_TEST,
-                REQUEST_MULTI_TURN_TEST,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
-                REQUEST_MULTI_TURN_IMAGE_URL_TEST,
-                REQUEST_MULTI_TURN_IMAGE_TEST,
-            ],
-        ),
-        (
-            TokenizerVersion.v7,
-            ValidationMode.finetuning,
-            True,
-            [
-                REQUEST_ONE_TURN_TRAIN,
-                REQUEST_MULTI_TURN_TRAIN,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-                REQUEST_MULTI_TURN_IMAGE_URL_TRAIN,
-                REQUEST_MULTI_TURN_IMAGE_TRAIN,
-            ],
-        ),
-    ],
-)
-def test_chat_template_spm(
-    version: TokenizerVersion,
-    mode: ValidationMode,
-    image: bool,
-    conversations: list[ChatCompletionRequest],
-) -> None:
-    mistral_tokenizer = _get_mistral_sentenpiece(tokenizer_version=version, validation_mode=mode, image=image)
-    chat_template = get_chat_template(True, version, image, False, False)
-    if version <= TokenizerVersion.v2:
-        for conv in conversations:
-            for message in conv.messages:
-                if isinstance(message, (UserMessage, AssistantMessage)) and isinstance(message.content, list):
-                    assert len(message.content) == 1 and isinstance(message.content[0], TextChunk), (
-                        "Only text content is supported for v1 and v2"
-                    )
-                    message.content = str(message.content[0].text)
-    for conversation in conversations:
-        if version == TokenizerVersion.v2:
-            for message in conversation.messages:
-                if isinstance(message, ToolMessage):
-                    message.name = "tool"
-        if version <= TokenizerVersion.v2 and isinstance(conversation.messages[0], SystemMessage):
-            instruct_conversation = InstructRequest(
-                messages=conversation.messages[1:],
-                system_prompt=conversation.messages[0].content,  # type: ignore[arg-type]
-                available_tools=conversation.tools,
-            )
-
-            mistral_common_encoded = encode_instruct_mistral_common(
-                mistral_tokenizer.instruct_tokenizer, instruct_conversation, True
-            )
-        else:
-            mistral_common_encoded = encode_mistral_common(mistral_tokenizer, conversation, True)
-        transformers_encoded = encode_transformers(chat_template, conversation)
-        print("mistral\n\n")
-        print(mistral_common_encoded)
-        print("\n\n")
-        print("transformers\n\n")
-        print(transformers_encoded)
         assert mistral_common_encoded == transformers_encoded
