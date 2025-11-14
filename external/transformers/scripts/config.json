@@ -1,0 +1,31 @@
+{
+    "text_encode": {
+      "datasets": [
+        {
+          "name": "HuggingFaceFW/fineweb",
+          "split": "train",
+          "column": "text",
+          "num_samples": 500,
+          "max_tokens": 2048
+        },
+        {
+          "name": "HuggingFaceFW/finepdfs",
+          "split": "train",
+          "column": "text",
+          "num_samples": 500,
+          "max_tokens": 2048
+        }
+      ]
+    },
+    "text_instruct": {
+      "datasets": [
+        {
+          "name": "HuggingFaceH4/ultrachat_200k",
+          "split": "train_sft",
+          "column": "messages",
+          "num_samples": 1000,
+          "max_tokens": 2048
+        }
+      ]
+    }
+  }
