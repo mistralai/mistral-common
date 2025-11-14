@@ -28,6 +28,7 @@ Arguments:
 - `--hf_model`: Model name or path for the Hugging Face tokenizer (required).
 - `--mc_model`: Model name or path for the Mistral-Common tokenizer.
   If not provided, defaults to `hf_model`.
+- `--random_only`: If provided, only use random UTF-8 strings and no datasets for quick testing.
 - `--config`: Path to JSON config file with mode-specific settings
   (default: "external/transformers/scripts/full_compare_tokenizer_config.json").
 - `--type`: Type(s) of tokenization to perform (space-separated).
@@ -50,12 +51,17 @@ Examples:
         --config custom_config.json
         --type text_encode text_instruct
         --save_results
+
+    python3 compare_tokenizer.py
+        --hf_model mistralai/Mistral-Small-24b-Instruct-2501
+        --type text_encode text_instruct
+        --random_only
 """
 
 import argparse
 import json
+import random
 from collections import Counter
-from typing import Any
 
 from datasets import load_dataset
 from tqdm import tqdm
@@ -72,7 +78,7 @@ def compare_tokenizers(
     content: str | dict | list,
     max_tokens: int = 2_048,
     mode: str = "text_encode",
-) -> dict[str, Any] | None:
+) -> dict[str] | None:
     """Compare tokenization between Hugging Face and Mistral tokenizers."""
     if mode == "text_encode":
         assert isinstance(content, str), "Content must be a string for text_encode mode."
@@ -117,43 +123,99 @@ def process_dataset(
     num_samples: int,
     max_tokens: int,
     mode: str,
-) -> list[dict[str, Any]]:
+) -> list[dict[str]]:
     """Process a dataset and collect tokenizer mismatches."""
     mismatches = []
-    dataset = load_dataset(dataset_name, split=split, streaming=True)
-    try:
-        for i, example in tqdm(
-            enumerate(dataset),
-            desc=f"Processing {dataset_name} ({split}, mode: {mode})",
-            total=num_samples,
-        ):
-            if i >= num_samples:
-                break
-            content = example[column]
-            mismatch = compare_tokenizers(hf_tokenizer, mc_tokenizer, content, max_tokens, mode)
-            if mismatch:
-                mismatch.update(
-                    {
-                        "dataset_name": dataset_name,
-                        "dataset_column": column,
-                        "sample_index": i,
-                    }
+    if dataset_name not in ["random_utf8", "random_instruct_utf8"]:
+        dataset = load_dataset(dataset_name, split=split, streaming=True)
+        try:
+            for i, example in tqdm(
+                enumerate(dataset),
+                desc=f"Processing {dataset_name} ({split}, mode: {mode})",
+                total=num_samples,
+            ):
+                if i >= num_samples:
+                    break
+                content = example[column]
+                mismatch = compare_tokenizers(hf_tokenizer, mc_tokenizer, content, max_tokens, mode)
+                if mismatch:
+                    mismatch.update(
+                        {
+                            "dataset_name": dataset_name,
+                            "dataset_column": column,
+                            "sample_index": i,
+                        }
+                    )
+                    mismatches.append(mismatch)
+        finally:
+            if hasattr(dataset, "close"):
+                print(f"Closing dataset {dataset_name}.")
+                dataset.close()
+    else:
+        if dataset_name == "random_utf8":
+            for i in tqdm(range(num_samples), desc=f"Processing random_utf8 (mode: {mode})"):
+                content = "".join([chr(random.randint(0, 127)) for _ in range(max_tokens)])
+                mismatch = compare_tokenizers(hf_tokenizer, mc_tokenizer, content, max_tokens, mode)
+                if mismatch:
+                    mismatch.update(
+                        {
+                            "dataset_name": dataset_name,
+                            "dataset_column": column,
+                            "sample_index": i,
+                        }
+                    )
+                    mismatches.append(mismatch)
+        elif dataset_name == "random_instruct_utf8":
+            for i in tqdm(
+                range(num_samples),
+                desc=f"Processing random_instruct_utf8 (mode: {mode})",
+            ):
+                content = (
+                    [
+                        {
+                            "role": "system",
+                            "content": "".join([chr(random.randint(0, 127)) for _ in range(512)]),
+                        }
+                    ]
+                    if random.random() < 0.5
+                    else []
                 )
-                mismatches.append(mismatch)
-    finally:
-        if hasattr(dataset, "close"):
-            print(f"Closing dataset {dataset_name}.")
-            dataset.close()
+                for i in range(random.randint(1, 10)):
+                    if len(content) == 0:
+                        content.append(
+                            {
+                                "role": "user",
+                                "content": "".join([chr(random.randint(0, 127)) for _ in range(512)]),
+                            }
+                        )
+                    else:
+                        content.append(
+                            {
+                                "role": ("assistant" if content[-1]["role"] == "user" else "user"),
+                                "content": "".join([chr(random.randint(0, 127)) for _ in range(512)]),
+                            }
+                        )
+                mismatch = compare_tokenizers(hf_tokenizer, mc_tokenizer, content, max_tokens, mode)
+                if mismatch:
+                    mismatch.update(
+                        {
+                            "dataset_name": dataset_name,
+                            "dataset_column": column,
+                            "sample_index": i,
+                        }
+                    )
+                    mismatches.append(mismatch)
     return mismatches
 
 
 def test_tokenizer(
     hf_model: str,
     mc_model: str,
+    random_only: bool,
     modes: list[str],
     hf_token: str | None = None,
-    config: dict[str, Any] = {},
-) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
+    config: dict[str] = {},
+) -> tuple[dict[str, list[dict[str]]], dict[str]]:
     """Test tokenizer consistency for each mode and dataset in the config.
     Returns: (mismatch_results, stats)
     """
@@ -177,6 +239,11 @@ def test_tokenizer(
 
         for dataset_config in mode_config["datasets"]:
             dataset_name = dataset_config["name"]
+            if random_only and dataset_name not in [
+                "random_utf8",
+                "random_instruct_utf8",
+            ]:
+                continue
             split = dataset_config.get("split", "train")
             column = dataset_config.get("column", "text")
             num_samples = dataset_config.get("num_samples", 1000)
@@ -221,9 +288,7 @@ def test_tokenizer(
     return all_mismatches, stats
 
 
-def generate_mismatch_report(
-    mismatch_results: dict[str, list[dict[str, Any]]], stats: dict[str, Any]
-) -> dict[str, Any]:
+def generate_mismatch_report(mismatch_results: dict[str, list[dict[str]]], stats: dict[str]) -> dict[str]:
     """Generate a detailed report using precomputed stats and return it as a dict."""
     report = {"summary_by_mode": {}, "top_tokens_by_mode": {}, "top_tokens_overall": {}}
 
@@ -299,8 +364,8 @@ def generate_mismatch_report(
 
 
 def save_results(
-    results: dict[str, list[dict[str, Any]]],
-    report: dict[str, Any],
+    results: dict[str, list[dict[str]]],
+    report: dict[str],
     mismatches_filename: str = "tokenizer_mismatches_data.json",
     report_filename: str = "tokenizer_mismatches_report.json",
 ) -> None:
@@ -332,9 +397,13 @@ if __name__ == "__main__":
         help="Path to JSON config file with mode-specific settings.",
     )
     parser.add_argument(
+        "--random_only",
+        action="store_true",
+        help="Only test random UTF-8 data (for quick testing).",
+    )
+    parser.add_argument(
         "--hf_token",
         type=str,
-        default=None,
         help="Hugging Face token for private models.",
     )
     parser.add_argument(
@@ -363,6 +432,7 @@ if __name__ == "__main__":
     results, stats = test_tokenizer(
         args.hf_model,
         args.mc_model if args.mc_model else args.hf_model,
+        args.random_only,
         args.type,
         args.hf_token,
         config,
