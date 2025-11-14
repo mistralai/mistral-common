@@ -72,8 +72,8 @@ def compare_tokenizers(
 ) -> dict[str, Any] | None:
     """Compare tokenization between Hugging Face and Mistral tokenizers."""
     content = content[:max_chars]  # Limit to max_chars characters to avoid long sequences
-    hf_tokens = hf_tokenizer.encode(content)
-    mc_tokens = mc_tokenizer.instruct_tokenizer.tokenizer.encode(content, bos=True, eos=False)
+    hf_tokens = hf_tokenizer.encode(content, add_special_tokens=False)
+    mc_tokens = mc_tokenizer.instruct_tokenizer.tokenizer.encode(content, bos=False, eos=False)
     if hf_tokens != mc_tokens:
         mismatch_id = next(
             (idx for idx, (a, b) in enumerate(zip(hf_tokens, mc_tokens)) if a != b),
