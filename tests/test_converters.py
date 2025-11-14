@@ -139,7 +139,7 @@ def test_convert_text_chunk() -> None:
     chunk = TextChunk(text="Hello")
     text_openai = chunk.to_openai()
 
-    text_openai == {"type": "text", "text": "Hello"}
+    assert text_openai == {"type": "text", "text": "Hello"}
 
     assert TextChunk.from_openai(text_openai) == chunk
 
@@ -317,7 +317,7 @@ def test_convert_tool_call() -> None:
     )
     tool_call_openai = tool_call.to_openai()
 
-    tool_call_openai == (
+    assert tool_call_openai == (
         {
             "id": "VvvODy9mT",
             "type": "function",
