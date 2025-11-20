@@ -494,6 +494,7 @@ REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN = ChatCompletionRequest(  # type: igno
         Tool(function=Function(name="tool2", parameters={})),
     ],
 )
+
 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2 = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         SystemMessage(content="You are a helpful assistant."),
@@ -504,6 +505,110 @@ REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2 = ChatCompletionRequest(  # type: ig
         UserMessage(content="bye"),
         AssistantMessage(
             content=None,
+            tool_calls=[
+                ToolCall(
+                    id="123456789",
+                    function=FunctionCall(
+                        name="tool1",
+                        arguments={  # type: ignore[arg-type]
+                            "location": "San Francisco, CA",
+                        },
+                    ),
+                ),
+                ToolCall(
+                    id="023456789",
+                    function=FunctionCall(
+                        name="tool2",
+                        arguments={},  # type: ignore[arg-type]
+                    ),
+                ),
+            ],
+        ),
+        ToolMessage(content="32", tool_call_id="123456789"),
+        ToolMessage(content="aya", tool_call_id="023456789"),
+        AssistantMessage(content="wow 32", tool_calls=[]),
+    ],
+    tools=[
+        Tool(
+            function=Function(
+                name="tool1",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description": "The city and state, e.g. San Francisco, CA",
+                            "required": ["location"],
+                        }
+                    },
+                },
+            )
+        ),
+        Tool(function=Function(name="tool2", parameters={})),
+    ],
+)
+
+REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are a helpful assistant."),
+        UserMessage(content="User says hello"),
+        AssistantMessage(content="Whether is 32 degrees in San Francisco, CA"),
+        UserMessage(content=[TextChunk(text="User says thanks.")]),
+        AssistantMessage(content=[TextChunk(text="Assistant says you're welcome.")]),
+        UserMessage(content="bye"),
+        AssistantMessage(
+            content="Assistant says hi, let me fetch the weather for you.",
+            tool_calls=[
+                ToolCall(
+                    id="123456789",
+                    function=FunctionCall(
+                        name="tool1",
+                        arguments={  # type: ignore[arg-type]
+                            "location": "San Francisco, CA",
+                        },
+                    ),
+                ),
+                ToolCall(
+                    id="023456789",
+                    function=FunctionCall(
+                        name="tool2",
+                        arguments={},  # type: ignore[arg-type]
+                    ),
+                ),
+            ],
+        ),
+        ToolMessage(content="32", tool_call_id="123456789"),
+    ],
+    tools=[
+        Tool(
+            function=Function(
+                name="tool1",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description": "The city and state, e.g. San Francisco, CA",
+                            "required": ["location"],
+                        }
+                    },
+                },
+            )
+        ),
+        Tool(function=Function(name="tool2", parameters={})),
+    ],
+)
+
+REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are a helpful assistant."),
+        UserMessage(content="User says hello"),
+        AssistantMessage(content="Whether is 32 degrees in San Francisco, CA"),
+        UserMessage(content=[TextChunk(text="User says thanks.")]),
+        AssistantMessage(content=[TextChunk(text="Assistant says you're welcome.")]),
+        UserMessage(content="bye"),
+        AssistantMessage(
+            content="Assistant says hi, let me fetch the weather for you.",
             tool_calls=[
                 ToolCall(
                     id="123456789",
@@ -898,6 +1003,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
             ],
         ),
         (
@@ -913,6 +1019,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
             ],
         ),
         (
@@ -930,6 +1037,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
                 REQUEST_MULTI_TURN_IMAGE_URL_TEST,
                 REQUEST_MULTI_TURN_IMAGE_TEST,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
             ],
         ),
         (
@@ -947,6 +1055,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
                 REQUEST_MULTI_TURN_IMAGE_URL_TRAIN,
                 REQUEST_MULTI_TURN_IMAGE_TRAIN,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
             ],
         ),
         (
@@ -964,6 +1073,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
                 REQUEST_MULTI_TURN_AUDIO_URL_TEST,
                 REQUEST_MULTI_TURN_AUDIO_TEST,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
             ],
         ),
         (
@@ -981,6 +1091,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
                 REQUEST_MULTI_TURN_AUDIO_URL_TRAIN,
                 REQUEST_MULTI_TURN_AUDIO_TRAIN,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
             ],
         ),
         (
@@ -996,6 +1107,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
             ],
         ),
         (
@@ -1011,6 +1123,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
             ],
         ),
         (
@@ -1028,6 +1141,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
                 REQUEST_MULTI_TURN_IMAGE_URL_TEST,
                 REQUEST_MULTI_TURN_IMAGE_TEST,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
             ],
         ),
         (
@@ -1045,6 +1159,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
                 REQUEST_MULTI_TURN_IMAGE_URL_TRAIN,
                 REQUEST_MULTI_TURN_IMAGE_TRAIN,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
             ],
         ),
         (
@@ -1062,6 +1177,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
                 REQUEST_MULTI_TURN_AUDIO_URL_TEST,
                 REQUEST_MULTI_TURN_AUDIO_TEST,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
             ],
         ),
         (
@@ -1079,6 +1195,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
                 REQUEST_MULTI_TURN_AUDIO_URL_TRAIN,
                 REQUEST_MULTI_TURN_AUDIO_TRAIN,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
             ],
         ),
         (
@@ -1094,6 +1211,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
             ],
         ),
         (
@@ -1109,6 +1227,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
             ],
         ),
         (
@@ -1126,6 +1245,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
                 REQUEST_MULTI_TURN_IMAGE_URL_TEST,
                 REQUEST_MULTI_TURN_IMAGE_TEST,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
             ],
         ),
         (
@@ -1143,6 +1263,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
                 REQUEST_MULTI_TURN_IMAGE_URL_TRAIN,
                 REQUEST_MULTI_TURN_IMAGE_TRAIN,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
             ],
         ),
         (
@@ -1160,6 +1281,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
                 REQUEST_MULTI_TURN_AUDIO_URL_TEST,
                 REQUEST_MULTI_TURN_AUDIO_TEST,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
             ],
         ),
         (
@@ -1177,6 +1299,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
                 REQUEST_MULTI_TURN_AUDIO_URL_TRAIN,
                 REQUEST_MULTI_TURN_AUDIO_TRAIN,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
             ],
         ),
         (
@@ -1193,6 +1316,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
                 REQUEST_MULTI_TURN_THINKING_TEST,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
             ],
         ),
         (
@@ -1209,6 +1333,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
                 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
                 REQUEST_MULTI_TURN_THINKING_TRAIN,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
             ],
         ),
         (
@@ -1227,6 +1352,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_IMAGE_URL_TEST,
                 REQUEST_MULTI_TURN_IMAGE_TEST,
                 REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TEST,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
             ],
         ),
         (
@@ -1245,6 +1371,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
                 REQUEST_MULTI_TURN_IMAGE_URL_TRAIN,
                 REQUEST_MULTI_TURN_IMAGE_TRAIN,
                 REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN,
+                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
             ],
         ),
     ],
@@ -1293,4 +1420,36 @@ def test_chat_template(
         else:
             mistral_common_encoded = encode_mistral_common(mistral_tokenizer, conversation, spm)
         transformers_encoded = encode_transformers(chat_template, conversation)
+
+        print("Mistral\n\n")
+        print(mistral_common_encoded)
+        print("\n\n\nTransformers\n\n")
+        print(transformers_encoded)
         assert mistral_common_encoded == transformers_encoded
+
+
+def test_tool_call_errors() -> None:
+    # ID
+    # Name
+    # args = dict
+    ...
+
+
+def test_role_error() -> None:
+    # alternate user, assistant
+    # tool after assistant
+    # only system, user, tool, assistant
+    ...
+
+
+def test_valid_chunks() -> None:
+    # user: text, image, audio
+    # sp: text, think
+    # assistant: text, think
+    ...
+
+
+def test_valid_assistant() -> None:
+    # content
+    # tool calls
+    ...
