@@ -83,7 +83,7 @@
 
     {#- Assistant messages supports text content or text and thinking chunks. #}
     {%- elif message['role'] == 'assistant' %}
-        {%- if message['content'] is not none and message['content'] | length > 0 and message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls'] | length > 0 %}
+        {%- if message['content'] is not none and message['content'] | length > 0 and message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}
             {{- raise_exception('Assistant message cannot have both content and tool calls.') }}
         {%- endif %}
 
@@ -105,7 +105,7 @@
                     {{- raise_exception('Only text chunks are supported in assistant message contents.') }}
                 {%- endif %}
             {%- endfor %}
-        {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls'] | length > 0 %}
+        {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}
             {%- if ns.add_space %}
                 {%- set ns.add_space=false %}
             {%- endif %}
