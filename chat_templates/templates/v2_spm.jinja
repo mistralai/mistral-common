@@ -83,7 +83,7 @@
 
     {#- Assistant messages supports text content or text chunks. #}
     {%- elif message['role'] == 'assistant' %}
-        {%- if message['content'] is not none and message['content'] | length > 0 and message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls'] | length > 0 %}
+        {%- if message['content'] is not none and message['content'] | length > 0 and message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}
             {{- raise_exception('Assistant message cannot have both content and tool calls.') }}
         {%- endif %}
 
@@ -107,7 +107,7 @@
                 {%- endif %}
             {%- endfor %}
             {{- eos_token }}
-        {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls'] | length > 0 and ns.index > ns.max_idx_user %}
+        {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 and ns.index > ns.max_idx_user %}
             {%- if ns.add_space %}
                 {%- set ns.add_space=false %}
             {%- endif %}
@@ -127,7 +127,7 @@
             {%- endfor %}
             {{- ']' }}
             {{- eos_token }}
-        {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls'] | length > 0 and ns.index <= ns.max_idx_user %}
+        {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 and ns.index <= ns.max_idx_user %}
         {%- else %}
             {{- raise_exception('Assistant message must have a string or a list of chunks in content or a list of tool calls.') }}
         {%- endif %}
