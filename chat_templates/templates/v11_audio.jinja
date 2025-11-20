@@ -86,8 +86,8 @@
 
     {#- Assistant messages supports text content or text and audio chunks. #}
     {%- elif message['role'] == 'assistant' %}
-        {%- if message['content'] is not none and message['content'] | length > 0 and message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls'] | length > 0 %}
-            {{- raise_exception('Assistant message cannot have both content and tool calls.') }}
+        {%- if (message['content'] is none or message['content'] == '' or message['content']|length == 0) and (message['tool_calls'] is not defined or message['tool_calls'] is none or message['tool_calls']|length == 0) %}
+            {{- raise_exception('Assistant message must have a string or a list of chunks in content or a list of tool calls.') }}
         {%- endif %}
 
         {%- if message['content'] is string and message['content'] != '' %}
@@ -100,7 +100,9 @@
                     {{- raise_exception('Only text chunks are supported in assistant message contents.') }}
                 {%- endif %}
             {%- endfor %}
-        {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls'] | length > 0 %}
+        {%- endif %}
+
+        {%- if message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}
             {%- for tool in message['tool_calls'] %}
                 {{- '[TOOL_CALLS]' }}
                 {%- set name = tool['function']['name'] %}
@@ -116,9 +118,8 @@
                 {%- endif %}
                 {{- name + '[CALL_ID]' + id + '[ARGS]' + arguments }}
             {%- endfor %}
-        {%- else %}
-            {{- raise_exception('Assistant message must have a string or a list of chunks in content or a list of tool calls.') }}
         {%- endif %}
+
         {{- eos_token }}
 
     {#- Tool messages only supports text content. #}
