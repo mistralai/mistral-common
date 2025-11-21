@@ -84,3 +84,5 @@ uv run pre-commit install
 ## License
 
 This library is licensed under the Apache 2.0 License. See the [LICENCE](./LICENCE) file for more information.
+
+*You must not use this library or our models in a manner that infringes, misappropriates, or otherwise violates any third party’s rights, including intellectual property rights.*
