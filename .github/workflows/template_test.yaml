@@ -7,16 +7,12 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "chat_templates/**"
   pull_request:
     types:
       - opened
       - synchronize
       - reopened
       - ready_for_review
-    paths:
-      - "chat_templates/**"
     
   jobs:
   build_lint_test:
@@ -44,4 +40,4 @@ on:
       # PyTest
       - name: Tests
         run: |
-          uv run pytest chat_templates/test_chat_templates.py
+          uv run pytest integrations/chat_templates/test_chat_templates.py
