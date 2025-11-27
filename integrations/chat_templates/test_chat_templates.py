@@ -1,7 +1,10 @@
 import json
+import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
+from jinja2.exceptions import TemplateError
 from transformers.utils.chat_template_utils import render_jinja_template
 
 from chat_templates.chat_templates import get_chat_template
@@ -17,12 +20,22 @@ from mistral_common.protocol.instruct.chunk import (
     TextChunk,
     ThinkChunk,
 )
-from mistral_common.protocol.instruct.messages import AssistantMessage, SystemMessage, ToolMessage, UserMessage
+from mistral_common.protocol.instruct.messages import (
+    AssistantMessage,
+    SystemMessage,
+    ToolMessage,
+    UserMessage,
+)
 from mistral_common.protocol.instruct.normalize import get_normalizer
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.protocol.instruct.validator import ValidationMode, get_validator
-from mistral_common.tokens.tokenizers.audio import AudioConfig, AudioEncoder, AudioSpectrogramConfig, SpecialAudioIDs
+from mistral_common.tokens.tokenizers.audio import (
+    AudioConfig,
+    AudioEncoder,
+    AudioSpectrogramConfig,
+    SpecialAudioIDs,
+)
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenizer, TokenizerVersion
 from mistral_common.tokens.tokenizers.image import ImageConfig, ImageEncoder, SpecialImageIDs
 from mistral_common.tokens.tokenizers.instruct import (
@@ -36,7 +49,14 @@ from mistral_common.tokens.tokenizers.instruct import (
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-from tests.test_tekken import get_special_tokens
+
+ROOT_DIR = Path(__file__).parent.parent.parent
+TEST_DIR = ROOT_DIR / "tests"
+
+# To import test_tekken
+sys.path.append(TEST_DIR.as_posix())
+
+from test_tekken import get_special_tokens  # noqa: E402 # type: ignore
 
 mistral_tokenizer = MistralTokenizer.from_hf_hub("mistralai/Magistral-Small-2509")
 
@@ -125,6 +145,27 @@ def _get_audio_encoder() -> AudioEncoder:
     )
     audio_encoder = AudioEncoder(audio_config=audio_config, special_ids=SpecialAudioIDs(audio=24, begin_audio=25))
     return audio_encoder
+
+
+def _maybe_skip(
+    spm: bool,
+    version: TokenizerVersion,
+    image: bool,
+    audio: bool,
+    think: bool,
+) -> None:
+    if spm and (version >= TokenizerVersion.v11 or audio):
+        pytest.skip("SPM tokenizer is not supported for tokenizer versions v11 and above or audio")
+    elif version < TokenizerVersion.v7 and audio:
+        pytest.skip("Audio is not supported for tokenizer version v1, v2, v3")
+    elif version < TokenizerVersion.v13 and think:
+        pytest.skip("Think is not supported for tokenizer version v1, v2, v3, v7, v11")
+    elif version < TokenizerVersion.v3 and image:
+        pytest.skip("Image is not supported for tokenizer version v1, v2")
+    elif image and audio:
+        pytest.skip("Image and audio are mutually exclusive")
+    elif audio and think:
+        pytest.skip("Audio and think are mutually exclusive")
 
 
 def _get_mistral_tekkenizer(
@@ -229,8 +270,11 @@ def _get_mistral_tokenizer(
         return _get_mistral_tekkenizer(tokenizer_version, validation_mode, image, audio, think)
 
 
-def encode_transformers(chat_template: str, chat_request: ChatCompletionRequest) -> str:
-    openai_request = chat_request.to_openai()
+def encode_transformers(chat_template: str, chat_request: ChatCompletionRequest | dict) -> str:
+    if isinstance(chat_request, ChatCompletionRequest):
+        openai_request = chat_request.to_openai()
+    else:
+        openai_request = chat_request
     return render_jinja_template(
         [openai_request["messages"]],
         tools=openai_request.get("tools", None),  # type: ignore[arg-type]
@@ -877,506 +921,24 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
 )
 
 
-@pytest.mark.parametrize(
-    "version,mode,image,audio,think,conversations",
-    [
-        (
-            TokenizerVersion.v1,
-            ValidationMode.test,
-            False,
-            False,
-            False,
-            [REQUEST_ONE_TURN_TEST, REQUEST_MULTI_TURN_TEST, REQUEST_MULTI_TURN_WITH_SYSTEM_TEST],
-        ),
-        (
-            TokenizerVersion.v1,
-            ValidationMode.finetuning,
-            False,
-            False,
-            False,
-            [REQUEST_ONE_TURN_TRAIN, REQUEST_MULTI_TURN_TRAIN, REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN],
-        ),
-        (
-            TokenizerVersion.v2,
-            ValidationMode.test,
-            False,
-            False,
-            False,
-            [
-                REQUEST_ONE_TURN_TEST,
-                REQUEST_MULTI_TURN_TEST,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
-            ],
-        ),
-        (
-            TokenizerVersion.v2,
-            ValidationMode.finetuning,
-            False,
-            False,
-            False,
-            [
-                REQUEST_ONE_TURN_TRAIN,
-                REQUEST_MULTI_TURN_TRAIN,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-            ],
-        ),
-        (
-            TokenizerVersion.v3,
-            ValidationMode.test,
-            False,
-            False,
-            False,
-            [
-                REQUEST_ONE_TURN_TEST,
-                REQUEST_MULTI_TURN_TEST,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
-            ],
-        ),
-        (
-            TokenizerVersion.v3,
-            ValidationMode.finetuning,
-            False,
-            False,
-            False,
-            [
-                REQUEST_ONE_TURN_TRAIN,
-                REQUEST_MULTI_TURN_TRAIN,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-            ],
-        ),
-        (
-            TokenizerVersion.v3,
-            ValidationMode.test,
-            True,
-            False,
-            False,
-            [
-                REQUEST_ONE_TURN_TEST,
-                REQUEST_MULTI_TURN_TEST,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
-                REQUEST_MULTI_TURN_IMAGE_URL_TEST,
-                REQUEST_MULTI_TURN_IMAGE_TEST,
-            ],
-        ),
-        (
-            TokenizerVersion.v3,
-            ValidationMode.finetuning,
-            True,
-            False,
-            False,
-            [
-                REQUEST_ONE_TURN_TRAIN,
-                REQUEST_MULTI_TURN_TRAIN,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-                REQUEST_MULTI_TURN_IMAGE_URL_TRAIN,
-                REQUEST_MULTI_TURN_IMAGE_TRAIN,
-            ],
-        ),
-        (
-            TokenizerVersion.v7,
-            ValidationMode.test,
-            False,
-            False,
-            False,
-            [
-                REQUEST_ONE_TURN_TEST,
-                REQUEST_MULTI_TURN_TEST,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
-            ],
-        ),
-        (
-            TokenizerVersion.v7,
-            ValidationMode.finetuning,
-            False,
-            False,
-            False,
-            [
-                REQUEST_ONE_TURN_TRAIN,
-                REQUEST_MULTI_TURN_TRAIN,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
-            ],
-        ),
-        (
-            TokenizerVersion.v7,
-            ValidationMode.test,
-            True,
-            False,
-            False,
-            [
-                REQUEST_ONE_TURN_TEST,
-                REQUEST_MULTI_TURN_TEST,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
-                REQUEST_MULTI_TURN_IMAGE_URL_TEST,
-                REQUEST_MULTI_TURN_IMAGE_TEST,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
-            ],
-        ),
-        (
-            TokenizerVersion.v7,
-            ValidationMode.finetuning,
-            True,
-            False,
-            False,
-            [
-                REQUEST_ONE_TURN_TRAIN,
-                REQUEST_MULTI_TURN_TRAIN,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-                REQUEST_MULTI_TURN_IMAGE_URL_TRAIN,
-                REQUEST_MULTI_TURN_IMAGE_TRAIN,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
-            ],
-        ),
-        (
-            TokenizerVersion.v7,
-            ValidationMode.test,
-            False,
-            True,
-            False,
-            [
-                REQUEST_ONE_TURN_TEST,
-                REQUEST_MULTI_TURN_TEST,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
-                REQUEST_MULTI_TURN_AUDIO_URL_TEST,
-                REQUEST_MULTI_TURN_AUDIO_TEST,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
-            ],
-        ),
-        (
-            TokenizerVersion.v7,
-            ValidationMode.finetuning,
-            False,
-            True,
-            False,
-            [
-                REQUEST_ONE_TURN_TRAIN,
-                REQUEST_MULTI_TURN_TRAIN,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-                REQUEST_MULTI_TURN_AUDIO_URL_TRAIN,
-                REQUEST_MULTI_TURN_AUDIO_TRAIN,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
-            ],
-        ),
-        (
-            TokenizerVersion.v11,
-            ValidationMode.test,
-            False,
-            False,
-            False,
-            [
-                REQUEST_ONE_TURN_TEST,
-                REQUEST_MULTI_TURN_TEST,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
-            ],
-        ),
-        (
-            TokenizerVersion.v11,
-            ValidationMode.finetuning,
-            False,
-            False,
-            False,
-            [
-                REQUEST_ONE_TURN_TRAIN,
-                REQUEST_MULTI_TURN_TRAIN,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
-            ],
-        ),
-        (
-            TokenizerVersion.v11,
-            ValidationMode.test,
-            True,
-            False,
-            False,
-            [
-                REQUEST_ONE_TURN_TEST,
-                REQUEST_MULTI_TURN_TEST,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
-                REQUEST_MULTI_TURN_IMAGE_URL_TEST,
-                REQUEST_MULTI_TURN_IMAGE_TEST,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
-            ],
-        ),
-        (
-            TokenizerVersion.v11,
-            ValidationMode.finetuning,
-            True,
-            False,
-            False,
-            [
-                REQUEST_ONE_TURN_TRAIN,
-                REQUEST_MULTI_TURN_TRAIN,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-                REQUEST_MULTI_TURN_IMAGE_URL_TRAIN,
-                REQUEST_MULTI_TURN_IMAGE_TRAIN,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
-            ],
-        ),
-        (
-            TokenizerVersion.v11,
-            ValidationMode.test,
-            False,
-            True,
-            False,
-            [
-                REQUEST_ONE_TURN_TEST,
-                REQUEST_MULTI_TURN_TEST,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
-                REQUEST_MULTI_TURN_AUDIO_URL_TEST,
-                REQUEST_MULTI_TURN_AUDIO_TEST,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
-            ],
-        ),
-        (
-            TokenizerVersion.v11,
-            ValidationMode.finetuning,
-            False,
-            True,
-            False,
-            [
-                REQUEST_ONE_TURN_TRAIN,
-                REQUEST_MULTI_TURN_TRAIN,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-                REQUEST_MULTI_TURN_AUDIO_URL_TRAIN,
-                REQUEST_MULTI_TURN_AUDIO_TRAIN,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
-            ],
-        ),
-        (
-            TokenizerVersion.v13,
-            ValidationMode.test,
-            False,
-            False,
-            False,
-            [
-                REQUEST_ONE_TURN_TEST,
-                REQUEST_MULTI_TURN_TEST,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
-            ],
-        ),
-        (
-            TokenizerVersion.v13,
-            ValidationMode.finetuning,
-            False,
-            False,
-            False,
-            [
-                REQUEST_ONE_TURN_TRAIN,
-                REQUEST_MULTI_TURN_TRAIN,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
-            ],
-        ),
-        (
-            TokenizerVersion.v13,
-            ValidationMode.test,
-            True,
-            False,
-            False,
-            [
-                REQUEST_ONE_TURN_TEST,
-                REQUEST_MULTI_TURN_TEST,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
-                REQUEST_MULTI_TURN_IMAGE_URL_TEST,
-                REQUEST_MULTI_TURN_IMAGE_TEST,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
-            ],
-        ),
-        (
-            TokenizerVersion.v13,
-            ValidationMode.finetuning,
-            True,
-            False,
-            False,
-            [
-                REQUEST_ONE_TURN_TRAIN,
-                REQUEST_MULTI_TURN_TRAIN,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-                REQUEST_MULTI_TURN_IMAGE_URL_TRAIN,
-                REQUEST_MULTI_TURN_IMAGE_TRAIN,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
-            ],
-        ),
-        (
-            TokenizerVersion.v13,
-            ValidationMode.test,
-            False,
-            True,
-            False,
-            [
-                REQUEST_ONE_TURN_TEST,
-                REQUEST_MULTI_TURN_TEST,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
-                REQUEST_MULTI_TURN_AUDIO_URL_TEST,
-                REQUEST_MULTI_TURN_AUDIO_TEST,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
-            ],
-        ),
-        (
-            TokenizerVersion.v13,
-            ValidationMode.finetuning,
-            False,
-            True,
-            False,
-            [
-                REQUEST_ONE_TURN_TRAIN,
-                REQUEST_MULTI_TURN_TRAIN,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-                REQUEST_MULTI_TURN_AUDIO_URL_TRAIN,
-                REQUEST_MULTI_TURN_AUDIO_TRAIN,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
-            ],
-        ),
-        (
-            TokenizerVersion.v13,
-            ValidationMode.test,
-            False,
-            False,
-            True,
-            [
-                REQUEST_ONE_TURN_TEST,
-                REQUEST_MULTI_TURN_TEST,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
-                REQUEST_MULTI_TURN_THINKING_TEST,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
-            ],
-        ),
-        (
-            TokenizerVersion.v13,
-            ValidationMode.finetuning,
-            False,
-            False,
-            True,
-            [
-                REQUEST_ONE_TURN_TRAIN,
-                REQUEST_MULTI_TURN_TRAIN,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-                REQUEST_MULTI_TURN_THINKING_TRAIN,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
-            ],
-        ),
-        (
-            TokenizerVersion.v13,
-            ValidationMode.test,
-            True,
-            False,
-            True,
-            [
-                REQUEST_ONE_TURN_TEST,
-                REQUEST_MULTI_TURN_TEST,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
-                REQUEST_MULTI_TURN_IMAGE_URL_TEST,
-                REQUEST_MULTI_TURN_IMAGE_TEST,
-                REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TEST,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
-            ],
-        ),
-        (
-            TokenizerVersion.v13,
-            ValidationMode.finetuning,
-            True,
-            False,
-            True,
-            [
-                REQUEST_ONE_TURN_TRAIN,
-                REQUEST_MULTI_TURN_TRAIN,
-                REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
-                REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-                REQUEST_MULTI_TURN_IMAGE_URL_TRAIN,
-                REQUEST_MULTI_TURN_IMAGE_TRAIN,
-                REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN,
-                REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
-            ],
-        ),
-    ],
-)
 @pytest.mark.parametrize("spm", [True, False])
+@pytest.mark.parametrize(("version", "image", "audio", "think"), [
+    (TokenizerVersion.v1, False, False, False),
+    (TokenizerVersion.v2, False, False, False),
+    (TokenizerVersion.v3, False, False, False),
+    (TokenizerVersion.v3, True, False, False),
+    (TokenizerVersion.v7, False, False, False),
+    (TokenizerVersion.v7, True, False, False),
+    (TokenizerVersion.v7, False, True, False),
+    (TokenizerVersion.v11, False, False, False),
+    (TokenizerVersion.v11, True, False, False),
+    (TokenizerVersion.v11, False, True, False),
+    (TokenizerVersion.v13, False, False, False),
+    (TokenizerVersion.v13, True, False, False),
+    (TokenizerVersion.v13, False, True, False),
+    (TokenizerVersion.v13, True, False, True),
+])
+@pytest.mark.parametrize("mode", [ValidationMode.test, ValidationMode.finetuning])
 def test_chat_template(
     spm: bool,
     version: TokenizerVersion,
@@ -1384,10 +946,64 @@ def test_chat_template(
     image: bool,
     audio: bool,
     think: bool,
-    conversations: list[ChatCompletionRequest],
 ) -> None:
-    if spm and (version >= TokenizerVersion.v11 or audio):
-        pytest.skip("SPM tokenizer is not supported for tokenizer versions v11 and above or audio")
+    _maybe_skip(spm, version, image, audio, think)
+
+    conversations: list[ChatCompletionRequest] = (
+        [REQUEST_ONE_TURN_TEST, REQUEST_MULTI_TURN_TEST, REQUEST_MULTI_TURN_WITH_SYSTEM_TEST]
+        if mode == ValidationMode.test
+        else [REQUEST_ONE_TURN_TRAIN, REQUEST_MULTI_TURN_TRAIN, REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN]
+    )
+
+    if version > TokenizerVersion.v1:
+        if mode == ValidationMode.test:
+            conversations.extend(
+                [
+                    REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
+                    REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
+                    REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
+                ]
+            )
+        else:
+            conversations.extend(
+                [
+                    REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
+                    REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
+                    REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
+                ]
+            )
+    if version > TokenizerVersion.v7:
+        conversations.append(
+            REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST
+            if mode == ValidationMode.test
+            else REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN
+        )
+
+    if image:
+        if mode == ValidationMode.test:
+            conversations.extend([REQUEST_MULTI_TURN_IMAGE_URL_TEST, REQUEST_MULTI_TURN_IMAGE_TEST])
+        else:
+            conversations.extend([REQUEST_MULTI_TURN_IMAGE_URL_TRAIN, REQUEST_MULTI_TURN_IMAGE_TRAIN])
+
+    if audio:
+        if mode == ValidationMode.test:
+            conversations.extend([REQUEST_MULTI_TURN_AUDIO_URL_TEST, REQUEST_MULTI_TURN_AUDIO_TEST])
+
+        else:
+            conversations.extend([REQUEST_MULTI_TURN_AUDIO_URL_TRAIN, REQUEST_MULTI_TURN_AUDIO_TRAIN])
+
+    if think:
+        if mode == ValidationMode.test:
+            conversations.extend([REQUEST_MULTI_TURN_THINKING_TEST])
+        else:
+            conversations.extend([REQUEST_MULTI_TURN_THINKING_TRAIN])
+
+    if image and think:
+        if mode == ValidationMode.test:
+            conversations.extend([REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TEST])
+        else:
+            conversations.extend([REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN])
+
     mistral_tokenizer = _get_mistral_tokenizer(
         spm=spm, tokenizer_version=version, validation_mode=mode, image=image, audio=audio, think=think
     )
@@ -1421,31 +1037,260 @@ def test_chat_template(
             mistral_common_encoded = encode_mistral_common(mistral_tokenizer, conversation, spm)
         transformers_encoded = encode_transformers(chat_template, conversation)
 
-        print("Mistral\n\n")
-        print(mistral_common_encoded)
-        print("\n\n\nTransformers\n\n")
-        print(transformers_encoded)
         assert mistral_common_encoded == transformers_encoded
 
 
-def test_tool_call_errors() -> None:
-    # ID
-    # Name
-    # args = dict
-    ...
+@pytest.mark.parametrize("spm", [True, False])
+@pytest.mark.parametrize(("version", "image", "audio", "think"), [
+    (TokenizerVersion.v1, False, False, False),
+    (TokenizerVersion.v2, False, False, False),
+    (TokenizerVersion.v3, False, False, False),
+    (TokenizerVersion.v3, True, False, False),
+    (TokenizerVersion.v7, False, False, False),
+    (TokenizerVersion.v7, True, False, False),
+    (TokenizerVersion.v7, False, True, False),
+    (TokenizerVersion.v11, False, False, False),
+    (TokenizerVersion.v11, True, False, False),
+    (TokenizerVersion.v11, False, True, False),
+    (TokenizerVersion.v13, False, False, False),
+    (TokenizerVersion.v13, True, False, False),
+    (TokenizerVersion.v13, False, True, False),
+    (TokenizerVersion.v13, True, False, True),
+])
+def test_role_error(
+    spm: bool,
+    version: TokenizerVersion,
+    image: bool,
+    audio: bool,
+    think: bool,
+) -> None:
+    _maybe_skip(spm, version, image, audio, think)
+
+    chat_template = get_chat_template(spm, version, image, audio, think)
+
+    INVALID_ALTERNATE_CONVERSATION = {
+        "messages": [
+            {"role": "user", "content": "Hello"},
+            {"role": "user", "content": "Hello"},
+        ]
+    }
+
+    INVALID_ROLE = {
+        "messages": [
+            {"role": "user", "content": "Hello"},
+            {"role": "invalid", "content": "Hello"},
+        ]
+    }
+
+    alternate_match = (
+        (
+            r"After the optional system message, conversation roles must alternate user and assistant roles except for "
+            r"tool calls and results."
+        )
+        if version > TokenizerVersion.v1
+        else (r"After the optional system message, conversation roles must alternate user and assistant.")
+    )
+
+    role_match = (
+        r"Only user, assistant and tool roles are supported, got invalid."
+        if version > TokenizerVersion.v1
+        else r"Only user and assistant roles are supported, got invalid."
+    )
+
+    with pytest.raises(expected_exception=TemplateError, match=alternate_match):
+        encode_transformers(chat_template, INVALID_ALTERNATE_CONVERSATION)
+
+    with pytest.raises(TemplateError, match=role_match):
+        encode_transformers(chat_template, INVALID_ROLE)
 
 
-def test_role_error() -> None:
-    # alternate user, assistant
-    # tool after assistant
-    # only system, user, tool, assistant
-    ...
-
-
-def test_valid_chunks() -> None:
+@pytest.mark.parametrize("spm", [True, False])
+@pytest.mark.parametrize(("version", "image", "audio", "think"), [
+    (TokenizerVersion.v1, False, False, False),
+    (TokenizerVersion.v2, False, False, False),
+    (TokenizerVersion.v3, False, False, False),
+    (TokenizerVersion.v3, True, False, False),
+    (TokenizerVersion.v7, False, False, False),
+    (TokenizerVersion.v7, True, False, False),
+    (TokenizerVersion.v7, False, True, False),
+    (TokenizerVersion.v11, False, False, False),
+    (TokenizerVersion.v11, True, False, False),
+    (TokenizerVersion.v11, False, True, False),
+    (TokenizerVersion.v13, False, False, False),
+    (TokenizerVersion.v13, True, False, False),
+    (TokenizerVersion.v13, False, True, False),
+    (TokenizerVersion.v13, True, False, True),
+])
+def test_invalid_chunks(
+    spm: bool,
+    version: TokenizerVersion,
+    image: bool,
+    audio: bool,
+    think: bool,
+) -> None:
     # user: text, image, audio
     # sp: text, think
     # assistant: text, think
+    _maybe_skip(spm, version, image, audio, think)
+
+    INVALID_SP_THINK = {
+        "messages": [
+            {
+                "role": "system",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                    {"type": "think", "thinking": "Hello"},
+                ],
+            }
+        ]
+    }
+
+    INVALID_SP_RANDOM = {
+        "messages": [
+            {
+                "role": "system",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                    {"type": "random", "random": "Hello"},
+                ],
+            }
+        ]
+    }
+
+    INVALID_ASSISTANT_THINK = {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                ],
+            },
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                    {"type": "think", "thinking": "Hello"},
+                ],
+            },
+        ]
+    }
+
+    INVALID_ASSISTANT_RANDOM = {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                ],
+            },
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                    {"type": "random", "random": "Hello"},
+                ],
+            },
+        ]
+    }
+
+    INVALID_USER_IMAGE = {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                    {"type": "image", "image_url": "Hello"},
+                ],
+            }
+        ]
+    }
+
+    INVALID_USER_AUDIO = {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                    {"type": "audio", "audio_url": "Hello"},
+                ],
+            }
+        ]
+    }
+
+    INVALID_USER_RANDOM = {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                    {"type": "random", "random": "Hello"},
+                ],
+            }
+        ]
+    }
+
+    SP_INVALIDS = [INVALID_SP_RANDOM, INVALID_SP_THINK]
+    ASSISTANT_INVALIDS = [INVALID_ASSISTANT_RANDOM, INVALID_ASSISTANT_THINK]
+    USER_INVALIDS = [INVALID_USER_IMAGE, INVALID_USER_AUDIO, INVALID_USER_RANDOM]
+
+    invalid_convs = [INVALID_SP_RANDOM, INVALID_USER_RANDOM, INVALID_ASSISTANT_RANDOM]
+    if not think:
+        invalid_convs += [INVALID_SP_THINK, INVALID_ASSISTANT_THINK]
+    if not image:
+        invalid_convs += [INVALID_USER_IMAGE]
+    if not audio:
+        invalid_convs += [INVALID_USER_AUDIO]
+
+    chat_template = get_chat_template(spm, version, image, audio, think)
+    for conv in invalid_convs:
+        msg_template = "Only {chunks} chunks are supported in {role} message content."
+        if conv in SP_INVALIDS:
+            chunks = "text and thinking" if think else "text"
+            role = "system"
+        elif conv in USER_INVALIDS:
+            chunks = "text"
+            if image:
+                chunks += ", image and image_url"
+            if audio:
+                chunks += ", input_audio and audio_url"
+            role = "user"
+        elif conv in ASSISTANT_INVALIDS:
+            chunks = "text and thinking" if think else "text"
+            role = "assistant"
+
+        err_msg = msg_template.format(chunks=chunks, role=role)
+        with pytest.raises(TemplateError, match=err_msg):
+            encode_transformers(chat_template, conv)
+
+
+@pytest.mark.parametrize("spm", [True, False])
+@pytest.mark.parametrize(("version", "image", "audio", "think"), [
+    (TokenizerVersion.v1, False, False, False),
+    (TokenizerVersion.v2, False, False, False),
+    (TokenizerVersion.v3, False, False, False),
+    (TokenizerVersion.v3, True, False, False),
+    (TokenizerVersion.v7, False, False, False),
+    (TokenizerVersion.v7, True, False, False),
+    (TokenizerVersion.v7, False, True, False),
+    (TokenizerVersion.v11, False, False, False),
+    (TokenizerVersion.v11, True, False, False),
+    (TokenizerVersion.v11, False, True, False),
+    (TokenizerVersion.v13, False, False, False),
+    (TokenizerVersion.v13, True, False, False),
+    (TokenizerVersion.v13, False, True, False),
+    (TokenizerVersion.v13, True, False, True),
+])
+def test_tool_call_errors(
+    spm: bool,
+    version: TokenizerVersion,
+    image: bool,
+    audio: bool,
+    think: bool,
+) -> None:
+    _maybe_skip(spm, version, image, audio, think)
+    # ID
+    # Name
+    # args = dict
     ...
 
 
