@@ -184,6 +184,7 @@ class Tekkenizer(Tokenizer):
         inner_vocab_size = vocab_size - num_special_tokens
 
         # reload vocab
+        logger.info(f"Non special vocabulary size is {inner_vocab_size} with {num_special_tokens} special tokens.")
         self._tekken_token2id_nospecial = _reload_mergeable_ranks(vocab, max_vocab=inner_vocab_size)
         assert set(range(inner_vocab_size)) == set(self._tekken_token2id_nospecial.values()), (
             inner_vocab_size,
@@ -537,11 +538,11 @@ def _reload_mergeable_ranks(
     max_vocab: int | None = None,
 ) -> dict[bytes, int]:
     r"""Reload our tokenizer JSON file and convert it to Tiktoken format."""
-    logger.info(f"Vocab size: {len(vocab)}")
     if max_vocab is not None:
         assert len(vocab) >= max_vocab, (len(vocab), max_vocab)
-        vocab = vocab[:max_vocab]
-        logger.info(f"Cutting vocab to first {len(vocab)} tokens.")
+        if len(vocab) > max_vocab:
+            vocab = vocab[:max_vocab]
+            logger.info(f"Cutting non special vocabulary to first {len(vocab)} tokens.")
 
     # build ranks
     ranks: dict[bytes, int] = {}
