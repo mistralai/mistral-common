@@ -921,42 +921,21 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
 )
 
 
-@pytest.mark.parametrize("spm", [True, False])
-@pytest.mark.parametrize(("version", "image", "audio", "think"), [
-    (TokenizerVersion.v1, False, False, False),
-    (TokenizerVersion.v2, False, False, False),
-    (TokenizerVersion.v3, False, False, False),
-    (TokenizerVersion.v3, True, False, False),
-    (TokenizerVersion.v7, False, False, False),
-    (TokenizerVersion.v7, True, False, False),
-    (TokenizerVersion.v7, False, True, False),
-    (TokenizerVersion.v11, False, False, False),
-    (TokenizerVersion.v11, True, False, False),
-    (TokenizerVersion.v11, False, True, False),
-    (TokenizerVersion.v13, False, False, False),
-    (TokenizerVersion.v13, True, False, False),
-    (TokenizerVersion.v13, False, True, False),
-    (TokenizerVersion.v13, True, False, True),
-])
-@pytest.mark.parametrize("mode", [ValidationMode.test, ValidationMode.finetuning])
-def test_chat_template(
-    spm: bool,
-    version: TokenizerVersion,
-    mode: ValidationMode,
+def _get_conversations(
+    tokenizer_version: TokenizerVersion,
+    validation_mode: ValidationMode,
     image: bool,
     audio: bool,
     think: bool,
-) -> None:
-    _maybe_skip(spm, version, image, audio, think)
-
+) -> list[ChatCompletionRequest]:
     conversations: list[ChatCompletionRequest] = (
         [REQUEST_ONE_TURN_TEST, REQUEST_MULTI_TURN_TEST, REQUEST_MULTI_TURN_WITH_SYSTEM_TEST]
-        if mode == ValidationMode.test
+        if validation_mode == ValidationMode.test
         else [REQUEST_ONE_TURN_TRAIN, REQUEST_MULTI_TURN_TRAIN, REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN]
     )
 
-    if version > TokenizerVersion.v1:
-        if mode == ValidationMode.test:
+    if tokenizer_version > TokenizerVersion.v1:
+        if validation_mode == ValidationMode.test:
             conversations.extend(
                 [
                     REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
@@ -972,37 +951,73 @@ def test_chat_template(
                     REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
                 ]
             )
-    if version > TokenizerVersion.v7:
+    if tokenizer_version > TokenizerVersion.v7:
         conversations.append(
             REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST
-            if mode == ValidationMode.test
+            if validation_mode == ValidationMode.test
             else REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN
         )
 
     if image:
-        if mode == ValidationMode.test:
+        if validation_mode == ValidationMode.test:
             conversations.extend([REQUEST_MULTI_TURN_IMAGE_URL_TEST, REQUEST_MULTI_TURN_IMAGE_TEST])
         else:
             conversations.extend([REQUEST_MULTI_TURN_IMAGE_URL_TRAIN, REQUEST_MULTI_TURN_IMAGE_TRAIN])
 
     if audio:
-        if mode == ValidationMode.test:
+        if validation_mode == ValidationMode.test:
             conversations.extend([REQUEST_MULTI_TURN_AUDIO_URL_TEST, REQUEST_MULTI_TURN_AUDIO_TEST])
 
         else:
             conversations.extend([REQUEST_MULTI_TURN_AUDIO_URL_TRAIN, REQUEST_MULTI_TURN_AUDIO_TRAIN])
 
     if think:
-        if mode == ValidationMode.test:
+        if validation_mode == ValidationMode.test:
             conversations.extend([REQUEST_MULTI_TURN_THINKING_TEST])
         else:
             conversations.extend([REQUEST_MULTI_TURN_THINKING_TRAIN])
 
     if image and think:
-        if mode == ValidationMode.test:
+        if validation_mode == ValidationMode.test:
             conversations.extend([REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TEST])
         else:
             conversations.extend([REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN])
+
+    return conversations
+
+
+@pytest.mark.parametrize("spm", [True, False])
+@pytest.mark.parametrize(
+    ("version", "image", "audio", "think"),
+    [
+        (TokenizerVersion.v1, False, False, False),
+        (TokenizerVersion.v2, False, False, False),
+        (TokenizerVersion.v3, False, False, False),
+        (TokenizerVersion.v3, True, False, False),
+        (TokenizerVersion.v7, False, False, False),
+        (TokenizerVersion.v7, True, False, False),
+        (TokenizerVersion.v7, False, True, False),
+        (TokenizerVersion.v11, False, False, False),
+        (TokenizerVersion.v11, True, False, False),
+        (TokenizerVersion.v11, False, True, False),
+        (TokenizerVersion.v13, False, False, False),
+        (TokenizerVersion.v13, True, False, False),
+        (TokenizerVersion.v13, False, True, False),
+        (TokenizerVersion.v13, True, False, True),
+    ],
+)
+@pytest.mark.parametrize("mode", [ValidationMode.test, ValidationMode.finetuning])
+def test_chat_template(
+    spm: bool,
+    version: TokenizerVersion,
+    mode: ValidationMode,
+    image: bool,
+    audio: bool,
+    think: bool,
+) -> None:
+    _maybe_skip(spm, version, image, audio, think)
+
+    conversations = _get_conversations(version, mode, image, audio, think)
 
     mistral_tokenizer = _get_mistral_tokenizer(
         spm=spm, tokenizer_version=version, validation_mode=mode, image=image, audio=audio, think=think
@@ -1041,22 +1056,25 @@ def test_chat_template(
 
 
 @pytest.mark.parametrize("spm", [True, False])
-@pytest.mark.parametrize(("version", "image", "audio", "think"), [
-    (TokenizerVersion.v1, False, False, False),
-    (TokenizerVersion.v2, False, False, False),
-    (TokenizerVersion.v3, False, False, False),
-    (TokenizerVersion.v3, True, False, False),
-    (TokenizerVersion.v7, False, False, False),
-    (TokenizerVersion.v7, True, False, False),
-    (TokenizerVersion.v7, False, True, False),
-    (TokenizerVersion.v11, False, False, False),
-    (TokenizerVersion.v11, True, False, False),
-    (TokenizerVersion.v11, False, True, False),
-    (TokenizerVersion.v13, False, False, False),
-    (TokenizerVersion.v13, True, False, False),
-    (TokenizerVersion.v13, False, True, False),
-    (TokenizerVersion.v13, True, False, True),
-])
+@pytest.mark.parametrize(
+    ("version", "image", "audio", "think"),
+    [
+        (TokenizerVersion.v1, False, False, False),
+        (TokenizerVersion.v2, False, False, False),
+        (TokenizerVersion.v3, False, False, False),
+        (TokenizerVersion.v3, True, False, False),
+        (TokenizerVersion.v7, False, False, False),
+        (TokenizerVersion.v7, True, False, False),
+        (TokenizerVersion.v7, False, True, False),
+        (TokenizerVersion.v11, False, False, False),
+        (TokenizerVersion.v11, True, False, False),
+        (TokenizerVersion.v11, False, True, False),
+        (TokenizerVersion.v13, False, False, False),
+        (TokenizerVersion.v13, True, False, False),
+        (TokenizerVersion.v13, False, True, False),
+        (TokenizerVersion.v13, True, False, True),
+    ],
+)
 def test_role_error(
     spm: bool,
     version: TokenizerVersion,
@@ -1105,22 +1123,25 @@ def test_role_error(
 
 
 @pytest.mark.parametrize("spm", [True, False])
-@pytest.mark.parametrize(("version", "image", "audio", "think"), [
-    (TokenizerVersion.v1, False, False, False),
-    (TokenizerVersion.v2, False, False, False),
-    (TokenizerVersion.v3, False, False, False),
-    (TokenizerVersion.v3, True, False, False),
-    (TokenizerVersion.v7, False, False, False),
-    (TokenizerVersion.v7, True, False, False),
-    (TokenizerVersion.v7, False, True, False),
-    (TokenizerVersion.v11, False, False, False),
-    (TokenizerVersion.v11, True, False, False),
-    (TokenizerVersion.v11, False, True, False),
-    (TokenizerVersion.v13, False, False, False),
-    (TokenizerVersion.v13, True, False, False),
-    (TokenizerVersion.v13, False, True, False),
-    (TokenizerVersion.v13, True, False, True),
-])
+@pytest.mark.parametrize(
+    ("version", "image", "audio", "think"),
+    [
+        (TokenizerVersion.v1, False, False, False),
+        (TokenizerVersion.v2, False, False, False),
+        (TokenizerVersion.v3, False, False, False),
+        (TokenizerVersion.v3, True, False, False),
+        (TokenizerVersion.v7, False, False, False),
+        (TokenizerVersion.v7, True, False, False),
+        (TokenizerVersion.v7, False, True, False),
+        (TokenizerVersion.v11, False, False, False),
+        (TokenizerVersion.v11, True, False, False),
+        (TokenizerVersion.v11, False, True, False),
+        (TokenizerVersion.v13, False, False, False),
+        (TokenizerVersion.v13, True, False, False),
+        (TokenizerVersion.v13, False, True, False),
+        (TokenizerVersion.v13, True, False, True),
+    ],
+)
 def test_invalid_chunks(
     spm: bool,
     version: TokenizerVersion,
@@ -1264,22 +1285,25 @@ def test_invalid_chunks(
 
 
 @pytest.mark.parametrize("spm", [True, False])
-@pytest.mark.parametrize(("version", "image", "audio", "think"), [
-    (TokenizerVersion.v1, False, False, False),
-    (TokenizerVersion.v2, False, False, False),
-    (TokenizerVersion.v3, False, False, False),
-    (TokenizerVersion.v3, True, False, False),
-    (TokenizerVersion.v7, False, False, False),
-    (TokenizerVersion.v7, True, False, False),
-    (TokenizerVersion.v7, False, True, False),
-    (TokenizerVersion.v11, False, False, False),
-    (TokenizerVersion.v11, True, False, False),
-    (TokenizerVersion.v11, False, True, False),
-    (TokenizerVersion.v13, False, False, False),
-    (TokenizerVersion.v13, True, False, False),
-    (TokenizerVersion.v13, False, True, False),
-    (TokenizerVersion.v13, True, False, True),
-])
+@pytest.mark.parametrize(
+    ("version", "image", "audio", "think"),
+    [
+        (TokenizerVersion.v1, False, False, False),
+        (TokenizerVersion.v2, False, False, False),
+        (TokenizerVersion.v3, False, False, False),
+        (TokenizerVersion.v3, True, False, False),
+        (TokenizerVersion.v7, False, False, False),
+        (TokenizerVersion.v7, True, False, False),
+        (TokenizerVersion.v7, False, True, False),
+        (TokenizerVersion.v11, False, False, False),
+        (TokenizerVersion.v11, True, False, False),
+        (TokenizerVersion.v11, False, True, False),
+        (TokenizerVersion.v13, False, False, False),
+        (TokenizerVersion.v13, True, False, False),
+        (TokenizerVersion.v13, False, True, False),
+        (TokenizerVersion.v13, True, False, True),
+    ],
+)
 def test_tool_call_errors(
     spm: bool,
     version: TokenizerVersion,
