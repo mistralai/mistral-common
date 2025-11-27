@@ -11,6 +11,7 @@
         {%- set system_message = messages[0]['content'] %}
     {%- else %}        
         {%- for block in messages[0]['content'] %}
+            {%- set system_message = '' %}
             {%- if block['type'] == 'text' %}
                 {% set system_message = system_message + block['text'] %}
             {%- else %}
@@ -29,7 +30,7 @@
 {%- for message in loop_messages %}
     {%- if message.role == 'user' or message.role == 'assistant' %}
         {%- if (message['role'] == 'user') != (ns.index % 2 == 0) %}
-            {{- raise_exception('After the optional system message, conversation roles must alternate user/assistant/user/assistant/...') }}
+            {{- raise_exception('After the optional system message, conversation roles must alternate user and assistant.') }}
         {%- endif %}
         {%- set ns.index = ns.index + 1 %}
     {%- endif %}
@@ -39,7 +40,7 @@
 {%- for message in loop_messages %}
     {#- User messages supports text content. #}
     {%- if message['role'] == 'user' %}
-        {{- ' [INST] ' }}
+        {{- '[INST] ' }}
         {%- if loop.index0 == 0 and system_message != '' %}
             {{- system_message + '\n\n' }}
         {%- endif %}
@@ -57,9 +58,6 @@
             {{- raise_exception('User message must have a string or a list of chunks in content') }}
         {%- endif %}
         {{- ' [/INST]' }}
-        {%- if loop.index < loop.length %}
-            {{- " " }}
-        {%- endif %}
 
     {#- Assistant messages supports text content or text chunks. #}
     {%- elif message['role'] == 'assistant' %}
@@ -82,6 +80,6 @@
 
     {#- Raise exception for unsupported roles. #}
     {%- else %}
-        {{- raise_exception('Only user and assistant roles are supported, got ' + message['role']) }}
+        {{- raise_exception('Only user and assistant roles are supported, got ' + message['role'] + '.') }}
     {%- endif %}
 {%- endfor %}

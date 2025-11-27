@@ -39,7 +39,8 @@
 {%- endif %}
 
 {#- Checks for alternating user/assistant messages. #}
-{%- set ns = namespace(index=0) %}
+{%- set ns = namespace() %}
+{%- set ns.index = 0 %}
 {%- for message in loop_messages %}
     {%- if message.role == 'user' or (message.role == 'assistant' and (message.tool_calls is not defined or message.tool_calls is none or message.tool_calls | length == 0)) %}
         {%- if (message['role'] == 'user') != (ns.index % 2 == 0) %}
@@ -52,24 +53,18 @@
 {#- Handle conversation messages. #}
 {%- for message in loop_messages %}
 
-    {#- User messages supports text content or text and image chunks. #}
+    {#- User messages supports text content. #}
     {%- if message['role'] == 'user' %}
         {%- if message['content'] is string %}
             {{- '[INST]' + message['content'] + '[/INST]' }}
         {%- elif message['content'] | length > 0 %}
             {{- '[INST]' }}
-            {%- if message['content'] | length == 2 %}
-                {%- set blocks = message['content'] | sort(attribute='type') %}
-            {%- else %}
-                {%- set blocks = message['content'] %}
-            {%- endif %}
-            {%- for block in blocks %}
+            {%- set sorted_blocks = message['content'] | sort(attribute='type') %}
+            {%- for block in sorted_blocks %}
                 {%- if block['type'] == 'text' %}
                     {{- block['text'] }}
-                {%- elif block['type'] in ['image', 'image_url'] %}
-                    {{- '[IMG]' }}
                 {%- else %}
-                    {{- raise_exception('Only text, image and image_url chunks are supported in user message content.') }}
+                    {{- raise_exception('Only text chunks are supported in user message content.') }}
                 {%- endif %}
             {%- endfor %}
             {{- '[/INST]' }}
@@ -77,13 +72,13 @@
             {{- raise_exception('User message must have a string or a list of chunks in content') }}
         {%- endif %}
 
-    {#- Assistant messages supports text content or text and image chunks. #}
+    {#- Assistant messages supports text content or text chunks. #}
     {%- elif message['role'] == 'assistant' %}
         {%- if (message['content'] is none or message['content'] == '' or message['content']|length == 0) and (message['tool_calls'] is not defined or message['tool_calls'] is none or message['tool_calls']|length == 0) %}
             {{- raise_exception('Assistant message must have a string or a list of chunks in content or a list of tool calls.') }}
         {%- endif %}
 
-        {%- if message['content'] is string %}
+        {%- if message['content'] is string and message['content'] != '' %}
             {{- message['content'] }}
         {%- elif message['content'] | length > 0 %}
             {%- for block in message['content'] %}
@@ -94,20 +89,21 @@
                 {%- endif %}
             {%- endfor %}
         {%- endif %}
-        
+
         {%- if message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}
             {%- for tool in message['tool_calls'] %}
+                {{- '[TOOL_CALLS]' }}
+                {%- set name = tool['function']['name'] %}
                 {%- set arguments = tool['function']['arguments'] %}
                 {%- if arguments is not string %}
                     {%- set arguments = arguments|tojson|safe %}
                 {%- elif arguments == '' %}
                     {%- set arguments = '{}' %}
                 {%- endif %}
-                {{- '[TOOL_CALLS]' + tool['function']['name'] + '[ARGS]' + arguments }}
+                {{- name + '[ARGS]' + arguments }}
             {%- endfor %}
         {%- endif %}
 
-        {#- End of sequence token for each assistant messages. #}
         {{- eos_token }}
 
     {#- Tool messages only supports text content. #}
@@ -116,6 +112,6 @@
 
     {#- Raise exception for unsupported roles. #}
     {%- else %}
-        {{- raise_exception('Only user, assistant and tool roles are supported, got ' + message['role']) }}
+        {{- raise_exception('Only user, assistant and tool roles are supported, got ' + message['role'] + '.') }}
     {%- endif %}
 {%- endfor %}

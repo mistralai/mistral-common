@@ -11,6 +11,7 @@
         {%- set system_message = messages[0]['content'] %}
     {%- else %}        
         {%- for block in messages[0]['content'] %}
+            {%- set system_message = '' %}
             {%- if block['type'] == 'text' %}
                 {% set system_message = system_message + block['text'] %}
             {%- else %}
@@ -33,7 +34,7 @@
 {%- endif %}
 
 {#- Checks for alternating user/assistant messages. #}
-{%- set ns = namespace(index=0, max_idx_user=-1, add_space=false, prev_tool=false, prev_img=false) %}
+{%- set ns = namespace(index=0, max_idx_user=-1, add_space=false) %}
 {%- for message in loop_messages %}
     {%- if message.role == 'user' or (message.role == 'assistant' and (message.tool_calls is not defined or message.tool_calls is none or message.tool_calls | length == 0)) %}
         {%- if (message['role'] == 'user') != (ns.index % 2 == 0) %}
@@ -50,44 +51,26 @@
 {%- set ns.index = 0 %}
 {#- Handle conversation messages. #}
 {%- for message in loop_messages %}
-    {#- User messages supports text content or text and image chunks. #}
+    {#- User messages supports text content. #}
     {%- if message['role'] == 'user' %}
         {#- Add tool definition to the last user message. #}
         {%- if (ns.index == ns.max_idx_user) and has_tools %}
             {{- tools_definition }}
         {%- endif %}
-        {{- '[INST]' }}
+        {{- '[INST] ' }}
         {#- Add system message to the last user message. #}
-        {%- set added_sp = false %}
         {%- if (ns.index == ns.max_idx_user) and system_message != '' %}
-            {%- set added_sp = true %}
-            {{- ' ' + system_message + '\n\n' }}
-        {%- elif message['content'] is string %}
-            {{- ' '  }}
+            {{- system_message + '\n\n' }}
         {%- endif %}
-
 
         {%- if message['content'] is string %}
             {{- message['content']}}
         {%- elif message['content'] | length > 0 %}
-            {%- if message['content'] | length == 2 %}
-                {%- set blocks = message['content'] | sort(attribute='type') %}
-            {%- else %}
-                {%- set blocks = message['content'] %}
-            {%- endif %}
-            {% set ns.prev_img = not added_sp %}
-            {%- for block in blocks %}
-                {%- if ns.prev_img and block['type'] == 'text' %}
-                    {{- ' ' }}
-                {%- endif %}
+            {%- for block in  message['content'] %}
                 {%- if block['type'] == 'text' %}
                     {{- block['text'] }}
-                    {%- set ns.prev_img = false %}
-                {%- elif block['type'] in ['image', 'image_url'] %}
-                    {{- '[IMG]' }}
-                    {%- set ns.prev_img = true %}
                 {%- else %}
-                    {{- raise_exception('Only text and image chunks are supported in user message content.') }}
+                    {{- raise_exception('Only text chunks are supported in user message content.') }}
                 {%- endif %}
             {%- endfor %}
         {%- else %}
@@ -99,7 +82,7 @@
         {%- endif %}
         {%- set ns.prev_tool=false %}
 
-    {#- Assistant messages supports text content or text and image chunks. #}
+    {#- Assistant messages supports text content or text and thinking chunks. #}
     {%- elif message['role'] == 'assistant' %}
         {%- if message['content'] is not none and message['content'] | length > 0 and message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}
             {{- raise_exception('Assistant message cannot have both content and tool calls.') }}
@@ -191,7 +174,7 @@
 
     {#- Raise exception for unsupported roles. #}
     {%- elif message['role'] != 'tool' or ns.index > ns.max_idx_user %}
-        {{- raise_exception('Only user, assistant and tool roles are supported, got ' + message['role']) }}
+        {{- raise_exception('Only user, assistant and tool roles are supported, got ' + message['role'] + '.') }}
     {%- endif %}
 
     {%- if message['role'] == 'user' %}

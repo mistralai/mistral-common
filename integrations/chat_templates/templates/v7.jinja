@@ -7,7 +7,6 @@
 {#- Handle system prompt if it exists. #}
 {#- System prompt supports text content or text chunks. #}
 {%- if messages[0]['role'] == 'system' %}
-    {%- set has_sp = true %}
     {{- '[SYSTEM_PROMPT]' -}}
     {%- if messages[0]['content'] is string %}
         {{- messages[0]['content'] -}}
@@ -26,9 +25,6 @@
     {%- set loop_messages = messages %}
     {%- if default_system_message != '' %}
         {{- '[SYSTEM_PROMPT]' + default_system_message + '[/SYSTEM_PROMPT]' }}
-        {%- set has_sp = true %}
-    {%- else %}
-        {%- set has_sp = false %}
     {%- endif %}
 {%- endif %}
 
@@ -70,13 +66,8 @@
             {%- for block in message['content'] %}
                 {%- if block['type'] == 'text' %}
                     {{- block['text'] }}
-                {%- elif block['type'] in ['input_audio', 'audio_url'] %}
-                    {%- if has_sp %}
-                        {{- raise_exception('Audio chunks are not supported in user message content when system prompt is provided.') }}
-                    {%- endif %}
-                    {{- '[AUDIO]' }}
                 {%- else %}
-                    {{- raise_exception('Only text, input_audio and audio_url chunks are supported in user message content.') }}
+                    {{- raise_exception('Only text chunks are supported in user message content.') }}
                 {%- endif %}
             {%- endfor %}
             {{- '[/INST]' }}
@@ -84,7 +75,7 @@
             {{- raise_exception('User message must have a string or a list of chunks in content') }}
         {%- endif %}
 
-    {#- Assistant messages supports text content or text and audio chunks. #}
+    {#- Assistant messages supports text content or text chunks. #}
     {%- elif message['role'] == 'assistant' %}
         {%- if (message['content'] is none or message['content'] == '' or message['content']|length == 0) and (message['tool_calls'] is not defined or message['tool_calls'] is none or message['tool_calls']|length == 0) %}
             {{- raise_exception('Assistant message must have a string or a list of chunks in content or a list of tool calls.') }}
@@ -103,8 +94,8 @@
         {%- endif %}
 
         {%- if message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}
+            {{- '[TOOL_CALLS][' }}
             {%- for tool in message['tool_calls'] %}
-                {{- '[TOOL_CALLS]' }}
                 {%- set name = tool['function']['name'] %}
                 {%- set arguments = tool['function']['arguments'] %}
                 {%- set id = tool['id']%}
@@ -116,8 +107,12 @@
                 {%- elif arguments == '' %}
                     {%- set arguments = '{}' %}
                 {%- endif %}
-                {{- name + '[CALL_ID]' + id + '[ARGS]' + arguments }}
+                {{- '{"name": "' + name + '", "arguments": ' + arguments + ', "id": "' + id + '"}' }}
+                {%- if loop.length > 1 and loop.index < loop.length %}
+                    {{- ', ' }}
+                {%- endif %}
             {%- endfor %}
+            {{- ']' }}
         {%- endif %}
 
         {{- eos_token }}
@@ -135,7 +130,7 @@
 
     {#- Raise exception for unsupported roles. #}
     {%- else %}
-        {{- raise_exception('Only user, assistant and tool roles are supported, got ' + message['role']) }}
+        {{- raise_exception('Only user, assistant and tool roles are supported, got ' + message['role'] + '.') }}
     {%- endif %}
     {%- if message['role'] == 'user' %}
         {%- set ns.index = ns.index + 1 %}

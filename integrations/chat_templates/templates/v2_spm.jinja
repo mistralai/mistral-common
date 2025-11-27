@@ -11,6 +11,7 @@
         {%- set system_message = messages[0]['content'] %}
     {%- else %}        
         {%- for block in messages[0]['content'] %}
+            {%- set system_message = '' %}
             {%- if block['type'] == 'text' %}
                 {% set system_message = system_message + block['text'] %}
             {%- else %}
@@ -29,15 +30,15 @@
 {%- set has_tools = false %}
 {%- if tools is defined and tools is not none and tools|length > 0 %}
     {%- set has_tools = true %}
-    {%- set tools_definition = '[AVAILABLE_TOOLS]' + (tools| tojson) + '[/AVAILABLE_TOOLS]' %}
+    {%- set tools_definition = '[AVAILABLE_TOOLS] ' + (tools| tojson) + '[/AVAILABLE_TOOLS]' %}
 {%- endif %}
 
 {#- Checks for alternating user/assistant messages. #}
-{%- set ns = namespace(index=0, max_idx_user=-1) %}
+{%- set ns = namespace(index=0, max_idx_user=-1, add_space=false, prev_tool=false) %}
 {%- for message in loop_messages %}
     {%- if message.role == 'user' or (message.role == 'assistant' and (message.tool_calls is not defined or message.tool_calls is none or message.tool_calls | length == 0)) %}
         {%- if (message['role'] == 'user') != (ns.index % 2 == 0) %}
-            {{- raise_exception('After the optional system message, conversation roles must alternate user/assistant/user/assistant/...') }}
+            {{- raise_exception('After the optional system message, conversation roles must alternate user and assistant roles except for tool calls and results.') }}
         {%- endif %}
         {%- set ns.index = ns.index + 1 %}
         {%- if message.role == 'user' %}
@@ -56,7 +57,7 @@
         {%- if (ns.index == ns.max_idx_user) and has_tools %}
             {{- tools_definition }}
         {%- endif %}
-        {{- '[INST]' }}
+        {{- '[INST] ' }}
         {#- Add system message to the last user message. #}
         {%- if (ns.index == ns.max_idx_user) and system_message != '' %}
             {{- system_message + '\n\n' }}
@@ -76,6 +77,10 @@
             {{- raise_exception('User message must have a string or a list of chunks in content') }}
         {%- endif %}
         {{- '[/INST]' }}
+        {%- if loop.index < loop.length %}
+            {%- set ns.add_space=true %}
+        {%- endif %}
+        {%- set ns.prev_tool=false %}
 
     {#- Assistant messages supports text content or text chunks. #}
     {%- elif message['role'] == 'assistant' %}
@@ -84,9 +89,17 @@
         {%- endif %}
 
         {%- if message['content'] is string and message['content'] != '' %}
+            {%- if ns.add_space %}
+                {{- ' ' }}
+                {%- set ns.add_space=false %}
+            {%- endif %}
             {{- message['content'] }}
             {{- eos_token }}
         {%- elif message['content'] | length > 0 %}
+            {%- if ns.add_space %}
+                {{- ' ' }}
+                {%- set ns.add_space=false %}
+            {%- endif %}
             {%- for block in message['content'] %}
                 {%- if block['type'] == 'text' %}
                     {{- block['text'] }}
@@ -96,7 +109,10 @@
             {%- endfor %}
             {{- eos_token }}
         {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 and ns.index > ns.max_idx_user %}
-            {{- '[TOOL_CALLS][' }}
+            {%- if ns.add_space %}
+                {%- set ns.add_space=false %}
+            {%- endif %}
+            {{- '[TOOL_CALLS] [' }}
             {%- for tool in message['tool_calls'] %}
                 {%- set name = tool['function']['name'] %}
                 {%- set arguments = tool['function']['arguments'] %}
@@ -116,10 +132,17 @@
         {%- else %}
             {{- raise_exception('Assistant message must have a string or a list of chunks in content or a list of tool calls.') }}
         {%- endif %}
+        {%- set ns.prev_tool=false %}
 
     
     {#- Tool messages supports int, float or text content. #}
     {%- elif message['role'] == 'tool' and ns.index > ns.max_idx_user %}
+        {%- if ns.add_space %}
+            {%- if not ns.prev_tool %}
+                {{- ' '}}
+            {%- endif %}
+            {%- set ns.add_space=false %}
+        {%- endif %}
         {# Try to parse 'content' as int or float if possible #}
         {%- set tool_content = message['content']|string %}
         {# Try to parse as int #}
@@ -140,11 +163,14 @@
 
         {%- set tool_message = {'name': message['name'], 'content': tool_content} %}
         
-        {{- '[TOOL_RESULTS][' + (tool_message|tojson) + '][/TOOL_RESULTS]' }}
+        {{- '[TOOL_RESULTS] [' + (tool_message|tojson) + '][/TOOL_RESULTS]' }}
+        {%- set ns.prev_tool=true %}
+        {%- set ns.add_space=true %}
+        
 
     {#- Raise exception for unsupported roles. #}
     {%- elif message['role'] != 'tool' or ns.index > ns.max_idx_user %}
-        {{- raise_exception('Only user, assistant and tool roles are supported, got ' + message['role']) }}
+        {{- raise_exception('Only user, assistant and tool roles are supported, got ' + message['role'] + '.') }}
     {%- endif %}
 
     {%- if message['role'] == 'user' %}
