@@ -117,6 +117,6 @@
 
     {#- Raise exception for unsupported roles. #}
     {%- else %}
-        {{- raise_exception('Only user, assistant and tool roles are supported, got ' + message['role']) }}
+        {{- raise_exception('Only user, assistant and tool roles are supported, got ' + message['role'] + '.') }}
     {%- endif %}
 {%- endfor %}
