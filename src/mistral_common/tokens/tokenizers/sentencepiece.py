@@ -2,8 +2,9 @@ import logging
 import os
 import warnings
 from functools import cached_property
-import numpy as np
 from pathlib import Path
+
+import numpy as np
 
 from mistral_common.exceptions import TokenizerException
 from mistral_common.imports import assert_sentencepiece_installed, is_sentencepiece_installed

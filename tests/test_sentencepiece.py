@@ -1,8 +1,11 @@
-from pathlib import Path
 import os
+from pathlib import Path
+
 import numpy as np
-from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
 import pytest
+
+from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
+
 
 @pytest.mark.parametrize(
     ("token", "is_control"),
@@ -18,6 +21,12 @@ import pytest
 )
 def test_is_control(token: str | int, is_control: bool) -> None:
     # get current file
-    _model_path = Path(os.path.abspath(__file__)).parent.parent / "src" / "mistral_common" / "data" / "mistral_instruct_tokenizer_241114.model.v7"
+    _model_path = (
+        Path(os.path.abspath(__file__)).parent.parent
+        / "src"
+        / "mistral_common"
+        / "data"
+        / "mistral_instruct_tokenizer_241114.model.v7"
+    )
     tokenizer = SentencePieceTokenizer(model_path=_model_path)
     assert tokenizer.is_special(token) is is_control

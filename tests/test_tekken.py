@@ -1,10 +1,10 @@
 import base64
 import json
-import numpy as np
 import re
 from pathlib import Path
 from typing import Sequence
 
+import numpy as np
 import pytest
 
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTokens, TokenizerVersion

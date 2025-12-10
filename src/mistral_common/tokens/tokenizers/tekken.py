@@ -2,12 +2,12 @@ import base64
 import json
 import logging
 import warnings
-import numpy as np
 from functools import cached_property
 from itertools import groupby
 from pathlib import Path
 from typing import TypedDict
 
+import numpy as np
 import tiktoken
 
 from mistral_common.tokens.tokenizers.audio import AudioConfig, AudioSpectrogramConfig
@@ -451,7 +451,7 @@ class Tekkenizer(Tokenizer):
             raise TypeError(f"Expected int or str, got {type(token).__name__}")
 
     def get_control_token(self, s: str) -> int:
-        warnings.warn(f"`get_control_token` is deprecated. Use `get_special_token` instead.", FutureWarning)
+        warnings.warn("`get_control_token` is deprecated. Use `get_special_token` instead.", FutureWarning)
         return self.get_special_token(s)
 
     def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy | None = None) -> str:
