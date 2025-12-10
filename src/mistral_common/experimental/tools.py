@@ -152,7 +152,7 @@ def _decode_tool_calls(tool_call_tokens: Sequence[list[int]], tokenizer: Tokeniz
             raise ValueError("Tool calls are not supported for tokenizer version v1.")
         elif tokenizer.version <= TokenizerVersion.v7:
             tools_calls.extend(_decode_tool_calls_v2_up_to_v7(tool_call, tokenizer))
-        elif tokenizer.version == TokenizerVersion.v11 and tokenizer.get_control_token("[CALL_ID]") in tool_call:
+        elif tokenizer.version == TokenizerVersion.v11 and tokenizer.get_special_token("[CALL_ID]") in tool_call:
             tools_calls.append(_decode_tool_call_v11_with_call_id(tool_call, tokenizer))
         else:
             tools_calls.append(_decode_tool_call_v11(tool_call, tokenizer))

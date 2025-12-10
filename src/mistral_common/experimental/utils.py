@@ -37,7 +37,7 @@ def _split_tokens_by_one_occurence_control_token(
     Raises:
         ValueError: If the control token is not found in the list or if it is found more than once.
     """
-    control_token_id = tokenizer.get_control_token(control_token)
+    control_token_id = tokenizer.get_special_token(control_token)
     first, *rest = _split_integer_list_by_value(list_, control_token_id)
     if len(rest) == 0:
         raise ValueError(f"Control token {control_token} not found in the list of tokens.")

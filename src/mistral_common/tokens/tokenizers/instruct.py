@@ -401,16 +401,16 @@ class InstructTokenizerV2(
             audio_encoder: The audio encoder to use.
         """
         super().__init__(tokenizer, image_encoder, audio_encoder)
-        self.BEGIN_INST = self.tokenizer.get_control_token(SpecialTokens.begin_inst.value)
-        self.END_INST = self.tokenizer.get_control_token(SpecialTokens.end_inst.value)
-        self.BEGIN_AVAILABLE_TOOLS = self.tokenizer.get_control_token(SpecialTokens.begin_tools.value)
-        self.END_AVAILABLE_TOOLS = self.tokenizer.get_control_token(SpecialTokens.end_tools.value)
-        self.BEGIN_TOOL_RESULTS = self.tokenizer.get_control_token(SpecialTokens.begin_tool_results.value)
-        self.END_TOOL_RESULTS = self.tokenizer.get_control_token(SpecialTokens.end_tool_results.value)
-        self.TOOL_CALLS = self.tokenizer.get_control_token(SpecialTokens.tool_calls.value)
-        self.BOS = self.tokenizer.get_control_token(SpecialTokens.bos.value)
-        self.PREFIX = self.tokenizer.get_control_token(SpecialTokens.prefix.value)
-        self.SUFFIX = self.tokenizer.get_control_token(SpecialTokens.suffix.value)
+        self.BEGIN_INST = self.tokenizer.get_special_token(SpecialTokens.begin_inst.value)
+        self.END_INST = self.tokenizer.get_special_token(SpecialTokens.end_inst.value)
+        self.BEGIN_AVAILABLE_TOOLS = self.tokenizer.get_special_token(SpecialTokens.begin_tools.value)
+        self.END_AVAILABLE_TOOLS = self.tokenizer.get_special_token(SpecialTokens.end_tools.value)
+        self.BEGIN_TOOL_RESULTS = self.tokenizer.get_special_token(SpecialTokens.begin_tool_results.value)
+        self.END_TOOL_RESULTS = self.tokenizer.get_special_token(SpecialTokens.end_tool_results.value)
+        self.TOOL_CALLS = self.tokenizer.get_special_token(SpecialTokens.tool_calls.value)
+        self.BOS = self.tokenizer.get_special_token(SpecialTokens.bos.value)
+        self.PREFIX = self.tokenizer.get_special_token(SpecialTokens.prefix.value)
+        self.SUFFIX = self.tokenizer.get_special_token(SpecialTokens.suffix.value)
 
     def encode_user_message(
         self,
@@ -793,13 +793,13 @@ class InstructTokenizerV7(InstructTokenizerV3):
         """
 
         super().__init__(tokenizer, image_encoder, audio_encoder)
-        self.BEGIN_SYSTEM = self.tokenizer.get_control_token(SpecialTokens.begin_system.value)
-        self.END_SYSTEM = self.tokenizer.get_control_token(SpecialTokens.end_system.value)
-        self.BEGIN_TOOL_CONTENT = self.tokenizer.get_control_token(SpecialTokens.begin_tool_content.value)
+        self.BEGIN_SYSTEM = self.tokenizer.get_special_token(SpecialTokens.begin_system.value)
+        self.END_SYSTEM = self.tokenizer.get_special_token(SpecialTokens.end_system.value)
+        self.BEGIN_TOOL_CONTENT = self.tokenizer.get_special_token(SpecialTokens.begin_tool_content.value)
 
         self.TRANSCRIBE = None
         if audio_encoder is not None:
-            self.TRANSCRIBE = self.tokenizer.get_control_token(SpecialTokens.transcribe.value)
+            self.TRANSCRIBE = self.tokenizer.get_special_token(SpecialTokens.transcribe.value)
 
     def _truncate_for_max_tokens(
         self,
@@ -1054,8 +1054,8 @@ class InstructTokenizerV11(InstructTokenizerV7):
         audio_encoder: AudioEncoder | None = None,
     ) -> None:
         super().__init__(tokenizer, image_encoder, audio_encoder)
-        self.ARGS = self.tokenizer.get_control_token(SpecialTokens.args.value)
-        self.CALL_ID = self.tokenizer.get_control_token(SpecialTokens.call_id.value)
+        self.ARGS = self.tokenizer.get_special_token(SpecialTokens.args.value)
+        self.CALL_ID = self.tokenizer.get_special_token(SpecialTokens.call_id.value)
 
     def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> list[int]:
         assert message.tool_calls, f"Assistant message must have tool calls. Got {message}"
@@ -1099,8 +1099,8 @@ class InstructTokenizerV13(InstructTokenizerV11):
             SpecialTokens.begin_think.value in tokenizer._special_tokens_reverse_vocab
             and SpecialTokens.end_think.value in tokenizer._special_tokens_reverse_vocab
         ):
-            self.BEGIN_THINK: int | None = tokenizer.get_control_token(SpecialTokens.begin_think.value)
-            self.END_THINK: int | None = tokenizer.get_control_token(SpecialTokens.end_think.value)
+            self.BEGIN_THINK: int | None = tokenizer.get_special_token(SpecialTokens.begin_think.value)
+            self.END_THINK: int | None = tokenizer.get_special_token(SpecialTokens.end_think.value)
         else:
             self.BEGIN_THINK = None
             self.END_THINK = None

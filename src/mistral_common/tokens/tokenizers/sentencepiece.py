@@ -2,6 +2,7 @@ import logging
 import os
 import warnings
 from functools import cached_property
+import numpy as np
 from pathlib import Path
 
 from mistral_common.exceptions import TokenizerException
@@ -103,7 +104,7 @@ class SentencePieceTokenizer(Tokenizer):
         r"""The version of the tokenizer."""
         return self._version
 
-    def get_control_token(self, s: str) -> int:
+    def get_special_token(self, s: str) -> int:
         r"""Get the control token for the given string."""
         return self._model.piece_to_id(s)  # type: ignore
 
@@ -126,9 +127,14 @@ class SentencePieceTokenizer(Tokenizer):
         r"""The end of sentence token id."""
         return self._model.eos_id()  # type: ignore
 
-    @cached_property
-    def _control_tokens(self) -> set[int]:
-        return {tok for tok in range(self.n_words) if self._model.IsControl(tok)}
+    def is_special(self, token: int | np.integer | str) -> bool:
+        if isinstance(token, (int, np.integer)):
+            return self._model.IsControl(int(token))  # type: ignore
+        elif isinstance(token, str):
+            token_int = self._model.piece_to_id(token)  # type: ignore
+            return self._model.IsControl(token_int)  # type: ignore
+        else:
+            raise TypeError(f"Expected int or str, got {type(token).__name__}")
 
     def encode(self, s: str, bos: bool, eos: bool) -> list[int]:
         r"""Encode the given string into a list of token ids.
@@ -195,7 +201,7 @@ class SentencePieceTokenizer(Tokenizer):
         text_list = []
         curr_tokens: list[int] = []
         for tok in tokens:
-            if tok in self._control_tokens:
+            if self.is_special(tok):
                 if special_token_policy == SpecialTokenPolicy.RAISE:
                     raise ValueError("Decoding `tokens` that contain special tokens with special_token_policy=RAISE.")
                 if curr_tokens:

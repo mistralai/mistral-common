@@ -95,7 +95,7 @@ async def detokenize_to_assistant_message(
 
     if settings.tokenizer.instruct_tokenizer.tokenizer.version > TokenizerVersion.v1:
         content_tokens, tool_calls_tokens = _split_content_and_tool_calls(
-            tokens, settings.tokenizer.instruct_tokenizer.tokenizer.get_control_token("[TOOL_CALLS]")
+            tokens, settings.tokenizer.instruct_tokenizer.tokenizer.get_special_token("[TOOL_CALLS]")
         )
     else:
         content_tokens, tool_calls_tokens = tokens, ()

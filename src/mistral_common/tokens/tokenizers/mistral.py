@@ -66,9 +66,9 @@ def load_image_encoder(image_config: ImageConfig, tokenizer: Tekkenizer | Senten
         The image encoder.
     """
     special_ids = SpecialImageIDs(
-        img=tokenizer.get_control_token(SpecialTokens.img.value),
-        img_break=tokenizer.get_control_token(SpecialTokens.img_break.value),
-        img_end=tokenizer.get_control_token(SpecialTokens.img_end.value),
+        img=tokenizer.get_special_token(SpecialTokens.img.value),
+        img_break=tokenizer.get_special_token(SpecialTokens.img_break.value),
+        img_end=tokenizer.get_special_token(SpecialTokens.img_end.value),
     )
     return ImageEncoder(image_config, special_ids)
 
@@ -84,8 +84,8 @@ def load_audio_encoder(audio_config: AudioConfig, tokenizer: Tekkenizer) -> Audi
         The audio encoder.
     """
     special_ids = SpecialAudioIDs(
-        audio=tokenizer.get_control_token(SpecialTokens.audio.value),
-        begin_audio=tokenizer.get_control_token(SpecialTokens.begin_audio.value),
+        audio=tokenizer.get_special_token(SpecialTokens.audio.value),
+        begin_audio=tokenizer.get_special_token(SpecialTokens.begin_audio.value),
     )
     return AudioEncoder(audio_config, special_ids)
 

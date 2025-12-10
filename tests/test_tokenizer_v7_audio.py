@@ -61,8 +61,8 @@ def _get_tekkenizer_with_audio() -> InstructTokenizerV7:
         ),
     )
     special_audio_ids = SpecialAudioIDs(
-        audio=tokenizer.get_control_token(SpecialTokens.audio.value),
-        begin_audio=tokenizer.get_control_token(SpecialTokens.begin_audio.value),
+        audio=tokenizer.get_special_token(SpecialTokens.audio.value),
+        begin_audio=tokenizer.get_special_token(SpecialTokens.begin_audio.value),
     )
     audio_encoder = AudioEncoder(audio_config, special_audio_ids)
 
@@ -149,13 +149,13 @@ def _get_audio_chunk(duration: float) -> AudioChunk:
 
 
 def _get_specials(tekkenizer: InstructTokenizerV7) -> tuple[int, ...]:
-    BOS = tekkenizer.tokenizer.get_control_token(SpecialTokens.bos.value)
-    EOS = tekkenizer.tokenizer.get_control_token(SpecialTokens.eos.value)
-    BEGIN_INST = tekkenizer.tokenizer.get_control_token(SpecialTokens.begin_inst.value)
-    END_INST = tekkenizer.tokenizer.get_control_token(SpecialTokens.end_inst.value)
-    AUDIO = tekkenizer.tokenizer.get_control_token(SpecialTokens.audio.value)
-    BEGIN_AUDIO = tekkenizer.tokenizer.get_control_token(SpecialTokens.begin_audio.value)
-    TRANSCRIBE = tekkenizer.tokenizer.get_control_token(SpecialTokens.transcribe.value)
+    BOS = tekkenizer.tokenizer.get_special_token(SpecialTokens.bos.value)
+    EOS = tekkenizer.tokenizer.get_special_token(SpecialTokens.eos.value)
+    BEGIN_INST = tekkenizer.tokenizer.get_special_token(SpecialTokens.begin_inst.value)
+    END_INST = tekkenizer.tokenizer.get_special_token(SpecialTokens.end_inst.value)
+    AUDIO = tekkenizer.tokenizer.get_special_token(SpecialTokens.audio.value)
+    BEGIN_AUDIO = tekkenizer.tokenizer.get_special_token(SpecialTokens.begin_audio.value)
+    TRANSCRIBE = tekkenizer.tokenizer.get_special_token(SpecialTokens.transcribe.value)
     return BOS, EOS, BEGIN_INST, END_INST, AUDIO, BEGIN_AUDIO, TRANSCRIBE
 
 
