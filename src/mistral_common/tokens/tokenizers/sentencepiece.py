@@ -132,7 +132,7 @@ class SentencePieceTokenizer(Tokenizer):
         if isinstance(token, (int, np.integer)):
             return self._model.IsControl(int(token))  # type: ignore
         elif isinstance(token, str):
-            token_int = self._model.piece_to_id(token)  # type: ignore
+            token_int = self._model.piece_to_id(token)
             return self._model.IsControl(token_int)  # type: ignore
         else:
             raise TypeError(f"Expected int or str, got {type(token).__name__}")
