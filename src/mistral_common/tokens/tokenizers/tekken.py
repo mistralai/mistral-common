@@ -19,6 +19,14 @@ from mistral_common.tokens.tokenizers.base import (
 )
 from mistral_common.tokens.tokenizers.image import ImageConfig
 
+
+warnings.filterwarnings(
+    action="once",
+    category=FutureWarning,
+    message=r"*`get_control_token` is deprecated.*",
+)
+
+
 logger = logging.getLogger(__name__)
 
 
