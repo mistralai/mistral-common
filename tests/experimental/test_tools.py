@@ -200,7 +200,7 @@ def test_decode_tool_calls(tokenizer: MistralTokenizer, tool_calls: list[ToolCal
     )
 
     splitted_tool_calls = _split_integer_list_by_value(
-        encoded_tool_calls, tokenizer.instruct_tokenizer.tokenizer.get_control_token("[TOOL_CALLS]")
+        encoded_tool_calls, tokenizer.instruct_tokenizer.tokenizer.get_special_token("[TOOL_CALLS]")
     )
 
     decoded_tool_calls = _decode_tool_calls(splitted_tool_calls, tokenizer.instruct_tokenizer.tokenizer)
@@ -221,9 +221,9 @@ def test_decode_tool_calls(tokenizer: MistralTokenizer, tool_calls: list[ToolCal
     # Test 2:
     # invalid tool calls (remove a JSON needed token from the args)
     if tokenizer.instruct_tokenizer.tokenizer.version in versions_inf_v11:
-        arg_index = tokenizer.instruct_tokenizer.tokenizer.get_control_token("[TOOL_CALLS]")
+        arg_index = tokenizer.instruct_tokenizer.tokenizer.get_special_token("[TOOL_CALLS]")
     else:
-        arg_index = tokenizer.instruct_tokenizer.tokenizer.get_control_token("[ARGS]")
+        arg_index = tokenizer.instruct_tokenizer.tokenizer.get_special_token("[ARGS]")
 
     first_args_index = splitted_tool_calls[0].index(arg_index)
     splitted_tool_calls = (
@@ -248,8 +248,8 @@ def test_decode_tool_calls_v11_without_id() -> None:
         AssistantMessage(tool_calls=[tool_call])
     )
 
-    call_id_token = tokenizer.instruct_tokenizer.tokenizer.get_control_token("[CALL_ID]")
-    args_token = tokenizer.instruct_tokenizer.tokenizer.get_control_token("[ARGS]")
+    call_id_token = tokenizer.instruct_tokenizer.tokenizer.get_special_token("[CALL_ID]")
+    args_token = tokenizer.instruct_tokenizer.tokenizer.get_special_token("[ARGS]")
 
     call_id_index = encoded_tool_call.index(call_id_token)
     args_token_index = encoded_tool_call.index(args_token)

@@ -7,6 +7,7 @@ from itertools import groupby
 from pathlib import Path
 from typing import TypedDict
 
+import numpy as np
 import tiktoken
 
 from mistral_common.tokens.tokenizers.audio import AudioConfig, AudioSpectrogramConfig
@@ -17,6 +18,13 @@ from mistral_common.tokens.tokenizers.base import (
     TokenizerVersion,
 )
 from mistral_common.tokens.tokenizers.image import ImageConfig
+
+warnings.filterwarnings(
+    action="once",
+    category=FutureWarning,
+    message=r".*`get_control_token` is deprecated.*",
+)
+
 
 logger = logging.getLogger(__name__)
 
@@ -203,6 +211,7 @@ class Tekkenizer(Tokenizer):
         self._audio_config = audio_config
 
         self._all_special_tokens = special_tokens
+        self._special_token_ids = {t["rank"] for t in special_tokens}
         self._special_tokens_reverse_vocab = {t["token_str"]: t["rank"] for t in special_tokens}
         self._vocab = [self.id_to_piece(i) for i in range(vocab_size)]
         self._special_token_policy = SpecialTokenPolicy.IGNORE
@@ -348,22 +357,22 @@ class Tekkenizer(Tokenizer):
     @cached_property
     def bos_id(self) -> int:
         r"""The beginning of sentence token id."""
-        return self.get_control_token("<s>")
+        return self.get_special_token("<s>")
 
     @cached_property
     def eos_id(self) -> int:
         r"""The end of sentence token id."""
-        return self.get_control_token("</s>")
+        return self.get_special_token("</s>")
 
     @cached_property
     def pad_id(self) -> int:
         r"""The padding token id."""
-        return self.get_control_token("<pad>")
+        return self.get_special_token("<pad>")
 
     @cached_property
     def unk_id(self) -> int:
         r"""The unknown token id."""
-        return self.get_control_token("<unk>")
+        return self.get_special_token("<unk>")
 
     def vocab(self) -> list[str]:
         r"""All tokens in the vocabulary as strings.
@@ -433,12 +442,25 @@ class Tekkenizer(Tokenizer):
         r"""Check if a token id is a byte token."""
         return 0 <= token_id - self.num_special_tokens < 256
 
-    def get_control_token(self, s: str) -> int:
-        r"""Get the token id of a control token."""
+    def get_special_token(self, s: str) -> int:
+        r"""Get the token id of a special token."""
         if s in self._special_tokens_reverse_vocab:
             return self._special_tokens_reverse_vocab[s]
         else:
             raise ValueError(f"Unknown control token {s}")
+
+    def is_special(self, token: int | np.integer | str) -> bool:
+        """Return `True` if the passed `token` is a special token."""
+        if isinstance(token, (int, np.integer)):
+            return token in self._special_token_ids
+        elif isinstance(token, str):
+            return token in self._special_tokens_reverse_vocab
+        else:
+            raise TypeError(f"Expected int or str, got {type(token).__name__}")
+
+    def get_control_token(self, s: str) -> int:
+        warnings.warn("`get_control_token` is deprecated. Use `get_special_token` instead.", FutureWarning)
+        return self.get_special_token(s)
 
     def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy | None = None) -> str:
         r"""Decode a list of token ids into a string.

@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 from typing import Sequence
 
+import numpy as np
 import pytest
 
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTokens, TokenizerVersion
@@ -289,3 +290,28 @@ def test_frozen_special_tokens_list() -> None:
         "[TOOL_CONTENT]",
     ]  # DO NOT MODIFY
     assert FROZEN_TOKENS_DO_NOT_MODIFY == [token["token_str"] for token in _get_deprecated_special_tokens()]
+
+
+@pytest.mark.parametrize(
+    ("token", "is_special"),
+    [
+        ("</s>", True),
+        ("a", False),
+        (1, True),
+        (1001, False),
+        (np.int64(0), True),
+        (np.int64(1), True),
+        (np.int64(1001), False),
+    ],
+)
+def test_is_control(token: str | int, is_special: bool) -> None:
+    vocab = _quick_vocab([b"hello"])
+    tekkenizer = Tekkenizer(
+        vocab,
+        special_tokens=_get_deprecated_special_tokens(),
+        pattern=r".+",  # single token, whole string
+        vocab_size=len(vocab) + len(_get_deprecated_special_tokens()),
+        num_special_tokens=len(_get_deprecated_special_tokens()),
+        version=TokenizerVersion.v3,
+    )
+    assert tekkenizer.is_special(token) is is_special
