@@ -19,7 +19,6 @@ from mistral_common.tokens.tokenizers.base import (
 )
 from mistral_common.tokens.tokenizers.image import ImageConfig
 
-
 warnings.filterwarnings(
     action="once",
     category=FutureWarning,
