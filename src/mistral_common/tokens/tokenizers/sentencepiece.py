@@ -108,6 +108,10 @@ class SentencePieceTokenizer(Tokenizer):
     def get_special_token(self, s: str) -> int:
         r"""Get the special token for the given string."""
         return self._model.piece_to_id(s)  # type: ignore
+        
+    def get_control_token(self, s: str) -> int:
+        warnings.warn("`get_control_token` is deprecated. Use `get_special_token` instead.", FutureWarning)
+        return self.get_special_token(s)
 
     @property
     def n_words(self) -> int:
