@@ -18,7 +18,7 @@ from mistral_common.tokens.tokenizers.image import ImageConfig, MultiModalVersio
 warnings.filterwarnings(
     action="once",
     category=FutureWarning,
-    message=r"*`get_control_token` is deprecated.*",
+    message=r".*`get_control_token` is deprecated.*",
 )
 
 
