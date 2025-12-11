@@ -165,7 +165,10 @@ class ToolCall(MistralBase):
 
     @classmethod
     def from_openai(cls, tool_call: dict[str, Any]) -> "ToolCall":
-        return cls.model_validate(tool_call)
+        # OpenAI responses may include an "index" field; ignore it to stay compatible
+        openai_tool_call = dict(tool_call)
+        openai_tool_call.pop("index", None)
+        return cls.model_validate(openai_tool_call)
 
 
 ToolType = TypeVar("ToolType", bound=Tool)
