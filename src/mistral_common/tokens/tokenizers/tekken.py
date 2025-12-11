@@ -443,6 +443,7 @@ class Tekkenizer(Tokenizer):
             raise ValueError(f"Unknown control token {s}")
 
     def is_special(self, token: int | np.integer | str) -> bool:
+           """Return `True` if the passed `token` is a special token."""
         if isinstance(token, (int, np.integer)):
             return token in self._special_token_ids
         elif isinstance(token, str):
