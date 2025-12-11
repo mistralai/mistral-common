@@ -129,7 +129,7 @@ class SentencePieceTokenizer(Tokenizer):
         return self._model.eos_id()  # type: ignore
 
     def is_special(self, token: int | np.integer | str) -> bool:
-           """Return `True` if the passed `token` is a special token."""
+        """Return `True` if the passed `token` is a special token."""
         if isinstance(token, (int, np.integer)):
             return self._model.IsControl(int(token))  # type: ignore
         elif isinstance(token, str):
