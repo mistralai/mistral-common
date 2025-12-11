@@ -436,7 +436,7 @@ class Tekkenizer(Tokenizer):
         return 0 <= token_id - self.num_special_tokens < 256
 
     def get_special_token(self, s: str) -> int:
-        r"""Get the token id of a control token."""
+        r"""Get the token id of a special token."""
         if s in self._special_tokens_reverse_vocab:
             return self._special_tokens_reverse_vocab[s]
         else:

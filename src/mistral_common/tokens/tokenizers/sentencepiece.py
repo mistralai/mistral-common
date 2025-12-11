@@ -106,7 +106,7 @@ class SentencePieceTokenizer(Tokenizer):
         return self._version
 
     def get_special_token(self, s: str) -> int:
-        r"""Get the control token for the given string."""
+        r"""Get the special token for the given string."""
         return self._model.piece_to_id(s)  # type: ignore
 
     @property
