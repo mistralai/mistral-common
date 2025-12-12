@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 import pytest
 from jinja2.exceptions import TemplateError
-from transformers.utils.chat_template_utils import render_jinja_template
+from transformers.utils.chat_template_utils import render_jinja_template  # type: ignore[import-not-found]
 
 from integrations.chat_templates.chat_templates import get_chat_template
 from mistral_common.audio import Audio
@@ -278,13 +278,15 @@ def encode_transformers(
                     openai_message["name"] = chat_message.name
     else:
         openai_request = chat_request
-    return render_jinja_template(
+    encoded = render_jinja_template(
         [openai_request["messages"]],
-        tools=openai_request.get("tools", None),  # type: ignore[arg-type]
+        tools=openai_request.get("tools", None),
         chat_template=chat_template,
         bos_token="<s>",
         eos_token="</s>",
     )[0][0]
+    assert isinstance(encoded, str), type(encoded)
+    return encoded
 
 
 REQUEST_ONE_TURN_TEST = ChatCompletionRequest(
