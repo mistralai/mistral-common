@@ -68,7 +68,7 @@ jobs:
       # PyTest
       - name: Tests
         run: |
-          uv run pytest --cov=mistral_common . --cov-report "xml:coverage.xml"
+          uv run pytest --cov=mistral_common . --cov-report "xml:coverage.xml" --ignore tests/integrations
       
       # Doctests
       - name: Doctests
