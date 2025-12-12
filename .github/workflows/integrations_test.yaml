@@ -15,7 +15,7 @@ on:
       - ready_for_review
     
   jobs:
-  build_lint_test:
+  chat_templates:
     if: ${{ github.event.pull_request.draft != true }}
     runs-on: ubuntu-latest
     steps:
@@ -40,4 +40,4 @@ on:
       # PyTest
       - name: Tests
         run: |
-          uv run pytest integrations/chat_templates/test_chat_templates.py
+          uv run pytest tests/integrations/chat_templates/

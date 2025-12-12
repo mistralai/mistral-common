@@ -1,5 +1,4 @@
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -7,7 +6,7 @@ import pytest
 from jinja2.exceptions import TemplateError
 from transformers.utils.chat_template_utils import render_jinja_template
 
-from chat_templates.chat_templates import get_chat_template
+from integrations.chat_templates.chat_templates import get_chat_template
 from mistral_common.audio import Audio
 from mistral_common.image import download_image
 from mistral_common.protocol.instruct.chunk import (
@@ -49,14 +48,11 @@ from mistral_common.tokens.tokenizers.instruct import (
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
+from tests.test_tekken import get_special_tokens
 
 ROOT_DIR = Path(__file__).parent.parent.parent
 TEST_DIR = ROOT_DIR / "tests"
 
-# To import test_tekken
-sys.path.append(TEST_DIR.as_posix())
-
-from test_tekken import get_special_tokens  # noqa: E402 # type: ignore
 
 mistral_tokenizer = MistralTokenizer.from_hf_hub("mistralai/Magistral-Small-2509")
 
@@ -275,6 +271,7 @@ def encode_transformers(chat_template: str, chat_request: ChatCompletionRequest 
         openai_request = chat_request.to_openai()
     else:
         openai_request = chat_request
+    print(openai_request)
     return render_jinja_template(
         [openai_request["messages"]],
         tools=openai_request.get("tools", None),  # type: ignore[arg-type]
@@ -986,24 +983,29 @@ def _get_conversations(
     return conversations
 
 
-@pytest.mark.parametrize("spm", [True, False])
 @pytest.mark.parametrize(
-    ("version", "image", "audio", "think"),
+    ("spm", "version", "image", "audio", "think"),
     [
-        (TokenizerVersion.v1, False, False, False),
-        (TokenizerVersion.v2, False, False, False),
-        (TokenizerVersion.v3, False, False, False),
-        (TokenizerVersion.v3, True, False, False),
-        (TokenizerVersion.v7, False, False, False),
-        (TokenizerVersion.v7, True, False, False),
-        (TokenizerVersion.v7, False, True, False),
-        (TokenizerVersion.v11, False, False, False),
-        (TokenizerVersion.v11, True, False, False),
-        (TokenizerVersion.v11, False, True, False),
-        (TokenizerVersion.v13, False, False, False),
-        (TokenizerVersion.v13, True, False, False),
-        (TokenizerVersion.v13, False, True, False),
-        (TokenizerVersion.v13, True, False, True),
+        (False, TokenizerVersion.v1, False, False, False),
+        (True, TokenizerVersion.v1, False, False, False),
+        (False, TokenizerVersion.v2, False, False, False),
+        (True, TokenizerVersion.v2, False, False, False),
+        (False, TokenizerVersion.v3, False, False, False),
+        (True, TokenizerVersion.v3, False, False, False),
+        (False, TokenizerVersion.v3, True, False, False),
+        (True, TokenizerVersion.v3, True, False, False),
+        (False, TokenizerVersion.v7, False, False, False),
+        (True, TokenizerVersion.v7, False, False, False),
+        (False, TokenizerVersion.v7, True, False, False),
+        (True, TokenizerVersion.v7, True, False, False),
+        (False, TokenizerVersion.v7, False, True, False),
+        (False, TokenizerVersion.v11, False, False, False),
+        (False, TokenizerVersion.v11, True, False, False),
+        (False, TokenizerVersion.v11, False, True, False),
+        (False, TokenizerVersion.v13, False, False, False),
+        (False, TokenizerVersion.v13, True, False, False),
+        (False, TokenizerVersion.v13, False, True, False),
+        (False, TokenizerVersion.v13, True, False, True),
     ],
 )
 @pytest.mark.parametrize("mode", [ValidationMode.test, ValidationMode.finetuning])
@@ -1015,8 +1017,6 @@ def test_chat_template(
     audio: bool,
     think: bool,
 ) -> None:
-    _maybe_skip(spm, version, image, audio, think)
-
     conversations = _get_conversations(version, mode, image, audio, think)
 
     mistral_tokenizer = _get_mistral_tokenizer(
@@ -1055,24 +1055,29 @@ def test_chat_template(
         assert mistral_common_encoded == transformers_encoded
 
 
-@pytest.mark.parametrize("spm", [True, False])
 @pytest.mark.parametrize(
-    ("version", "image", "audio", "think"),
+    ("spm", "version", "image", "audio", "think"),
     [
-        (TokenizerVersion.v1, False, False, False),
-        (TokenizerVersion.v2, False, False, False),
-        (TokenizerVersion.v3, False, False, False),
-        (TokenizerVersion.v3, True, False, False),
-        (TokenizerVersion.v7, False, False, False),
-        (TokenizerVersion.v7, True, False, False),
-        (TokenizerVersion.v7, False, True, False),
-        (TokenizerVersion.v11, False, False, False),
-        (TokenizerVersion.v11, True, False, False),
-        (TokenizerVersion.v11, False, True, False),
-        (TokenizerVersion.v13, False, False, False),
-        (TokenizerVersion.v13, True, False, False),
-        (TokenizerVersion.v13, False, True, False),
-        (TokenizerVersion.v13, True, False, True),
+        (False, TokenizerVersion.v1, False, False, False),
+        (True, TokenizerVersion.v1, False, False, False),
+        (False, TokenizerVersion.v2, False, False, False),
+        (True, TokenizerVersion.v2, False, False, False),
+        (False, TokenizerVersion.v3, False, False, False),
+        (True, TokenizerVersion.v3, False, False, False),
+        (False, TokenizerVersion.v3, True, False, False),
+        (True, TokenizerVersion.v3, True, False, False),
+        (False, TokenizerVersion.v7, False, False, False),
+        (True, TokenizerVersion.v7, False, False, False),
+        (False, TokenizerVersion.v7, True, False, False),
+        (True, TokenizerVersion.v7, True, False, False),
+        (False, TokenizerVersion.v7, False, True, False),
+        (False, TokenizerVersion.v11, False, False, False),
+        (False, TokenizerVersion.v11, True, False, False),
+        (False, TokenizerVersion.v11, False, True, False),
+        (False, TokenizerVersion.v13, False, False, False),
+        (False, TokenizerVersion.v13, True, False, False),
+        (False, TokenizerVersion.v13, False, True, False),
+        (False, TokenizerVersion.v13, True, False, True),
     ],
 )
 def test_role_error(
@@ -1082,8 +1087,6 @@ def test_role_error(
     audio: bool,
     think: bool,
 ) -> None:
-    _maybe_skip(spm, version, image, audio, think)
-
     chat_template = get_chat_template(spm, version, image, audio, think)
 
     INVALID_ALTERNATE_CONVERSATION = {
@@ -1122,24 +1125,29 @@ def test_role_error(
         encode_transformers(chat_template, INVALID_ROLE)
 
 
-@pytest.mark.parametrize("spm", [True, False])
 @pytest.mark.parametrize(
-    ("version", "image", "audio", "think"),
+    ("spm", "version", "image", "audio", "think"),
     [
-        (TokenizerVersion.v1, False, False, False),
-        (TokenizerVersion.v2, False, False, False),
-        (TokenizerVersion.v3, False, False, False),
-        (TokenizerVersion.v3, True, False, False),
-        (TokenizerVersion.v7, False, False, False),
-        (TokenizerVersion.v7, True, False, False),
-        (TokenizerVersion.v7, False, True, False),
-        (TokenizerVersion.v11, False, False, False),
-        (TokenizerVersion.v11, True, False, False),
-        (TokenizerVersion.v11, False, True, False),
-        (TokenizerVersion.v13, False, False, False),
-        (TokenizerVersion.v13, True, False, False),
-        (TokenizerVersion.v13, False, True, False),
-        (TokenizerVersion.v13, True, False, True),
+        (False, TokenizerVersion.v1, False, False, False),
+        (True, TokenizerVersion.v1, False, False, False),
+        (False, TokenizerVersion.v2, False, False, False),
+        (True, TokenizerVersion.v2, False, False, False),
+        (False, TokenizerVersion.v3, False, False, False),
+        (True, TokenizerVersion.v3, False, False, False),
+        (False, TokenizerVersion.v3, True, False, False),
+        (True, TokenizerVersion.v3, True, False, False),
+        (False, TokenizerVersion.v7, False, False, False),
+        (True, TokenizerVersion.v7, False, False, False),
+        (False, TokenizerVersion.v7, True, False, False),
+        (True, TokenizerVersion.v7, True, False, False),
+        (False, TokenizerVersion.v7, False, True, False),
+        (False, TokenizerVersion.v11, False, False, False),
+        (False, TokenizerVersion.v11, True, False, False),
+        (False, TokenizerVersion.v11, False, True, False),
+        (False, TokenizerVersion.v13, False, False, False),
+        (False, TokenizerVersion.v13, True, False, False),
+        (False, TokenizerVersion.v13, False, True, False),
+        (False, TokenizerVersion.v13, True, False, True),
     ],
 )
 def test_invalid_chunks(
@@ -1149,11 +1157,6 @@ def test_invalid_chunks(
     audio: bool,
     think: bool,
 ) -> None:
-    # user: text, image, audio
-    # sp: text, think
-    # assistant: text, think
-    _maybe_skip(spm, version, image, audio, think)
-
     INVALID_SP_THINK = {
         "messages": [
             {
@@ -1284,24 +1287,21 @@ def test_invalid_chunks(
             encode_transformers(chat_template, conv)
 
 
-@pytest.mark.parametrize("spm", [True, False])
 @pytest.mark.parametrize(
-    ("version", "image", "audio", "think"),
+    ("spm", "version", "image", "audio", "think"),
     [
-        (TokenizerVersion.v1, False, False, False),
-        (TokenizerVersion.v2, False, False, False),
-        (TokenizerVersion.v3, False, False, False),
-        (TokenizerVersion.v3, True, False, False),
-        (TokenizerVersion.v7, False, False, False),
-        (TokenizerVersion.v7, True, False, False),
-        (TokenizerVersion.v7, False, True, False),
-        (TokenizerVersion.v11, False, False, False),
-        (TokenizerVersion.v11, True, False, False),
-        (TokenizerVersion.v11, False, True, False),
-        (TokenizerVersion.v13, False, False, False),
-        (TokenizerVersion.v13, True, False, False),
-        (TokenizerVersion.v13, False, True, False),
-        (TokenizerVersion.v13, True, False, True),
+        (False, TokenizerVersion.v3, False, False, False),
+        (True, TokenizerVersion.v3, False, False, False),
+        (False, TokenizerVersion.v3, True, False, False),
+        (True, TokenizerVersion.v3, True, False, False),
+        (False, TokenizerVersion.v7, False, False, False),
+        (True, TokenizerVersion.v7, False, False, False),
+        (False, TokenizerVersion.v7, True, False, False),
+        (True, TokenizerVersion.v7, True, False, False),
+        (False, TokenizerVersion.v7, False, True, False),
+        (False, TokenizerVersion.v11, False, False, False),
+        (False, TokenizerVersion.v11, True, False, False),
+        (False, TokenizerVersion.v11, False, True, False),
     ],
 )
 def test_tool_call_errors(
@@ -1311,14 +1311,50 @@ def test_tool_call_errors(
     audio: bool,
     think: bool,
 ) -> None:
-    _maybe_skip(spm, version, image, audio, think)
-    # ID
-    # Name
-    # args = dict
-    ...
+    invalid_id_conv = {
+        "messages": [
+            {"role": "user", "content": "Hello"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"id": "1", "function": {"name": "func", "arguments": "{}"}}],
+            },
+        ]
+    }
+
+    chat_template = get_chat_template(spm, version, image, audio, think)
+    with pytest.raises(TemplateError, match="Tool call must have an id of 9 characters or numbers."):
+        encode_transformers(chat_template, invalid_id_conv)
 
 
-def test_valid_assistant() -> None:
-    # content
-    # tool calls
-    ...
+@pytest.mark.parametrize(
+    ("spm", "version", "image", "audio", "think"),
+    [
+        (False, TokenizerVersion.v2, False, False, False),
+        (True, TokenizerVersion.v2, False, False, False),
+        (False, TokenizerVersion.v3, False, False, False),
+        (True, TokenizerVersion.v3, False, False, False),
+        (False, TokenizerVersion.v3, True, False, False),
+        (True, TokenizerVersion.v3, True, False, False),
+    ],
+)
+def test_invalid_assistant(
+    spm: bool,
+    version: TokenizerVersion,
+    image: bool,
+    audio: bool,
+    think: bool,
+) -> None:
+    invalid_message_conv = {
+        "messages": [
+            {
+                "role": "assistant",
+                "content": "hey",
+                "tool_calls": [{"id": "123456789", "function": {"name": "func", "arguments": "{}"}}],
+            },
+        ]
+    }
+
+    chat_template = get_chat_template(spm, version, image, audio, think)
+    with pytest.raises(TemplateError, match="Assistant message cannot have both content and tool calls."):
+        encode_transformers(chat_template, invalid_message_conv)
