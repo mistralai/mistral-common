@@ -122,9 +122,9 @@ def _get_image_encoder(tokenizer: Tokenizer) -> ImageEncoder:
     image_encoder = ImageEncoder(
         image_config=image_config,
         special_ids=SpecialImageIDs(
-            img=tokenizer.get_control_token("[IMG]"),
-            img_break=tokenizer.get_control_token("[IMG_BREAK]"),
-            img_end=tokenizer.get_control_token("[IMG_END]"),
+            img=tokenizer.get_special_token("[IMG]"),
+            img_break=tokenizer.get_special_token("[IMG_BREAK]"),
+            img_end=tokenizer.get_special_token("[IMG_END]"),
         ),
     )
     return image_encoder
@@ -272,12 +272,12 @@ def encode_transformers(
 ) -> str:
     if isinstance(chat_request, ChatCompletionRequest):
         openai_request = chat_request.to_openai()
+        if keep_name_for_tools:
+            for openai_message, chat_message in zip(openai_request["messages"], chat_request.messages):
+                if chat_message.role == "tool":
+                    openai_message["name"] = chat_message.name
     else:
         openai_request = chat_request
-    if keep_name_for_tools:
-        for openai_message, chat_message in zip(openai_request["messages"], chat_request["messages"]):
-            if chat_message["role"] == "tool":
-                openai_message["name"] = chat_message["name"]
     return render_jinja_template(
         [openai_request["messages"]],
         tools=openai_request.get("tools", None),  # type: ignore[arg-type]
