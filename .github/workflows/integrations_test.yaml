@@ -20,7 +20,7 @@ on:
       - 'integrations/**'
       - 'tests/integrations/**'
     
-  jobs:
+jobs:
   chat_templates:
     if: ${{ github.event.pull_request.draft != true }}
     runs-on: ubuntu-latest
