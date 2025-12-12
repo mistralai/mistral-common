@@ -266,7 +266,9 @@ def _get_mistral_tokenizer(
         return _get_mistral_tekkenizer(tokenizer_version, validation_mode, image, audio, think)
 
 
-def encode_transformers(chat_template: str, chat_request: ChatCompletionRequest | dict, keep_name_for_tools: bool=False) -> str:
+def encode_transformers(
+    chat_template: str, chat_request: ChatCompletionRequest | dict, keep_name_for_tools: bool = False
+) -> str:
     if isinstance(chat_request, ChatCompletionRequest):
         openai_request = chat_request.to_openai()
     else:
@@ -1053,7 +1055,9 @@ def test_chat_template(
             )
         else:
             mistral_common_encoded = encode_mistral_common(mistral_tokenizer, conversation, spm)
-        transformers_encoded = encode_transformers(chat_template, conversation, keep_name_for_tools=version==TokenizerVersion.v2)
+        transformers_encoded = encode_transformers(
+            chat_template, conversation, keep_name_for_tools=version == TokenizerVersion.v2
+        )
 
         assert mistral_common_encoded == transformers_encoded
 
