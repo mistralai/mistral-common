@@ -4,11 +4,10 @@ from typing import Any
 
 import numpy as np
 import pytest
-from chat_templates.chat_templates import get_chat_template
 from jinja2.exceptions import TemplateError
-from test_tekken import get_special_tokens
 from transformers.utils.chat_template_utils import render_jinja_template  # type: ignore[import-not-found]
 
+from integrations.chat_templates.chat_templates import get_chat_template
 from mistral_common.audio import Audio
 from mistral_common.image import download_image
 from mistral_common.protocol.instruct.chunk import (
@@ -50,6 +49,7 @@ from mistral_common.tokens.tokenizers.instruct import (
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
+from tests.test_tekken import get_special_tokens
 
 ROOT_DIR = Path(__file__).parent.parent.parent
 TEST_DIR = ROOT_DIR / "tests"
