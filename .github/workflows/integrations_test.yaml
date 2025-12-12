@@ -1,4 +1,4 @@
-name: Mistral Common Chat templates CI
+name: Mistral Common Integrations CI
 
 permissions:
   contents: read
@@ -7,12 +7,18 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'integrations/**'
+      - 'tests/integrations/**'
   pull_request:
     types:
       - opened
       - synchronize
       - reopened
       - ready_for_review
+    paths:
+      - 'integrations/**'
+      - 'tests/integrations/**'
     
   jobs:
   chat_templates:

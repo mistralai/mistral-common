@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -267,16 +268,16 @@ def _get_mistral_tokenizer(
 
 
 def encode_transformers(
-    chat_template: str, chat_request: ChatCompletionRequest | dict, keep_name_for_tools: bool = False
+    chat_template: str, chat_request: ChatCompletionRequest | dict[str, Any], keep_name_for_tools: bool = False
 ) -> str:
     if isinstance(chat_request, ChatCompletionRequest):
         openai_request = chat_request.to_openai()
     else:
         openai_request = chat_request
     if keep_name_for_tools:
-        for openai_message, chat_message in zip(openai_request["messages"], chat_request.messages):
-            if chat_message.role == "tool":
-                openai_message["name"] = chat_message.name
+        for openai_message, chat_message in zip(openai_request["messages"], chat_request["messages"]):
+            if chat_message["role"] == "tool":
+                openai_message["name"] = chat_message["name"]
     return render_jinja_template(
         [openai_request["messages"]],
         tools=openai_request.get("tools", None),  # type: ignore[arg-type]
