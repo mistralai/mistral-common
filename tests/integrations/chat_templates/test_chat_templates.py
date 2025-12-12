@@ -266,12 +266,15 @@ def _get_mistral_tokenizer(
         return _get_mistral_tekkenizer(tokenizer_version, validation_mode, image, audio, think)
 
 
-def encode_transformers(chat_template: str, chat_request: ChatCompletionRequest | dict) -> str:
+def encode_transformers(chat_template: str, chat_request: ChatCompletionRequest | dict, keep_name_for_tools: bool=False) -> str:
     if isinstance(chat_request, ChatCompletionRequest):
         openai_request = chat_request.to_openai()
     else:
         openai_request = chat_request
-    print(openai_request)
+    if keep_name_for_tools:
+        for openai_message, chat_message in zip(openai_request["messages"], chat_request.messages):
+            if chat_message.role == "tool":
+                openai_message["name"] = chat_message.name
     return render_jinja_template(
         [openai_request["messages"]],
         tools=openai_request.get("tools", None),  # type: ignore[arg-type]
@@ -1050,7 +1053,7 @@ def test_chat_template(
             )
         else:
             mistral_common_encoded = encode_mistral_common(mistral_tokenizer, conversation, spm)
-        transformers_encoded = encode_transformers(chat_template, conversation)
+        transformers_encoded = encode_transformers(chat_template, conversation, keep_name_for_tools=version==TokenizerVersion.v2)
 
         assert mistral_common_encoded == transformers_encoded
 
