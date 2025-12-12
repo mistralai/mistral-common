@@ -46,4 +46,4 @@ jobs:
       # PyTest
       - name: Tests
         run: |
-          uv run pytest tests/integrations/chat_templates/
+          uv run pytest integrations/tests/
