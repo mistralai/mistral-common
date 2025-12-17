@@ -284,7 +284,30 @@ class ToolMessage(BaseMessage):
     @classmethod
     def from_openai(cls, messages: dict[str, str | list[dict[str, str | dict[str, Any]]]]) -> "ToolMessage":
         r"""Converts the OpenAI message to the Mistral format."""
-        tool_message = cls.model_validate(messages)
+        openai_content = messages.get("content", "")
+
+        # Normalize OpenAI chunked content to a string
+        if isinstance(openai_content, list):
+            chunks = [_convert_openai_content_chunks(chunk) for chunk in openai_content]
+            text_parts: list[str] = []
+            for c in chunks:
+                if isinstance(c, TextChunk):
+                    text_parts.append(c.text)
+                else:
+                    raise ValueError(f"Unsupported tool content chunk type: {type(c).__name__}")
+
+            content = "".join(text_parts)
+        else:
+            content = "" if openai_content is None else openai_content
+
+        tool_message = cls.model_validate(
+            {
+                "role": messages["role"],
+                "content": content,
+                "tool_call_id": messages.get("tool_call_id"),
+                "name": messages.get("name"),
+            }
+        )
         assert tool_message.tool_call_id is not None, "tool_call_id must be provided for tool messages."
         return tool_message
 
