@@ -805,7 +805,6 @@ class InstructTokenizerV7(InstructTokenizerV3):
             else:
                 self.TRANSCRIBE = self.tokenizer.get_special_token(SpecialTokens.transcribe.value)
 
-
     def _truncate_for_max_tokens(
         self,
         tokenized_messages: list[list[int] | None],

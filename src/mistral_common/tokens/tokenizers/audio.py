@@ -136,6 +136,7 @@ class AudioConfig:
         downsample_factor /= self.encoding_config.hop_length
         return int(downsample_factor)
 
+
 @dataclass
 class AudioEncoding:
     r"""Encapsulates the tokens and audio data for an audio chunk.
