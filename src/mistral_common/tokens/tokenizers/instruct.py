@@ -471,10 +471,7 @@ class InstructTokenizerV2(
     def _parse_tool_content(self, content: str | list[TextChunk]) -> Any:
         if isinstance(content, list):
             content = "".join(chunk.text for chunk in content)
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            return content
+        return self._parse_json_content(content)
 
     def _prepare_tool_result(self, tool_message: ToolMessage) -> dict[str, Any]:
         r"""Bit of a hack due to the way tool results are tokenized."""
