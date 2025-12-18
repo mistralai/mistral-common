@@ -1,7 +1,7 @@
-from enum import Enum
 import logging
 import math
 from dataclasses import dataclass
+from enum import Enum
 
 import numpy as np
 

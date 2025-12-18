@@ -1,5 +1,5 @@
-from enum import Enum
 import io
+from enum import Enum
 from typing import Any
 
 from pydantic import Field

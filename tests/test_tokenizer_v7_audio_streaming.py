@@ -28,12 +28,12 @@ from mistral_common.tokens.tokenizers.mistral import (
 from mistral_common.tokens.tokenizers.special_tokens import SpecialTokens
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 
-
 _audio_spectrogram_config = {
     "num_mel_bins": 128,
     "hop_length": 160,
     "window_size": 400,
 }
+
 
 def add_special_tokens(
     special_tokens: list[dict[str, Any]], tokens: list[str], start_idx: int, is_control: bool = True
@@ -56,7 +56,6 @@ def add_special_tokens(
 
         token_entry["token_str"] = token
         token_entry["is_control"] = is_control
-
 
 
 def load_audio_streaming(
