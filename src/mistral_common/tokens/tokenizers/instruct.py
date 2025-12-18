@@ -949,7 +949,8 @@ class InstructTokenizerV7(InstructTokenizerV3):
             return self._encode_streaming_transcription(request)
 
         raise InvalidRequestException(
-            f"Transcription format should be one of 'instruct', 'streaming', got {self.audio_encoder.audio_config.transcription_format=}."
+            "Transcription format should be one of 'instruct', 'streaming', got "
+            f"{self.audio_encoder.audio_config.transcription_format=}."
         )
 
     def _encode_instruct_transcription(self, request: TranscriptionRequest) -> Tokenized:
