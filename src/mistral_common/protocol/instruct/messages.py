@@ -269,7 +269,7 @@ class ToolMessage(BaseMessage):
        >>> message = ToolMessage(content="Hello, how can I help you?", tool_call_id="123")
     """
 
-    content: str
+    content: str | list[TextChunk]
     role: Literal[Roles.tool] = Roles.tool
     tool_call_id: str | None = None
 

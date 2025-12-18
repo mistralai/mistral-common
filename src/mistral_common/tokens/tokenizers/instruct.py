@@ -468,11 +468,19 @@ class InstructTokenizerV2(
         except json.JSONDecodeError:
             return content
 
+    def _parse_tool_content(self, content: str | list[TextChunk]) -> Any:
+        if isinstance(content, list):
+            content = "".join(chunk.text for chunk in content)
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            return content
+
     def _prepare_tool_result(self, tool_message: ToolMessage) -> dict[str, Any]:
         r"""Bit of a hack due to the way tool results are tokenized."""
         return {
             "name": tool_message.name,
-            "content": self._parse_json_content(tool_message.content),
+            "content": self._parse_tool_content(tool_message.content),
         }
 
     def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> list[int]:
@@ -623,7 +631,7 @@ class InstructTokenizerV3(
         assert tool_message.tool_call_id is not None, "Tool message has to have the tool call id defined in v3"
 
         return {
-            "content": self._parse_json_content(tool_message.content),
+            "content": self._parse_tool_content(tool_message.content),
             "call_id": tool_message.tool_call_id,
         }
 
@@ -1131,7 +1139,11 @@ class InstructTokenizerV13(InstructTokenizerV11):
         """
         assert message.tool_call_id is not None, "Tool call id must be provided for tokenizer >= v13"
 
-        tokens = self.tokenizer.encode(message.content, bos=False, eos=False)
+        content = message.content
+        if not isinstance(content, str):
+            content = "".join(chunk.text for chunk in content)
+
+        tokens = self.tokenizer.encode(content, bos=False, eos=False)
         curr_tokens = [
             self.BEGIN_TOOL_RESULTS,
             *tokens,

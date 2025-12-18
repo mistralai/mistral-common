@@ -438,6 +438,14 @@ def test_convert_think_chunk() -> None:
             ToolMessage(tool_call_id="VvvODy9mT", content="22"),
         ),
         (
+            OpenAIToolMessage(
+                role="tool",
+                content=[{"type": "text", "text": "22"}, {"type": "text", "text": "23"}],
+                tool_call_id="VvvODy9mT",
+            ),
+            ToolMessage(tool_call_id="VvvODy9mT", content=[TextChunk(text="22"), TextChunk(text="23")]),
+        ),
+        (
             OpenAISystemMessage(role="system", content="You are a helpful assistant."),
             SystemMessage(content="You are a helpful assistant."),
         ),
