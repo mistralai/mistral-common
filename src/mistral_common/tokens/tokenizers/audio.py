@@ -126,12 +126,15 @@ class AudioConfig:
         return int(self.chunk_length_s * self.sampling_rate)
 
     @property
+    def raw_audio_length_per_tok(self) -> int:
+        return int(self.sampling_rate // self.frame_rate)
+
+    @property
     def audio_length_per_tok(self) -> int:
         r"""Calculate the length of audio per token."""
-        downsample_factor = self.sampling_rate // self.frame_rate
+        downsample_factor = float(self.raw_audio_length_per_tok)
         downsample_factor /= self.encoding_config.hop_length
         return int(downsample_factor)
-
 
 @dataclass
 class AudioEncoding:
@@ -203,7 +206,7 @@ class AudioEncoder:
 
     def _get_streaming_pad(self, num_samples: int, is_online: bool) -> int:
         # let's make sure the audio is a multiple of one "frame" token
-        mult_of = self.audio_config.audio_length_per_tok
+        mult_of = self.audio_config.raw_audio_length_per_tok
         pad = int((mult_of - (num_samples % mult_of)) % mult_of)
 
         if not is_online:

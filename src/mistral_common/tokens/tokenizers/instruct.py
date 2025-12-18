@@ -800,10 +800,11 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
         self.TRANSCRIBE = None
         if audio_encoder is not None:
-            self.TRANSCRIBE = self.tokenizer.get_special_token(SpecialTokens.transcribe.value)
+            if audio_encoder.audio_config.is_streaming:
+                self.STREAMING_PAD = self.tokenizer.get_special_token(SpecialTokens.streaming_pad.value)
+            else:
+                self.TRANSCRIBE = self.tokenizer.get_special_token(SpecialTokens.transcribe.value)
 
-        if audio_encoder.audio_config.is_streaming:
-            self.STREAMING_PAD = self.tokenizer.get_special_token(SpecialTokens.streaming_pad.value)
 
     def _truncate_for_max_tokens(
         self,
