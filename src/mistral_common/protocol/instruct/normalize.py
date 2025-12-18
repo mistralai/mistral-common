@@ -148,7 +148,9 @@ class InstructRequestNormalizer(
         tool_messages: list[ToolMessageType] = []
         for message in messages:
             assert isinstance(message, self._tool_message_class), "Expected tool message"
-            content = self._aggregate_content_chunks(message.content)
+            content = message.content
+            if not isinstance(content, str):
+                content = "".join([chunk.text for chunk in content])
             normalized_content = self._normalize_json_content(content)
             tool_messages.append(
                 self._tool_message_class(
@@ -375,7 +377,7 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
     def _aggregate_system_prompts(self, messages: list[UATS]) -> str | None:
         raise NotImplementedError("We should not aggregate system prompts")
 
-    def from_chat_completion_request(self, request: ChatCompletionRequest[UATS]) -> InstructRequestType:  # type: ignore[type-var]
+    def from_chat_completion_request(self, request: ChatCompletionRequest[UATS]) -> InstructRequestType:  # type: ignore[type-var, misc]
         r"""Converts a chat completion request to an instruct request.
 
         Args:
