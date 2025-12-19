@@ -232,7 +232,7 @@ class TestChatCompletionRequestNormalization:
         expected = [
             ToolMessage(content="C", tool_call_id="1"),
             ToolMessage(content=json.dumps({"a": 2}), tool_call_id="2"),
-            ToolMessage(content="BA", tool_call_id="3"),
+            ToolMessage(content="B\n\nA", tool_call_id="3"),
         ]
 
         assert (

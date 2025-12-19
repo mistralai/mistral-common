@@ -139,7 +139,7 @@ class InstructRequestNormalizer(
                 aggregated_content = self._aggregate_content_chunks(message.content)
                 system_prompt.append(aggregated_content)
 
-        return "\n\n".join(system_prompt) if len(system_prompt) else None
+        return CHUNK_JOIN_STR.join(system_prompt) if len(system_prompt) else None
 
     def _aggregate_tool_messages(self, messages: list[UATS], latest_call_ids: list[str]) -> list[ToolMessageType]:
         r"""
@@ -150,7 +150,7 @@ class InstructRequestNormalizer(
             assert isinstance(message, self._tool_message_class), "Expected tool message"
             content = message.content
             if not isinstance(content, str):
-                content = "".join([chunk.text for chunk in content])
+                content = CHUNK_JOIN_STR.join([chunk.text for chunk in content])
             normalized_content = self._normalize_json_content(content)
             tool_messages.append(
                 self._tool_message_class(
@@ -231,11 +231,11 @@ class InstructRequestNormalizer(
                         text_chunks.append(chunk.text)
                     else:
                         if text_chunks:
-                            all_content.append(TextChunk(text="\n\n".join(text_chunks)))
+                            all_content.append(TextChunk(text=CHUNK_JOIN_STR.join(text_chunks)))
                             text_chunks = []
                         all_content.append(chunk)
 
-        text_content = "\n\n".join(text_chunks) if text_chunks else ""
+        text_content = CHUNK_JOIN_STR.join(text_chunks) if text_chunks else ""
 
         if not all_content:
             # if no ContentChunk was passed, we return content as a str
