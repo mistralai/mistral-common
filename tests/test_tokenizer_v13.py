@@ -194,6 +194,11 @@ def test_encode_tool_message(v13_tekkenizer: InstructTokenizerV13) -> None:
     encoded = v13_tekkenizer.encode_tool_message(tool_message, is_before_last_user_message=False)
     assert encoded == [7, 182, 149, 8]
 
+    tool_message = ToolMessage(content=[TextChunk(text="R1"), TextChunk(text="R2")], tool_call_id="123456789")
+    assert isinstance(v13_tekkenizer, InstructTokenizerV13)
+    encoded = v13_tekkenizer.encode_tool_message(tool_message, is_before_last_user_message=False)
+    assert encoded == [7, 182, 149, 182, 150, 8]
+
 
 def test_encode_think_chunk(v13_tekkenizer_think: InstructTokenizerV13) -> None:
     assert isinstance(v13_tekkenizer_think, InstructTokenizerV13)

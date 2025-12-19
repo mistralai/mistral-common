@@ -3,6 +3,7 @@ import json
 import pytest
 
 from mistral_common.exceptions import InvalidAssistantMessageException, InvalidMessageStructureException
+from mistral_common.protocol.instruct.chunk import TextChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage, ToolMessage, UserMessage
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
@@ -241,6 +242,20 @@ def test_tool_response(tokenizer: InstructTokenizer) -> None:
     _, text = tokenized.tokens, tokenized.text
     assert text == (
         '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>[TOOL_RESULTS]▁[{"name":▁"b",▁"content":▁{"a":▁1}}][/TOOL_RESULTS]'
+    )
+
+    tokenized = tokenizer.encode_instruct(
+        InstructRequest(
+            messages=[
+                UserMessage(content="a"),
+                AssistantMessage(content=None, tool_calls=[ToolCall(function=FunctionCall(name="b", arguments="{}"))]),
+                ToolMessage(name="b", content=[TextChunk(text="d"), TextChunk(text='{"a": 1}')]),
+            ],
+        )
+    )
+    _, text = tokenized.tokens, tokenized.text
+    assert text == (
+        '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>[TOOL_RESULTS]▁[{"name":▁"b",▁"content":▁"d{\\"a\\":▁1}"}][/TOOL_RESULTS]'
     )
 
 
