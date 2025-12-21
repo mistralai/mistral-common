@@ -37,7 +37,7 @@ from mistral_common.tokens.tokenizers.instruct import (
 )
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-from tests.test_tekken import quick_vocab, get_special_tokens
+from tests.test_tekken import get_special_tokens, quick_vocab
 
 
 def get_tekkenizer_with_audio() -> InstructTokenizerV7:

@@ -1,7 +1,4 @@
-import json
 import math
-import tempfile
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -16,19 +13,16 @@ from mistral_common.tokens.tokenizers.audio import (
     OFFLINE_STREAMING_BUFFER_TOKENS,
     Audio,
     AudioConfig,
-    AudioEncoder,
     AudioSpectrogramConfig,
-    SpecialAudioIDs,
     TranscriptionFormat,
 )
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTokens, TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV7,
 )
 from mistral_common.tokens.tokenizers.mistral import (
-    MistralTokenizer,
     load_audio_encoder,
 )
-from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTokens, TokenizerVersion
 from mistral_common.tokens.tokenizers.tekken import SpecialTokenInfo, Tekkenizer
 from tests.test_tekken import get_special_tokens, quick_vocab
 
@@ -67,8 +61,8 @@ def load_audio_streaming() -> Tekkenizer:
     for i in range(35, 39):
         special_tokens += [SpecialTokenInfo(rank=i, token_str=f"<SPCECIAL_{i}>", is_control=True)]
 
-    special_tokens += [SpecialTokenInfo(rank=39, token_str=f"[STREAMING_PAD]", is_control=True)]
-    special_tokens += [SpecialTokenInfo(rank=40, token_str=f"[STREAMING_WORD]", is_control=True)]
+    special_tokens += [SpecialTokenInfo(rank=39, token_str="[STREAMING_PAD]", is_control=True)]
+    special_tokens += [SpecialTokenInfo(rank=40, token_str="[STREAMING_WORD]", is_control=True)]
     tokenizer = Tekkenizer(
         quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
         special_tokens,
@@ -92,6 +86,7 @@ def load_audio_streaming() -> Tekkenizer:
     tokenizer._audio_config = audio_config
     return tokenizer
 
+
 @pytest.fixture(scope="session")
 def tokenizer() -> InstructTokenizerV7:
     tekkenizer = load_audio_streaming()
@@ -99,13 +94,18 @@ def tokenizer() -> InstructTokenizerV7:
     audio_encoder = load_audio_encoder(tekkenizer.audio, tekkenizer)
     return InstructTokenizerV7(tekkenizer, image_encoder=None, audio_encoder=audio_encoder)
 
+
 def test_special_audio_streaming_tokens(tokenizer: InstructTokenizerV7) -> None:
     assert tokenizer.tokenizer.get_special_token(SpecialTokens.streaming_pad.value) == 39
     assert tokenizer.tokenizer.get_special_token(SpecialTokens.streaming_word.value) == 40
 
     decoded_ids = [211, 218, 39, 194, 189, 39, 40, 172, 39, 191, 40, 2]
     assert tokenizer.decode(decoded_ids) == "ov^YH["
-    assert tokenizer.decode(decoded_ids, special_token_policy=SpecialTokenPolicy.KEEP) == "ov[STREAMING_PAD]^Y[STREAMING_PAD][STREAMING_WORD]H[STREAMING_PAD][[STREAMING_WORD]</s>"
+    assert (
+        tokenizer.decode(decoded_ids, special_token_policy=SpecialTokenPolicy.KEEP)
+        == "ov[STREAMING_PAD]^Y[STREAMING_PAD][STREAMING_WORD]H[STREAMING_PAD][[STREAMING_WORD]</s>"
+    )
+
 
 @pytest.mark.parametrize(
     ("mode", "expected_array_len"), [(StreamingMode.OFFLINE, 57600), (StreamingMode.ONLINE, 28160)]
@@ -124,7 +124,9 @@ def test_tokenize_streaming_request(
         format="wav",
     )
 
-    streaming_request = TranscriptionRequest(audio=RawAudio(data=audio.to_base64("wav"), format="wav"), streaming=mode, language=None)
+    streaming_request = TranscriptionRequest(
+        audio=RawAudio(data=audio.to_base64("wav"), format="wav"), streaming=mode, language=None
+    )
 
     tokenized = tokenizer.encode_transcription(streaming_request)
     assert tokenizer.audio_encoder is not None
