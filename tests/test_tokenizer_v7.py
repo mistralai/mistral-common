@@ -31,14 +31,14 @@ from mistral_common.tokens.tokenizers.image import ImageEncoder
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-from tests.test_tekken import _quick_vocab
+from tests.test_tekken import quick_vocab
 from tests.test_tokenizer_v7_audio import _get_tekkenizer_with_audio
 
 
 @pytest.fixture
 def no_audio_tekkenizer() -> InstructTokenizerV7:
     tokenizer = Tekkenizer(
-        _quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
+        quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
         list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS),
         pattern=r".+",  # single token, whole string
         vocab_size=256 + 100,

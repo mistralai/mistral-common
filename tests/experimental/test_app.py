@@ -30,7 +30,7 @@ from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, TokenizerV
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-from tests.test_tekken import _quick_vocab, get_special_tokens
+from tests.test_tekken import quick_vocab, get_special_tokens
 
 
 @pytest.fixture(scope="module")
@@ -55,7 +55,7 @@ def mistral_tokenizer_v13() -> MistralTokenizer:
     return MistralTokenizer(
         instruct_tokenizer=InstructTokenizerV13(
             Tekkenizer(
-                _quick_vocab(
+                quick_vocab(
                     [
                         b"Hello",
                         b",",

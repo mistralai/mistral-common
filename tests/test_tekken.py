@@ -101,7 +101,7 @@ def _write_tekkenizer_model(
 ) -> None:
     # Create the vocab.json file
     if vocab is None:
-        vocab = _quick_vocab()
+        vocab = quick_vocab()
 
     config = {
         "pattern": pattern,
@@ -113,7 +113,7 @@ def _write_tekkenizer_model(
         config["version"] = version
 
     model = ModelData(
-        vocab=vocab if vocab else _quick_vocab(),
+        vocab=vocab if vocab else quick_vocab(),
         config=TekkenConfig(**config),  # type: ignore
         special_tokens=special_tokens,
         version=1,
@@ -125,7 +125,7 @@ def _write_tekkenizer_model(
 
 def test_roundtrip() -> None:
     tekkenizer = Tekkenizer(
-        _quick_vocab(extra_toks=[b"beau", b"My", b"unused"]),
+        quick_vocab(extra_toks=[b"beau", b"My", b"unused"]),
         list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS),
         pattern=".",
         vocab_size=256 + 3 + 100,
@@ -141,7 +141,7 @@ def test_roundtrip() -> None:
 def test_version(tmp_path: Path) -> None:
     tokpath = tmp_path / "tekken.json"
 
-    vocab = _quick_vocab(extra_toks=[b"beau", b"My", b"unused"])
+    vocab = quick_vocab(extra_toks=[b"beau", b"My", b"unused"])
     pattern = "."
     num_special_tokens = 100
 
@@ -165,7 +165,7 @@ def test_version(tmp_path: Path) -> None:
 def test_read_from_file(tmp_path: Path) -> None:
     inputs = "My very beatuiful string"
     tokpath = tmp_path / "tekken.json"
-    vocab = _quick_vocab(extra_toks=[b"beau", b"My", b"unused"])
+    vocab = quick_vocab(extra_toks=[b"beau", b"My", b"unused"])
     pattern = "."
     num_special_tokens = 100
     _write_tekkenizer_model(tokpath, vocab, None, pattern, num_special_tokens)
@@ -217,7 +217,7 @@ def test_istekken(tmp_path: Path) -> None:
 
 def test_isbyte() -> None:
     tekkenizer = Tekkenizer(
-        _quick_vocab([b"hello"]),
+        quick_vocab([b"hello"]),
         list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS),
         pattern=r".+",  # single token, whole string
         vocab_size=256 + 1 + 100,
@@ -235,7 +235,7 @@ def test_isbyte() -> None:
 
 
 def test_id_to_byte_piece() -> None:
-    vocab = _quick_vocab([b"hello"])
+    vocab = quick_vocab([b"hello"])
     tekkenizer = Tekkenizer(
         vocab,
         special_tokens=_get_deprecated_special_tokens(),
@@ -305,7 +305,7 @@ def test_frozen_special_tokens_list() -> None:
     ],
 )
 def test_is_control(token: str | int, is_special: bool) -> None:
-    vocab = _quick_vocab([b"hello"])
+    vocab = quick_vocab([b"hello"])
     tekkenizer = Tekkenizer(
         vocab,
         special_tokens=_get_deprecated_special_tokens(),

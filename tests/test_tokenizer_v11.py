@@ -8,14 +8,14 @@ from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV11
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-from tests.test_tekken import _quick_vocab, get_special_tokens
+from tests.test_tekken import quick_vocab, get_special_tokens
 
 
 @pytest.fixture(scope="session")
 def tekkenizer() -> InstructTokenizerV11:
     special_tokens = get_special_tokens(TokenizerVersion.v11)
     tokenizer = Tekkenizer(
-        _quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
+        quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
         special_tokens=special_tokens,
         pattern=r".+",  # single token, whole string
         vocab_size=256 + 100,
