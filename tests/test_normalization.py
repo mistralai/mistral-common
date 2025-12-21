@@ -222,6 +222,26 @@ class TestChatCompletionRequestNormalization:
             normalizer,
         )
 
+    def test_tool_chunk_aggregation(self, normalizer: InstructRequestNormalizer) -> None:
+        messages = [
+            ToolMessage(content="C", tool_call_id="1"),
+            ToolMessage(content=[TextChunk(text='{"a": 2}')], tool_call_id="2"),
+            ToolMessage(content=[TextChunk(text="B"), TextChunk(text="A")], tool_call_id="3"),
+        ]
+
+        expected = [
+            ToolMessage(content="C", tool_call_id="1"),
+            ToolMessage(content=json.dumps({"a": 2}), tool_call_id="2"),
+            ToolMessage(content="B\n\nA", tool_call_id="3"),
+        ]
+
+        assert (
+            normalizer._aggregate_tool_messages(
+                messages, [tool_message.tool_call_id for tool_message in messages if tool_message.tool_call_id]
+            )
+            == expected
+        )
+
     def test_normalize_chunks(self, normalizer: InstructRequestNormalizer) -> None:
         chat_completion_request = mock_chat_completion(
             messages=[

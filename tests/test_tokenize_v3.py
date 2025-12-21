@@ -5,6 +5,7 @@ from tempfile import NamedTemporaryFile
 import pytest
 
 from mistral_common.exceptions import InvalidAssistantMessageException, InvalidMessageStructureException
+from mistral_common.protocol.instruct.chunk import TextChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage, ToolMessage, UserMessage
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
@@ -355,6 +356,28 @@ def test_tool_message(tokenizer: InstructTokenizer, special_ws: str, ws: str) ->
         f"<s>[INST]{special_ws}a[/INST][TOOL_CALLS]{special_ws}["
         f'{{"name":{ws}"b",{ws}"arguments":{ws}{{}},{ws}"id":{ws}"123456789"}}]</s>[TOOL_RESULTS]{special_ws}'
         f'{{"content":{ws}{{"a":{ws}1}},{ws}"call_id":{ws}"123456789"}}[/TOOL_RESULTS]'
+    )
+
+    tokenized = tokenizer.encode_instruct(
+        InstructRequest(
+            messages=[
+                UserMessage(content="a"),
+                AssistantMessage(
+                    content=None, tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="b", arguments="{}"))]
+                ),
+                ToolMessage(
+                    name="b",
+                    content=[TextChunk(text="d"), TextChunk(text='{"a": 1}')],
+                    tool_call_id="123456789",
+                ),
+            ],
+        )
+    )
+    _, text = tokenized.tokens, tokenized.text
+    assert text == (
+        f"<s>[INST]{special_ws}a[/INST][TOOL_CALLS]{special_ws}["
+        f'{{"name":{ws}"b",{ws}"arguments":{ws}{{}},{ws}"id":{ws}"123456789"}}]</s>[TOOL_RESULTS]{special_ws}'
+        f'{{"content":{ws}"d{{\\"a\\":{ws}1}}",{ws}"call_id":{ws}"123456789"}}[/TOOL_RESULTS]'
     )
 
 
