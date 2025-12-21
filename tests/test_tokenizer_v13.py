@@ -20,7 +20,7 @@ from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized, 
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import SpecialTokenPolicy, Tekkenizer
-from tests.test_tekken import quick_vocab, get_special_tokens
+from tests.test_tekken import get_special_tokens, quick_vocab
 
 
 @pytest.fixture(scope="session")

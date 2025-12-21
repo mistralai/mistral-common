@@ -8,7 +8,7 @@ from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV11
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-from tests.test_tekken import quick_vocab, get_special_tokens
+from tests.test_tekken import get_special_tokens, quick_vocab
 
 
 @pytest.fixture(scope="session")
