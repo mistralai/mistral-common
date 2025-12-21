@@ -275,7 +275,7 @@ class AudioEncoder:
         else:
             audio = Audio.from_base64(content.url)
 
-        return self._encode_audio(audio)
+        return self.encode_audio(audio, is_online_streaming=False)
 
     def __call__(self, content: AudioChunk | AudioURLChunk) -> AudioEncoding:
         r"""Call the encoder on an audio chunk or URL chunk.

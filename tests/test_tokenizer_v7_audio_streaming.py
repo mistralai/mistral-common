@@ -7,7 +7,8 @@ from typing import Any
 import numpy as np
 import pytest
 
-from mistral_common.tokens.audio.transcription.request import (
+from mistral_common.protocol.instruct.chunk import RawAudio
+from mistral_common.protocol.transcription.request import (
     StreamingMode,
     TranscriptionRequest,
 )
@@ -15,7 +16,9 @@ from mistral_common.tokens.tokenizers.audio import (
     OFFLINE_STREAMING_BUFFER_TOKENS,
     Audio,
     AudioConfig,
+    AudioEncoder,
     AudioSpectrogramConfig,
+    SpecialAudioIDs,
     TranscriptionFormat,
 )
 from mistral_common.tokens.tokenizers.instruct import (
@@ -25,8 +28,9 @@ from mistral_common.tokens.tokenizers.mistral import (
     MistralTokenizer,
     load_audio_encoder,
 )
-from mistral_common.tokens.tokenizers.special_tokens import SpecialTokens
-from mistral_common.tokens.tokenizers.tekken import Tekkenizer
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTokens, TokenizerVersion
+from mistral_common.tokens.tokenizers.tekken import SpecialTokenInfo, Tekkenizer
+from tests.test_tekken import get_special_tokens, quick_vocab
 
 _audio_spectrogram_config = {
     "num_mel_bins": 128,
@@ -58,40 +62,35 @@ def add_special_tokens(
         token_entry["is_control"] = is_control
 
 
-def load_audio_streaming(
-    tmp_path: Path | None = None,
-) -> Tekkenizer:
-    original_json_path = MistralTokenizer._data_path() / "tekken_mm_240930.json"
-    with open(original_json_path, "r") as original_file:
-        data = json.load(original_file)
-    data["config"]["version"] = "v7"
-    add_special_tokens(
-        data["special_tokens"],
-        [
-            "[TRANSCRIBE]",
-            "[REPEAT_AUDIO_TEXT]",
-            "[NEXT_AUDIO_TEXT]",
-            "[PRINT_TIME]",
-            "[PRINT_LANGUAGE]",
-            "[STREAMING_PAD]",
-        ],
-        start_idx=34,
+def load_audio_streaming() -> Tekkenizer:
+    special_tokens = get_special_tokens(tokenizer_version=TokenizerVersion.v7, add_audio=True)
+    for i in range(35, 39):
+        special_tokens += [SpecialTokenInfo(rank=i, token_str=f"<SPCECIAL_{i}>", is_control=True)]
+
+    special_tokens += [SpecialTokenInfo(rank=39, token_str=f"[STREAMING_PAD]", is_control=True)]
+    special_tokens += [SpecialTokenInfo(rank=40, token_str=f"[STREAMING_WORD]", is_control=True)]
+    tokenizer = Tekkenizer(
+        quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
+        special_tokens,
+        pattern=r".+",  # single token, whole string
+        vocab_size=256 + 100,
+        num_special_tokens=100,
+        version=TokenizerVersion.v7,
     )
 
-    data["audio"] = {
-        "sampling_rate": 16001,
-        "frame_rate": 12.5,
-        "audio_spectrogram_config": _audio_spectrogram_config,
-        "transcription_delay_ms": 960.0,
-        "transcription_format": "streaming",
-    }
-    with tempfile.NamedTemporaryFile(mode="w+", suffix=".json", delete=True) as temp_json_file:
-        temp_json_file.write(json.dumps(data, ensure_ascii=False))
-        temp_json_file.flush()
-        temp_json_file_path = Path(temp_json_file.name)
-        mm_tekkenizer = Tekkenizer.from_file(temp_json_file_path)
-    return mm_tekkenizer
-
+    audio_config = AudioConfig(
+        sampling_rate=16_000,
+        frame_rate=12.5,
+        encoding_config=AudioSpectrogramConfig(
+            num_mel_bins=128,
+            window_size=400,
+            hop_length=160,
+        ),
+        transcription_delay_ms=960.0,
+        transcription_format=TranscriptionFormat.STREAMING,
+    )
+    tokenizer._audio_config = audio_config
+    return tokenizer
 
 @pytest.fixture(scope="session")
 def tokenizer() -> InstructTokenizerV7:
@@ -100,6 +99,13 @@ def tokenizer() -> InstructTokenizerV7:
     audio_encoder = load_audio_encoder(tekkenizer.audio, tekkenizer)
     return InstructTokenizerV7(tekkenizer, image_encoder=None, audio_encoder=audio_encoder)
 
+def test_special_audio_streaming_tokens(tokenizer: InstructTokenizerV7) -> None:
+    assert tokenizer.tokenizer.get_special_token(SpecialTokens.streaming_pad.value) == 39
+    assert tokenizer.tokenizer.get_special_token(SpecialTokens.streaming_word.value) == 40
+
+    decoded_ids = [211, 218, 39, 194, 189, 39, 40, 172, 39, 191, 40, 2]
+    assert tokenizer.decode(decoded_ids) == "ov^YH["
+    assert tokenizer.decode(decoded_ids, special_token_policy=SpecialTokenPolicy.KEEP) == "ov[STREAMING_PAD]^Y[STREAMING_PAD][STREAMING_WORD]H[STREAMING_PAD][[STREAMING_WORD]</s>"
 
 @pytest.mark.parametrize(
     ("mode", "expected_array_len"), [(StreamingMode.OFFLINE, 57600), (StreamingMode.ONLINE, 28160)]
@@ -115,9 +121,10 @@ def test_tokenize_streaming_request(
     audio = Audio(
         audio_array=rng.uniform(low=-1, high=1, size=[signal_length]),
         sampling_rate=sampling_rate,
+        format="wav",
     )
 
-    streaming_request = TranscriptionRequest(audio=audio.to_base64("wav"), streaming=mode)
+    streaming_request = TranscriptionRequest(audio=RawAudio(data=audio.to_base64("wav"), format="wav"), streaming=mode, language=None)
 
     tokenized = tokenizer.encode_transcription(streaming_request)
     assert tokenizer.audio_encoder is not None
@@ -152,7 +159,7 @@ def test_audio_config_delay(rate: float, delay: int, num_delay_tokens: int) -> N
         return AudioConfig(
             sampling_rate=16_000,
             frame_rate=rate,
-            audio_spectrogram_config=spectogram_config,
+            encoding_config=spectogram_config,
             transcription_delay_ms=delay,
             transcription_format=TranscriptionFormat.STREAMING,
         )

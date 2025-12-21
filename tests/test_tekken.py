@@ -18,7 +18,7 @@ from mistral_common.tokens.tokenizers.tekken import (
 )
 
 
-def _quick_vocab(extra_toks: Sequence[bytes] = ()) -> list[TokenInfo]:
+def quick_vocab(extra_toks: Sequence[bytes] = ()) -> list[TokenInfo]:
     vocab = [TokenInfo(rank=i, token_bytes=base64.b64encode(bytes([i])).decode(), token_str=chr(i)) for i in range(256)]
     for i, tok in enumerate(extra_toks):
         vocab.append(

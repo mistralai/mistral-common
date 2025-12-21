@@ -948,6 +948,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
         Returns:
             Tokenized: The tokenized representation of the audio data, including processed audio and tokens
         """
+        assert self.audio_encoder is not None, f"Audio encoder must be defined, got {self.audio_encoder=}"
         if self.audio_encoder.audio_config.transcription_format == TranscriptionFormat.INSTRUCT:
             return self._encode_instruct_transcription(request)
         elif self.audio_encoder.audio_config.transcription_format == TranscriptionFormat.STREAMING:

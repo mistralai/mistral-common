@@ -12,13 +12,13 @@ from mistral_common.tokens.tokenizers.instruct import (
 from tests.test_tokenizer_v7_audio import (
     _get_audio_chunk,
     _get_specials,
-    _get_tekkenizer_with_audio,
+    get_tekkenizer_with_audio,
 )
 
 
 @pytest.fixture(scope="session")
 def tekkenizer() -> InstructTokenizerV7:
-    return _get_tekkenizer_with_audio()
+    return get_tekkenizer_with_audio()
 
 
 def get_transcription_request(duration: float, language: LanguageAlpha2 | None = None) -> TranscriptionRequest:

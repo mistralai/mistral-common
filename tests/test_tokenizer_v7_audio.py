@@ -37,13 +37,13 @@ from mistral_common.tokens.tokenizers.instruct import (
 )
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-from tests.test_tekken import _quick_vocab, get_special_tokens
+from tests.test_tekken import quick_vocab, get_special_tokens
 
 
-def _get_tekkenizer_with_audio() -> InstructTokenizerV7:
+def get_tekkenizer_with_audio() -> InstructTokenizerV7:
     special_tokens = get_special_tokens(tokenizer_version=TokenizerVersion.v7, add_audio=True)
     tokenizer = Tekkenizer(
-        _quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
+        quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
         special_tokens,
         pattern=r".+",  # single token, whole string
         vocab_size=256 + 100,
@@ -71,7 +71,7 @@ def _get_tekkenizer_with_audio() -> InstructTokenizerV7:
 
 @pytest.fixture(scope="session")
 def tekkenizer() -> InstructTokenizerV7:
-    return _get_tekkenizer_with_audio()
+    return get_tekkenizer_with_audio()
 
 
 def sin_wave(sampling_rate: int, duration: float) -> np.ndarray:
