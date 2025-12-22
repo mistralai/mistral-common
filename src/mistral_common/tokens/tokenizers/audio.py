@@ -22,7 +22,7 @@ class TranscriptionFormat(str, Enum):
     r"""Transcription format.
 
     Should be set by the tokenizer for correct encoding.
-    
+
     Attributes:
     - INSTRUCT: The instruct format.
     - STREAMING: The streaming format.
@@ -119,7 +119,9 @@ class AudioConfig:
     def num_delay_tokens(self) -> int:
         assert self.is_streaming, f"Can't call num_delay_tokens if {self.is_streaming=}."
         # streaming pad tokens
-        assert self.transcription_delay_ms is not None, f"Can't call num_delay_tokens if {self.transcription_delay_ms=}."
+        assert self.transcription_delay_ms is not None, (
+            f"Can't call num_delay_tokens if {self.transcription_delay_ms=}."
+        )
         delay_len = int(self.transcription_delay_ms / 1000.0 * self.sampling_rate)
 
         return self.num_audio_tokens(delay_len)
