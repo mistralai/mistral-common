@@ -20,6 +20,11 @@ warnings.filterwarnings(
     category=FutureWarning,
     message=r".*`get_control_token` is deprecated.*",
 )
+warnings.filterwarnings(
+    action="once",
+    category=FutureWarning,
+    message=r".*`_control_tokens` is deprecated.*",
+)
 
 
 if is_sentencepiece_installed():
@@ -148,6 +153,11 @@ class SentencePieceTokenizer(Tokenizer):
             return self._model.IsControl(token_int)  # type: ignore
         else:
             raise TypeError(f"Expected int or str, got {type(token).__name__}")
+
+    @cached_property
+    def _control_tokens(self) -> set[int]:
+        warnings.warn("`_control_tokens` is deprecated. Make use of `is_special` instead.", FutureWarning)
+        return {tok for tok in range(self.n_words) if self._model.IsControl(tok)}
 
     def encode(self, s: str, bos: bool, eos: bool) -> list[int]:
         r"""Encode the given string into a list of token ids.
