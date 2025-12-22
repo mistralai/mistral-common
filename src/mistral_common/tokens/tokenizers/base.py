@@ -92,6 +92,8 @@ class SpecialTokens(str, Enum):
     transcribe = "[TRANSCRIBE]"
     begin_think = "[THINK]"
     end_think = "[/THINK]"
+    streaming_pad = "[STREAMING_PAD]"
+    streaming_word = "[STREAMING_WORD]"
 
 
 class SpecialTokenPolicy(int, Enum):

@@ -1,4 +1,5 @@
 import io
+from enum import Enum
 from typing import Any
 
 from pydantic import Field
@@ -11,6 +12,12 @@ from mistral_common.protocol.instruct.chunk import RawAudio
 
 if is_soundfile_installed():
     import soundfile as sf
+
+
+class StreamingMode(str, Enum):
+    DISABLED = "disabled"
+    ONLINE = "online"
+    OFFLINE = "offline"
 
 
 class TranscriptionRequest(BaseCompletionRequest):
@@ -38,6 +45,14 @@ class TranscriptionRequest(BaseCompletionRequest):
         ),
     )
     strict_audio_validation: bool = True
+    streaming: StreamingMode = Field(
+        default=StreamingMode.DISABLED,
+        description=(
+            "Whether to enable streaming for the transcription request. Online "
+            "streaming means the audio is streamed to the server and the transcription is "
+            "streamed back. Offline streaming means the audio is passed in one go to the server."
+        ),
+    )
 
     def to_openai(self, exclude: tuple = (), **kwargs: Any) -> dict[str, list[dict[str, Any]]]:
         r"""Convert the transcription request into the OpenAI format.
@@ -75,7 +90,7 @@ class TranscriptionRequest(BaseCompletionRequest):
         openai_request.update(kwargs)
 
         # remove mistral-specific
-        default_exclude = ("id", "max_tokens", "strict_audio_validation")
+        default_exclude = ("id", "max_tokens", "strict_audio_validation", "streaming")
         default_exclude += exclude
         for k in default_exclude:
             openai_request.pop(k, None)

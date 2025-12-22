@@ -8,6 +8,7 @@ from mistral_common.audio import Audio
 from mistral_common.exceptions import (
     InvalidAssistantMessageException,
     InvalidMessageStructureException,
+    InvalidRequestException,
     TokenizerException,
 )
 from mistral_common.protocol.fim.request import FIMRequest
@@ -31,8 +32,8 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolCall
-from mistral_common.protocol.transcription.request import TranscriptionRequest
-from mistral_common.tokens.tokenizers.audio import AudioEncoder
+from mistral_common.protocol.transcription.request import StreamingMode, TranscriptionRequest
+from mistral_common.tokens.tokenizers.audio import AudioEncoder, AudioSpectrogramConfig, TranscriptionFormat
 from mistral_common.tokens.tokenizers.base import (
     FIMRequestType,
     InstructRequestType,
@@ -804,7 +805,10 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
         self.TRANSCRIBE = None
         if audio_encoder is not None:
-            self.TRANSCRIBE = self.tokenizer.get_special_token(SpecialTokens.transcribe.value)
+            if audio_encoder.audio_config.is_streaming:
+                self.STREAMING_PAD = self.tokenizer.get_special_token(SpecialTokens.streaming_pad.value)
+            else:
+                self.TRANSCRIBE = self.tokenizer.get_special_token(SpecialTokens.transcribe.value)
 
     def _truncate_for_max_tokens(
         self,
@@ -944,7 +948,21 @@ class InstructTokenizerV7(InstructTokenizerV3):
         Returns:
             Tokenized: The tokenized representation of the audio data, including processed audio and tokens
         """
+        assert self.audio_encoder is not None, f"Audio encoder must be defined, got {self.audio_encoder=}"
+        if self.audio_encoder.audio_config.transcription_format == TranscriptionFormat.INSTRUCT:
+            return self._encode_instruct_transcription(request)
+        elif self.audio_encoder.audio_config.transcription_format == TranscriptionFormat.STREAMING:
+            return self._encode_streaming_transcription(request)
 
+        raise InvalidRequestException(
+            "Transcription format should be one of 'instruct', 'streaming', got "
+            f"{self.audio_encoder.audio_config.transcription_format=}."
+        )
+
+    def _encode_instruct_transcription(self, request: TranscriptionRequest) -> Tokenized:
+        assert request.streaming == StreamingMode.DISABLED, (
+            f"Request must not be in streaming mode, got {request.streaming=}"
+        )
         assert self.TRANSCRIBE is not None, f"{self.__class__.__name__} needs to have a TRANSCRIBE token"
         prefix = self.start()
         tokens, _, audio = self.encode_user_message(
@@ -962,6 +980,43 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
         tokens.append(self.TRANSCRIBE)
         return Tokenized(tokens=tokens, text=self.tokenizer._to_string(tokens), audios=audio)
+
+    def _encode_audio(self, audio: str | bytes, is_online_streaming: bool) -> Tokenized:
+        assert self.audio_encoder is not None, (
+            f"Audio encoder must be defined to encode audio, got {self.audio_encoder=}"
+        )
+        _audio = Audio.from_base64(audio) if isinstance(audio, str) else Audio.from_bytes(audio)
+        audio_enc = self.audio_encoder.encode_audio(_audio, is_online_streaming=is_online_streaming)
+
+        return Tokenized(
+            tokens=audio_enc.tokens,
+            audios=[audio_enc.audio],
+        )
+
+    def _encode_streaming_transcription(self, request: TranscriptionRequest) -> Tokenized:
+        assert request.streaming != StreamingMode.DISABLED, (
+            f"Request must be in streaming mode, got {request.streaming=}"
+        )
+
+        tokenized_audio = self._encode_audio(
+            request.audio.data, is_online_streaming=request.streaming == StreamingMode.ONLINE
+        )
+
+        assert isinstance(self.audio_encoder, AudioEncoder), f"Audio encoder must be defined, got {self.audio_encoder=}"
+        assert isinstance(self.audio_encoder.audio_config.encoding_config, AudioSpectrogramConfig), (
+            f"Audio encoder must be spectrogram encoder, got {self.audio_encoder=}"
+        )
+        assert self.audio_encoder.audio_config.transcription_delay_ms is not None
+
+        # streaming pad tokens
+        tokens = self.start() + [self.STREAMING_PAD] * self.audio_encoder.audio_config.num_delay_tokens
+
+        tokenized = Tokenized(
+            tokens=tokens,
+            text=self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP),
+            audios=tokenized_audio.audios,
+        )
+        return tokenized
 
     @classmethod
     def validate_messages(cls, messages: list[UATS]) -> None:

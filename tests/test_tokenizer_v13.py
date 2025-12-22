@@ -20,14 +20,14 @@ from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized, 
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import SpecialTokenPolicy, Tekkenizer
-from tests.test_tekken import _quick_vocab, get_special_tokens
+from tests.test_tekken import get_special_tokens, quick_vocab
 
 
 @pytest.fixture(scope="session")
 def v13_tekkenizer() -> InstructTokenizerV13:
     special_tokens = get_special_tokens(TokenizerVersion.v13, add_think=False)
     tokenizer = Tekkenizer(
-        _quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
+        quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
         special_tokens=special_tokens,
         pattern=r".+",  # single token, whole string
         vocab_size=256 + 100,
@@ -41,7 +41,7 @@ def v13_tekkenizer() -> InstructTokenizerV13:
 def v13_tekkenizer_think() -> InstructTokenizerV13:
     special_tokens = get_special_tokens(TokenizerVersion.v13, add_think=True)
     tokenizer = Tekkenizer(
-        _quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
+        quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
         special_tokens=special_tokens,
         pattern=r".+",  # single token, whole string
         vocab_size=256 + 100,

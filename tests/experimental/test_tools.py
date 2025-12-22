@@ -24,14 +24,14 @@ from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV11, InstructTokenizerV13
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-from tests.test_tekken import _quick_vocab, get_special_tokens
+from tests.test_tekken import get_special_tokens, quick_vocab
 
 
 def fixture_mistral_tokenizer_v11() -> MistralTokenizer:
     return MistralTokenizer(
         instruct_tokenizer=InstructTokenizerV11(
             Tekkenizer(
-                _quick_vocab(
+                quick_vocab(
                     [
                         b"Hello",
                         b",",
@@ -73,7 +73,7 @@ def fixture_mistral_tokenizer_v13() -> MistralTokenizer:
     return MistralTokenizer(
         instruct_tokenizer=InstructTokenizerV13(
             Tekkenizer(
-                _quick_vocab(
+                quick_vocab(
                     [
                         b"Hello",
                         b",",
@@ -142,7 +142,7 @@ def test_find_content_tool_calls() -> None:
         MistralTokenizer(
             instruct_tokenizer=InstructTokenizerV11(
                 Tekkenizer(
-                    _quick_vocab(
+                    quick_vocab(
                         [
                             b"Hello",
                             b",",
