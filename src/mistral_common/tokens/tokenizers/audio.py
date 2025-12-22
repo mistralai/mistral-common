@@ -10,17 +10,22 @@ from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk, Au
 
 logger = logging.getLogger(__name__)
 
-# for offline streaming we're encoding the whole audio at once.
+# For offline streaming we're encoding the whole audio at once.
 # Because the model is delayed by <transcription_delay_ms> + word_length
-# We must always add a buffer of max world length to the audio in the end
+# we must always add a buffer of max world length to the audio in the end.
 # For now we assume that there is no word that requires more than 10 tokens (0.8s)
-# which it might it practice but it won't affect any eval results
+# which might not be the case in practice but it won't affect any eval results.
 OFFLINE_STREAMING_BUFFER_TOKENS = 10
 
 
 class TranscriptionFormat(str, Enum):
-    """Transcription format
+    r"""Transcription format.
+
     Should be set by the tokenizer for correct encoding.
+    
+    Attributes:
+    - INSTRUCT: The instruct format.
+    - STREAMING: The streaming format.
     """
 
     INSTRUCT = "instruct"
@@ -114,7 +119,7 @@ class AudioConfig:
     def num_delay_tokens(self) -> int:
         assert self.is_streaming, f"Can't call num_delay_tokens if {self.is_streaming=}."
         # streaming pad tokens
-        assert self.transcription_delay_ms is not None
+        assert self.transcription_delay_ms is not None, f"Can't call num_delay_tokens if {self.transcription_delay_ms=}."
         delay_len = int(self.transcription_delay_ms / 1000.0 * self.sampling_rate)
 
         return self.num_audio_tokens(delay_len)
