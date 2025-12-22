@@ -270,7 +270,7 @@ class AudioEncoder:
 
     def _encode_audio_chunk(self, content: AudioChunk) -> AudioEncoding:
         audio = Audio.from_raw_audio(content.input_audio)
-        return self.encode_audio(audio, False)
+        return self.encode_audio(audio, is_online_streaming=False)
 
     def _encode_audio_url_chunk(self, content: AudioURLChunk) -> AudioEncoding:
         url_type = content.get_url_type()
