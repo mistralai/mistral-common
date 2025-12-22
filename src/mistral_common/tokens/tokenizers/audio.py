@@ -78,7 +78,7 @@ class AudioConfig:
     transcription_delay_ms: float | None = None
 
     # If we're in streaming or non-streaming
-    transcription_format: TranscriptionFormat | None = TranscriptionFormat.INSTRUCT
+    transcription_format: TranscriptionFormat = TranscriptionFormat.INSTRUCT
 
     def __post_init__(self) -> None:
         assert self.frame_rate > 0, self.frame_rate
