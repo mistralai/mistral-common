@@ -200,15 +200,15 @@ class AudioEncoder:
         if self.audio_config.chunk_length_s:
             next_multiple_of_chunk_frames = self.next_multiple_of_chunk_frames(audio_array.shape[-1], sampling_rate)
             audio_array = np.pad(audio_array, (0, next_multiple_of_chunk_frames - audio_array.shape[-1]))
+        elif self.audio_config.is_streaming:
+            pad = self._get_streaming_pad(audio_array.shape[-1], is_online_streaming)
+            audio_array = np.pad(audio_array, (0, pad))
         elif (
             isinstance(self.encoding_config, AudioSpectrogramConfig)
             and audio_array.shape[-1] < self.encoding_config.window_size
         ):
             # minimum length for audios is at least one spectrogram frame
             audio_array = np.pad(audio_array, (0, self.encoding_config.window_size - audio_array.shape[-1]))
-        elif self.audio_config.is_streaming:
-            pad = self._get_streaming_pad(audio_array.shape[-1], is_online_streaming)
-            audio_array = np.pad(audio_array, (0, pad))
 
         return audio_array
 
