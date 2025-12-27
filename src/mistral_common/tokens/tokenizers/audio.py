@@ -246,14 +246,13 @@ class AudioEncoder:
         return math.ceil(audio_array_len / self.audio_config.chunk_frames) * self.audio_config.chunk_frames
 
     def _encode_streaming_tokens(self) -> list[int]:
-        assert isinstance(self.audio_encoder, AudioEncoder), f"Audio encoder must be defined, got {self.audio_encoder=}"
-        assert isinstance(self.audio_encoder.audio_config.encoding_config, AudioSpectrogramConfig), (
+        assert isinstance(self.audio_config.encoding_config, AudioSpectrogramConfig), (
             f"Audio encoder must be spectrogram encoder, got {self.audio_encoder=}"
         )
-        assert self.audio_encoder.audio_config.transcription_delay_ms is not None
+        assert self.audio_config.transcription_delay_ms is not None
 
         # streaming pad tokens
-        tokens = [self.streaming_pad] * self.audio_encoder.audio_config.num_delay_tokens
+        tokens = [self.streaming_pad] * self.audio_config.num_delay_tokens
 
         return tokens
 
@@ -277,7 +276,7 @@ class AudioEncoder:
             # we don't pad for online streaming, we just make sure that
             # we're having the correct shape which needs to be a multiple
             # of the one-sided overlap between hop length and window size
-            mult_of = abs(self.audio_config.encoding_config.window_size / 2 - self.audio_config.hop_length)
+            mult_of = abs(self.audio_config.encoding_config.window_size / 2 - self.audio_config.encoding_config.hop_length)
             assert audio.audio_array.shape % mult_of == 0, f"{audio.audio_array.shape=} must be a multiple of {mult_of=}"
         else:
             audio.audio_array = self.pad(audio.audio_array, self.audio_config.sampling_rate)
