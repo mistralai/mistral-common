@@ -248,7 +248,7 @@ class AudioEncoder:
 
     def _encode_streaming_tokens(self) -> list[int]:
         assert isinstance(self.audio_config.encoding_config, AudioSpectrogramConfig), (
-            f"Audio encoder must be spectrogram encoder, got {self.audio_encoder=}"
+            f"Audio encoder must be spectrogram encoder, got {self.audio_config.encoding_config=}"
         )
         assert self.audio_config.transcription_delay_ms is not None
 
@@ -330,7 +330,7 @@ class AudioEncoder:
     @property
     def audio_token(self) -> int:
         r"""Get the audio token."""
-        assert self.special_ids.audio_token is not None, f"{self.special_ids.audio_token=} must be set."
+        assert self.special_ids.audio is not None, f"{self.special_ids.audio=} must be set."
         return self.special_ids.audio
 
     @property
