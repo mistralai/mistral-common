@@ -166,10 +166,11 @@ class SpecialAudioIDs:
     Attributes:
         audio: Token representing audio.
         begin_audio: Token representing the beginning of audio.
+        streaming_pad: Token representing streaming pad of audio. Only relevant for steaming models.
     """
-
-    audio: int
-    begin_audio: int
+    audio: int | None
+    begin_audio: int | None
+    streaming_pad: int | None
 
 
 class AudioEncoder:
@@ -217,9 +218,6 @@ class AudioEncoder:
         mult_of = self.audio_config.raw_audio_length_per_tok
         pad = int((mult_of - (num_samples % mult_of)) % mult_of)
 
-        # in offline streaming we're appending an extra pad to simulate
-        # a whole streaming session
-
         #  then add delay tokens + BOS token + buffer approx
         _extra_pad_tokens = (self.audio_config.num_delay_tokens + 1) + OFFLINE_STREAMING_BUFFER_TOKENS
         extra_pad_samples = int(mult_of * _extra_pad_tokens)
@@ -247,13 +245,19 @@ class AudioEncoder:
 
         return math.ceil(audio_array_len / self.audio_config.chunk_frames) * self.audio_config.chunk_frames
 
-    def encode_audio(self, audio: Audio, is_online_streaming: bool) -> AudioEncoding:
-        audio.resample(self.audio_config.sampling_rate)
+    def _encode_streaming_tokens(self) -> list[int]:
+        assert isinstance(self.audio_encoder, AudioEncoder), f"Audio encoder must be defined, got {self.audio_encoder=}"
+        assert isinstance(self.audio_encoder.audio_config.encoding_config, AudioSpectrogramConfig), (
+            f"Audio encoder must be spectrogram encoder, got {self.audio_encoder=}"
+        )
+        assert self.audio_encoder.audio_config.transcription_delay_ms is not None
 
-        if not is_online_streaming:
-            audio.audio_array = self.pad(audio.audio_array, self.audio_config.sampling_rate)
-        signal_length = audio.audio_array.shape[0]
+        # streaming pad tokens
+        tokens = [self.streaming_pad] * self.audio_encoder.audio_config.num_delay_tokens
 
+        return tokens
+
+    def _encode_audio_tokens(self, signal_length: int) -> list[int]:
         # for spectrogram-based models, the waveform is downsampled by the hop_length when computing the log-mel
         if signal_length % self.encoding_config.hop_length != 0:
             signal_length = math.ceil(signal_length / self.encoding_config.hop_length - 1)
@@ -261,10 +265,30 @@ class AudioEncoder:
             signal_length = signal_length // self.encoding_config.hop_length
 
         num_audio_tokens = math.ceil(signal_length / self.audio_config.audio_length_per_tok)
-        audio_tokens = [self.begin_audio_token] + [self.audio_token] * num_audio_tokens
+        tokens = [self.begin_audio_token] + [self.audio_token] * num_audio_tokens
+
+        return tokens
+
+
+    def encode_audio(self, audio: Audio, is_online_streaming: bool) -> AudioEncoding:
+        audio.resample(self.audio_config.sampling_rate)
+
+        if is_online_streaming:
+            # we don't pad for online streaming, we just make sure that
+            # we're having the correct shape which needs to be a multiple
+            # of the one-sided overlap between hop length and window size
+            mult_of = abs(self.audio_config.encoding_config.window_size / 2 - self.audio_config.hop_length)
+            assert audio.audio_array.shape % mult_of == 0, f"{audio.audio_array.shape=} must be a multiple of {mult_of=}"
+        else:
+            audio.audio_array = self.pad(audio.audio_array, self.audio_config.sampling_rate)
+
+        if self.audio_config.transcription_format == TranscriptionFormat.STREAMING:
+            tokens = self._encode_streaming_tokens()
+        else:
+            tokens = self._encode_audio_tokens(audio.audio_array.shape[0])
 
         return AudioEncoding(
-            tokens=audio_tokens,
+            tokens=tokens,
             audio=audio,
         )
 
@@ -303,9 +327,18 @@ class AudioEncoder:
     @property
     def audio_token(self) -> int:
         r"""Get the audio token."""
+        assert self.special_ids.audio_token is not None, f"{self.special_ids.audio_token=} must be set."
         return self.special_ids.audio
 
     @property
     def begin_audio_token(self) -> int:
         r"""Get the begin audio token."""
+        assert self.special_ids.begin_audio is not None, f"{self.special_ids.begin_audio=} must be set."
         return self.special_ids.begin_audio
+
+    @property
+    def streaming_pad(self) -> int:
+        r"""Get the streaming pad token."""
+        assert self.special_ids.streaming_pad is not None, f"{self.special_ids.streaming_pad=} must be set."
+        return self.special_ids.streaming_pad
+    
