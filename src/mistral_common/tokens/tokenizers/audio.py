@@ -186,7 +186,7 @@ class AudioEncoder:
         self.encoding_config = audio_config.encoding_config
         self.special_ids = special_ids
 
-    def pad(self, audio_array: np.ndarray, sampling_rate: int, is_online_streaming: bool) -> np.ndarray:
+    def pad(self, audio_array: np.ndarray, sampling_rate: int) -> np.ndarray:
         r"""Pad the audio array to the desired length.
 
         Args:
@@ -201,7 +201,7 @@ class AudioEncoder:
             next_multiple_of_chunk_frames = self.next_multiple_of_chunk_frames(audio_array.shape[-1], sampling_rate)
             audio_array = np.pad(audio_array, (0, next_multiple_of_chunk_frames - audio_array.shape[-1]))
         elif self.audio_config.is_streaming:
-            pad = self._get_streaming_pad(audio_array.shape[-1], is_online_streaming)
+            pad = self._get_streaming_pad(audio_array.shape[-1])
             audio_array = np.pad(audio_array, (0, pad))
         elif (
             isinstance(self.encoding_config, AudioSpectrogramConfig)
@@ -212,25 +212,19 @@ class AudioEncoder:
 
         return audio_array
 
-    def _get_streaming_pad(self, num_samples: int, is_online: bool) -> int:
+    def _get_streaming_pad(self, num_samples: int) -> int:
         # let's make sure the audio is a multiple of one "frame" token
         mult_of = self.audio_config.raw_audio_length_per_tok
         pad = int((mult_of - (num_samples % mult_of)) % mult_of)
 
-        if is_online:
-            assert pad == 0, (
-                f"{pad=} must be 0 for online streaming. Audio input must be a multiple of {mult_of=}"
-                f" , but is {num_samples=}. Make sure your audio buffering is correct."
-            )
-        else:
-            # in offline streaming we're appending an extra pad to simulate
-            # a whole streaming session
+        # in offline streaming we're appending an extra pad to simulate
+        # a whole streaming session
 
-            #  then add delay tokens + BOS token + buffer approx
-            _extra_pad_tokens = (self.audio_config.num_delay_tokens + 1) + OFFLINE_STREAMING_BUFFER_TOKENS
-            extra_pad_samples = int(mult_of * _extra_pad_tokens)
-            assert extra_pad_samples % mult_of == 0, f"{extra_pad_samples=} must be a multiple of {mult_of=}"
-            pad += extra_pad_samples
+        #  then add delay tokens + BOS token + buffer approx
+        _extra_pad_tokens = (self.audio_config.num_delay_tokens + 1) + OFFLINE_STREAMING_BUFFER_TOKENS
+        extra_pad_samples = int(mult_of * _extra_pad_tokens)
+        assert extra_pad_samples % mult_of == 0, f"{extra_pad_samples=} must be a multiple of {mult_of=}"
+        pad += extra_pad_samples
 
         return pad
 
@@ -256,7 +250,8 @@ class AudioEncoder:
     def encode_audio(self, audio: Audio, is_online_streaming: bool) -> AudioEncoding:
         audio.resample(self.audio_config.sampling_rate)
 
-        audio.audio_array = self.pad(audio.audio_array, self.audio_config.sampling_rate, is_online_streaming)
+        if not is_online_streaming:
+            audio.audio_array = self.pad(audio.audio_array, self.audio_config.sampling_rate)
         signal_length = audio.audio_array.shape[0]
 
         # for spectrogram-based models, the waveform is downsampled by the hop_length when computing the log-mel
