@@ -222,8 +222,7 @@ class AudioEncoder:
                 f"{pad=} must be 0 for online streaming. Audio input must be a multiple of {mult_of=}"
                 f" , but is {num_samples=}. Make sure your audio buffering is correct."
             )
-
-        if not is_online:
+        else:
             # in offline streaming we're appending an extra pad to simulate
             # a whole streaming session
 
