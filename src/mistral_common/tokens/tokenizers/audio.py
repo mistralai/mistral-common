@@ -217,6 +217,12 @@ class AudioEncoder:
         mult_of = self.audio_config.raw_audio_length_per_tok
         pad = int((mult_of - (num_samples % mult_of)) % mult_of)
 
+        if is_online:
+            assert pad == 0, (
+                f"{pad=} must be 0 for online streaming. Audio input must be a multiple of {mult_of=}"
+                f" , but is {num_samples=}. Make sure your audio buffering is correct."
+            )
+
         if not is_online:
             # in offline streaming we're appending an extra pad to simulate
             # a whole streaming session
