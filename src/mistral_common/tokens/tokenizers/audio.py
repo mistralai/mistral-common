@@ -279,8 +279,8 @@ class AudioEncoder:
             mult_of = abs(
                 self.audio_config.encoding_config.window_size / 2 - self.audio_config.encoding_config.hop_length
             )
-            assert audio.audio_array.shape % mult_of == 0, (
-                f"{audio.audio_array.shape=} must be a multiple of {mult_of=}"
+            assert audio.audio_array.shape[-1] % mult_of == 0, (
+                f"{audio.audio_array.shape[-1]=} must be a multiple of {mult_of=}"
             )
         else:
             audio.audio_array = self.pad(audio.audio_array, self.audio_config.sampling_rate)
