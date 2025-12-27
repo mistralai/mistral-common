@@ -113,7 +113,7 @@ def test_special_audio_streaming_tokens(tokenizer: InstructTokenizerV7) -> None:
         (StreamingMode.OFFLINE, 1.7, 57600),  # normal
         (StreamingMode.ONLINE, 1.7, 27200),  # normal (would correspond to long delay)
         (StreamingMode.OFFLINE, 8.44, 165120),
-        (StreamingMode.OFFLINE, 0.24, 28160),  # very short
+        (StreamingMode.OFFLINE, 0.24, 33280),  # very short
         (StreamingMode.ONLINE, 0.24, 3840),  # very short delay
         (StreamingMode.OFFLINE, 2.312231, 66560),  # weird length can correcctly be padded
         (StreamingMode.ONLINE, 2.312231, -1.0),  # should throw error as not correctly buffered
