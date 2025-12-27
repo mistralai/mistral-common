@@ -194,7 +194,6 @@ class AudioEncoder:
         Args:
             audio_array: Audio data as a numpy array.
             sampling_rate: Sampling rate of the audio.
-            is_online_streaming: Whether the audio is being streamed online.
 
         Returns:
             Padded audio array.
