@@ -168,6 +168,7 @@ class SpecialAudioIDs:
         begin_audio: Token representing the beginning of audio.
         streaming_pad: Token representing streaming pad of audio. Only relevant for steaming models.
     """
+
     audio: int | None
     begin_audio: int | None
     streaming_pad: int | None
@@ -268,7 +269,6 @@ class AudioEncoder:
 
         return tokens
 
-
     def encode_audio(self, audio: Audio, is_online_streaming: bool) -> AudioEncoding:
         audio.resample(self.audio_config.sampling_rate)
 
@@ -276,8 +276,12 @@ class AudioEncoder:
             # we don't pad for online streaming, we just make sure that
             # we're having the correct shape which needs to be a multiple
             # of the one-sided overlap between hop length and window size
-            mult_of = abs(self.audio_config.encoding_config.window_size / 2 - self.audio_config.encoding_config.hop_length)
-            assert audio.audio_array.shape % mult_of == 0, f"{audio.audio_array.shape=} must be a multiple of {mult_of=}"
+            mult_of = abs(
+                self.audio_config.encoding_config.window_size / 2 - self.audio_config.encoding_config.hop_length
+            )
+            assert audio.audio_array.shape % mult_of == 0, (
+                f"{audio.audio_array.shape=} must be a multiple of {mult_of=}"
+            )
         else:
             audio.audio_array = self.pad(audio.audio_array, self.audio_config.sampling_rate)
 
@@ -340,4 +344,3 @@ class AudioEncoder:
         r"""Get the streaming pad token."""
         assert self.special_ids.streaming_pad is not None, f"{self.special_ids.streaming_pad=} must be set."
         return self.special_ids.streaming_pad
-    

@@ -83,6 +83,7 @@ def load_audio_encoder(audio_config: AudioConfig, tokenizer: Tekkenizer) -> Audi
     Returns:
         The audio encoder.
     """
+
     def get_special_token_or_none(token: str) -> int | None:
         if not tokenizer.is_special(token):
             return None
