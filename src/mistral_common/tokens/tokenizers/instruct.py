@@ -33,7 +33,7 @@ from mistral_common.protocol.instruct.messages import (
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolCall
 from mistral_common.protocol.transcription.request import StreamingMode, TranscriptionRequest
-from mistral_common.tokens.tokenizers.audio import AudioEncoder, AudioSpectrogramConfig, TranscriptionFormat
+from mistral_common.tokens.tokenizers.audio import AudioEncoder, TranscriptionFormat
 from mistral_common.tokens.tokenizers.base import (
     FIMRequestType,
     InstructRequestType,
@@ -804,11 +804,8 @@ class InstructTokenizerV7(InstructTokenizerV3):
         self.BEGIN_TOOL_CONTENT = self.tokenizer.get_special_token(SpecialTokens.begin_tool_content.value)
 
         self.TRANSCRIBE = None
-        if audio_encoder is not None:
-            if audio_encoder.audio_config.is_streaming:
-                self.STREAMING_PAD = self.tokenizer.get_special_token(SpecialTokens.streaming_pad.value)
-            else:
-                self.TRANSCRIBE = self.tokenizer.get_special_token(SpecialTokens.transcribe.value)
+        if audio_encoder is not None and not audio_encoder.audio_config.is_streaming:
+            self.TRANSCRIBE = self.tokenizer.get_special_token(SpecialTokens.transcribe.value)
 
     def _truncate_for_max_tokens(
         self,
@@ -998,23 +995,16 @@ class InstructTokenizerV7(InstructTokenizerV3):
             f"Request must be in streaming mode, got {request.streaming=}"
         )
 
-        tokenized_audio = self._encode_audio(
+        tokenized = self._encode_audio(
             request.audio.data, is_online_streaming=request.streaming == StreamingMode.ONLINE
         )
 
-        assert isinstance(self.audio_encoder, AudioEncoder), f"Audio encoder must be defined, got {self.audio_encoder=}"
-        assert isinstance(self.audio_encoder.audio_config.encoding_config, AudioSpectrogramConfig), (
-            f"Audio encoder must be spectrogram encoder, got {self.audio_encoder=}"
-        )
-        assert self.audio_encoder.audio_config.transcription_delay_ms is not None
-
-        # streaming pad tokens
-        tokens = self.start() + [self.STREAMING_PAD] * self.audio_encoder.audio_config.num_delay_tokens
-
+        # we also add a BOS token in the beginning
+        tokens = self.start() + tokenized.tokens
         tokenized = Tokenized(
             tokens=tokens,
             text=self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP),
-            audios=tokenized_audio.audios,
+            audios=tokenized.audios,
         )
         return tokenized
 
