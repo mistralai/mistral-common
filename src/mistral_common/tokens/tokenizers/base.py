@@ -308,6 +308,7 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
 
     @property
     def version(self) -> TokenizerVersion:
+        r"""The version of the tokenizer."""
         return self.tokenizer.version
 
     def __init__(

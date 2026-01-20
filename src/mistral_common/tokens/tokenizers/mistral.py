@@ -146,10 +146,12 @@ class MistralTokenizer(
 
     @property
     def mode(self) -> ValidationMode:
+        r"""The validation mode of the tokenizer."""
         return self._chat_completion_request_validator.mode
 
     @property
     def version(self) -> TokenizerVersion:
+        r"""The version of the tokenizer."""
         return self.instruct_tokenizer.tokenizer.version
 
     @classmethod
