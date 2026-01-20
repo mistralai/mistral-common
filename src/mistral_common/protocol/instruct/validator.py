@@ -1,5 +1,5 @@
 import re
-from enum import StrEnum, auto
+from enum import Enum
 from typing import Generic
 
 from jsonschema import Draft7Validator, SchemaError
@@ -34,7 +34,7 @@ from mistral_common.protocol.instruct.tool_calls import (
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 
 
-class ValidationMode(StrEnum):
+class ValidationMode(str, Enum):
     r"""Enum for the validation mode.
 
     Attributes:
@@ -46,9 +46,9 @@ class ValidationMode(StrEnum):
         >>> mode = ValidationMode.serving
     """
 
-    serving = auto()
-    finetuning = auto()
-    test = auto()
+    serving = "serving"
+    finetuning = "finetuning"
+    test = "test"
 
 
 class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType]):

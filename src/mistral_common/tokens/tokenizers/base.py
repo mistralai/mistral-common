@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from enum import Enum, StrEnum, auto
+from enum import Enum
 from pathlib import Path
 from typing import Any, Generic, TypeVar
 
@@ -95,7 +95,7 @@ class SpecialTokens(str, Enum):
     streaming_word = "[STREAMING_WORD]"
 
 
-class SpecialTokenPolicy(StrEnum):
+class SpecialTokenPolicy(str, Enum):
     r"""What to do with special tokens when encoding/decoding.
 
     Attributes:
@@ -104,9 +104,9 @@ class SpecialTokenPolicy(StrEnum):
         RAISE: Raise an error if special tokens are found.
     """
 
-    IGNORE = auto()
-    KEEP = auto()
-    RAISE = auto()
+    IGNORE = "ignore"
+    KEEP = "keep"
+    RAISE = "raise"
 
     @classmethod
     def _missing_(cls, value: Any) -> Any:
@@ -120,7 +120,7 @@ class SpecialTokenPolicy(StrEnum):
         return super()._missing_(value)
 
 
-class TokenizerVersion(StrEnum):
+class TokenizerVersion(str, Enum):
     r"""Enum of tokenizer versions.
 
     Allow to distinguish between different versions of the tokenizer and maintain backward compatibility.
@@ -161,12 +161,12 @@ class TokenizerVersion(StrEnum):
             other = TokenizerVersion(other)
             return self._version_num >= other._version_num
 
-    v1 = auto()  # vocab_size = 32000
-    v2 = auto()  # vocab_size = 32768 with special control tokens [INST], [\INST]
-    v3 = auto()  # vocab_size = 32768 (spm) OR 131072 (tekken) with improved function calling
-    v7 = auto()  # vocab_size = 32768 (spm) or 131072 (tekken) with improved system prompt and function calling
-    v11 = auto()  # 131072 (tekken) with improved function calling
-    v13 = auto()  # 131072 (tekken) with no call id and better prompt caching
+    v1 = "v1"  # vocab_size = 32000
+    v2 = "v2"  # vocab_size = 32768 with special control tokens [INST], [\INST]
+    v3 = "v3"  # vocab_size = 32768 (spm) OR 131072 (tekken) with improved function calling
+    v7 = "v7"  # vocab_size = 32768 (spm) or 131072 (tekken) with improved system prompt and function calling
+    v11 = "v11"  # 131072 (tekken) with improved function calling
+    v13 = "v13"  # 131072 (tekken) with no call id and better prompt caching
 
 
 class Tokenized(MistralBase):
