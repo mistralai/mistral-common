@@ -66,4 +66,4 @@ def test_get_validator_version_mapping(version: TokenizerVersion, expected_class
 @pytest.mark.parametrize("mode", [ValidationMode.serving, ValidationMode.finetuning, ValidationMode.test])
 def test_get_validator_mode_passed_correctly(mode: ValidationMode) -> None:
     validator = get_validator(TokenizerVersion.v2, mode)
-    assert validator._mode == mode
+    assert validator._mode == validator.mode == mode

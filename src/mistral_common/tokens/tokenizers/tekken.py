@@ -328,6 +328,11 @@ class Tekkenizer(Tokenizer):
         r"""Vocabulary size of the tokenizer."""
         return self._vocab_size
 
+    @cached_property
+    def special_ids(self) -> set[int]:
+        r"""Ids of the special tokens."""
+        return {token["rank"] for token in self._all_special_tokens}
+
     @property
     def version(self) -> TokenizerVersion:
         r"""The version of the tokenizer."""
@@ -375,7 +380,7 @@ class Tekkenizer(Tokenizer):
         return self.get_special_token("<unk>")
 
     def vocab(self) -> list[str]:
-        r"""All tokens in the vocabulary as strings.
+        r"""Get all tokens in the vocabulary as strings.
 
         Note:
            This will collapse all tokens for which we have a decoding error into

@@ -1,8 +1,7 @@
-import re
 from abc import ABC, abstractmethod
-from enum import Enum
+from enum import Enum, StrEnum, auto
 from pathlib import Path
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 import numpy as np
 from pydantic import ConfigDict, Field
@@ -96,7 +95,7 @@ class SpecialTokens(str, Enum):
     streaming_word = "[STREAMING_WORD]"
 
 
-class SpecialTokenPolicy(int, Enum):
+class SpecialTokenPolicy(StrEnum):
     r"""What to do with special tokens when encoding/decoding.
 
     Attributes:
@@ -105,12 +104,23 @@ class SpecialTokenPolicy(int, Enum):
         RAISE: Raise an error if special tokens are found.
     """
 
-    IGNORE = 0
-    KEEP = 1
-    RAISE = 2
+    IGNORE = auto()
+    KEEP = auto()
+    RAISE = auto()
+
+    @classmethod
+    def _missing_(cls, value: Any) -> Any:
+        match value:
+            case 0:
+                return SpecialTokenPolicy.IGNORE
+            case 1:
+                return SpecialTokenPolicy.KEEP
+            case 2:
+                return SpecialTokenPolicy.RAISE
+        return super()._missing_(value)
 
 
-class TokenizerVersion(str, Enum):
+class TokenizerVersion(StrEnum):
     r"""Enum of tokenizer versions.
 
     Allow to distinguish between different versions of the tokenizer and maintain backward compatibility.
@@ -126,13 +136,6 @@ class TokenizerVersion(str, Enum):
     Examples:
         >>> version = TokenizerVersion.v1
     """
-
-    def __new__(cls, value: str) -> "TokenizerVersion":
-        if not re.match(r"^v\d+$", value):
-            raise ValueError(f"Invalid version format: {value}. Must be 'v' followed by a number.")
-        obj = str.__new__(cls, value)
-        obj._value_ = value
-        return obj
 
     @property
     def _version_num(self) -> int:
@@ -158,12 +161,12 @@ class TokenizerVersion(str, Enum):
             other = TokenizerVersion(other)
             return self._version_num >= other._version_num
 
-    v1 = "v1"  # vocab_size = 32000
-    v2 = "v2"  # vocab_size = 32768 with special control tokens [INST], [\INST]
-    v3 = "v3"  # vocab_size = 32768 (spm) OR 131072 (tekken) with improved function calling
-    v7 = "v7"  # vocab_size = 32768 (spm) or 131072 (tekken) with improved system prompt and function calling
-    v11 = "v11"  # 131072 (tekken) with improved function calling
-    v13 = "v13"  # 131072 (tekken) with no call id and better prompt caching
+    v1 = auto()  # vocab_size = 32000
+    v2 = auto()  # vocab_size = 32768 with special control tokens [INST], [\INST]
+    v3 = auto()  # vocab_size = 32768 (spm) OR 131072 (tekken) with improved function calling
+    v7 = auto()  # vocab_size = 32768 (spm) or 131072 (tekken) with improved system prompt and function calling
+    v11 = auto()  # 131072 (tekken) with improved function calling
+    v13 = auto()  # 131072 (tekken) with no call id and better prompt caching
 
 
 class Tokenized(MistralBase):
@@ -192,6 +195,16 @@ class Tokenizer(ABC):
     @abstractmethod
     def n_words(self) -> int:
         r"""Vocabulary size of the tokenizer."""
+
+    @property
+    @abstractmethod
+    def special_ids(self) -> set[int]:
+        r"""Ids of the special tokens."""
+
+    @property
+    @abstractmethod
+    def num_special_tokens(self) -> int:
+        r"""The number of special tokens of the tokenizer."""
 
     @abstractmethod
     def vocab(self) -> list[str]:
@@ -286,11 +299,16 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
     Attributes:
         tokenizer: The tokenizer to use.
         image_encoder: The image encoder to use if any.
+        audio_encoder: The audio encoder to use if any.
     """
 
     tokenizer: Tokenizer
     image_encoder: ImageEncoder | None
     audio_encoder: AudioEncoder | None
+
+    @property
+    def version(self) -> TokenizerVersion:
+        return self.tokenizer.version
 
     def __init__(
         self, tokenizer: Tokenizer, image_encoder: ImageEncoder | None, audio_encoder: AudioEncoder | None

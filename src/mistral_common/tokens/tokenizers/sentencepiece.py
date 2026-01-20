@@ -130,8 +130,13 @@ class SentencePieceTokenizer(Tokenizer):
         r"""Vocabulary size of the tokenizer."""
         return self._model.vocab_size()  # type: ignore
 
+    @property
+    def num_special_tokens(self) -> int:
+        r"""The number of special tokens of the tokenizer."""
+        return len(self.special_ids)
+
     def vocab(self) -> list[str]:
-        r"""All tokens in the vocabulary as strings."""
+        r"""Get all tokens in the vocabulary as strings."""
         return self._vocab
 
     @cached_property
@@ -156,7 +161,14 @@ class SentencePieceTokenizer(Tokenizer):
 
     @cached_property
     def _control_tokens(self) -> set[int]:
-        warnings.warn("`_control_tokens` is deprecated. Make use of `is_special` instead.", FutureWarning)
+        warnings.warn(
+            "`_control_tokens` is deprecated. Make use of `is_special` or `special_ids` instead.", FutureWarning
+        )
+        return {tok for tok in range(self.n_words) if self._model.IsControl(tok)}
+
+    @cached_property
+    def special_ids(self) -> set[int]:
+        r"""Ids of the special tokens."""
         return {tok for tok in range(self.n_words) if self._model.IsControl(tok)}
 
     def encode(self, s: str, bos: bool, eos: bool) -> list[int]:

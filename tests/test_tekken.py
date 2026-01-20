@@ -35,6 +35,19 @@ def _get_deprecated_special_tokens() -> list[SpecialTokenInfo]:
     return list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS)
 
 
+@pytest.fixture(scope="module")
+def dummy_v3() -> Tekkenizer:
+    vocab = quick_vocab([b"hello"])
+    return Tekkenizer(
+        vocab,
+        special_tokens=_get_deprecated_special_tokens(),
+        pattern=r".+",  # single token, whole string
+        vocab_size=len(vocab) + len(_get_deprecated_special_tokens()),
+        num_special_tokens=len(_get_deprecated_special_tokens()),
+        version=TokenizerVersion.v3,
+    )
+
+
 def get_special_tokens(
     tokenizer_version: TokenizerVersion, add_audio: bool = False, add_think: bool = False
 ) -> list[SpecialTokenInfo]:
@@ -183,6 +196,8 @@ def test_read_from_file(tmp_path: Path) -> None:
     encoded_from_loaded = tekkenizer_loaded.encode(inputs, False, False)
 
     assert encoded == encoded_from_loaded
+    assert tekkenizer.num_special_tokens == num_special_tokens
+    assert tekkenizer.version == TokenizerVersion.v3
 
 
 def test_istekken(tmp_path: Path) -> None:
@@ -304,14 +319,17 @@ def test_frozen_special_tokens_list() -> None:
         (np.int64(1001), False),
     ],
 )
-def test_is_control(token: str | int, is_special: bool) -> None:
-    vocab = quick_vocab([b"hello"])
-    tekkenizer = Tekkenizer(
-        vocab,
-        special_tokens=_get_deprecated_special_tokens(),
-        pattern=r".+",  # single token, whole string
-        vocab_size=len(vocab) + len(_get_deprecated_special_tokens()),
-        num_special_tokens=len(_get_deprecated_special_tokens()),
-        version=TokenizerVersion.v3,
-    )
-    assert tekkenizer.is_special(token) is is_special
+def test_is_control(dummy_v3: Tekkenizer, token: str | int, is_special: bool) -> None:
+    assert dummy_v3.is_special(token) is is_special
+
+
+def test_special_ids_property(dummy_v3: Tekkenizer) -> None:
+    special_ids = dummy_v3.special_ids
+    assert isinstance(special_ids, set)
+    assert special_ids == set(t["rank"] for t in _get_deprecated_special_tokens())
+
+
+def test_special_tokens_property(dummy_v3: Tekkenizer) -> None:
+    num_special = dummy_v3.num_special_tokens
+    assert isinstance(num_special, int)
+    assert num_special == len(dummy_v3._all_special_tokens)
