@@ -33,6 +33,26 @@ class ResponseFormats(str, Enum):
     json = "json_object"
 
 
+class ReasoningEffort(str, Enum):
+    r"""Enum of the reasoning effort for the model.
+
+    Note:
+        This is used for `ChatCompletionRequest` or `InstructRequest` for tokenizers >= v14
+
+    Attributes:
+        none: No reasoning is done.
+        high: Reasoning should be performed by the model.
+
+    Examples:
+        >>> reasoning_effort = ReasoningEffort.high
+        >>> reasoning_effort = ReasoningEffort.none
+        >>> reasoning_effort = None
+    """
+
+    none = "none"
+    high = "high"
+
+
 class ResponseFormat(MistralBase):
     r"""The format of the response.
 
@@ -53,6 +73,8 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         model: The model to use for the chat completion.
         messages: The messages to use for the chat completion.
         response_format: The format of the response.
+        reasoning_effort: The reasoning effort of the model. Used by models with reasoning and
+            tokenizer versions >= v14. Can be 'none', 'high', or None.
         tools: The tools to use for the chat completion.
         tool_choice: The tool choice to use for the chat completion.
         truncate_for_context_length: Whether to truncate the messages for the context length.
@@ -76,6 +98,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     model: str | None = None
     messages: list[ChatMessageType]
     response_format: ResponseFormat = Field(default_factory=ResponseFormat)
+    reasoning_effort: ReasoningEffort | None = None
     tools: list[Tool] | None = None
     tool_choice: ToolChoice = ToolChoice.auto
     truncate_for_context_length: bool = False
@@ -160,6 +183,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         messages: list[dict[str, str | list[dict[str, str | dict[str, Any]]]]],
         tools: list[dict[str, Any]] | None = None,
         continue_final_message: bool = False,
+        reasoning_effort: ReasoningEffort | None = None,
         **kwargs: Any,
     ) -> "ChatCompletionRequest":
         r"""Create a chat completion request from the OpenAI format.
@@ -168,6 +192,8 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             messages: The messages in the OpenAI format.
             tools: The tools in the OpenAI format.
             continue_final_message: Whether to continue the final message.
+            reasoning_effort: The reasoning effort of the model. Used by models with reasoning and
+                tokenizer versions >= v14. Can be 'none', 'high', or None.
             **kwargs: Additional keyword arguments to pass to the constructor. These should be the same as the fields
                 of the request class or the OpenAI API equivalent.
 
@@ -191,6 +217,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             tools=converted_tools,
             random_seed=random_seed,
             continue_final_message=continue_final_message,
+            reasoning_effort=reasoning_effort,
             **kwargs,
         )
 
@@ -202,6 +229,8 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         messages: The history of the conversation.
         system_prompt: The system prompt to be used for the conversation.
         available_tools: The tools available to the assistant.
+        reasoning_effort: The reasoning effort of the model. Used by models with reasoning and
+            tokenizer versions >= v14. Can be 'none', 'high', or None.
         truncate_at_max_tokens: The maximum number of tokens to truncate the conversation at.
         continue_final_message: Whether to continue the final message.
 
@@ -215,6 +244,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
     messages: list[ChatMessageType]
     system_prompt: str | None = None
     available_tools: list[ToolType] | None = None
+    reasoning_effort: ReasoningEffort | None = None
     truncate_at_max_tokens: int | None = None
     continue_final_message: bool = False
 
@@ -298,6 +328,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         messages: list[dict[str, str | list[dict[str, str | dict[str, Any]]]]],
         tools: list[dict[str, Any]] | None = None,
         continue_final_message: bool = False,
+        reasoning_effort: ReasoningEffort | None = None,
         **kwargs: Any,
     ) -> "InstructRequest":
         r"""Create an instruct request from the OpenAI format.
@@ -306,6 +337,8 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
             messages: The messages in the OpenAI format.
             tools: The tools in the OpenAI format.
             continue_final_message: Whether to continue the final message.
+            reasoning_effort: The reasoning effort of the model. Used by models with reasoning and
+                tokenizer versions >= v14. Can be 'none', 'high', or None.
             **kwargs: Additional keyword arguments to pass to the constructor. These should be the same as the fields
                 of the request class or the OpenAI API equivalent.
 
@@ -330,5 +363,6 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
             messages=converted_messages,  # type: ignore[arg-type]
             available_tools=converted_tools,  # type: ignore[arg-type]
             continue_final_message=continue_final_message,
+            reasoning_effort=reasoning_effort,
             **kwargs,
         )
