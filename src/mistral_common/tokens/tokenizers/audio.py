@@ -248,7 +248,7 @@ class AudioEncoder:
         _check_mult_of(_extra_right_pad_samples, mult_of)
         right_pad += _extra_right_pad_samples
 
-		# We also pad on the left as this has shown to improve performance
+        # We also pad on the left as this has shown to improve performance
         # simply by giving the model "more compute", we also add
         # - the same induced delay
         # - OFFLINE_STREAMING_BUFFER_TOKENS
