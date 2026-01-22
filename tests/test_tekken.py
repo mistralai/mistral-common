@@ -38,6 +38,7 @@ def _get_deprecated_special_tokens() -> list[SpecialTokenInfo]:
 def get_special_tokens(
     tokenizer_version: TokenizerVersion, add_audio: bool = False, add_think: bool = False
 ) -> list[SpecialTokenInfo]:
+    add_think = add_think or tokenizer_version >= TokenizerVersion.v14
     special_tokens = list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS)
     if tokenizer_version < TokenizerVersion.v7 and add_audio:
         raise ValueError("Audio tokens are only supported in v7 and above")
@@ -84,8 +85,14 @@ def get_special_tokens(
 
     if add_think:
         special_tokens += [
-            SpecialTokenInfo(rank=35, token_str="[THINK]", is_control=True),
-            SpecialTokenInfo(rank=36, token_str="[/THINK]", is_control=True),
+            SpecialTokenInfo(rank=35, token_str=SpecialTokens.begin_think, is_control=True),
+            SpecialTokenInfo(rank=36, token_str=SpecialTokens.end_think, is_control=True),
+        ]
+
+    if tokenizer_version >= TokenizerVersion.v14:
+        special_tokens += [
+            SpecialTokenInfo(rank=37, token_str=SpecialTokens.begin_model_settings, is_control=True),
+            SpecialTokenInfo(rank=38, token_str=SpecialTokens.end_model_settings, is_control=True),
         ]
 
     return special_tokens

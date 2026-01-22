@@ -15,7 +15,7 @@ from mistral_common.protocol.instruct.messages import (
     AssistantMessageType,
     UserMessage,
 )
-from mistral_common.protocol.instruct.request import InstructRequest
+from mistral_common.protocol.instruct.request import InstructRequest, ReasoningEffort
 from mistral_common.protocol.instruct.tool_calls import Tool
 from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import AudioEncoder
@@ -92,6 +92,8 @@ class SpecialTokens(str, Enum):
     transcribe = "[TRANSCRIBE]"
     begin_think = "[THINK]"
     end_think = "[/THINK]"
+    begin_model_settings = "[MODEL_SETTINGS]"
+    end_model_settings = "[/MODEL_SETTINGS]"
     streaming_pad = "[STREAMING_PAD]"
     streaming_word = "[STREAMING_WORD]"
 
@@ -122,6 +124,7 @@ class TokenizerVersion(str, Enum):
         v7: The seventh version of the tokenizer that includes improved system prompt and function calling.
         v11: The eleventh version of the tokenizer that includes improved function calling.
         v13: The thirteenth version of the tokenizer that includes no call id tokenization and better prompt caching.
+        v14: The fourteenth version of the tokenizer that includes model settings' reasoning effort.
 
     Examples:
         >>> version = TokenizerVersion.v1
@@ -164,6 +167,7 @@ class TokenizerVersion(str, Enum):
     v7 = "v7"  # vocab_size = 32768 (spm) or 131072 (tekken) with improved system prompt and function calling
     v11 = "v11"  # 131072 (tekken) with improved function calling
     v13 = "v13"  # 131072 (tekken) with no call id and better prompt caching
+    v14 = "v14"  # 131072 (tekken) add model settings for reasoning effort
 
 
 class Tokenized(MistralBase):
@@ -368,6 +372,7 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         is_first: bool,
         system_prompt: str | None = None,
         force_img_first: bool = False,
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a user message.
 

@@ -14,6 +14,7 @@ from mistral_common.exceptions import (
     InvalidToolMessageException,
     InvalidToolSchemaException,
 )
+from mistral_common.protocol.instruct.chunk import ThinkChunk
 from mistral_common.protocol.instruct.messages import (
     UATS,
     AssistantMessage,
@@ -115,6 +116,9 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
         # Validate the tools
         self._validate_tools(request.tools or [])
 
+        # Validate reasoning effort
+        self._validate_reasoning_effort(request)
+
         return request
 
     def _validate_function(self, function: Function) -> None:
@@ -141,6 +145,10 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
 
         for tool in tools:
             self._validate_function(tool.function)
+
+    def _validate_reasoning_effort(self, request: ChatCompletionRequest) -> None:
+        if request.reasoning_effort is not None:
+            raise InvalidRequestException("reasoning_effort is not supported for this tokenizer version")
 
     def _validate_user_message(self, message: UserMessageType) -> None:
         pass
@@ -406,6 +414,15 @@ class MistralRequestValidatorV5(MistralRequestValidatorV3):
 
 
 class MistralRequestValidatorV13(MistralRequestValidatorV5):
+    r"""Validator for v13 Mistral requests.
+
+    This validator checks that tool calls uniquely identified by their ids are followed by tool messages with the right
+    ids.
+
+    Examples:
+        >>> validator = MistralRequestValidatorV13()
+    """
+
     def _validate_tool_calls_followed_by_tool_messages(self, messages: list[UATS]) -> None:
         """
         Checks:
@@ -454,17 +471,48 @@ class MistralRequestValidatorV13(MistralRequestValidatorV5):
             raise InvalidMessageStructureException("More tool responses than tool calls")
 
 
-def get_validator(version: TokenizerVersion, mode: ValidationMode) -> MistralRequestValidator:
-    validator: MistralRequestValidator
-    if version <= TokenizerVersion.v2:
-        validator = MistralRequestValidator(mode=mode)
-    elif version <= TokenizerVersion.v3:
-        validator = MistralRequestValidatorV3(mode=mode)
-    elif version <= TokenizerVersion.v7:
-        validator = MistralRequestValidatorV5(mode=mode)
-    elif version <= TokenizerVersion.v13:
-        validator = MistralRequestValidatorV13(mode=mode)
-    else:
-        raise ValueError(f"Unsupported tokenizer version: {version}")
+class MistralRequestValidatorV14(MistralRequestValidatorV13):
+    r"""Validator for v14 Mistral requests.
 
-    return validator
+    This validator allow reasoning_effort to be passed to the request and prevent thinking chunks in the system prompt.
+
+    Examples:
+        >>> validator = MistralRequestValidatorV14()
+    """
+
+    def _validate_reasoning_effort(self, request: ChatCompletionRequest) -> None:
+        pass
+
+    def _validate_system_message(self, message: SystemMessageType) -> None:
+        if message.content is None:
+            raise InvalidSystemPromptException("System prompt must have content")
+        if isinstance(message.content, list) and any(isinstance(chunk, ThinkChunk) for chunk in message.content):
+            raise ValueError("ThinkChunk in system message is not supported for tokenizers >= v14.")
+
+
+def get_validator(version: TokenizerVersion, mode: ValidationMode) -> MistralRequestValidator:
+    r"""Get the tokenizer version request validator for a specified mode.
+
+    Args:
+        version: The tokenizer version.
+        mode: The tokenizer validation mode.
+
+    Returns:
+        The request validator.
+
+    Examples:
+        >>> validator = get_validator(version=TokenizerVersion.v14, mode=ValidationMode.finetuning)
+    """
+    match version:
+        case TokenizerVersion.v1 | TokenizerVersion.v2:
+            return MistralRequestValidator(mode=mode)
+        case TokenizerVersion.v3:
+            return MistralRequestValidatorV3(mode=mode)
+        case TokenizerVersion.v7 | TokenizerVersion.v11:
+            return MistralRequestValidatorV5(mode=mode)
+        case TokenizerVersion.v13:
+            return MistralRequestValidatorV13(mode=mode)
+        case TokenizerVersion.v14:
+            return MistralRequestValidatorV14(mode=mode)
+
+    raise ValueError(f"Unknown tokenizer version {version}")

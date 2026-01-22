@@ -1,4 +1,5 @@
 import json
+import warnings
 from typing import Generic, Sequence, overload
 
 from mistral_common.protocol.instruct.chunk import (
@@ -318,6 +319,8 @@ class InstructRequestNormalizer(
             >>> normalizer = InstructRequestNormalizer.normalizer()
             >>> instruct_request = normalizer.from_chat_completion_request(request)
         """
+        assert request.reasoning_effort is None, "`reasoning_effort` is not allowed for normalizer < v14."
+
         system_prompt = self._aggregate_system_prompts(request.messages)
         messages = self._aggregate_messages(request.messages)
 
@@ -325,6 +328,7 @@ class InstructRequestNormalizer(
             messages=messages,
             system_prompt=system_prompt,
             available_tools=request.tools,
+            reasoning_effort=None,
             continue_final_message=request.continue_final_message,
         )
 
@@ -338,6 +342,7 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
 
     _system_prompt_in_begin: bool = True
     _allow_tool_call_and_content: bool = True
+    _allow_reasoning_effort: bool = False
 
     @staticmethod
     def normalizer() -> "InstructRequestNormalizerV7":
@@ -397,8 +402,16 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
             >>> normalizer = InstructRequestNormalizerV7.normalizer()
             >>> instruct_request = normalizer.from_chat_completion_request(request)
         """
+        if not self._allow_reasoning_effort:
+            assert request.reasoning_effort is None, "`reasoning_effort` is not allowed for this normalizer."
+
         messages = self._aggregate_messages(request.messages)
-        return self._instruct_request_class(messages=messages, system_prompt=None, available_tools=request.tools)  # type: ignore[no-any-return]
+        return self._instruct_request_class(  # type: ignore[no-any-return]
+            messages=messages,
+            system_prompt=None,
+            available_tools=request.tools,
+            reasoning_effort=request.reasoning_effort,
+        )
 
 
 class InstructRequestNormalizerV13(InstructRequestNormalizerV7):
@@ -435,7 +448,34 @@ class InstructRequestNormalizerV13(InstructRequestNormalizerV7):
         return tool_messages
 
 
+class InstructRequestNormalizerV14(InstructRequestNormalizerV13):
+    _allow_reasoning_effort: bool = True
+
+    @staticmethod
+    def normalizer() -> "InstructRequestNormalizerV14":
+        return InstructRequestNormalizerV14(
+            UserMessage,
+            AssistantMessage,
+            ToolMessage,
+            SystemMessage,
+            InstructRequest[UATS, Tool],
+        )
+
+
 def normalizer_for_tokenizer_version(version: TokenizerVersion) -> InstructRequestNormalizer:
+    r"""Gets the appropriate normalizer for the given tokenizer version.
+
+    warn:
+        Deprecated in favor of `get_normalizer`. It will be removed in 1.10.0.
+    """
+    warnings.warn(
+        "normalizer_for_tokenizer_version is deprecated and will be removed in 1.10.0. Use `get_normalizer` instead.",
+        FutureWarning,
+    )
+    return get_normalizer(version)
+
+
+def get_normalizer(version: TokenizerVersion) -> InstructRequestNormalizer:
     r"""Gets the appropriate normalizer for the given tokenizer version.
 
     Args:
@@ -447,23 +487,14 @@ def normalizer_for_tokenizer_version(version: TokenizerVersion) -> InstructReque
     Examples:
         >>> normalizer = normalizer_for_tokenizer_version(TokenizerVersion.v1)
     """
-    if version in {TokenizerVersion.v1, TokenizerVersion.v2, TokenizerVersion.v3}:
-        return InstructRequestNormalizer.normalizer()
-    elif version in {TokenizerVersion.v7, TokenizerVersion.v11}:
-        return InstructRequestNormalizerV7.normalizer()
-    elif version == TokenizerVersion.v13:
-        return InstructRequestNormalizerV13.normalizer()
+    match version:
+        case TokenizerVersion.v1 | TokenizerVersion.v2 | TokenizerVersion.v3:
+            return InstructRequestNormalizer.normalizer()
+        case TokenizerVersion.v7 | TokenizerVersion.v11:
+            return InstructRequestNormalizerV7.normalizer()
+        case TokenizerVersion.v13:
+            return InstructRequestNormalizerV13.normalizer()
+        case TokenizerVersion.v14:
+            return InstructRequestNormalizerV14.normalizer()
+
     raise ValueError(f"Unknown tokenizer version {version}")
-
-
-def get_normalizer(version: TokenizerVersion) -> InstructRequestNormalizer:
-    if version <= TokenizerVersion.v3:
-        normalizer_cls = InstructRequestNormalizer
-    elif version <= TokenizerVersion.v7:
-        normalizer_cls = InstructRequestNormalizerV7
-    elif version <= TokenizerVersion.v13:
-        normalizer_cls = InstructRequestNormalizerV13
-    else:
-        raise ValueError(f"Unsupported tokenizer version: {version}")
-
-    return normalizer_cls.normalizer()

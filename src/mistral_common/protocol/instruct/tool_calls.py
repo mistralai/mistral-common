@@ -14,6 +14,7 @@ class Function(MistralBase):
         name: The name of the function.
         description: A description of what the function does.
         parameters: The parameters the functions accepts, described as a JSON Schema object.
+        strict: Whether to enforce strict function calling.
 
     Examples:
         >>> function = Function(
@@ -36,6 +37,7 @@ class Function(MistralBase):
     name: str
     description: str = ""
     parameters: dict[str, Any]
+    strict: bool = False
 
 
 class ToolTypes(str, Enum):

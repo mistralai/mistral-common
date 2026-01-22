@@ -30,7 +30,7 @@ from mistral_common.protocol.instruct.messages import (
     ToolMessage,
     UserMessage,
 )
-from mistral_common.protocol.instruct.request import InstructRequest
+from mistral_common.protocol.instruct.request import InstructRequest, ReasoningEffort
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolCall
 from mistral_common.protocol.transcription.request import StreamingMode, TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import AudioEncoder, TranscriptionFormat
@@ -186,6 +186,7 @@ class InstructTokenizerBase(
                     msg_idx == first_user_idx,
                     system_prompt=request.system_prompt,
                     force_img_first=True,  # img is always first when providing text/img chunk pair
+                    reasoning_effort=request.reasoning_effort,
                 )
                 images.extend(new_images)
                 audios.extend(new_audios)
@@ -264,6 +265,7 @@ class InstructTokenizerV1(
         is_first: bool,
         system_prompt: str | None = None,
         force_img_first: bool = False,
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a user message.
 
@@ -274,6 +276,8 @@ class InstructTokenizerV1(
             is_first: Whether the message is the first one.
             system_prompt: The system prompt.
             force_img_first: Not used.
+            reasoning_effort: The reasoning effort of the model. Used by models with reasoning and
+                tokenizer versions >= v14. Can be 'none', 'high', or None.
 
         Returns:
             The encoded tokens and empty list.
@@ -386,7 +390,7 @@ class InstructTokenizerV2(
     This tokenizer adds supports to images, tools and FIM requests.
     """
 
-    _user_message_position_to_encode_tools = UserMessagePosition.last
+    _user_message_position_to_encode_settings = UserMessagePosition.last
 
     def __init__(
         self,
@@ -413,6 +417,12 @@ class InstructTokenizerV2(
         self.PREFIX = self.tokenizer.get_special_token(SpecialTokens.prefix.value)
         self.SUFFIX = self.tokenizer.get_special_token(SpecialTokens.suffix.value)
 
+    def _encode_settings(
+        self,
+        reasoning_effort: ReasoningEffort | None,
+    ) -> list[int]:
+        return []
+
     def encode_user_message(
         self,
         message: UserMessage,
@@ -421,6 +431,7 @@ class InstructTokenizerV2(
         is_first: bool,
         system_prompt: str | None = None,
         force_img_first: bool = False,
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a user message.
 
@@ -431,23 +442,29 @@ class InstructTokenizerV2(
             is_first: Not used.
             system_prompt: The system prompt.
             force_img_first: Whether to force the image to be first.
+            reasoning_effort: The reasoning effort of the model. Used by models with reasoning and
+                tokenizer versions >= v14. Can be 'none', 'high', or None.
 
         Returns:
             The encoded tokens and the list of images.
         """
-        do_encode_tools = False
-        do_encode_tools |= is_first and (self._user_message_position_to_encode_tools == UserMessagePosition.first)
-        do_encode_tools |= is_last and (self._user_message_position_to_encode_tools == UserMessagePosition.last)
+        do_encode_settings = False
+        do_encode_settings |= is_first and (self._user_message_position_to_encode_settings == UserMessagePosition.first)
+        do_encode_settings |= is_last and (self._user_message_position_to_encode_settings == UserMessagePosition.last)
         tools_tokens: list[int] = []
+        settings_tokens: list[int] = []
 
-        if do_encode_tools and available_tools:
-            tools = [tool.model_dump() for tool in available_tools]
+        if do_encode_settings and available_tools:
+            tools = [tool.model_dump(exclude={"function": {"strict": True}}) for tool in available_tools]
             tools_json_tokens = self.tokenizer.encode(json.dumps(tools, ensure_ascii=False), bos=False, eos=False)
             tools_tokens = [
                 self.BEGIN_AVAILABLE_TOOLS,
                 *tools_json_tokens,
                 self.END_AVAILABLE_TOOLS,
             ]
+
+        if do_encode_settings:
+            settings_tokens = self._encode_settings(reasoning_effort)
 
         tokens, image, audio = self.encode_user_content(
             content=message.content,
@@ -456,7 +473,7 @@ class InstructTokenizerV2(
             force_img_first=force_img_first,
         )
 
-        prefix_tokens = [*tools_tokens, self.BEGIN_INST]
+        prefix_tokens = [*tools_tokens, *settings_tokens, self.BEGIN_INST]
         suffix_tokens = [self.END_INST]
 
         curr_tokens = prefix_tokens + tokens + suffix_tokens
@@ -904,6 +921,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
         is_first: bool,
         system_prompt: str | None = None,
         force_img_first: bool = False,
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a user message.
 
@@ -914,6 +932,8 @@ class InstructTokenizerV7(InstructTokenizerV3):
             is_first: Whether the message is the first one.
             system_prompt: Not used.
             force_img_first: Whether to force the image to be first.
+            reasoning_effort: The reasoning effort of the model. Used by models with reasoning and
+                tokenizer versions >= v14. Can be 'none', 'high', or None.
 
         Returns:
             The encoded tokens and the list of images.
@@ -927,6 +947,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
             is_first=is_first,
             system_prompt=None,
             force_img_first=force_img_first,
+            reasoning_effort=reasoning_effort,
         )
 
         return tokens, images, audio
@@ -1135,7 +1156,7 @@ class InstructTokenizerV13(InstructTokenizerV11):
         - call id is no longer tokenized for tool calls or results.
     """
 
-    _user_message_position_to_encode_tools = UserMessagePosition.first
+    _user_message_position_to_encode_settings = UserMessagePosition.first
 
     def __init__(
         self,
@@ -1208,3 +1229,51 @@ class InstructTokenizerV13(InstructTokenizerV11):
         if chunk.closed:
             think_tokens.append(self.END_THINK)
         return think_tokens
+
+
+class InstructTokenizerV14(InstructTokenizerV13):
+    r"""Instruct tokenizer V14.
+
+    The difference with V14 tokenizer is that it encodes the model settings for reasoning efforts. It also no longer
+    support thinking chunks for the system messages.
+    """
+
+    def __init__(
+        self,
+        tokenizer: Tokenizer,
+        image_encoder: ImageEncoder | None = None,
+        audio_encoder: AudioEncoder | None = None,
+    ) -> None:
+        super().__init__(tokenizer, image_encoder, audio_encoder=audio_encoder)
+        self.BEGIN_MODEL_SETTINGS = self.tokenizer.get_special_token(SpecialTokens.begin_model_settings.value)
+        self.END_MODEL_SETTINGS = self.tokenizer.get_special_token(SpecialTokens.end_model_settings.value)
+
+    def _encode_settings(
+        self,
+        reasoning_effort: ReasoningEffort | None,
+    ) -> list[int]:
+        # If reasoning_effort is not passed, it is set to 'none'.
+        reasoning_effort = reasoning_effort or ReasoningEffort.none
+        settings = {"reasoning_effort": reasoning_effort}
+        setting_json_tokens = self.tokenizer.encode(json.dumps(settings, ensure_ascii=False), bos=False, eos=False)
+        settings_tokens = [
+            self.BEGIN_MODEL_SETTINGS,
+            *setting_json_tokens,
+            self.END_MODEL_SETTINGS,
+        ]
+        return settings_tokens
+
+    def encode_system_message(self, message: SystemMessage) -> list[int]:
+        r"""Encode a system message.
+
+        It also verifies that no thinking chunks are in the message.
+
+        Args:
+            message: The message to encode.
+
+        Returns:
+            The encoded tokens.
+        """
+        if isinstance(message.content, list) and any(isinstance(chunk, ThinkChunk) for chunk in message.content):
+            raise ValueError("ThinkChunk in system message is not supported for tokenizers >= v14.")
+        return super().encode_system_message(message)
