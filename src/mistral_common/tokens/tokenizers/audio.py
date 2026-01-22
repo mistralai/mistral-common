@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 OFFLINE_STREAMING_BUFFER_TOKENS = 10
 
 
+def _check_mult_of(num_samples: int, mult_of: int) -> None:
+    assert num_samples % mult_of == 0, f"{num_samples=} must be a multiple of {mult_of=}"
+
+
 class TranscriptionFormat(str, Enum):
     r"""Transcription format.
 
@@ -143,6 +147,25 @@ class AudioConfig:
         downsample_factor /= self.encoding_config.hop_length
         return int(downsample_factor)
 
+    @property
+    def n_right_pad_tokens(self) -> int:
+        assert self.is_streaming, f"Can't call n_right_pad_tokens if {self.is_streaming=}."
+        # we need to pad on the rigth to ensure the models transcribes
+        # - the induced delay on the prefill step (num_delay_tokens)
+        # - the BOS token (1)
+        # - a heuristic that defines a max token length for a single word
+        #   (OFFLINE_STREAMING_BUFFER_TOKENS)
+        return (self.num_delay_tokens + 1) + OFFLINE_STREAMING_BUFFER_TOKENS
+
+    @property
+    def n_left_pad_tokens(self) -> int:
+        assert self.is_streaming, f"Can't call n_left_pad_tokens if {self.is_streaming=}."
+        # We also pad on the left as this has shown to improve performance
+        # simply by giving the model "more compute", we also add
+        # - the same induced delay
+        # - OFFLINE_STREAMING_BUFFER_TOKENS
+        return self.num_delay_tokens + OFFLINE_STREAMING_BUFFER_TOKENS
+
 
 @dataclass
 class AudioEncoding:
@@ -202,8 +225,10 @@ class AudioEncoder:
             next_multiple_of_chunk_frames = self.next_multiple_of_chunk_frames(audio_array.shape[-1], sampling_rate)
             audio_array = np.pad(audio_array, (0, next_multiple_of_chunk_frames - audio_array.shape[-1]))
         elif self.audio_config.is_streaming:
-            pad = self._get_streaming_pad(audio_array.shape[-1])
-            audio_array = np.pad(audio_array, (0, pad))
+            left_pad, right_pad = self._get_streaming_pad(audio_array.shape[-1])
+            # we pad both left & right as this leads to better performance
+            # doesn't seem to work as expected here
+            audio_array = np.pad(audio_array, (left_pad, right_pad))
         elif (
             isinstance(self.encoding_config, AudioSpectrogramConfig)
             and audio_array.shape[-1] < self.encoding_config.window_size
@@ -213,18 +238,25 @@ class AudioEncoder:
 
         return audio_array
 
-    def _get_streaming_pad(self, num_samples: int) -> int:
+    def _get_streaming_pad(self, num_samples: int) -> tuple[int, int]:
         # let's make sure the audio is a multiple of one "frame" token
         mult_of = self.audio_config.raw_audio_length_per_tok
-        pad = int((mult_of - (num_samples % mult_of)) % mult_of)
+        right_pad = int((mult_of - (num_samples % mult_of)) % mult_of)
 
-        #  then add delay tokens + BOS token + buffer approx
-        _extra_pad_tokens = (self.audio_config.num_delay_tokens + 1) + OFFLINE_STREAMING_BUFFER_TOKENS
-        extra_pad_samples = int(mult_of * _extra_pad_tokens)
-        assert extra_pad_samples % mult_of == 0, f"{extra_pad_samples=} must be a multiple of {mult_of=}"
-        pad += extra_pad_samples
+        _extra_right_pad_tokens = self.audio_config.n_right_pad_tokens
+        _extra_right_pad_samples = int(mult_of * _extra_right_pad_tokens)
+        _check_mult_of(_extra_right_pad_samples, mult_of)
+        right_pad += _extra_right_pad_samples
 
-        return pad
+		# We also pad on the left as this has shown to improve performance
+        # simply by giving the model "more compute", we also add
+        # - the same induced delay
+        # - OFFLINE_STREAMING_BUFFER_TOKENS
+        _extra_left_pad_tokens = self.audio_config.n_left_pad_tokens
+        left_pad = int(mult_of * _extra_left_pad_tokens)
+        _check_mult_of(left_pad, mult_of)
+
+        return left_pad, right_pad
 
     def next_multiple_of_chunk_frames(self, audio_array_len: int, sampling_rate: int) -> int:
         r"""Calculate the next multiple of chunk frames.
@@ -251,8 +283,9 @@ class AudioEncoder:
         )
         assert self.audio_config.transcription_delay_ms is not None
 
-        # streaming pad tokens
-        tokens = [self.streaming_pad] * self.audio_config.num_delay_tokens
+        # streaming pad tokens consist of silence we pad on left + delay tokens
+        stream_pad_prefix_len = self.audio_config.n_left_pad_tokens + self.audio_config.num_delay_tokens
+        tokens = [self.streaming_pad] * stream_pad_prefix_len
 
         return tokens
 
