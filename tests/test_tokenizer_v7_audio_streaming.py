@@ -110,12 +110,12 @@ def test_special_audio_streaming_tokens(tokenizer: InstructTokenizerV7) -> None:
 @pytest.mark.parametrize(
     ("mode", "duration", "expected_array_len"),
     [
-        (StreamingMode.OFFLINE, 1.7, 57600),  # normal
+        (StreamingMode.OFFLINE, 1.7, 85760),  # normal
         (StreamingMode.ONLINE, 1.7, 27200),  # normal (would correspond to long delay)
-        (StreamingMode.OFFLINE, 8.44, 165120),
-        (StreamingMode.OFFLINE, 0.24, 33280),  # very short
+        (StreamingMode.OFFLINE, 8.44, 193280),
+        (StreamingMode.OFFLINE, 0.24, 61440),  # very short
         (StreamingMode.ONLINE, 0.24, 3840),  # very short delay
-        (StreamingMode.OFFLINE, 2.312231, 66560),  # weird length can correcctly be padded
+        (StreamingMode.OFFLINE, 2.312231, 94720),  # weird length can correcctly be padded
         (StreamingMode.ONLINE, 2.312231, -1.0),  # should throw error as not correctly buffered
     ],
 )
@@ -144,7 +144,8 @@ def test_tokenize_streaming_request(
 
     tokenized = tokenizer.encode_transcription(streaming_request)
     assert tokenizer.audio_encoder is not None
-    delay_n_tokens = tokenizer.audio_encoder.audio_config.num_delay_tokens
+    config = tokenizer.audio_encoder.audio_config
+    delay_n_tokens = config.num_delay_tokens + config.n_left_pad_tokens
 
     BOS = tokenizer.tokenizer.get_special_token(SpecialTokens.bos.value)
     STREAMING_PAD = tokenizer.tokenizer.get_special_token(SpecialTokens.streaming_pad.value)
