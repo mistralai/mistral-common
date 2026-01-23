@@ -150,7 +150,7 @@ class AudioConfig:
     @property
     def n_right_pad_tokens(self) -> int:
         assert self.is_streaming, f"Can't call n_right_pad_tokens if {self.is_streaming=}."
-        # we need to pad on the rigth to ensure the models transcribes
+        # we need to pad on the right to ensure the models transcribes
         # - the induced delay on the prefill step (num_delay_tokens)
         # - the BOS token (1)
         # - a heuristic that defines a max token length for a single word
@@ -227,7 +227,6 @@ class AudioEncoder:
         elif self.audio_config.is_streaming:
             left_pad, right_pad = self._get_streaming_pad(audio_array.shape[-1])
             # we pad both left & right as this leads to better performance
-            # doesn't seem to work as expected here
             audio_array = np.pad(audio_array, (left_pad, right_pad))
         elif (
             isinstance(self.encoding_config, AudioSpectrogramConfig)
