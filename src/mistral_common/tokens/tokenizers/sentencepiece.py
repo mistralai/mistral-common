@@ -206,7 +206,7 @@ class SentencePieceTokenizer(Tokenizer):
         Returns:
             The decoded string.
         """
-        if special_token_policy is not None and not isinstance(special_token_policy, SpecialTokenPolicy):
+        if special_token_policy is not None and not isinstance(special_token_policy, (str, SpecialTokenPolicy)):
             raise ValueError(
                 f"Expected `special_token_policy` to be None or SpecialTokenPolicy, got {type(special_token_policy)}."
             )
