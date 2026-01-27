@@ -211,7 +211,7 @@ class AudioEncoder:
         self.encoding_config = audio_config.encoding_config
         self.special_ids = special_ids
 
-    def pad(self, audio_array: np.ndarray, sampling_rate: int) -> np.ndarray:
+    def pad(self, audio_array: np.ndarray, sampling_rate: int, is_online_streaming: bool) -> np.ndarray:
         r"""Pad the audio array to the desired length.
 
         Args:
@@ -225,7 +225,7 @@ class AudioEncoder:
             next_multiple_of_chunk_frames = self.next_multiple_of_chunk_frames(audio_array.shape[-1], sampling_rate)
             audio_array = np.pad(audio_array, (0, next_multiple_of_chunk_frames - audio_array.shape[-1]))
         elif self.audio_config.is_streaming:
-            left_pad, right_pad = self._get_streaming_pad(audio_array.shape[-1])
+            left_pad, right_pad = self._get_streaming_pad(audio_array.shape[-1], is_online_streaming)
             # we pad both left & right as this leads to better performance
             # doesn't seem to work as expected here
             audio_array = np.pad(audio_array, (left_pad, right_pad))
@@ -238,15 +238,21 @@ class AudioEncoder:
 
         return audio_array
 
-    def _get_streaming_pad(self, num_samples: int) -> tuple[int, int]:
+    def _get_streaming_pad(self, num_samples: int, is_online_streaming: bool) -> tuple[int, int]:
         # let's make sure the audio is a multiple of one "frame" token
         mult_of = self.audio_config.raw_audio_length_per_tok
-        right_pad = int((mult_of - (num_samples % mult_of)) % mult_of)
 
-        _extra_right_pad_tokens = self.audio_config.n_right_pad_tokens
-        _extra_right_pad_samples = int(mult_of * _extra_right_pad_tokens)
-        _check_mult_of(_extra_right_pad_samples, mult_of)
-        right_pad += _extra_right_pad_samples
+        if is_online_streaming:
+            # in online streaming we don't yet have
+            # access to the "end" of the audio
+            right_pad = 0
+        else:
+            right_pad = int((mult_of - (num_samples % mult_of)) % mult_of)
+
+            _extra_right_pad_tokens = self.audio_config.n_right_pad_tokens
+            _extra_right_pad_samples = int(mult_of * _extra_right_pad_tokens)
+            _check_mult_of(_extra_right_pad_samples, mult_of)
+            right_pad += _extra_right_pad_samples
 
         # We also pad on the left as this has shown to improve performance
         # simply by giving the model "more compute", we also add
@@ -303,19 +309,7 @@ class AudioEncoder:
 
     def encode_audio(self, audio: Audio, is_online_streaming: bool) -> AudioEncoding:
         audio.resample(self.audio_config.sampling_rate)
-
-        if is_online_streaming:
-            # we don't pad for online streaming, we just make sure that
-            # we're having the correct shape which needs to be a multiple
-            # of the one-sided overlap between hop length and window size
-            mult_of = abs(
-                self.audio_config.encoding_config.window_size / 2 - self.audio_config.encoding_config.hop_length
-            )
-            assert audio.audio_array.shape[-1] % mult_of == 0, (
-                f"{audio.audio_array.shape[-1]=} must be a multiple of {mult_of=}"
-            )
-        else:
-            audio.audio_array = self.pad(audio.audio_array, self.audio_config.sampling_rate)
+        audio.audio_array = self.pad(audio.audio_array, self.audio_config.sampling_rate, is_online_streaming)
 
         if self.audio_config.transcription_format == TranscriptionFormat.STREAMING:
             tokens = self._encode_streaming_tokens()
