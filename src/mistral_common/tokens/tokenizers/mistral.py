@@ -348,7 +348,7 @@ class MistralTokenizer(
             )
         elif tokenizer.version == TokenizerVersion.v13:
             return MistralTokenizer(
-                InstructTokenizerV13(tokenizer, image_encoder=image_encoder),
+                InstructTokenizerV13(tokenizer, image_encoder=image_encoder, audio_encoder=audio_encoder),
                 validator=MistralRequestValidatorV13(mode=mode),
                 request_normalizer=request_normalizer,
             )
