@@ -1,0 +1,41 @@
+{
+    "text_encode": {
+      "datasets": [
+        {
+          "name": "random_utf8",
+          "num_samples": 1000,
+          "max_tokens": 2048
+        },
+        {
+          "name": "HuggingFaceFW/fineweb",
+          "split": "train",
+          "column": "text",
+          "num_samples": 500,
+          "max_tokens": 2048
+        },
+        {
+          "name": "HuggingFaceFW/finepdfs",
+          "split": "train",
+          "column": "text",
+          "num_samples": 500,
+          "max_tokens": 2048
+        }
+      ]
+    },
+    "text_instruct": {
+      "datasets": [
+        {
+          "name": "random_instruct_utf8",
+          "num_samples": 1000,
+          "max_tokens": 2048
+        },
+        {
+          "name": "HuggingFaceH4/ultrachat_200k",
+          "split": "train_sft",
+          "column": "messages",
+          "num_samples": 500,
+          "max_tokens": 2048
+        }
+      ]
+    }
+  }
