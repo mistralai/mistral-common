@@ -178,6 +178,7 @@ class AudioConfig:
         # simply by giving the model "more compute", we also add
         # - the same induced delay
         # - OFFLINE_STREAMING_BUFFER_TOKENS
+        assert self.streaming_n_left_pad_tokens is not None, f"{self.streaming_n_left_pad_tokens=} must be set."
         return self.streaming_n_left_pad_tokens
 
 
