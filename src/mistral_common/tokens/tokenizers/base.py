@@ -110,6 +110,7 @@ class SpecialTokenPolicy(str, Enum):
 
     @classmethod
     def _missing_(cls, value: Any) -> Any:
+        # Backward compatibility of int values.
         match value:
             case 0:
                 return SpecialTokenPolicy.IGNORE

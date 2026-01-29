@@ -9,6 +9,6 @@ def test_special_token_policy_backward_compatibility() -> None:
     assert SpecialTokenPolicy(2) == SpecialTokenPolicy.RAISE
 
     with pytest.raises(ValueError, match=r"3 is not a valid SpecialTokenPolicy"):
-        SpecialTokenPolicy(3) is None
+        SpecialTokenPolicy(3)
     with pytest.raises(ValueError, match=r"'invalid' is not a valid SpecialTokenPolicy"):
-        SpecialTokenPolicy("invalid") is None
+        SpecialTokenPolicy("invalid")
