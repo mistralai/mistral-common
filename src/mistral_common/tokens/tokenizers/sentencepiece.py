@@ -164,7 +164,7 @@ class SentencePieceTokenizer(Tokenizer):
         warnings.warn(
             "`_control_tokens` is deprecated. Make use of `is_special` or `special_ids` instead.", FutureWarning
         )
-        return {tok for tok in range(self.n_words) if self._model.IsControl(tok)}
+        return self.special_ids
 
     @cached_property
     def special_ids(self) -> set[int]:
