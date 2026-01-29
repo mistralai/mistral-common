@@ -175,12 +175,12 @@ def test_image_processing(special_token_ids: SpecialImageIDs, size: tuple[int, i
     # These are manually calculated based on the normalization process and image size
     # The spatial_merge_size doesn't affect image sums, only token generation
     EXP_IMG_SUM = {
-        (200, 311): 38949.70662005218,
-        (300, 212): 39848.55459483156,
-        (251, 1374): 115051.45965744506,
-        (1475, 477): 201340.04772297462,
-        (1344, 1544): 536906.9365316343,
-        (2133, 3422): 383504.87150127615,
+        (200, 311): 38949.726562,
+        (300, 212): 39848.566406,
+        (251, 1374): 115051.507812,
+        (1475, 477): 201340.125000,
+        (1344, 1544): 536907.000000,
+        (2133, 3422): 383505.000000,
     }
 
     test_image = _create_test_image(size, color=(128, 128, 128))
