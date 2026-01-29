@@ -80,8 +80,11 @@ def load_audio_streaming() -> Tekkenizer:
             window_size=400,
             hop_length=160,
         ),
-        transcription_delay_ms=960.0,
+        transcription_delay_ms=480.0,
         transcription_format=TranscriptionFormat.STREAMING,
+        streaming_look_ahead_ms=2.5,
+        streaming_look_back_ms=52.5,
+        streaming_n_left_pad_tokens=16,
     )
     tokenizer._audio_config = audio_config
     return tokenizer
@@ -110,12 +113,12 @@ def test_special_audio_streaming_tokens(tokenizer: InstructTokenizerV7) -> None:
 @pytest.mark.parametrize(
     ("mode", "duration", "expected_array_len"),
     [
-        (StreamingMode.OFFLINE, 1.7, 85760),  # normal
-        (StreamingMode.ONLINE, 1.7, 27200),  # normal (would correspond to long delay)
-        (StreamingMode.OFFLINE, 8.44, 193280),
-        (StreamingMode.OFFLINE, 0.24, 61440),  # very short
-        (StreamingMode.ONLINE, 0.24, 3840),  # very short delay
-        (StreamingMode.OFFLINE, 2.312231, 94720),  # weird length can correcctly be padded
+        (StreamingMode.OFFLINE, 1.7, 70400),  # normal
+        (StreamingMode.ONLINE, 1.7, 47680),  # normal (would correspond to long delay)
+        (StreamingMode.OFFLINE, 8.44, 177920),
+        (StreamingMode.OFFLINE, 0.24, 46080),  # very short
+        (StreamingMode.ONLINE, 0.24, 24320),  # very short delay
+        (StreamingMode.OFFLINE, 2.312231, 79360),  # weird length can correcctly be padded
         (StreamingMode.ONLINE, 2.312231, -1.0),  # should throw error as not correctly buffered
     ],
 )
@@ -179,6 +182,9 @@ def test_audio_config_delay(rate: float, delay: int, num_delay_tokens: int) -> N
             encoding_config=spectogram_config,
             transcription_delay_ms=delay,
             transcription_format=TranscriptionFormat.STREAMING,
+            streaming_look_ahead_ms=2.5,
+            streaming_look_back_ms=52.5,
+            streaming_n_left_pad_tokens=16,
         )
 
     if num_delay_tokens == -1:

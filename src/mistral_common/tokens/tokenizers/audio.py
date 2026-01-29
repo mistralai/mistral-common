@@ -78,11 +78,17 @@ class AudioConfig:
     # Whether to pad an audio into multiples of chunk_length_s seconds
     chunk_length_s: float | None = None
 
+    # If we're in streaming or non-streaming
+    transcription_format: TranscriptionFormat = TranscriptionFormat.INSTRUCT
+
     # delay between the audio stream and text stream
     transcription_delay_ms: float | None = None
 
-    # If we're in streaming or non-streaming
-    transcription_format: TranscriptionFormat = TranscriptionFormat.INSTRUCT
+    # only relevant for streaming
+    streaming_look_ahead_ms: float | None = None
+    streaming_look_back_ms: float | None = None
+
+    streaming_n_left_pad_tokens: int | None = None
 
     def __post_init__(self) -> None:
         assert self.frame_rate > 0, self.frame_rate
@@ -94,11 +100,19 @@ class AudioConfig:
                 f"chunk_length_s and sampling_rate must both be > 0, got {self.chunk_length_s} and {self.sampling_rate}"
             )
 
-        assert self.is_streaming == (self.transcription_delay_ms is not None), (
-            f"{self.is_streaming=} and {self.transcription_delay_ms=} must be both set or both unset"
-        )
+        if not self.is_streaming:
+            # make sure streaming params are only set for streaming use case
+            assert self.transcription_delay_ms is None, f"{self.transcription_delay_ms=} must be None."
+            assert self.streaming_look_ahead_ms is None, f"{self.streaming_look_ahead_ms=} must be None."
+            assert self.streaming_look_back_ms is None, f"{self.streaming_look_back_ms=} must be None."
+            assert self.streaming_n_left_pad_tokens is None, f"{self.streaming_n_left_pad_tokens=} must be None."
 
-        if self.transcription_delay_ms is not None:
+        if self.is_streaming:
+            assert self.transcription_delay_ms is not None, f"{self.transcription_delay_ms=} must be set."
+            assert self.streaming_look_ahead_ms is not None, f"{self.streaming_look_ahead_ms=} must be set."
+            assert self.streaming_look_back_ms is not None, f"{self.streaming_look_back_ms=} must be set."
+            assert self.streaming_n_left_pad_tokens is not None, f"{self.streaming_n_left_pad_tokens=} must be set."
+
             frame_duration_ms = 1000.0 / self.frame_rate
 
             assert self.transcription_delay_ms > 0, "{self.transcription_delay_ms=} must be > 0"
@@ -164,7 +178,8 @@ class AudioConfig:
         # simply by giving the model "more compute", we also add
         # - the same induced delay
         # - OFFLINE_STREAMING_BUFFER_TOKENS
-        return self.num_delay_tokens + OFFLINE_STREAMING_BUFFER_TOKENS
+        assert self.streaming_n_left_pad_tokens is not None, f"{self.streaming_n_left_pad_tokens=} must be set."
+        return self.streaming_n_left_pad_tokens
 
 
 @dataclass
@@ -211,7 +226,7 @@ class AudioEncoder:
         self.encoding_config = audio_config.encoding_config
         self.special_ids = special_ids
 
-    def pad(self, audio_array: np.ndarray, sampling_rate: int) -> np.ndarray:
+    def pad(self, audio_array: np.ndarray, sampling_rate: int, is_online_streaming: bool) -> np.ndarray:
         r"""Pad the audio array to the desired length.
 
         Args:
@@ -225,7 +240,7 @@ class AudioEncoder:
             next_multiple_of_chunk_frames = self.next_multiple_of_chunk_frames(audio_array.shape[-1], sampling_rate)
             audio_array = np.pad(audio_array, (0, next_multiple_of_chunk_frames - audio_array.shape[-1]))
         elif self.audio_config.is_streaming:
-            left_pad, right_pad = self._get_streaming_pad(audio_array.shape[-1])
+            left_pad, right_pad = self._get_streaming_pad(audio_array.shape[-1], is_online_streaming)
             # we pad both left & right as this leads to better performance
             audio_array = np.pad(audio_array, (left_pad, right_pad))
         elif (
@@ -237,15 +252,21 @@ class AudioEncoder:
 
         return audio_array
 
-    def _get_streaming_pad(self, num_samples: int) -> tuple[int, int]:
+    def _get_streaming_pad(self, num_samples: int, is_online_streaming: bool) -> tuple[int, int]:
         # let's make sure the audio is a multiple of one "frame" token
         mult_of = self.audio_config.raw_audio_length_per_tok
-        right_pad = int((mult_of - (num_samples % mult_of)) % mult_of)
 
-        _extra_right_pad_tokens = self.audio_config.n_right_pad_tokens
-        _extra_right_pad_samples = int(mult_of * _extra_right_pad_tokens)
-        _check_mult_of(_extra_right_pad_samples, mult_of)
-        right_pad += _extra_right_pad_samples
+        if is_online_streaming:
+            # in online streaming we don't yet have
+            # access to the "end" of the audio
+            right_pad = 0
+        else:
+            right_pad = int((mult_of - (num_samples % mult_of)) % mult_of)
+
+            _extra_right_pad_tokens = self.audio_config.n_right_pad_tokens
+            _extra_right_pad_samples = int(mult_of * _extra_right_pad_tokens)
+            _check_mult_of(_extra_right_pad_samples, mult_of)
+            right_pad += _extra_right_pad_samples
 
         # We also pad on the left as this has shown to improve performance
         # simply by giving the model "more compute", we also add
@@ -313,8 +334,8 @@ class AudioEncoder:
             assert audio.audio_array.shape[-1] % mult_of == 0, (
                 f"{audio.audio_array.shape[-1]=} must be a multiple of {mult_of=}"
             )
-        else:
-            audio.audio_array = self.pad(audio.audio_array, self.audio_config.sampling_rate)
+
+        audio.audio_array = self.pad(audio.audio_array, self.audio_config.sampling_rate, is_online_streaming)
 
         if self.audio_config.transcription_format == TranscriptionFormat.STREAMING:
             tokens = self._encode_streaming_tokens()
