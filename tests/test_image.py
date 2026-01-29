@@ -1,6 +1,7 @@
 import base64
 from io import BytesIO
 from typing import Any
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
@@ -41,7 +42,7 @@ def test_image_to_num_tokens(spatial_merge_size: int, special_token_ids: Special
 
 
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
-def test_download_image(spatial_merge_size: int, special_token_ids: SpecialImageIDs, mocker: Any) -> None:
+def test_download_image(spatial_merge_size: int, special_token_ids: SpecialImageIDs) -> None:
     image_config = ImageConfig(
         image_patch_size=16 // spatial_merge_size, max_image_size=128, spatial_merge_size=spatial_merge_size
     )
@@ -51,7 +52,7 @@ def test_download_image(spatial_merge_size: int, special_token_ids: SpecialImage
     test_image2 = _create_test_image((400, 600), color=(100, 150, 200))
 
     def mock_get(url: str, headers: Any = None) -> Any:
-        mock_response = mocker.Mock()
+        mock_response = Mock()
 
         if url == url1:
             img_byte_arr = BytesIO()
@@ -64,19 +65,18 @@ def test_download_image(spatial_merge_size: int, special_token_ids: SpecialImage
         else:
             raise requests.exceptions.RequestException("Download failed")
 
-        mock_response.raise_for_status = mocker.Mock()
+        mock_response.raise_for_status = Mock()
         return mock_response
 
     url1 = "https://upload.wikimedia.org/wikipedia/commons/d/da/2015_Kaczka_krzy%C5%BCowka_w_wodzie_%28samiec%29.jpg"
     url2 = "https://upload.wikimedia.org/wikipedia/commons/7/77/002_The_lion_king_Snyggve_in_the_Serengeti_National_Park_Photo_by_Giles_Laurent.jpg"
 
-    mocker.patch("mistral_common.image.requests.get", side_effect=mock_get)
+    with patch("mistral_common.image.requests.get", side_effect=mock_get):
+        for url, expected_image in [(url1, test_image1), (url2, test_image2)]:
+            content = ImageURLChunk(image_url=url)
+            result = image_encoder(content)
 
-    for url, expected_image in [(url1, test_image1), (url2, test_image2)]:
-        content = ImageURLChunk(image_url=url)
-        result = image_encoder(content)
-
-        assert result.image is not None, "Image should be processed successfully"
+            assert result.image is not None, "Image should be processed successfully"
 
     # Test request error.
     invalid_url = "https://invalid.url/image.jpg"
@@ -84,11 +84,10 @@ def test_download_image(spatial_merge_size: int, special_token_ids: SpecialImage
     response.status_code = 404
     response._content = b"Not found"
 
-    mocker.patch("mistral_common.image.requests.get", return_value=response)
-
-    with pytest.raises(RuntimeError, match="Error downloading the image"):
-        content = ImageURLChunk(image_url=invalid_url)
-        image_encoder(content)
+    with patch("mistral_common.image.requests.get", return_value=response):
+        with pytest.raises(RuntimeError, match="Error downloading the image"):
+            content = ImageURLChunk(image_url=invalid_url)
+            image_encoder(content)
 
 
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
@@ -201,21 +200,33 @@ def test_image_encoder_formats(spatial_merge_size: int, special_token_ids: Speci
     )
     image_encoder = ImageEncoder(image_config, special_token_ids)
 
-    url = "https://picsum.photos/id/237/200/300"
-    img_data = requests.get(url).content
-
-    pil = Image.open(BytesIO(img_data))
+    pil = _create_test_image((200, 300))
+    buffer = BytesIO()
+    pil.save(buffer, "PNG")
+    img_data = buffer.getvalue()
     data_url = f"data:image/jpeg;base64,{base64.b64encode(img_data).decode('utf-8')}"
 
     img_pil = ImageChunk(image=pil)
-    img_url = ImageURLChunk(image_url=url)
+    img_url = ImageURLChunk(image_url="https://url.com")
     img_data_url = ImageURLChunk(image_url=data_url)
 
     outputs = []
-    for content in [img_pil, img_url, img_data_url]:
+    for content in [img_pil, img_data_url]:
         assert isinstance(content, (ImageChunk, ImageURLChunk))
-
         outputs.append(image_encoder(content))
+
+    def mock_get(url: str, headers: Any = None) -> Any:
+        mock_response = Mock()
+
+        if url == "https://url.com":
+            mock_response.content = img_data
+        else:
+            raise requests.exceptions.RequestException("Download failed")
+        mock_response.raise_fort_status = Mock()
+        return mock_response
+
+    with patch("mistral_common.image.requests.get", side_effect=mock_get):
+        outputs.append(image_encoder(img_url))
 
     for output in outputs[1:]:
         assert (output.image == outputs[0].image).all()
