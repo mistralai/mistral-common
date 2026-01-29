@@ -34,7 +34,7 @@ from mistral_common.protocol.instruct.tool_calls import (
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 
 
-class ValidationMode(Enum):
+class ValidationMode(str, Enum):
     r"""Enum for the validation mode.
 
     Attributes:
@@ -72,6 +72,10 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
             mode: The validation mode. Defaults to ValidationMode.test.
         """
         self._mode = mode
+
+    @property
+    def mode(self) -> ValidationMode:
+        return self._mode
 
     def validate_messages(self, messages: list[UATS], continue_final_message: bool) -> None:
         r"""Validates the list of messages.

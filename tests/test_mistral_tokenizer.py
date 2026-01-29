@@ -5,7 +5,7 @@ import pytest
 
 from mistral_common.exceptions import TokenizerException
 from mistral_common.protocol.instruct.validator import ValidationMode
-from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV1,
     InstructTokenizerV2,
@@ -142,3 +142,29 @@ def test_tokenizer_is_pickleable_with_multiprocessing(
 
     assert len(results) == 1
     assert results[0] == expected
+
+
+def test_mistral_tokenizer_version_property() -> None:
+    tokenizer_v1 = MistralTokenizer.from_model("open-mistral-7B")
+    assert (
+        tokenizer_v1.version
+        == tokenizer_v1.instruct_tokenizer.version
+        == tokenizer_v1.instruct_tokenizer.tokenizer.version
+        == TokenizerVersion.v1
+    )
+
+    tokenizer_v3 = MistralTokenizer.from_model("open-mixtral-8x22B")
+    assert (
+        tokenizer_v3.version
+        == tokenizer_v3.instruct_tokenizer.version
+        == tokenizer_v3.instruct_tokenizer.tokenizer.version
+        == TokenizerVersion.v3
+    )
+
+
+def test_mistral_tokenizer_mode_property() -> None:
+    tokenizer_path = str(MistralTokenizer._data_path() / "tokenizer.model.v1")
+
+    for mode in [ValidationMode.serving, ValidationMode.finetuning, ValidationMode.test]:
+        tokenizer = MistralTokenizer.from_file(tokenizer_path, mode)
+        assert tokenizer.mode == tokenizer._chat_completion_request_validator.mode == mode

@@ -1,8 +1,7 @@
-import re
 from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 import numpy as np
 from pydantic import ConfigDict, Field
@@ -96,7 +95,7 @@ class SpecialTokens(str, Enum):
     streaming_word = "[STREAMING_WORD]"
 
 
-class SpecialTokenPolicy(int, Enum):
+class SpecialTokenPolicy(str, Enum):
     r"""What to do with special tokens when encoding/decoding.
 
     Attributes:
@@ -105,9 +104,21 @@ class SpecialTokenPolicy(int, Enum):
         RAISE: Raise an error if special tokens are found.
     """
 
-    IGNORE = 0
-    KEEP = 1
-    RAISE = 2
+    IGNORE = "ignore"
+    KEEP = "keep"
+    RAISE = "raise"
+
+    @classmethod
+    def _missing_(cls, value: Any) -> Any:
+        # Backward compatibility of int values.
+        match value:
+            case 0:
+                return SpecialTokenPolicy.IGNORE
+            case 1:
+                return SpecialTokenPolicy.KEEP
+            case 2:
+                return SpecialTokenPolicy.RAISE
+        return super()._missing_(value)
 
 
 class TokenizerVersion(str, Enum):
@@ -126,13 +137,6 @@ class TokenizerVersion(str, Enum):
     Examples:
         >>> version = TokenizerVersion.v1
     """
-
-    def __new__(cls, value: str) -> "TokenizerVersion":
-        if not re.match(r"^v\d+$", value):
-            raise ValueError(f"Invalid version format: {value}. Must be 'v' followed by a number.")
-        obj = str.__new__(cls, value)
-        obj._value_ = value
-        return obj
 
     @property
     def _version_num(self) -> int:
@@ -192,6 +196,16 @@ class Tokenizer(ABC):
     @abstractmethod
     def n_words(self) -> int:
         r"""Vocabulary size of the tokenizer."""
+
+    @property
+    @abstractmethod
+    def special_ids(self) -> set[int]:
+        r"""Ids of the special tokens."""
+
+    @property
+    @abstractmethod
+    def num_special_tokens(self) -> int:
+        r"""The number of special tokens of the tokenizer."""
 
     @abstractmethod
     def vocab(self) -> list[str]:
@@ -286,11 +300,17 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
     Attributes:
         tokenizer: The tokenizer to use.
         image_encoder: The image encoder to use if any.
+        audio_encoder: The audio encoder to use if any.
     """
 
     tokenizer: Tokenizer
     image_encoder: ImageEncoder | None
     audio_encoder: AudioEncoder | None
+
+    @property
+    def version(self) -> TokenizerVersion:
+        r"""The version of the tokenizer."""
+        return self.tokenizer.version
 
     def __init__(
         self, tokenizer: Tokenizer, image_encoder: ImageEncoder | None, audio_encoder: AudioEncoder | None
