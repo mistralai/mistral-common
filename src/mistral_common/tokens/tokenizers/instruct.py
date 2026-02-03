@@ -144,7 +144,7 @@ class InstructTokenizerBase(
     @classmethod
     def validate_messages(cls, messages: list[UATS]) -> None:
         # for v7 we start validates messages
-        ...
+        pass
 
     def encode_instruct(
         self,
@@ -1208,3 +1208,8 @@ class InstructTokenizerV13(InstructTokenizerV11):
         if chunk.closed:
             think_tokens.append(self.END_THINK)
         return think_tokens
+
+    @classmethod
+    def validate_messages(cls, messages: list[UATS]) -> None:
+        # for v13 no need to check audio to remove system message as done in v7
+        pass
