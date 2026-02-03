@@ -3,23 +3,6 @@ from pydantic import Field
 from mistral_common.base import MistralBase
 
 
-class UsageInfo(MistralBase):
-    r"""Usage statistics for a completion request.
-
-    Attributes:
-        prompt_tokens: Number of tokens in the prompt.
-        completion_tokens: Number of tokens in the generated completion.
-        total_tokens: Total number of tokens used in the request (prompt + completion).
-
-    Examples:
-        >>> info = UsageInfo(prompt_tokens=10, completion_tokens=20, total_tokens=30)
-    """
-
-    prompt_tokens: int = 0
-    completion_tokens: int | None = 0
-    total_tokens: int = 0
-
-
 class BaseCompletionRequest(MistralBase):
     """Base class for completion requests.
 

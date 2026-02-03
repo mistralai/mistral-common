@@ -70,7 +70,7 @@ lint.ignore = ["E203"]
 lint.fixable = ["ALL"]
 lint.unfixable = []
 line-length = 120
-exclude = ["docs", "build"]
+exclude = ["*.md", "docs", "build"]
 
 [tool.mypy]
 disallow_untyped_defs = true
