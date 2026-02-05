@@ -2,7 +2,7 @@
 {%- set default_system_message = '' %}
 
 {#- Begin of sequence token. #}
-{{- bos_token }}
+{{- '<s>' }}
 
 {#- Handle system prompt if it exists. #}
 {#- System prompt supports text content or text chunks. #}
@@ -94,7 +94,7 @@
                 {%- set ns.add_space=false %}
             {%- endif %}
             {{- message['content'] }}
-            {{- eos_token }}
+            {{- '</s>' }}
         {%- elif message['content'] | length > 0 %}
             {%- if ns.add_space %}
                 {{- ' ' }}
@@ -107,7 +107,7 @@
                     {{- raise_exception('Only text chunks are supported in assistant message contents.') }}
                 {%- endif %}
             {%- endfor %}
-            {{- eos_token }}
+            {{- '</s>' }}
         {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 and ns.index > ns.max_idx_user %}
             {%- if ns.add_space %}
                 {%- set ns.add_space=false %}
@@ -127,7 +127,7 @@
                 {%- endif %}
             {%- endfor %}
             {{- ']' }}
-            {{- eos_token }}
+            {{- '</s>' }}
         {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 and ns.index <= ns.max_idx_user %}
         {%- else %}
             {{- raise_exception('Assistant message must have a string or a list of chunks in content or a list of tool calls.') }}
