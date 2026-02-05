@@ -144,7 +144,7 @@ class InstructTokenizerBase(
 
     @classmethod
     def validate_messages(cls, messages: list[UATS]) -> None:
-        # We start validates messages for v7
+        # We start validating messages for v7
         return
 
     def encode_instruct(
