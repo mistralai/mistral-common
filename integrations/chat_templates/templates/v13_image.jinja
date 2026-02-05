@@ -2,7 +2,7 @@
 {%- set default_system_message = '' %}
 
 {#- Begin of sequence token. #}
-{{- bos_token }}
+{{- '<s>' }}
 
 {#- Handle system prompt if it exists. #}
 {#- System prompt supports text content or text chunks. #}
@@ -108,7 +108,7 @@
         {%- endif %}
 
         {#- End of sequence token for each assistant messages. #}
-        {{- eos_token }}
+        {{- '</s>' }}
 
     {#- Tool messages only supports text content. #}
     {%- elif message['role'] == 'tool' %}

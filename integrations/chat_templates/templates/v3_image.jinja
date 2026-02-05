@@ -2,7 +2,7 @@
 {%- set default_system_message = '' %}
 
 {#- Begin of sequence token. #}
-{{- bos_token }}
+{{- '<s>' }}
 
 {#- Handle system prompt if it exists. #}
 {#- System prompt supports text content or text chunks. #}
@@ -124,7 +124,7 @@
         {%- else %}
             {{- raise_exception('Assistant message must have a string or a list of chunks in content or a list of tool calls.') }}
         {%- endif %}
-        {{- eos_token }}
+        {{- '</s>' }}
 
     
     {#- Tool messages supports int, float or text content. #}
