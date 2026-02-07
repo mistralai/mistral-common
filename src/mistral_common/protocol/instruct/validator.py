@@ -434,7 +434,7 @@ class MistralRequestValidatorV13(MistralRequestValidatorV5):
                 observed_tool_ids.add(tool_call_id)
 
             elif message.role == Roles.assistant:
-                # if we have an assistant message and we have not recieved all the function calls
+                # if we have an assistant message and we have not received all the function calls
                 # we need to raise an exception
                 if len(expected_tool_ids) != len(observed_tool_ids):
                     raise InvalidMessageStructureException("Not the same number of function calls and responses")

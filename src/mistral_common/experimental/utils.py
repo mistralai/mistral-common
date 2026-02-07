@@ -29,7 +29,7 @@ def _split_integer_list_by_value(list_: list[int], value: int) -> tuple[list[int
     return (result,)
 
 
-def _split_tokens_by_one_occurence_control_token(
+def _split_tokens_by_one_occurrence_control_token(
     list_: list[int], tokenizer: Tokenizer, control_token: str
 ) -> tuple[list[int], list[int]]:
     r"""Split a list of integers by a given control token.
