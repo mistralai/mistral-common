@@ -5,6 +5,11 @@ import regex as re  # type: ignore[import-untyped]
 
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 
+from integrations.chat_templates.template_generator import (
+    TemplateConfig,
+    generate_chat_template as _generate_dynamic_template,
+)
+
 _TEMPLATE_PATH = Path(__file__).parent / "templates"
 
 V1 = _TEMPLATE_PATH / "v1.jinja"
@@ -28,6 +33,50 @@ V13_IMAGE = _TEMPLATE_PATH / "v13_image.jinja"
 V13_IMAGE_THINK = _TEMPLATE_PATH / "v13_image_think.jinja"
 V13_AUDIO = _TEMPLATE_PATH / "v13_audio.jinja"
 V13_THINK = _TEMPLATE_PATH / "v13_think.jinja"
+
+
+def generate_chat_template_dynamic(
+    spm: bool,
+    tokenizer_version: TokenizerVersion,
+    image_support: bool,
+    audio_support: bool,
+    thinking_support: bool,
+    default_system_prompt: str | None = None,
+) -> str:
+    """Dynamically generate a chat template based on configuration.
+
+    This is an alternative to get_chat_template() that generates templates
+    programmatically instead of loading from static files. The generated
+    templates are functionally equivalent to the static ones.
+
+    Args:
+        spm: Whether to use SentencePiece tokenizer.
+        tokenizer_version: The tokenizer version.
+        image_support: Whether to support image chunks.
+        audio_support: Whether to support audio chunks.
+        thinking_support: Whether to support thinking chunks.
+        default_system_prompt: Optional default system prompt to embed.
+
+    Returns:
+        The generated Jinja2 template as a string.
+    """
+    config = TemplateConfig(
+        version=tokenizer_version,
+        spm=spm,
+        image_support=image_support,
+        audio_support=audio_support,
+        thinking_support=thinking_support,
+    )
+    template = _generate_dynamic_template(config)
+
+    if default_system_prompt is not None:
+        template = re.sub(
+            r"{%- set default_system_message = '' %}",
+            r"{%- set default_system_message = '" + default_system_prompt + r"' %}",
+            template,
+        )
+
+    return template
 
 
 def _load_chat_template(path: Path, default_system_prompt: str | None) -> str:

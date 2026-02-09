@@ -7,7 +7,7 @@ import pytest
 from jinja2.exceptions import TemplateError
 from transformers.utils.chat_template_utils import render_jinja_template  # type: ignore[import-not-found]
 
-from integrations.chat_templates.chat_templates import get_chat_template
+from integrations.chat_templates.chat_templates import generate_chat_template_dynamic
 from mistral_common.audio import Audio
 from mistral_common.image import download_image
 from mistral_common.protocol.instruct.chunk import (
@@ -140,7 +140,7 @@ def _get_audio_encoder() -> AudioEncoder:
             hop_length=160,
         ),
     )
-    audio_encoder = AudioEncoder(audio_config=audio_config, special_ids=SpecialAudioIDs(audio=24, begin_audio=25))
+    audio_encoder = AudioEncoder(audio_config=audio_config, special_ids=SpecialAudioIDs(audio=24, begin_audio=25, streaming_pad=26))
     return audio_encoder
 
 
@@ -1030,7 +1030,7 @@ def test_chat_template(
     mistral_tokenizer = _get_mistral_tokenizer(
         spm=spm, tokenizer_version=version, validation_mode=mode, image=image, audio=audio, think=think
     )
-    chat_template = get_chat_template(spm, version, image, audio, think)
+    chat_template = generate_chat_template_dynamic(spm, version, image, audio, think)
     if version <= TokenizerVersion.v2:
         for conv in conversations:
             for message in conv.messages:
@@ -1097,7 +1097,7 @@ def test_role_error(
     audio: bool,
     think: bool,
 ) -> None:
-    chat_template = get_chat_template(spm, version, image, audio, think)
+    chat_template = generate_chat_template_dynamic(spm, version, image, audio, think)
 
     INVALID_ALTERNATE_CONVERSATION = {
         "messages": [
@@ -1275,7 +1275,7 @@ def test_invalid_chunks(
     if not audio:
         invalid_convs += [INVALID_USER_AUDIO]
 
-    chat_template = get_chat_template(spm, version, image, audio, think)
+    chat_template = generate_chat_template_dynamic(spm, version, image, audio, think)
     for conv in invalid_convs:
         msg_template = "Only {chunks} chunks are supported in {role} message content."
         if conv in SP_INVALIDS:
@@ -1332,7 +1332,7 @@ def test_tool_call_errors(
         ]
     }
 
-    chat_template = get_chat_template(spm, version, image, audio, think)
+    chat_template = generate_chat_template_dynamic(spm, version, image, audio, think)
     with pytest.raises(TemplateError, match="Tool call must have an id of 9 characters or numbers."):
         encode_transformers(chat_template, invalid_id_conv)
 
@@ -1365,6 +1365,6 @@ def test_invalid_assistant(
         ]
     }
 
-    chat_template = get_chat_template(spm, version, image, audio, think)
+    chat_template = generate_chat_template_dynamic(spm, version, image, audio, think)
     with pytest.raises(TemplateError, match="Assistant message cannot have both content and tool calls."):
         encode_transformers(chat_template, invalid_message_conv)
