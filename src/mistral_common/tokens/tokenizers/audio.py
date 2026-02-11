@@ -146,8 +146,8 @@ class AudioConfig:
         if transcription_delay_ms is None:
             transcription_delay_ms = self.transcription_delay_ms
         # streaming pad tokens
-        assert self.transcription_delay_ms is not None, (
-            f"Can't call get_num_delay_tokens if {self.transcription_delay_ms=}."
+        assert transcription_delay_ms is not None, (
+            f"Can't call get_num_delay_tokens if {transcription_delay_ms=}."
         )
         return self.num_audio_tokens(self.delay_len(transcription_delay_ms))
 

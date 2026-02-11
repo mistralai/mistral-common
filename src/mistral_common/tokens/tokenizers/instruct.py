@@ -1022,7 +1022,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
                     )
                 ]
             else:
-                assert not request.audio, (
+                assert not request.audio.data, (
                     "For online streaming, no audio bytes should be passed in the first request. "
                     "Audio buffering is taken care of directly by vLLM."
                 )

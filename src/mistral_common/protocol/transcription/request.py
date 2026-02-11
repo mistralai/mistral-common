@@ -36,7 +36,7 @@ class TranscriptionRequest(BaseCompletionRequest):
 
     id: str | None = None
     model: str | None = None
-    audio: RawAudio | None
+    audio: RawAudio
     language: LanguageAlpha2 | None = Field(
         None,
         description=(
@@ -54,7 +54,7 @@ class TranscriptionRequest(BaseCompletionRequest):
         ),
     )
     target_streaming_delay_ms: int | None = Field(
-        default=None,
+        None,
         description=(
             "When streaming is enabled, the target streaming delay (in milli-seconds). "
             "This controls how much latency will the model be requested to target after "
