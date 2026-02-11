@@ -230,7 +230,7 @@ class AudioEncoder:
         self.special_ids = special_ids
 
     def pad(
-        self, audio_array: np.ndarray, sampling_rate: int, transcription_delay_ms: float | None = None
+        self, audio_array: np.ndarray, sampling_rate: int, transcription_delay_ms: float | None = None, is_online_streaming: bool = False
     ) -> np.ndarray:
         r"""Pad the audio array to the desired length.
 
@@ -242,6 +242,8 @@ class AudioEncoder:
         Returns:
             Padded audio array.
         """
+        # TODO(Patrick) - remove `is_online_streaming` as it has been removed from vLLM and was only
+        # relevant for the release. Remove in mistral_common version 1.11
         if self.audio_config.chunk_length_s:
             next_multiple_of_chunk_frames = self.next_multiple_of_chunk_frames(audio_array.shape[-1], sampling_rate)
             audio_array = np.pad(audio_array, (0, next_multiple_of_chunk_frames - audio_array.shape[-1]))

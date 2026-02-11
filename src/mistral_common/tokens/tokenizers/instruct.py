@@ -1,6 +1,7 @@
 import json
 from abc import abstractmethod
 from typing import Any, Generic, Sequence, overload
+import warnings
 
 import numpy as np
 
@@ -999,17 +1000,31 @@ class InstructTokenizerV7(InstructTokenizerV3):
             tokens = tokenized.tokens
             audios = tokenized.audios
         elif request.streaming == StreamingMode.ONLINE:
-            assert not request.audio, (
-                "For online streaming, no audio bytes should be passed in the first request. "
-                "Audio buffering is taken care of directly by vLLM."
-            )
-            assert self.audio_encoder is not None, (
-                f"Audio encoder must be defined to encode audio, got {self.audio_encoder=}"
-            )
-            tokens = self.audio_encoder.encode_streaming_tokens(request.target_streaming_delay_ms)
-
             left_pad, right_pad = self.audio_encoder.get_padding_audio(request.target_streaming_delay_ms)
             audios = [left_pad, right_pad]
+
+            if request.audio is not None:
+                # TODO(Patrick) - remove this if statement in 1.11.0
+                # only left to keep vLLM backwards compability in 
+                # voxtral_realtime.py
+                warnings.warn(
+                    f"Passing audio with {request.transcription_format=} and {request.streaming=} is "
+                    "deprecated. Make sure to not pass any audio to `TranscriptionRequest` when doing"
+                    " online streaming.",
+                    FutureWarning,
+                )
+                request_audio = Audio.from_bytes(request.audio.data)
+                audios = [Audio(np.concatenate(left_pad.data, request_audio.data), request_audio.sample_rate, request_audio.format)]
+            else:
+                assert not request.audio, (
+                    "For online streaming, no audio bytes should be passed in the first request. "
+                    "Audio buffering is taken care of directly by vLLM."
+                )
+                assert self.audio_encoder is not None, (
+                    f"Audio encoder must be defined to encode audio, got {self.audio_encoder=}"
+                )
+
+            tokens = self.audio_encoder.encode_streaming_tokens(request.target_streaming_delay_ms)
         else:
             raise ValueError(f"Request must be in streaming mode, got {request.streaming=}")
 
