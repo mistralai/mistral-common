@@ -60,7 +60,7 @@ class TranscriptionRequest(BaseCompletionRequest):
             "This controls how much latency will the model be requested to target after "
             "it hears a word. Note: this is not supported by all models and model targets "
             "the target but may not strictly meet it. It is also only supported in the "
-            "local-model implementation for inference.",
+            "local-model implementation for inference."
         ),
     )
 
