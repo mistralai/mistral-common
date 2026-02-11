@@ -24,7 +24,9 @@ def tekkenizer() -> InstructTokenizerV7:
 def get_transcription_request(duration: float, language: LanguageAlpha2 | None = None) -> TranscriptionRequest:
     audio_chunk = _get_audio_chunk(duration)
 
-    return TranscriptionRequest(model="dummy", audio=audio_chunk.input_audio, language=language, target_streaming_delay_ms=None)
+    return TranscriptionRequest(
+        model="dummy", audio=audio_chunk.input_audio, language=language, target_streaming_delay_ms=None
+    )
 
 
 def test_tokenize_transcribe(tekkenizer: InstructTokenizerV7) -> None:
