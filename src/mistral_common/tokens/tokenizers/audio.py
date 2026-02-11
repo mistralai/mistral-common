@@ -273,6 +273,13 @@ class AudioEncoder:
         return audio_array
 
     def get_padding_audio(self, transcription_delay_ms: float | None = None) -> tuple[Audio, Audio]:
+        r"""Gets left and right padding for realtime audio models
+        Args:
+            transcription_delay_ms (optional): Delay in milliseconds for transcription.
+        Returns:
+            Tuple of left and right padding for realtime audio models
+        """
+
         left_pad, right_pad = self._get_streaming_pad(0, transcription_delay_ms)
         left_pad_audio = Audio(
             audio_array=np.zeros(left_pad, dtype=np.float32),
