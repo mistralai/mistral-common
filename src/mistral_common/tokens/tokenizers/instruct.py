@@ -978,12 +978,12 @@ class InstructTokenizerV7(InstructTokenizerV3):
         tokens.append(self.TRANSCRIBE)
         return Tokenized(tokens=tokens, text=self.tokenizer._to_string(tokens), audios=audio)
 
-    def _encode_audio(self, audio: str | bytes, is_online_streaming: bool) -> Tokenized:
+    def _encode_audio(self, audio: str | bytes, transcription_delay_ms: float | None = None) -> Tokenized:
         assert self.audio_encoder is not None, (
             f"Audio encoder must be defined to encode audio, got {self.audio_encoder=}"
         )
         _audio = Audio.from_base64(audio) if isinstance(audio, str) else Audio.from_bytes(audio)
-        audio_enc = self.audio_encoder.encode_audio(_audio, is_online_streaming=is_online_streaming)
+        audio_enc = self.audio_encoder.encode_audio(_audio, transcription_delay_ms)
 
         return Tokenized(
             tokens=audio_enc.tokens,
@@ -991,22 +991,34 @@ class InstructTokenizerV7(InstructTokenizerV3):
         )
 
     def _encode_streaming_transcription(self, request: TranscriptionRequest) -> Tokenized:
-        assert request.streaming != StreamingMode.DISABLED, (
-            f"Request must be in streaming mode, got {request.streaming=}"
-        )
+        if request.streaming == StreamingMode.OFFLINE:
+            tokenized = self._encode_audio(
+                request.audio.data, request.target_streaming_delay_ms
+            )
 
-        tokenized = self._encode_audio(
-            request.audio.data, is_online_streaming=request.streaming == StreamingMode.ONLINE
-        )
+            tokens = tokenized.tokens
+            audios = tokenized.audios
+        elif request.streaming == StreamingMode.ONLINE:
+            assert not request.audio, (
+                "For online streaming, no audio bytes should be passed in the first request. "
+                "Audio buffering is taken care of directly by vLLM."
+            )
+            assert self.audio_encoder is not None, (
+                f"Audio encoder must be defined to encode audio, got {self.audio_encoder=}"
+            )
+            tokens = self.audio_encoder.encode_streaming_tokens(request.target_streaming_delay_ms)
+
+            left_pad, right_pad = self.audio_encoder.get_padding_audio(request.target_streaming_delay_ms)
+            audios = [left_pad, right_pad]
+        else:
+            raise ValueError(f"Request must be in streaming mode, got {request.streaming=}")
 
         # we also add a BOS token in the beginning
-        tokens = self.start() + tokenized.tokens
-        tokenized = Tokenized(
-            tokens=tokens,
+        return Tokenized(
+            tokens=self.start() + tokens,
             text=self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP),
-            audios=tokenized.audios,
+            audios=audios,
         )
-        return tokenized
 
     @classmethod
     def validate_messages(cls, messages: list[UATS]) -> None:
