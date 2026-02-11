@@ -143,6 +143,7 @@ def test_tokenize_streaming_request(
         audio=RawAudio.from_audio(audio) if mode == StreamingMode.OFFLINE else RawAudio(data="", format="wav"),
         streaming=mode,
         target_streaming_delay_ms=target_streaming_delay_ms,
+        language=None,
     )
 
     tokenized = tokenizer.encode_transcription(streaming_request)

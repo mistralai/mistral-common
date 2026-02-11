@@ -1000,6 +1000,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
             audios = tokenized.audios
         elif request.streaming == StreamingMode.ONLINE:
+            assert self.audio_encoder is not None
             left_pad, right_pad = self.audio_encoder.get_padding_audio(request.target_streaming_delay_ms)
             audios = [left_pad, right_pad]
 
@@ -1013,6 +1014,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
                     " online streaming.",
                     FutureWarning,
                 )
+                assert isinstance(request.audio.data, str)
                 request_audio = Audio.from_base64(request.audio.data)
                 audios = [
                     Audio(

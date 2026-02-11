@@ -821,7 +821,7 @@ def test_convert_transcription(audio: AudioChunk, language: LanguageAlpha2 | Non
         return True
 
     seed: int = 43
-    request = TranscriptionRequest(audio=audio.input_audio, language=language, model="model", random_seed=seed)
+    request = TranscriptionRequest(audio=audio.input_audio, language=language, model="model", random_seed=seed, target_streaming_delay_ms=None)
     openai_request = request.to_openai(stream=stream)
 
     assert check_equality(request, TranscriptionRequest.from_openai(openai_request))
