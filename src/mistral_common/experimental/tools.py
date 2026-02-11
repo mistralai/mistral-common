@@ -3,7 +3,7 @@ from typing import Sequence
 
 from mistral_common.experimental.utils import (
     _split_integer_list_by_value,
-    _split_tokens_by_one_occurence_control_token,
+    _split_tokens_by_one_occurrence_control_token,
 )
 from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenizer, TokenizerVersion
@@ -92,9 +92,9 @@ def _decode_tool_call_v11_with_call_id(tool_call_tokens: list[int], tokenizer: T
         `[TOOL_CALLS]name[CALL_ID]call_id[ARGS]{"arg1": "value1", "arg2": "value2"}`
 
     """
-    name, call_id_and_args = _split_tokens_by_one_occurence_control_token(tool_call_tokens, tokenizer, "[CALL_ID]")
+    name, call_id_and_args = _split_tokens_by_one_occurrence_control_token(tool_call_tokens, tokenizer, "[CALL_ID]")
 
-    call_id, args = _split_tokens_by_one_occurence_control_token(call_id_and_args, tokenizer, "[ARGS]")
+    call_id, args = _split_tokens_by_one_occurrence_control_token(call_id_and_args, tokenizer, "[ARGS]")
 
     try:
         tool_call = ToolCall(
@@ -117,7 +117,7 @@ def _decode_tool_call_v11(tool_call_tokens: list[int], tokenizer: Tokenizer) -> 
 
         `[TOOL_CALLS]name[ARGS]{"arg1": "value1", "arg2": "value2"}`
     """
-    name, args = _split_tokens_by_one_occurence_control_token(tool_call_tokens, tokenizer, "[ARGS]")
+    name, args = _split_tokens_by_one_occurrence_control_token(tool_call_tokens, tokenizer, "[ARGS]")
     try:
         tool_call = ToolCall(
             function=FunctionCall(
