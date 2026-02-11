@@ -133,7 +133,6 @@ class AudioConfig:
 
         return math.ceil(audio_len / self.audio_length_per_tok)
 
-    @property
     def num_delay_tokens(self, transcription_delay_ms: float | None = None) -> int:
         assert self.is_streaming, f"Can't call num_delay_tokens if {self.is_streaming=}."
         if transcription_delay_ms is None:
@@ -146,6 +145,10 @@ class AudioConfig:
 
     def delay_len(self, transcription_delay_ms: float) -> int:
         return int(transcription_delay_ms / 1000.0 * self.sampling_rate)
+
+    @property
+    def frame_duration_ms(self) -> float:
+        return 1000.0 / self.frame_rate
 
     @property
     def chunk_frames(self) -> int:
@@ -164,7 +167,6 @@ class AudioConfig:
         downsample_factor /= self.encoding_config.hop_length
         return int(downsample_factor)
 
-    @property
     def n_right_pad_tokens(self, transcription_delay_ms: float | None = None) -> int:
         assert self.is_streaming, f"Can't call n_right_pad_tokens if {self.is_streaming=}."
         # we need to pad on the right to ensure the models transcribes
@@ -267,10 +269,10 @@ class AudioEncoder:
     def get_padding_audio(self, transcription_delay_ms: float | None = None) -> tuple[Audio, Audio]:
         left_pad, right_pad = self._get_streaming_pad(0, transcription_delay_ms)
         left_pad_audio = Audio(
-            audio_array=np.zeros(left_pad, dtype=np.float32), sampling_rate=self.audio_config.sampling_rate
+            audio_array=np.zeros(left_pad, dtype=np.float32), sampling_rate=self.audio_config.sampling_rate, format="wav"
         )
         right_pad_audio = Audio(
-            audio_array=np.zeros(right_pad, dtype=np.float32), sampling_rate=self.audio_config.sampling_rate
+            audio_array=np.zeros(right_pad, dtype=np.float32), sampling_rate=self.audio_config.sampling_rate, format="wav"
         )
         return left_pad_audio, right_pad_audio
 
@@ -345,7 +347,7 @@ class AudioEncoder:
         audio.audio_array = self.pad(audio.audio_array, self.audio_config.sampling_rate, transcription_delay_ms)
 
         if self.audio_config.transcription_format == TranscriptionFormat.STREAMING:
-            tokens = self._encode_streaming_tokens(transcription_delay_ms)
+            tokens = self.encode_streaming_tokens(transcription_delay_ms)
         else:
             tokens = self._encode_audio_tokens(audio.audio_array.shape[0])
 

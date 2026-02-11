@@ -995,7 +995,9 @@ class InstructTokenizerV7(InstructTokenizerV3):
         if request.streaming == StreamingMode.OFFLINE:
             tokenized = self._encode_audio(request.audio.data, request.target_streaming_delay_ms)
 
-            tokens = tokenized.tokens
+            # we also add a BOS token in the beginning
+            tokens = self.start() + tokenized.tokens
+
             audios = tokenized.audios
         elif request.streaming == StreamingMode.ONLINE:
             left_pad, right_pad = self.audio_encoder.get_padding_audio(request.target_streaming_delay_ms)
@@ -1006,7 +1008,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
                 # only left to keep vLLM backwards compability in
                 # voxtral_realtime.py
                 warnings.warn(
-                    f"Passing audio with {request.transcription_format=} and {request.streaming=} is "
+                    f"Passing audio with {request.streaming=} is "
                     "deprecated. Make sure to not pass any audio to `TranscriptionRequest` when doing"
                     " online streaming.",
                     FutureWarning,
@@ -1028,13 +1030,13 @@ class InstructTokenizerV7(InstructTokenizerV3):
                     f"Audio encoder must be defined to encode audio, got {self.audio_encoder=}"
                 )
 
-            tokens = self.audio_encoder.encode_streaming_tokens(request.target_streaming_delay_ms)
+            # we also add a BOS token in the beginning
+            tokens = self.start() + self.audio_encoder.encode_streaming_tokens(request.target_streaming_delay_ms)
         else:
             raise ValueError(f"Request must be in streaming mode, got {request.streaming=}")
 
-        # we also add a BOS token in the beginning
         return Tokenized(
-            tokens=self.start() + tokens,
+            tokens=tokens,
             text=self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP),
             audios=audios,
         )

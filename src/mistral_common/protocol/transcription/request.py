@@ -36,9 +36,9 @@ class TranscriptionRequest(BaseCompletionRequest):
 
     id: str | None = None
     model: str | None = None
-    audio: RawAudio
+    audio: RawAudio | None
     language: LanguageAlpha2 | None = Field(
-        ...,
+        None,
         description=(
             "The language of the input audio. Supplying the input language "
             "in ISO-639-1 format will improve language adherence."
