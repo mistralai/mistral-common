@@ -2,6 +2,7 @@ import logging
 import math
 from dataclasses import dataclass
 from enum import Enum
+import warnings
 
 import numpy as np
 
@@ -133,13 +134,20 @@ class AudioConfig:
 
         return math.ceil(audio_len / self.audio_length_per_tok)
 
-    def num_delay_tokens(self, transcription_delay_ms: float | None = None) -> int:
-        assert self.is_streaming, f"Can't call num_delay_tokens if {self.is_streaming=}."
+    @property
+    def num_delay_tokens(self) -> int:
+        # TODO(Patrick) - delete in 1.11.0
+        # only used in vLLM in voxtral_realtime.py
+        warnings.warn("Use get_num_delay_tokens instead of num_delay_tokens", DeprecationWarning)
+        return self.get_num_delay_tokens()
+
+    def get_num_delay_tokens(self, transcription_delay_ms: float | None = None) -> int:
+        assert self.is_streaming, f"Can't call get_num_delay_tokens if {self.is_streaming=}."
         if transcription_delay_ms is None:
             transcription_delay_ms = self.transcription_delay_ms
         # streaming pad tokens
         assert self.transcription_delay_ms is not None, (
-            f"Can't call num_delay_tokens if {self.transcription_delay_ms=}."
+            f"Can't call get_num_delay_tokens if {self.transcription_delay_ms=}."
         )
         return self.num_audio_tokens(self.delay_len(transcription_delay_ms))
 
@@ -174,7 +182,7 @@ class AudioConfig:
         # - the BOS token (1)
         # - a heuristic that defines a max token length for a single word
         #   (OFFLINE_STREAMING_BUFFER_TOKENS)
-        return (self.num_delay_tokens(transcription_delay_ms) + 1) + OFFLINE_STREAMING_BUFFER_TOKENS
+        return (self.get_num_delay_tokens(transcription_delay_ms) + 1) + OFFLINE_STREAMING_BUFFER_TOKENS
 
     @property
     def n_left_pad_tokens(self) -> int:
@@ -327,7 +335,7 @@ class AudioEncoder:
         assert self.audio_config.transcription_delay_ms is not None
 
         # streaming pad tokens consist of silence we pad on left + delay tokens
-        stream_pad_prefix_len = self.audio_config.n_left_pad_tokens + self.audio_config.num_delay_tokens(
+        stream_pad_prefix_len = self.audio_config.n_left_pad_tokens + self.audio_config.get_num_delay_tokens(
             transcription_delay_ms
         )
         tokens = [self.streaming_pad] * stream_pad_prefix_len

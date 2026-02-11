@@ -1013,11 +1013,11 @@ class InstructTokenizerV7(InstructTokenizerV3):
                     " online streaming.",
                     FutureWarning,
                 )
-                request_audio = Audio.from_bytes(request.audio.data)
+                request_audio = Audio.from_base64(request.audio.data)
                 audios = [
                     Audio(
-                        np.concatenate(left_pad.data, request_audio.data),
-                        request_audio.sample_rate,
+                        np.concatenate((left_pad.audio_array, request_audio.audio_array)),
+                        request_audio.sampling_rate,
                         request_audio.format,
                     )
                 ]
