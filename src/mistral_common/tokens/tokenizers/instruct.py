@@ -1003,7 +1003,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
             left_pad, right_pad = self.audio_encoder.get_padding_audio(request.target_streaming_delay_ms)
             audios = [left_pad, right_pad]
 
-            if request.audio is not None:
+            if len(request.audio.data) > 0:
                 # TODO(Patrick) - remove this if statement in 1.11.0
                 # only left to keep vLLM backwards compability in
                 # voxtral_realtime.py

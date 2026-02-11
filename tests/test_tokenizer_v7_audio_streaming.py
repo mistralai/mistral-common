@@ -140,7 +140,7 @@ def test_tokenize_streaming_request(
     )
 
     streaming_request = TranscriptionRequest(
-        audio=RawAudio.from_audio(audio) if mode == StreamingMode.OFFLINE else RawAudio(data=b'', format="wav"),
+        audio=RawAudio.from_audio(audio) if mode == StreamingMode.OFFLINE else RawAudio(data='', format="wav"),
         streaming=mode,
         target_streaming_delay_ms=target_streaming_delay_ms,
     )
