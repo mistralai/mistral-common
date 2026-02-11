@@ -1,8 +1,8 @@
 import logging
 import math
+import warnings
 from dataclasses import dataclass
 from enum import Enum
-import warnings
 
 import numpy as np
 
