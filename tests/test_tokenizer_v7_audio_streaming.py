@@ -148,7 +148,7 @@ def test_tokenize_streaming_request(
     tokenized = tokenizer.encode_transcription(streaming_request)
     assert tokenizer.audio_encoder is not None
     config = tokenizer.audio_encoder.audio_config
-    delay_n_tokens = config.num_delay_tokens(target_streaming_delay_ms) + config.n_left_pad_tokens
+    delay_n_tokens = config.get_num_delay_tokens(target_streaming_delay_ms) + config.n_left_pad_tokens
 
     BOS = tokenizer.tokenizer.get_special_token(SpecialTokens.bos.value)
     STREAMING_PAD = tokenizer.tokenizer.get_special_token(SpecialTokens.streaming_pad.value)
