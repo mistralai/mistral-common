@@ -269,10 +269,14 @@ class AudioEncoder:
     def get_padding_audio(self, transcription_delay_ms: float | None = None) -> tuple[Audio, Audio]:
         left_pad, right_pad = self._get_streaming_pad(0, transcription_delay_ms)
         left_pad_audio = Audio(
-            audio_array=np.zeros(left_pad, dtype=np.float32), sampling_rate=self.audio_config.sampling_rate, format="wav"
+            audio_array=np.zeros(left_pad, dtype=np.float32),
+            sampling_rate=self.audio_config.sampling_rate,
+            format="wav",
         )
         right_pad_audio = Audio(
-            audio_array=np.zeros(right_pad, dtype=np.float32), sampling_rate=self.audio_config.sampling_rate, format="wav"
+            audio_array=np.zeros(right_pad, dtype=np.float32),
+            sampling_rate=self.audio_config.sampling_rate,
+            format="wav",
         )
         return left_pad_audio, right_pad_audio
 
