@@ -53,6 +53,10 @@ class TranscriptionRequest(BaseCompletionRequest):
             "streamed back. Offline streaming means the audio is passed in one go to the server."
         ),
     )
+    target_streaming_delay_ms: int | None = Field(
+        default=None,
+        description="When streaming is enabled, the target streaming delay (in milli-seconds). This controls how much latency will the model be requested to target after it hears a word. Note: this is not supported by all models and model targets the target but may not strictly meet it. It is also only supported in the local-model implementation for inference.",
+    )
 
     def to_openai(self, exclude: tuple = (), **kwargs: Any) -> dict[str, list[dict[str, Any]]]:
         r"""Convert the transcription request into the OpenAI format.
