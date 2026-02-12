@@ -254,7 +254,7 @@ class AudioEncoder:
         Returns:
             Padded audio array.
         """
-        # TODO(Patrick) - remove **kwargs as it's just there to swallow deprecated 
+        # TODO(Patrick) - remove **kwargs as it's just there to swallow deprecated
         # keyword args from voxtral_realtime in vLLM. It was
         # relevant for the release. Remove in mistral_common version 1.11
         if self.audio_config.chunk_length_s:
