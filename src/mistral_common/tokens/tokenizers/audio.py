@@ -1,7 +1,9 @@
 import logging
 import math
+import warnings
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 import numpy as np
 
@@ -135,14 +137,25 @@ class AudioConfig:
 
     @property
     def num_delay_tokens(self) -> int:
-        assert self.is_streaming, f"Can't call num_delay_tokens if {self.is_streaming=}."
-        # streaming pad tokens
-        assert self.transcription_delay_ms is not None, (
-            f"Can't call num_delay_tokens if {self.transcription_delay_ms=}."
-        )
-        delay_len = int(self.transcription_delay_ms / 1000.0 * self.sampling_rate)
+        # TODO(Patrick) - delete in 1.11.0
+        # only used in vLLM in voxtral_realtime.py
+        warnings.warn("Use get_num_delay_tokens instead of num_delay_tokens", DeprecationWarning)
+        return self.get_num_delay_tokens()
 
-        return self.num_audio_tokens(delay_len)
+    def get_num_delay_tokens(self, transcription_delay_ms: float | None = None) -> int:
+        assert self.is_streaming, f"Can't call get_num_delay_tokens if {self.is_streaming=}."
+        if transcription_delay_ms is None:
+            transcription_delay_ms = self.transcription_delay_ms
+        # streaming pad tokens
+        assert transcription_delay_ms is not None, f"Can't call get_num_delay_tokens if {transcription_delay_ms=}."
+        return self.num_audio_tokens(self.delay_len(transcription_delay_ms))
+
+    def delay_len(self, transcription_delay_ms: float) -> int:
+        return int(transcription_delay_ms / 1000.0 * self.sampling_rate)
+
+    @property
+    def frame_duration_ms(self) -> float:
+        return 1000.0 / self.frame_rate
 
     @property
     def chunk_frames(self) -> int:
@@ -161,15 +174,14 @@ class AudioConfig:
         downsample_factor /= self.encoding_config.hop_length
         return int(downsample_factor)
 
-    @property
-    def n_right_pad_tokens(self) -> int:
+    def n_right_pad_tokens(self, transcription_delay_ms: float | None = None) -> int:
         assert self.is_streaming, f"Can't call n_right_pad_tokens if {self.is_streaming=}."
         # we need to pad on the right to ensure the models transcribes
         # - the induced delay on the prefill step (num_delay_tokens)
         # - the BOS token (1)
         # - a heuristic that defines a max token length for a single word
         #   (OFFLINE_STREAMING_BUFFER_TOKENS)
-        return (self.num_delay_tokens + 1) + OFFLINE_STREAMING_BUFFER_TOKENS
+        return (self.get_num_delay_tokens(transcription_delay_ms) + 1) + OFFLINE_STREAMING_BUFFER_TOKENS
 
     @property
     def n_left_pad_tokens(self) -> int:
@@ -226,21 +238,31 @@ class AudioEncoder:
         self.encoding_config = audio_config.encoding_config
         self.special_ids = special_ids
 
-    def pad(self, audio_array: np.ndarray, sampling_rate: int, is_online_streaming: bool) -> np.ndarray:
+    def pad(
+        self,
+        audio_array: np.ndarray,
+        sampling_rate: int,
+        transcription_delay_ms: float | None = None,
+        **kwargs: Any,
+    ) -> np.ndarray:
         r"""Pad the audio array to the desired length.
 
         Args:
             audio_array: Audio data as a numpy array.
             sampling_rate: Sampling rate of the audio.
+            transcription_delay_ms (optional): Delay in milliseconds for transcription.
 
         Returns:
             Padded audio array.
         """
+        # TODO(Patrick) - remove **kwargs as it's just there to swallow deprecated
+        # keyword args from voxtral_realtime in vLLM. It was
+        # relevant for the release. Remove in mistral_common version 1.11
         if self.audio_config.chunk_length_s:
             next_multiple_of_chunk_frames = self.next_multiple_of_chunk_frames(audio_array.shape[-1], sampling_rate)
             audio_array = np.pad(audio_array, (0, next_multiple_of_chunk_frames - audio_array.shape[-1]))
         elif self.audio_config.is_streaming:
-            left_pad, right_pad = self._get_streaming_pad(audio_array.shape[-1], is_online_streaming)
+            left_pad, right_pad = self._get_streaming_pad(audio_array.shape[-1], transcription_delay_ms)
             # we pad both left & right as this leads to better performance
             audio_array = np.pad(audio_array, (left_pad, right_pad))
         elif (
@@ -252,21 +274,39 @@ class AudioEncoder:
 
         return audio_array
 
-    def _get_streaming_pad(self, num_samples: int, is_online_streaming: bool) -> tuple[int, int]:
+    def get_padding_audio(self, transcription_delay_ms: float | None = None) -> tuple[Audio, Audio]:
+        r"""Gets left and right padding for realtime audio models.
+
+        Args:
+            transcription_delay_ms (optional): Delay in milliseconds for transcription.
+
+        Returns:
+            Tuple of left and right padding for realtime audio models.
+        """
+
+        left_pad, right_pad = self._get_streaming_pad(0, transcription_delay_ms)
+        left_pad_audio = Audio(
+            audio_array=np.zeros(left_pad, dtype=np.float32),
+            sampling_rate=self.audio_config.sampling_rate,
+            format="wav",
+        )
+        right_pad_audio = Audio(
+            audio_array=np.zeros(right_pad, dtype=np.float32),
+            sampling_rate=self.audio_config.sampling_rate,
+            format="wav",
+        )
+        return left_pad_audio, right_pad_audio
+
+    def _get_streaming_pad(self, num_samples: int, transcription_delay_ms: float | None = None) -> tuple[int, int]:
         # let's make sure the audio is a multiple of one "frame" token
         mult_of = self.audio_config.raw_audio_length_per_tok
 
-        if is_online_streaming:
-            # in online streaming we don't yet have
-            # access to the "end" of the audio
-            right_pad = 0
-        else:
-            right_pad = int((mult_of - (num_samples % mult_of)) % mult_of)
+        right_pad = int((mult_of - (num_samples % mult_of)) % mult_of)
 
-            _extra_right_pad_tokens = self.audio_config.n_right_pad_tokens
-            _extra_right_pad_samples = int(mult_of * _extra_right_pad_tokens)
-            _check_mult_of(_extra_right_pad_samples, mult_of)
-            right_pad += _extra_right_pad_samples
+        _extra_right_pad_tokens = self.audio_config.n_right_pad_tokens(transcription_delay_ms)
+        _extra_right_pad_samples = int(mult_of * _extra_right_pad_tokens)
+        _check_mult_of(_extra_right_pad_samples, mult_of)
+        right_pad += _extra_right_pad_samples
 
         # We also pad on the left as this has shown to improve performance
         # simply by giving the model "more compute", we also add
@@ -297,14 +337,17 @@ class AudioEncoder:
 
         return math.ceil(audio_array_len / self.audio_config.chunk_frames) * self.audio_config.chunk_frames
 
-    def _encode_streaming_tokens(self) -> list[int]:
+    def encode_streaming_tokens(self, transcription_delay_ms: float | None = None) -> list[int]:
+        r"""Encode the streaming tokens given a transcription delay."""
         assert isinstance(self.audio_config.encoding_config, AudioSpectrogramConfig), (
             f"Audio encoder must be spectrogram encoder, got {self.audio_config.encoding_config=}"
         )
         assert self.audio_config.transcription_delay_ms is not None
 
         # streaming pad tokens consist of silence we pad on left + delay tokens
-        stream_pad_prefix_len = self.audio_config.n_left_pad_tokens + self.audio_config.num_delay_tokens
+        stream_pad_prefix_len = self.audio_config.n_left_pad_tokens + self.audio_config.get_num_delay_tokens(
+            transcription_delay_ms
+        )
         tokens = [self.streaming_pad] * stream_pad_prefix_len
 
         return tokens
@@ -321,24 +364,13 @@ class AudioEncoder:
 
         return tokens
 
-    def encode_audio(self, audio: Audio, is_online_streaming: bool) -> AudioEncoding:
+    def encode_audio(self, audio: Audio, transcription_delay_ms: float | None = None) -> AudioEncoding:
+        r"""Encode an audio optionally with transcription delay."""
         audio.resample(self.audio_config.sampling_rate)
-
-        if is_online_streaming:
-            # we don't pad for online streaming, we just make sure that
-            # we're having the correct shape which needs to be a multiple
-            # of the one-sided overlap between hop length and window size
-            mult_of = abs(
-                self.audio_config.encoding_config.window_size / 2 - self.audio_config.encoding_config.hop_length
-            )
-            assert audio.audio_array.shape[-1] % mult_of == 0, (
-                f"{audio.audio_array.shape[-1]=} must be a multiple of {mult_of=}"
-            )
-
-        audio.audio_array = self.pad(audio.audio_array, self.audio_config.sampling_rate, is_online_streaming)
+        audio.audio_array = self.pad(audio.audio_array, self.audio_config.sampling_rate, transcription_delay_ms)
 
         if self.audio_config.transcription_format == TranscriptionFormat.STREAMING:
-            tokens = self._encode_streaming_tokens()
+            tokens = self.encode_streaming_tokens(transcription_delay_ms)
         else:
             tokens = self._encode_audio_tokens(audio.audio_array.shape[0])
 
@@ -349,7 +381,7 @@ class AudioEncoder:
 
     def _encode_audio_chunk(self, content: AudioChunk) -> AudioEncoding:
         audio = Audio.from_raw_audio(content.input_audio)
-        return self.encode_audio(audio, is_online_streaming=False)
+        return self.encode_audio(audio)
 
     def _encode_audio_url_chunk(self, content: AudioURLChunk) -> AudioEncoding:
         url_type = content.get_url_type()
@@ -361,7 +393,7 @@ class AudioEncoder:
         else:
             audio = Audio.from_base64(content.url)
 
-        return self.encode_audio(audio, is_online_streaming=False)
+        return self.encode_audio(audio)
 
     def __call__(self, content: AudioChunk | AudioURLChunk) -> AudioEncoding:
         r"""Call the encoder on an audio chunk or URL chunk.

@@ -38,7 +38,7 @@ class TranscriptionRequest(BaseCompletionRequest):
     model: str | None = None
     audio: RawAudio
     language: LanguageAlpha2 | None = Field(
-        ...,
+        None,
         description=(
             "The language of the input audio. Supplying the input language "
             "in ISO-639-1 format will improve language adherence."
@@ -51,6 +51,15 @@ class TranscriptionRequest(BaseCompletionRequest):
             "Whether to enable streaming for the transcription request. Online "
             "streaming means the audio is streamed to the server and the transcription is "
             "streamed back. Offline streaming means the audio is passed in one go to the server."
+        ),
+    )
+    target_streaming_delay_ms: int | None = Field(
+        None,
+        description=(
+            "When streaming is enabled, the target streaming delay (in milli-seconds). "
+            "This controls how much latency will the model be requested to target after "
+            "it hears a word. Note: this is not supported by all models and model targets "
+            "the target but may not strictly meet it."
         ),
     )
 

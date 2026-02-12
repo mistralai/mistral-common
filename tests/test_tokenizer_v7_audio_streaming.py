@@ -110,20 +110,24 @@ def test_special_audio_streaming_tokens(tokenizer: InstructTokenizerV7) -> None:
     )
 
 
+@pytest.mark.parametrize("target_streaming_delay_ms", [None, 0, 1, 480, 960, 2400])
 @pytest.mark.parametrize(
-    ("mode", "duration", "expected_array_len"),
+    ("mode", "duration"),
     [
-        (StreamingMode.OFFLINE, 1.7, 70400),  # normal
-        (StreamingMode.ONLINE, 1.7, 47680),  # normal (would correspond to long delay)
-        (StreamingMode.OFFLINE, 8.44, 177920),
-        (StreamingMode.OFFLINE, 0.24, 46080),  # very short
-        (StreamingMode.ONLINE, 0.24, 24320),  # very short delay
-        (StreamingMode.OFFLINE, 2.312231, 79360),  # weird length can correcctly be padded
-        (StreamingMode.ONLINE, 2.312231, -1.0),  # should throw error as not correctly buffered
+        (StreamingMode.OFFLINE, 1.7),  # normal
+        (StreamingMode.ONLINE, 1.7),  # normal (would correspond to long delay)
+        (StreamingMode.OFFLINE, 8.44),
+        (StreamingMode.OFFLINE, 0.24),  # very short
+        (StreamingMode.ONLINE, 0.24),  # very short delay
+        (StreamingMode.OFFLINE, 2.312231),  # weird length can correcctly be padded
+        (StreamingMode.ONLINE, 2.312231),  # should throw error as not correctly buffered
     ],
 )
 def test_tokenize_streaming_request(
-    tokenizer: InstructTokenizerV7, mode: StreamingMode, duration: float, expected_array_len: int
+    tokenizer: InstructTokenizerV7,
+    mode: StreamingMode,
+    duration: float,
+    target_streaming_delay_ms: int | None,
 ) -> None:
     sampling_rate = 24_000
     signal_length = int(duration * sampling_rate)
@@ -136,36 +140,43 @@ def test_tokenize_streaming_request(
     )
 
     streaming_request = TranscriptionRequest(
-        audio=RawAudio(data=audio.to_base64("wav"), format="wav"), streaming=mode, language=None
+        audio=RawAudio.from_audio(audio) if mode == StreamingMode.OFFLINE else RawAudio(data="", format="wav"),
+        streaming=mode,
+        target_streaming_delay_ms=target_streaming_delay_ms,
+        language=None,
     )
-
-    if expected_array_len < 0:
-        # expect error
-        with pytest.raises(AssertionError, match="be a multiple of mult_of=40.0"):
-            tokenizer.encode_transcription(streaming_request)
-        return
 
     tokenized = tokenizer.encode_transcription(streaming_request)
     assert tokenizer.audio_encoder is not None
     config = tokenizer.audio_encoder.audio_config
-    delay_n_tokens = config.num_delay_tokens + config.n_left_pad_tokens
+    delay_n_tokens = config.get_num_delay_tokens(target_streaming_delay_ms) + config.n_left_pad_tokens
 
     BOS = tokenizer.tokenizer.get_special_token(SpecialTokens.bos.value)
     STREAMING_PAD = tokenizer.tokenizer.get_special_token(SpecialTokens.streaming_pad.value)
-
     assert tokenized.tokens == ([BOS] + delay_n_tokens * [STREAMING_PAD]), f"{tokenized.tokens}"
     assert tokenized.text == "<s>" + delay_n_tokens * "[STREAMING_PAD]"
 
-    audio_array = tokenized.audios[0].audio_array
-    assert audio_array.shape == (expected_array_len,)
-
-    audio_len_in_tokens = tokenizer.audio_encoder.audio_config.num_audio_tokens(audio_array.shape[0])
-    expected_audio_len_in_tokens = int(math.ceil(duration * tokenizer.audio_encoder.audio_config.frame_rate))
-
     if mode == StreamingMode.OFFLINE:
-        expected_audio_len_in_tokens += len(tokenized.tokens) + OFFLINE_STREAMING_BUFFER_TOKENS
-
-        assert audio_len_in_tokens == expected_audio_len_in_tokens
+        rounded_duration = math.ceil(duration / (config.frame_duration_ms / 1000)) * (config.frame_duration_ms / 1000)
+        audio_array = tokenized.audios[0].audio_array
+        assert audio_array.shape == (
+            rounded_duration * config.sampling_rate
+            + (config.n_left_pad_tokens + config.n_right_pad_tokens(target_streaming_delay_ms))
+            * config.raw_audio_length_per_tok,
+        )
+        audio_len_in_tokens = tokenizer.audio_encoder.audio_config.num_audio_tokens(audio_array.shape[0])
+        assert audio_len_in_tokens == (
+            rounded_duration * tokenizer.audio_encoder.audio_config.frame_rate
+            + len(tokenized.tokens)
+            + OFFLINE_STREAMING_BUFFER_TOKENS
+        )
+    elif mode == StreamingMode.ONLINE:
+        assert len(tokenized.audios) == 2, tokenized.audios
+        left_audio, right_audio = tokenized.audios
+        assert left_audio.duration == config.n_left_pad_tokens / config.frame_rate
+        assert right_audio.duration == config.n_right_pad_tokens(target_streaming_delay_ms) / config.frame_rate
+    else:
+        raise ValueError(f"Unknown mode {mode}")
 
 
 @pytest.mark.parametrize(
