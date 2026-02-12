@@ -242,7 +242,7 @@ class AudioEncoder:
         audio_array: np.ndarray,
         sampling_rate: int,
         transcription_delay_ms: float | None = None,
-        is_online_streaming: bool = False,
+        **kwargs,
     ) -> np.ndarray:
         r"""Pad the audio array to the desired length.
 
@@ -254,7 +254,8 @@ class AudioEncoder:
         Returns:
             Padded audio array.
         """
-        # TODO(Patrick) - remove `is_online_streaming` as it has been removed from vLLM and was only
+        # TODO(Patrick) - remove **kwargs as it's just there to swallow deprecated 
+        # keyword args from voxtral_realtime in vLLM. It was
         # relevant for the release. Remove in mistral_common version 1.11
         if self.audio_config.chunk_length_s:
             next_multiple_of_chunk_frames = self.next_multiple_of_chunk_frames(audio_array.shape[-1], sampling_rate)
@@ -273,11 +274,13 @@ class AudioEncoder:
         return audio_array
 
     def get_padding_audio(self, transcription_delay_ms: float | None = None) -> tuple[Audio, Audio]:
-        r"""Gets left and right padding for realtime audio models
+        r"""Gets left and right padding for realtime audio models.
+
         Args:
             transcription_delay_ms (optional): Delay in milliseconds for transcription.
+
         Returns:
-            Tuple of left and right padding for realtime audio models
+            Tuple of left and right padding for realtime audio models.
         """
 
         left_pad, right_pad = self._get_streaming_pad(0, transcription_delay_ms)
@@ -334,7 +337,8 @@ class AudioEncoder:
         return math.ceil(audio_array_len / self.audio_config.chunk_frames) * self.audio_config.chunk_frames
 
     def encode_streaming_tokens(self, transcription_delay_ms: float | None = None) -> list[int]:
-        assert isinstance(self.audio_config.encoding_config, AudioSpectrogramConfig), (
+    r"""Encode the streaming tokens given a transcription delay."""
+assert isinstance(self.audio_config.encoding_config, AudioSpectrogramConfig), (
             f"Audio encoder must be spectrogram encoder, got {self.audio_config.encoding_config=}"
         )
         assert self.audio_config.transcription_delay_ms is not None
@@ -360,6 +364,7 @@ class AudioEncoder:
         return tokens
 
     def encode_audio(self, audio: Audio, transcription_delay_ms: float | None = None) -> AudioEncoding:
+        r"""Encode an audio optionally with transcription delay."""
         audio.resample(self.audio_config.sampling_rate)
         audio.audio_array = self.pad(audio.audio_array, self.audio_config.sampling_rate, transcription_delay_ms)
 
