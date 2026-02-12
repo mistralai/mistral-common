@@ -1,14 +1,12 @@
 import numpy as np
-import pytest
 
 from mistral_common.audio import Audio
 from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURL, AudioURLChunk, RawAudio
 
 
-@pytest.fixture(scope="session")
-def audio_chunk() -> AudioChunk:
+def get_dummy_audio_chunk() -> AudioChunk:
     sampling_rate = 16000
-    audio_array = np.zeros(1600)  # 0.1 seconds of silence
+    audio_array = np.zeros(1600)
 
     audio = Audio(
         audio_array=audio_array,
@@ -24,6 +22,6 @@ def audio_chunk() -> AudioChunk:
     )
 
 
-@pytest.fixture(scope="session")
-def audio_url_chunk(audio_chunk: AudioChunk) -> AudioURLChunk:
+def get_dummy_audio_url_chunk() -> AudioURLChunk:
+    audio_chunk = get_dummy_audio_chunk()
     return AudioURLChunk(audio_url=AudioURL(url=str(audio_chunk.input_audio.data)))

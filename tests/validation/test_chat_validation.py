@@ -21,6 +21,17 @@ from mistral_common.protocol.instruct.validator import (
     MistralRequestValidatorV13,
     ValidationMode,
 )
+from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
+
+
+@pytest.fixture(scope="module")
+def audio_chunk() -> AudioChunk:
+    return get_dummy_audio_chunk()
+
+
+@pytest.fixture(scope="module")
+def audio_url_chunk() -> AudioURLChunk:
+    return get_dummy_audio_url_chunk()
 
 
 @pytest.fixture(
@@ -275,7 +286,13 @@ class TestChatValidationV5:
         self, validator_v5: MistralRequestValidatorV5, audio_fixture: str, request: pytest.FixtureRequest
     ) -> None:
         audio_chunk: AudioChunk | AudioURLChunk = request.getfixturevalue(audio_fixture)
-        with pytest.raises(ValueError, match="System messages are not yet allowed when audio is present"):
+        with pytest.raises(
+            ValueError,
+            match=(
+                r"Found system messages at indexes \[0\] and audio chunks in messages at indexes \[1\]\. This is not "
+                r"allowed prior to the tokenizer version 13\."
+            ),
+        ):
             validator_v5.validate_messages(
                 messages=[
                     SystemMessage(content="This is a system prompt"),

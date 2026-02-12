@@ -406,7 +406,7 @@ class MistralRequestValidatorV5(MistralRequestValidatorV3):
     This validator allows for both tool calls and content in the assistant message.
 
     Note:
-        For requests containing audio, this validator ensures that no system prompt are present.
+        For requests containing audio, this validator ensures that no system prompt is present.
 
     Examples:
         >>> validator = MistralRequestValidatorV5()
@@ -416,15 +416,27 @@ class MistralRequestValidatorV5(MistralRequestValidatorV3):
 
     def _validate_system_prompt_and_audio(self, messages: list[UATS]) -> None:
         r"""Validates that system prompts and audio chunks are not used together in v5."""
-        has_audio = any(
-            isinstance(message, UserMessage)
-            and isinstance(message.content, list)
-            and any(isinstance(chunk, (AudioChunk, AudioURLChunk)) for chunk in message.content)
-            for message in messages
-        )
-        has_sp = any(isinstance(message, SystemMessage) for message in messages)
-        if has_audio and has_sp:
-            raise ValueError("System messages are not yet allowed when audio is present")
+
+        def _is_system(message: UATS) -> bool:
+            return isinstance(message, SystemMessage)
+
+        def _has_audio(message: UATS) -> bool:
+            return (
+                isinstance(message, UserMessage)
+                and isinstance(message.content, list)
+                and any(isinstance(chunk, (AudioChunk, AudioURLChunk)) for chunk in message.content)
+            )
+
+        has_sp = any(_is_system(message=message) for message in messages)
+        has_sp_and_audio = has_sp and any(_has_audio(message=message) for message in messages)
+
+        if has_sp_and_audio:
+            sp_indexes = [i for i, message in enumerate(messages) if _is_system(message=message)]
+            audio_indexes = [i for i, message in enumerate(messages) if _has_audio(message=message)]
+            raise ValueError(
+                f"Found system messages at indexes {sp_indexes} and audio chunks in messages at indexes {audio_indexes}"
+                ". This is not allowed prior to the tokenizer version 13."
+            )
 
     def _validate_message_list_structure(self, messages: list[UATS], continue_final_message: bool) -> None:
         super()._validate_message_list_structure(messages=messages, continue_final_message=continue_final_message)

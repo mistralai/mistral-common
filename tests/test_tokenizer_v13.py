@@ -23,7 +23,18 @@ from mistral_common.tokens.tokenizers.base import InstructTokenizer, SpecialToke
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import SpecialTokenPolicy, Tekkenizer
+from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
 from tests.test_tekken import get_special_tokens, quick_vocab
+
+
+@pytest.fixture(scope="module")
+def audio_chunk() -> AudioChunk:
+    return get_dummy_audio_chunk()
+
+
+@pytest.fixture(scope="module")
+def audio_url_chunk() -> AudioURLChunk:
+    return get_dummy_audio_url_chunk()
 
 
 @pytest.fixture(scope="session")
