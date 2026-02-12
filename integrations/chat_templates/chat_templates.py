@@ -3,12 +3,13 @@ from pathlib import Path
 
 import regex as re  # type: ignore[import-untyped]
 
-from mistral_common.tokens.tokenizers.base import TokenizerVersion
-
 from integrations.chat_templates.template_generator import (
     TemplateConfig,
+)
+from integrations.chat_templates.template_generator import (
     generate_chat_template as _generate_dynamic_template,
 )
+from mistral_common.tokens.tokenizers.base import TokenizerVersion
 
 _TEMPLATE_PATH = Path(__file__).parent / "templates"
 
@@ -43,7 +44,7 @@ def generate_chat_template_dynamic(
     thinking_support: bool,
     default_system_prompt: str | None = None,
 ) -> str:
-    """Dynamically generate a chat template based on configuration.
+    r"""Dynamically generate a chat template based on configuration.
 
     This is an alternative to get_chat_template() that generates templates
     programmatically instead of loading from static files. The generated
@@ -70,9 +71,10 @@ def generate_chat_template_dynamic(
     template = _generate_dynamic_template(config)
 
     if default_system_prompt is not None:
+        escaped_prompt = default_system_prompt.replace("\\", "\\\\").replace("'", "\\'")
         template = re.sub(
             r"{%- set default_system_message = '' %}",
-            r"{%- set default_system_message = '" + default_system_prompt + r"' %}",
+            r"{%- set default_system_message = '" + escaped_prompt + r"' %}",
             template,
         )
 
@@ -101,6 +103,28 @@ def get_chat_template(
     thinking_support: bool,
     default_system_prompt: str | None = None,
 ) -> str:
+    r"""Retrieve a chat template based on configuration.
+
+    Loads a pre-defined chat template from static files based on the provided
+    configuration. Validates the configuration and returns the appropriate template.
+
+    Args:
+        spm: Whether to use SentencePiece tokenizer.
+        tokenizer_version: The tokenizer version.
+        image_support: Whether to support image chunks.
+        audio_support: Whether to support audio chunks.
+        thinking_support: Whether to support thinking chunks.
+        default_system_prompt: Optional default system prompt to embed.
+
+    Returns:
+        The Jinja2 template as a string.
+
+    Raises:
+        ValueError: If the configuration is invalid or unsupported.
+
+    Examples:
+        >>> get_chat_template(spm=False, tokenizer_version=TokenizerVersion.v3, image_support=True)
+    """
     if spm and (tokenizer_version >= TokenizerVersion.v11 or audio_support):
         raise ValueError("SPM tokenizer is not supported for tokenizer versions v11 and above or audio")
     if image_support and audio_support:

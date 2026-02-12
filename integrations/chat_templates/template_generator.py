@@ -1,9 +1,3 @@
-"""Dynamic chat template generator for Mistral tokenizers.
-
-This module generates Jinja2 chat templates dynamically based on tokenizer version
-and feature flags, avoiding code repetition across the 24 static template files.
-"""
-
 from dataclasses import dataclass
 
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
@@ -11,7 +5,35 @@ from mistral_common.tokens.tokenizers.base import TokenizerVersion
 
 @dataclass
 class TemplateConfig:
-    """Configuration for generating a chat template."""
+    r"""Configuration for generating a chat template.
+
+    This class encapsulates all the configuration options required to generate
+    a Jinja2 chat template that formats conversation messages for Mistral models.
+    The template handles message roles, special tokens, tool calls, and multimodal content.
+
+    Attributes:
+        version: The tokenizer version (e.g., v1, v2, v3, v7, v11, v13). Determines
+            special token formatting, tool call syntax, and available features.
+        spm: Whether to use SentencePiece tokenizer formatting. When True, adds spaces
+            after special tokens. Not supported for versions v11+ or with audio.
+        image_support: Whether to enable image chunk processing in user messages.
+            Adds [IMG] token support. Requires version v3+. Mutually exclusive with audio.
+        audio_support: Whether to enable audio chunk processing in user messages.
+            Adds [AUDIO] token support. Requires version v7+. Mutually exclusive with image.
+        thinking_support: Whether to enable thinking chunks in system and assistant messages.
+            Adds [THINK]/[/THINK] token support. Requires version v13+.
+
+    Raises:
+        ValueError: If the configuration is invalid (e.g., conflicting options like
+            spm with v11+, image and audio together, or version requirements not met).
+
+    Examples:
+        >>> config = TemplateConfig(
+        ...     version=TokenizerVersion.v3,
+        ...     spm=False,
+        ...     image_support=True
+        ... )
+    """
 
     version: TokenizerVersion
     spm: bool = False
@@ -129,7 +151,7 @@ class TemplateConfig:
 
 
 def _generate_header() -> str:
-    """Generate template header with default system message."""
+    r"""Generate template header with default system message."""
     return """{#- Default system message if no system prompt is passed. #}
 {%- set default_system_message = '' %}
 
@@ -139,16 +161,14 @@ def _generate_header() -> str:
 
 
 def _generate_system_prompt_handling(config: TemplateConfig) -> str:
-    """Generate system prompt handling section."""
+    r"""Generate system prompt handling section."""
     lines = [
         "",
         "{#- Handle system prompt if it exists. #}",
     ]
 
-    # Determine supported chunk types in system message
     if config.thinking_support:
         chunk_comment = "{#- System prompt supports text content or text and thinking chunks. #}"
-        supported_chunks = "text and thinking"
         chunk_handler = """            {%- if block['type'] == 'text' %}
                 {{- block['text'] }}
             {%- elif block['type'] == 'thinking' %}
@@ -158,7 +178,6 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
             {%- endif %}"""
     else:
         chunk_comment = "{#- System prompt supports text content or text chunks. #}"
-        supported_chunks = "text"
         chunk_handler = """            {%- if block['type'] == 'text' %}
                 {{- block['text'] }}
             {%- else %}
@@ -168,13 +187,11 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
     lines.append(chunk_comment)
 
     if config.uses_system_prompt_tokens:
-        # Modern style: [SYSTEM_PROMPT]...[/SYSTEM_PROMPT]
         if config.tracks_has_sp_for_audio:
             lines.append("{%- if messages[0]['role'] == 'system' %}")
             lines.append("    {%- set has_sp = true %}")
         else:
             lines.append("{%- if messages[0]['role'] == 'system' %}")
-        # SPM v7+ has space after [SYSTEM_PROMPT]
         if config.spm_system_prompt_has_space:
             lines.append("    {{- '[SYSTEM_PROMPT] ' -}}")
         else:
@@ -199,18 +216,18 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
         lines.append("    {%- endif %}")
         lines.append("{%- endif %}")
     else:
-        # Legacy style: system message injected into first user message
         lines.append("{%- if messages[0]['role'] == 'system' %}")
         lines.append("    {%- if messages[0]['content'] is string %}")
         lines.append("        {%- set system_message = messages[0]['content'] %}")
         lines.append("    {%- else %}        ")
         lines.append("        {%- for block in messages[0]['content'] %}")
         lines.append("            {%- set system_message = '' %}")
-        # For v1/v2 SPM style, only text is supported
         lines.append("            {%- if block['type'] == 'text' %}")
         lines.append("                {% set system_message = system_message + block['text'] %}")
         lines.append("            {%- else %}")
-        lines.append("                {{- raise_exception('Only text chunks are supported in system message contents.') }}")
+        lines.append(
+            "                {{- raise_exception('Only text chunks are supported in system message contents.') }}"
+        )
         lines.append("            {%- endif %}")
         lines.append("        {%- endfor %}")
         lines.append("    {%- endif %}")
@@ -224,7 +241,7 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
 
 
 def _generate_tools_definition(config: TemplateConfig) -> str:
-    """Generate tools definition section."""
+    r"""Generate tools definition section."""
     if not config.has_tools:
         return ""
 
@@ -238,13 +255,11 @@ def _generate_tools_definition(config: TemplateConfig) -> str:
         "    {%- set has_tools = true %}",
     ]
 
-    # SPM style has spaces in tools definition
     if config.spm:
         lines.append("    {%- set tools_definition = '[AVAILABLE_TOOLS] ' + (tools| tojson) + '[/AVAILABLE_TOOLS]' %}")
     else:
         lines.append("    {%- set tools_definition = '[AVAILABLE_TOOLS]' + (tools| tojson) + '[/AVAILABLE_TOOLS]' %}")
 
-    # v11+ emit tools at the beginning
     if config.tools_at_beginning:
         lines.append("    {{- tools_definition }}")
 
@@ -254,20 +269,18 @@ def _generate_tools_definition(config: TemplateConfig) -> str:
 
 
 def _generate_alternation_check(config: TemplateConfig) -> str:
-    """Generate message alternation validation."""
+    r"""Generate message alternation validation."""
     lines = [
         "",
         "{#- Checks for alternating user/assistant messages. #}",
     ]
 
-    # Determine namespace variables
     ns_vars = ["index=0"]
     if config.tracks_max_idx_user:
         ns_vars.append("max_idx_user=-1")
     if config.uses_spm_space_tracking:
         ns_vars.append("add_space=false")
     if config.uses_v2_spm_tool_format:
-        # v2_spm also tracks prev_tool in namespace initialization
         ns_vars.append("prev_tool=false")
     if config.uses_spm_prev_img_tracking:
         ns_vars.append("prev_img=false")
@@ -276,15 +289,15 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
 
     lines.append("{%- for message in loop_messages %}")
 
-    # Condition for counting messages
     if config.has_tools:
-        lines.append("    {%- if message.role == 'user' or (message.role == 'assistant' and (message.tool_calls is not defined or message.tool_calls is none or message.tool_calls | length == 0)) %}")
+        lines.append(
+            "    {%- if message.role == 'user' or (message.role == 'assistant' and (message.tool_calls is not defined or message.tool_calls is none or message.tool_calls | length == 0)) %}"  # noqa: E501
+        )
     else:
         lines.append("    {%- if message.role == 'user' or message.role == 'assistant' %}")
 
-    # Error message
     if config.has_tools:
-        error_msg = "After the optional system message, conversation roles must alternate user and assistant roles except for tool calls and results."
+        error_msg = "After the optional system message, conversation roles must alternate user and assistant roles except for tool calls and results."  # noqa: E501
     else:
         error_msg = "After the optional system message, conversation roles must alternate user and assistant."
 
@@ -305,10 +318,9 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
 
 
 def _generate_user_message_handling(config: TemplateConfig) -> str:
-    """Generate user message handling section."""
+    r"""Generate user message handling section."""
     lines = []
 
-    # Determine supported chunk types
     chunk_types = ["text"]
     if config.image_support:
         chunk_types.extend(["image", "image_url"])
@@ -327,9 +339,6 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
         lines.append("            {{- tools_definition }}")
         lines.append("        {%- endif %}")
 
-    # SPM-style INST tokens have trailing space on open
-    # For all SPM: [INST] content[/INST] (space after INST, no space before /INST)
-    # Exception: SPM image templates don't have space after INST for list content
     if config.spm and not config.uses_spm_prev_img_tracking:
         inst_open = "[INST] "
         inst_close = "[/INST]"
@@ -337,8 +346,6 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
         inst_open = "[INST]"
         inst_close = "[/INST]"
 
-    # For v7+ with system prompt tokens (no system injection needed in user message)
-    # We can use the compact string format
     if config.uses_system_prompt_tokens:
         lines.append("        {%- if message['content'] is string %}")
         if config.spm:
@@ -347,16 +354,13 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
             lines.append(f"            {{{{- '{inst_open}' + message['content'] + '{inst_close}' }}}}")
         lines.append("        {%- elif message['content'] | length > 0 %}")
         if config.uses_spm_prev_img_tracking:
-            # SPM image: no space after INST for list content
             lines.append("            {{- '[INST]' }}")
         elif config.spm:
             lines.append("            {{- '[INST] ' }}")
         else:
             lines.append(f"            {{{{- '{inst_open}' }}}}")
     elif config.uses_spm_prev_img_tracking:
-        # SPM image templates have special INST/space handling
         lines.append(f"        {{{{- '{inst_open}' }}}}")
-        # Add space tracking for system message
         lines.append("        {%- set added_sp = false %}")
         lines.append("        {%- if (ns.index == ns.max_idx_user) and system_message != '' %}")
         lines.append("            {%- set added_sp = true %}")
@@ -370,24 +374,17 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
         lines.append("            {{- message['content']}}")
         lines.append("        {%- elif message['content'] | length > 0 %}")
     else:
-        # For v1, v2, v3: need to inject system message, so always use separate INST output
         lines.append(f"        {{{{- '{inst_open}' }}}}")
-
-        # System message injection for legacy style
         if config.version == TokenizerVersion.v1:
-            # v1 injects system at first user message
             lines.append("        {%- if loop.index0 == 0 and system_message != '' %}")
         else:
-            # v2, v3, v3_spm inject system at last user message
             lines.append("        {%- if (ns.index == ns.max_idx_user) and system_message != '' %}")
         lines.append("            {{- system_message + '\\n\\n' }}")
         lines.append("        {%- endif %}")
-
         lines.append("        {%- if message['content'] is string %}")
         lines.append("            {{- message['content']}}")
         lines.append("        {%- elif message['content'] | length > 0 %}")
 
-    # Block sorting for image templates (when exactly 2 blocks)
     if config.image_support:
         lines.append("            {%- if message['content'] | length == 2 %}")
         lines.append("                {%- set blocks = message['content'] | sort(attribute='type') %}")
@@ -396,20 +393,16 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
         lines.append("            {%- endif %}")
         block_var = "blocks"
     elif config.version >= TokenizerVersion.v13 and not config.audio_support:
-        # v13 non-audio sorts blocks
         lines.append("            {%- set sorted_blocks = message['content'] | sort(attribute='type') %}")
         block_var = "sorted_blocks"
     else:
         block_var = "message['content']"
 
-    # SPM image templates need prev_img initialization
     if config.uses_spm_prev_img_tracking:
         lines.append("            {% set ns.prev_img = not added_sp %}")
 
-    # Use double space for block content iteration (in elif branch)
     lines.append(f"            {{%- for block in {block_var} %}}")
 
-    # SPM image templates add space before text after image
     if config.uses_spm_prev_img_tracking:
         lines.append("                {%- if ns.prev_img and block['type'] == 'text' %}")
         lines.append("                    {{- ' ' }}")
@@ -420,43 +413,44 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
     if config.uses_spm_prev_img_tracking:
         lines.append("                    {%- set ns.prev_img = false %}")
 
-    # Image chunk handling
     if config.image_support:
         lines.append("                {%- elif block['type'] in ['image', 'image_url'] %}")
         lines.append("                    {{- '[IMG]' }}")
         if config.uses_spm_prev_img_tracking:
             lines.append("                    {%- set ns.prev_img = true %}")
 
-    # Audio chunk handling
     if config.audio_support:
         lines.append("                {%- elif block['type'] in ['input_audio', 'audio_url'] %}")
         if config.tracks_has_sp_for_audio:
             lines.append("                    {%- if has_sp %}")
-            lines.append("                        {{- raise_exception('Audio chunks are not supported in user message content when system prompt is provided.') }}")
+            lines.append(
+                "                        {{- raise_exception('Audio chunks are not supported in user message content when system prompt is provided.') }}"  # noqa: E501
+            )
             lines.append("                    {%- endif %}")
         lines.append("                    {{- '[AUDIO]' }}")
 
-    # Error for unsupported types
     lines.append("                {%- else %}")
-    lines.append(f"                    {{{{- raise_exception('Only {chunk_desc} chunks are supported in user message content.') }}}}")
+    lines.append(
+        f"                    {{{{- raise_exception('Only {chunk_desc} chunks are supported in user message content.') }}}}"  # noqa: E501
+    )
     lines.append("                {%- endif %}")
     lines.append("            {%- endfor %}")
 
-    # Close the content handling
     if config.uses_system_prompt_tokens:
-        # For v7+: the string case has inline [/INST], list case needs [/INST] here
         lines.append(f"            {{{{- '{inst_close}' }}}}")
         lines.append("        {%- else %}")
-        lines.append("            {{- raise_exception('User message must have a string or a list of chunks in content') }}")
+        lines.append(
+            "            {{- raise_exception('User message must have a string or a list of chunks in content') }}"
+        )
         lines.append("        {%- endif %}")
     else:
-        # For v1/v2/v3: shared [/INST] at the end for all cases
         lines.append("        {%- else %}")
-        lines.append("            {{- raise_exception('User message must have a string or a list of chunks in content') }}")
+        lines.append(
+            "            {{- raise_exception('User message must have a string or a list of chunks in content') }}"
+        )
         lines.append("        {%- endif %}")
         lines.append(f"        {{{{- '{inst_close}' }}}}")
 
-    # SPM-specific space tracking (v2_spm and above)
     if config.uses_spm_space_tracking:
         lines.append("        {%- if loop.index < loop.length %}")
         lines.append("            {%- set ns.add_space=true %}")
@@ -467,10 +461,9 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
 
 
 def _generate_assistant_message_handling(config: TemplateConfig) -> str:
-    """Generate assistant message handling section."""
+    r"""Generate assistant message handling section."""
     lines = []
 
-    # Determine supported chunk types
     if config.thinking_support:
         chunk_types = "text and thinking"
     else:
@@ -481,24 +474,30 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     lines.append(f"    {comment}")
     lines.append("    {%- elif message['role'] == 'assistant' %}")
 
-    # v2 and v3: cannot have both content and tool calls
     if config.version in [TokenizerVersion.v2, TokenizerVersion.v3]:
-        lines.append("        {%- if message['content'] is not none and message['content'] | length > 0 and message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}")
+        lines.append(
+            "        {%- if message['content'] is not none and message['content'] | length > 0 and message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}"  # noqa: E501
+        )
         lines.append("            {{- raise_exception('Assistant message cannot have both content and tool calls.') }}")
         lines.append("        {%- endif %}")
         lines.append("")
 
-    # v7+ style validation (must have content or tool calls)
-    if config.version >= TokenizerVersion.v7 or (config.version >= TokenizerVersion.v3 and not config.spm) or config.version == TokenizerVersion.v13:
-        lines.append("        {%- if (message['content'] is none or message['content'] == '' or message['content']|length == 0) and (message['tool_calls'] is not defined or message['tool_calls'] is none or message['tool_calls']|length == 0) %}")
-        lines.append("            {{- raise_exception('Assistant message must have a string or a list of chunks in content or a list of tool calls.') }}")
+    if (
+        config.version >= TokenizerVersion.v7
+        or (config.version >= TokenizerVersion.v3 and not config.spm)
+        or config.version == TokenizerVersion.v13
+    ):
+        lines.append(
+            "        {%- if (message['content'] is none or message['content'] == '' or message['content']|length == 0) and (message['tool_calls'] is not defined or message['tool_calls'] is none or message['tool_calls']|length == 0) %}"  # noqa: E501
+        )
+        lines.append(
+            "            {{- raise_exception('Assistant message must have a string or a list of chunks in content or a list of tool calls.') }}"  # noqa: E501
+        )
         lines.append("        {%- endif %}")
         lines.append("")
 
-    # String content
     lines.append("        {%- if message['content'] is string and message['content'] != '' %}")
 
-    # SPM space handling
     if config.uses_spm_space_tracking:
         lines.append("            {%- if ns.add_space %}")
         lines.append("                {{- ' ' }}")
@@ -507,13 +506,11 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
 
     lines.append("            {{- message['content'] }}")
 
-    # v2 outputs EOS after string content (both SPM and non-SPM)
     if config.uses_v2_tool_format:
         lines.append("            {{- '</s>' }}")
 
     lines.append("        {%- elif message['content'] | length > 0 %}")
 
-    # SPM space handling for list content
     if config.uses_spm_space_tracking:
         lines.append("            {%- if ns.add_space %}")
         lines.append("                {{- ' ' }}")
@@ -529,34 +526,35 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
         lines.append("                    {{- '[THINK]' + block['thinking'] + '[/THINK]' }}")
 
     lines.append("                {%- else %}")
-    lines.append(f"                    {{{{- raise_exception('Only {chunk_types} chunks are supported in assistant message contents.') }}}}")
+    lines.append(
+        f"                    {{{{- raise_exception('Only {chunk_types} chunks are supported in assistant message contents.') }}}}"  # noqa: E501
+    )
     lines.append("                {%- endif %}")
     lines.append("            {%- endfor %}")
 
-    # v2 outputs EOS after list content (both SPM and non-SPM)
     if config.uses_v2_tool_format:
         lines.append("            {{- '</s>' }}")
 
-    # v2 and v3_spm style: tool calls in elif branch
     if config.version == TokenizerVersion.v2 or (config.spm and config.version == TokenizerVersion.v3):
         lines.append(_generate_tool_calls_elif_v2_v3(config))
         lines.append("        {%- else %}")
-        lines.append("            {{- raise_exception('Assistant message must have a string or a list of chunks in content or a list of tool calls.') }}")
+        lines.append(
+            "            {{- raise_exception('Assistant message must have a string or a list of chunks in content or a list of tool calls.') }}"  # noqa: E501
+        )
         lines.append("        {%- endif %}")
     else:
         lines.append("        {%- endif %}")
 
-    # v7+ style: tool calls after content
-    if config.has_tools and not (config.version == TokenizerVersion.v2 or (config.spm and config.version == TokenizerVersion.v3)):
+    if config.has_tools and not (
+        config.version == TokenizerVersion.v2 or (config.spm and config.version == TokenizerVersion.v3)
+    ):
         lines.append("")
         lines.append(_generate_tool_calls_block(config))
 
-    # EOS token (not for v2 which has EOS in each branch)
     if not config.uses_v2_tool_format:
         lines.append("")
         lines.append("        {{- '</s>' }}")
 
-    # SPM tracking
     if config.uses_spm_space_tracking:
         lines.append("        {%- set ns.prev_tool=false %}")
 
@@ -564,23 +562,23 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
 
 
 def _generate_tool_calls_elif_v2_v3(config: TemplateConfig) -> str:
-    """Generate tool calls as elif branch for v2 (SPM and non-SPM) and v3_spm templates."""
+    r"""Generate tool calls as elif branch for v2 (SPM and non-SPM) and v3_spm templates."""
     lines = []
 
     if config.uses_v2_tool_format:
-        # v2: tool calls only valid after all user messages
-        lines.append("        {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 and ns.index > ns.max_idx_user %}")
+        lines.append(
+            "        {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 and ns.index > ns.max_idx_user %}"  # noqa: E501
+        )
     else:
-        # v3_spm: tool calls always valid
-        lines.append("        {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}")
+        lines.append(
+            "        {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}"  # noqa: E501
+        )
 
-    # SPM space handling (only for SPM templates)
     if config.spm:
         lines.append("            {%- if ns.add_space %}")
         lines.append("                {%- set ns.add_space=false %}")
         lines.append("            {%- endif %}")
 
-    # Token format differs between SPM (with space) and non-SPM (no space)
     if config.spm:
         lines.append("            {{- '[TOOL_CALLS] [' }}")
     else:
@@ -601,14 +599,18 @@ def _generate_tool_calls_elif_v2_v3(config: TemplateConfig) -> str:
         # v3_spm: has ID in tool calls
         lines.append("                {%- set id = tool['id']%}")
         lines.append("                {%- if id is not defined or id|length != 9 %}")
-        lines.append("                    {{- raise_exception('Tool call must have an id of 9 characters or numbers.') }}")
+        lines.append(
+            "                    {{- raise_exception('Tool call must have an id of 9 characters or numbers.') }}"
+        )
         lines.append("                {%- endif %}")
         lines.append("                {%- if arguments is not string %}")
         lines.append("                    {%- set arguments = arguments|tojson|safe %}")
         lines.append("                {%- elif arguments == '' %}")
         lines.append("                    {%- set arguments = '{}' %}")
         lines.append("                {%- endif %}")
-        lines.append("                {{- '{\"name\": \"' + name + '\", \"arguments\": ' + arguments + ', \"id\": \"' + id + '\"}' }}")
+        lines.append(
+            '                {{- \'{"name": "\' + name + \'", "arguments": \' + arguments + \', "id": "\' + id + \'"}\' }}'  # noqa: E501
+        )
 
     lines.append("                {%- if loop.length > 1 and loop.index < loop.length %}")
     lines.append("                    {{- ', ' }}")
@@ -621,57 +623,26 @@ def _generate_tool_calls_elif_v2_v3(config: TemplateConfig) -> str:
 
     if config.uses_v2_tool_format:
         # v2: additional elif for tool calls during user messages (ignored)
-        lines.append("        {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 and ns.index <= ns.max_idx_user %}")
-
-    return "\n".join(lines)
-
-
-def _generate_tool_calls_elif(config: TemplateConfig) -> str:
-    """Generate tool calls as elif branch (v3_spm style). DEPRECATED: use _generate_tool_calls_elif_spm."""
-    lines = []
-    lines.append("        {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}")
-
-    # SPM space handling
-    lines.append("            {%- if ns.add_space %}")
-    lines.append("                {%- set ns.add_space=false %}")
-    lines.append("            {%- endif %}")
-
-    lines.append("            {{- '[TOOL_CALLS] [' }}")
-    lines.append("            {%- for tool in message['tool_calls'] %}")
-    lines.append("                {%- set name = tool['function']['name'] %}")
-    lines.append("                {%- set arguments = tool['function']['arguments'] %}")
-    lines.append("                {%- set id = tool['id']%}")
-    lines.append("                {%- if id is not defined or id|length != 9 %}")
-    lines.append("                    {{- raise_exception('Tool call must have an id of 9 characters or numbers.') }}")
-    lines.append("                {%- endif %}")
-    lines.append("                {%- if arguments is not string %}")
-    lines.append("                    {%- set arguments = arguments|tojson|safe %}")
-    lines.append("                {%- elif arguments == '' %}")
-    lines.append("                    {%- set arguments = '{}' %}")
-    lines.append("                {%- endif %}")
-    lines.append("                {{- '{\"name\": \"' + name + '\", \"arguments\": ' + arguments + ', \"id\": \"' + id + '\"}' }}")
-    lines.append("                {%- if loop.length > 1 and loop.index < loop.length %}")
-    lines.append("                    {{- ', ' }}")
-    lines.append("                {%- endif %}")
-    lines.append("            {%- endfor %}")
-    lines.append("            {{- ']' }}")
+        lines.append(
+            "        {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 and ns.index <= ns.max_idx_user %}"  # noqa: E501
+        )
 
     return "\n".join(lines)
 
 
 def _generate_tool_calls_block(config: TemplateConfig) -> str:
-    """Generate tool calls block (v7+ style)."""
+    r"""Generate tool calls block (v7+ style)."""
     lines = []
-    lines.append("        {%- if message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}")
+    lines.append(
+        "        {%- if message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}"  # noqa: E501
+    )
 
-    # SPM templates need to reset add_space without outputting space
     if config.uses_spm_space_tracking:
         lines.append("            {%- if ns.add_space %}")
         lines.append("                {%- set ns.add_space=false %}")
         lines.append("            {%- endif %}")
 
     if config.uses_v13_tool_format:
-        # v13 style: [TOOL_CALLS]name[ARGS]arguments
         lines.append("            {%- for tool in message['tool_calls'] %}")
         lines.append("                {{- '[TOOL_CALLS]' }}")
         lines.append("                {%- set name = tool['function']['name'] %}")
@@ -684,14 +655,15 @@ def _generate_tool_calls_block(config: TemplateConfig) -> str:
         lines.append("                {{- name + '[ARGS]' + arguments }}")
         lines.append("            {%- endfor %}")
     elif config.uses_call_id_in_tool_calls:
-        # v11 style: [TOOL_CALLS]name[CALL_ID]id[ARGS]arguments
         lines.append("            {%- for tool in message['tool_calls'] %}")
         lines.append("                {{- '[TOOL_CALLS]' }}")
         lines.append("                {%- set name = tool['function']['name'] %}")
         lines.append("                {%- set arguments = tool['function']['arguments'] %}")
         lines.append("                {%- set id = tool['id']%}")
         lines.append("                {%- if id is not defined or id|length != 9 %}")
-        lines.append("                    {{- raise_exception('Tool call must have an id of 9 characters or numbers.') }}")
+        lines.append(
+            "                    {{- raise_exception('Tool call must have an id of 9 characters or numbers.') }}"
+        )
         lines.append("                {%- endif %}")
         lines.append("                {%- if arguments is not string %}")
         lines.append("                    {%- set arguments = arguments|tojson|safe %}")
@@ -701,8 +673,6 @@ def _generate_tool_calls_block(config: TemplateConfig) -> str:
         lines.append("                {{- name + '[CALL_ID]' + id + '[ARGS]' + arguments }}")
         lines.append("            {%- endfor %}")
     else:
-        # v3, v7 style: [TOOL_CALLS][{json}, {json}]
-        # SPM has space after [TOOL_CALLS]
         if config.spm:
             lines.append("            {{- '[TOOL_CALLS] [' }}")
         else:
@@ -712,14 +682,18 @@ def _generate_tool_calls_block(config: TemplateConfig) -> str:
         lines.append("                {%- set arguments = tool['function']['arguments'] %}")
         lines.append("                {%- set id = tool['id']%}")
         lines.append("                {%- if id is not defined or id|length != 9 %}")
-        lines.append("                    {{- raise_exception('Tool call must have an id of 9 characters or numbers.') }}")
+        lines.append(
+            "                    {{- raise_exception('Tool call must have an id of 9 characters or numbers.') }}"
+        )
         lines.append("                {%- endif %}")
         lines.append("                {%- if arguments is not string %}")
         lines.append("                    {%- set arguments = arguments|tojson|safe %}")
         lines.append("                {%- elif arguments == '' %}")
         lines.append("                    {%- set arguments = '{}' %}")
         lines.append("                {%- endif %}")
-        lines.append("                {{- '{\"name\": \"' + name + '\", \"arguments\": ' + arguments + ', \"id\": \"' + id + '\"}' }}")
+        lines.append(
+            '                {{- \'{"name": "\' + name + \'", "arguments": \' + arguments + \', "id": "\' + id + \'"}\' }}'  # noqa: E501
+        )
         lines.append("                {%- if loop.length > 1 and loop.index < loop.length %}")
         lines.append("                    {{- ', ' }}")
         lines.append("                {%- endif %}")
@@ -732,7 +706,7 @@ def _generate_tool_calls_block(config: TemplateConfig) -> str:
 
 
 def _generate_tool_message_handling(config: TemplateConfig) -> str:
-    """Generate tool message handling section."""
+    r"""Generate tool message handling section."""
     if not config.has_tools:
         return ""
 
@@ -740,14 +714,12 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
     lines.append("")
 
     if config.uses_v2_tool_format:
-        # v2: tool messages with index check
         lines.append("    {#- Tool messages supports int, float or text content. #}")
         lines.append("    {%- elif message['role'] == 'tool' and ns.index > ns.max_idx_user %}")
     else:
         lines.append("    {#- Tool messages only supports text content. #}")
         lines.append("    {%- elif message['role'] == 'tool' %}")
 
-    # SPM space handling
     if config.uses_spm_space_tracking:
         lines.append("        {%- if ns.add_space %}")
         lines.append("            {%- if not ns.prev_tool %}")
@@ -757,7 +729,6 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         lines.append("        {%- endif %}")
 
     if config.uses_v2_tool_format:
-        # v2 style: JSON with name instead of call_id
         lines.append("        {# Try to parse 'content' as int or float if possible #}")
         lines.append("        {%- set tool_content = message['content']|string %}")
         lines.append("        {# Try to parse as int #}")
@@ -778,13 +749,11 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         lines.append("")
         lines.append("        {%- set tool_message = {'name': message['name'], 'content': tool_content} %}")
         lines.append("        ")
-        # SPM has space after [TOOL_RESULTS], non-SPM doesn't
         if config.spm:
             lines.append("        {{- '[TOOL_RESULTS] [' + (tool_message|tojson) + '][/TOOL_RESULTS]' }}")
         else:
             lines.append("        {{- '[TOOL_RESULTS][' + (tool_message|tojson) + '][/TOOL_RESULTS]' }}")
     elif config.uses_json_tool_results:
-        # v3_spm style: JSON with type parsing
         lines.append("        {# Try to parse 'content' as int or float if possible #}")
         lines.append("        {%- set tool_content = message['content']|string %}")
         lines.append("        {# Try to parse as int #}")
@@ -801,31 +770,40 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         lines.append("        ")
         lines.append("        {%- if message['call_id'] is not undefined and message['call_id']|length == 9 %}")
         lines.append("            {%- set tool_id = message['call_id'] %}")
-        lines.append("        {%- elif message['tool_call_id'] is not undefined and message['tool_call_id']|length == 9  %}")
+        lines.append(
+            "        {%- elif message['tool_call_id'] is not undefined and message['tool_call_id']|length == 9  %}"
+        )
         lines.append("            {%- set tool_id = message['tool_call_id'] %}")
         lines.append("        {%- else %}")
-        lines.append("            {{- raise_exception('Tool message must have a call_id or tool_call_id of 9 characters or numbers.') }}")
+        lines.append(
+            "            {{- raise_exception('Tool message must have a call_id or tool_call_id of 9 characters or numbers.') }}"  # noqa: E501
+        )
         lines.append("        {%- endif %}")
         lines.append("")
         lines.append("        {%- set tool_message = {'content': tool_content, 'call_id': tool_id} %}")
         lines.append("        ")
         lines.append("        {{- '[TOOL_RESULTS] ' + (tool_message|tojson) + '[/TOOL_RESULTS]' }}")
     elif config.uses_tool_content_format:
-        # v7, v11 style: [TOOL_RESULTS]id[TOOL_CONTENT]content
         lines.append("        {%- if message['call_id'] is not undefined and message['call_id']|length == 9 %}")
         lines.append("            {%- set tool_id = message['call_id'] %}")
-        lines.append("        {%- elif message['tool_call_id'] is not undefined and message['tool_call_id']|length == 9  %}")
+        lines.append(
+            "        {%- elif message['tool_call_id'] is not undefined and message['tool_call_id']|length == 9  %}"
+        )
         lines.append("            {%- set tool_id = message['tool_call_id'] %}")
         lines.append("        {%- else %}")
-        lines.append("            {{- raise_exception('Tool message must have a call_id or tool_call_id of 9 characters or numbers.') }}")
+        lines.append(
+            "            {{- raise_exception('Tool message must have a call_id or tool_call_id of 9 characters or numbers.') }}"  # noqa: E501
+        )
         lines.append("        {%- endif %}")
         if config.spm:
-            # v7_spm has spaces in tokens
-            lines.append("        {{- '[TOOL_RESULTS] ' + tool_id + '[TOOL_CONTENT] ' + message['content']|string + '[/TOOL_RESULTS]' }}")
+            lines.append(
+                "        {{- '[TOOL_RESULTS] ' + tool_id + '[TOOL_CONTENT] ' + message['content']|string + '[/TOOL_RESULTS]' }}"  # noqa: E501
+            )
         else:
-            lines.append("        {{- '[TOOL_RESULTS]' + tool_id + '[TOOL_CONTENT]' + message['content']|string + '[/TOOL_RESULTS]' }}")
+            lines.append(
+                "        {{- '[TOOL_RESULTS]' + tool_id + '[TOOL_CONTENT]' + message['content']|string + '[/TOOL_RESULTS]' }}"  # noqa: E501
+            )
     elif config.uses_simple_tool_results:
-        # v13 style: simple [TOOL_RESULTS]content
         lines.append("        {{- '[TOOL_RESULTS]' + message['content']|string + '[/TOOL_RESULTS]' }}")
     else:
         # v3 non-spm style
@@ -845,10 +823,14 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         lines.append("        ")
         lines.append("        {%- if message['call_id'] is not undefined and message['call_id']|length == 9 %}")
         lines.append("            {%- set tool_id = message['call_id'] %}")
-        lines.append("        {%- elif message['tool_call_id'] is not undefined and message['tool_call_id']|length == 9  %}")
+        lines.append(
+            "        {%- elif message['tool_call_id'] is not undefined and message['tool_call_id']|length == 9  %}"
+        )
         lines.append("            {%- set tool_id = message['tool_call_id'] %}")
         lines.append("        {%- else %}")
-        lines.append("            {{- raise_exception('Tool message must have a call_id or tool_call_id of 9 characters or numbers.') }}")
+        lines.append(
+            "            {{- raise_exception('Tool message must have a call_id or tool_call_id of 9 characters or numbers.') }}"  # noqa: E501
+        )
         lines.append("        {%- endif %}")
         lines.append("")
         lines.append("        {%- set tool_message = {'content': tool_content, 'call_id': tool_id} %}")
@@ -863,8 +845,8 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
     return "\n".join(lines)
 
 
-def _generate_else_block(config: TemplateConfig) -> str:
-    """Generate else block for unsupported roles."""
+def _generate_else_role_block(config: TemplateConfig) -> str:
+    r"""Generate else block for unsupported roles."""
     lines = []
     lines.append("")
     lines.append("    {#- Raise exception for unsupported roles. #}")
@@ -874,10 +856,14 @@ def _generate_else_block(config: TemplateConfig) -> str:
             lines.append("    {%- elif message['role'] != 'tool' or ns.index > ns.max_idx_user %}")
         else:
             lines.append("    {%- else %}")
-        lines.append("        {{- raise_exception('Only user, assistant and tool roles are supported, got ' + message['role'] + '.') }}")
+        lines.append(
+            "        {{- raise_exception('Only user, assistant and tool roles are supported, got ' + message['role'] + '.') }}"  # noqa: E501
+        )
     else:
         lines.append("    {%- else %}")
-        lines.append("        {{- raise_exception('Only user and assistant roles are supported, got ' + message['role'] + '.') }}")
+        lines.append(
+            "        {{- raise_exception('Only user and assistant roles are supported, got ' + message['role'] + '.') }}"  # noqa: E501
+        )
 
     lines.append("    {%- endif %}")
 
@@ -885,10 +871,16 @@ def _generate_else_block(config: TemplateConfig) -> str:
 
 
 def _generate_message_loop(config: TemplateConfig) -> str:
-    """Generate the main message processing loop."""
+    r"""Generate the main message processing loop.
+
+    Args:
+        config: The template configuration.
+
+    Returns:
+        A string representing the main message processing loop of the chat template.
+    """
     lines = []
 
-    # Reset index for v3/v7 SPM style
     if config.tracks_max_idx_user:
         lines.append("")
         lines.append("{%- set ns.index = 0 %}")
@@ -896,17 +888,10 @@ def _generate_message_loop(config: TemplateConfig) -> str:
     lines.append("{#- Handle conversation messages. #}")
     lines.append("{%- for message in loop_messages %}")
 
-    # User message
     lines.append(_generate_user_message_handling(config))
-
-    # Assistant message
     lines.append(_generate_assistant_message_handling(config))
-
-    # Tool message
     lines.append(_generate_tool_message_handling(config))
-
-    # Else block
-    lines.append(_generate_else_block(config))
+    lines.append(_generate_else_role_block(config))
 
     # Index tracking for v3/v7 style
     if config.tracks_max_idx_user:
@@ -920,7 +905,7 @@ def _generate_message_loop(config: TemplateConfig) -> str:
 
 
 def _generate_v1_template(config: TemplateConfig) -> str:
-    """Generate v1 template which has unique structure."""
+    r"""Generate v1 template which has unique structure."""
     lines = []
     lines.append(_generate_header())
     lines.append(_generate_system_prompt_handling(config))
@@ -930,7 +915,9 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("{%- for message in loop_messages %}")
     lines.append("    {%- if message.role == 'user' or message.role == 'assistant' %}")
     lines.append("        {%- if (message['role'] == 'user') != (ns.index % 2 == 0) %}")
-    lines.append("            {{- raise_exception('After the optional system message, conversation roles must alternate user and assistant.') }}")
+    lines.append(
+        "            {{- raise_exception('After the optional system message, conversation roles must alternate user and assistant.') }}"  # noqa: E501
+    )
     lines.append("        {%- endif %}")
     lines.append("        {%- set ns.index = ns.index + 1 %}")
     lines.append("    {%- endif %}")
@@ -954,7 +941,9 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("                {%- if block['type'] == 'text' %}")
     lines.append("                    {{- block['text'] }}")
     lines.append("                {%- else %}")
-    lines.append("                    {{- raise_exception('Only text chunks are supported in user message content.') }}")
+    lines.append(
+        "                    {{- raise_exception('Only text chunks are supported in user message content.') }}"
+    )
     lines.append("                {%- endif %}")
     lines.append("            {%- endfor %}")
     lines.append("        {%- else %}")
@@ -963,7 +952,7 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("        {{- ' [/INST]' }}")
     if config.spm:
         lines.append("        {%- if loop.index < loop.length %}")
-        lines.append("            {{- \" \" }}")
+        lines.append('            {{- " " }}')
         lines.append("        {%- endif %}")
     lines.append("")
     lines.append("    {#- Assistant messages supports text content or text chunks. #}")
@@ -975,7 +964,9 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("                {%- if block['type'] == 'text' %}")
     lines.append("                    {{- block['text'] }}")
     lines.append("                {%- else %}")
-    lines.append("                    {{- raise_exception('Only text chunks are supported in assistant message contents.') }}")
+    lines.append(
+        "                    {{- raise_exception('Only text chunks are supported in assistant message contents.') }}"
+    )
     lines.append("                {%- endif %}")
     lines.append("            {%- endfor %}")
     lines.append("            {#- End of sequence token for each assistant messages. #}")
@@ -987,7 +978,9 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("")
     lines.append("    {#- Raise exception for unsupported roles. #}")
     lines.append("    {%- else %}")
-    lines.append("        {{- raise_exception('Only user and assistant roles are supported, got ' + message['role'] + '.') }}")
+    lines.append(
+        "        {{- raise_exception('Only user and assistant roles are supported, got ' + message['role'] + '.') }}"
+    )
     lines.append("    {%- endif %}")
     lines.append("{%- endfor %}")
 
@@ -995,15 +988,18 @@ def _generate_v1_template(config: TemplateConfig) -> str:
 
 
 def generate_chat_template(config: TemplateConfig) -> str:
-    """Generate a complete chat template based on configuration.
+    r"""Generate a complete chat template based on configuration.
 
     Args:
         config: Template configuration specifying version and features.
 
     Returns:
         The complete Jinja2 template as a string.
+
+    Examples:
+        >>> config = TemplateConfig(version=TokenizerVersion.v3, image_support=True)
+        >>> template = generate_chat_template(config)
     """
-    # v1 has a unique structure, handle separately
     if config.version == TokenizerVersion.v1:
         return _generate_v1_template(config)
 
