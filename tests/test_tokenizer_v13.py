@@ -2,6 +2,8 @@ import pytest
 
 from mistral_common.exceptions import InvalidAssistantMessageException, TokenizerException
 from mistral_common.protocol.instruct.chunk import (
+    AudioChunk,
+    AudioURLChunk,
     TextChunk,
     ThinkChunk,
 )
@@ -16,11 +18,23 @@ from mistral_common.protocol.instruct.normalize import InstructRequestNormalizer
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.protocol.instruct.validator import MistralRequestValidatorV13
-from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized, TokenizerVersion
+from mistral_common.tokens.tokenizers.audio import AudioConfig, AudioEncoder, AudioSpectrogramConfig, SpecialAudioIDs
+from mistral_common.tokens.tokenizers.base import InstructTokenizer, SpecialTokens, Tokenized, TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import SpecialTokenPolicy, Tekkenizer
+from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
 from tests.test_tekken import get_special_tokens, quick_vocab
+
+
+@pytest.fixture(scope="module")
+def audio_chunk() -> AudioChunk:
+    return get_dummy_audio_chunk()
+
+
+@pytest.fixture(scope="module")
+def audio_url_chunk() -> AudioURLChunk:
+    return get_dummy_audio_url_chunk()
 
 
 @pytest.fixture(scope="session")
@@ -49,6 +63,36 @@ def v13_tekkenizer_think() -> InstructTokenizerV13:
         version=TokenizerVersion.v13,
     )
     return InstructTokenizerV13(tokenizer)
+
+
+@pytest.fixture(scope="session")
+def v13_tekkenizer_audio() -> InstructTokenizerV13:
+    special_tokens = get_special_tokens(TokenizerVersion.v13, add_think=False, add_audio=True)
+    tokenizer = Tekkenizer(
+        quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
+        special_tokens=special_tokens,
+        pattern=r".+",  # single token, whole string
+        vocab_size=256 + 100,
+        num_special_tokens=100,
+        version=TokenizerVersion.v13,
+    )
+
+    audio_config = AudioConfig(
+        sampling_rate=24_000,
+        frame_rate=12.5,
+        encoding_config=AudioSpectrogramConfig(
+            num_mel_bins=128,
+            window_size=400,
+            hop_length=160,
+        ),
+    )
+    special_audio_ids = SpecialAudioIDs(
+        audio=tokenizer.get_special_token(SpecialTokens.audio.value),
+        begin_audio=tokenizer.get_special_token(SpecialTokens.begin_audio.value),
+        streaming_pad=None,
+    )
+    audio_encoder = AudioEncoder(audio_config, special_audio_ids)
+    return InstructTokenizerV13(tokenizer, audio_encoder=audio_encoder)
 
 
 EXPECTED_TEXT_V13: str = (
@@ -327,3 +371,22 @@ def test_encode_system_message(
 ) -> None:
     encoded = v13_tekkenizer_think.encode_system_message(message)
     assert v13_tekkenizer_think.decode(encoded, special_token_policy=SpecialTokenPolicy.KEEP) == expected
+
+
+@pytest.mark.parametrize("audio_fixture", ["audio_chunk", "audio_url_chunk"])
+def test_encode_chat_completion_request_with_sp_and_audio(
+    v13_tekkenizer_audio: InstructTokenizerV13, audio_fixture: str, request: pytest.FixtureRequest
+) -> None:
+    audio_chunk: AudioChunk | AudioURLChunk = request.getfixturevalue(audio_fixture)
+    request_normalizer = InstructRequestNormalizerV13.normalizer()
+    validator = MistralRequestValidatorV13()
+    messages = [
+        SystemMessage(content="hello"),
+        UserMessage(content=[audio_chunk]),
+    ]
+    mistral_tokenizer_v13 = MistralTokenizer(
+        instruct_tokenizer=v13_tekkenizer_audio, validator=validator, request_normalizer=request_normalizer
+    )
+    encoded = mistral_tokenizer_v13.encode_chat_completion(ChatCompletionRequest(messages=messages))
+    assert encoded.text == "<s>[SYSTEM_PROMPT]hello[/SYSTEM_PROMPT][INST][BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
+    assert len(encoded.audios) == 1

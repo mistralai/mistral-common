@@ -5,6 +5,7 @@ from mistral_common.exceptions import (
     InvalidMessageStructureException,
     InvalidRequestException,
 )
+from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     SystemMessage,
@@ -16,9 +17,21 @@ from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
 from mistral_common.protocol.instruct.validator import (
     MistralRequestValidator,
     MistralRequestValidatorV3,
+    MistralRequestValidatorV5,
     MistralRequestValidatorV13,
     ValidationMode,
 )
+from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
+
+
+@pytest.fixture(scope="module")
+def audio_chunk() -> AudioChunk:
+    return get_dummy_audio_chunk()
+
+
+@pytest.fixture(scope="module")
+def audio_url_chunk() -> AudioURLChunk:
+    return get_dummy_audio_url_chunk()
 
 
 @pytest.fixture(
@@ -30,6 +43,11 @@ from mistral_common.protocol.instruct.validator import (
 )
 def validator(request: pytest.FixtureRequest) -> MistralRequestValidator:
     return request.param  # type: ignore
+
+
+@pytest.fixture
+def validator_v5() -> MistralRequestValidatorV5:
+    return MistralRequestValidatorV5(ValidationMode.serving)
 
 
 @pytest.fixture(
@@ -262,7 +280,51 @@ class TestChatValidation:
             )
 
 
-class TestChatValidationV6:
+class TestChatValidationV5:
+    @pytest.mark.parametrize("audio_fixture", ["audio_chunk", "audio_url_chunk"])
+    def test_audio_with_system_prompt_raises_error(
+        self, validator_v5: MistralRequestValidatorV5, audio_fixture: str, request: pytest.FixtureRequest
+    ) -> None:
+        audio_chunk: AudioChunk | AudioURLChunk = request.getfixturevalue(audio_fixture)
+        with pytest.raises(
+            ValueError,
+            match=(
+                r"Found system messages at indexes \[0\] and audio chunks in messages at indexes \[1\]\. This is not "
+                r"allowed prior to the tokenizer version 13\."
+            ),
+        ):
+            validator_v5.validate_messages(
+                messages=[
+                    SystemMessage(content="This is a system prompt"),
+                    UserMessage(content=[audio_chunk]),
+                ],
+                continue_final_message=False,
+            )
+
+    @pytest.mark.parametrize("audio_fixture", ["audio_chunk", "audio_url_chunk"])
+    def test_audio_without_system_prompt_ok(
+        self, validator_v5: MistralRequestValidatorV5, audio_fixture: str, request: pytest.FixtureRequest
+    ) -> None:
+        audio_chunk: AudioChunk | AudioURLChunk = request.getfixturevalue(audio_fixture)
+        validator_v5.validate_messages(
+            messages=[
+                UserMessage(content=[audio_chunk]),
+                UserMessage(content="User message after audio"),
+            ],
+            continue_final_message=False,
+        )
+
+    def test_system_prompt_without_audio_ok(self, validator_v5: MistralRequestValidatorV5) -> None:
+        validator_v5.validate_messages(
+            messages=[
+                SystemMessage(content="This is a system prompt"),
+                UserMessage(content="User message after system"),
+            ],
+            continue_final_message=False,
+        )
+
+
+class TestChatValidationV13:
     def test_right_number_results_invalid_id(self, validator_v13: MistralRequestValidatorV13) -> None:
         with pytest.raises(
             InvalidMessageStructureException,
@@ -392,6 +454,19 @@ class TestChatValidationV6:
                 ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
                 AssistantMessage(content="h"),
                 UserMessage(content="foo"),
+            ],
+            continue_final_message=False,
+        )
+
+    @pytest.mark.parametrize("audio_fixture", ["audio_chunk", "audio_url_chunk"])
+    def test_audio_with_system_prompt_raises_ok(
+        self, validator_v13: MistralRequestValidatorV13, audio_fixture: str, request: pytest.FixtureRequest
+    ) -> None:
+        audio_chunk: AudioChunk | AudioURLChunk = request.getfixturevalue(audio_fixture)
+        validator_v13.validate_messages(
+            messages=[
+                SystemMessage(content="This is a system prompt"),
+                UserMessage(content=[audio_chunk]),
             ],
             continue_final_message=False,
         )
