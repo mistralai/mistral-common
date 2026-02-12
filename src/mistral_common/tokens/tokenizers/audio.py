@@ -2,6 +2,7 @@ import logging
 import math
 import warnings
 from dataclasses import dataclass
+from typing import Any
 from enum import Enum
 
 import numpy as np
@@ -242,7 +243,7 @@ class AudioEncoder:
         audio_array: np.ndarray,
         sampling_rate: int,
         transcription_delay_ms: float | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> np.ndarray:
         r"""Pad the audio array to the desired length.
 
