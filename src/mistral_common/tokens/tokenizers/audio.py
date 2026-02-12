@@ -337,8 +337,8 @@ class AudioEncoder:
         return math.ceil(audio_array_len / self.audio_config.chunk_frames) * self.audio_config.chunk_frames
 
     def encode_streaming_tokens(self, transcription_delay_ms: float | None = None) -> list[int]:
-    r"""Encode the streaming tokens given a transcription delay."""
-assert isinstance(self.audio_config.encoding_config, AudioSpectrogramConfig), (
+        r"""Encode the streaming tokens given a transcription delay."""
+        assert isinstance(self.audio_config.encoding_config, AudioSpectrogramConfig), (
             f"Audio encoder must be spectrogram encoder, got {self.audio_config.encoding_config=}"
         )
         assert self.audio_config.transcription_delay_ms is not None
