@@ -2,8 +2,8 @@ import logging
 import math
 import warnings
 from dataclasses import dataclass
-from typing import Any
 from enum import Enum
+from typing import Any
 
 import numpy as np
 
