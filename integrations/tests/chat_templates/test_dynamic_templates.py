@@ -333,15 +333,26 @@ def test_dynamic_template_comprehensive(
         )
 
     for test_case in test_cases:
-        try:
-            static_output = render_template(static_template, test_case["messages"])
-            dynamic_output = render_template(dynamic_template, test_case["messages"])
+        test_name = test_case["name"]
 
-            assert static_output == dynamic_output, (
-                f"Output mismatch for version={version}, case={test_case['name']}\n\n"
-                f"Static output: {static_output}\n"
-                f"Dynamic output: {dynamic_output}"
-            )
-        except ValueError:
-            # Some configurations may not support all test cases, that's OK
-            pass
+        # Explicitly skip unsupported configurations rather than catching exceptions
+        # Image tests require image support
+        if test_name == "with_image" and not image:
+            continue
+
+        # Audio tests require audio support
+        if test_name == "with_audio" and not audio:
+            continue
+
+        # Thinking tests require thinking support
+        if test_name == "with_thinking" and not think:
+            continue
+
+        static_output = render_template(static_template, test_case["messages"])
+        dynamic_output = render_template(dynamic_template, test_case["messages"])
+
+        assert static_output == dynamic_output, (
+            f"Output mismatch for version={version}, case={test_name}\n\n"
+            f"Static output: {static_output}\n"
+            f"Dynamic output: {dynamic_output}"
+        )

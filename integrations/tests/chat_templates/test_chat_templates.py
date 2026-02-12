@@ -140,7 +140,9 @@ def _get_audio_encoder() -> AudioEncoder:
             hop_length=160,
         ),
     )
-    audio_encoder = AudioEncoder(audio_config=audio_config, special_ids=SpecialAudioIDs(audio=24, begin_audio=25, streaming_pad=26))
+    audio_encoder = AudioEncoder(
+        audio_config=audio_config, special_ids=SpecialAudioIDs(audio=24, begin_audio=25, streaming_pad=26)
+    )
     return audio_encoder
 
 
@@ -1368,3 +1370,192 @@ def test_invalid_assistant(
     chat_template = generate_chat_template_dynamic(spm, version, image, audio, think)
     with pytest.raises(TemplateError, match="Assistant message cannot have both content and tool calls."):
         encode_transformers(chat_template, invalid_message_conv)
+
+
+class TestDefaultSystemPrompt:
+    """Tests for the default_system_prompt parameter in generate_chat_template_dynamic.
+
+    There are two different system prompt handling methods:
+    1. Legacy style (v1-v3): System message injected into user messages
+    2. Modern style (v7+): Uses [SYSTEM_PROMPT]...[/SYSTEM_PROMPT] tokens
+
+    Tests cover representative versions for each method.
+    """
+
+    DEFAULT_SYSTEM_PROMPT = "You are a helpful AI assistant."
+
+    CONV_NO_SYSTEM = {
+        "messages": [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"},
+        ]
+    }
+
+    CONV_WITH_SYSTEM = {
+        "messages": [
+            {"role": "system", "content": "You are a custom assistant."},
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"},
+        ]
+    }
+
+    def test_legacy_style_default_system_prompt_used(self) -> None:
+        chat_template = generate_chat_template_dynamic(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v3,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=self.DEFAULT_SYSTEM_PROMPT,
+        )
+
+        output = encode_transformers(chat_template, self.CONV_NO_SYSTEM)
+
+        assert self.DEFAULT_SYSTEM_PROMPT in output
+        assert f"[INST]{self.DEFAULT_SYSTEM_PROMPT}\n\nHello[/INST]" in output
+
+    def test_legacy_style_default_system_prompt_ignored_when_provided(self) -> None:
+        chat_template = generate_chat_template_dynamic(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v3,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=self.DEFAULT_SYSTEM_PROMPT,
+        )
+
+        output = encode_transformers(chat_template, self.CONV_WITH_SYSTEM)
+
+        assert self.DEFAULT_SYSTEM_PROMPT not in output
+        assert "You are a custom assistant." in output
+
+    def test_legacy_style_no_default_system_prompt(self) -> None:
+        chat_template = generate_chat_template_dynamic(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v3,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=None,
+        )
+
+        output = encode_transformers(chat_template, self.CONV_NO_SYSTEM)
+
+        assert "[INST]Hello[/INST]" in output
+
+    def test_modern_style_default_system_prompt_used(self) -> None:
+        chat_template = generate_chat_template_dynamic(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v7,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=self.DEFAULT_SYSTEM_PROMPT,
+        )
+
+        output = encode_transformers(chat_template, self.CONV_NO_SYSTEM)
+
+        assert f"[SYSTEM_PROMPT]{self.DEFAULT_SYSTEM_PROMPT}[/SYSTEM_PROMPT]" in output
+
+    def test_modern_style_default_system_prompt_ignored_when_provided(self) -> None:
+        chat_template = generate_chat_template_dynamic(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v7,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=self.DEFAULT_SYSTEM_PROMPT,
+        )
+
+        output = encode_transformers(chat_template, self.CONV_WITH_SYSTEM)
+
+        assert self.DEFAULT_SYSTEM_PROMPT not in output
+        assert "[SYSTEM_PROMPT]You are a custom assistant.[/SYSTEM_PROMPT]" in output
+
+    def test_modern_style_no_default_system_prompt(self) -> None:
+        chat_template = generate_chat_template_dynamic(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v7,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=None,
+        )
+
+        output = encode_transformers(chat_template, self.CONV_NO_SYSTEM)
+
+        assert "[SYSTEM_PROMPT]" not in output
+        assert "[/SYSTEM_PROMPT]" not in output
+
+    def test_legacy_spm_style_default_system_prompt(self) -> None:
+        """Test default system prompt with SPM tokenizer (v3 SPM style)."""
+        chat_template = generate_chat_template_dynamic(
+            spm=True,
+            tokenizer_version=TokenizerVersion.v3,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=self.DEFAULT_SYSTEM_PROMPT,
+        )
+
+        output = encode_transformers(chat_template, self.CONV_NO_SYSTEM)
+
+        assert self.DEFAULT_SYSTEM_PROMPT in output
+        assert f"[INST] {self.DEFAULT_SYSTEM_PROMPT}\n\nHello[/INST]" in output
+
+    def test_modern_spm_style_default_system_prompt(self) -> None:
+        chat_template = generate_chat_template_dynamic(
+            spm=True,
+            tokenizer_version=TokenizerVersion.v7,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=self.DEFAULT_SYSTEM_PROMPT,
+        )
+
+        output = encode_transformers(chat_template, self.CONV_NO_SYSTEM)
+
+        assert f"[SYSTEM_PROMPT]{self.DEFAULT_SYSTEM_PROMPT}[/SYSTEM_PROMPT]" in output
+
+    def test_v11_style_default_system_prompt(self) -> None:
+        chat_template = generate_chat_template_dynamic(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v11,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=self.DEFAULT_SYSTEM_PROMPT,
+        )
+
+        output = encode_transformers(chat_template, self.CONV_NO_SYSTEM)
+
+        assert f"[SYSTEM_PROMPT]{self.DEFAULT_SYSTEM_PROMPT}[/SYSTEM_PROMPT]" in output
+
+    def test_v13_style_default_system_prompt(self) -> None:
+        chat_template = generate_chat_template_dynamic(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v13,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=self.DEFAULT_SYSTEM_PROMPT,
+        )
+
+        output = encode_transformers(chat_template, self.CONV_NO_SYSTEM)
+
+        assert f"[SYSTEM_PROMPT]{self.DEFAULT_SYSTEM_PROMPT}[/SYSTEM_PROMPT]" in output
+
+    def test_special_characters_in_system_prompt(self) -> None:
+        special_prompt = "You're a helpful assistant! Use \"quotes\" and 'apostrophes'."
+        chat_template = generate_chat_template_dynamic(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v7,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=special_prompt,
+        )
+
+        output = encode_transformers(chat_template, self.CONV_NO_SYSTEM)
+
+        assert special_prompt in output
