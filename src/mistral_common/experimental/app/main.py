@@ -95,7 +95,7 @@ def cli() -> None:
     "--engine-url",
     type=str,
     default="http://127.0.0.1:8080",
-    help="Enginge URL",
+    help="Engine URL",
     show_default=True,
 )
 @click.option(
