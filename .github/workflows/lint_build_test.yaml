@@ -20,18 +20,9 @@ concurrency:
   cancel-in-progress: ${{ github.event.pull_request.number != null }}
 
 jobs:
-  build_lint_test:
+  lint:
     if: ${{ github.event.pull_request.draft != true }}
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        # Support all LTS versions of Python
-        python-version: [
-          "3.10",
-          "3.11",
-          "3.12",
-          "3.13"
-        ]
     steps:
       - name: Checkout
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -39,11 +30,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
-          python-version: ${{ matrix.python-version }}
-      
-      - name: Check uv lock
-        run: |
-          uv lock --check
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       # Install
       - name: Install Dependencies
@@ -65,32 +54,74 @@ jobs:
         run: |
           uv run mypy .
 
+  test:
+    if: ${{ github.event.pull_request.draft != true }}
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Support all LTS versions of Python
+        python-version: [
+          "3.10",
+          "3.11",
+          "3.12",
+          "3.13"
+        ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Check uv lock
+        run: |
+          uv lock --check
+
+      # Install
+      - name: Install Dependencies
+        run: |
+          uv sync --frozen --all-extras --group dev
+
       # PyTest
       - name: Tests
         run: |
           uv run pytest --cov=mistral_common . --cov-report "xml:coverage.xml"
-      
+
+      # Save coverage report as artifact so it's not discarded after the job ends
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python-version }}
+          path: coverage.xml
+
       # Doctests
       - name: Doctests
         run: |
           uv run pytest --doctest-modules ./src
-  
+
   build_docs:
     if: ${{ github.event.pull_request.draft != true }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
-      
+
       - name: Install uv
         uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           python-version: "3.12"
-      
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
       - name: Install Dependencies
         run: |
           uv sync --frozen --all-extras --group docs
-  
+
       - name: Build Docs
         run: |
           uv run mkdocs build --strict
