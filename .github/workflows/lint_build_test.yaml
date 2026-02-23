@@ -32,7 +32,6 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
-          cache-dependency-glob: "uv.lock"
 
       # Install
       - name: Install Dependencies
@@ -49,11 +48,10 @@ jobs:
         run: |
           uv run ruff format . --check
 
-      # Mypy
-      - name: Mypy Check
+      - name: Check uv lock
         run: |
-          uv run mypy .
-
+          uv lock --check
+  
   test:
     if: ${{ github.event.pull_request.draft != true }}
     needs: lint
@@ -76,16 +74,15 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
-          cache-dependency-glob: "uv.lock"
-
-      - name: Check uv lock
-        run: |
-          uv lock --check
 
       # Install
       - name: Install Dependencies
         run: |
           uv sync --frozen --all-extras --group dev
+
+      - name: Mypy Check
+        run: |
+          uv run mypy --python-version ${{ matrix.python-version }} .
 
       # PyTest
       - name: Tests
@@ -116,7 +113,6 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
-          cache-dependency-glob: "uv.lock"
 
       - name: Install Dependencies
         run: |
