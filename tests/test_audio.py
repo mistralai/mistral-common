@@ -1,7 +1,9 @@
 import tempfile
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+import requests
 import soundfile as sf
 
 from mistral_common.audio import Audio, hertz_to_mel, mel_filter_bank
@@ -49,17 +51,42 @@ def test_from_file() -> None:
 
 def test_from_url() -> None:
     # Test with an invalid URL
-    with pytest.raises(ValueError, match=("Failed to download audio from URL: https://example.com/invalid_audio.wav")):
-        Audio.from_url("https://example.com/invalid_audio.wav")
+    with patch("mistral_common.audio.requests.get") as mock_get:
+        mock_get.side_effect = requests.RequestException("connection failed")
+        with pytest.raises(
+            ValueError,
+            match="Failed to download audio from URL: https://example.com/invalid_audio.wav",
+        ):
+            Audio.from_url("https://example.com/invalid_audio.wav")
 
     # Test with an invalid content
-    with pytest.raises(ValueError, match="Failed to create Audio instance from URL: https://example.com ."):
-        Audio.from_url("https://example.com")
+    with patch("mistral_common.audio.requests.get") as mock_get:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = b"<html>this is not audio</html>"
+        mock_get.return_value = mock_response
+        with pytest.raises(
+            ValueError,
+            match=r"Failed to create Audio instance from URL: https://example\.com \.",
+        ):
+            Audio.from_url("https://example.com")
 
     # Test valid URL
-    url = "https://download.samplelib.com/mp3/sample-3s.mp3"
-    audio_url = Audio.from_url(url, strict=False)
-    assert isinstance(audio_url, Audio)
+    sampling_rate = 16_000
+    audio_array = sin_wave(sampling_rate, 1)
+    with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
+        with sf.SoundFile(tmp.name, "w", samplerate=sampling_rate, channels=1) as f:
+            f.write(audio_array)
+        with open(tmp.name, "rb") as f:
+            wav_bytes = f.read()
+
+    with patch("mistral_common.audio.requests.get") as mock_get:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = wav_bytes
+        mock_get.return_value = mock_response
+        audio_url = Audio.from_url("https://fake-audio-url.com/sample.wav", strict=False)
+        assert isinstance(audio_url, Audio)
 
 
 @pytest.mark.parametrize("prefix", [True, False])
