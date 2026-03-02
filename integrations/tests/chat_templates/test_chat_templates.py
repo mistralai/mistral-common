@@ -1,15 +1,16 @@
 import json
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import numpy as np
 import pytest
 from jinja2.exceptions import TemplateError
+from PIL import Image
 from transformers.utils.chat_template_utils import render_jinja_template  # type: ignore[import-not-found]
 
 from integrations.chat_templates.chat_templates import generate_chat_template_dynamic
 from mistral_common.audio import Audio
-from mistral_common.image import download_image
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURL,
@@ -45,6 +46,7 @@ from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV7,
     InstructTokenizerV11,
     InstructTokenizerV13,
+    InstructTokenizerV14,
 )
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
@@ -58,7 +60,28 @@ TEST_DIR = ROOT_DIR / "tests"
 mistral_tokenizer = MistralTokenizer.from_hf_hub("mistralai/Magistral-Small-2509")
 
 _IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/7/78/Red_Square_%282x2_Pixel%29.png"
-_IMAGE = download_image(_IMAGE_URL)
+
+
+def _create_dummy_image() -> Image.Image:
+    """Create a simple dummy 2x2 red square image for testing."""
+    # Create a 2x2 red image (same as the one that was being downloaded)
+    img = Image.new("RGB", (2, 2), color="red")
+    return img
+
+
+# Create the dummy image once for module-level use
+_IMAGE = _create_dummy_image()
+
+
+@pytest.fixture(autouse=True, scope="module")
+def mock_download_image():
+    """Mock the download_image function to return a dummy image for all tests."""
+    with patch("mistral_common.image.download_image") as mock_download:
+        mock_download.return_value = _IMAGE
+        # Also mock it in other modules where it might be imported
+        with patch("mistral_common.tokens.tokenizers.image.download_image") as mock_download2:
+            mock_download2.return_value = _IMAGE
+            yield
 
 
 def _sin_wave(sampling_rate: int, duration: float) -> np.ndarray:
@@ -203,6 +226,8 @@ def _get_mistral_tekkenizer(
         instruct_cls = InstructTokenizerV11
     elif tokenizer_version == TokenizerVersion.v13:
         instruct_cls = InstructTokenizerV13
+    elif tokenizer_version == TokenizerVersion.v14:
+        instruct_cls = InstructTokenizerV14
     else:
         raise ValueError(f"Unknown tokenizer version: {tokenizer_version}")
 
@@ -280,6 +305,8 @@ def encode_transformers(
                     openai_message["name"] = chat_message.name
     else:
         openai_request = chat_request
+    for tool in openai_request.get("tools", []):
+        tool["function"].pop("strict", False)
     encoded = render_jinja_template(
         [openai_request["messages"]],
         tools=openai_request.get("tools", None),
@@ -990,6 +1017,16 @@ def _get_conversations(
         else:
             conversations.extend([REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN])
 
+    conversations = [c.model_copy(deep=True) for c in conversations]
+
+    if think and tokenizer_version >= TokenizerVersion.v14:
+        for conv in conversations:
+            for message in conv.messages:
+                if isinstance(message, SystemMessage) and isinstance(message.content, list):
+                    message.content = [
+                        TextChunk(text="\n".join([c.text for c in message.content if isinstance(c, TextChunk)]))
+                    ]
+
     return conversations
 
 
@@ -1016,6 +1053,10 @@ def _get_conversations(
         (False, TokenizerVersion.v13, True, False, False),
         (False, TokenizerVersion.v13, False, True, False),
         (False, TokenizerVersion.v13, True, False, True),
+        (False, TokenizerVersion.v14, False, False, False),
+        (False, TokenizerVersion.v14, True, False, False),
+        (False, TokenizerVersion.v14, False, True, False),
+        (False, TokenizerVersion.v14, True, False, True),
     ],
 )
 @pytest.mark.parametrize("mode", [ValidationMode.test, ValidationMode.finetuning])
@@ -1090,6 +1131,10 @@ def test_chat_template(
         (False, TokenizerVersion.v13, True, False, False),
         (False, TokenizerVersion.v13, False, True, False),
         (False, TokenizerVersion.v13, True, False, True),
+        (False, TokenizerVersion.v14, False, False, False),
+        (False, TokenizerVersion.v14, True, False, False),
+        (False, TokenizerVersion.v14, False, True, False),
+        (False, TokenizerVersion.v14, True, False, True),
     ],
 )
 def test_role_error(
@@ -1160,6 +1205,10 @@ def test_role_error(
         (False, TokenizerVersion.v13, True, False, False),
         (False, TokenizerVersion.v13, False, True, False),
         (False, TokenizerVersion.v13, True, False, True),
+        (False, TokenizerVersion.v14, False, False, False),
+        (False, TokenizerVersion.v14, True, False, False),
+        (False, TokenizerVersion.v14, False, True, False),
+        (False, TokenizerVersion.v14, True, False, True),
     ],
 )
 def test_invalid_chunks(
@@ -1281,7 +1330,7 @@ def test_invalid_chunks(
     for conv in invalid_convs:
         msg_template = "Only {chunks} chunks are supported in {role} message content."
         if conv in SP_INVALIDS:
-            chunks = "text and thinking" if think else "text"
+            chunks = "text and thinking" if think and version < TokenizerVersion.v14 else "text"
             role = "system"
         elif conv in USER_INVALIDS:
             chunks = "text"

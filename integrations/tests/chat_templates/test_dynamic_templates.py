@@ -13,7 +13,9 @@ from integrations.chat_templates.template_generator import (
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 
 
-def render_template(template: str, messages: list[Any], tools: list[Any] | None = None) -> str:
+def render_template(
+    template: str, messages: list[Any], tools: list[Any] | None = None, reasoning_effort: str | None = None
+) -> str:
     """Render a jinja2 template with the given messages."""
     from jinja2 import BaseLoader
     from jinja2.sandbox import ImmutableSandboxedEnvironment
@@ -25,12 +27,18 @@ def render_template(template: str, messages: list[Any], tools: list[Any] | None 
     env.globals["raise_exception"] = raise_exception
     jinja_template = env.from_string(template)
 
-    return jinja_template.render(
-        messages=messages,
-        tools=tools,
-        bos_token="<s>",
-        eos_token="</s>",
-    )
+    render_kwargs = {
+        "messages": messages,
+        "tools": tools,
+        "bos_token": "<s>",
+        "eos_token": "</s>",
+    }
+
+    # Only add reasoning_effort for v14+ templates that support it
+    if reasoning_effort is not None or "reasoning_effort" in template:
+        render_kwargs["reasoning_effort"] = reasoning_effort
+
+    return jinja_template.render(**render_kwargs)
 
 
 # All configurations for output comparison tests (including SPM)
@@ -51,6 +59,9 @@ ALL_CONFIGS = [
     (TokenizerVersion.v13, False, False, True, False),
     (TokenizerVersion.v13, False, False, False, True),
     (TokenizerVersion.v13, False, True, False, True),
+    (TokenizerVersion.v14, False, False, False, False),
+    (TokenizerVersion.v14, False, True, False, False),
+    (TokenizerVersion.v14, False, True, False, True),
     # SPM
     (TokenizerVersion.v1, True, False, False, False),
     (TokenizerVersion.v2, True, False, False, False),
@@ -191,6 +202,141 @@ def test_generate_chat_template_dynamic_function() -> None:
     assert static_output == dynamic_output
 
 
+def test_v14_reasoning_effort() -> None:
+    """Test that v14 templates correctly handle reasoning effort."""
+    # Test v14 template generation
+    template = generate_chat_template_dynamic(
+        spm=False,
+        tokenizer_version=TokenizerVersion.v14,
+        image_support=False,
+        audio_support=False,
+        thinking_support=False,
+    )
+
+    # Verify the template contains MODEL_SETTINGS logic
+    assert "[MODEL_SETTINGS]" in template
+    assert "reasoning_effort" in template
+
+    # Test rendering with different reasoning effort values
+    messages = [
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "content": "Hi there!"},
+    ]
+
+    # Test with no reasoning effort (should default to 'none')
+    output_none = render_template(template, messages, reasoning_effort=None)
+    assert '[MODEL_SETTINGS]{"reasoning_effort": "none"}[/MODEL_SETTINGS]' in output_none
+
+    # Test with reasoning effort='high'
+    output_high = render_template(template, messages, reasoning_effort="high")
+    assert '[MODEL_SETTINGS]{"reasoning_effort": "high"}[/MODEL_SETTINGS]' in output_high
+
+    # Test with reasoning effort='none'
+    output_none_explicit = render_template(template, messages, reasoning_effort="none")
+    assert '[MODEL_SETTINGS]{"reasoning_effort": "none"}[/MODEL_SETTINGS]' in output_none_explicit
+
+    # Test that v14 static and dynamic templates produce same output
+    static_template = get_chat_template(
+        spm=False,
+        tokenizer_version=TokenizerVersion.v14,
+        image_support=False,
+        audio_support=False,
+        thinking_support=False,
+    )
+
+    static_output = render_template(static_template, messages, reasoning_effort="high")
+    dynamic_output = render_template(template, messages, reasoning_effort="high")
+
+    assert static_output == dynamic_output
+
+
+def test_v14_with_features() -> None:
+    """Test that v14 templates work correctly with images and thinking."""
+    # Test v14 with image support
+    template_image = generate_chat_template_dynamic(
+        spm=False,
+        tokenizer_version=TokenizerVersion.v14,
+        image_support=True,
+        audio_support=False,
+        thinking_support=False,
+    )
+
+    messages_with_image = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "What is this?"},
+                {"type": "image_url", "image_url": "http://example.com/image.png"},
+            ],
+        },
+        {"role": "assistant", "content": "It's an image."},
+    ]
+
+    output = render_template(template_image, messages_with_image, reasoning_effort="high")
+    assert '[MODEL_SETTINGS]{"reasoning_effort": "high"}[/MODEL_SETTINGS]' in output
+    assert "[IMG]" in output
+
+    # Test v14 with thinking support
+    template_think = generate_chat_template_dynamic(
+        spm=False,
+        tokenizer_version=TokenizerVersion.v14,
+        image_support=False,
+        audio_support=False,
+        thinking_support=True,
+    )
+
+    messages_with_thinking = [
+        {"role": "user", "content": "Solve this problem"},
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "thinking", "thinking": "Let me think..."},
+                {"type": "text", "text": "The answer is 42."},
+            ],
+        },
+    ]
+
+    output = render_template(template_think, messages_with_thinking, reasoning_effort="none")
+    assert '[MODEL_SETTINGS]{"reasoning_effort": "none"}[/MODEL_SETTINGS]' in output
+    assert "[THINK]Let me think...[/THINK]" in output
+
+
+def test_v14_with_tools() -> None:
+    """Test that v14 templates work correctly with tools."""
+    template = generate_chat_template_dynamic(
+        spm=False,
+        tokenizer_version=TokenizerVersion.v14,
+        image_support=False,
+        audio_support=False,
+        thinking_support=False,
+    )
+
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "Get the current weather",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"location": {"type": "string", "description": "The city and state"}},
+                    "required": ["location"],
+                },
+            },
+        }
+    ]
+
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "What's the weather in Paris?"},
+    ]
+
+    output = render_template(template, messages, tools=tools, reasoning_effort="high")
+    assert '[MODEL_SETTINGS]{"reasoning_effort": "high"}[/MODEL_SETTINGS]' in output
+    assert "[AVAILABLE_TOOLS]" in output
+    assert "get_weather" in output
+
+
 # Comprehensive functional tests using the same test cases as test_chat_templates.py
 @pytest.mark.parametrize(
     ("version", "spm", "image", "audio", "think"),
@@ -211,6 +357,9 @@ def test_generate_chat_template_dynamic_function() -> None:
         (TokenizerVersion.v13, False, False, True, False),
         (TokenizerVersion.v13, False, False, False, True),
         (TokenizerVersion.v13, False, True, False, True),
+        (TokenizerVersion.v14, False, False, False, False),
+        (TokenizerVersion.v14, False, True, False, False),
+        (TokenizerVersion.v14, False, True, False, True),
     ],
 )
 def test_dynamic_template_comprehensive(
