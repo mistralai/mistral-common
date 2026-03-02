@@ -14,8 +14,7 @@ from mistral_common.exceptions import (
     InvalidToolMessageException,
     InvalidToolSchemaException,
 )
-from mistral_common.protocol.instruct.chunk import ThinkChunk
-from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk
+from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk, ThinkChunk
 from mistral_common.protocol.instruct.messages import (
     UATS,
     AssistantMessage,

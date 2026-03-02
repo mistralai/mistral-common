@@ -40,6 +40,9 @@
 
 {#- Model settings definition #}
 {%- set reasoning_effort = reasoning_effort if reasoning_effort is defined and reasoning_effort is not none else 'none' %}
+{%- if reasoning_effort not in ['none', 'high'] %}
+    {{- raise_exception('reasoning_effort must be either "none" or "high"') }}
+{%- endif %}
 {%- set model_settings = '[MODEL_SETTINGS]{"reasoning_effort": "' + reasoning_effort + '"}[/MODEL_SETTINGS]' %}
 {{- model_settings }}
 

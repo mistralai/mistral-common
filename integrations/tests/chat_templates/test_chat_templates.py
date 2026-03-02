@@ -307,12 +307,22 @@ def encode_transformers(
         openai_request = chat_request
     for tool in openai_request.get("tools", []):
         tool["function"].pop("strict", False)
+
+    # Extract reasoning_effort from the request if present
+    reasoning_effort = openai_request.get("reasoning_effort")
+
+    # Prepare kwargs for template rendering
+    template_kwargs = {}
+    if reasoning_effort is not None:
+        template_kwargs["reasoning_effort"] = reasoning_effort
+
     encoded = render_jinja_template(
         [openai_request["messages"]],
         tools=openai_request.get("tools", None),
         chat_template=chat_template,
         bos_token="<s>",
         eos_token="</s>",
+        **template_kwargs,
     )[0][0]
     assert isinstance(encoded, str), type(encoded)
     return encoded
@@ -1608,3 +1618,83 @@ class TestDefaultSystemPrompt:
         output = encode_transformers(chat_template, self.CONV_NO_SYSTEM)
 
         assert special_prompt in output
+
+
+@pytest.mark.parametrize(
+    ("spm", "version", "image", "audio", "think"),
+    [
+        (False, TokenizerVersion.v14, False, False, False),
+        (False, TokenizerVersion.v14, True, False, False),
+        (False, TokenizerVersion.v14, False, False, True),
+        (False, TokenizerVersion.v14, True, False, True),
+    ],
+)
+def test_reasoning_effort_validation(
+    spm: bool,
+    version: TokenizerVersion,
+    image: bool,
+    audio: bool,
+    think: bool,
+) -> None:
+    """Test that reasoning_effort must be either 'none' or 'high' for v14 templates."""
+    chat_template = generate_chat_template_dynamic(spm, version, image, audio, think)
+
+    # Test valid reasoning_effort values
+    valid_conversations = [
+        {
+            "messages": [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi"},
+            ],
+            "reasoning_effort": "none",
+        },
+        {
+            "messages": [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi"},
+            ],
+            "reasoning_effort": "high",
+        },
+        {
+            "messages": [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi"},
+            ]
+            # No reasoning_effort - should default to 'none'
+        },
+    ]
+
+    for conv in valid_conversations:
+        # Should not raise an exception
+        result = encode_transformers(chat_template, conv)
+        assert result is not None
+        assert "[MODEL_SETTINGS]" in result
+
+    # Test invalid reasoning_effort values
+    invalid_conversations = [
+        {
+            "messages": [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi"},
+            ],
+            "reasoning_effort": "low",
+        },
+        {
+            "messages": [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi"},
+            ],
+            "reasoning_effort": "medium",
+        },
+        {
+            "messages": [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi"},
+            ],
+            "reasoning_effort": "invalid_value",
+        },
+    ]
+
+    for conv in invalid_conversations:
+        with pytest.raises(TemplateError, match='reasoning_effort must be either "none" or "high"'):
+            encode_transformers(chat_template, conv)

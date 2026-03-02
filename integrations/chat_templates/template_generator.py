@@ -277,6 +277,9 @@ def _generate_model_settings_definition(config: TemplateConfig) -> str:
         "",
         "{#- Model settings definition #}",
         "{%- set reasoning_effort = reasoning_effort if reasoning_effort is defined and reasoning_effort is not none else 'none' %}",  # noqa: E501
+        "{%- if reasoning_effort not in ['none', 'high'] %}",  # noqa: E501
+        '    {{- raise_exception(\'reasoning_effort must be either "none" or "high"\') }}',  # noqa: E501
+        "{%- endif %}",
         "{%- set model_settings = '[MODEL_SETTINGS]{\"reasoning_effort\": \"' + reasoning_effort + '\"}[/MODEL_SETTINGS]' %}",  # noqa: E501
         "{{- model_settings }}",
     ]
