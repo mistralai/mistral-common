@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
+import requests
 import soundfile as sf
 
 from mistral_common.protocol.instruct.chunk import (
@@ -415,8 +416,12 @@ def test_tokenize_audio_url_chunk(
 def test_encode_invalid_audio_url_chunk(tekkenizer: InstructTokenizerV7) -> None:
     assert tekkenizer.audio_encoder is not None
     # Test with an invalid URL
-    with pytest.raises(ValueError, match=r"Failed to download audio from URL: https://example.com/invalid_audio.wav"):
-        tekkenizer.audio_encoder(AudioURLChunk(audio_url="https://example.com/invalid_audio.wav"))
+    with patch("mistral_common.audio.requests.get") as mock_get:
+        mock_get.side_effect = requests.RequestException("connection failed")
+        with pytest.raises(
+            ValueError, match=r"Failed to download audio from URL: https://example.com/invalid_audio.wav"
+        ):
+            tekkenizer.audio_encoder(AudioURLChunk(audio_url="https://example.com/invalid_audio.wav"))
 
     # Test with an invalid base64 string
     with pytest.raises(ValueError, match=r"base64 decoding failed. Please check the input string is a valid base64."):
