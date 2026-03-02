@@ -34,6 +34,10 @@ V13_IMAGE = _TEMPLATE_PATH / "v13_image.jinja"
 V13_IMAGE_THINK = _TEMPLATE_PATH / "v13_image_think.jinja"
 V13_AUDIO = _TEMPLATE_PATH / "v13_audio.jinja"
 V13_THINK = _TEMPLATE_PATH / "v13_think.jinja"
+V14 = _TEMPLATE_PATH / "v14.jinja"
+V14_IMAGE = _TEMPLATE_PATH / "v14_image.jinja"
+V14_IMAGE_THINK = _TEMPLATE_PATH / "v14_image_think.jinja"
+V14_THINK = _TEMPLATE_PATH / "v14_think.jinja"
 
 
 def generate_chat_template_dynamic(
@@ -175,6 +179,17 @@ def get_chat_template(
             return _load_chat_template(V13_THINK, default_system_prompt)
         else:
             return _load_chat_template(V13, default_system_prompt)
+    elif tokenizer_version == TokenizerVersion.v14:
+        if image_support and not thinking_support:
+            return _load_chat_template(V14_IMAGE, default_system_prompt)
+        elif image_support and thinking_support:
+            return _load_chat_template(V14_IMAGE_THINK, default_system_prompt)
+        elif audio_support:
+            return _load_chat_template(V13_AUDIO, default_system_prompt)
+        elif thinking_support:
+            return _load_chat_template(V14_THINK, default_system_prompt)
+        else:
+            return _load_chat_template(V14, default_system_prompt)
     raise ValueError(
         f"Unknown configuration: tokenizer_version={tokenizer_version}, image_support={image_support}, "
         f"audio_support={audio_support}, thinking_support={thinking_support}"

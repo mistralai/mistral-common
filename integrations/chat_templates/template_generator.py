@@ -12,7 +12,7 @@ class TemplateConfig:
     The template handles message roles, special tokens, tool calls, and multimodal content.
 
     Attributes:
-        version: The tokenizer version (e.g., v1, v2, v3, v7, v11, v13). Determines
+        version: The tokenizer version (e.g., v1, v2, v3, v7, v11, v13, v14). Determines
             special token formatting, tool call syntax, and available features.
         spm: Whether to use SentencePiece tokenizer formatting. When True, adds spaces
             after special tokens. Not supported for versions v11+ or with audio.
@@ -167,7 +167,7 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
         "{#- Handle system prompt if it exists. #}",
     ]
 
-    if config.thinking_support:
+    if config.thinking_support and config.version < TokenizerVersion.v14:
         chunk_comment = "{#- System prompt supports text content or text and thinking chunks. #}"
         chunk_handler = """            {%- if block['type'] == 'text' %}
                 {{- block['text'] }}
@@ -264,6 +264,22 @@ def _generate_tools_definition(config: TemplateConfig) -> str:
         lines.append("    {{- tools_definition }}")
 
     lines.append("{%- endif %}")
+
+    return "\n".join(lines)
+
+
+def _generate_model_settings_definition(config: TemplateConfig) -> str:
+    r"""Generate model settings definition section."""
+    if config.version < TokenizerVersion.v14:
+        return ""
+
+    lines = [
+        "",
+        "{#- Model settings definition #}",
+        "{%- set reasoning_effort = reasoning_effort if reasoning_effort is defined and reasoning_effort is not none else 'none' %}",  # noqa: E501
+        "{%- set model_settings = '[MODEL_SETTINGS]{\"reasoning_effort\": \"' + reasoning_effort + '\"}[/MODEL_SETTINGS]' %}",  # noqa: E501
+        "{{- model_settings }}",
+    ]
 
     return "\n".join(lines)
 
@@ -1007,6 +1023,7 @@ def generate_chat_template(config: TemplateConfig) -> str:
     parts.append(_generate_header())
     parts.append(_generate_system_prompt_handling(config))
     parts.append(_generate_tools_definition(config))
+    parts.append(_generate_model_settings_definition(config))
     parts.append(_generate_alternation_check(config))
     parts.append("")
     parts.append(_generate_message_loop(config))
