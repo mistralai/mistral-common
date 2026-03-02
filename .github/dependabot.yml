@@ -1,0 +1,25 @@
+# Keep dependencies and GitHub Actions up to date automatically
+version: 2
+updates:
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
+
+  # Python dependencies (pip/uv)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "deps"
+    labels:
+      - "dependencies"
+    # Only update direct dependencies, not transitive ones
+    allow:
+      - dependency-type: "direct"
