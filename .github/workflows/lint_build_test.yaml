@@ -30,7 +30,8 @@ jobs:
           "3.10",
           "3.11",
           "3.12",
-          "3.13"
+          "3.13",
+          "3.14",
         ]
     steps:
       - name: Checkout
@@ -85,7 +86,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
-          python-version: "3.12"
+          python-version: 3.14
       
       - name: Install Dependencies
         run: |
