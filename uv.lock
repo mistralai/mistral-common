@@ -939,7 +939,7 @@ requires-dist = [
     { name = "mistral-common", extras = ["soundfile"], marker = "extra == 'audio'" },
     { name = "mistral-common", extras = ["soxr"], marker = "extra == 'audio'" },
     { name = "numpy", marker = "python_full_version < '3.13'", specifier = ">=1.25,<2.4" },
-    { name = "numpy", marker = "python_full_version >= '3.13'", specifier = ">=2.4" },
+    { name = "numpy", marker = "python_full_version >= '3.13'", specifier = ">=1.25" },
     { name = "opencv-python-headless", marker = "extra == 'opencv'", specifier = ">=4.0.0" },
     { name = "pillow", specifier = ">=10.3.0" },
     { name = "pydantic", marker = "python_full_version < '3.14'", specifier = ">=2.7,<3.0" },

@@ -22,7 +22,7 @@ dependencies = [
     "pillow>=10.3.0",
     "requests>=2.0.0",
     "numpy>=1.25,<2.4; python_version <= '3.12'",
-    "numpy>=2.4; python_version > '3.12'",
+    "numpy>=1.25; python_version > '3.12'",
     "pydantic-extra-types[pycountry]>=2.10.5",
 ]
 
