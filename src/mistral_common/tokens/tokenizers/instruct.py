@@ -35,7 +35,7 @@ from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolCall
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import StreamingMode, TranscriptionRequest
-from mistral_common.tokens.tokenizers.audio import AudioEncoder, TranscriptionFormat
+from mistral_common.tokens.tokenizers.audio import AudioEncoder, AudioEncoding, TranscriptionFormat
 from mistral_common.tokens.tokenizers.base import (
     FIMRequestType,
     InstructRequestType,
@@ -381,6 +381,7 @@ class InstructTokenizerV1(
 
     def encode_speech_request(self, request: SpeechRequest) -> Tokenized:
         raise TokenizerException(f"Speech request not available for tokenizer {self.tokenizer.version.value}")
+
 
 class InstructTokenizerV2(
     InstructTokenizerV1, Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]
@@ -1138,7 +1139,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
         if ref_audio is not None:
             _audio = Audio.from_base64(ref_audio) if isinstance(ref_audio, str) else Audio.from_bytes(ref_audio)
         audio_enc = self.audio_encoder.encode_audio_for_speech_request(_audio, voice)
-        assert isinstance(audio_enc, PreAudioEncoding), f"Audio encoder must return PreAudioEncoding, got {audio_enc=}"
+        assert isinstance(audio_enc, AudioEncoding), f"Audio encoder must return PreAudioEncoding, got {audio_enc=}"
 
         return Tokenized(
             tokens=audio_enc.tokens,
@@ -1161,6 +1162,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
         tokenized.tokens = tokens
 
         return tokenized
+
 
 class InstructTokenizerV11(InstructTokenizerV7):
     r"""Instruct tokenizer V11.

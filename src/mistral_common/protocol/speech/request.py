@@ -1,10 +1,11 @@
+import io
+from typing import Any
+
 from pydantic import Field
 
 from mistral_common.audio import Audio
 from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
 from mistral_common.protocol.base import BaseCompletionRequest
-import io
-from typing import Any
 
 if is_soundfile_installed():
     import soundfile as sf
