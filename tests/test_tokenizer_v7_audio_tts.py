@@ -3,7 +3,7 @@ import math
 import numpy as np
 import pytest
 
-from mistral_common.tokens.audio.speech.request import BaseSpeechRequest
+from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.tokens.tokenizers.audio import (
     Audio,
     AudioConfig,
@@ -50,7 +50,7 @@ def test_encode_speech_request_with_ref_audio(tts_tokenizer: InstructTokenizerV7
     duration = 1.5
     sampling_rate = 24000
     audio = _make_fake_audio(duration, sampling_rate)
-    request = BaseSpeechRequest(input="Hello world", ref_audio=audio.to_base64())
+    request = SpeechRequest(input="Hello world", ref_audio=audio.to_base64())
     tokenized = tts_tokenizer.encode_speech_request(request)
 
     assert isinstance(tts_tokenizer.audio_encoder, AudioEncoder)
@@ -80,7 +80,7 @@ def test_encode_speech_request_with_ref_audio(tts_tokenizer: InstructTokenizerV7
 
 
 def test_encode_speech_request_with_voice_female(tts_tokenizer: InstructTokenizerV7) -> None:
-    request = BaseSpeechRequest(input="Hello world", voice="female")
+    request = SpeechRequest(input="Hello world", voice="female")
     tokenized = tts_tokenizer.encode_speech_request(request)
 
     BOS = tts_tokenizer.tokenizer.get_special_token(SpecialTokens.bos.value)
@@ -99,7 +99,7 @@ def test_encode_speech_request_with_voice_female(tts_tokenizer: InstructTokenize
 
 
 def test_encode_speech_request_with_voice_male(tts_tokenizer: InstructTokenizerV7) -> None:
-    request = BaseSpeechRequest(input="Hello world", voice="male")
+    request = SpeechRequest(input="Hello world", voice="male")
     tokenized = tts_tokenizer.encode_speech_request(request)
 
     BOS = tts_tokenizer.tokenizer.get_special_token(SpecialTokens.bos.value)
@@ -121,7 +121,7 @@ def test_encode_speech_request_ref_audio_takes_precedence_over_voice(
     tts_tokenizer: InstructTokenizerV7,
 ) -> None:
     audio = _make_fake_audio(1.0)
-    request = BaseSpeechRequest(input="text", ref_audio=audio.to_base64(), voice="female")
+    request = SpeechRequest(input="text", ref_audio=audio.to_base64(), voice="female")
     tokenized = tts_tokenizer.encode_speech_request(request)
 
     # ref_audio takes precedence: audio is not None so the audio path is used
@@ -140,14 +140,14 @@ def test_encode_speech_request_ref_audio_takes_precedence_over_voice(
 def test_encode_speech_request_neither_audio_nor_voice_fails(
     tts_tokenizer: InstructTokenizerV7,
 ) -> None:
-    request = BaseSpeechRequest(input="Hello world")
+    request = SpeechRequest(input="Hello world")
     with pytest.raises(AssertionError, match="Either ref_audio or voice must be defined"):
         tts_tokenizer.encode_speech_request(request)
 
 
 def test_encode_speech_request_text_tokens_correct(tts_tokenizer: InstructTokenizerV7) -> None:
     input_text = "The quick brown fox"
-    request = BaseSpeechRequest(input=input_text, voice="female")
+    request = SpeechRequest(input=input_text, voice="female")
     tokenized = tts_tokenizer.encode_speech_request(request)
 
     NEXT_AUDIO_TEXT = tts_tokenizer.tokenizer.get_special_token(SpecialTokens.text_to_audio.value)
@@ -166,7 +166,7 @@ def test_encode_speech_request_no_audio_encoder_fails() -> None:
     mm_tekkenizer = load_audio_v7_tokenizer()
     tokenizer_no_encoder = InstructTokenizerV7(tokenizer=mm_tekkenizer, audio_encoder=None)
 
-    request = BaseSpeechRequest(input="Hello world", voice="female")
+    request = SpeechRequest(input="Hello world", voice="female")
     with pytest.raises(AssertionError, match="Audio encoder must be defined"):
         tokenizer_no_encoder.encode_speech_request(request)
 
@@ -176,7 +176,7 @@ def test_encode_speech_request_audio_resampled(tts_tokenizer: InstructTokenizerV
     duration = 2.0
     source_sr = 16000
     audio = _make_fake_audio(duration, source_sr)
-    request = BaseSpeechRequest(input="Resample test", ref_audio=audio.to_base64())
+    request = SpeechRequest(input="Resample test", ref_audio=audio.to_base64())
     tokenized = tts_tokenizer.encode_speech_request(request)
 
     assert isinstance(tts_tokenizer.audio_encoder, AudioEncoder)
