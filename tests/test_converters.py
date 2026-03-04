@@ -54,6 +54,7 @@ from mistral_common.protocol.instruct.messages import (
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.protocol.transcription.request import TranscriptionRequest
+from mistral_common.protocol.speech.request import SpeechRequest
 
 CURRENT_FILE_PATH = Path(__file__).resolve()
 ROOT_PATH = CURRENT_FILE_PATH.parents[1]
@@ -834,3 +835,76 @@ def test_convert_transcription(audio: AudioChunk, language: LanguageAlpha2 | Non
     assert isinstance(from_oai, TranscriptionRequest)
 
     assert check_equality(request, from_oai)
+
+
+def _make_fake_audio(duration: float, sampling_rate: int = 24000) -> Audio:
+    rng = np.random.default_rng(42)
+    audio_array = rng.uniform(low=-1, high=1, size=int(duration * sampling_rate))
+    return Audio(audio_array=audio_array, sampling_rate=sampling_rate, format="wav")
+
+
+def _audio_to_wav_bytes(audio: Audio) -> bytes:
+    import soundfile as sf
+
+    buffer = io.BytesIO()
+    sf.write(buffer, audio.audio_array, audio.sampling_rate, format="wav")
+    return buffer.getvalue()
+
+
+def test_convert_speech_request_from_openai() -> None:
+    audio = _make_fake_audio(0.5)
+    raw_bytes = _audio_to_wav_bytes(audio)
+    openai_dict: dict[str, Any] = {
+        "input": "Hello world",
+        "model": "tts-1",
+        "voice": "female",
+        "ref_audio": io.BytesIO(raw_bytes),
+        "instructions": "Speak slowly",  # OAI-only field, should be ignored
+    }
+    request = SpeechRequest.from_openai(openai_dict)
+
+    assert request.input == "Hello world"
+    assert request.model == "tts-1"
+    assert request.voice == "female"
+    assert isinstance(request.ref_audio, str)
+    decoded_audio = Audio.from_base64(request.ref_audio)
+    assert np.allclose(decoded_audio.audio_array, audio.audio_array, atol=1e-3)
+
+    # Voice as dict with "id" (OAI format) should be normalized to string
+    openai_dict_voice_obj: dict[str, Any] = {
+        "input": "Hello",
+        "voice": {"id": "custom-voice-123"},
+    }
+    request_voice = SpeechRequest.from_openai(openai_dict_voice_obj)
+    assert request_voice.voice == "custom-voice-123"
+
+
+def test_convert_speech_request_round_trip() -> None:
+    audio = _make_fake_audio(0.5)
+    original = SpeechRequest(
+        input="Round trip test",
+        ref_audio=audio.to_base64(),
+        voice="female",
+        model="tts-1",
+    )
+
+    openai_dict = original.to_openai()
+    assert isinstance(openai_dict["ref_audio"], io.BytesIO)
+
+    restored = SpeechRequest.from_openai(openai_dict)
+
+    assert restored.input == original.input
+    assert restored.voice == original.voice
+    assert restored.model == original.model
+    assert isinstance(restored.ref_audio, str)
+    assert isinstance(original.ref_audio, str)
+    original_audio = Audio.from_base64(original.ref_audio)
+    restored_audio = Audio.from_base64(restored.ref_audio)
+    assert np.allclose(restored_audio.audio_array, original_audio.audio_array, atol=1e-3)
+
+    # Voice-only request (no ref_audio) should not crash
+    voice_only = SpeechRequest(input="Hello", voice="female")
+    voice_only_dict = voice_only.to_openai()
+    assert "ref_audio" not in voice_only_dict
+    assert voice_only_dict["input"] == "Hello"
+    assert voice_only_dict["voice"] == "female"
