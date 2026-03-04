@@ -94,8 +94,8 @@ class SpecialTokens(str, Enum):
     end_think = "[/THINK]"
     streaming_pad = "[STREAMING_PAD]"
     streaming_word = "[STREAMING_WORD]"
-    text_to_audio = "[TEXT_TO_AUDIO]"
-    audio_to_text = "[AUDIO_TO_TEXT]"
+    text_to_audio = "[NEXT_AUDIO_TEXT]"
+    audio_to_text = "[REPEAT_AUDIO_TEXT]"
 
 
 class SpecialTokenPolicy(str, Enum):
