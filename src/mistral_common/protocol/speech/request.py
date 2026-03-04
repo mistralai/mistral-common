@@ -24,7 +24,7 @@ class SpeechRequest(BaseCompletionRequest):
         description=(
             "Reference audio for voice cloning, provided as a base64-encoded string or raw bytes. ",
             "Takes precedence over voice when both are provided.",
-        )
+        ),
     )
 
     def to_openai(self, **kwargs: Any) -> dict[str, Any]:
