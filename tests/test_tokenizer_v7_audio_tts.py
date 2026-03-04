@@ -12,14 +12,14 @@ from mistral_common.tokens.tokenizers.audio import (
 )
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7
 from mistral_common.tokens.tokenizers.mistral import load_audio_encoder
-from mistral_common.tokens.tokenizers.special_tokens import SpecialTokenPolicy, SpecialTokens
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTokens
 
-from .test_tokenizer_v7_audio import load_audio_v7_tokenizer
+from .test_tokenizer_v7_audio import get_tekkenizer_with_audio
 
 
 @pytest.fixture(scope="session")
 def tts_tokenizer() -> InstructTokenizerV7:
-    mm_tekkenizer = load_audio_v7_tokenizer()
+    mm_tekkenizer = get_tekkenizer_with_audio().tokenizer
     audio_encoder = load_audio_encoder(
         AudioConfig(
             sampling_rate=24000,
