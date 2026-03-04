@@ -16,6 +16,7 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Tool
+from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import AudioEncoder
 from mistral_common.tokens.tokenizers.image import ImageEncoder
@@ -349,7 +350,10 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         Returns:
             Tokenized: The tokenized representation of the audio data, including processed audio and tokens
         """
-        ...
+
+    @abstractmethod
+    def encode_speech_request(self, request: SpeechRequest) -> TokenizedType:
+        """SpeechRequest to Tokenized object"""
 
     @abstractmethod
     def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy | None = None) -> str:

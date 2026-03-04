@@ -92,6 +92,9 @@ class AudioConfig:
 
     streaming_n_left_pad_tokens: int | None = None
 
+    # Mapping from speaker voice name to number of audio tokens for that speaker's reference audio
+    voice_num_audio_tokens: dict[str, int] | None = None
+
     def __post_init__(self) -> None:
         assert self.frame_rate > 0, self.frame_rate
         assert self.sampling_rate > 0, self.sampling_rate
@@ -206,7 +209,7 @@ class AudioEncoding:
     # Text tokens corresponding to this audio chunk
     tokens: list[int]
     # Original audio waveform data.
-    audio: Audio
+    audio: Audio | None
 
 
 @dataclass
@@ -377,6 +380,41 @@ class AudioEncoder:
         return AudioEncoding(
             tokens=tokens,
             audio=audio,
+        )
+
+    def _encode_audio_tokens_for_speech_request(self, num_audio_tokens: int) -> list[int]:
+        tokens = []
+        tokens.append(self.begin_audio_token)
+        tokens.extend([self.audio_token] * num_audio_tokens)
+        return tokens
+
+    def _get_num_audio_token_for_speech_request(self, audio_length: int) -> int:
+        return (
+            math.ceil((audio_length / self.audio_config.sampling_rate) * self.audio_config.frame_rate) + 1
+        )  # +1 for eoa (END_OUTPUT_AUDIO)
+
+    def encode_audio_for_speech_request(self, audio: Audio | None, voice: str | None) -> AudioEncoding:
+        assert audio is not None or voice is not None, (
+            f"Either audio or voice must be defined to encode audio, got {audio=} and {voice=}"
+        )
+
+        if audio is not None:
+            audio.resample(self.audio_config.sampling_rate)
+            num_audio_tokens = self._get_num_audio_token_for_speech_request(len(audio.audio_array))
+        else:
+            assert self.audio_config.voice_num_audio_tokens is not None, (
+                "voice_num_audio_tokens must be set in audio config to use voice-based speech requests"
+            )
+            assert voice is not None and voice in self.audio_config.voice_num_audio_tokens, (
+                f"Unknown voice {voice!r}, expected one of {list(self.audio_config.voice_num_audio_tokens)}"
+            )
+            num_audio_tokens = self.audio_config.voice_num_audio_tokens[voice]
+        tokens = self._encode_audio_tokens_for_speech_request(num_audio_tokens)
+
+        return AudioEncoding(
+            tokens=tokens,
+            audio=audio,
+            audio_segment_token_sizes=[],
         )
 
     def _encode_audio_chunk(self, content: AudioChunk) -> AudioEncoding:

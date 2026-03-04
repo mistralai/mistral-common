@@ -33,6 +33,7 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolCall
+from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import StreamingMode, TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import AudioEncoder, TranscriptionFormat
 from mistral_common.tokens.tokenizers.base import (
@@ -378,6 +379,8 @@ class InstructTokenizerV1(
     def encode_transcription(self, request: TranscriptionRequest) -> Tokenized:
         raise TokenizerException(f"Transcription not available for {self.tokenizer.version}")
 
+    def encode_speech_request(self, request: SpeechRequest) -> Tokenized:
+        raise TokenizerException(f"Speech request not available for tokenizer {self.tokenizer.version.value}")
 
 class InstructTokenizerV2(
     InstructTokenizerV1, Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]
@@ -1124,6 +1127,40 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
         return curr_tokens
 
+    def _encode_audio_for_speech_request(self, ref_audio: str | bytes | None, voice: str | None) -> Tokenized:
+        assert ref_audio is not None or voice is not None, (
+            f"Either ref_audio or voice must be defined to encode audio, got {ref_audio=} and {voice=}"
+        )
+        assert self.audio_encoder is not None, (
+            f"Audio encoder must be defined to encode audio, got {self.audio_encoder=}"
+        )
+        _audio = None
+        if ref_audio is not None:
+            _audio = Audio.from_base64(ref_audio) if isinstance(ref_audio, str) else Audio.from_bytes(ref_audio)
+        audio_enc = self.audio_encoder.encode_audio_for_speech_request(_audio, voice)
+        assert isinstance(audio_enc, PreAudioEncoding), f"Audio encoder must return PreAudioEncoding, got {audio_enc=}"
+
+        return Tokenized(
+            tokens=audio_enc.tokens,
+            audios=[audio_enc.audio] if audio_enc.audio is not None else [],
+        )
+
+    def encode_speech_request(self, request: SpeechRequest) -> Tokenized:
+        assert self.audio_encoder is not None, (
+            f"Audio encoder must be defined to encode audio, got {self.audio_encoder=}"
+        )
+        init_tokens = self.start()
+        tokenized = Tokenized(tokens=init_tokens)
+        tokenized_audio = self._encode_audio_for_speech_request(request.ref_audio, request.voice)
+        tokenized.extend(tokenized_audio)
+        tokens: list[int] = tokenized.tokens
+        tokens.append(self.token_text_to_audio)
+        tokens.extend(self.tokenizer.encode(request.input, bos=False, eos=False))
+        tokens.append(self.token_audio_to_text)
+        tokens.append(self.audio_encoder.begin_audio_token)
+        tokenized.tokens = tokens
+
+        return tokenized
 
 class InstructTokenizerV11(InstructTokenizerV7):
     r"""Instruct tokenizer V11.
