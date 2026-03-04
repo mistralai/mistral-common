@@ -329,9 +329,6 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
             image_encoder: The image encoder to use if any.
             audio_encoder: The audio encoder to use if any.
         """
-        self.tokenizer = tokenizer
-        self.image_encoder = image_encoder
-        self.audio_encoder = audio_encoder
 
     @abstractmethod
     def encode_instruct(self, request: InstructRequestType) -> TokenizedType:
