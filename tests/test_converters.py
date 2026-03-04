@@ -53,8 +53,8 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
-from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.protocol.speech.request import SpeechRequest
+from mistral_common.protocol.transcription.request import TranscriptionRequest
 
 CURRENT_FILE_PATH = Path(__file__).resolve()
 ROOT_PATH = CURRENT_FILE_PATH.parents[1]
