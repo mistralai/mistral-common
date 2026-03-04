@@ -60,6 +60,10 @@ class SpecialTokens(str, Enum):
         transcribe: The transcribe token.
         begin_think: The beginning of think token.
         end_think: The end of think token.
+        streaming_pad: The streaming pad token.
+        streaming_word: The streaming word token.
+        text_to_audio: The text to audio token.
+        audio_to_text: The audio to text token.
 
     Examples:
         >>> unk = SpecialTokens.unk
