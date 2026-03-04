@@ -87,6 +87,7 @@ def get_special_tokens(
     ]
 
     if add_audio:
+        assert not add_think, f"Audio and think tokens are mutually exclusive, got {add_audio} and {add_think}"
         special_tokens += [
             SpecialTokenInfo(rank=34, token_str=SpecialTokens.transcribe, is_control=True),
             SpecialTokenInfo(rank=35, token_str=SpecialTokens.text_to_audio, is_control=True),
