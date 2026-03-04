@@ -10,9 +10,9 @@ from mistral_common.tokens.tokenizers.audio import (
     AudioEncoder,
     AudioSpectrogramConfig,
 )
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTokens
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7
 from mistral_common.tokens.tokenizers.mistral import load_audio_encoder
-from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTokens
 
 from .test_tokenizer_v7_audio import get_tekkenizer_with_audio
 
@@ -163,7 +163,7 @@ def test_encode_speech_request_text_tokens_correct(tts_tokenizer: InstructTokeni
 
 
 def test_encode_speech_request_no_audio_encoder_fails() -> None:
-    mm_tekkenizer = load_audio_v7_tokenizer()
+    mm_tekkenizer = get_tekkenizer_with_audio().tokenizer
     tokenizer_no_encoder = InstructTokenizerV7(tokenizer=mm_tekkenizer, audio_encoder=None)
 
     request = SpeechRequest(input="Hello world", voice="female")
