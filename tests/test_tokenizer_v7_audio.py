@@ -415,7 +415,7 @@ def test_tokenize_audio_url_chunk(
 
 def test_encode_invalid_audio_url_chunk(tekkenizer: InstructTokenizerV7) -> None:
     assert tekkenizer.audio_encoder is not None
-    # Test with an invalid URL
+    # Mock an invalid URL
     with patch("mistral_common.audio.requests.get") as mock_get:
         mock_get.side_effect = requests.RequestException("connection failed")
         with pytest.raises(
