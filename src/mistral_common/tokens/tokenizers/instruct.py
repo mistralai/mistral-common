@@ -990,9 +990,10 @@ class InstructTokenizerV7(InstructTokenizerV3):
         _audio = Audio.from_base64(audio) if isinstance(audio, str) else Audio.from_bytes(audio)
         audio_enc = self.audio_encoder.encode_audio(_audio, transcription_delay_ms)
 
+        audios = [audio_enc.audio] if audio_enc.audio is not None else []
         return Tokenized(
             tokens=audio_enc.tokens,
-            audios=[audio_enc.audio],
+            audios=audios,
         )
 
     def _encode_streaming_transcription(self, request: TranscriptionRequest) -> Tokenized:
