@@ -24,7 +24,7 @@ def tts_tokenizer() -> InstructTokenizerV7:
         AudioConfig(
             sampling_rate=24000,
             frame_rate=12.5,
-            audio_spectrogram_config=AudioSpectrogramConfig(
+            encoding_config=AudioSpectrogramConfig(
                 num_mel_bins=128,
                 window_size=400,
                 hop_length=160,
@@ -50,7 +50,7 @@ def test_encode_speech_request_with_ref_audio(tts_tokenizer: InstructTokenizerV7
     duration = 1.5
     sampling_rate = 24000
     audio = _make_fake_audio(duration, sampling_rate)
-    request = SpeechRequest(input="Hello world", ref_audio=audio.to_base64())
+    request = SpeechRequest(input="Hello world", ref_audio=audio.to_base64("wav"))
     tokenized = tts_tokenizer.encode_speech_request(request)
 
     assert isinstance(tts_tokenizer.audio_encoder, AudioEncoder)
@@ -121,7 +121,7 @@ def test_encode_speech_request_ref_audio_takes_precedence_over_voice(
     tts_tokenizer: InstructTokenizerV7,
 ) -> None:
     audio = _make_fake_audio(1.0)
-    request = SpeechRequest(input="text", ref_audio=audio.to_base64(), voice="female")
+    request = SpeechRequest(input="text", ref_audio=audio.to_base64("wav"), voice="female")
     tokenized = tts_tokenizer.encode_speech_request(request)
 
     # ref_audio takes precedence: audio is not None so the audio path is used
@@ -176,7 +176,7 @@ def test_encode_speech_request_audio_resampled(tts_tokenizer: InstructTokenizerV
     duration = 2.0
     source_sr = 16000
     audio = _make_fake_audio(duration, source_sr)
-    request = SpeechRequest(input="Resample test", ref_audio=audio.to_base64())
+    request = SpeechRequest(input="Resample test", ref_audio=audio.to_base64("wav"))
     tokenized = tts_tokenizer.encode_speech_request(request)
 
     assert isinstance(tts_tokenizer.audio_encoder, AudioEncoder)

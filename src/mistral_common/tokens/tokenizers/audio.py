@@ -225,6 +225,8 @@ class SpecialAudioIDs:
     audio: int | None
     begin_audio: int | None
     streaming_pad: int | None
+    text_to_audio: int | None = None
+    audio_to_text: int | None = None
 
 
 class AudioEncoder:
@@ -383,17 +385,45 @@ class AudioEncoder:
         )
 
     def _encode_audio_tokens_for_speech_request(self, num_audio_tokens: int) -> list[int]:
+        r"""Build the token sequence for a speech request's audio segment.
+
+        Args:
+            num_audio_tokens: Number of audio placeholder tokens to emit.
+
+        Returns:
+            List of token IDs: [BEGIN_AUDIO, AUDIO * num_audio_tokens].
+        """
         tokens = []
         tokens.append(self.begin_audio_token)
         tokens.extend([self.audio_token] * num_audio_tokens)
         return tokens
 
     def _get_num_audio_token_for_speech_request(self, audio_length: int) -> int:
+        r"""Compute the number of audio tokens needed for a given audio length.
+
+        Args:
+            audio_length: Number of audio samples.
+
+        Returns:
+            Number of audio tokens (includes +1 for END_OUTPUT_AUDIO).
+        """
         return (
             math.ceil((audio_length / self.audio_config.sampling_rate) * self.audio_config.frame_rate) + 1
         )  # +1 for eoa (END_OUTPUT_AUDIO)
 
     def encode_audio_for_speech_request(self, audio: Audio | None, voice: str | None) -> AudioEncoding:
+        r"""Encode audio or voice preset into an AudioEncoding for speech synthesis.
+
+        Either ``audio`` (reference audio for voice cloning) or ``voice`` (preset name)
+        must be provided. When ``audio`` is given it takes precedence.
+
+        Args:
+            audio: Reference audio waveform, or None to use a voice preset.
+            voice: Preset voice name (e.g. 'female', 'male'), or None when using ref audio.
+
+        Returns:
+            AudioEncoding containing the token sequence and optional audio data.
+        """
         assert audio is not None or voice is not None, (
             f"Either audio or voice must be defined to encode audio, got {audio=} and {voice=}"
         )
@@ -414,7 +444,6 @@ class AudioEncoder:
         return AudioEncoding(
             tokens=tokens,
             audio=audio,
-            audio_segment_token_sizes=[],
         )
 
     def _encode_audio_chunk(self, content: AudioChunk) -> AudioEncoding:
@@ -466,3 +495,15 @@ class AudioEncoder:
         r"""Get the streaming pad token."""
         assert self.special_ids.streaming_pad is not None, f"{self.special_ids.streaming_pad=} must be set."
         return self.special_ids.streaming_pad
+
+    @property
+    def text_to_audio_token(self) -> int:
+        r"""Get the text_to_audio token."""
+        assert self.special_ids.text_to_audio is not None, f"{self.special_ids.text_to_audio=} must be set."
+        return self.special_ids.text_to_audio
+
+    @property
+    def audio_to_text_token(self) -> int:
+        r"""Get the audio_to_text token."""
+        assert self.special_ids.audio_to_text is not None, f"{self.special_ids.audio_to_text=} must be set."
+        return self.special_ids.audio_to_text

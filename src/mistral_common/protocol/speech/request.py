@@ -12,6 +12,11 @@ if is_soundfile_installed():
 
 
 class SpeechRequest(BaseCompletionRequest):
+    r"""Request for text-to-speech synthesis.
+
+    Supports both preset voices and voice cloning via reference audio.
+    """
+
     id: str | None = None
     model: str | None = None
     input: str
@@ -28,6 +33,14 @@ class SpeechRequest(BaseCompletionRequest):
     )
 
     def to_openai(self, **kwargs: Any) -> dict[str, Any]:
+        r"""Convert this SpeechRequest to an OpenAI-compatible request dictionary.
+
+        Args:
+            **kwargs: Additional key-value pairs to include in the request dictionary.
+
+        Returns:
+            An OpenAI-compatible request dictionary.
+        """
         openai_request: dict[str, Any] = self.model_dump(exclude={"ref_audio"})
 
         assert_soundfile_installed()

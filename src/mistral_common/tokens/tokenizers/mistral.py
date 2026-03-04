@@ -95,6 +95,8 @@ def load_audio_encoder(audio_config: AudioConfig, tokenizer: Tekkenizer) -> Audi
         audio=get_special_token_or_none(SpecialTokens.audio.value),
         begin_audio=get_special_token_or_none(SpecialTokens.begin_audio.value),
         streaming_pad=get_special_token_or_none(SpecialTokens.streaming_pad.value),
+        text_to_audio=get_special_token_or_none(SpecialTokens.text_to_audio.value),
+        audio_to_text=get_special_token_or_none(SpecialTokens.audio_to_text.value),
     )
     return AudioEncoder(audio_config, special_ids)
 
@@ -406,6 +408,14 @@ class MistralTokenizer(
         return self.instruct_tokenizer.encode_transcription(request)
 
     def encode_speech_request(self, request: SpeechRequest) -> TokenizedType:
+        r"""Encodes a speech synthesis request.
+
+        Args:
+            request: The speech request to encode.
+
+        Returns:
+            The encoded speech request.
+        """
         return self.instruct_tokenizer.encode_speech_request(request)
 
     def encode_fim(self, request: FIMRequest) -> TokenizedType:

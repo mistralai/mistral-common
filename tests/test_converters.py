@@ -883,7 +883,7 @@ def test_convert_speech_request_round_trip() -> None:
     audio = _make_fake_audio(0.5)
     original = SpeechRequest(
         input="Round trip test",
-        ref_audio=audio.to_base64(),
+        ref_audio=audio.to_base64("wav"),
         voice="female",
         model="tts-1",
     )

@@ -94,6 +94,8 @@ class SpecialTokens(str, Enum):
     end_think = "[/THINK]"
     streaming_pad = "[STREAMING_PAD]"
     streaming_word = "[STREAMING_WORD]"
+    text_to_audio = "[TEXT_TO_AUDIO]"
+    audio_to_text = "[AUDIO_TO_TEXT]"
 
 
 class SpecialTokenPolicy(str, Enum):
@@ -353,7 +355,17 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
 
     @abstractmethod
     def encode_speech_request(self, request: SpeechRequest) -> TokenizedType:
-        """SpeechRequest to Tokenized object"""
+        r"""Encodes a speech synthesis request into a tokenized format.
+
+        This method processes a speech request containing text input and
+        optional reference audio or voice preset, and returns the tokenized output.
+
+        Args:
+            request: The speech request object containing the text and voice/audio data.
+
+        Returns:
+            Tokenized: The tokenized representation of the speech request.
+        """
 
     @abstractmethod
     def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy | None = None) -> str:

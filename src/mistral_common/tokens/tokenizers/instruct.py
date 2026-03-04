@@ -1129,6 +1129,15 @@ class InstructTokenizerV7(InstructTokenizerV3):
         return curr_tokens
 
     def _encode_audio_for_speech_request(self, ref_audio: str | bytes | None, voice: str | None) -> Tokenized:
+        r"""Encode reference audio or voice preset into a Tokenized object.
+
+        Args:
+            ref_audio: Base64-encoded string or raw bytes of reference audio, or None.
+            voice: Preset voice name, or None.
+
+        Returns:
+            Tokenized object with audio tokens and optional audio data.
+        """
         assert ref_audio is not None or voice is not None, (
             f"Either ref_audio or voice must be defined to encode audio, got {ref_audio=} and {voice=}"
         )
@@ -1147,17 +1156,28 @@ class InstructTokenizerV7(InstructTokenizerV3):
         )
 
     def encode_speech_request(self, request: SpeechRequest) -> Tokenized:
+        r"""Encode a speech synthesis request into a tokenized sequence.
+
+        Produces: [BOS] + audio_tokens + [TEXT_TO_AUDIO] + text_tokens + [AUDIO_TO_TEXT] + [BEGIN_AUDIO].
+
+        Args:
+            request: The speech request containing input text and voice/audio data.
+
+        Returns:
+            Tokenized object with the full token sequence and optional audio data.
+        """
         assert self.audio_encoder is not None, (
             f"Audio encoder must be defined to encode audio, got {self.audio_encoder=}"
         )
         init_tokens = self.start()
         tokenized = Tokenized(tokens=init_tokens)
         tokenized_audio = self._encode_audio_for_speech_request(request.ref_audio, request.voice)
-        tokenized.extend(tokenized_audio)
+        tokenized.tokens.extend(tokenized_audio.tokens)
+        tokenized.audios.extend(tokenized_audio.audios)
         tokens: list[int] = tokenized.tokens
-        tokens.append(self.token_text_to_audio)
+        tokens.append(self.audio_encoder.text_to_audio_token)
         tokens.extend(self.tokenizer.encode(request.input, bos=False, eos=False))
-        tokens.append(self.token_audio_to_text)
+        tokens.append(self.audio_encoder.audio_to_text_token)
         tokens.append(self.audio_encoder.begin_audio_token)
         tokenized.tokens = tokens
 
