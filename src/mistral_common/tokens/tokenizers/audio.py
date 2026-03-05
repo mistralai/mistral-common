@@ -71,6 +71,8 @@ class AudioConfig:
         frame_rate: Number of frames per second accepted by the tokenizer model.
         encoding_config: Configuration for audio spectrogram.
         chunk_length_s: Whether to pad an audio into multiples of chunk_length_s seconds (optional).
+        voice_num_audio_tokens: Mapping from speaker voice name to number of audio tokens
+            for that speaker's reference audio (optional, only for TTS).
     """
 
     sampling_rate: int
@@ -91,6 +93,8 @@ class AudioConfig:
     streaming_look_back_ms: float | None = None
 
     streaming_n_left_pad_tokens: int | None = None
+
+    voice_num_audio_tokens: dict[str, int] | None = None
 
     def __post_init__(self) -> None:
         assert self.frame_rate > 0, self.frame_rate
@@ -200,13 +204,12 @@ class AudioEncoding:
 
     Attributes:
         tokens: Text tokens corresponding to this audio chunk.
-        audio: Original audio waveform data.
+        audio: Original audio waveform data, or None when using a preset voice
+            (no reference audio to forward to the model).
     """
 
-    # Text tokens corresponding to this audio chunk
     tokens: list[int]
-    # Original audio waveform data.
-    audio: Audio
+    audio: Audio | None
 
 
 @dataclass
@@ -217,11 +220,15 @@ class SpecialAudioIDs:
         audio: Token representing audio.
         begin_audio: Token representing the beginning of audio.
         streaming_pad: Token representing streaming pad of audio. Only relevant for steaming models.
+        text_to_audio: Token representing intent to convert text to audio.
+        audio_to_text: Token representing intent to convert audio to text.
     """
 
     audio: int | None
     begin_audio: int | None
     streaming_pad: int | None
+    text_to_audio: int | None
+    audio_to_text: int | None
 
 
 class AudioEncoder:
@@ -379,6 +386,68 @@ class AudioEncoder:
             audio=audio,
         )
 
+    def _encode_audio_tokens_for_speech_request(self, num_audio_tokens: int) -> list[int]:
+        r"""Build the token sequence for a speech request's audio segment.
+
+        Args:
+            num_audio_tokens: Number of audio placeholder tokens to emit.
+
+        Returns:
+            List of token IDs: [BEGIN_AUDIO, AUDIO * num_audio_tokens].
+        """
+        tokens = []
+        tokens.append(self.begin_audio_token)
+        tokens.extend([self.audio_token] * num_audio_tokens)
+        return tokens
+
+    def _get_num_audio_token_for_speech_request(self, audio_length: int) -> int:
+        r"""Compute the number of audio tokens needed for a given audio length.
+
+        Args:
+            audio_length: Number of audio samples.
+
+        Returns:
+            Number of audio tokens (includes +1 for END_OUTPUT_AUDIO).
+        """
+        return (
+            math.ceil((audio_length / self.audio_config.sampling_rate) * self.audio_config.frame_rate) + 1
+        )  # +1 for eoa (END_OUTPUT_AUDIO)
+
+    def encode_audio_for_speech_request(self, audio: Audio | None, voice: str | None) -> AudioEncoding:
+        r"""Encode audio or voice preset into an AudioEncoding for speech synthesis.
+
+        Either ``audio`` (reference audio for voice cloning) or ``voice`` (preset name)
+        must be provided. When ``audio`` is given it takes precedence.
+
+        Args:
+            audio: Reference audio waveform, or None to use a voice preset.
+            voice: Preset voice name (e.g. 'Neutral Male', 'Neutral Female'), or None when using ref audio.
+
+        Returns:
+            AudioEncoding containing the token sequence and optional audio data.
+        """
+        assert audio is not None or voice is not None, (
+            f"Either audio or voice must be defined to encode audio, got {audio=} and {voice=}"
+        )
+
+        if audio is not None:
+            audio.resample(self.audio_config.sampling_rate)
+            num_audio_tokens = self._get_num_audio_token_for_speech_request(len(audio.audio_array))
+        else:
+            assert self.audio_config.voice_num_audio_tokens is not None, (
+                "voice_num_audio_tokens must be set in audio config to use voice-based speech requests"
+            )
+            assert voice is not None and voice in self.audio_config.voice_num_audio_tokens, (
+                f"Unknown voice {voice!r}, expected one of {list(self.audio_config.voice_num_audio_tokens)}"
+            )
+            num_audio_tokens = self.audio_config.voice_num_audio_tokens[voice]
+        tokens = self._encode_audio_tokens_for_speech_request(num_audio_tokens)
+
+        return AudioEncoding(
+            tokens=tokens,
+            audio=audio,
+        )
+
     def _encode_audio_chunk(self, content: AudioChunk) -> AudioEncoding:
         audio = Audio.from_raw_audio(content.input_audio)
         return self.encode_audio(audio)
@@ -428,3 +497,15 @@ class AudioEncoder:
         r"""Get the streaming pad token."""
         assert self.special_ids.streaming_pad is not None, f"{self.special_ids.streaming_pad=} must be set."
         return self.special_ids.streaming_pad
+
+    @property
+    def text_to_audio_token(self) -> int:
+        r"""Get the text_to_audio token."""
+        assert self.special_ids.text_to_audio is not None, f"{self.special_ids.text_to_audio=} must be set."
+        return self.special_ids.text_to_audio
+
+    @property
+    def audio_to_text_token(self) -> int:
+        r"""Get the audio_to_text token."""
+        assert self.special_ids.audio_to_text is not None, f"{self.special_ids.audio_to_text=} must be set."
+        return self.special_ids.audio_to_text

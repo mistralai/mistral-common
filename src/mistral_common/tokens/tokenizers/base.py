@@ -16,6 +16,7 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Tool
+from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import AudioEncoder
 from mistral_common.tokens.tokenizers.image import ImageEncoder
@@ -59,6 +60,10 @@ class SpecialTokens(str, Enum):
         transcribe: The transcribe token.
         begin_think: The beginning of think token.
         end_think: The end of think token.
+        streaming_pad: The streaming pad token.
+        streaming_word: The streaming word token.
+        text_to_audio: The text to audio token.
+        audio_to_text: The audio to text token.
 
     Examples:
         >>> unk = SpecialTokens.unk
@@ -93,6 +98,8 @@ class SpecialTokens(str, Enum):
     end_think = "[/THINK]"
     streaming_pad = "[STREAMING_PAD]"
     streaming_word = "[STREAMING_WORD]"
+    text_to_audio = "[NEXT_AUDIO_TEXT]"
+    audio_to_text = "[REPEAT_AUDIO_TEXT]"
 
 
 class SpecialTokenPolicy(str, Enum):
@@ -349,7 +356,20 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         Returns:
             Tokenized: The tokenized representation of the audio data, including processed audio and tokens
         """
-        ...
+
+    @abstractmethod
+    def encode_speech_request(self, request: SpeechRequest) -> TokenizedType:
+        r"""Encodes a speech synthesis request into a tokenized format.
+
+        This method processes a speech request containing text input and
+        optional reference audio or voice preset, and returns the tokenized output.
+
+        Args:
+            request: The speech request object containing the text and voice/audio data.
+
+        Returns:
+            Tokenized: The tokenized representation of the speech request.
+        """
 
     @abstractmethod
     def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy | None = None) -> str:

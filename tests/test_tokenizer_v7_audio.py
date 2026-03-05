@@ -65,6 +65,8 @@ def get_tekkenizer_with_audio() -> InstructTokenizerV7:
         audio=tokenizer.get_special_token(SpecialTokens.audio.value),
         begin_audio=tokenizer.get_special_token(SpecialTokens.begin_audio.value),
         streaming_pad=None,
+        text_to_audio=None,
+        audio_to_text=None,
     )
     audio_encoder = AudioEncoder(audio_config, special_audio_ids)
 
