@@ -35,7 +35,7 @@ from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolCall
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import StreamingMode, TranscriptionRequest
-from mistral_common.tokens.tokenizers.audio import AudioEncoder, AudioEncoding, TranscriptionFormat
+from mistral_common.tokens.tokenizers.audio import AudioEncoder, TranscriptionFormat
 from mistral_common.tokens.tokenizers.base import (
     FIMRequestType,
     InstructRequestType,
