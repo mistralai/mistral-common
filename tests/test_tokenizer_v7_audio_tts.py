@@ -185,8 +185,10 @@ def test_encode_speech_request_audio_resampled(tts_tokenizer: InstructTokenizerV
     assert isinstance(tts_tokenizer.audio_encoder, AudioEncoder)
     target_sr = tts_tokenizer.audio_encoder.audio_config.sampling_rate
     frame_rate = tts_tokenizer.audio_encoder.audio_config.frame_rate
-    
-    assert tokenized.audio.sampling_rate == target_sr, f"{frame_rate=}, {tts_tokenizer.audio_encoder.audio_config.frame_rate=}"
+
+    assert tokenized.audio.sampling_rate == target_sr, (
+        f"{frame_rate=}, {tts_tokenizer.audio_encoder.audio_config.frame_rate=}"
+    )
 
     # After resampling the duration stays the same, but length changes to target_sr * duration
     num_audio_tokens = math.ceil(duration * frame_rate) + 1
