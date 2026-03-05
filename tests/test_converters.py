@@ -5,8 +5,6 @@ from typing import Any
 
 import numpy as np
 import pytest
-
-from .test_tokenizer_v7_audio_tts import _make_fake_audio
 from openai.resources.chat.completions.completions import Completions
 from openai.types.audio.transcription_create_params import TranscriptionCreateParamsBase as OpenAITranscriptionRequest
 from openai.types.chat.chat_completion_assistant_message_param import (
@@ -57,6 +55,8 @@ from mistral_common.protocol.instruct.request import ChatCompletionRequest, Inst
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
+
+from .test_tokenizer_v7_audio_tts import _make_fake_audio
 
 CURRENT_FILE_PATH = Path(__file__).resolve()
 ROOT_PATH = CURRENT_FILE_PATH.parents[1]
