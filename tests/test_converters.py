@@ -51,7 +51,7 @@ from mistral_common.protocol.instruct.messages import (
     ToolMessage,
     UserMessage,
 )
-from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
+from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest, ReasoningEffort
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
@@ -284,6 +284,7 @@ def test_convert_tool() -> None:
         {
             "type": "function",
             "function": {
+                "strict": False,
                 "name": "get_current_weather",
                 "description": "Get the current weather",
                 "parameters": {
@@ -527,6 +528,7 @@ def test_convert_openai_message_to_message_and_back(openai_message: dict, messag
                         "function": {
                             "name": "get_current_weather",
                             "description": "Get the current weather",
+                            "strict": True,
                             "parameters": {
                                 "type": "object",
                                 "properties": {
@@ -566,6 +568,7 @@ def test_convert_openai_message_to_message_and_back(openai_message: dict, messag
                             },
                             "required": ["location", "format"],
                         },
+                        strict=True,
                     )
                 )
             ],
@@ -633,6 +636,7 @@ def test_convert_openai_message_to_message_and_back(openai_message: dict, messag
                         "function": {
                             "name": "get_current_weather",
                             "description": "Get the current weather",
+                            "strict": False,
                             "parameters": {
                                 "type": "object",
                                 "properties": {
@@ -736,24 +740,20 @@ def test_convert_openai_message_to_message_and_back(openai_message: dict, messag
         ),
     ],
 )
+@pytest.mark.parametrize("reasoning_effort", [None, "high"])
 def test_convert_requests(
     openai_messages: list[dict[str, Any]],
     messages: list[ChatMessage],
     openai_tools: list[dict[str, Any]] | None,
     tools: list[Tool] | None,
     request_cls: type[ChatCompletionRequest | InstructRequest],
+    reasoning_effort: ReasoningEffort | None,
 ) -> None:
     request: ChatCompletionRequest | InstructRequest
     if request_cls == ChatCompletionRequest:
-        request = ChatCompletionRequest(
-            messages=messages,
-            tools=tools,
-        )
+        request = ChatCompletionRequest(messages=messages, tools=tools, reasoning_effort=reasoning_effort)
     else:
-        request = InstructRequest(
-            messages=messages,
-            available_tools=tools,
-        )
+        request = InstructRequest(messages=messages, available_tools=tools, reasoning_effort=reasoning_effort)
 
     openai_request = request.to_openai(stream=True)
 
