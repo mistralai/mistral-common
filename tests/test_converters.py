@@ -5,6 +5,8 @@ from typing import Any
 
 import numpy as np
 import pytest
+
+from .test_tokenizer_v7_audio_tts import _make_fake_audio
 from openai.resources.chat.completions.completions import Completions
 from openai.types.audio.transcription_create_params import TranscriptionCreateParamsBase as OpenAITranscriptionRequest
 from openai.types.chat.chat_completion_assistant_message_param import (
@@ -835,12 +837,6 @@ def test_convert_transcription(audio: AudioChunk, language: LanguageAlpha2 | Non
     assert isinstance(from_oai, TranscriptionRequest)
 
     assert check_equality(request, from_oai)
-
-
-def _make_fake_audio(duration: float, sampling_rate: int = 24000) -> Audio:
-    rng = np.random.default_rng(42)
-    audio_array = rng.uniform(low=-1, high=1, size=int(duration * sampling_rate))
-    return Audio(audio_array=audio_array, sampling_rate=sampling_rate, format="wav")
 
 
 def _audio_to_wav_bytes(audio: Audio) -> bytes:
