@@ -1,8 +1,6 @@
 import io
 from typing import Any
 
-from pydantic import Field
-
 from mistral_common.audio import Audio
 from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
 from mistral_common.protocol.base import BaseCompletionRequest
@@ -15,20 +13,21 @@ class SpeechRequest(BaseCompletionRequest):
     r"""Request for text-to-speech synthesis.
 
     Supports both preset voices and voice cloning via reference audio.
+
+    Attributes:
+        id: Optional unique identifier for the speech request.
+        model: Optional model identifier for the speech synthesis.
+        input: Text input to be converted to speech.
+        voice: Optional preset voice identifier (e.g., 'Neutral Male', 'Neutral Female') to use for speech synthesis.
+        ref_audio: Optional reference audio for voice cloning, provided as a base64-encoded string or raw bytes.
+            Takes precedence over voice when both are provided.
     """
 
     id: str | None = None
     model: str | None = None
     input: str
-    voice: str | None = Field(
-        default=None,
-        description="Preset voice identifier (e.g. 'Neutral Male', 'Neutral Female') to use for speech synthesis.",
-    )
-    ref_audio: str | bytes | None = Field(
-        default=None,
-        description="Reference audio for voice cloning, provided as a base64-encoded string or raw bytes. "
-        "Takes precedence over voice when both are provided.",
-    )
+    voice: str | None = None
+    ref_audio: str | bytes | None = None
 
     def to_openai(self, **kwargs: Any) -> dict[str, Any]:
         r"""Convert this SpeechRequest to an OpenAI-compatible request dictionary.
@@ -72,8 +71,7 @@ class SpeechRequest(BaseCompletionRequest):
         """
         converted_dict: dict[str, Any] = {k: v for k, v in openai_request.items() if k in cls.model_fields}
 
-        ref_audio = openai_request.get("ref_audio")
-        if ref_audio is not None:
+        if (ref_audio := openai_request.get("ref_audio")) is not None:
             if isinstance(ref_audio, io.BytesIO):
                 audio_bytes = ref_audio.getvalue()
             elif hasattr(ref_audio, "file"):

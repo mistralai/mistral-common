@@ -71,6 +71,8 @@ class AudioConfig:
         frame_rate: Number of frames per second accepted by the tokenizer model.
         encoding_config: Configuration for audio spectrogram.
         chunk_length_s: Whether to pad an audio into multiples of chunk_length_s seconds (optional).
+        voice_num_audio_tokens: Mapping from speaker voice name to number of audio tokens
+            for that speaker's reference audio (optional, only for TTS).
     """
 
     sampling_rate: int
@@ -92,7 +94,6 @@ class AudioConfig:
 
     streaming_n_left_pad_tokens: int | None = None
 
-    # Mapping from speaker voice name to number of audio tokens for that speaker's reference audio
     voice_num_audio_tokens: dict[str, int] | None = None
 
     def __post_init__(self) -> None:
@@ -203,12 +204,11 @@ class AudioEncoding:
 
     Attributes:
         tokens: Text tokens corresponding to this audio chunk.
-        audio: Original audio waveform data.
+        audio: Original audio waveform data, or None when using a preset voice
+            (no reference audio to forward to the model).
     """
 
-    # Text tokens corresponding to this audio chunk
     tokens: list[int]
-    # Original audio waveform data.
     audio: Audio | None
 
 
@@ -220,13 +220,15 @@ class SpecialAudioIDs:
         audio: Token representing audio.
         begin_audio: Token representing the beginning of audio.
         streaming_pad: Token representing streaming pad of audio. Only relevant for steaming models.
+        text_to_audio: Token representing intent to convert text to audio.
+        audio_to_text: Token representing intent to convert audio to text.
     """
 
     audio: int | None
     begin_audio: int | None
     streaming_pad: int | None
-    text_to_audio: int | None = None
-    audio_to_text: int | None = None
+    text_to_audio: int | None
+    audio_to_text: int | None
 
 
 class AudioEncoder:

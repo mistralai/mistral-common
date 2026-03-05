@@ -1149,7 +1149,6 @@ class InstructTokenizerV7(InstructTokenizerV3):
         if ref_audio is not None:
             _audio = Audio.from_base64(ref_audio) if isinstance(ref_audio, str) else Audio.from_bytes(ref_audio)
         audio_enc = self.audio_encoder.encode_audio_for_speech_request(_audio, voice)
-        assert isinstance(audio_enc, AudioEncoding), f"Audio encoder must return PreAudioEncoding, got {audio_enc=}"
 
         return Tokenized(
             tokens=audio_enc.tokens,
