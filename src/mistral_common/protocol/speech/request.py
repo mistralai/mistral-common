@@ -22,7 +22,7 @@ class SpeechRequest(BaseCompletionRequest):
     input: str
     voice: str | None = Field(
         default=None,
-        description="Preset voice identifier (e.g. 'female', 'male') to use for speech synthesis.",
+        description="Preset voice identifier (e.g. 'Neutral Male', 'Neutral Female') to use for speech synthesis.",
     )
     ref_audio: str | bytes | None = Field(
         default=None,

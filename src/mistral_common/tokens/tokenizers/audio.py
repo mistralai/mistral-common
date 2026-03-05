@@ -419,7 +419,7 @@ class AudioEncoder:
 
         Args:
             audio: Reference audio waveform, or None to use a voice preset.
-            voice: Preset voice name (e.g. 'female', 'male'), or None when using ref audio.
+            voice: Preset voice name (e.g. 'Neutral Male', 'Neutral Female'), or None when using ref audio.
 
         Returns:
             AudioEncoding containing the token sequence and optional audio data.
