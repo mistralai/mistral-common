@@ -446,7 +446,7 @@ class InstructTokenizerV2(
         tools_tokens: list[int] = []
 
         if do_encode_tools and available_tools:
-            tools = [tool.model_dump() for tool in available_tools]
+            tools = [tool.model_dump(exclude={"function": {"strict": True}}) for tool in available_tools]
             tools_json_tokens = self.tokenizer.encode(json.dumps(tools, ensure_ascii=False), bos=False, eos=False)
             tools_tokens = [
                 self.BEGIN_AVAILABLE_TOOLS,
