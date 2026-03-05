@@ -186,7 +186,7 @@ def test_encode_speech_request_audio_resampled(tts_tokenizer: InstructTokenizerV
     target_sr = tts_tokenizer.audio_encoder.audio_config.sampling_rate
     frame_rate = tts_tokenizer.audio_encoder.audio_config.frame_rate
 
-    assert tokenized.audio.sampling_rate == target_sr, (
+    assert tokenized.audios[0].sampling_rate == target_sr, (
         f"{frame_rate=}, {tokenized.audio.sampling_rate=}"
     )
 
