@@ -90,13 +90,6 @@ jobs:
         run: |
           uv run pytest --cov=mistral_common . --cov-report "xml:coverage.xml"
 
-      # Save coverage report as artifact so it's not discarded after the job ends
-      - name: Upload coverage
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-${{ matrix.python-version }}
-          path: coverage.xml
-
       # Doctests
       - name: Doctests
         run: |
