@@ -58,7 +58,7 @@ def add_special_tokens(
 
 def load_audio_streaming() -> Tekkenizer:
     special_tokens = get_special_tokens(tokenizer_version=TokenizerVersion.v7, add_audio=True)
-    for i in range(35, 39):
+    for i in range(37, 39):
         special_tokens += [SpecialTokenInfo(rank=i, token_str=f"<SPCECIAL_{i}>", is_control=True)]
 
     special_tokens += [SpecialTokenInfo(rank=39, token_str="[STREAMING_PAD]", is_control=True)]

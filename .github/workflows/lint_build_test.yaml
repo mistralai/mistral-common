@@ -105,7 +105,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
-          python-version: "3.12"
+          python-version: "3.14"
           enable-cache: true
 
       - name: Install Dependencies
