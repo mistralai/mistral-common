@@ -214,15 +214,19 @@ class MistralTokenizer(
             )
 
     @classmethod
-    def from_model(cls, model: str) -> "MistralTokenizer":
+    def from_model(cls, model: str, strict: bool = True) -> "MistralTokenizer":
         r"""Get the Mistral tokenizer for a given model.
 
         Args:
             model: The model name.
+            strict: Has to be True, not used.
 
         Returns:
             The Mistral tokenizer for the given model.
         """
+
+        if not strict:
+            raise ValueError("strict has to be `True` since v1.10.0.")
 
         if model not in MODEL_NAME_TO_TOKENIZER_CLS:
             raise TokenizerException(f"Unrecognized model: {model}")
