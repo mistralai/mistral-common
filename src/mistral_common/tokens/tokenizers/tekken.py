@@ -363,27 +363,6 @@ class Tekkenizer(Tokenizer):
         r"""The version of the tokenizer."""
         return self._version
 
-    @property
-    def special_token_policy(self) -> SpecialTokenPolicy:
-        r"""The policy for handling special tokens."""
-        return self._special_token_policy
-
-    @special_token_policy.setter
-    def special_token_policy(self, policy: SpecialTokenPolicy) -> None:
-        r"""Set the policy for handling special tokens."""
-        if not isinstance(policy, SpecialTokenPolicy):
-            raise ValueError(f"Expected SpecialTokenPolicy, got {type(policy)}.")
-
-        warnings.warn(
-            (
-                "The attributed `special_token_policy` is deprecated and will be removed in 1.10.0. "
-                "Please pass a special token policy explicitly to the relevant methods."
-            ),
-            FutureWarning,
-        )
-
-        self._special_token_policy = policy
-
     @cached_property
     def bos_id(self) -> int:
         r"""The beginning of sentence token id."""
@@ -492,53 +471,22 @@ class Tekkenizer(Tokenizer):
         warnings.warn("`get_control_token` is deprecated. Use `get_special_token` instead.", FutureWarning)
         return self.get_special_token(s)
 
-    def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy | None = None) -> str:
+    def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy = SpecialTokenPolicy.IGNORE) -> str:
         r"""Decode a list of token ids into a string.
 
         Args:
             tokens: The list of token ids to decode.
             special_token_policy: The policy for handling special tokens.
-                Use the tokenizer's [attribute][mistral_common.tokens.tokenizers.tekken.Tekkenizer.special_token_policy]
-                if `None`. Passing `None` is deprecated and will be changed
-                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.10.0`.
 
         Returns:
             The decoded string.
         """
-        if special_token_policy is not None and not isinstance(special_token_policy, (str, SpecialTokenPolicy)):
+        if not isinstance(special_token_policy, (str, SpecialTokenPolicy)):
             raise ValueError(
-                f"Expected `special_token_policy` to be None or SpecialTokenPolicy, got {type(special_token_policy)}."
+                f"Expected `special_token_policy` to be SpecialTokenPolicy, got {type(special_token_policy)}."
             )
-
-        if special_token_policy is None:
-            warnings.warn(
-                (
-                    f"Using the tokenizer's special token policy ({self._special_token_policy}) is deprecated. "
-                    "It will be removed in 1.10.0. "
-                    "Please pass a special token policy explicitly. "
-                    "Future default will be SpecialTokenPolicy.IGNORE."
-                ),
-                FutureWarning,
-            )
-            special_token_policy = self._special_token_policy
 
         return "".join(self._decode_all(tokens, special_token_policy=special_token_policy))
-
-    def to_string(self, tokens: list[int]) -> str:
-        r"""[DEPRECATED] Converts a list of token ids into a string, keeping special tokens.
-
-        Use `decode` with `special_token_policy=SpecialTokenPolicy.KEEP` instead.
-
-        This is a convenient method for debugging.
-        """
-        warnings.warn(
-            (
-                "`to_string` is deprecated and will be removed in 1.10.0. "
-                "Use `decode` with `special_token_policy=SpecialTokenPolicy.KEEP` instead."
-            ),
-            FutureWarning,
-        )
-        return self._to_string(tokens)
 
     def _to_string(self, tokens: list[int]) -> str:
         return self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP)
@@ -547,31 +495,18 @@ class Tekkenizer(Tokenizer):
         r"""Convert a token id to its string representation."""
         return self.decode([token_id], special_token_policy=SpecialTokenPolicy.KEEP)
 
-    def id_to_byte_piece(self, token_id: int, special_token_policy: SpecialTokenPolicy | None = None) -> bytes:
+    def id_to_byte_piece(
+        self, token_id: int, special_token_policy: SpecialTokenPolicy = SpecialTokenPolicy.IGNORE
+    ) -> bytes:
         r"""Convert a token id to its byte representation.
 
         Args:
             token_id: The token id to convert.
             special_token_policy: The policy for handling special tokens.
-                Use the tokenizer's [attribute][mistral_common.tokens.tokenizers.tekken.Tekkenizer.special_token_policy]
-                if `None`. Passing `None` is deprecated and will be changed
-                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.10.0`.
 
         Returns:
             The byte representation of the token.
         """
-        if special_token_policy is None:
-            warnings.warn(
-                (
-                    f"Using the tokenizer's special token policy ({self._special_token_policy}) is deprecated. "
-                    "It will be removed in 1.10.0. "
-                    "Please pass a special token policy explicitly. "
-                    "Future default will be SpecialTokenPolicy.IGNORE."
-                ),
-                FutureWarning,
-            )
-            special_token_policy = self._special_token_policy
-
         if token_id < self.num_special_tokens:
             if special_token_policy == SpecialTokenPolicy.KEEP:
                 return self._all_special_tokens[token_id]["token_str"].encode("utf-8")

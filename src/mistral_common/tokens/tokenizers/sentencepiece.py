@@ -198,7 +198,7 @@ class SentencePieceTokenizer(Tokenizer):
             t = [*t, self.eos_id]
         return t
 
-    def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy | None = None) -> str:
+    def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy = SpecialTokenPolicy.IGNORE) -> str:
         r"""Decode the given list of token ids into a string.
 
         Note:
@@ -207,34 +207,20 @@ class SentencePieceTokenizer(Tokenizer):
 
         Args:
             tokens: The list of token ids.
-            special_token_policy: The policy to use for special tokens. If `None`, the default policy
-                is `SpecialTokenPolicy.IGNORE`.  Passing `None` is deprecated and will be changed
-                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.10.0`.
+            special_token_policy: The policy to use for special tokens.
 
         Returns:
             The decoded string.
         """
-        if special_token_policy is not None and not isinstance(special_token_policy, (str, SpecialTokenPolicy)):
+        if not isinstance(special_token_policy, (str, SpecialTokenPolicy)):
             raise ValueError(
-                f"Expected `special_token_policy` to be None or SpecialTokenPolicy, got {type(special_token_policy)}."
+                f"Expected `special_token_policy` to be a SpecialTokenPolicy, got {type(special_token_policy)}."
             )
-
-        if special_token_policy is None:
-            warnings.warn(
-                (
-                    "Using the tokenizer's special token policy `None` is deprecated. "
-                    "It will be removed in 1.10.0. "
-                    "Please pass a special token policy explicitly. "
-                    "Future default will be SpecialTokenPolicy.IGNORE."
-                ),
-                FutureWarning,
-            )
-            special_token_policy = SpecialTokenPolicy.IGNORE
 
         if special_token_policy in [SpecialTokenPolicy.KEEP, SpecialTokenPolicy.RAISE]:
             return self._decode_with_special_tokens(tokens, special_token_policy)
 
-        return self._model.decode(tokens)  # type: ignore
+        return self._model.decode(tokens)
 
     def id_to_piece(self, token_id: int) -> str:
         r"""Convert the given token id to a token piece."""
@@ -260,22 +246,6 @@ class SentencePieceTokenizer(Tokenizer):
             text_list.extend([self.id_to_piece(tok) for tok in curr_tokens])
 
         return "".join(text_list)
-
-    def to_string(self, tokens: list[int]) -> str:
-        r"""[DEPRECATED] Converts a list of token ids into a string, keeping special tokens.
-
-        Use `decode` with `special_token_policy=SpecialTokenPolicy.KEEP` instead.
-
-        This is a convenient method for debugging.
-        """
-        warnings.warn(
-            (
-                "`to_string` is deprecated and will be removed in 1.10.0. "
-                "Use `decode` with `special_token_policy=SpecialTokenPolicy.KEEP` instead."
-            ),
-            FutureWarning,
-        )
-        return self._to_string(tokens)
 
     def _to_string(self, tokens: list[int]) -> str:
         return self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP)

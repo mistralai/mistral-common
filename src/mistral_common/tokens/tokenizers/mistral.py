@@ -1,4 +1,3 @@
-import warnings
 from pathlib import Path
 from typing import Any, Callable, Generic
 
@@ -215,32 +214,16 @@ class MistralTokenizer(
             )
 
     @classmethod
-    def from_model(cls, model: str, strict: bool = False) -> "MistralTokenizer":
+    def from_model(cls, model: str) -> "MistralTokenizer":
         r"""Get the Mistral tokenizer for a given model.
 
         Args:
             model: The model name.
             strict: Whether to use strict model name matching. If `False`, the model name is matched as a substring.
-                This is deprecated and will be removed in `mistral_common=1.10.0`.
 
         Returns:
             The Mistral tokenizer for the given model.
         """
-        if not strict:
-            warnings.warn(
-                "Calling `MistralTokenizer.from_model(..., strict=False)` is deprecated as it can lead to incorrect "
-                "tokenizers. It is strongly recommended to use MistralTokenizer.from_model(..., strict=True)` "
-                "which will become the default in `mistral_common=1.10.0`."
-                "If you are using `mistral_common` for open-sourced model weights, we recommend using "
-                "`MistralTokenizer.from_file('<path/to/tokenizer/file>')` instead.",
-                FutureWarning,
-            )
-
-            # TODO(Delete this code in mistral_common >= 1.10.0
-            # Prefix search the model name mapping
-            for model_name, tokenizer_cls in MODEL_NAME_TO_TOKENIZER_CLS.items():
-                if model_name in model.lower():
-                    return tokenizer_cls()
 
         if model not in MODEL_NAME_TO_TOKENIZER_CLS:
             raise TokenizerException(f"Unrecognized model: {model}")
@@ -435,13 +418,12 @@ class MistralTokenizer(
         """
         return self.instruct_tokenizer.encode_fim(request)
 
-    def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy | None = None) -> str:
+    def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy = SpecialTokenPolicy.IGNORE) -> str:
         r"""Decodes a list of tokens into a string.
 
         Args:
             tokens: The tokens to decode.
-            special_token_policy: The policy to use for special tokens. Passing `None` is deprecated and will be changed
-                to `SpecialTokenPolicy.IGNORE` in `mistral_common=1.10.0`.
+            special_token_policy: The policy to use for special tokens.
 
         Returns:
             The decoded string.
@@ -469,17 +451,4 @@ MODEL_NAME_TO_TOKENIZER_CLS: dict[str, Callable[[], MistralTokenizer]] = {
     "codestral-2405": MistralTokenizer.v3,
     "codestral-mamba-2407": MistralTokenizer.v3,
     "pixtral-12b-2409": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
-    # The following are deprecated - only left for backward comp. Delete in >= 1.10.0
-    "open-mistral-7b": MistralTokenizer.v1,
-    "open-mixtral-8x7b": MistralTokenizer.v1,
-    "mistral-embed": MistralTokenizer.v1,
-    "mistral-small-v1": MistralTokenizer.v2,
-    "mistral-large-v1": MistralTokenizer.v2,
-    "mistral-small": MistralTokenizer.v3,
-    "mistral-large": MistralTokenizer.v3,
-    "open-mixtral-8x22b": MistralTokenizer.v3,
-    "codestral-22b": MistralTokenizer.v3,
-    "mistral-nemo": lambda: MistralTokenizer.v3(is_tekken=True),
-    "pixtral": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
-    "pixtral-large": lambda: MistralTokenizer.v7(is_mm=True),
 }

@@ -1,4 +1,3 @@
-import warnings
 from enum import Enum
 from typing import Any, Literal, TypeVar
 
@@ -14,71 +13,6 @@ from mistral_common.protocol.instruct.chunk import (
     _convert_openai_content_chunks,
 )
 from mistral_common.protocol.instruct.tool_calls import ToolCall
-
-warnings.filterwarnings(
-    action="once",
-    category=FutureWarning,
-    message=r".*has moved to 'mistral_common.protocol.instruct.chunk'\. It will be removed.*",
-)
-
-
-# TODO(Julien): Remove in 1.10.0
-# This is a hacky temporary fix for the deprecation of chunks in message module in favor to the chunk module.
-def __getattr__(name: str) -> Any:
-    msg = (
-        f"{name} has moved to 'mistral_common.protocol.instruct.chunk'. It will be removed from '{__name__}' in 1.10.0."
-    )
-    if name == "AudioURL":
-        from mistral_common.protocol.instruct.chunk import AudioURL
-
-        warnings.warn(msg, FutureWarning)
-        return AudioURL
-    elif name == "AudioURLChunk":
-        from mistral_common.protocol.instruct.chunk import AudioURLChunk
-
-        warnings.warn(msg, FutureWarning)
-        return AudioURLChunk
-    elif name == "AudioURLType":
-        from mistral_common.protocol.instruct.chunk import AudioURLType
-
-        warnings.warn(msg, FutureWarning)
-        return AudioURLType
-    elif name == "AudioChunk":
-        from mistral_common.protocol.instruct.chunk import AudioChunk
-
-        warnings.warn(msg, FutureWarning)
-        return AudioChunk
-    elif name == "BaseContentChunk":
-        from mistral_common.protocol.instruct.chunk import BaseContentChunk
-
-        warnings.warn(msg, FutureWarning)
-        return BaseContentChunk
-    elif name == "ChunkTypes":
-        from mistral_common.protocol.instruct.chunk import ChunkTypes
-
-        warnings.warn(msg, FutureWarning)
-        return ChunkTypes
-    elif name == "ImageURL":
-        from mistral_common.protocol.instruct.chunk import ImageURL
-
-        warnings.warn(msg, FutureWarning)
-        return ImageURL
-    elif name == "ImageURLChunk":
-        from mistral_common.protocol.instruct.chunk import ImageURLChunk
-
-        warnings.warn(msg, FutureWarning)
-        return ImageURLChunk
-    elif name == "ImageChunk":
-        from mistral_common.protocol.instruct.chunk import ImageChunk
-
-        warnings.warn(msg, FutureWarning)
-        return ImageChunk
-    elif name == "RawAudio":
-        from mistral_common.protocol.instruct.chunk import RawAudio
-
-        warnings.warn(msg, FutureWarning)
-        return RawAudio
-    raise AttributeError(f"module {__name__} has no attribute {name}")
 
 
 class Roles(str, Enum):
