@@ -186,7 +186,7 @@ class TokenizerVersion(str, Enum):
 
 
 class Tokenized(MistralBase):
-    r"""A tokenized [`InstructRequest`][mistral_common.tokens.instruct.request].
+    r"""A tokenized [`InstructRequest`][mistral_common.protocol.instruct.request.InstructRequest].
 
     Attributes:
         tokens: The token ids.
