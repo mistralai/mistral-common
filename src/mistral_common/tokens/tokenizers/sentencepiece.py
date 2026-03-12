@@ -220,7 +220,7 @@ class SentencePieceTokenizer(Tokenizer):
         if special_token_policy in [SpecialTokenPolicy.KEEP, SpecialTokenPolicy.RAISE]:
             return self._decode_with_special_tokens(tokens, special_token_policy)
 
-        return self._model.decode(tokens)
+        return self._model.decode(tokens)  # type: ignore[no-any-return]
 
     def id_to_piece(self, token_id: int) -> str:
         r"""Convert the given token id to a token piece."""
