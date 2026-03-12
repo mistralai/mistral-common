@@ -219,7 +219,6 @@ class MistralTokenizer(
 
         Args:
             model: The model name.
-            strict: Whether to use strict model name matching. If `False`, the model name is matched as a substring.
 
         Returns:
             The Mistral tokenizer for the given model.
