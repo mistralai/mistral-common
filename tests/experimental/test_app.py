@@ -92,7 +92,7 @@ def mistral_tokenizer_v13() -> MistralTokenizer:
         ),
         validator=MistralRequestValidatorV13(),
         request_normalizer=InstructRequestNormalizerV13(
-            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
         ),
     )
 

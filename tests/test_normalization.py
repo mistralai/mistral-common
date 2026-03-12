@@ -21,11 +21,18 @@ from mistral_common.protocol.instruct.normalize import (
     InstructRequestNormalizer,
     InstructRequestNormalizerV7,
     InstructRequestNormalizerV13,
+    InstructRequestNormalizerV15,
     get_normalizer,
 )
-from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
+from mistral_common.protocol.instruct.request import (
+    ChatCompletionRequest,
+    InstructRequest,
+    ModelSettings,
+    ReasoningEffort,
+)
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
+from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
 
 
 def mock_chat_completion(messages: list[ChatMessage]) -> ChatCompletionRequest:
@@ -40,7 +47,9 @@ def mock_chat_completion(messages: list[ChatMessage]) -> ChatCompletionRequest:
 class TestChatCompletionRequestNormalization:
     @pytest.fixture(autouse=True)
     def normalizer(self) -> InstructRequestNormalizer:
-        return InstructRequestNormalizer(UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest)
+        return InstructRequestNormalizer(
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
+        )
 
     def test_user_system_user(self, normalizer: InstructRequestNormalizer) -> None:
         chat_completion_request = mock_chat_completion(
@@ -368,11 +377,23 @@ class TestChatCompletionRequestNormalization:
         normalized = normalizer.from_chat_completion_request(request)
         assert normalized == gt
 
+    def test_assert_parsed_settings(
+        self,
+        normalizer: InstructRequestNormalizer,
+    ) -> None:
+        chat_completion_request = ChatCompletionRequest(messages=[UserMessage(content="B")])
+        parsed_request: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(
+            chat_completion_request
+        )
+        assert parsed_request.settings == ModelSettings.none()
+
 
 class TestChatCompletionRequestNormalizationV7:
     @pytest.fixture(autouse=True)
     def normalizer_v7(self) -> InstructRequestNormalizerV7:
-        return InstructRequestNormalizerV7(UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest)
+        return InstructRequestNormalizerV7(
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
+        )
 
     def test_system_assistant_user_v7(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
         chat_completion_request = mock_chat_completion(
@@ -474,12 +495,22 @@ class TestChatCompletionRequestNormalizationV7:
         assert all([t.function.name == f"tool{tool_key[i]}" for i, t in enumerate(tool_calls)])
         assert all([json.loads(t.function.arguments)["input"] == tool_key[i] for i, t in enumerate(tool_calls)])
 
+    def test_assert_parsed_settings(
+        self,
+        normalizer_v7: InstructRequestNormalizerV7,
+    ) -> None:
+        chat_completion_request = ChatCompletionRequest(messages=[UserMessage(content="B")])
+        parsed_request: InstructRequest[ChatMessage, Tool] = normalizer_v7.from_chat_completion_request(
+            chat_completion_request
+        )
+        assert parsed_request.settings == ModelSettings.none()
+
 
 class TestFineTuningNormalizer:
     @pytest.fixture(autouse=True)
     def normalizer(self) -> InstructRequestNormalizer:
         return InstructRequestNormalizer(
-            UserMessage, FinetuningAssistantMessage, ToolMessage, SystemMessage, InstructRequest
+            UserMessage, FinetuningAssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
         )
 
     def test_normalize_weighted_assistant(self, normalizer: InstructRequestNormalizer) -> None:
@@ -533,7 +564,9 @@ class TestFineTuningNormalizer:
 class TestChatCompletionRequestNormalizationV13:
     @pytest.fixture(autouse=True)
     def normalizer_v13(self) -> InstructRequestNormalizerV13:
-        return InstructRequestNormalizerV13(UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest)
+        return InstructRequestNormalizerV13(
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
+        )
 
     def _mock_chat_completion(self, messages: list[ChatMessage]) -> ChatCompletionRequest:
         return ChatCompletionRequest(
@@ -762,18 +795,69 @@ class TestChatCompletionRequestNormalizationV13:
         )
         assert parsed_request.messages == [expected_system_message, UserMessage(content="B")]
 
+    def test_assert_parsed_settings(
+        self,
+        normalizer_v13: InstructRequestNormalizerV13,
+    ) -> None:
+        chat_completion_request: ChatCompletionRequest = self._mock_chat_completion(messages=[UserMessage(content="B")])
+        parsed_request: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(
+            chat_completion_request
+        )
+        assert parsed_request.settings == ModelSettings.none()
+
+
+class TestChatCompletionRequestNormalizationV15:
+    @pytest.fixture(autouse=True)
+    def normalizer_v15(self) -> InstructRequestNormalizerV15:
+        return InstructRequestNormalizerV15(
+            UserMessage,
+            AssistantMessage,
+            ToolMessage,
+            SystemMessage,
+            InstructRequest,
+            ModelSettingsBuilder(
+                reasoning_effort=EnumBuilder[ReasoningEffort](
+                    values=list(ReasoningEffort), accepts_none=False, default=None
+                )
+            ),
+        )
+
+    @pytest.mark.parametrize("reasoning_effort", [ReasoningEffort.none, ReasoningEffort.high])
+    def test_assert_parsed_settings(
+        self, normalizer_v15: InstructRequestNormalizerV15, reasoning_effort: ReasoningEffort
+    ) -> None:
+        chat_completion_request = ChatCompletionRequest(
+            messages=[UserMessage(content="B")], reasoning_effort=reasoning_effort
+        )
+        parsed_request: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(
+            chat_completion_request
+        )
+        assert parsed_request.settings == ModelSettings(reasoning_effort=reasoning_effort)
+
 
 @pytest.mark.parametrize(
-    "version,expected_class",
+    "version,expected_class,model_settings_builder",
     [
-        (TokenizerVersion.v1, InstructRequestNormalizer),
-        (TokenizerVersion.v2, InstructRequestNormalizer),
-        (TokenizerVersion.v3, InstructRequestNormalizer),
-        (TokenizerVersion.v7, InstructRequestNormalizerV7),
-        (TokenizerVersion.v11, InstructRequestNormalizerV7),
-        (TokenizerVersion.v13, InstructRequestNormalizerV13),
+        (TokenizerVersion.v1, InstructRequestNormalizer, None),
+        (TokenizerVersion.v2, InstructRequestNormalizer, None),
+        (TokenizerVersion.v3, InstructRequestNormalizer, None),
+        (TokenizerVersion.v7, InstructRequestNormalizerV7, None),
+        (TokenizerVersion.v11, InstructRequestNormalizerV7, None),
+        (TokenizerVersion.v13, InstructRequestNormalizerV13, None),
+        (
+            TokenizerVersion.v15,
+            InstructRequestNormalizerV15,
+            ModelSettingsBuilder(
+                reasoning_effort=EnumBuilder[ReasoningEffort](
+                    values=list(ReasoningEffort), accepts_none=False, default=None
+                )
+            ),
+        ),
     ],
 )
-def test_get_normalizer_version_mapping(version: TokenizerVersion, expected_class: type) -> None:
-    normalizer = get_normalizer(version)
+def test_get_normalizer_version_mapping(
+    version: TokenizerVersion, expected_class: type, model_settings_builder: ModelSettingsBuilder
+) -> None:
+    normalizer = get_normalizer(version, model_settings_builder)
     assert isinstance(normalizer, expected_class)
+    assert normalizer._model_settings_builder == model_settings_builder

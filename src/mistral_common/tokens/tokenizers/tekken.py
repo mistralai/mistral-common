@@ -18,6 +18,7 @@ from mistral_common.tokens.tokenizers.base import (
     TokenizerVersion,
 )
 from mistral_common.tokens.tokenizers.image import ImageConfig
+from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
 
 warnings.filterwarnings(
     action="once",
@@ -150,6 +151,7 @@ class Tekkenizer(Tokenizer):
         _path: str | Path | None = None,
         image_config: ImageConfig | None = None,
         audio_config: AudioConfig | None = None,
+        model_settings_builder: ModelSettingsBuilder | None = None,
     ):
         r"""Initialize the tekken tokenizer.
 
@@ -162,7 +164,14 @@ class Tekkenizer(Tokenizer):
             version: The version of the tokenizer.
             name: The name of the tokenizer.
             image_config: The image configuration of the tokenizer.
+            audio_config: The audio configuration of the tokenizer.
+            model_settings_builder: The builder for model settings, or None if unsupported.
         """
+        if not version.supports_model_settings and model_settings_builder is not None:
+            raise ValueError(
+                f"model_settings_builder is not supported for {version=} but got {model_settings_builder=}"
+            )
+
         assert vocab_size <= len(vocab) + num_special_tokens, (
             vocab_size,
             len(vocab),
@@ -216,6 +225,7 @@ class Tekkenizer(Tokenizer):
         self._vocab = [self.id_to_piece(i) for i in range(vocab_size)]
         self._special_token_policy = SpecialTokenPolicy.IGNORE
         self._file_path = Path(_path) if _path is not None else None
+        self._model_settings_builder = model_settings_builder
 
     @property
     def file_path(self) -> Path:
@@ -223,6 +233,11 @@ class Tekkenizer(Tokenizer):
         if self._file_path is None:
             raise ValueError("The tokenizer was not loaded from a file.")
         return self._file_path
+
+    @property
+    def model_settings_builder(self) -> ModelSettingsBuilder | None:
+        r"""The model settings builder, or None if unsupported by this version."""
+        return self._model_settings_builder
 
     @classmethod
     def from_file(cls: type["Tekkenizer"], path: str | Path) -> "Tekkenizer":
@@ -253,7 +268,7 @@ class Tekkenizer(Tokenizer):
         special_tokens_dicts: list[SpecialTokenInfo] | None = untyped.get("special_tokens", None)
         if special_tokens_dicts is None:
             # Tokenizer > v7 should find special tokens in the tokenizer file
-            if version > TokenizerVersion("v7"):
+            if version > TokenizerVersion.v7:
                 raise ValueError(
                     f"Special tokens not found in {path}. "
                     "Please update your tokenizer file and include all special tokens you need."
@@ -267,7 +282,7 @@ class Tekkenizer(Tokenizer):
 
         if mm := untyped.get("multimodal"):
             # deprecated - only allowed for tokenizers <= v11
-            if version > TokenizerVersion("v11"):
+            if version > TokenizerVersion.v11:
                 raise ValueError(
                     f"The image config has to be called 'image' in {path} for tokenizers of version {version.value}."
                 )
@@ -281,6 +296,15 @@ class Tekkenizer(Tokenizer):
             encoding_config = AudioSpectrogramConfig(**encoding_config)
             untyped["audio"] = AudioConfig(encoding_config=encoding_config, **audio)
 
+        if (
+            model_settings_builder := untyped.get("model_settings_builder")
+        ) is not None and not version.supports_model_settings:
+            raise ValueError(
+                f"model_settings_builder is not supported for {version=} but got {model_settings_builder=}"
+            )
+        elif model_settings_builder is not None:
+            untyped["model_settings_builder"] = ModelSettingsBuilder.model_validate(model_settings_builder)
+
         model_data: ModelData = untyped
 
         return cls(
@@ -293,6 +317,7 @@ class Tekkenizer(Tokenizer):
             name=path.name.replace(".json", ""),
             image_config=model_data.get("image"),
             audio_config=model_data.get("audio"),
+            model_settings_builder=model_settings_builder,
             _path=path,
         )
 

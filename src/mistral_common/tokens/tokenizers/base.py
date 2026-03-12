@@ -20,6 +20,7 @@ from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import AudioEncoder
 from mistral_common.tokens.tokenizers.image import ImageEncoder
+from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
 
 
 class UserMessagePosition(str, Enum):
@@ -100,6 +101,8 @@ class SpecialTokens(str, Enum):
     streaming_word = "[STREAMING_WORD]"
     text_to_audio = "[NEXT_AUDIO_TEXT]"
     audio_to_text = "[REPEAT_AUDIO_TEXT]"
+    begin_model_settings = "[MODEL_SETTINGS]"
+    end_model_settings = "[/MODEL_SETTINGS]"
 
 
 class SpecialTokenPolicy(str, Enum):
@@ -149,6 +152,10 @@ class TokenizerVersion(str, Enum):
     def _version_num(self) -> int:
         return int(self.value[1:])
 
+    @property
+    def supports_model_settings(self) -> bool:
+        return self >= TokenizerVersion.v15
+
     def __lt__(self, other: "str | TokenizerVersion") -> bool:
         if isinstance(other, str):
             other = TokenizerVersion(other)
@@ -175,6 +182,7 @@ class TokenizerVersion(str, Enum):
     v7 = "v7"  # vocab_size = 32768 (spm) or 131072 (tekken) with improved system prompt and function calling
     v11 = "v11"  # 131072 (tekken) with improved function calling
     v13 = "v13"  # 131072 (tekken) with no call id and better prompt caching
+    v15 = "v15"  # 131072 (tekken) with model settings
 
 
 class Tokenized(MistralBase):
@@ -213,6 +221,11 @@ class Tokenizer(ABC):
     @abstractmethod
     def num_special_tokens(self) -> int:
         r"""The number of special tokens of the tokenizer."""
+
+    @property
+    @abstractmethod
+    def model_settings_builder(self) -> ModelSettingsBuilder | None:
+        r"""The model settings builder, or None if unsupported by this version."""
 
     @abstractmethod
     def vocab(self) -> list[str]:

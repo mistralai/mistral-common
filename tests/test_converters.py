@@ -51,7 +51,12 @@ from mistral_common.protocol.instruct.messages import (
     ToolMessage,
     UserMessage,
 )
-from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
+from mistral_common.protocol.instruct.request import (
+    ChatCompletionRequest,
+    InstructRequest,
+    ModelSettings,
+    ReasoningEffort,
+)
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
@@ -474,6 +479,10 @@ def test_convert_openai_message_to_message_and_back(openai_message: dict, messag
 
 
 @pytest.mark.parametrize(
+    "reasoning_effort",
+    [None, ReasoningEffort.none, ReasoningEffort.high],
+)
+@pytest.mark.parametrize(
     ["request_cls"],
     [
         (ChatCompletionRequest,),
@@ -746,17 +755,20 @@ def test_convert_requests(
     openai_tools: list[dict[str, Any]] | None,
     tools: list[Tool] | None,
     request_cls: type[ChatCompletionRequest | InstructRequest],
+    reasoning_effort: ReasoningEffort | None,
 ) -> None:
     request: ChatCompletionRequest | InstructRequest
     if request_cls == ChatCompletionRequest:
         request = ChatCompletionRequest(
             messages=messages,
             tools=tools,
+            reasoning_effort=reasoning_effort,
         )
     else:
         request = InstructRequest(
             messages=messages,
             available_tools=tools,
+            settings=ModelSettings(reasoning_effort=reasoning_effort),
         )
 
     openai_request = request.to_openai(stream=True)
@@ -766,6 +778,11 @@ def test_convert_requests(
         assert openai_request["tools"] == openai_tools
     else:
         assert "tools" not in openai_request
+
+    if reasoning_effort is not None:
+        assert openai_request["reasoning_effort"] == reasoning_effort.value
+    else:
+        assert "reasoning_effort" not in openai_request
 
     if isinstance(request, ChatCompletionRequest):
         assert openai_request["temperature"] == 0.7
@@ -794,6 +811,11 @@ def test_convert_requests(
         assert len(tools) == len(reconstructed_tools)
         for i in range(len(tools)):
             assert reconstructed_tools[i] == tools[i]
+
+    if isinstance(reconstructed_request, ChatCompletionRequest):
+        assert reconstructed_request.reasoning_effort == reasoning_effort
+    else:
+        assert reconstructed_request.settings.reasoning_effort == reasoning_effort
 
 
 @pytest.mark.parametrize(

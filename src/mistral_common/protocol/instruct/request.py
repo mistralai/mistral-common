@@ -33,6 +33,47 @@ class ResponseFormats(str, Enum):
     json = "json_object"
 
 
+class ReasoningEffort(str, Enum):
+    r"""Controls how much reasoning effort the model should apply.
+
+    Attributes:
+        none: No additional reasoning effort.
+        high: High reasoning effort for complex tasks.
+    """
+
+    none = "none"
+    high = "high"
+
+
+class ModelSettings(MistralBase):
+    r"""Model configuration settings for instruct requests.
+
+    This class encapsulates various model configuration options that can be
+    passed to the model during inference. Currently supports reasoning effort
+    configuration, but can be extended with additional settings in the future.
+
+    Attributes:
+        reasoning_effort: Controls how much reasoning effort the model should apply when
+            generating responses. Supported for tokenizer >= v15 and not supported for earlier versions.
+    """
+
+    reasoning_effort: ReasoningEffort | None = None
+
+    @staticmethod
+    def none() -> "ModelSettings":
+        r"""Create a ModelSettings instance with default (None) values."""
+        return ModelSettings()
+
+    def to_openai(self) -> dict[str, Any]:
+        r"""Convert ModelSettings to OpenAI API format with non-None values."""
+        return self.model_dump(exclude_none=True)
+
+    @classmethod
+    def from_openai(cls, **kwargs: Any) -> "ModelSettings":
+        r"""Create ModelSettings from OpenAI keywords API format."""
+        return ModelSettings.model_validate(kwargs)
+
+
 class ResponseFormat(MistralBase):
     r"""The format of the response.
 
@@ -57,6 +98,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         tool_choice: The tool choice to use for the chat completion.
         truncate_for_context_length: Whether to truncate the messages for the context length.
         continue_final_message: Whether to continue the final message.
+        reasoning_effort: Controls how much reasoning effort the model should apply.
 
     Examples:
         >>> from mistral_common.protocol.instruct.messages import UserMessage, AssistantMessage
@@ -80,6 +122,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     tool_choice: ToolChoice = ToolChoice.auto
     truncate_for_context_length: bool = False
     continue_final_message: bool = False
+    reasoning_effort: ReasoningEffort | None = None
 
     def to_openai(self, **kwargs: Any) -> dict[str, list[dict[str, Any]]]:
         r"""Convert the request messages and tools into the OpenAI format.
@@ -204,6 +247,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         available_tools: The tools available to the assistant.
         truncate_at_max_tokens: The maximum number of tokens to truncate the conversation at.
         continue_final_message: Whether to continue the final message.
+        settings: Model configuration settings for the request.
 
     Examples:
         >>> from mistral_common.protocol.instruct.messages import UserMessage, SystemMessage
@@ -217,6 +261,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
     available_tools: list[ToolType] | None = None
     truncate_at_max_tokens: int | None = None
     continue_final_message: bool = False
+    settings: ModelSettings = Field(default_factory=ModelSettings.none)
 
     def to_openai(self, **kwargs: Any) -> dict[str, list[dict[str, Any]]]:
         r"""Convert the request messages and tools into the OpenAI format.
@@ -258,7 +303,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
 
         # Handle messages, tools, and truncate_at_max_tokens separately.
         openai_request: dict[str, Any] = self.model_dump(
-            exclude={"messages", "available_tools", "truncate_at_max_tokens"}, exclude_none=True
+            exclude={"messages", "available_tools", "truncate_at_max_tokens", "settings"}, exclude_none=True
         )
 
         for kwarg in kwargs:
@@ -289,6 +334,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
             raise NotImplementedError("Truncating at max tokens is not implemented for OpenAI requests.")
 
         openai_request.update(kwargs)
+        openai_request.update(**self.settings.to_openai())
 
         return openai_request
 
@@ -320,15 +366,25 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
             else:
                 raise ValueError("Cannot specify both `tools` and `available_tools`.")
 
-        _check_openai_fields_names(set(cls.model_fields.keys()), set(kwargs.keys()))
+        model_settings_fields = ModelSettings.model_fields.keys()
+        instruct_request_fields = cls.model_fields.keys()
+        assert instruct_request_fields.isdisjoint(model_settings_fields), (
+            "ModelSettings fields should not overlap with InstructRequest fields."
+        )
+        valid_fields = instruct_request_fields | model_settings_fields
+        _check_openai_fields_names(valid_fields, set(kwargs.keys()))
 
         converted_messages: list[ChatMessage] = convert_openai_messages(messages)
 
         converted_tools = convert_openai_tools(tools) if tools is not None else None
 
+        model_settings = ModelSettings.from_openai(**{k: v for k, v in kwargs.items() if k in model_settings_fields})
+        other_kwargs = {k: v for k, v in kwargs.items() if k not in model_settings_fields}
+
         return cls(
             messages=converted_messages,  # type: ignore[arg-type]
             available_tools=converted_tools,  # type: ignore[arg-type]
             continue_final_message=continue_final_message,
-            **kwargs,
+            settings=model_settings,
+            **other_kwargs,
         )
