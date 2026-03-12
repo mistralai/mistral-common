@@ -64,7 +64,7 @@ def fixture_mistral_tokenizer_v11() -> MistralTokenizer:
         ),
         validator=MistralRequestValidatorV5(),
         request_normalizer=InstructRequestNormalizerV7(
-            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
         ),
     )
 
@@ -110,7 +110,7 @@ def fixture_mistral_tokenizer_v13() -> MistralTokenizer:
         ),
         validator=MistralRequestValidatorV13(),
         request_normalizer=InstructRequestNormalizerV13(
-            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
         ),
     )
 
@@ -175,7 +175,7 @@ def test_find_content_tool_calls() -> None:
             ),
             validator=MistralRequestValidatorV5(),
             request_normalizer=InstructRequestNormalizerV7(
-                UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest
+                UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
             ),
         ),
         fixture_mistral_tokenizer_v11(),

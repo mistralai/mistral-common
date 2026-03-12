@@ -13,7 +13,7 @@ from mistral_common.protocol.instruct.messages import (
     ToolMessageType,
     UserMessageType,
 )
-from mistral_common.protocol.instruct.normalize import InstructRequestNormalizer, normalizer_for_tokenizer_version
+from mistral_common.protocol.instruct.normalize import InstructRequestNormalizer, get_normalizer
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import (
     MistralRequestValidator,
@@ -46,6 +46,7 @@ from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV7,
     InstructTokenizerV11,
     InstructTokenizerV13,
+    InstructTokenizerV15,
 )
 from mistral_common.tokens.tokenizers.sentencepiece import (
     SentencePieceTokenizer,
@@ -319,7 +320,7 @@ class MistralTokenizer(
             assert isinstance(tokenizer, Tekkenizer), "Audio is only supported for tekken tokenizers"
             audio_encoder = load_audio_encoder(audio_config, tokenizer)
 
-        request_normalizer = normalizer_for_tokenizer_version(tokenizer.version)
+        request_normalizer = get_normalizer(tokenizer.version, tokenizer.model_settings_builder)
 
         if tokenizer.version == TokenizerVersion.v1:
             assert image_encoder is None, "Tokenizer version needs to be >= v3"
@@ -359,6 +360,12 @@ class MistralTokenizer(
         elif tokenizer.version == TokenizerVersion.v13:
             return MistralTokenizer(
                 InstructTokenizerV13(tokenizer, image_encoder=image_encoder, audio_encoder=audio_encoder),
+                validator=MistralRequestValidatorV13(mode=mode),
+                request_normalizer=request_normalizer,
+            )
+        elif tokenizer.version == TokenizerVersion.v15:
+            return MistralTokenizer(
+                InstructTokenizerV15(tokenizer, image_encoder=image_encoder, audio_encoder=audio_encoder),
                 validator=MistralRequestValidatorV13(mode=mode),
                 request_normalizer=request_normalizer,
             )

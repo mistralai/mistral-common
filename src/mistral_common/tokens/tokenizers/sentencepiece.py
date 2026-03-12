@@ -14,6 +14,7 @@ from mistral_common.tokens.tokenizers.base import (
     TokenizerVersion,
 )
 from mistral_common.tokens.tokenizers.image import ImageConfig, MultiModalVersion
+from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
 
 warnings.filterwarnings(
     action="once",
@@ -116,6 +117,13 @@ class SentencePieceTokenizer(Tokenizer):
     def version(self) -> TokenizerVersion:
         r"""The version of the tokenizer."""
         return self._version
+
+    @property
+    def model_settings_builder(self) -> ModelSettingsBuilder | None:
+        r"""Always returns None as SentencePiece does not support `model_settings_builder`."""
+        if self.version.supports_model_settings:
+            raise ValueError(f"SentencePieceTokenizer does not support model settings for version {self.version}")
+        return None
 
     def get_special_token(self, s: str) -> int:
         r"""Get the special token for the given string."""

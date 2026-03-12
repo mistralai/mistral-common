@@ -1,6 +1,8 @@
 import json
-from typing import Generic, Sequence, overload
+import warnings
+from typing import Generic, Sequence, assert_never, overload
 
+from mistral_common.exceptions import InvalidRequestException
 from mistral_common.protocol.instruct.chunk import (
     TextChunk,
     ThinkChunk,
@@ -19,9 +21,10 @@ from mistral_common.protocol.instruct.messages import (
     UserMessage,
     UserMessageType,
 )
-from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
+from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest, ModelSettings
 from mistral_common.protocol.instruct.tool_calls import FunctionCall, Tool, ToolCall
 from mistral_common.tokens.tokenizers.base import InstructRequestType, TokenizerVersion
+from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
 
 CHUNK_JOIN_STR = "\n\n"
 
@@ -52,6 +55,7 @@ class InstructRequestNormalizer(
         tool_message_class: type[ToolMessageType],
         system_message_class: type[SystemMessageType],
         instruct_request_class: type[InstructRequestType],
+        model_settings_builder: ModelSettingsBuilder | None,
     ):
         r"""Initializes the normalizer with the appropriate message classes.
 
@@ -61,6 +65,7 @@ class InstructRequestNormalizer(
            tool_message_class: The class for tool messages.
            system_message_class: The class for system messages.
            instruct_request_class: The class for instruct requests.
+           model_settings_builder: The builder for model settings, or None if unsupported.
         """
         self._user_message_class = user_message_class
         self._assistant_message_class = assistant_message_class
@@ -68,21 +73,49 @@ class InstructRequestNormalizer(
         self._instruct_request_class = instruct_request_class
         # this is unused but makes creation nicer
         self._system_message_class = system_message_class
+        self._model_settings_builder = model_settings_builder
 
     @staticmethod
-    def normalizer() -> "InstructRequestNormalizer":
+    def normalizer(model_settings_builder: ModelSettingsBuilder | None = None) -> "InstructRequestNormalizer":
         r"""Returns a normalizer for the default instruct request.
+
+        Args:
+            model_settings_builder: Must be None for this normalizer version.
+
+        Returns:
+            A normalizer for the default instruct request.
+
+        Raises:
+            ValueError: If model_settings_builder is not None.
 
         Examples:
             >>> normalizer = InstructRequestNormalizer.normalizer()
         """
+        if model_settings_builder is not None:
+            raise ValueError(
+                f"model_settings_builder must be None for InstructRequestNormalizer, got {model_settings_builder}"
+            )
         return InstructRequestNormalizer(
-            UserMessage,
-            AssistantMessage,
-            ToolMessage,
-            SystemMessage,
-            InstructRequest[UATS, Tool],
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest[UATS, Tool], None
         )
+
+    def build_settings(self, request: ChatCompletionRequest) -> ModelSettings:
+        r"""Build model settings from a chat completion request.
+
+        For pre-v15 normalizers, this passes through the reasoning_effort from the request
+        without validation. The caller asserts the result is ``ModelSettings.none()``.
+
+        Args:
+            request: The chat completion request.
+
+        Returns:
+            The built model settings.
+        """
+        if self._model_settings_builder is not None:
+            raise InvalidRequestException(
+                f"model_settings_builder should be None for {type(self).__name__}, got {self._model_settings_builder}"
+            )
+        return ModelSettings(reasoning_effort=request.reasoning_effort)
 
     def _normalize_json_content(self, content: str | None) -> str:
         if content is None or len(content) == 0:
@@ -321,11 +354,16 @@ class InstructRequestNormalizer(
         system_prompt = self._aggregate_system_prompts(request.messages)
         messages = self._aggregate_messages(request.messages)
 
+        settings = self.build_settings(request)
+        if settings != ModelSettings.none():
+            raise InvalidRequestException(f"Model settings are not supported for {type(self).__name__}, got {settings}")
+
         return self._instruct_request_class(
             messages=messages,
             system_prompt=system_prompt,
             available_tools=request.tools,
             continue_final_message=request.continue_final_message,
+            settings=settings,
         )
 
 
@@ -340,18 +378,27 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
     _allow_tool_call_and_content: bool = True
 
     @staticmethod
-    def normalizer() -> "InstructRequestNormalizerV7":
-        r"""Returns a normalizer for the default instruct request
+    def normalizer(model_settings_builder: ModelSettingsBuilder | None = None) -> "InstructRequestNormalizerV7":
+        r"""Returns a normalizer for the default instruct request.
+
+        Args:
+            model_settings_builder: Must be None for this normalizer version.
+
+        Returns:
+            A normalizer for the V7 instruct request.
+
+        Raises:
+            ValueError: If model_settings_builder is not None.
 
         Examples:
             >>> normalizer = InstructRequestNormalizerV7.normalizer()
         """
+        if model_settings_builder is not None:
+            raise ValueError(
+                f"model_settings_builder must be None for InstructRequestNormalizerV7, got {model_settings_builder}"
+            )
         return InstructRequestNormalizerV7(
-            UserMessage,
-            AssistantMessage,
-            ToolMessage,
-            SystemMessage,
-            InstructRequest[UATS, Tool],
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest[UATS, Tool], None
         )
 
     def _aggregate_system_messages(self, messages: list[UATS]) -> list[SystemMessageType]:
@@ -398,7 +445,12 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
             >>> instruct_request = normalizer.from_chat_completion_request(request)
         """
         messages = self._aggregate_messages(request.messages)
-        return self._instruct_request_class(messages=messages, system_prompt=None, available_tools=request.tools)  # type: ignore[no-any-return]
+        settings = self.build_settings(request)
+        if settings != ModelSettings.none():
+            raise InvalidRequestException(f"Model settings are not supported for {type(self).__name__}, got {settings}")
+        return self._instruct_request_class(  # type: ignore[no-any-return]
+            messages=messages, system_prompt=None, available_tools=request.tools, settings=settings
+        )
 
 
 class InstructRequestNormalizerV13(InstructRequestNormalizerV7):
@@ -411,14 +463,24 @@ class InstructRequestNormalizerV13(InstructRequestNormalizerV7):
     """
 
     @staticmethod
-    def normalizer() -> "InstructRequestNormalizerV13":
-        r"""Returns a normalizer for the default instruct request."""
+    def normalizer(model_settings_builder: ModelSettingsBuilder | None = None) -> "InstructRequestNormalizerV13":
+        r"""Returns a normalizer for the default instruct request.
+
+        Args:
+            model_settings_builder: Must be None for this normalizer version.
+
+        Returns:
+            A normalizer for the V13 instruct request.
+
+        Raises:
+            ValueError: If model_settings_builder is not None.
+        """
+        if model_settings_builder is not None:
+            raise ValueError(
+                f"model_settings_builder must be None for InstructRequestNormalizerV13, got {model_settings_builder}"
+            )
         return InstructRequestNormalizerV13(
-            UserMessage,
-            AssistantMessage,
-            ToolMessage,
-            SystemMessage,
-            InstructRequest[UATS, Tool],
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest[UATS, Tool], None
         )
 
     def _aggregate_tool_messages(self, messages: list[UATS], latest_call_ids: list[str]) -> list[ToolMessageType]:
@@ -435,35 +497,103 @@ class InstructRequestNormalizerV13(InstructRequestNormalizerV7):
         return tool_messages
 
 
-def normalizer_for_tokenizer_version(version: TokenizerVersion) -> InstructRequestNormalizer:
+class InstructRequestNormalizerV15(InstructRequestNormalizerV13):
+    r"""Normalizer for the v15 tokenizer.
+
+    It reorders tool messages based on the tool call order and builds model settings.
+
+    Examples:
+        >>> normalizer = InstructRequestNormalizerV15.normalizer()
+    """
+
+    @staticmethod
+    def normalizer(model_settings_builder: ModelSettingsBuilder | None = None) -> "InstructRequestNormalizerV15":
+        r"""Returns a normalizer for the V15 instruct request.
+
+        Args:
+            model_settings_builder: The builder for model settings.
+
+        Returns:
+            A normalizer for the V15 instruct request.
+        """
+        return InstructRequestNormalizerV15(
+            UserMessage,
+            AssistantMessage,
+            ToolMessage,
+            SystemMessage,
+            InstructRequest,
+            model_settings_builder,
+        )
+
+    def build_settings(self, request: ChatCompletionRequest) -> ModelSettings:
+        r"""Build model settings using the configured model settings builder.
+
+        Args:
+            request: The chat completion request.
+
+        Returns:
+            The built model settings.
+
+        Raises:
+            InvalidRequestException: If no model settings builder is configured.
+        """
+        if self._model_settings_builder is None:
+            raise InvalidRequestException(f"model_settings_builder must not be None for {type(self).__name__}")
+        return self._model_settings_builder.build_settings(request)
+
+    def from_chat_completion_request(self, request: ChatCompletionRequest[UATS]) -> InstructRequestType:  # type: ignore[type-var, misc]
+        r"""Converts a chat completion request to an instruct request.
+
+        Args:
+            request: The chat completion request to convert.
+
+        Returns:
+            The converted instruct request.
+        """
+        messages = self._aggregate_messages(request.messages)
+        settings = self.build_settings(request)
+        return self._instruct_request_class(  # type: ignore[no-any-return]
+            messages=messages, system_prompt=None, available_tools=request.tools, settings=settings
+        )
+
+
+def normalizer_for_tokenizer_version(
+    version: TokenizerVersion, model_settings_builder: ModelSettingsBuilder | None = None
+) -> InstructRequestNormalizer:
+    r"""Deprecated in favor to `get_normalizer`, will be removed in 1.12.0."""
+    warnings.warn(
+        "`normalizer_for_tokenizer_version` is deprecated and will be removed in 1.12.0. "
+        "Please call `get_normalizer` instead.",
+        FutureWarning,
+    )
+    return get_normalizer(version=version, model_settings_builder=model_settings_builder)
+
+
+def get_normalizer(
+    version: TokenizerVersion, model_settings_builder: ModelSettingsBuilder | None = None
+) -> InstructRequestNormalizer:
     r"""Gets the appropriate normalizer for the given tokenizer version.
 
     Args:
         version: The tokenizer version to get the normalizer for.
+        model_settings_builder: The builder for model settings, or None if unsupported.
 
     Returns:
         The appropriate normalizer for the given tokenizer version.
 
     Examples:
-        >>> normalizer = normalizer_for_tokenizer_version(TokenizerVersion.v1)
+        >>> normalizer = get_normalizer(TokenizerVersion.v1)
     """
-    if version in {TokenizerVersion.v1, TokenizerVersion.v2, TokenizerVersion.v3}:
-        return InstructRequestNormalizer.normalizer()
-    elif version in {TokenizerVersion.v7, TokenizerVersion.v11}:
-        return InstructRequestNormalizerV7.normalizer()
-    elif version == TokenizerVersion.v13:
-        return InstructRequestNormalizerV13.normalizer()
-    raise ValueError(f"Unknown tokenizer version {version}")
+    match version:
+        case TokenizerVersion.v1 | TokenizerVersion.v2 | TokenizerVersion.v3:
+            normalizer_cls = InstructRequestNormalizer
+        case TokenizerVersion.v7 | TokenizerVersion.v11:
+            normalizer_cls = InstructRequestNormalizerV7
+        case TokenizerVersion.v13:
+            normalizer_cls = InstructRequestNormalizerV13
+        case TokenizerVersion.v15:
+            normalizer_cls = InstructRequestNormalizerV15
+        case _:
+            assert_never(version)
 
-
-def get_normalizer(version: TokenizerVersion) -> InstructRequestNormalizer:
-    if version <= TokenizerVersion.v3:
-        normalizer_cls = InstructRequestNormalizer
-    elif version <= TokenizerVersion.v7:
-        normalizer_cls = InstructRequestNormalizerV7
-    elif version <= TokenizerVersion.v13:
-        normalizer_cls = InstructRequestNormalizerV13
-    else:
-        raise ValueError(f"Unsupported tokenizer version: {version}")
-
-    return normalizer_cls.normalizer()
+    return normalizer_cls.normalizer(model_settings_builder=model_settings_builder)
