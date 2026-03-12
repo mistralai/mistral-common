@@ -177,6 +177,7 @@ class ModelSettingsBuilder(MistralBase):
         """
         dict_settings = {}
         for field_name in ModelSettingsBuilder.model_fields:
+            # We have a CI test to ensure all fields match between ModelSettings and ModelSettingsEncoder.
             value = getattr(request, field_name)
             field_builder: FieldBuilder | None = getattr(self, field_name)
             if field_builder is not None:
