@@ -587,9 +587,9 @@ def get_normalizer(
     match version:
         case TokenizerVersion.v1 | TokenizerVersion.v2 | TokenizerVersion.v3:
             normalizer_cls = InstructRequestNormalizer
-        case TokenizerVersion.v7 | TokenizerVersion.v11:
+        case TokenizerVersion.v7:
             normalizer_cls = InstructRequestNormalizerV7
-        case TokenizerVersion.v13:
+        case TokenizerVersion.v11 | TokenizerVersion.v13:
             normalizer_cls = InstructRequestNormalizerV13
         case TokenizerVersion.v15:
             normalizer_cls = InstructRequestNormalizerV15
