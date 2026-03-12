@@ -296,14 +296,14 @@ class Tekkenizer(Tokenizer):
             encoding_config = AudioSpectrogramConfig(**encoding_config)
             untyped["audio"] = AudioConfig(encoding_config=encoding_config, **audio)
 
-        model_settings_builder = untyped.get("model_settings_builder")
-        if not version.supports_model_settings:
-            if model_settings_builder is not None:
-                raise ValueError(
-                    f"model_settings_builder is not supported for {version=} but got {model_settings_builder=}"
-                )
-        else:
-            untyped["model_settings_builder"] = ModelSettingsBuilder.model_validate(model_settings_builder or {})
+        if (
+            model_settings_builder := untyped.get("model_settings_builder")
+        ) is not None and not version.supports_model_settings:
+            raise ValueError(
+                f"model_settings_builder is not supported for {version=} but got {model_settings_builder=}"
+            )
+        elif model_settings_builder is not None:
+            untyped["model_settings_builder"] = ModelSettingsBuilder.model_validate(model_settings_builder)
 
         model_data: ModelData = untyped
 
@@ -317,7 +317,7 @@ class Tekkenizer(Tokenizer):
             name=path.name.replace(".json", ""),
             image_config=model_data.get("image"),
             audio_config=model_data.get("audio"),
-            model_settings_builder=untyped.get("model_settings_builder"),
+            model_settings_builder=model_settings_builder,
             _path=path,
         )
 
