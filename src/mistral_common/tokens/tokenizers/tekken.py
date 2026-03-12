@@ -303,7 +303,7 @@ class Tekkenizer(Tokenizer):
                 f"model_settings_builder is not supported for {version=} but got {model_settings_builder=}"
             )
         elif model_settings_builder is not None:
-            untyped["model_settings_builder"] = ModelSettingsBuilder.model_validate(model_settings_builder)
+            model_settings_builder = ModelSettingsBuilder.model_validate(model_settings_builder)
 
         model_data: ModelData = untyped
 
