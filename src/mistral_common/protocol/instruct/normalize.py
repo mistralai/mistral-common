@@ -1,6 +1,8 @@
 import json
 import warnings
-from typing import Generic, Sequence, assert_never, overload
+from typing import Generic, Sequence, overload
+
+from typing_extensions import assert_never
 
 from mistral_common.exceptions import InvalidRequestException
 from mistral_common.protocol.instruct.chunk import (
