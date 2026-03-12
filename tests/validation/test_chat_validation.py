@@ -12,13 +12,17 @@ from mistral_common.protocol.instruct.messages import (
     ToolMessage,
     UserMessage,
 )
-from mistral_common.protocol.instruct.request import ChatCompletionRequest
+from mistral_common.protocol.instruct.request import (
+    ChatCompletionRequest,
+    ReasoningEffort,
+)
 from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
 from mistral_common.protocol.instruct.validator import (
     MistralRequestValidator,
     MistralRequestValidatorV3,
     MistralRequestValidatorV5,
     MistralRequestValidatorV13,
+    MistralRequestValidatorV15,
     ValidationMode,
 )
 from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
@@ -56,6 +60,15 @@ def validator_v5() -> MistralRequestValidatorV5:
     ]
 )
 def validator_v13(request: pytest.FixtureRequest) -> MistralRequestValidator:
+    return request.param  # type: ignore
+
+
+@pytest.fixture(
+    params=[
+        MistralRequestValidatorV15(ValidationMode.serving),
+    ]
+)
+def validator_v15(request: pytest.FixtureRequest) -> MistralRequestValidator:
     return request.param  # type: ignore
 
 
@@ -279,6 +292,12 @@ class TestChatValidation:
                 continue_final_message=False,
             )
 
+    def test_build_settings_raises_error(self, validator: MistralRequestValidator) -> None:
+        request = ChatCompletionRequest(messages=[UserMessage(content="Hello")], reasoning_effort=ReasoningEffort.none)
+
+        with pytest.raises(InvalidRequestException, match="reasoning_effort='none' is not supported for this model"):
+            validator._validate_model_settings(request)
+
 
 class TestChatValidationV5:
     @pytest.mark.parametrize("audio_fixture", ["audio_chunk", "audio_url_chunk"])
@@ -323,6 +342,12 @@ class TestChatValidationV5:
             continue_final_message=False,
         )
 
+    def test_build_settings_raises_error(self, validator: MistralRequestValidator) -> None:
+        request = ChatCompletionRequest(messages=[UserMessage(content="Hello")], reasoning_effort=ReasoningEffort.none)
+
+        with pytest.raises(InvalidRequestException, match="reasoning_effort='none' is not supported for this model"):
+            validator._validate_model_settings(request)
+
 
 class TestChatValidationV13:
     def test_right_number_results_invalid_id(self, validator_v13: MistralRequestValidatorV13) -> None:
@@ -357,6 +382,12 @@ class TestChatValidationV13:
                 ],
                 continue_final_message=False,
             )
+
+    def test_build_settings_raises_error(self, validator: MistralRequestValidator) -> None:
+        request = ChatCompletionRequest(messages=[UserMessage(content="Hello")], reasoning_effort=ReasoningEffort.none)
+
+        with pytest.raises(InvalidRequestException, match="reasoning_effort='none' is not supported for this model"):
+            validator._validate_model_settings(request)
 
     def test_parallel_call_missing_results(self, validator_v13: MistralRequestValidatorV13) -> None:
         with pytest.raises(
@@ -470,3 +501,12 @@ class TestChatValidationV13:
             ],
             continue_final_message=False,
         )
+
+
+class TestChatValidationV15:
+    @pytest.mark.parametrize("reasoning_effort", [*list(ReasoningEffort), None])
+    def test_build_settings_v15_reasoning_effort(
+        self, reasoning_effort: ReasoningEffort | None, validator_v15: MistralRequestValidatorV15
+    ) -> None:
+        request = ChatCompletionRequest(messages=[UserMessage(content="Hello")], reasoning_effort=reasoning_effort)
+        validator_v15._validate_model_settings(request)

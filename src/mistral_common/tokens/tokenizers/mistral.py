@@ -17,10 +17,8 @@ from mistral_common.protocol.instruct.normalize import InstructRequestNormalizer
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import (
     MistralRequestValidator,
-    MistralRequestValidatorV3,
-    MistralRequestValidatorV5,
-    MistralRequestValidatorV13,
     ValidationMode,
+    get_validator,
 )
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
@@ -321,13 +319,14 @@ class MistralTokenizer(
             audio_encoder = load_audio_encoder(audio_config, tokenizer)
 
         request_normalizer = get_normalizer(tokenizer.version, tokenizer.model_settings_builder)
+        validator = get_validator(tokenizer.version, mode=mode)
 
         if tokenizer.version == TokenizerVersion.v1:
             assert image_encoder is None, "Tokenizer version needs to be >= v3"
             assert audio_encoder is None, "Tokenizer version needs to be >= v7"
             return MistralTokenizer(
                 InstructTokenizerV1(tokenizer),
-                validator=MistralRequestValidator(mode=mode),
+                validator=validator,
                 request_normalizer=request_normalizer,
             )
         elif tokenizer.version == TokenizerVersion.v2:
@@ -335,38 +334,38 @@ class MistralTokenizer(
             assert audio_encoder is None, "Tokenizer version needs to be >= v7"
             return MistralTokenizer(
                 InstructTokenizerV2(tokenizer),
-                validator=MistralRequestValidator(mode=mode),
+                validator=validator,
                 request_normalizer=request_normalizer,
             )
         elif tokenizer.version == TokenizerVersion.v3:
             assert audio_encoder is None, "Tokenizer version needs to be >= v7"
             return MistralTokenizer(
                 InstructTokenizerV3(tokenizer, image_encoder=image_encoder),
-                validator=MistralRequestValidatorV3(mode=mode),
+                validator=validator,
                 request_normalizer=request_normalizer,
             )
         elif tokenizer.version == TokenizerVersion.v7:
             return MistralTokenizer(
                 InstructTokenizerV7(tokenizer, image_encoder=image_encoder, audio_encoder=audio_encoder),
-                validator=MistralRequestValidatorV5(mode=mode),
+                validator=validator,
                 request_normalizer=request_normalizer,
             )
         elif tokenizer.version == TokenizerVersion.v11:
             return MistralTokenizer(
                 InstructTokenizerV11(tokenizer, image_encoder=image_encoder, audio_encoder=audio_encoder),
-                validator=MistralRequestValidatorV5(mode=mode),
+                validator=validator,
                 request_normalizer=request_normalizer,
             )
         elif tokenizer.version == TokenizerVersion.v13:
             return MistralTokenizer(
                 InstructTokenizerV13(tokenizer, image_encoder=image_encoder, audio_encoder=audio_encoder),
-                validator=MistralRequestValidatorV13(mode=mode),
+                validator=validator,
                 request_normalizer=request_normalizer,
             )
         elif tokenizer.version == TokenizerVersion.v15:
             return MistralTokenizer(
                 InstructTokenizerV15(tokenizer, image_encoder=image_encoder, audio_encoder=audio_encoder),
-                validator=MistralRequestValidatorV13(mode=mode),
+                validator=validator,
                 request_normalizer=request_normalizer,
             )
 

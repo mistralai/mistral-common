@@ -3,6 +3,7 @@ from enum import Enum
 from typing import Generic
 
 from jsonschema import Draft7Validator, SchemaError
+from typing_extensions import assert_never
 
 from mistral_common.exceptions import (
     InvalidAssistantMessageException,
@@ -121,6 +122,8 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
 
         # Validate the tools
         self._validate_tools(request.tools or [])
+
+        self._validate_model_settings(request)
 
         return request
 
@@ -340,6 +343,10 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
             else:
                 raise InvalidRequestException(f"Unsupported message type {type(message)}")
 
+    def _validate_model_settings(self, request: ChatCompletionRequest) -> None:
+        if (reasoning_effort := request.reasoning_effort) is not None:
+            raise InvalidRequestException(f"{reasoning_effort=} is not supported for this model")
+
 
 class MistralRequestValidatorV3(MistralRequestValidator):
     r"""Validator for v3 Mistral requests.
@@ -503,17 +510,25 @@ class MistralRequestValidatorV13(MistralRequestValidatorV5):
         return
 
 
+class MistralRequestValidatorV15(MistralRequestValidatorV13):
+    def _validate_model_settings(self, request: ChatCompletionRequest) -> None:
+        pass
+
+
 def get_validator(version: TokenizerVersion, mode: ValidationMode) -> MistralRequestValidator:
     validator: MistralRequestValidator
-    if version <= TokenizerVersion.v2:
-        validator = MistralRequestValidator(mode=mode)
-    elif version <= TokenizerVersion.v3:
-        validator = MistralRequestValidatorV3(mode=mode)
-    elif version <= TokenizerVersion.v7:
-        validator = MistralRequestValidatorV5(mode=mode)
-    elif version <= TokenizerVersion.v13:
-        validator = MistralRequestValidatorV13(mode=mode)
-    else:
-        raise ValueError(f"Unsupported tokenizer version: {version}")
+    match version:
+        case TokenizerVersion.v1 | TokenizerVersion.v2:
+            validator = MistralRequestValidator(mode=mode)
+        case TokenizerVersion.v3:
+            validator = MistralRequestValidatorV3(mode=mode)
+        case TokenizerVersion.v7:
+            validator = MistralRequestValidatorV5(mode=mode)
+        case TokenizerVersion.v11 | TokenizerVersion.v13:
+            validator = MistralRequestValidatorV13(mode=mode)
+        case TokenizerVersion.v15:
+            validator = MistralRequestValidatorV15(mode=mode)
+        case _:
+            assert_never(f"Unsupported tokenizer version: {version}")
 
     return validator

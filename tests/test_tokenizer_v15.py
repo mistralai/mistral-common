@@ -17,7 +17,7 @@ from mistral_common.protocol.instruct.request import (
     ReasoningEffort,
 )
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
-from mistral_common.protocol.instruct.validator import MistralRequestValidatorV13, ValidationMode
+from mistral_common.protocol.instruct.validator import ValidationMode, get_validator
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV15
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
@@ -81,9 +81,10 @@ def get_v15_mistral_tokenizer(
     """Build a MistralTokenizer wrapping a v15 instruct tokenizer."""
     tekkenizer = _build_v15_tekkenizer(model_settings_builder)
     request_normalizer = get_normalizer(TokenizerVersion.v15, tekkenizer.model_settings_builder)
+    validator = get_validator(TokenizerVersion.v15, mode=ValidationMode.test)
     return MistralTokenizer(
         InstructTokenizerV15(tekkenizer),
-        validator=MistralRequestValidatorV13(mode=ValidationMode.test),
+        validator=validator,
         request_normalizer=request_normalizer,
     )
 

@@ -104,20 +104,19 @@ class InstructRequestNormalizer(
     def build_settings(self, request: ChatCompletionRequest) -> ModelSettings:
         r"""Build model settings from a chat completion request.
 
-        For pre-v15 normalizers, this passes through the reasoning_effort from the request
-        without validation. The caller asserts the result is ``ModelSettings.none()``.
+        For pre-v15 normalizers, model settings are all `None`.
 
         Args:
             request: The chat completion request.
 
         Returns:
-            The built model settings.
+            Returns `ModelSettings.none()`.
         """
         if self._model_settings_builder is not None:
             raise InvalidRequestException(
                 f"model_settings_builder should be None for {type(self).__name__}, got {self._model_settings_builder}"
             )
-        return ModelSettings(reasoning_effort=request.reasoning_effort)
+        return ModelSettings.none()
 
     def _normalize_json_content(self, content: str | None) -> str:
         if content is None or len(content) == 0:
