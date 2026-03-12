@@ -276,6 +276,7 @@ def test_convert_tool() -> None:
                 },
                 "required": ["location", "format"],
             },
+            strict=True,
         )
     )
 
@@ -301,6 +302,7 @@ def test_convert_tool() -> None:
                     },
                     "required": ["location", "format"],
                 },
+                "strict": True,
             },
         }
     )
@@ -542,6 +544,7 @@ def test_convert_openai_message_to_message_and_back(openai_message: dict, messag
                                 },
                                 "required": ["location", "format"],
                             },
+                            "strict": False,
                         },
                     }
                 )
@@ -648,6 +651,7 @@ def test_convert_openai_message_to_message_and_back(openai_message: dict, messag
                                 },
                                 "required": ["location", "format"],
                             },
+                            "strict": False,
                         },
                     }
                 )
