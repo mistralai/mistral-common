@@ -393,7 +393,7 @@ class InstructTokenizerV2(
     This tokenizer adds supports to images, tools and FIM requests.
     """
 
-    _message_position_to_encode_settings = UserMessagePosition.last
+    _message_position_to_encode_tools_settings = UserMessagePosition.last
 
     def __init__(
         self,
@@ -443,15 +443,19 @@ class InstructTokenizerV2(
         Returns:
             The encoded tokens and the list of images.
         """
-        do_encode_settings = False
-        do_encode_settings |= is_first and (self._message_position_to_encode_settings == UserMessagePosition.first)
-        do_encode_settings |= is_last and (self._message_position_to_encode_settings == UserMessagePosition.last)
-        settings_tokens: list[int] = []
+        do_encode_tools_settings = False
+        do_encode_tools_settings |= is_first and (
+            self._message_position_to_encode_tools_settings == UserMessagePosition.first
+        )
+        do_encode_tools_settings |= is_last and (
+            self._message_position_to_encode_tools_settings == UserMessagePosition.last
+        )
+        tools_settings_tokens: list[int] = []
 
-        if do_encode_settings and available_tools:
+        if do_encode_tools_settings and available_tools:
             tools = [tool.model_dump(exclude={"function": {"strict": True}}) for tool in available_tools]
             tools_json_tokens = self.tokenizer.encode(json.dumps(tools, ensure_ascii=False), bos=False, eos=False)
-            settings_tokens.extend(
+            tools_settings_tokens.extend(
                 [
                     self.BEGIN_AVAILABLE_TOOLS,
                     *tools_json_tokens,
@@ -459,8 +463,8 @@ class InstructTokenizerV2(
                 ]
             )
 
-        if do_encode_settings:
-            settings_tokens.extend(self._encode_settings(settings=settings))
+        if do_encode_tools_settings:
+            tools_settings_tokens.extend(self._encode_settings(settings=settings))
 
         tokens, image, audio = self.encode_user_content(
             content=message.content,
@@ -469,7 +473,7 @@ class InstructTokenizerV2(
             force_img_first=force_img_first,
         )
 
-        prefix_tokens = [*settings_tokens, self.BEGIN_INST]
+        prefix_tokens = [*tools_settings_tokens, self.BEGIN_INST]
         suffix_tokens = [self.END_INST]
 
         curr_tokens = prefix_tokens + tokens + suffix_tokens
@@ -547,6 +551,7 @@ class InstructTokenizerV2(
         settings: ModelSettings,
     ) -> list[int]:
         r"""Encode model settings as tokens. Returns empty list by default."""
+        assert self.tokenizer.model_settings_builder is None, "`model_settings_builder` not supported for this version."
         return []
 
     def encode_assistant_message(
@@ -1248,7 +1253,7 @@ class InstructTokenizerV13(InstructTokenizerV11):
         - call id is no longer tokenized for tool calls or results.
     """
 
-    _message_position_to_encode_settings = UserMessagePosition.first
+    _message_position_to_encode_tools_settings = UserMessagePosition.first
 
     def __init__(
         self,
