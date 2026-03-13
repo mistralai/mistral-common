@@ -57,7 +57,7 @@ def test_tokenize_assistant_message(tekkenizer: InstructTokenizerV11) -> None:
         134,
         2,
     ]
-    assert tekkenizer.tokenizer.to_string(tokens) == ('[TOOL_CALLS]a_a_a[ARGS]"blabla"</s>')
+    assert tekkenizer.tokenizer._to_string(tokens) == ('[TOOL_CALLS]a_a_a[ARGS]"blabla"</s>')
 
 
 def test_tokenize_assistant_message_continue_message(tekkenizer: InstructTokenizerV11) -> None:
@@ -78,7 +78,7 @@ def test_tokenize_assistant_message_continue_message(tekkenizer: InstructTokeniz
         197,
         134,
     ]
-    assert tekkenizer.tokenizer.to_string(tokens) == ('"blabla"')
+    assert tekkenizer.tokenizer._to_string(tokens) == ('"blabla"')
 
     with pytest.raises(
         InvalidAssistantMessageException,
@@ -131,7 +131,7 @@ def test_tokenize_assistant_messages(tekkenizer: InstructTokenizerV11) -> None:
         134,
         2,
     ]
-    assert tekkenizer.tokenizer.to_string(tokens) == ('[TOOL_CALLS]a_a_a[ARGS]"blabla"[TOOL_CALLS]b[ARGS]"blu"</s>')
+    assert tekkenizer.tokenizer._to_string(tokens) == ('[TOOL_CALLS]a_a_a[ARGS]"blabla"[TOOL_CALLS]b[ARGS]"blu"</s>')
 
 
 def test_tokenize_assistant_message_train(tekkenizer: InstructTokenizerV11) -> None:
@@ -164,4 +164,4 @@ def test_tokenize_assistant_message_train(tekkenizer: InstructTokenizerV11) -> N
         134,
         2,
     ]
-    assert tekkenizer.tokenizer.to_string(tokens) == ('[TOOL_CALLS]a_a_a[CALL_ID]ABC[ARGS]"blabla"</s>')
+    assert tekkenizer.tokenizer._to_string(tokens) == ('[TOOL_CALLS]a_a_a[CALL_ID]ABC[ARGS]"blabla"</s>')

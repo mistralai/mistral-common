@@ -19,16 +19,12 @@ SPM_WHITESPACE = "▁"
 
 class TestMistralToknizer:
     def test_from_model(self) -> None:
-        assert isinstance(MistralTokenizer.from_model("open-mistral-7B").instruct_tokenizer, InstructTokenizerV1)
-        assert isinstance(MistralTokenizer.from_model("open-mixtral-8x7B").instruct_tokenizer, InstructTokenizerV1)
-        assert isinstance(MistralTokenizer.from_model("mistral-embed").instruct_tokenizer, InstructTokenizerV1)
-        assert isinstance(MistralTokenizer.from_model("mistral-small").instruct_tokenizer, InstructTokenizerV2)
-        assert isinstance(MistralTokenizer.from_model("mistral-large").instruct_tokenizer, InstructTokenizerV2)
-        assert isinstance(MistralTokenizer.from_model("open-mixtral-8x22B").instruct_tokenizer, InstructTokenizerV3)
-
-        # Test partial matches
-        assert isinstance(MistralTokenizer.from_model("mistral-small-latest").instruct_tokenizer, InstructTokenizerV2)
-        assert isinstance(MistralTokenizer.from_model("mistral-small-240401").instruct_tokenizer, InstructTokenizerV2)
+        assert isinstance(MistralTokenizer.from_model("mistral-medium-2312").instruct_tokenizer, InstructTokenizerV1)
+        assert isinstance(MistralTokenizer.from_model("mistral-tiny-2312").instruct_tokenizer, InstructTokenizerV2)
+        assert isinstance(MistralTokenizer.from_model("mistral-large-2402").instruct_tokenizer, InstructTokenizerV2)
+        assert isinstance(
+            MistralTokenizer.from_model("open-mixtral-8x22b-2404").instruct_tokenizer, InstructTokenizerV3
+        )
 
         with pytest.raises(TokenizerException):
             MistralTokenizer.from_model("unknown-model")
@@ -36,8 +32,6 @@ class TestMistralToknizer:
     @pytest.mark.parametrize(
         ["special_token_policy", "is_tekken"],
         [
-            (None, False),
-            (None, True),
             (SpecialTokenPolicy.IGNORE, False),
             (SpecialTokenPolicy.IGNORE, True),
             (SpecialTokenPolicy.KEEP, False),
@@ -46,7 +40,7 @@ class TestMistralToknizer:
             (SpecialTokenPolicy.RAISE, True),
         ],
     )
-    def test_decode(self, special_token_policy: SpecialTokenPolicy | None, is_tekken: bool) -> None:
+    def test_decode(self, special_token_policy: SpecialTokenPolicy, is_tekken: bool) -> None:
         tokenizer = MistralTokenizer.v3(is_tekken=is_tekken)
 
         prompt = "This is a complicated te$t, ain't it?"
@@ -145,7 +139,7 @@ def test_tokenizer_is_pickleable_with_multiprocessing(
 
 
 def test_mistral_tokenizer_version_property() -> None:
-    tokenizer_v1 = MistralTokenizer.from_model("open-mistral-7B")
+    tokenizer_v1 = MistralTokenizer.from_model("mistral-medium-2312")
     assert (
         tokenizer_v1.version
         == tokenizer_v1.instruct_tokenizer.version
@@ -153,7 +147,7 @@ def test_mistral_tokenizer_version_property() -> None:
         == TokenizerVersion.v1
     )
 
-    tokenizer_v3 = MistralTokenizer.from_model("open-mixtral-8x22B")
+    tokenizer_v3 = MistralTokenizer.from_model("open-mixtral-8x22b-2404")
     assert (
         tokenizer_v3.version
         == tokenizer_v3.instruct_tokenizer.version

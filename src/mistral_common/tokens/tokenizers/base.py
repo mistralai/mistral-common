@@ -186,7 +186,7 @@ class TokenizerVersion(str, Enum):
 
 
 class Tokenized(MistralBase):
-    r"""A tokenized [`InstructRequest`][mistral_common.tokens.instruct.request].
+    r"""A tokenized [`InstructRequest`][mistral_common.protocol.instruct.request.InstructRequest].
 
     Attributes:
         tokens: The token ids.
@@ -260,17 +260,12 @@ class Tokenizer(ABC):
         """Convert a string to a list of token ids."""
 
     @abstractmethod
-    def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy | None = None) -> str:
+    def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy = SpecialTokenPolicy.IGNORE) -> str:
         r"""Decode the token ids to a string.
 
         Args:
             tokens: The token ids to decode.
             special_token_policy: The policy to use for special tokens.
-                Passing `None` will default to `self._special_token_policy` for
-                [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer] and `SpecialTokenPolicy.IGNORE`
-                for [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer].
-                Note that passing `None` will be deprecated and `special_token_policy` will default to
-                `SpecialTokenPolicy.IGNORE` in `mistral_common=1.10.0`.
 
         Returns:
             The decoded string.
@@ -288,16 +283,6 @@ class Tokenizer(ABC):
     @abstractmethod
     def version(self) -> TokenizerVersion:
         r"""Get the version of the tokenizer."""
-
-    @abstractmethod
-    def to_string(self, tokens: list[int]) -> str:
-        r"""[DEPRECATED] Converts a list of token ids into a string, keeping special tokens.
-
-        Use `decode` with `special_token_policy=SpecialTokenPolicy.KEEP` instead.
-
-        This is a convenient method for debugging.
-        """
-        ...
 
     @abstractmethod
     def _to_string(self, tokens: list[int]) -> str: ...
@@ -385,17 +370,12 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         """
 
     @abstractmethod
-    def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy | None = None) -> str:
+    def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy) -> str:
         r"""Convert token ids to string
 
         Args:
             tokens: The token ids to decode.
             special_token_policy: The policy to use for special tokens.
-                Passing `None` will default to `self._special_token_policy` for
-                [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer] and `SpecialTokenPolicy.IGNORE`
-                for [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer].
-                Note that passing `None` will be deprecated and `special_token_policy` will default to
-                `SpecialTokenPolicy.IGNORE` in `mistral_common=1.10.0`.
 
         Returns:
             The decoded string.

@@ -35,7 +35,7 @@ class InstructRequestNormalizer(
     Generic[UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType, InstructRequestType]
 ):
     r"""Takes a [ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest] and normalizes
-    it into an [InstructRequest][mistral_common.tokens.instruct.request.InstructRequest].
+    it into an [InstructRequest][mistral_common.protocol.instruct.request.InstructRequest].
 
     The normalization process does several things such as:
     - Aggregate consecutive messages of the same role
