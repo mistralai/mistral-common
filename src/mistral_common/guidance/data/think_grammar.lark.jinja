@@ -1,0 +1,21 @@
+{% if json_schema_str != None -%}
+start: body | %json {{ json_schema_str }}
+{% else -%}
+start: body
+{% endif -%}
+
+{% if mode == "auto" -%}
+body: think? (content | fcalls)
+{% elif mode == "any" -%}
+body: think? fcalls
+{% elif mode == "none" -%}
+body: think? content
+{% endif -%}
+
+fcalls: content? {{ fcall }}
+
+content: (/(.|\n)+/)+
+
+think: <THINK> content </THINK>
+
+SAFE_WS: /[ \t\r\n]+/

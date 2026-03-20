@@ -3,6 +3,7 @@ import os
 import warnings
 from functools import cached_property
 from pathlib import Path
+from typing import TypeGuard
 
 import numpy as np
 
@@ -259,3 +260,8 @@ class SentencePieceTokenizer(Tokenizer):
     def unk_id(self) -> int:
         r"""The unknown token id."""
         return self._model.unk_id()  # type: ignore
+
+
+def is_sentencepiece_tokenizer(tokenizer: Tokenizer) -> TypeGuard[SentencePieceTokenizer]:
+    r"""Returns whether the tokenizer is a SentencePieceTokenizer."""
+    return isinstance(tokenizer, SentencePieceTokenizer)

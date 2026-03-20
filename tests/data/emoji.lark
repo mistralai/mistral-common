@@ -1,0 +1,2 @@
+start: emoji+
+emoji: /(\p{Emoji_Presentation}|\p{Emoji}\uFE0F)/

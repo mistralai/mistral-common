@@ -1,0 +1,19 @@
+{% if json_schema_str != None -%}
+start: body | SAFE_WS? %json {{ json_schema_str }}
+{% else -%}
+start: body
+{% endif -%}
+
+{% if mode == "auto" -%}
+body: content | (content? fcalls)
+{% elif mode == "any" -%}
+body: fcalls
+{% elif mode == "none" -%}
+body: content
+{% endif -%}
+
+fcalls: {{ fcall }}
+
+content: (/(.|\n)+/)+
+
+SAFE_WS: /[ \t\r\n]+/
