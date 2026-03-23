@@ -965,11 +965,5 @@ class TestToolChoice:
         openai_request = request.to_openai()
         assert openai_request["tool_choice"] == expected_openai
 
-        messages = openai_request.pop("messages")
-        tools = openai_request.pop("tools", None)
-        continue_final_message = openai_request.pop("continue_final_message", False)
-
-        reconstructed = ChatCompletionRequest.from_openai(
-            messages=messages, tools=tools, continue_final_message=continue_final_message, **openai_request
-        )
+        reconstructed = ChatCompletionRequest.from_openai(**openai_request)
         assert reconstructed.tool_choice == expected_reconstructed

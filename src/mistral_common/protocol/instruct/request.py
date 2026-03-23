@@ -124,7 +124,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     continue_final_message: bool = False
     reasoning_effort: ReasoningEffort | None = None
 
-    def to_openai(self, **kwargs: Any) -> dict[str, list[dict[str, Any]]]:
+    def to_openai(self, **kwargs: Any) -> dict[str, Any]:
         r"""Convert the request messages and tools into the OpenAI format.
 
         Args:
