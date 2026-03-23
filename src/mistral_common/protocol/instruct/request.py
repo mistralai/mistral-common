@@ -196,7 +196,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         openai_tool_choice: str | dict[str, Any]
         match self.tool_choice:
             case ToolChoice.auto | ToolChoice.none:
-                openai_tool_choice = self.tool_choice.value
+                openai_tool_choice = self.tool_choice
             case ToolChoice.required | ToolChoice.any:
                 openai_tool_choice = ToolChoice.required.value
             case _:
