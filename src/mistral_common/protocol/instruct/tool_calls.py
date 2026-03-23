@@ -7,7 +7,20 @@ from pydantic import field_validator
 from mistral_common.base import MistralBase
 
 
-class Function(MistralBase):
+class FunctionName(MistralBase):
+    r"""A function identified by name.
+
+    Attributes:
+        name: The name of the function.
+
+    Examples:
+        >>> function_name = FunctionName(name="get_current_weather")
+    """
+
+    name: str
+
+
+class Function(FunctionName):
     r"""Function definition for tools.
 
     Attributes:
@@ -34,7 +47,6 @@ class Function(MistralBase):
         ... )
     """
 
-    name: str
     description: str = ""
     parameters: dict[str, Any]
     strict: bool = False
@@ -59,7 +71,8 @@ class ToolChoice(str, Enum):
     Attributes:
         auto: Automatically choose the tool.
         none: Do not use any tools.
-        any: Use any tool.
+        any: Deprecated in favor of `required`.
+        required: Require the model to call a tool.
 
     Examples:
         >>> tool_choice = ToolChoice.auto
@@ -67,7 +80,23 @@ class ToolChoice(str, Enum):
 
     auto = "auto"
     none = "none"
-    any = "any"
+    any = "any"  # deprecated in favor of `required`
+    required = "required"
+
+
+class NamedToolChoice(MistralBase):
+    r"""Forces the model to call a specific function.
+
+    Attributes:
+        type: The type of the tool.
+        function: The function the model should call.
+
+    Examples:
+        >>> named = NamedToolChoice(function=FunctionName(name="get_weather"))
+    """
+
+    type: ToolTypes = ToolTypes.function
+    function: FunctionName
 
 
 class Tool(MistralBase):

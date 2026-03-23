@@ -15,7 +15,7 @@ from mistral_common.protocol.instruct.messages import (
     ChatMessage,
     ChatMessageType,
 )
-from mistral_common.protocol.instruct.tool_calls import Tool, ToolChoice, ToolType
+from mistral_common.protocol.instruct.tool_calls import NamedToolChoice, Tool, ToolChoice, ToolType
 
 
 class ResponseFormats(str, Enum):
@@ -119,7 +119,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     messages: list[ChatMessageType]
     response_format: ResponseFormat = Field(default_factory=ResponseFormat)
     tools: list[Tool] | None = None
-    tool_choice: ToolChoice = ToolChoice.auto
+    tool_choice: ToolChoice | NamedToolChoice = ToolChoice.auto
     truncate_for_context_length: bool = False
     continue_final_message: bool = False
     reasoning_effort: ReasoningEffort | None = None
@@ -138,7 +138,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             >>> from mistral_common.protocol.instruct.tool_calls import Tool, Function
             >>> request = ChatCompletionRequest(messages=[UserMessage(content="Hello, how are you?")], temperature=0.15)
             >>> request.to_openai(stream=True)
-            {'temperature': 0.15, 'top_p': 1.0, 'response_format': {'type': 'text'}, 'tool_choice': 'auto', 'continue_final_message': False, 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'stream': True}
+            {'temperature': 0.15, 'top_p': 1.0, 'response_format': {'type': 'text'}, 'continue_final_message': False, 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'tool_choice': 'auto', 'stream': True}
             >>> request = ChatCompletionRequest(messages=[UserMessage(content="Hello, how are you?")], tools=[
             ...     Tool(function=Function(
             ...         name="get_current_weather",
@@ -157,12 +157,12 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             ...     ),
             ... )])
             >>> request.to_openai()
-            {'temperature': 0.7, 'top_p': 1.0, 'response_format': {'type': 'text'}, 'tool_choice': 'auto', 'continue_final_message': False, 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'tools': [{'type': 'function', 'function': {'name': 'get_current_weather', 'description': 'Get the current weather in a given location', 'parameters': {'type': 'object', 'properties': {'location': {'type': 'string', 'description': 'The city and state, e.g. San Francisco, CA'}, 'unit': {'type': 'string', 'enum': ['celsius', 'fahrenheit']}}, 'required': ['location']}, 'strict': False}}]}
+            {'temperature': 0.7, 'top_p': 1.0, 'response_format': {'type': 'text'}, 'continue_final_message': False, 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'tools': [{'type': 'function', 'function': {'name': 'get_current_weather', 'description': 'Get the current weather in a given location', 'parameters': {'type': 'object', 'properties': {'location': {'type': 'string', 'description': 'The city and state, e.g. San Francisco, CA'}, 'unit': {'type': 'string', 'enum': ['celsius', 'fahrenheit']}}, 'required': ['location']}, 'strict': False}}], 'tool_choice': 'auto'}
         """  # noqa: E501
 
         # Handle messages and tools separately.
         openai_request: dict[str, Any] = self.model_dump(
-            exclude={"messages", "tools", "truncate_for_context_length"}, exclude_none=True
+            exclude={"messages", "tools", "truncate_for_context_length", "tool_choice"}, exclude_none=True
         )
 
         # Rename random_seed to seed.
@@ -192,6 +192,17 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         openai_request["messages"] = openai_messages
         if self.tools is not None:
             openai_request["tools"] = [tool.to_openai() for tool in self.tools]
+
+        openai_tool_choice: str | dict[str, Any]
+        match self.tool_choice:
+            case ToolChoice.auto | ToolChoice.none:
+                openai_tool_choice = self.tool_choice
+            case ToolChoice.required | ToolChoice.any:
+                openai_tool_choice = ToolChoice.required.value
+            case _:
+                openai_tool_choice = self.tool_choice.model_dump()
+
+        openai_request["tool_choice"] = openai_tool_choice
 
         openai_request.update(kwargs)
 
