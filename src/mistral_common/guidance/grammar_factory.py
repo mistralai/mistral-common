@@ -1,5 +1,6 @@
 import json
 from enum import Enum
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,34 @@ if is_jinja2_installed():
     from jinja2 import Template
 
 JINJA_DIR = Path(__file__).parent / "data"
+
+
+@lru_cache()
+def _cached_get_jinja_template(tokenizer_version: TokenizerVersion, reasoning: bool) -> str:
+    if tokenizer_version < TokenizerVersion.v13:
+        jinja_key = _GrammarVariant.plain_think if reasoning else _GrammarVariant.base
+    else:
+        jinja_key = _GrammarVariant.think if reasoning else _GrammarVariant.base
+    jinja_path = JINJA_PATHS[jinja_key]
+    return jinja_path.read_text(encoding="utf-8")
+
+
+@lru_cache()
+def _cached_get_lark_from_jinja(
+    template: str,
+    mode: ToolChoice,
+    fcall: str,
+    json_schema_str: str | None,
+    parallel_tool_calls: bool,
+) -> str:
+    jinja_template = Template(template)
+    lark_grammar = jinja_template.render(
+        mode=mode,
+        fcall=fcall,
+        json_schema_str=json_schema_str,
+        parallel_tool_calls=parallel_tool_calls,
+    )
+    return lark_grammar
 
 
 class _GrammarVariant(str, Enum):
@@ -128,13 +157,7 @@ class GrammarFactory:
         Returns:
             The jinja template content as a string.
         """
-        tokenizer_version = self._tokenizer.version
-        if tokenizer_version < TokenizerVersion.v13:
-            jinja_key = _GrammarVariant.plain_think if reasoning else _GrammarVariant.base
-        else:
-            jinja_key = _GrammarVariant.think if reasoning else _GrammarVariant.base
-        jinja_path = JINJA_PATHS[jinja_key]
-        return jinja_path.read_text(encoding="utf-8")
+        return _cached_get_jinja_template(tokenizer_version=self._tokenizer.version, reasoning=reasoning)
 
     def get_lark_from_jinja(
         self,
@@ -156,13 +179,15 @@ class GrammarFactory:
         Returns:
             The rendered lark grammar string.
         """
-        jinja_template = Template(template)
-        lark_grammar = jinja_template.render(
+        fcall = convert_tool_calls(tools, mode, parallel_tool_calls)
+        json_schema_str = json.dumps(json_schema, ensure_ascii=False) if json_schema else None
+        return _cached_get_lark_from_jinja(
+            template=template,
             mode=mode,
-            fcall=convert_tool_calls(tools, mode, parallel_tool_calls),
-            json_schema_str=json.dumps(json_schema, ensure_ascii=False) if json_schema else None,
+            tools=fcall,
+            json_schema_str=json_schema_str,
+            parallel_tool_calls=parallel_tool_calls,
         )
-        return lark_grammar
 
     def get_lark_for_json_schema(self, json_schema: dict[str, Any]) -> str:
         r"""Returns a lark grammar that only accepts JSON objects matching the given schema."""
