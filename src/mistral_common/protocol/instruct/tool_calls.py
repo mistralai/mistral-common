@@ -72,7 +72,7 @@ class ToolChoiceEnum(str, Enum):
         auto: Automatically choose the tool.
         none: Do not use any tools.
         any: Deprecated in favor of `required`.
-        required: Require the model to call a tool.
+        required: Require the model to call at least one tool.
 
     Examples:
         >>> tool_choice = ToolChoiceEnum.auto

@@ -110,7 +110,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         ...     ],
         ...     response_format=ResponseFormat(type=ResponseFormats.text),
         ...     tools=[Tool(type=ToolTypes.function, function=Function(name="get_weather", parameters={}))],
-        ...     tool_choice=ToolChoice.auto,
+        ...     tool_choice=ToolChoiceEnum.auto,
         ...     truncate_for_context_length=True,
         ... )
     """
