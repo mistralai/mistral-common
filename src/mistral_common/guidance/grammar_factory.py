@@ -11,7 +11,7 @@ from mistral_common.imports import (
     is_jinja2_installed,
     is_llguidance_installed,
 )
-from mistral_common.protocol.instruct.tool_calls import Tool, ToolChoice
+from mistral_common.protocol.instruct.tool_calls import NamedToolChoice, Tool, ToolChoice, ToolChoiceEnum
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import is_tekkenizer
@@ -38,7 +38,7 @@ def _cached_get_jinja_template(tokenizer_version: TokenizerVersion, reasoning: b
 @lru_cache()
 def _cached_get_lark_from_jinja(
     template: str,
-    mode: ToolChoice,
+    mode: str,
     fcall: str,
     json_schema_str: str | None,
     parallel_tool_calls: bool,
@@ -95,19 +95,28 @@ def convert_tool_calls(
     any_strict_true = any(tool.function.strict for tool in tools) if tools else False
 
     if not tools or not any_strict_true:
-        single_tool_call = '<TOOL_CALLS> SAFE_WS? /.+/ <ARGS> SAFE_WS? %json {"type": "object"} SAFE_WS?'
-        return f"({single_tool_call})+" if parallel_tool_calls else single_tool_call
-
-    individual_tool_calls = []
-    for tool in tools:
-        args = _get_tool_args_json(tool)
-        individual_tool_calls.append(
-            f'(<TOOL_CALLS> SAFE_WS? "{tool.function.name}" <ARGS> SAFE_WS? %json '
-            f"{json.dumps(args, ensure_ascii=False)} SAFE_WS?)"
+        if not isinstance(mode, NamedToolChoice):
+            grammar_tool_call = '<TOOL_CALLS> SAFE_WS? /.+/ <ARGS> SAFE_WS? %json {"type": "object"} SAFE_WS?'
+        else:
+            grammar_tool_call = (
+                f'<TOOL_CALLS> SAFE_WS? "{mode.function.name}" <ARGS> SAFE_WS? %json {{"type": "object"}} SAFE_WS?'
+            )
+    else:
+        grammar_per_tool = []
+        tools = (
+            [next(tool for tool in tools if tool.function.name == mode.function.name)]
+            if isinstance(mode, NamedToolChoice)
+            else tools
         )
+        for tool in tools:
+            args = _get_tool_args_json(tool)
+            grammar_per_tool.append(
+                f'(<TOOL_CALLS> SAFE_WS? "{tool.function.name}" <ARGS> SAFE_WS? %json '
+                f"{json.dumps(args, ensure_ascii=False)} SAFE_WS?)"
+            )
+        grammar_tool_call = f"{' | '.join(grammar_per_tool)}"
 
-    single_tool_call = f"{' | '.join(individual_tool_calls)}"
-    return f"({single_tool_call})+" if parallel_tool_calls else single_tool_call
+    return f"({grammar_tool_call})+" if parallel_tool_calls else grammar_tool_call
 
 
 class GrammarFactory:
@@ -181,10 +190,12 @@ class GrammarFactory:
         """
         fcall = convert_tool_calls(tools, mode, parallel_tool_calls)
         json_schema_str = json.dumps(json_schema, ensure_ascii=False) if json_schema else None
+        # NamedToolChoice forces a specific tool, which maps to "required" grammar
+        template_mode = ToolChoiceEnum.required if isinstance(mode, NamedToolChoice) else mode
         return _cached_get_lark_from_jinja(
             template=template,
-            mode=mode,
-            tools=fcall,
+            mode=template_mode.value,
+            fcall=fcall,
             json_schema_str=json_schema_str,
             parallel_tool_calls=parallel_tool_calls,
         )

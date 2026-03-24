@@ -8,6 +8,8 @@ start: body
 body: content | (content? fcalls)
 {% elif mode == "any" -%}
 body: fcalls
+{% elif mode == "required" -%}
+body: content? fcalls
 {% elif mode == "none" -%}
 body: content
 {% endif -%}

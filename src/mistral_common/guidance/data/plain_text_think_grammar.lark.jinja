@@ -6,7 +6,7 @@ start: body
 
 {% if mode == "auto" -%}
 body: think (content | fcalls)
-{% elif mode == "any" -%}
+{% elif mode == "any" or mode == "required" -%}
 body: think fcalls
 {% elif mode == "none" -%}
 body: think content
