@@ -222,8 +222,9 @@ def _find_first_rejection(
     Raises:
         ValueError: If all tokens are accepted.
     """
-    grammar = factory.get_lark(
-        reasoning=False, mode=ToolChoice(mode), tools=tools, json_schema=None, parallel_tool_calls=True
+    template = factory.select_jinja_template(reasoning=False)
+    grammar = factory.get_lark_from_jinja(
+        template=template, mode=ToolChoice(mode), tools=tools, json_schema=None, parallel_tool_calls=True
     )
     matcher = factory.get_matcher(grammar)
     for i, token in enumerate(tokens):
@@ -975,8 +976,9 @@ class TestGrammarFactory:
         elif test_case.json_schema is not None and test_case.tools is None:
             grammar = factory.get_lark_for_json_schema(json_schema=test_case.json_schema)
         else:
-            grammar = factory.get_lark(
-                reasoning=test_case.reasoning,
+            template = factory.select_jinja_template(reasoning=test_case.reasoning)
+            grammar = factory.get_lark_from_jinja(
+                template=template,
                 mode=ToolChoice(test_case.mode),
                 tools=test_case.tools,
                 json_schema=test_case.json_schema,

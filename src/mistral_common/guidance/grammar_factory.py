@@ -136,9 +136,9 @@ class GrammarFactory:
         jinja_path = JINJA_PATHS[jinja_key]
         return jinja_path.read_text(encoding="utf-8")
 
-    def get_lark(
+    def get_lark_from_jinja(
         self,
-        reasoning: bool,
+        template: str,
         mode: ToolChoice,
         tools: list[Tool] | None,
         json_schema: dict[str, Any] | None,
@@ -147,7 +147,7 @@ class GrammarFactory:
         r"""Renders a lark grammar from a jinja template.
 
         Args:
-            reasoning: Whether reasoning/thinking mode is enabled.
+            template: Jinja template to render as a string.
             mode: The function calling mode (auto, any, none).
             tools: The list of tools available.
             json_schema: JSON schema to additionally allow, unioned with the grammar.
@@ -156,7 +156,7 @@ class GrammarFactory:
         Returns:
             The rendered lark grammar string.
         """
-        jinja_template = Template(self.select_jinja_template(reasoning=reasoning))
+        jinja_template = Template(template)
         lark_grammar = jinja_template.render(
             mode=mode,
             fcall=convert_tool_calls(tools, mode, parallel_tool_calls),
