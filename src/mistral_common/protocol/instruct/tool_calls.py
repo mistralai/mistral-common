@@ -1,6 +1,6 @@
 import json
 from enum import Enum
-from typing import Any, TypeVar
+from typing import Any, TypeAlias, TypeVar
 
 from pydantic import field_validator
 
@@ -76,6 +76,8 @@ class ToolChoiceEnum(str, Enum):
 
     Examples:
         >>> tool_choice = ToolChoiceEnum.auto
+        >>> isinstance(tool_choice, ToolChoice)
+        True
     """
 
     auto = "auto"
@@ -93,13 +95,16 @@ class NamedToolChoice(MistralBase):
 
     Examples:
         >>> named = NamedToolChoice(function=FunctionName(name="get_weather"))
+        >>> isinstance(named, ToolChoice)
+        True
     """
 
     type: ToolTypes = ToolTypes.function
     function: FunctionName
 
 
-ToolChoice = ToolChoiceEnum | NamedToolChoice
+ToolChoice: TypeAlias = ToolChoiceEnum | NamedToolChoice
+r"""Tool choice are either a `ToolChoiceEnum` or a `NamedToolChoice`."""
 
 
 class Tool(MistralBase):
