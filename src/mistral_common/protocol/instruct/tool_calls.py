@@ -65,7 +65,7 @@ class ToolTypes(str, Enum):
     function = "function"
 
 
-class ToolChoice(str, Enum):
+class ToolChoiceEnum(str, Enum):
     r"""Enum of tool choice types.
 
     Attributes:
@@ -75,7 +75,7 @@ class ToolChoice(str, Enum):
         required: Require the model to call a tool.
 
     Examples:
-        >>> tool_choice = ToolChoice.auto
+        >>> tool_choice = ToolChoiceEnum.auto
     """
 
     auto = "auto"
@@ -97,6 +97,9 @@ class NamedToolChoice(MistralBase):
 
     type: ToolTypes = ToolTypes.function
     function: FunctionName
+
+
+ToolChoice = ToolChoiceEnum | NamedToolChoice
 
 
 class Tool(MistralBase):

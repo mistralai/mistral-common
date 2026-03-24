@@ -15,7 +15,7 @@ from mistral_common.protocol.instruct.messages import (
     ChatMessage,
     ChatMessageType,
 )
-from mistral_common.protocol.instruct.tool_calls import NamedToolChoice, Tool, ToolChoice, ToolType
+from mistral_common.protocol.instruct.tool_calls import Tool, ToolChoice, ToolChoiceEnum, ToolType
 
 
 class ResponseFormats(str, Enum):
@@ -119,7 +119,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     messages: list[ChatMessageType]
     response_format: ResponseFormat = Field(default_factory=ResponseFormat)
     tools: list[Tool] | None = None
-    tool_choice: ToolChoice | NamedToolChoice = ToolChoice.auto
+    tool_choice: ToolChoice = ToolChoiceEnum.auto
     truncate_for_context_length: bool = False
     continue_final_message: bool = False
     reasoning_effort: ReasoningEffort | None = None
@@ -195,10 +195,10 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
 
         openai_tool_choice: str | dict[str, Any]
         match self.tool_choice:
-            case ToolChoice.auto | ToolChoice.none:
+            case ToolChoiceEnum.auto | ToolChoiceEnum.none:
                 openai_tool_choice = self.tool_choice
-            case ToolChoice.required | ToolChoice.any:
-                openai_tool_choice = ToolChoice.required.value
+            case ToolChoiceEnum.required | ToolChoiceEnum.any:
+                openai_tool_choice = ToolChoiceEnum.required.value
             case _:
                 openai_tool_choice = self.tool_choice.model_dump()
 

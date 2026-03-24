@@ -64,7 +64,7 @@ from mistral_common.protocol.instruct.tool_calls import (
     NamedToolChoice,
     Tool,
     ToolCall,
-    ToolChoice,
+    ToolChoiceEnum,
 )
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
@@ -944,10 +944,10 @@ class TestToolChoice:
     @pytest.mark.parametrize(
         ["tool_choice", "expected_openai", "expected_reconstructed"],
         [
-            (ToolChoice.auto, "auto", ToolChoice.auto.value),
-            (ToolChoice.none, "none", ToolChoice.none.value),
-            (ToolChoice.required, "required", ToolChoice.required.value),
-            (ToolChoice.any, "required", ToolChoice.required.value),
+            (ToolChoiceEnum.auto, "auto", ToolChoiceEnum.auto.value),
+            (ToolChoiceEnum.none, "none", ToolChoiceEnum.none.value),
+            (ToolChoiceEnum.required, "required", ToolChoiceEnum.required.value),
+            (ToolChoiceEnum.any, "required", ToolChoiceEnum.required.value),
             (
                 NamedToolChoice(function=FunctionName(name="get_weather")),
                 {"type": "function", "function": {"name": "get_weather"}},
@@ -957,7 +957,7 @@ class TestToolChoice:
     )
     def test_tool_choice_round_trip(
         self,
-        tool_choice: ToolChoice | NamedToolChoice,
+        tool_choice: ToolChoiceEnum | NamedToolChoice,
         expected_openai: str | dict[str, Any],
         expected_reconstructed: str | NamedToolChoice,
     ) -> None:
