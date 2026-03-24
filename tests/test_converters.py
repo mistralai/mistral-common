@@ -57,7 +57,15 @@ from mistral_common.protocol.instruct.request import (
     ModelSettings,
     ReasoningEffort,
 )
-from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
+from mistral_common.protocol.instruct.tool_calls import (
+    Function,
+    FunctionCall,
+    FunctionName,
+    NamedToolChoice,
+    Tool,
+    ToolCall,
+    ToolChoiceEnum,
+)
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
 
@@ -930,3 +938,32 @@ def test_convert_speech_request_round_trip() -> None:
     assert "ref_audio" not in voice_only_dict
     assert voice_only_dict["input"] == "Hello"
     assert voice_only_dict["voice"] == "female"
+
+
+class TestToolChoice:
+    @pytest.mark.parametrize(
+        ["tool_choice", "expected_openai", "expected_reconstructed"],
+        [
+            (ToolChoiceEnum.auto, "auto", ToolChoiceEnum.auto.value),
+            (ToolChoiceEnum.none, "none", ToolChoiceEnum.none.value),
+            (ToolChoiceEnum.required, "required", ToolChoiceEnum.required.value),
+            (ToolChoiceEnum.any, "required", ToolChoiceEnum.required.value),
+            (
+                NamedToolChoice(function=FunctionName(name="get_weather")),
+                {"type": "function", "function": {"name": "get_weather"}},
+                NamedToolChoice(function=FunctionName(name="get_weather")),
+            ),
+        ],
+    )
+    def test_tool_choice_round_trip(
+        self,
+        tool_choice: ToolChoiceEnum | NamedToolChoice,
+        expected_openai: str | dict[str, Any],
+        expected_reconstructed: str | NamedToolChoice,
+    ) -> None:
+        request = ChatCompletionRequest(messages=[UserMessage(content="Hello")], tool_choice=tool_choice)
+        openai_request = request.to_openai()
+        assert openai_request["tool_choice"] == expected_openai
+
+        reconstructed = ChatCompletionRequest.from_openai(**openai_request)
+        assert reconstructed.tool_choice == expected_reconstructed

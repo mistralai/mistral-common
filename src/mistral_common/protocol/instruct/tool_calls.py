@@ -1,13 +1,26 @@
 import json
 from enum import Enum
-from typing import Any, TypeVar
+from typing import Any, TypeAlias, TypeVar
 
 from pydantic import field_validator
 
 from mistral_common.base import MistralBase
 
 
-class Function(MistralBase):
+class FunctionName(MistralBase):
+    r"""A function identified by name.
+
+    Attributes:
+        name: The name of the function.
+
+    Examples:
+        >>> function_name = FunctionName(name="get_current_weather")
+    """
+
+    name: str
+
+
+class Function(FunctionName):
     r"""Function definition for tools.
 
     Attributes:
@@ -34,7 +47,6 @@ class Function(MistralBase):
         ... )
     """
 
-    name: str
     description: str = ""
     parameters: dict[str, Any]
     strict: bool = False
@@ -53,21 +65,46 @@ class ToolTypes(str, Enum):
     function = "function"
 
 
-class ToolChoice(str, Enum):
+class ToolChoiceEnum(str, Enum):
     r"""Enum of tool choice types.
 
     Attributes:
         auto: Automatically choose the tool.
         none: Do not use any tools.
-        any: Use any tool.
+        any: Deprecated in favor of `required`.
+        required: Require the model to call at least one tool.
 
     Examples:
-        >>> tool_choice = ToolChoice.auto
+        >>> tool_choice = ToolChoiceEnum.auto
+        >>> isinstance(tool_choice, ToolChoice)
+        True
     """
 
     auto = "auto"
     none = "none"
-    any = "any"
+    any = "any"  # deprecated in favor of `required`
+    required = "required"
+
+
+class NamedToolChoice(MistralBase):
+    r"""Forces the model to call a specific function.
+
+    Attributes:
+        type: The type of the tool.
+        function: The function the model should call.
+
+    Examples:
+        >>> named = NamedToolChoice(function=FunctionName(name="get_weather"))
+        >>> isinstance(named, ToolChoice)
+        True
+    """
+
+    type: ToolTypes = ToolTypes.function
+    function: FunctionName
+
+
+ToolChoice: TypeAlias = ToolChoiceEnum | NamedToolChoice
+r"""Tool choice are either a `ToolChoiceEnum` or a `NamedToolChoice`."""
 
 
 class Tool(MistralBase):
