@@ -157,6 +157,10 @@ class GrammarFactory:
             )
         self._llg_tokenizer = from_mistral_tokenizer(tokenizer)
 
+    @property
+    def llg_tokenizer(self) -> "llg.LLTokenizer":
+        return self._llg_tokenizer
+
     def select_jinja_template(self, reasoning: bool) -> str:
         r"""Selects and returns the appropriate jinja template content based on tokenizer version and reasoning mode.
 
