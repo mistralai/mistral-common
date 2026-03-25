@@ -195,7 +195,7 @@ class GrammarFactory:
         fcall = convert_tool_calls(tools, mode, parallel_tool_calls)
         json_schema_str = json.dumps(json_schema, ensure_ascii=False) if json_schema else None
         # NamedToolChoice forces a specific tool, which maps to "required" grammar
-        template_mode = ToolChoiceEnum.required if isinstance(mode, NamedToolChoice) else mode
+        template_mode = ToolChoiceEnum.required if isinstance(mode, NamedToolChoice) else ToolChoiceEnum(mode)
         return _cached_get_lark_from_jinja(
             template=template,
             mode=template_mode.value,

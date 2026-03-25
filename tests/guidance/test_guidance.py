@@ -35,12 +35,46 @@ from tests.test_tekken import get_special_tokens, quick_vocab
 EMOJI_LARK_PATH = Path(__file__).parent.parent / "data" / "emoji.lark"
 
 Mode = Literal["auto", "any", "none", "required"]
-_AUTO_ANY: tuple[Mode, Mode] = ("auto", "any")
-_REQUIRED_MODE: Mode = "required"
+_AUTO_ANY_REQUIRED: tuple[Mode, Mode, Mode] = ("auto", "any", "required")
 
 
 _NUM_SPECIAL_TOKENS = 100
-_EXTRA_TOKENS = [b"a", b"b", b"c", b"f", b"de", b"he", b"llo"]
+_EXTRA_TOKENS = [
+    b"de",
+    b"he",
+    b"llo",
+    "😃".encode("utf-8"),
+    "😂".encode("utf-8"),
+    "😊".encode("utf-8"),
+    "😍".encode("utf-8"),
+    "😘".encode("utf-8"),
+    "😗".encode("utf-8"),
+    "😙".encode("utf-8"),
+    "😚".encode("utf-8"),
+    "😋".encode("utf-8"),
+    "😛".encode("utf-8"),
+    "😜".encode("utf-8"),
+    "😝".encode("utf-8"),
+    "🤑".encode("utf-8"),
+    "🤗".encode("utf-8"),
+    "🤔".encode("utf-8"),
+    "🤐".encode("utf-8"),
+    "😐".encode("utf-8"),
+    "😑".encode("utf-8"),
+    "😶".encode("utf-8"),
+    "😬".encode("utf-8"),
+    "こ".encode("utf-8"),
+    "ん".encode("utf-8"),
+    "に".encode("utf-8"),
+    "ち".encode("utf-8"),
+    "は".encode("utf-8"),
+    "مرحبا".encode("utf-8"),
+    "بكم".encode("utf-8"),
+    "في".encode("utf-8"),
+    "عالم".encode("utf-8"),
+    "الذكاء".encode("utf-8"),
+    "الاصطناعي".encode("utf-8"),
+]
 
 
 def _build_tekken_mistral_tokenizer(
@@ -49,12 +83,13 @@ def _build_tekken_mistral_tokenizer(
 ) -> MistralTokenizer:
     r"""Builds a MistralTokenizer wrapping a programmatic Tekkenizer."""
     special_tokens = get_special_tokens(version, add_think=add_think)
+    vocab = quick_vocab(_EXTRA_TOKENS)
 
     tekkenizer = Tekkenizer(
-        quick_vocab(_EXTRA_TOKENS),
+        vocab,
         special_tokens=special_tokens,
-        pattern=r".+",
-        vocab_size=256 + _NUM_SPECIAL_TOKENS,
+        pattern=r"(?s:.+)",
+        vocab_size=len(vocab) + _NUM_SPECIAL_TOKENS,
         num_special_tokens=_NUM_SPECIAL_TOKENS,
         version=version,
     )
@@ -172,15 +207,6 @@ def _encode_content(
     instruct_tokenizer: InstructTokenizerBase,
     content: str | list[Any],
 ) -> list[int]:
-    r"""Encodes assistant message content into token ids.
-
-    Args:
-        instruct_tokenizer: The instruct tokenizer to use.
-        content: Either a plain string or a list of TextChunk / ThinkChunk / ToolCall.
-
-    Returns:
-        The encoded token ids.
-    """
     tokenizer = instruct_tokenizer.tokenizer
 
     if isinstance(content, str):
@@ -216,7 +242,7 @@ def _encode_content(
 def _find_first_rejection(
     factory: GrammarFactory,
     tokens: list[int],
-    mode: Literal["auto", "any", "none", "required"] | NamedToolChoice,
+    mode: ToolChoice,
     tools: list[Tool] | None,
 ) -> int:
     r"""Finds the index of the first token rejected by the grammar.
@@ -234,14 +260,9 @@ def _find_first_rejection(
         ValueError: If all tokens are accepted.
     """
     template = factory.select_jinja_template(reasoning=False)
-    if isinstance(mode, NamedToolChoice):
-        grammar = factory.get_lark_from_jinja(
-            template=template, mode=mode, tools=tools, json_schema=None, parallel_tool_calls=True
-        )
-    else:
-        grammar = factory.get_lark_from_jinja(
-            template=template, mode=ToolChoiceEnum(mode), tools=tools, json_schema=None, parallel_tool_calls=True
-        )
+    grammar = factory.get_lark_from_jinja(
+        template=template, mode=mode, tools=tools, json_schema=None, parallel_tool_calls=True
+    )
     matcher = factory.get_matcher(grammar)
     for i, token in enumerate(tokens):
         if not matcher.consume_token(token):
@@ -250,7 +271,6 @@ def _find_first_rejection(
 
 
 def _token_debug_repr(tokenizer: Tekkenizer, token_id: int) -> str:
-    r"""Returns a debug representation of a token."""
     return repr(tokenizer.id_to_byte_piece(token_id, SpecialTokenPolicy.KEEP))
 
 
@@ -258,26 +278,18 @@ def _generate_general_cases(mistral_tokenizer: MistralTokenizer) -> list[TestCas
     instruct_tokenizer = mistral_tokenizer.instruct_tokenizer
     tokenizer = instruct_tokenizer.tokenizer
     assert isinstance(instruct_tokenizer, InstructTokenizerBase)
+    assert isinstance(tokenizer, Tekkenizer)
 
     cases: list[TestCase] = []
-    # For programmatic tiny-vocab tokenizers, limit to ASCII-safe content
-    is_full_vocab = tokenizer.n_words > 1000
-    if is_full_vocab:
-        items = {
-            "newline": "\n",
-            "blank": "_",
-            "text": "Hello!",
-            "text_with_newlines": "Hello!\n\nHow are you?\nI'm fine, thanks!",
-            "emojis": "😃😂😊😍😘😗😙😚😋😛😜😝🤑🤗🤔🤐😐😑😶😬",
-            "japanese": "こんにちは",
-            "arabic": "مرحبا بكم في عالم الذكاء الاصطناعي",
-        }
-    else:
-        items = {
-            "text_a": "abc",
-            "text_b": "hello",
-            "text_de": "de",
-        }
+    items = {
+        "newline": "\n",
+        "blank": "_",
+        "text": "Hello!",
+        "text_with_newlines": "Hello!\n\nHow are you?\nI'm fine, thanks!",
+        "emojis": "😃😂😊😍😘😗😙😚😋😛😜😝🤑🤗🤔🤐😐😑😶😬",
+        "japanese": "こんにちは",
+        "arabic": "مرحبا بكم في عالم الذكاء الاصطناعي",
+    }
     for case_name, content in items.items():
         tokens = _encode_content(instruct_tokenizer, content)
         cases.append(
@@ -290,9 +302,20 @@ def _generate_general_cases(mistral_tokenizer: MistralTokenizer) -> list[TestCas
                 reasoning=False,
             )
         )
-        # v11: plain_text_think grammar requires <think>...</think> first, so plain text fails
-        # v13+: think grammar has think? (optional), so plain text passes
-        reasoning_fail = 0 if tokenizer.version < TokenizerVersion.v13 else None
+        if tokenizer.version < TokenizerVersion.v13:
+            # Count how many leading whitespace-only tokens the SAFE_WS? rule will consume
+            # before the grammar rejects (expecting <think>).
+            content_tokens = tokenizer.encode(content, bos=False, eos=False)
+            ws_prefix_len = 0
+            for t in content_tokens:
+                piece = tokenizer.id_to_byte_piece(t, SpecialTokenPolicy.IGNORE)
+                if piece.strip(b" \t\r\n") == b"":
+                    ws_prefix_len += 1
+                else:
+                    break
+            reasoning_fail = ws_prefix_len
+        else:
+            reasoning_fail = None
         cases.append(
             TestCase(
                 tokenizer=tokenizer,
@@ -306,26 +329,45 @@ def _generate_general_cases(mistral_tokenizer: MistralTokenizer) -> list[TestCas
     return cases
 
 
+def _count_prefix_tokens(tokenizer: Tokenizer, full_text: str, prefix: str) -> int:
+    r"""Counts the number of tokens that cover the prefix bytes in the full-text tokenization.
+
+    BPE tokenization is context-dependent, so encoding a prefix in isolation may produce
+    different tokens than encoding the full string. This helper encodes the full string
+    and counts how many tokens are needed to cover the byte-length of the prefix.
+
+    Args:
+        tokenizer: The tokenizer to use.
+        full_text: The complete text to tokenize.
+        prefix: The prefix whose byte-length determines the token count.
+
+    Returns:
+        The number of tokens covering the prefix bytes.
+    """
+    assert is_tekkenizer(tokenizer)
+    prefix_byte_len = len(prefix.encode("utf-8"))
+    tokens = tokenizer.encode(full_text, bos=False, eos=False)
+    byte_count = 0
+    for i, t in enumerate(tokens):
+        byte_count += len(tokenizer.id_to_byte_piece(t, SpecialTokenPolicy.IGNORE))
+        if byte_count >= prefix_byte_len:
+            return i + 1
+    return len(tokens)
+
+
 def _generate_emoji_cases(mistral_tokenizer: MistralTokenizer) -> list[TestCase]:
     instruct_tokenizer = mistral_tokenizer.instruct_tokenizer
     tokenizer = instruct_tokenizer.tokenizer
     assert isinstance(instruct_tokenizer, InstructTokenizerBase)
-
-    # Emoji grammar needs a full vocab tokenizer (tiny programmatic tokenizers lack emoji tokens)
-    if tokenizer.n_words <= 1000:
-        return []
-
     emoji_lark = EMOJI_LARK_PATH.read_text(encoding="utf-8")
     cases: list[TestCase] = []
-    # Encode raw emoji text (no assistant message wrapping) so we get pure emoji tokens
     items: dict[str, tuple[str, int | None]] = {
         "emojis_valid_a": ("😃😂😊😍😘😗😙😚😋😛😜😝🤑🤗🤔🤐😐😑😶😬", None),
         "emojis_valid_b": ("😃😃😃", None),
-        "emojis_invalid_text": ("😃smile", len(tokenizer.encode("😃", bos=False, eos=False))),
-        "emojis_invalid_space": ("😃 ", len(tokenizer.encode("😃", bos=False, eos=False))),
+        "emojis_invalid_text": ("😃smile", _count_prefix_tokens(tokenizer, "😃smile", "😃")),
+        "emojis_invalid_space": ("😃 ", _count_prefix_tokens(tokenizer, "😃 ", "😃")),
     }
     for case_name, (text, should_fail_on) in items.items():
-        # Use raw encode to avoid assistant message wrapping (BOS/EOS)
         tokens = tokenizer.encode(text, bos=False, eos=False)
         cases.append(
             TestCase(
@@ -350,7 +392,7 @@ def _generate_cases_tool_calls(mistral_tokenizer: MistralTokenizer) -> list[Test
         (
             "single_fcall",
             [ToolCall(function=FunctionCall(name="hello", arguments='{"arg1": "val1", "arg2": "val2"}'))],
-            {"auto": None, "any": None, "none": 0},
+            {"auto": None, "any": None, "none": 0, "required": None},
         ),
         (
             "multi_fcall",
@@ -359,7 +401,7 @@ def _generate_cases_tool_calls(mistral_tokenizer: MistralTokenizer) -> list[Test
                 ToolCall(function=FunctionCall(name="hello_1", arguments='{"arg1": "val1", "arg2": "val2"}')),
                 ToolCall(function=FunctionCall(name="hello_2_3", arguments='{"arg1": "val1", "arg2": "val2"}')),
             ],
-            {"auto": None, "any": None, "none": 0},
+            {"auto": None, "any": None, "none": 0, "required": None},
         ),
         (
             "emoji_fcall",
@@ -368,7 +410,7 @@ def _generate_cases_tool_calls(mistral_tokenizer: MistralTokenizer) -> list[Test
                     function=FunctionCall(name="he🧦🧦o", arguments='{"arg1": "🐱", "arg2": "🐶", "arg🧦": "🧦"}'),
                 )
             ],
-            {"auto": None, "any": None, "none": 0},
+            {"auto": None, "any": None, "none": 0, "required": None},
         ),
         (
             "pretty_printed_args",
@@ -380,12 +422,12 @@ def _generate_cases_tool_calls(mistral_tokenizer: MistralTokenizer) -> list[Test
                     ),
                 )
             ],
-            {"auto": None, "any": None, "none": 0},
+            {"auto": None, "any": None, "none": 0, "required": None},
         ),
         (
             "japanese_fcall",
             [ToolCall(function=FunctionCall(name="こんにちは", arguments='{"こん": "にちは"}'))],
-            {"auto": None, "any": None, "none": 0},
+            {"auto": None, "any": None, "none": 0, "required": None},
         ),
     ]
     for case_name, content, valid_for in items:
@@ -400,25 +442,11 @@ def _generate_cases_tool_calls(mistral_tokenizer: MistralTokenizer) -> list[Test
                     mode=mode,
                 )
             )
-        # The "required" mode should behave like "any" - tool calls are required
-        # and text content is optional (content? fcalls)
-        if case_name != "single_non_strict_tool_call":  # handled in strict tests
-            cases.append(
-                TestCase(
-                    tokenizer=tokenizer,
-                    tokens=tokens,
-                    should_fail_on=valid_for.get("any"),
-                    case_name=case_name,
-                    mode="required",
-                )
-            )
 
-        # v11: plain_text_think mandates <think> first, so bare tool calls fail at 0
-        # v13+: think grammar has think? (optional), tool calls pass; fcalls allows content? prefix
         if tokenizer.version < TokenizerVersion.v13:
-            reasoning_valid_for: dict[Mode, int | None] = {"auto": 0, "any": 0, "none": 0}
+            reasoning_valid_for: dict[Mode, int | None] = {"auto": 0, "any": 0, "none": 0, "required": 0}
         else:
-            reasoning_valid_for = {"auto": None, "any": None, "none": 0}
+            reasoning_valid_for = {"auto": None, "any": None, "none": 0, "required": None}
         for mode, should_fail_on in reasoning_valid_for.items():
             cases.append(
                 TestCase(
@@ -430,23 +458,8 @@ def _generate_cases_tool_calls(mistral_tokenizer: MistralTokenizer) -> list[Test
                     reasoning=True,
                 )
             )
-        # "required" mode with reasoning
-        if tokenizer.version < TokenizerVersion.v13:
-            reasoning_required_fail = 0
-        else:
-            reasoning_required_fail = None
-        cases.append(
-            TestCase(
-                tokenizer=tokenizer,
-                tokens=tokens,
-                should_fail_on=reasoning_required_fail,
-                case_name=f"{case_name}_reasoning",
-                mode="required",
-                reasoning=True,
-            )
-        )
 
-    # Broken / missing args edge cases (token-level construction)
+    # Broken / missing args edge cases
     token_items: list[tuple[str, list[int], dict[Mode, int | None]]] = [
         (
             "fcall_broken_args",
@@ -498,9 +511,6 @@ def _generate_cases_text_and_tool_calls(mistral_tokenizer: MistralTokenizer) -> 
     tokens = _encode_content(instruct_tokenizer, content)
     text_len = len(tokenizer.encode("Hello!", bos=False, eos=False))
 
-    # Non-reasoning uses base grammar where:
-    # - "any" mode is `body: fcalls` — no content allowed
-    # - "required" mode is `body: content? fcalls` — content is optional
     valid_for: dict[Mode, int | None] = {"auto": None, "any": 0, "none": text_len, "required": None}
 
     for mode, should_fail_on in valid_for.items():
@@ -514,8 +524,6 @@ def _generate_cases_text_and_tool_calls(mistral_tokenizer: MistralTokenizer) -> 
             )
         )
 
-    # v11: plain_text_think mandates <think> first, so text+fcall without think fails at 0
-    # v13+: think? optional, fcalls: content? fcall, so "any" mode accepts text before tool calls
     if tokenizer.version < TokenizerVersion.v13:
         reasoning_valid_for: dict[Mode, int | None] = {"auto": 0, "any": 0, "none": 0, "required": 0}
     else:
@@ -696,7 +704,7 @@ def _generate_single_tool_call(mistral_tokenizer: MistralTokenizer) -> list[Test
     cases: list[TestCase] = []
     single_call = [ToolCall(function=FunctionCall(name="hello", arguments='{"arg1": "val1", "arg2": "val2"}'))]
     single_tokens = _encode_content(instruct_tokenizer, single_call)
-    for mode in _AUTO_ANY:
+    for mode in _AUTO_ANY_REQUIRED:
         cases.append(
             TestCase(
                 tokenizer=tokenizer,
@@ -707,17 +715,6 @@ def _generate_single_tool_call(mistral_tokenizer: MistralTokenizer) -> list[Test
                 parallel_tool_calls=False,
             )
         )
-    # "required" mode also accepts single tool call
-    cases.append(
-        TestCase(
-            tokenizer=tokenizer,
-            tokens=single_tokens,
-            should_fail_on=None,
-            case_name="single_tool_call",
-            mode="required",
-            parallel_tool_calls=False,
-        )
-    )
     cases.append(
         TestCase(
             tokenizer=tokenizer,
@@ -729,8 +726,6 @@ def _generate_single_tool_call(mistral_tokenizer: MistralTokenizer) -> list[Test
         )
     )
 
-    # v11: plain_text_think mandates <think> first, so bare tool calls fail at 0
-    # v13+: think? optional, tool calls pass
     if tokenizer.version < TokenizerVersion.v13:
         reasoning_valid_for: dict[Mode, int | None] = {"auto": 0, "any": 0, "none": 0, "required": 0}
     else:
@@ -748,9 +743,6 @@ def _generate_single_tool_call(mistral_tokenizer: MistralTokenizer) -> list[Test
             )
         )
 
-    # Multi tool call should fail when parallel_tool_calls=False
-    # Each tool call is a separate [TOOL_CALLS]...[ARGS]... sequence;
-    # the second [TOOL_CALLS] is where it fails.
     multi_calls = [
         ToolCall(function=FunctionCall(name="fn1", arguments='{"arg1": "val1", "arg2": "val2"}')),
         ToolCall(function=FunctionCall(name="fn2", arguments='{"arg1": "val1", "arg2": "val2"}')),
@@ -759,7 +751,7 @@ def _generate_single_tool_call(mistral_tokenizer: MistralTokenizer) -> list[Test
     single_tokens_with_eos = _encode_content(instruct_tokenizer, [multi_calls[0]])
     fail_idx = len(single_tokens_with_eos) - 1
 
-    for mode in _AUTO_ANY:
+    for mode in _AUTO_ANY_REQUIRED:
         cases.append(
             TestCase(
                 tokenizer=tokenizer,
@@ -770,17 +762,6 @@ def _generate_single_tool_call(mistral_tokenizer: MistralTokenizer) -> list[Test
                 parallel_tool_calls=False,
             )
         )
-    # "required" mode with parallel_tool_calls=False also fails on second tool call
-    cases.append(
-        TestCase(
-            tokenizer=tokenizer,
-            tokens=multi_tokens,
-            should_fail_on=fail_idx,
-            case_name="multi_tool_call_disallowed",
-            mode="required",
-            parallel_tool_calls=False,
-        )
-    )
 
     return cases
 
@@ -796,7 +777,7 @@ def _generate_strict_tool_calls(mistral_tokenizer: MistralTokenizer, factory: Gr
     # 1. Non-strict tools — any function name/args accepted
     non_strict_call = [ToolCall(function=FunctionCall(name="fn1", arguments='{"arg1": "val1", "arg2": "val2"}'))]
     non_strict_tokens = _encode_content(instruct_tokenizer, non_strict_call)
-    for mode in _AUTO_ANY:
+    for mode in _AUTO_ANY_REQUIRED:
         cases.append(
             TestCase(
                 tokenizer=tokenizer,
@@ -807,24 +788,13 @@ def _generate_strict_tool_calls(mistral_tokenizer: MistralTokenizer, factory: Gr
                 tools=[ToolProvider.retrieve_payment_date(strict=False)],
             )
         )
-    # required mode also accepts non-strict tool calls
-    cases.append(
-        TestCase(
-            tokenizer=tokenizer,
-            tokens=non_strict_tokens,
-            should_fail_on=None,
-            case_name="single_non_strict_tool_call",
-            mode="required",
-            tools=[ToolProvider.retrieve_payment_date(strict=False)],
-        )
-    )
 
     # 2. Correct strict tool call
     strict_call = [
         ToolCall(function=FunctionCall(name="retrieve_payment_date", arguments='{"transaction_id": "12345"}'))
     ]
     strict_tokens = _encode_content(instruct_tokenizer, strict_call)
-    for mode in _AUTO_ANY:
+    for mode in _AUTO_ANY_REQUIRED:
         cases.append(
             TestCase(
                 tokenizer=tokenizer,
@@ -835,23 +805,12 @@ def _generate_strict_tool_calls(mistral_tokenizer: MistralTokenizer, factory: Gr
                 tools=[ToolProvider.retrieve_payment_date(strict=True)],
             )
         )
-    # required mode also accepts correct strict tool call
-    cases.append(
-        TestCase(
-            tokenizer=tokenizer,
-            tokens=strict_tokens,
-            should_fail_on=None,
-            case_name="single_strict_tool_call",
-            mode="required",
-            tools=[ToolProvider.retrieve_payment_date(strict=True)],
-        )
-    )
 
     # 3. Wrong args for strict tool — it must fail somewhere before the end.
     wrong_args_call = [ToolCall(function=FunctionCall(name="retrieve_payment_date", arguments='{"bogus": "12345"}'))]
     wrong_args_tokens = _encode_content(instruct_tokenizer, wrong_args_call)
-    bogus_start = _find_first_rejection(factory, wrong_args_tokens, mode="auto", tools=tools_strict)
-    for mode in _AUTO_ANY:
+    bogus_start = _find_first_rejection(factory, wrong_args_tokens, mode=ToolChoiceEnum.auto, tools=tools_strict)
+    for mode in _AUTO_ANY_REQUIRED:
         cases.append(
             TestCase(
                 tokenizer=tokenizer,
@@ -862,23 +821,12 @@ def _generate_strict_tool_calls(mistral_tokenizer: MistralTokenizer, factory: Gr
                 tools=tools_strict,
             )
         )
-    # required mode also fails on wrong args
-    cases.append(
-        TestCase(
-            tokenizer=tokenizer,
-            tokens=wrong_args_tokens,
-            should_fail_on=bogus_start,
-            case_name="strict_tool_call_wrong_args",
-            mode="required",
-            tools=tools_strict,
-        )
-    )
 
     # 4. Wrong name for strict tool
     wrong_name_call = [ToolCall(function=FunctionCall(name="fn1", arguments='{"transaction_id": "12345"}'))]
     wrong_name_tokens = _encode_content(instruct_tokenizer, wrong_name_call)
-    fail_on_name = _find_first_rejection(factory, wrong_name_tokens, mode="auto", tools=tools_strict)
-    for mode in _AUTO_ANY:
+    fail_on_name = _find_first_rejection(factory, wrong_name_tokens, mode=ToolChoiceEnum.auto, tools=tools_strict)
+    for mode in _AUTO_ANY_REQUIRED:
         cases.append(
             TestCase(
                 tokenizer=tokenizer,
@@ -889,17 +837,6 @@ def _generate_strict_tool_calls(mistral_tokenizer: MistralTokenizer, factory: Gr
                 tools=tools_strict,
             )
         )
-    # required mode also fails on wrong name
-    cases.append(
-        TestCase(
-            tokenizer=tokenizer,
-            tokens=wrong_name_tokens,
-            should_fail_on=fail_on_name,
-            case_name="strict_tool_call_wrong_name",
-            mode="required",
-            tools=tools_strict,
-        )
-    )
 
     # 5. Multiple strict tool calls (both correct)
     multi_strict = [
@@ -907,7 +844,7 @@ def _generate_strict_tool_calls(mistral_tokenizer: MistralTokenizer, factory: Gr
         ToolCall(function=FunctionCall(name="retrieve_payment_status", arguments='{"transaction_id": "12345"}')),
     ]
     multi_strict_tokens = _encode_content(instruct_tokenizer, multi_strict)
-    for mode in _AUTO_ANY:
+    for mode in _AUTO_ANY_REQUIRED:
         cases.append(
             TestCase(
                 tokenizer=tokenizer,
@@ -921,26 +858,10 @@ def _generate_strict_tool_calls(mistral_tokenizer: MistralTokenizer, factory: Gr
                 ],
             )
         )
-    # required mode also accepts multiple strict tool calls
-    cases.append(
-        TestCase(
-            tokenizer=tokenizer,
-            tokens=multi_strict_tokens,
-            should_fail_on=None,
-            case_name="multiple_strict_tool_calls",
-            mode="required",
-            tools=[
-                ToolProvider.retrieve_payment_date(strict=True),
-                ToolProvider.retrieve_payment_status(strict=True),
-            ],
-        )
-    )
 
     # 6. reasoning=True variants
-    # v11: plain_text_think mandates <think> first, so all bare tool calls fail at 0
-    # v13+: think? optional, tool calls behave as without reasoning
     if tokenizer.version < TokenizerVersion.v13:
-        for mode in _AUTO_ANY:
+        for mode in _AUTO_ANY_REQUIRED:
             cases.append(
                 TestCase(
                     tokenizer=tokenizer,
@@ -952,20 +873,8 @@ def _generate_strict_tool_calls(mistral_tokenizer: MistralTokenizer, factory: Gr
                     reasoning=True,
                 )
             )
-        # required mode with reasoning in v11 also fails at 0
-        cases.append(
-            TestCase(
-                tokenizer=tokenizer,
-                tokens=strict_tokens,
-                should_fail_on=0,
-                case_name="strict_tool_call_reasoning",
-                mode="required",
-                tools=tools_strict,
-                reasoning=True,
-            )
-        )
     else:
-        for mode in _AUTO_ANY:
+        for mode in _AUTO_ANY_REQUIRED:
             cases.append(
                 TestCase(
                     tokenizer=tokenizer,
@@ -977,19 +886,7 @@ def _generate_strict_tool_calls(mistral_tokenizer: MistralTokenizer, factory: Gr
                     reasoning=True,
                 )
             )
-        # required mode with reasoning in v13+ also accepts strict tool call
-        cases.append(
-            TestCase(
-                tokenizer=tokenizer,
-                tokens=strict_tokens,
-                should_fail_on=None,
-                case_name="strict_tool_call_reasoning",
-                mode="required",
-                tools=tools_strict,
-                reasoning=True,
-            )
-        )
-        for mode in _AUTO_ANY:
+        for mode in _AUTO_ANY_REQUIRED:
             cases.append(
                 TestCase(
                     tokenizer=tokenizer,
@@ -1004,21 +901,6 @@ def _generate_strict_tool_calls(mistral_tokenizer: MistralTokenizer, factory: Gr
                     reasoning=True,
                 )
             )
-        # required mode with reasoning in v13+ also accepts multiple strict tool calls
-        cases.append(
-            TestCase(
-                tokenizer=tokenizer,
-                tokens=multi_strict_tokens,
-                should_fail_on=None,
-                case_name="multiple_strict_tool_calls_reasoning",
-                mode="required",
-                tools=[
-                    ToolProvider.retrieve_payment_date(strict=True),
-                    ToolProvider.retrieve_payment_status(strict=True),
-                ],
-                reasoning=True,
-            )
-        )
 
     return cases
 
@@ -1031,7 +913,6 @@ def _generate_named_tool_choice(mistral_tokenizer: MistralTokenizer, factory: Gr
 
     cases: list[TestCase] = []
 
-    # Define the tools we'll use
     tools = [
         ToolProvider.retrieve_payment_date(strict=False),
         ToolProvider.retrieve_payment_status(strict=False),
@@ -1052,7 +933,6 @@ def _generate_named_tool_choice(mistral_tokenizer: MistralTokenizer, factory: Gr
     ]
     correct_date_tokens = _encode_content(instruct_tokenizer, correct_date_call)
 
-    # The named tool choice should accept only that specific tool
     cases.append(
         TestCase(
             tokenizer=tokenizer,
@@ -1077,7 +957,6 @@ def _generate_named_tool_choice(mistral_tokenizer: MistralTokenizer, factory: Gr
     )
 
     # 2. Non-strict NamedToolChoice should NOT enforce JSON arguments schema —
-    # any valid JSON object is accepted (uses %json {"type": "object"})
     arbitrary_args_call = [
         ToolCall(
             function=FunctionCall(
@@ -1110,7 +989,6 @@ def _generate_named_tool_choice(mistral_tokenizer: MistralTokenizer, factory: Gr
     ]
     wrong_tool_tokens = _encode_content(instruct_tokenizer, wrong_tool_call)
 
-    # Find where the rejection happens
     fail_idx = _find_first_rejection(
         factory,
         wrong_tool_tokens,
@@ -1130,8 +1008,6 @@ def _generate_named_tool_choice(mistral_tokenizer: MistralTokenizer, factory: Gr
     )
 
     # 4. NamedToolChoice with reasoning mode
-    # v11: plain_text_think mandates <think> first
-    # v13+: think? optional
     if tokenizer.version < TokenizerVersion.v13:
         cases.append(
             TestCase(
@@ -1164,7 +1040,6 @@ def _generate_named_tool_choice(mistral_tokenizer: MistralTokenizer, factory: Gr
         function=FunctionName(name="retrieve_payment_date"),
     )
 
-    # Correct args
     cases.append(
         TestCase(
             tokenizer=tokenizer,
@@ -1176,7 +1051,6 @@ def _generate_named_tool_choice(mistral_tokenizer: MistralTokenizer, factory: Gr
         )
     )
 
-    # Wrong args
     wrong_args_call = [
         ToolCall(
             function=FunctionCall(
@@ -1204,7 +1078,6 @@ def _generate_named_tool_choice(mistral_tokenizer: MistralTokenizer, factory: Gr
     )
 
     # 6. NamedToolChoice with non-existent tool in tools list
-    # This should generate a grammar that only accepts the named tool
     named_nonexistent = NamedToolChoice(
         type=ToolTypes.function,
         function=FunctionName(name="non_existent_tool"),
@@ -1219,7 +1092,6 @@ def _generate_named_tool_choice(mistral_tokenizer: MistralTokenizer, factory: Gr
     ]
     nonexistent_tokens = _encode_content(instruct_tokenizer, nonexistent_call)
 
-    # Without strict tool, any args are accepted
     cases.append(
         TestCase(
             tokenizer=tokenizer,
@@ -1227,21 +1099,43 @@ def _generate_named_tool_choice(mistral_tokenizer: MistralTokenizer, factory: Gr
             should_fail_on=None,
             case_name="named_tool_choice_nonexistent_tool",
             mode=named_nonexistent,
-            tools=[],  # No tools provided
+            tools=[],
         )
     )
 
     return cases
 
 
-def _generate_json_schema(mistral_tokenizer: MistralTokenizer) -> list[TestCase]:
+def _find_first_json_schema_rejection(
+    factory: GrammarFactory,
+    tokens: list[int],
+    json_schema: dict[str, Any],
+) -> int:
+    r"""Finds the index of the first token rejected by the JSON schema grammar.
+
+    Args:
+        factory: The grammar factory.
+        tokens: The token sequence to test.
+        json_schema: The JSON schema to validate against.
+
+    Returns:
+        The index of the first rejected token.
+
+    Raises:
+        ValueError: If all tokens are accepted.
+    """
+    grammar = factory.get_lark_for_json_schema(json_schema=json_schema)
+    matcher = factory.get_matcher(grammar)
+    for i, token in enumerate(tokens):
+        if not matcher.consume_token(token):
+            return i
+    raise ValueError("All tokens were accepted — expected a rejection")
+
+
+def _generate_json_schema(mistral_tokenizer: MistralTokenizer, factory: GrammarFactory) -> list[TestCase]:
     instruct_tokenizer = mistral_tokenizer.instruct_tokenizer
     tokenizer = instruct_tokenizer.tokenizer
     assert isinstance(instruct_tokenizer, InstructTokenizerBase)
-
-    # JSON schema validation requires a full vocab tokenizer
-    if tokenizer.n_words <= 1000:
-        return []
 
     cases: list[TestCase] = []
     items: list[tuple[str, str, int | None, dict[str, Any]]] = [
@@ -1270,12 +1164,6 @@ def _generate_json_schema(mistral_tokenizer: MistralTokenizer) -> list[TestCase]
             {"type": "object"},
         ),
         (
-            "basic_person_invalid",
-            '{"age": "John", "name": 30}',
-            1,
-            SchemaProvider.basic_person(),
-        ),
-        (
             "basic_person_non_strict_valid",
             '{"age": "John", "name": 30}',
             None,
@@ -1301,6 +1189,22 @@ def _generate_json_schema(mistral_tokenizer: MistralTokenizer) -> list[TestCase]
                 json_schema=json_schema,
             )
         )
+
+    # Cases where should_fail_on must be computed dynamically because the exact
+    # rejection index depends on the grammar engine's internal byte-level parsing.
+    person_invalid_tokens = _encode_content(instruct_tokenizer, '{"age": "John", "name": 30}')
+    person_schema = SchemaProvider.basic_person()
+    cases.append(
+        TestCase(
+            tokenizer=tokenizer,
+            tokens=person_invalid_tokens,
+            should_fail_on=_find_first_json_schema_rejection(factory, person_invalid_tokens, person_schema),
+            case_name="basic_person_invalid",
+            mode="auto",
+            json_schema=person_schema,
+        )
+    )
+
     return cases
 
 
@@ -1311,14 +1215,14 @@ def _generate_cases(mistral_tokenizer: MistralTokenizer, factory: GrammarFactory
 
     cases = _generate_general_cases(mistral_tokenizer)
     cases += _generate_emoji_cases(mistral_tokenizer)
-    cases += _generate_json_schema(mistral_tokenizer)
+    cases += _generate_json_schema(mistral_tokenizer, factory)
     cases += _generate_cases_tool_calls(mistral_tokenizer)
     cases += _generate_single_tool_call(mistral_tokenizer)
     cases += _generate_strict_tool_calls(mistral_tokenizer, factory)
     cases += _generate_named_tool_choice(mistral_tokenizer, factory)
     cases += _generate_cases_text_and_tool_calls(mistral_tokenizer)
 
-    if not tokenizer_version < TokenizerVersion.v13:
+    if tokenizer_version >= TokenizerVersion.v13:
         cases += _generate_cases_thinking(mistral_tokenizer)
     else:
         cases += _generate_cases_thinking_v11(mistral_tokenizer)
