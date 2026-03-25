@@ -12,7 +12,7 @@ from mistral_common.protocol.instruct.validator import ValidationMode, get_valid
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTokens, Tokenizer, TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.tekken import Tekkenizer
+from mistral_common.tokens.tokenizers.tekken import SpecialTokenInfo, Tekkenizer
 from tests.test_tekken import get_special_tokens, quick_vocab
 
 _NUM_SPECIAL_TOKENS = 100
@@ -114,6 +114,48 @@ class TestMistralLLGTokenizer:
     def test_call_encodes_string(self, tekkenizer: Tekkenizer, llg_tokenizer: MistralLLGTokenizer) -> None:
         test_string = "abc"
         assert llg_tokenizer(test_string) == tekkenizer.encode(test_string, bos=False, eos=False)
+
+    def test_init_rejects_invalid_special_token_format(self) -> None:
+        base = list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS)
+        next_rank = len(base)
+        special_tokens: list[SpecialTokenInfo] = [
+            *base,
+            SpecialTokenInfo(rank=next_rank, token_str="INVALID_NO_BRACKETS", is_control=True),
+        ]
+        vocab = quick_vocab()
+        num_special = len(special_tokens)
+        tekkenizer = Tekkenizer(
+            vocab,
+            special_tokens=special_tokens,
+            pattern=r".+",
+            vocab_size=len(vocab) + num_special,
+            num_special_tokens=num_special,
+            version=TokenizerVersion.v7,
+        )
+        with pytest.raises(ValueError, match="Invalid special token"):
+            MistralLLGTokenizer(tekkenizer)
+
+    def test_init_rejects_duplicate_special_tokens(self) -> None:
+        base = list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS)
+        next_rank = len(base)
+        # Both [CUSTOM] and <CUSTOM> map to <CUSTOM> after bracket conversion
+        special_tokens: list[SpecialTokenInfo] = [
+            *base,
+            SpecialTokenInfo(rank=next_rank, token_str="<CUSTOM>", is_control=True),
+            SpecialTokenInfo(rank=next_rank + 1, token_str="[CUSTOM]", is_control=True),
+        ]
+        vocab = quick_vocab()
+        num_special = len(special_tokens)
+        tekkenizer = Tekkenizer(
+            vocab,
+            special_tokens=special_tokens,
+            pattern=r".+",
+            vocab_size=len(vocab) + num_special,
+            num_special_tokens=num_special,
+            version=TokenizerVersion.v7,
+        )
+        with pytest.raises(ValueError, match="Duplicate special token"):
+            MistralLLGTokenizer(tekkenizer)
 
 
 class TestFromMistralTokenizer:

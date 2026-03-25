@@ -6,7 +6,7 @@ from typing import Any, Literal
 import pytest
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from mistral_common.guidance.grammar_factory import GrammarFactory
+from mistral_common.guidance.grammar_factory import GrammarFactory, convert_tool_calls
 from mistral_common.protocol.instruct.chunk import TextChunk, ThinkChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage
 from mistral_common.protocol.instruct.normalize import get_normalizer
@@ -153,21 +153,17 @@ class SchemaProvider:
     @staticmethod
     def basic_person() -> dict[str, Any]:
         class Person(BaseModel):
+            model_config = ConfigDict(extra="forbid")
             name: str
             age: int
-
-            class Config:
-                extra = "forbid"
 
         return Person.model_json_schema()
 
     @staticmethod
     def basic_dict_of_list() -> dict[str, Any]:
         class DoMerge(BaseModel):
+            model_config = ConfigDict(extra="forbid")
             new_clusters: dict[str, list[str]] = Field(default_factory=dict)
-
-            class Config:
-                extra = "forbid"
 
         return DoMerge.model_json_schema()
 
@@ -224,7 +220,9 @@ def _encode_content(
             is_before_last_user_message=False,
             continue_message=False,
         )
-    # Strip trailing EOS before adding tool calls
+    # The instruct tokenizer appends EOS after content, but when tool calls follow,
+    # the EOS should come after the last tool call, not after the content. Strip it
+    # here so the tool call tokens are appended directly after content tokens.
     while tokens and tokens[-1] == tokenizer.eos_id:
         tokens.pop()
 
@@ -1304,6 +1302,15 @@ class TestGrammarFactory:
                     f"\n\nGrammar:\n{grammar}\n\nTokens: {debug_tokens}\n\nIds: {test_case.tokens}"
                 )
 
+        # For fully accepted sequences, verify the matcher reached a valid terminal state.
+        # Raw lark grammars (e.g., emoji matcher) don't consume EOS, so they may not reach
+        # a stopped state — skip the check for those.
+        if test_case.should_fail_on is None and test_case.raw_lark is None:
+            assert matcher.is_stopped(), (
+                f"Matcher did not reach terminal state after consuming all tokens.\n\n"
+                f"Grammar:\n{grammar}\n\nTokens: {debug_tokens}\n\nIds: {test_case.tokens}"
+            )
+
     @pytest.mark.parametrize(
         ("tokenizer", "expected"),
         [
@@ -1315,3 +1322,87 @@ class TestGrammarFactory:
     )
     def test_grammar_factory_is_supported(self, tokenizer: MistralTokenizer, expected: bool) -> None:
         assert GrammarFactory.is_supported(tokenizer) is expected
+
+    @pytest.mark.parametrize(
+        "tokenizer",
+        [MistralTokenizer.v1(), MistralTokenizer.v3(is_tekken=True)],
+    )
+    def test_grammar_factory_init_rejects_unsupported(self, tokenizer: MistralTokenizer) -> None:
+        with pytest.raises(ValueError, match="Guidance requires a Tekken tokenizer with version >= v11"):
+            GrammarFactory(tokenizer)
+
+    def test_get_matcher_rejects_invalid_grammar(self, v11_tekken: MistralTokenizer) -> None:
+        factory = GrammarFactory(v11_tekken)
+        with pytest.raises(ValueError, match="Invalid grammar"):
+            factory.get_matcher("start: INVALID_RULE_REF_THAT_DOES_NOT_EXIST")
+
+
+class TestConvertToolCalls:
+    def test_none_mode(self) -> None:
+        result = convert_tool_calls(tools=None, mode=ToolChoiceEnum.none, parallel_tool_calls=False)
+        assert result == ""
+
+    def test_none_mode_with_tools(self) -> None:
+        tools = [ToolProvider.retrieve_payment_date(strict=True)]
+        result = convert_tool_calls(tools=tools, mode=ToolChoiceEnum.none, parallel_tool_calls=True)
+        assert result == ""
+
+    def test_auto_mode_no_tools(self) -> None:
+        result = convert_tool_calls(tools=None, mode=ToolChoiceEnum.auto, parallel_tool_calls=False)
+        assert "<TOOL_CALLS>" in result
+        assert "<ARGS>" in result
+        assert "/.+/" in result
+        assert not result.endswith(")+")
+
+    def test_auto_mode_non_strict(self) -> None:
+        tools = [ToolProvider.retrieve_payment_date(strict=False)]
+        result = convert_tool_calls(tools=tools, mode=ToolChoiceEnum.auto, parallel_tool_calls=False)
+        assert "<TOOL_CALLS>" in result
+        assert "/.+/" in result
+        assert not result.endswith(")+")
+
+    def test_auto_mode_strict(self) -> None:
+        tools = [
+            ToolProvider.retrieve_payment_date(strict=True),
+            ToolProvider.retrieve_payment_status(strict=True),
+        ]
+        result = convert_tool_calls(tools=tools, mode=ToolChoiceEnum.auto, parallel_tool_calls=False)
+        assert '"retrieve_payment_date"' in result
+        assert '"retrieve_payment_status"' in result
+        assert not result.endswith(")+")
+
+    def test_named_tool_choice_non_strict(self) -> None:
+        named = NamedToolChoice(function=FunctionName(name="retrieve_payment_date"))
+        tools = [ToolProvider.retrieve_payment_date(strict=False)]
+        result = convert_tool_calls(tools=tools, mode=named, parallel_tool_calls=False)
+        assert '"retrieve_payment_date"' in result
+        assert "/.+/" not in result
+        assert not result.endswith(")+")
+
+    def test_named_tool_choice_strict(self) -> None:
+        named = NamedToolChoice(function=FunctionName(name="retrieve_payment_date"))
+        tools = [
+            ToolProvider.retrieve_payment_date(strict=True),
+            ToolProvider.retrieve_payment_status(strict=True),
+        ]
+        result = convert_tool_calls(tools=tools, mode=named, parallel_tool_calls=False)
+        assert '"retrieve_payment_date"' in result
+        assert '"retrieve_payment_status"' not in result
+        assert not result.endswith(")+")
+
+    def test_parallel_tool_calls(self) -> None:
+        result = convert_tool_calls(tools=None, mode=ToolChoiceEnum.auto, parallel_tool_calls=True)
+        assert result.startswith("(") and result.endswith(")+")
+
+    def test_empty_params_strict_tool(self) -> None:
+        tool = Tool(function=Function(name="empty_fn", parameters={}, strict=True))
+        result = convert_tool_calls(tools=[tool], mode=ToolChoiceEnum.auto, parallel_tool_calls=False)
+        assert '"additionalProperties": false' in result
+        assert '"properties": {}' in result
+        assert not result.endswith(")+")
+
+    def test_named_tool_not_in_strict_tools_raises(self) -> None:
+        named = NamedToolChoice(function=FunctionName(name="non_existent_tool"))
+        tools = [ToolProvider.retrieve_payment_date(strict=True)]
+        with pytest.raises(StopIteration):
+            convert_tool_calls(tools=tools, mode=named, parallel_tool_calls=False)
