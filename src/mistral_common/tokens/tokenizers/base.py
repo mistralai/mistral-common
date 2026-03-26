@@ -1,3 +1,4 @@
+import warnings
 from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
@@ -150,6 +151,14 @@ class TokenizerVersion(str, Enum):
 
     @property
     def _version_num(self) -> int:
+        warnings.warn(
+            "`TokenizerVersion._version_num` is deprecated in favor to `TokenizerVersion.version_num` and will "
+            "be removed in 1.12.0."
+        )
+        return self.version_num
+
+    @property
+    def version_num(self) -> int:
         return int(self.value[1:])
 
     @property
@@ -159,22 +168,22 @@ class TokenizerVersion(str, Enum):
     def __lt__(self, other: "str | TokenizerVersion") -> bool:
         if isinstance(other, str):
             other = TokenizerVersion(other)
-        return self._version_num < other._version_num
+        return self.version_num < other.version_num
 
     def __le__(self, other: "str | TokenizerVersion") -> bool:
         if isinstance(other, str):
             other = TokenizerVersion(other)
-            return self._version_num <= other._version_num
+        return self.version_num <= other.version_num
 
     def __gt__(self, other: "str | TokenizerVersion") -> bool:
         if isinstance(other, str):
             other = TokenizerVersion(other)
-            return self._version_num > other._version_num
+        return self.version_num > other.version_num
 
     def __ge__(self, other: "str | TokenizerVersion") -> bool:
         if isinstance(other, str):
             other = TokenizerVersion(other)
-            return self._version_num >= other._version_num
+        return self.version_num >= other.version_num
 
     v1 = "v1"  # vocab_size = 32000
     v2 = "v2"  # vocab_size = 32768 with special control tokens [INST], [\INST]
