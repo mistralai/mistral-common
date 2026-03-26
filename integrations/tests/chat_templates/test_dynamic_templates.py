@@ -34,7 +34,7 @@ def render_template(
         "eos_token": "</s>",
     }
 
-    # Only add reasoning_effort for v14+ templates that support it
+    # Only add reasoning_effort for v15+ templates that support it
     if reasoning_effort is not None or "reasoning_effort" in template:
         render_kwargs["reasoning_effort"] = reasoning_effort
 
@@ -59,9 +59,10 @@ ALL_CONFIGS = [
     (TokenizerVersion.v13, False, False, True, False),
     (TokenizerVersion.v13, False, False, False, True),
     (TokenizerVersion.v13, False, True, False, True),
-    (TokenizerVersion.v14, False, False, False, False),
-    (TokenizerVersion.v14, False, True, False, False),
-    (TokenizerVersion.v14, False, True, False, True),
+    (TokenizerVersion.v15, False, False, False, False),
+    (TokenizerVersion.v15, False, True, False, False),
+    (TokenizerVersion.v15, False, False, True, False),
+    (TokenizerVersion.v15, False, True, False, True),
     # SPM
     (TokenizerVersion.v1, True, False, False, False),
     (TokenizerVersion.v2, True, False, False, False),
@@ -202,12 +203,12 @@ def test_generate_chat_template_dynamic_function() -> None:
     assert static_output == dynamic_output
 
 
-def test_v14_reasoning_effort() -> None:
-    """Test that v14 templates correctly handle reasoning effort."""
-    # Test v14 template generation
+def test_v15_reasoning_effort() -> None:
+    """Test that v15 templates correctly handle reasoning effort."""
+    # Test v15 template generation
     template = generate_chat_template_dynamic(
         spm=False,
-        tokenizer_version=TokenizerVersion.v14,
+        tokenizer_version=TokenizerVersion.v15,
         image_support=False,
         audio_support=False,
         thinking_support=False,
@@ -235,10 +236,10 @@ def test_v14_reasoning_effort() -> None:
     output_none_explicit = render_template(template, messages, reasoning_effort="none")
     assert '[MODEL_SETTINGS]{"reasoning_effort": "none"}[/MODEL_SETTINGS]' in output_none_explicit
 
-    # Test that v14 static and dynamic templates produce same output
+    # Test that v15 static and dynamic templates produce same output
     static_template = get_chat_template(
         spm=False,
-        tokenizer_version=TokenizerVersion.v14,
+        tokenizer_version=TokenizerVersion.v15,
         image_support=False,
         audio_support=False,
         thinking_support=False,
@@ -250,12 +251,12 @@ def test_v14_reasoning_effort() -> None:
     assert static_output == dynamic_output
 
 
-def test_v14_with_features() -> None:
-    """Test that v14 templates work correctly with images and thinking."""
-    # Test v14 with image support
+def test_v15_with_features() -> None:
+    """Test that v15 templates work correctly with images and thinking."""
+    # Test v15 with image support
     template_image = generate_chat_template_dynamic(
         spm=False,
-        tokenizer_version=TokenizerVersion.v14,
+        tokenizer_version=TokenizerVersion.v15,
         image_support=True,
         audio_support=False,
         thinking_support=False,
@@ -276,10 +277,10 @@ def test_v14_with_features() -> None:
     assert '[MODEL_SETTINGS]{"reasoning_effort": "high"}[/MODEL_SETTINGS]' in output
     assert "[IMG]" in output
 
-    # Test v14 with thinking support
+    # Test v15 with thinking support
     template_think = generate_chat_template_dynamic(
         spm=False,
-        tokenizer_version=TokenizerVersion.v14,
+        tokenizer_version=TokenizerVersion.v15,
         image_support=False,
         audio_support=False,
         thinking_support=True,
@@ -301,11 +302,11 @@ def test_v14_with_features() -> None:
     assert "[THINK]Let me think...[/THINK]" in output
 
 
-def test_v14_with_tools() -> None:
-    """Test that v14 templates work correctly with tools."""
+def test_v15_with_tools() -> None:
+    """Test that v15 templates work correctly with tools."""
     template = generate_chat_template_dynamic(
         spm=False,
-        tokenizer_version=TokenizerVersion.v14,
+        tokenizer_version=TokenizerVersion.v15,
         image_support=False,
         audio_support=False,
         thinking_support=False,
@@ -357,9 +358,10 @@ def test_v14_with_tools() -> None:
         (TokenizerVersion.v13, False, False, True, False),
         (TokenizerVersion.v13, False, False, False, True),
         (TokenizerVersion.v13, False, True, False, True),
-        (TokenizerVersion.v14, False, False, False, False),
-        (TokenizerVersion.v14, False, True, False, False),
-        (TokenizerVersion.v14, False, True, False, True),
+        (TokenizerVersion.v15, False, False, False, False),
+        (TokenizerVersion.v15, False, True, False, False),
+        (TokenizerVersion.v15, False, False, True, False),
+        (TokenizerVersion.v15, False, True, False, True),
     ],
 )
 def test_dynamic_template_comprehensive(
@@ -497,8 +499,8 @@ def test_dynamic_template_comprehensive(
         if test_name == "with_thinking" and not think:
             continue
 
-        static_output = render_template(static_template, test_case["messages"])
-        dynamic_output = render_template(dynamic_template, test_case["messages"])
+        static_output = render_template(static_template, test_case["messages"])  # type: ignore
+        dynamic_output = render_template(dynamic_template, test_case["messages"])  # type: ignore
 
         assert static_output == dynamic_output, (
             f"Output mismatch for version={version}, case={test_name}\n\n"

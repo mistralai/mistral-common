@@ -28,7 +28,7 @@ from mistral_common.protocol.instruct.messages import (
     UserMessage,
 )
 from mistral_common.protocol.instruct.normalize import get_normalizer
-from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
+from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest, ReasoningEffort
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.protocol.instruct.validator import ValidationMode, get_validator
 from mistral_common.tokens.tokenizers.audio import (
@@ -46,9 +46,10 @@ from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV7,
     InstructTokenizerV11,
     InstructTokenizerV13,
-    InstructTokenizerV14,
+    InstructTokenizerV15,
 )
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
 from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import get_special_tokens
@@ -199,6 +200,15 @@ def _get_mistral_tekkenizer(
     vocab = json_tekkenizer["vocab"]
     vocab_size = json_tekkenizer["config"]["default_vocab_size"]
     pattern = json_tekkenizer["config"]["pattern"]
+    model_settings_builder = (
+        ModelSettingsBuilder(
+            reasoning_effort=EnumBuilder(
+                accepts_none=True, default=None, values=[ReasoningEffort.none, ReasoningEffort.high]
+            )
+        )
+        if tokenizer_version.supports_model_settings
+        else None
+    )
     tokenizer = Tekkenizer(
         vocab,
         special_tokens,
@@ -206,6 +216,7 @@ def _get_mistral_tekkenizer(
         vocab_size=vocab_size,
         num_special_tokens=100,
         version=tokenizer_version,
+        model_settings_builder=model_settings_builder,
     )
 
     if audio:
@@ -226,8 +237,8 @@ def _get_mistral_tekkenizer(
         instruct_cls = InstructTokenizerV11
     elif tokenizer_version == TokenizerVersion.v13:
         instruct_cls = InstructTokenizerV13
-    elif tokenizer_version == TokenizerVersion.v14:
-        instruct_cls = InstructTokenizerV14
+    elif tokenizer_version == TokenizerVersion.v15:
+        instruct_cls = InstructTokenizerV15
     else:
         raise ValueError(f"Unknown tokenizer version: {tokenizer_version}")
 
@@ -236,10 +247,11 @@ def _get_mistral_tekkenizer(
         image_encoder=image_encoder if image else None,
         audio_encoder=audio_encoder if audio else None,
     )
+    model_settings_builder = tokenizer.model_settings_builder if isinstance(tokenizer, Tekkenizer) else None
     mistral_tokenizer = MistralTokenizer(
         instruct_tokenizer,
         validator=get_validator(mode=validation_mode, version=tokenizer_version),
-        request_normalizer=get_normalizer(version=tokenizer_version),
+        request_normalizer=get_normalizer(version=tokenizer_version, model_settings_builder=model_settings_builder),
     )
 
     return mistral_tokenizer
@@ -1029,7 +1041,7 @@ def _get_conversations(
 
     conversations = [c.model_copy(deep=True) for c in conversations]
 
-    if think and tokenizer_version >= TokenizerVersion.v14:
+    if think and tokenizer_version >= TokenizerVersion.v15:
         for conv in conversations:
             for message in conv.messages:
                 if isinstance(message, SystemMessage) and isinstance(message.content, list):
@@ -1063,10 +1075,10 @@ def _get_conversations(
         (False, TokenizerVersion.v13, True, False, False),
         (False, TokenizerVersion.v13, False, True, False),
         (False, TokenizerVersion.v13, True, False, True),
-        (False, TokenizerVersion.v14, False, False, False),
-        (False, TokenizerVersion.v14, True, False, False),
-        (False, TokenizerVersion.v14, False, True, False),
-        (False, TokenizerVersion.v14, True, False, True),
+        (False, TokenizerVersion.v15, False, False, False),
+        (False, TokenizerVersion.v15, True, False, False),
+        (False, TokenizerVersion.v15, False, True, False),
+        (False, TokenizerVersion.v15, True, False, True),
     ],
 )
 @pytest.mark.parametrize("mode", [ValidationMode.test, ValidationMode.finetuning])
@@ -1141,10 +1153,10 @@ def test_chat_template(
         (False, TokenizerVersion.v13, True, False, False),
         (False, TokenizerVersion.v13, False, True, False),
         (False, TokenizerVersion.v13, True, False, True),
-        (False, TokenizerVersion.v14, False, False, False),
-        (False, TokenizerVersion.v14, True, False, False),
-        (False, TokenizerVersion.v14, False, True, False),
-        (False, TokenizerVersion.v14, True, False, True),
+        (False, TokenizerVersion.v15, False, False, False),
+        (False, TokenizerVersion.v15, True, False, False),
+        (False, TokenizerVersion.v15, False, True, False),
+        (False, TokenizerVersion.v15, True, False, True),
     ],
 )
 def test_role_error(
@@ -1215,10 +1227,10 @@ def test_role_error(
         (False, TokenizerVersion.v13, True, False, False),
         (False, TokenizerVersion.v13, False, True, False),
         (False, TokenizerVersion.v13, True, False, True),
-        (False, TokenizerVersion.v14, False, False, False),
-        (False, TokenizerVersion.v14, True, False, False),
-        (False, TokenizerVersion.v14, False, True, False),
-        (False, TokenizerVersion.v14, True, False, True),
+        (False, TokenizerVersion.v15, False, False, False),
+        (False, TokenizerVersion.v15, True, False, False),
+        (False, TokenizerVersion.v15, False, True, False),
+        (False, TokenizerVersion.v15, True, False, True),
     ],
 )
 def test_invalid_chunks(
@@ -1340,7 +1352,7 @@ def test_invalid_chunks(
     for conv in invalid_convs:
         msg_template = "Only {chunks} chunks are supported in {role} message content."
         if conv in SP_INVALIDS:
-            chunks = "text and thinking" if think and version < TokenizerVersion.v14 else "text"
+            chunks = "text and thinking" if think and version < TokenizerVersion.v15 else "text"
             role = "system"
         elif conv in USER_INVALIDS:
             chunks = "text"
@@ -1623,10 +1635,10 @@ class TestDefaultSystemPrompt:
 @pytest.mark.parametrize(
     ("spm", "version", "image", "audio", "think"),
     [
-        (False, TokenizerVersion.v14, False, False, False),
-        (False, TokenizerVersion.v14, True, False, False),
-        (False, TokenizerVersion.v14, False, False, True),
-        (False, TokenizerVersion.v14, True, False, True),
+        (False, TokenizerVersion.v15, False, False, False),
+        (False, TokenizerVersion.v15, True, False, False),
+        (False, TokenizerVersion.v15, False, False, True),
+        (False, TokenizerVersion.v15, True, False, True),
     ],
 )
 def test_reasoning_effort_validation(
@@ -1636,7 +1648,7 @@ def test_reasoning_effort_validation(
     audio: bool,
     think: bool,
 ) -> None:
-    """Test that reasoning_effort must be either 'none' or 'high' for v14 templates."""
+    """Test that reasoning_effort must be either 'none' or 'high' for v15 templates."""
     chat_template = generate_chat_template_dynamic(spm, version, image, audio, think)
 
     # Test valid reasoning_effort values
@@ -1666,7 +1678,7 @@ def test_reasoning_effort_validation(
 
     for conv in valid_conversations:
         # Should not raise an exception
-        result = encode_transformers(chat_template, conv)
+        result = encode_transformers(chat_template, conv)  # type: ignore
         assert result is not None
         assert "[MODEL_SETTINGS]" in result
 

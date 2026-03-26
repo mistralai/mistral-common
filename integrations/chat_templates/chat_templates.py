@@ -37,6 +37,7 @@ V13_THINK = _TEMPLATE_PATH / "v13_think.jinja"
 V15 = _TEMPLATE_PATH / "v15.jinja"
 V15_IMAGE = _TEMPLATE_PATH / "v15_image.jinja"
 V15_IMAGE_THINK = _TEMPLATE_PATH / "v15_image_think.jinja"
+V15_AUDIO = _TEMPLATE_PATH / "v15_audio.jinja"
 V15_THINK = _TEMPLATE_PATH / "v15_think.jinja"
 
 
@@ -185,7 +186,7 @@ def get_chat_template(
         elif image_support and thinking_support:
             return _load_chat_template(V15_IMAGE_THINK, default_system_prompt)
         elif audio_support:
-            return _load_chat_template(V13_AUDIO, default_system_prompt)
+            return _load_chat_template(V15_AUDIO, default_system_prompt)
         elif thinking_support:
             return _load_chat_template(V15_THINK, default_system_prompt)
         else:

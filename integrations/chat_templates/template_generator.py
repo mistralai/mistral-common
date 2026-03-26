@@ -146,8 +146,8 @@ class TemplateConfig:
 
     @property
     def tracks_has_sp_for_audio(self) -> bool:
-        """Whether to track has_sp for audio constraint."""
-        return self.audio_support
+        """Whether to track has_sp for audio constraint. V15+ allows audio with system prompts."""
+        return self.audio_support and self.version < TokenizerVersion.v15
 
 
 def _generate_header() -> str:
