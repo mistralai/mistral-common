@@ -12,7 +12,7 @@ class TemplateConfig:
     The template handles message roles, special tokens, tool calls, and multimodal content.
 
     Attributes:
-        version: The tokenizer version (e.g., v1, v2, v3, v7, v11, v13, v14). Determines
+        version: The tokenizer version (e.g., v1, v2, v3, v7, v11, v13, v15). Determines
             special token formatting, tool call syntax, and available features.
         spm: Whether to use SentencePiece tokenizer formatting. When True, adds spaces
             after special tokens. Not supported for versions v11+ or with audio.
@@ -167,7 +167,7 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
         "{#- Handle system prompt if it exists. #}",
     ]
 
-    if config.thinking_support and config.version < TokenizerVersion.v14:
+    if config.thinking_support and config.version < TokenizerVersion.v15:
         chunk_comment = "{#- System prompt supports text content or text and thinking chunks. #}"
         chunk_handler = """            {%- if block['type'] == 'text' %}
                 {{- block['text'] }}
@@ -270,7 +270,7 @@ def _generate_tools_definition(config: TemplateConfig) -> str:
 
 def _generate_model_settings_definition(config: TemplateConfig) -> str:
     r"""Generate model settings definition section."""
-    if config.version < TokenizerVersion.v14:
+    if config.version < TokenizerVersion.v15:
         return ""
 
     lines = [
