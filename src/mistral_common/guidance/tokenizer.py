@@ -11,19 +11,27 @@ if is_llguidance_installed():
 
 
 class MistralLLGTokenizer:
-    r"""Wraps a Tekken tokenizer for use with llguidance.
+    r"""Wraps a Tekken tokenizer for use with llguidance."""
 
-    Attributes:
-        eos_token_id: The end of string token id.
-        bos_token_id: The beginning of string token id.
-        tokens: The list of token byte representations.
-        special_token_ids: The list of special token ids.
-    """
+    @property
+    def bos_token_id(self) -> int:
+        r"""The beginning of string token id."""
+        return self._tokenizer.bos_id
 
-    eos_token_id: int
-    bos_token_id: int
-    tokens: list[bytes]
-    special_token_ids: list[int]
+    @property
+    def eos_token_id(self) -> int:
+        r"""The end of string token id."""
+        return self._tokenizer.eos_id
+
+    @property
+    def tokens(self) -> list[bytes]:
+        r"""The list of token byte representations."""
+        return self._tokens
+
+    @property
+    def special_token_ids(self) -> list[bytes]:
+        r"""The list of special token ids."""
+        return self._special_token_ids
 
     def __init__(self, tokenizer: Tokenizer) -> None:
         r"""Initialize the wrapper.
@@ -36,14 +44,13 @@ class MistralLLGTokenizer:
             ValueError: If a special token has an invalid format.
         """
         assert_llguidance_installed()
+
         if not is_tekkenizer(tokenizer):
             raise TypeError(f"Guidance only supports Tekken tokenizers, got {type(tokenizer)}")
-        self._tokenizer = tokenizer
-        self.eos_token_id = self._tokenizer.eos_id
-        self.bos_token_id = self._tokenizer.bos_id
 
-        self.tokens: list[bytes] = []
-        self.special_token_ids: list[int] = []
+        self._tokenizer = tokenizer
+        self._tokens: list[bytes] = []
+        self._special_token_ids: list[int] = []
 
         seen_special_tokens: set[str] = set()
         for i in range(self._tokenizer.n_words):
@@ -61,15 +68,16 @@ class MistralLLGTokenizer:
                 if token_rep_llg in seen_special_tokens:
                     raise ValueError(f"Duplicate special token: {token_rep_llg} (already seen: {seen_special_tokens})")
                 seen_special_tokens.add(token_rep_llg)
-                self.special_token_ids.append(i)
-                self.tokens.append(token_rep_llg.encode("utf-8"))
+                self._special_token_ids.append(i)
+                self._tokens.append(token_rep_llg.encode("utf-8"))
             else:
                 token_bytes = self._tokenizer.id_to_byte_piece(i, SpecialTokenPolicy.RAISE)
-                self.tokens.append(token_bytes)
+                self._tokens.append(token_bytes)
 
-        if len(self.special_token_ids) != self._tokenizer.num_special_tokens:
+        if len(self._special_token_ids) != self._tokenizer.num_special_tokens:
             raise ValueError(
-                f"Expected {self._tokenizer.num_special_tokens} special tokens, but found {len(self.special_token_ids)}"
+                f"Expected {self._tokenizer.num_special_tokens} special tokens, but found "
+                f"{len(self._special_token_ids)}"
             )
 
     def __call__(self, s: str, *args: Any, **kwargs: Any) -> list[int]:
