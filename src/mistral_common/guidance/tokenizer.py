@@ -29,7 +29,7 @@ class MistralLLGTokenizer:
         return self._tokens
 
     @property
-    def special_token_ids(self) -> list[bytes]:
+    def special_token_ids(self) -> list[int]:
         r"""The list of special token ids."""
         return self._special_token_ids
 
