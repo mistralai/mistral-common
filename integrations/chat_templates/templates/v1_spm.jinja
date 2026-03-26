@@ -4,26 +4,91 @@
 {#- Begin of sequence token. #}
 {{- '<s>' }}
 
+
 {#- Handle system prompt if it exists. #}
-{#- System prompt supports text content or text chunks. #}
-{%- if messages[0]['role'] == 'system' %}
-    {%- if messages[0]['content'] is string %}
-        {%- set system_message = messages[0]['content'] %}
-    {%- else %}        
-        {%- for block in messages[0]['content'] %}
-            {%- set system_message = '' %}
-            {%- if block['type'] == 'text' %}
-                {% set system_message = system_message + block['text'] %}
-            {%- else %}
-                {{- raise_exception('Only text chunks are supported in system message contents.') }}
-            {%- endif %}
-        {%- endfor %}
+{#- Extract all system messages and merge into system prompt. #}
+{%- set ns_sys = namespace(system_parts=[], filtered=[]) %}
+{%- for message in messages %}
+    {%- if message['role'] == 'system' %}
+        {%- if message['content'] is string %}
+            {%- set ns_sys.system_parts = ns_sys.system_parts + [message['content']] %}
+        {%- else %}
+            {%- for block in message['content'] %}
+                {%- if block['type'] == 'text' %}
+                    {%- set ns_sys.system_parts = ns_sys.system_parts + [block['text']] %}
+                {%- else %}
+                    {{- raise_exception('Only text chunks are supported in system message content.') }}
+                {%- endif %}
+            {%- endfor %}
+        {%- endif %}
+    {%- else %}
+        {%- set ns_sys.filtered = ns_sys.filtered + [message] %}
     {%- endif %}
-    {%- set loop_messages = messages[1:] %}
+{%- endfor %}
+{%- if ns_sys.system_parts | length > 0 %}
+    {%- set system_message = ns_sys.system_parts | join('\n\n') %}
 {%- else %}
     {%- set system_message = default_system_message %}
-    {%- set loop_messages = messages %}
-{%- endif%}
+{%- endif %}
+{%- set loop_messages = ns_sys.filtered %}
+
+{#- Aggregate consecutive messages with the same role. #}
+{#- System and tool messages are never merged across consecutive messages. #}
+{#- A sentinel message is appended so the last group gets flushed inside the loop #}
+{#- without duplicating the flush logic after the loop. #}
+{%- set ns_agg = namespace(messages=[], current_group=[], current_role=none) %}
+{%- for message in loop_messages + [{'role': '__sentinel__'}] %}
+    {%- if message['role'] != ns_agg.current_role or message['role'] == 'system' or message['role'] == 'tool' %}
+        {%- if ns_agg.current_role == 'tool' %}
+            {%- set ns_agg.messages = ns_agg.messages + ns_agg.current_group %}
+        {%- elif ns_agg.current_role is not none %}
+            {%- set ns_c = namespace(text_parts=[], chunks=[], has_non_text=false, tool_calls=[]) %}
+            {%- for msg in ns_agg.current_group %}
+                {%- if msg['content'] is string %}
+                    {%- if msg['content'] != '' %}
+                        {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}
+                    {%- endif %}
+                {%- elif msg['content'] is not none %}
+                    {%- for block in msg['content'] %}
+                        {%- if block['type'] == 'text' %}
+                            {%- set ns_c.text_parts = ns_c.text_parts + [block['text']] %}
+                        {%- else %}
+                            {%- if ns_c.text_parts | length > 0 %}
+                                {%- set ns_c.chunks = ns_c.chunks + [{'type': 'text', 'text': ns_c.text_parts | join('\n\n')}] %}
+                                {%- set ns_c.text_parts = [] %}
+                            {%- endif %}
+                            {%- set ns_c.chunks = ns_c.chunks + [block] %}
+                            {%- set ns_c.has_non_text = true %}
+                        {%- endif %}
+                    {%- endfor %}
+                {%- endif %}
+                {%- if msg['tool_calls'] is defined and msg['tool_calls'] is not none %}
+                    {%- set ns_c.tool_calls = ns_c.tool_calls + msg['tool_calls'] | list %}
+                {%- endif %}
+            {%- endfor %}
+            {%- if ns_c.has_non_text %}
+                {%- if ns_c.text_parts | length > 0 %}
+                    {%- set ns_c.chunks = ns_c.chunks + [{'type': 'text', 'text': ns_c.text_parts | join('\n\n')}] %}
+                {%- endif %}
+                {%- set merged_content = ns_c.chunks %}
+            {%- else %}
+                {%- set merged_content = ns_c.text_parts | join('\n\n') %}
+            {%- endif %}
+            {%- if ns_c.tool_calls | length > 0 %}
+                {%- set ns_agg.messages = ns_agg.messages + [{'role': ns_agg.current_role, 'content': merged_content, 'tool_calls': ns_c.tool_calls}] %}
+            {%- else %}
+                {%- set ns_agg.messages = ns_agg.messages + [{'role': ns_agg.current_role, 'content': merged_content}] %}
+            {%- endif %}
+        {%- endif %}
+        {%- if message['role'] != '__sentinel__' %}
+            {%- set ns_agg.current_group = [message] %}
+            {%- set ns_agg.current_role = message['role'] %}
+        {%- endif %}
+    {%- else %}
+        {%- set ns_agg.current_group = ns_agg.current_group + [message] %}
+    {%- endif %}
+{%- endfor %}
+{%- set loop_messages = ns_agg.messages %}
 
 {#- Checks for alternating user/assistant messages. #}
 {%- set ns = namespace(index=0) %}

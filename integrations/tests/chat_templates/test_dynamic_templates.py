@@ -224,7 +224,7 @@ def test_v15_reasoning_effort() -> None:
         {"role": "assistant", "content": "Hi there!"},
     ]
 
-    # Test with no reasoning effort (should default to 'none')
+    # Test with no reasoning effort (None/undefined — defaults to 'none')
     output_none = render_template(template, messages, reasoning_effort=None)
     assert '[MODEL_SETTINGS]{"reasoning_effort": "none"}[/MODEL_SETTINGS]' in output_none
 
@@ -232,7 +232,7 @@ def test_v15_reasoning_effort() -> None:
     output_high = render_template(template, messages, reasoning_effort="high")
     assert '[MODEL_SETTINGS]{"reasoning_effort": "high"}[/MODEL_SETTINGS]' in output_high
 
-    # Test with reasoning effort='none'
+    # Test with reasoning effort='none' (explicit string)
     output_none_explicit = render_template(template, messages, reasoning_effort="none")
     assert '[MODEL_SETTINGS]{"reasoning_effort": "none"}[/MODEL_SETTINGS]' in output_none_explicit
 
@@ -483,20 +483,231 @@ def test_dynamic_template_comprehensive(
             }
         )
 
+    # Test no system prompt at first message — tools/settings must still work
+    test_cases.append(
+        {
+            "name": "no_system_first",
+            "messages": [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi"},
+            ],
+        }
+    )
+
+    # Add message aggregation test cases
+    test_cases.extend(
+        [
+            {
+                "name": "consecutive_users",
+                "messages": [
+                    {"role": "user", "content": "Hello"},
+                    {"role": "user", "content": "World"},
+                    {"role": "assistant", "content": "Hi there"},
+                ],
+            },
+            {
+                "name": "consecutive_users_with_system",
+                "messages": [
+                    {"role": "system", "content": "You are helpful."},
+                    {"role": "user", "content": "Hello"},
+                    {"role": "user", "content": "World"},
+                    {"role": "assistant", "content": "Hi there"},
+                ],
+            },
+            {
+                "name": "consecutive_assistants",
+                "messages": [
+                    {"role": "user", "content": "Hello"},
+                    {"role": "assistant", "content": "Hi"},
+                    {"role": "assistant", "content": "How can I help?"},
+                    {"role": "user", "content": "Thanks"},
+                    {"role": "assistant", "content": "Welcome"},
+                ],
+            },
+            {
+                "name": "multiple_systems",
+                "messages": [
+                    {"role": "system", "content": "System 1."},
+                    {"role": "system", "content": "System 2."},
+                    {"role": "user", "content": "Hello"},
+                    {"role": "assistant", "content": "Hi"},
+                ],
+            },
+        ]
+    )
+
+    # Multi-chunk aggregation test cases
+    test_cases.extend(
+        [
+            {
+                "name": "consecutive_users_text_chunks",
+                "messages": [
+                    {"role": "user", "content": "First as string"},
+                    {"role": "user", "content": [{"type": "text", "text": "Second as chunk"}]},
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Third part A"},
+                            {"type": "text", "text": "Third part B"},
+                        ],
+                    },
+                    {"role": "assistant", "content": "Response"},
+                ],
+            },
+            {
+                "name": "system_text_chunks",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": [
+                            {"type": "text", "text": "You are helpful."},
+                            {"type": "text", "text": "Be concise."},
+                        ],
+                    },
+                    {"role": "user", "content": "Hello"},
+                    {"role": "assistant", "content": "Hi"},
+                ],
+            },
+        ]
+    )
+
+    if image:
+        test_cases.extend(
+            [
+                {
+                    "name": "consecutive_users_with_image",
+                    "messages": [
+                        {"role": "user", "content": "What is this?"},
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "image_url", "image_url": "http://example.com/image.png"},
+                                {"type": "text", "text": "Describe it"},
+                            ],
+                        },
+                        {"role": "assistant", "content": "It's an image."},
+                    ],
+                },
+                {
+                    "name": "consecutive_users_multi_image",
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": "Describe this"},
+                                {"type": "image_url", "image_url": "http://example.com/a.png"},
+                                {"type": "text", "text": "What color?"},
+                            ],
+                        },
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": "Also this"},
+                                {"type": "image_url", "image_url": "http://example.com/b.png"},
+                                {"type": "text", "text": "What shape?"},
+                            ],
+                        },
+                        {"role": "assistant", "content": "Both are red squares."},
+                    ],
+                },
+            ]
+        )
+
+    if audio:
+        test_cases.append(
+            {
+                "name": "consecutive_users_multi_audio",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Listen"},
+                            {"type": "audio_url", "audio_url": "http://example.com/a.wav"},
+                            {"type": "text", "text": "What language?"},
+                        ],
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "And this"},
+                            {"type": "audio_url", "audio_url": "http://example.com/b.wav"},
+                            {"type": "text", "text": "Transcribe it"},
+                        ],
+                    },
+                    {"role": "assistant", "content": "Both are in English."},
+                ],
+            }
+        )
+
+    if think:
+        test_cases.extend(
+            [
+                {
+                    "name": "consecutive_assistants_think",
+                    "messages": [
+                        {"role": "user", "content": "Solve this"},
+                        {
+                            "role": "assistant",
+                            "content": [
+                                {"type": "text", "text": "Hmm."},
+                                {"type": "thinking", "thinking": "Let me think..."},
+                                {"type": "text", "text": "I need more context."},
+                            ],
+                        },
+                        {
+                            "role": "assistant",
+                            "content": [
+                                {"type": "text", "text": "OK."},
+                                {"type": "thinking", "thinking": "Now I understand."},
+                                {"type": "text", "text": "The answer is 42."},
+                            ],
+                        },
+                        {"role": "user", "content": "Thanks"},
+                        {"role": "assistant", "content": "You're welcome"},
+                    ],
+                },
+                {
+                    "name": "consecutive_systems_think",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": [
+                                {"type": "text", "text": "Rule A"},
+                                {"type": "text", "text": "Rule B"},
+                                {"type": "thinking", "thinking": "Think 1"},
+                            ],
+                        },
+                        {
+                            "role": "system",
+                            "content": [
+                                {"type": "thinking", "thinking": "Think 2"},
+                                {"type": "text", "text": "Rule C"},
+                                {"type": "text", "text": "Rule D"},
+                            ],
+                        },
+                        {"role": "user", "content": "Hello"},
+                        {"role": "assistant", "content": "Hi"},
+                    ],
+                },
+            ]
+        )
+
+    skip_names_image = {"with_image", "consecutive_users_with_image", "consecutive_users_multi_image"}
+    skip_names_audio = {"with_audio", "consecutive_users_multi_audio"}
+    skip_names_think = {"with_thinking", "consecutive_assistants_think", "consecutive_systems_think"}
+    # ThinkChunks in system messages are only supported in v13 (not v15+)
+    skip_names_think_system = {"consecutive_systems_think"}
+
     for test_case in test_cases:
         test_name = test_case["name"]
 
-        # Explicitly skip unsupported configurations rather than catching exceptions
-        # Image tests require image support
-        if test_name == "with_image" and not image:
+        if test_name in skip_names_image and not image:
             continue
-
-        # Audio tests require audio support
-        if test_name == "with_audio" and not audio:
+        if test_name in skip_names_audio and not audio:
             continue
-
-        # Thinking tests require thinking support
-        if test_name == "with_thinking" and not think:
+        if test_name in skip_names_think and not think:
+            continue
+        if test_name in skip_names_think_system and version >= TokenizerVersion.v15:
             continue
 
         static_output = render_template(static_template, test_case["messages"])  # type: ignore
@@ -507,3 +718,144 @@ def test_dynamic_template_comprehensive(
             f"Static output: {static_output}\n"
             f"Dynamic output: {dynamic_output}"
         )
+
+
+@pytest.mark.parametrize(
+    ("version", "spm"),
+    [
+        (TokenizerVersion.v7, False),
+        (TokenizerVersion.v7, True),
+        (TokenizerVersion.v13, False),
+        (TokenizerVersion.v15, False),
+    ],
+)
+def test_aggregation_consecutive_assistants_both_tool_calls(version: TokenizerVersion, spm: bool) -> None:
+    r"""Test consecutive assistant messages where both have tool_calls.
+
+    This pattern is rejected by the validator but the normalizer handles it.
+    We test the template directly to ensure the Jinja aggregation logic works.
+    """
+    template = generate_chat_template_dynamic(spm, version, False, False, False)
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "Weather?"},
+        {
+            "role": "assistant",
+            "content": "Checking Paris.",
+            "tool_calls": [
+                {
+                    "id": "123456789",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": '{"city": "Paris"}'},
+                },
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": "And London.",
+            "tool_calls": [
+                {
+                    "id": "023456789",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": '{"city": "London"}'},
+                },
+            ],
+        },
+        {"role": "tool", "name": "get_weather", "content": "22", "tool_call_id": "123456789"},
+        {"role": "tool", "name": "get_weather", "content": "15", "tool_call_id": "023456789"},
+        {"role": "assistant", "content": "Paris: 22, London: 15"},
+        {"role": "user", "content": "Thanks"},
+        {"role": "assistant", "content": "Welcome"},
+    ]
+
+    tools: list[dict[str, Any]] = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "",
+                "parameters": {"type": "object", "properties": {"city": {"type": "string"}}},
+            },
+        }
+    ]
+
+    output = render_template(template, messages, tools=tools)
+
+    # Both assistant messages should be merged: content joined with \n\n
+    assert "Checking Paris.\n\nAnd London." in output
+    # Both tool calls should be present in the output
+    assert '"city": "Paris"' in output
+    assert '"city": "London"' in output
+
+
+@pytest.mark.parametrize(
+    ("has_system", "has_tools", "reasoning_effort"),
+    [
+        (True, True, "high"),
+        (True, False, "high"),
+        (False, True, "high"),
+        (False, False, "high"),
+        (True, True, "none"),
+        (False, False, "none"),
+        (True, True, None),
+        (False, False, None),
+    ],
+)
+def test_v15_tools_and_settings_ordering(has_system: bool, has_tools: bool, reasoning_effort: str | None) -> None:
+    r"""Test that v15 emits system, tools, and model_settings in the correct order.
+
+    Expected order: ``[SYSTEM_PROMPT]...[/SYSTEM_PROMPT]`` (if system) then
+    ``[AVAILABLE_TOOLS]...[/AVAILABLE_TOOLS]`` (if tools) then
+    ``[MODEL_SETTINGS]...[/MODEL_SETTINGS]`` (always, None defaults to 'none') then
+    ``[INST]...[/INST]``.
+    """
+    template = generate_chat_template_dynamic(False, TokenizerVersion.v15, False, False, False)
+
+    messages: list[dict[str, Any]] = []
+    if has_system:
+        messages.append({"role": "system", "content": "You are helpful."})
+    messages.extend(
+        [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi"},
+        ]
+    )
+
+    tools: list[dict[str, Any]] | None = None
+    if has_tools:
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "tool1",
+                    "description": "",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+
+    output = render_template(template, messages, tools=tools, reasoning_effort=reasoning_effort)
+
+    # Verify ordering of special blocks
+    if has_system:
+        assert "[SYSTEM_PROMPT]You are helpful.[/SYSTEM_PROMPT]" in output
+        sp_pos = output.index("[SYSTEM_PROMPT]")
+    else:
+        assert "[SYSTEM_PROMPT]" not in output
+        sp_pos = -1
+
+    if has_tools:
+        assert "[AVAILABLE_TOOLS]" in output
+        tools_pos = output.index("[AVAILABLE_TOOLS]")
+        assert tools_pos > sp_pos
+    else:
+        assert "[AVAILABLE_TOOLS]" not in output
+        tools_pos = sp_pos
+
+    # MODEL_SETTINGS is always emitted for v15 (reasoning_effort is always provided)
+    assert "[MODEL_SETTINGS]" in output
+    settings_pos = output.index("[MODEL_SETTINGS]")
+    assert settings_pos > tools_pos
+
+    inst_pos = output.index("[INST]")
+    assert inst_pos > settings_pos

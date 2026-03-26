@@ -203,7 +203,7 @@ def _get_mistral_tekkenizer(
     model_settings_builder = (
         ModelSettingsBuilder(
             reasoning_effort=EnumBuilder(
-                accepts_none=True, default=None, values=[ReasoningEffort.none, ReasoningEffort.high]
+                accepts_none=True, default=ReasoningEffort.none, values=[ReasoningEffort.none, ReasoningEffort.high]
             )
         )
         if tokenizer_version.supports_model_settings
@@ -977,6 +977,177 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
 )
 
 
+# -- Message aggregation test fixtures --
+
+REQUEST_CONSECUTIVE_USERS_TEST = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="Hello"),
+        UserMessage(content="World"),
+    ]
+)
+
+REQUEST_CONSECUTIVE_USERS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="Hello"),
+        UserMessage(content="World"),
+        AssistantMessage(content="Hi there"),
+    ]
+)
+
+REQUEST_CONSECUTIVE_USERS_WITH_SYSTEM_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are helpful."),
+        UserMessage(content="Hello"),
+        UserMessage(content="World"),
+        AssistantMessage(content="Hi there"),
+    ]
+)
+
+REQUEST_CONSECUTIVE_ASSISTANTS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="Hello"),
+        AssistantMessage(content="Hi"),
+        AssistantMessage(content="How can I help?"),
+        UserMessage(content="Thanks"),
+        AssistantMessage(content="You're welcome"),
+    ]
+)
+
+REQUEST_MULTIPLE_SYSTEMS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="System prompt 1."),
+        SystemMessage(content="System prompt 2."),
+        UserMessage(content="Hello"),
+        AssistantMessage(content="Hi"),
+    ]
+)
+
+REQUEST_CONSECUTIVE_USERS_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="What is this?"),
+        UserMessage(
+            content=[
+                ImageChunk(image=_IMAGE),
+                TextChunk(text="Describe it"),
+            ]
+        ),
+        AssistantMessage(content="It's an image."),
+    ]
+)
+
+# -- Multi-chunk aggregation test fixtures --
+
+REQUEST_CONSECUTIVE_USERS_TEXT_CHUNKS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="First as string"),
+        UserMessage(content=[TextChunk(text="Second as chunk")]),
+        UserMessage(content=[TextChunk(text="Third part A"), TextChunk(text="Third part B")]),
+        AssistantMessage(content="Response"),
+    ]
+)
+
+REQUEST_CONSECUTIVE_USERS_MULTI_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content=[TextChunk(text="Describe this"), ImageChunk(image=_IMAGE), TextChunk(text="What color?")]),
+        UserMessage(content=[TextChunk(text="Also this"), ImageChunk(image=_IMAGE), TextChunk(text="What shape?")]),
+        AssistantMessage(content="Both are red squares."),
+    ]
+)
+
+REQUEST_CONSECUTIVE_USERS_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(
+            content=[
+                TextChunk(text="Listen to this"),
+                AudioURLChunk(audio_url=_AUDIO_URL),
+                TextChunk(text="What language?"),
+            ]
+        ),
+        UserMessage(
+            content=[
+                TextChunk(text="And this"),
+                AudioURLChunk(audio_url=_AUDIO_URL),
+                TextChunk(text="Transcribe it"),
+            ]
+        ),
+        AssistantMessage(content="Both are in English."),
+    ]
+)
+
+REQUEST_CONSECUTIVE_ASSISTANTS_THINK_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="Solve this problem"),
+        AssistantMessage(
+            content=[
+                TextChunk(text="Hmm."),
+                ThinkChunk(thinking="Let me think..."),
+                TextChunk(text="I need more context."),
+            ]
+        ),
+        AssistantMessage(
+            content=[
+                TextChunk(text="OK."),
+                ThinkChunk(thinking="Now I understand."),
+                TextChunk(text="The answer is 42."),
+            ]
+        ),
+        UserMessage(content="Thanks"),
+        AssistantMessage(content="You're welcome"),
+    ]
+)
+
+REQUEST_CONSECUTIVE_ASSISTANTS_TOOL_CALLS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are a helpful assistant."),
+        UserMessage(content="What's the weather?"),
+        AssistantMessage(content="Let me check."),
+        AssistantMessage(
+            content="Fetching data.",
+            tool_calls=[
+                ToolCall(
+                    id="123456789",
+                    function=FunctionCall(name="tool1", arguments={"location": "Paris"}),  # type: ignore[arg-type]
+                ),
+                ToolCall(
+                    id="023456789",
+                    function=FunctionCall(name="tool1", arguments={"location": "London"}),  # type: ignore[arg-type]
+                ),
+            ],
+        ),
+        ToolMessage(content="22", tool_call_id="123456789"),
+        ToolMessage(content="15", tool_call_id="023456789"),
+        AssistantMessage(content="Paris: 22, London: 15"),
+        UserMessage(content="Thanks"),
+        AssistantMessage(content="Welcome"),
+    ],
+    tools=[
+        Tool(
+            function=Function(
+                name="tool1",
+                parameters={"type": "object", "properties": {"location": {"type": "string"}}},
+            )
+        ),
+    ],
+)
+
+REQUEST_SYSTEM_TEXT_CHUNKS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content=[TextChunk(text="You are helpful."), TextChunk(text="Be concise.")]),
+        UserMessage(content="Hello"),
+        AssistantMessage(content="Hi"),
+    ]
+)
+
+REQUEST_CONSECUTIVE_SYSTEMS_THINK_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content=[TextChunk(text="Rule A"), TextChunk(text="Rule B"), ThinkChunk(thinking="Think 1")]),
+        SystemMessage(content=[ThinkChunk(thinking="Think 2"), TextChunk(text="Rule C"), TextChunk(text="Rule D")]),
+        UserMessage(content="Hello"),
+        AssistantMessage(content="Hi"),
+    ]
+)
+
+
 def _get_conversations(
     tokenizer_version: TokenizerVersion,
     validation_mode: ValidationMode,
@@ -1038,6 +1209,48 @@ def _get_conversations(
             conversations.extend([REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TEST])
         else:
             conversations.extend([REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN])
+
+    # Message aggregation test fixtures (finetuning only since last msg must be assistant)
+    if validation_mode == ValidationMode.finetuning:
+        # String-only aggregation (all versions)
+        conversations.extend(
+            [
+                REQUEST_CONSECUTIVE_USERS_TRAIN,
+                REQUEST_CONSECUTIVE_USERS_WITH_SYSTEM_TRAIN,
+                REQUEST_CONSECUTIVE_ASSISTANTS_TRAIN,
+                REQUEST_MULTIPLE_SYSTEMS_TRAIN,
+            ]
+        )
+        # Multi-chunk aggregation (v3+ since v1/v2 only support string or single-TextChunk content)
+        if tokenizer_version >= TokenizerVersion.v3:
+            conversations.extend(
+                [
+                    REQUEST_CONSECUTIVE_USERS_TEXT_CHUNKS_TRAIN,
+                    REQUEST_SYSTEM_TEXT_CHUNKS_TRAIN,
+                ]
+            )
+        if image:
+            conversations.extend(
+                [
+                    REQUEST_CONSECUTIVE_USERS_IMAGE_TRAIN,
+                    REQUEST_CONSECUTIVE_USERS_MULTI_IMAGE_TRAIN,
+                ]
+            )
+        if audio:
+            conversations.append(REQUEST_CONSECUTIVE_USERS_AUDIO_TRAIN)
+        if think:
+            conversations.extend(
+                [
+                    REQUEST_CONSECUTIVE_ASSISTANTS_THINK_TRAIN,
+                    REQUEST_CONSECUTIVE_SYSTEMS_THINK_TRAIN,
+                ]
+            )
+    else:
+        conversations.append(REQUEST_CONSECUTIVE_USERS_TEST)
+
+    # v7+ only: consecutive assistants with tool calls (requires content+tool_calls in same message)
+    if tokenizer_version >= TokenizerVersion.v7 and validation_mode == ValidationMode.finetuning:
+        conversations.append(REQUEST_CONSECUTIVE_ASSISTANTS_TOOL_CALLS_TRAIN)
 
     conversations = [c.model_copy(deep=True) for c in conversations]
 
@@ -1109,23 +1322,11 @@ def test_chat_template(
             for message in conversation.messages:
                 if isinstance(message, ToolMessage):
                     message.name = "tool"
-        if version in [TokenizerVersion.v1, TokenizerVersion.v2] and isinstance(
-            conversation.messages[0], SystemMessage
-        ):
-            instruct_conversation = InstructRequest(
-                messages=conversation.messages[1:],
-                system_prompt=conversation.messages[0].content,  # type: ignore[arg-type]
-                available_tools=conversation.tools,
-            )
-
-            mistral_common_encoded = encode_instruct_mistral_common(
-                mistral_tokenizer.instruct_tokenizer, instruct_conversation, spm
-            )
-        else:
-            mistral_common_encoded = encode_mistral_common(mistral_tokenizer, conversation, spm)
+        # Run transformers first since encode_mistral_common may mutate the conversation in-place
         transformers_encoded = encode_transformers(
             chat_template, conversation, keep_name_for_tools=version == TokenizerVersion.v2
         )
+        mistral_common_encoded = encode_mistral_common(mistral_tokenizer, conversation, spm)
 
         assert mistral_common_encoded == transformers_encoded
 
@@ -1168,12 +1369,30 @@ def test_role_error(
 ) -> None:
     chat_template = generate_chat_template_dynamic(spm, version, image, audio, think)
 
+    # Consecutive user messages should be aggregated (not raise an error)
+    VALID_CONSECUTIVE_USERS = {
+        "messages": [
+            {"role": "user", "content": "Hello"},
+            {"role": "user", "content": "World"},
+            {"role": "assistant", "content": "Hi"},
+        ]
+    }
+    # This should not raise
+    encode_transformers(chat_template, VALID_CONSECUTIVE_USERS)
+
+    # But actual alternation violations should still be caught
     INVALID_ALTERNATE_CONVERSATION = {
         "messages": [
             {"role": "user", "content": "Hello"},
-            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi"},
+            {"role": "assistant", "content": "Help?"},
+            {"role": "assistant", "content": "More"},
+            {"role": "user", "content": "Thanks"},
+            # After aggregation: user, assistant, user — this is valid
         ]
     }
+    # This should be valid since consecutive assistants get aggregated
+    encode_transformers(chat_template, INVALID_ALTERNATE_CONVERSATION)
 
     INVALID_ROLE = {
         "messages": [
@@ -1182,23 +1401,12 @@ def test_role_error(
         ]
     }
 
-    alternate_match = (
-        (
-            r"After the optional system message, conversation roles must alternate user and assistant roles except for "
-            r"tool calls and results."
-        )
-        if version > TokenizerVersion.v1
-        else (r"After the optional system message, conversation roles must alternate user and assistant.")
-    )
-
-    role_match = (
-        r"Only user, assistant and tool roles are supported, got invalid."
-        if version > TokenizerVersion.v1
-        else r"Only user and assistant roles are supported, got invalid."
-    )
-
-    with pytest.raises(expected_exception=TemplateError, match=alternate_match):
-        encode_transformers(chat_template, INVALID_ALTERNATE_CONVERSATION)
+    if version >= TokenizerVersion.v7:
+        role_match = r"Only user, assistant, system and tool roles are supported, got invalid\."
+    elif version > TokenizerVersion.v1:
+        role_match = r"Only user, assistant and tool roles are supported, got invalid\."
+    else:
+        role_match = r"Only user and assistant roles are supported, got invalid\."
 
     with pytest.raises(TemplateError, match=role_match):
         encode_transformers(chat_template, INVALID_ROLE)
@@ -1651,7 +1859,8 @@ def test_reasoning_effort_validation(
     """Test that reasoning_effort must be either 'none' or 'high' for v15 templates."""
     chat_template = generate_chat_template_dynamic(spm, version, image, audio, think)
 
-    # Test valid reasoning_effort values
+    # Test valid reasoning_effort values — v15 always emits [MODEL_SETTINGS]
+    # (None/undefined defaults to 'none' in the template)
     valid_conversations = [
         {
             "messages": [
@@ -1672,12 +1881,11 @@ def test_reasoning_effort_validation(
                 {"role": "user", "content": "Hello"},
                 {"role": "assistant", "content": "Hi"},
             ]
-            # No reasoning_effort - should default to 'none'
+            # No reasoning_effort — template defaults to 'none'
         },
     ]
 
     for conv in valid_conversations:
-        # Should not raise an exception
         result = encode_transformers(chat_template, conv)  # type: ignore
         assert result is not None
         assert "[MODEL_SETTINGS]" in result

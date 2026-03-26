@@ -4,46 +4,93 @@
 {#- Begin of sequence token. #}
 {{- '<s>' }}
 
+
 {#- Handle system prompt if it exists. #}
-{#- System prompt supports text content or text chunks. #}
-{%- if messages[0]['role'] == 'system' %}
-    {{- '[SYSTEM_PROMPT]' -}}
-    {%- if messages[0]['content'] is string %}
-        {{- messages[0]['content'] -}}
-    {%- else %}        
-        {%- for block in messages[0]['content'] %}
-            {%- if block['type'] == 'text' %}
-                {{- block['text'] }}
-            {%- else %}
-                {{- raise_exception('Only text chunks are supported in system message contents.') }}
-            {%- endif %}
-        {%- endfor %}
-    {%- endif %}
-    {{- '[/SYSTEM_PROMPT]' -}}
-    {%- set loop_messages = messages[1:] %}
-{%- else %}
-    {%- set loop_messages = messages %}
-    {%- if default_system_message != '' %}
-        {{- '[SYSTEM_PROMPT]' + default_system_message + '[/SYSTEM_PROMPT]' }}
-    {%- endif %}
+{#- System messages are handled in the message loop. #}
+{#- Only emit default system prompt if no system message is at position 0. #}
+{%- set loop_messages = messages %}
+{%- if messages[0]['role'] != 'system' and default_system_message != '' %}
+    {{- '[SYSTEM_PROMPT]' + default_system_message + '[/SYSTEM_PROMPT]' }}
 {%- endif %}
 
 
-{#- Tools definition #}
-{%- set tools_definition = '' %}
+{#- Tools and model settings definition #}
+{%- set tools_and_settings = '' %}
 {%- set has_tools = false %}
 {%- if tools is defined and tools is not none and tools|length > 0 %}
     {%- set has_tools = true %}
-    {%- set tools_definition = '[AVAILABLE_TOOLS]' + (tools| tojson) + '[/AVAILABLE_TOOLS]' %}
-    {{- tools_definition }}
+    {%- set tools_and_settings = '[AVAILABLE_TOOLS]' + (tools| tojson) + '[/AVAILABLE_TOOLS]' %}
 {%- endif %}
 
+{#- Aggregate consecutive messages with the same role. #}
+{#- System and tool messages are never merged across consecutive messages. #}
+{#- A sentinel message is appended so the last group gets flushed inside the loop #}
+{#- without duplicating the flush logic after the loop. #}
+{%- set ns_agg = namespace(messages=[], current_group=[], current_role=none) %}
+{%- for message in loop_messages + [{'role': '__sentinel__'}] %}
+    {%- if message['role'] != ns_agg.current_role or message['role'] == 'system' or message['role'] == 'tool' %}
+        {%- if ns_agg.current_role == 'tool' %}
+            {%- set ns_agg.messages = ns_agg.messages + ns_agg.current_group %}
+        {%- elif ns_agg.current_role is not none %}
+            {%- set ns_c = namespace(text_parts=[], chunks=[], has_non_text=false, tool_calls=[]) %}
+            {%- for msg in ns_agg.current_group %}
+                {%- if msg['content'] is string %}
+                    {%- if msg['content'] != '' %}
+                        {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}
+                    {%- endif %}
+                {%- elif msg['content'] is not none %}
+                    {%- for block in msg['content'] %}
+                        {%- if block['type'] == 'text' %}
+                            {%- set ns_c.text_parts = ns_c.text_parts + [block['text']] %}
+                        {%- else %}
+                            {%- if ns_c.text_parts | length > 0 %}
+                                {%- set ns_c.chunks = ns_c.chunks + [{'type': 'text', 'text': ns_c.text_parts | join('\n\n')}] %}
+                                {%- set ns_c.text_parts = [] %}
+                            {%- endif %}
+                            {%- set ns_c.chunks = ns_c.chunks + [block] %}
+                            {%- set ns_c.has_non_text = true %}
+                        {%- endif %}
+                    {%- endfor %}
+                {%- endif %}
+                {%- if msg['tool_calls'] is defined and msg['tool_calls'] is not none %}
+                    {%- set ns_c.tool_calls = ns_c.tool_calls + msg['tool_calls'] | list %}
+                {%- endif %}
+            {%- endfor %}
+            {%- if ns_c.has_non_text %}
+                {%- if ns_c.text_parts | length > 0 %}
+                    {%- set ns_c.chunks = ns_c.chunks + [{'type': 'text', 'text': ns_c.text_parts | join('\n\n')}] %}
+                {%- endif %}
+                {%- set merged_content = ns_c.chunks %}
+            {%- else %}
+                {%- set merged_content = ns_c.text_parts | join('\n\n') %}
+            {%- endif %}
+            {%- if ns_c.tool_calls | length > 0 %}
+                {%- set ns_agg.messages = ns_agg.messages + [{'role': ns_agg.current_role, 'content': merged_content, 'tool_calls': ns_c.tool_calls}] %}
+            {%- else %}
+                {%- set ns_agg.messages = ns_agg.messages + [{'role': ns_agg.current_role, 'content': merged_content}] %}
+            {%- endif %}
+        {%- endif %}
+        {%- if message['role'] != '__sentinel__' %}
+            {%- set ns_agg.current_group = [message] %}
+            {%- set ns_agg.current_role = message['role'] %}
+        {%- endif %}
+    {%- else %}
+        {%- set ns_agg.current_group = ns_agg.current_group + [message] %}
+    {%- endif %}
+{%- endfor %}
+{%- set loop_messages = ns_agg.messages %}
+
 {#- Checks for alternating user/assistant messages. #}
-{%- set ns = namespace(index=0) %}
+{%- set ns = namespace(index=0, tools_and_settings_emitted=false) %}
 {%- for message in loop_messages %}
+    {%- if message.role == 'system' %}
+        {%- if ns.index % 2 != 0 %}
+            {%- set ns.index = ns.index + 1 %}
+        {%- endif %}
+    {%- endif %}
     {%- if message.role == 'user' or (message.role == 'assistant' and (message.tool_calls is not defined or message.tool_calls is none or message.tool_calls | length == 0)) %}
         {%- if (message['role'] == 'user') != (ns.index % 2 == 0) %}
-            {{- raise_exception('After the optional system message, conversation roles must alternate user and assistant roles except for tool calls and results.') }}
+            {{- raise_exception('After the optional system message, conversation roles must alternate user and assistant roles except for tool calls, results and system messages.') }}
         {%- endif %}
         {%- set ns.index = ns.index + 1 %}
     {%- endif %}
@@ -51,9 +98,12 @@
 
 {#- Handle conversation messages. #}
 {%- for message in loop_messages %}
-
-    {#- User messages supports text content or text and image chunks. #}
+    {#- User messages supports text, image and image_url content. #}
     {%- if message['role'] == 'user' %}
+        {%- if not ns.tools_and_settings_emitted %}
+            {{- tools_and_settings }}
+            {%- set ns.tools_and_settings_emitted = true %}
+        {%- endif %}
         {%- if message['content'] is string %}
             {{- '[INST]' + message['content'] + '[/INST]' }}
         {%- elif message['content'] | length > 0 %}
@@ -77,13 +127,13 @@
             {{- raise_exception('User message must have a string or a list of chunks in content') }}
         {%- endif %}
 
-    {#- Assistant messages supports text content or text and image chunks. #}
+    {#- Assistant messages supports text content. #}
     {%- elif message['role'] == 'assistant' %}
         {%- if (message['content'] is none or message['content'] == '' or message['content']|length == 0) and (message['tool_calls'] is not defined or message['tool_calls'] is none or message['tool_calls']|length == 0) %}
             {{- raise_exception('Assistant message must have a string or a list of chunks in content or a list of tool calls.') }}
         {%- endif %}
 
-        {%- if message['content'] is string %}
+        {%- if message['content'] is string and message['content'] != '' %}
             {{- message['content'] }}
         {%- elif message['content'] | length > 0 %}
             {%- for block in message['content'] %}
@@ -94,28 +144,45 @@
                 {%- endif %}
             {%- endfor %}
         {%- endif %}
-        
+
         {%- if message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}
             {%- for tool in message['tool_calls'] %}
+                {{- '[TOOL_CALLS]' }}
+                {%- set name = tool['function']['name'] %}
                 {%- set arguments = tool['function']['arguments'] %}
                 {%- if arguments is not string %}
                     {%- set arguments = arguments|tojson|safe %}
                 {%- elif arguments == '' %}
                     {%- set arguments = '{}' %}
                 {%- endif %}
-                {{- '[TOOL_CALLS]' + tool['function']['name'] + '[ARGS]' + arguments }}
+                {{- name + '[ARGS]' + arguments }}
             {%- endfor %}
         {%- endif %}
 
-        {#- End of sequence token for each assistant messages. #}
         {{- '</s>' }}
 
     {#- Tool messages only supports text content. #}
     {%- elif message['role'] == 'tool' %}
         {{- '[TOOL_RESULTS]' + message['content']|string + '[/TOOL_RESULTS]' }}
 
+    {#- System messages. #}
+    {%- elif message['role'] == 'system' %}
+        {{- '[SYSTEM_PROMPT]' -}}
+        {%- if message['content'] is string %}
+            {{- message['content'] -}}
+        {%- else %}
+            {%- for block in message['content'] %}
+                {%- if block['type'] == 'text' %}
+                    {{- block['text'] }}
+                {%- else %}
+                    {{- raise_exception('Only text chunks are supported in system message contents.') }}
+                {%- endif %}
+            {%- endfor %}
+        {%- endif %}
+        {{- '[/SYSTEM_PROMPT]' -}}
+
     {#- Raise exception for unsupported roles. #}
     {%- else %}
-        {{- raise_exception('Only user, assistant and tool roles are supported, got ' + message['role'] + '.') }}
+        {{- raise_exception('Only user, assistant, system and tool roles are supported, got ' + message['role'] + '.') }}
     {%- endif %}
 {%- endfor %}
