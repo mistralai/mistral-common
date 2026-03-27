@@ -1,5 +1,15 @@
 {% if json_schema_str != None -%}
-start: body | %json {{ json_schema_str }}
+{% if json_only -%}
+start: json_grammar
+{% else -%}
+start: body | json_grammar
+{% endif -%}
+
+{% if think_with_json -%}
+json_grammar: think? SAFE_WS? %json {{ json_schema_str }}
+{% else -%}
+json_grammar: SAFE_WS? %json {{ json_schema_str }}
+{% endif -%}
 {% else -%}
 start: body
 {% endif -%}
@@ -18,4 +28,4 @@ content: (/(.|\n)+/)+
 
 think: <THINK> content </THINK>
 
-SAFE_WS: /[ \t\r\n]+/
+SAFE_WS: /[ \t\r\n]{1,8}/

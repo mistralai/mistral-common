@@ -10,6 +10,7 @@ from mistral_common.guidance.grammar_factory import GrammarFactory, convert_tool
 from mistral_common.protocol.instruct.chunk import TextChunk, ThinkChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage
 from mistral_common.protocol.instruct.normalize import get_normalizer
+from mistral_common.protocol.instruct.request import ReasoningEffort
 from mistral_common.protocol.instruct.tool_calls import (
     Function,
     FunctionCall,
@@ -27,8 +28,10 @@ from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerBase,
     InstructTokenizerV11,
     InstructTokenizerV13,
+    InstructTokenizerV15,
 )
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekkenizer
 from tests.test_tekken import get_special_tokens, quick_vocab
 
@@ -80,6 +83,7 @@ _EXTRA_TOKENS = [
 def _build_tekken_mistral_tokenizer(
     version: TokenizerVersion,
     add_think: bool = False,
+    model_settings_builder: ModelSettingsBuilder | None = None,
 ) -> MistralTokenizer:
     r"""Builds a MistralTokenizer wrapping a programmatic Tekkenizer."""
     special_tokens = get_special_tokens(version, add_think=add_think)
@@ -92,6 +96,7 @@ def _build_tekken_mistral_tokenizer(
         vocab_size=len(vocab) + _NUM_SPECIAL_TOKENS,
         num_special_tokens=_NUM_SPECIAL_TOKENS,
         version=version,
+        model_settings_builder=model_settings_builder,
     )
 
     match version:
@@ -99,6 +104,8 @@ def _build_tekken_mistral_tokenizer(
             instruct_tokenizer = InstructTokenizerV11(tekkenizer)
         case TokenizerVersion.v13:
             instruct_tokenizer = InstructTokenizerV13(tekkenizer)
+        case TokenizerVersion.v15:
+            instruct_tokenizer = InstructTokenizerV15(tekkenizer)
         case _:
             raise ValueError(f"Unsupported version for programmatic Tekken build: {version}")
 
@@ -115,6 +122,22 @@ def v11_tekken() -> MistralTokenizer:
 @pytest.fixture(scope="module")
 def v13_tekken() -> MistralTokenizer:
     return _build_tekken_mistral_tokenizer(TokenizerVersion.v13, add_think=True)
+
+
+_V15_MODEL_SETTINGS_BUILDER = ModelSettingsBuilder(
+    reasoning_effort=EnumBuilder[ReasoningEffort](
+        values=list(ReasoningEffort),
+        accepts_none=True,
+        default=None,
+    ),
+)
+
+
+@pytest.fixture(scope="module")
+def v15_tekken() -> MistralTokenizer:
+    return _build_tekken_mistral_tokenizer(
+        TokenizerVersion.v15, add_think=True, model_settings_builder=_V15_MODEL_SETTINGS_BUILDER
+    )
 
 
 _PAYMENT_PARAMS: dict[str, Any] = {
@@ -1122,7 +1145,8 @@ def _find_first_json_schema_rejection(
     Raises:
         ValueError: If all tokens are accepted.
     """
-    grammar = factory.get_lark_for_json_schema(json_schema=json_schema)
+    template = factory.select_jinja_template(reasoning=False)
+    grammar = factory.get_lark_for_json_schema(template=template, json_schema=json_schema)
     matcher = factory.get_matcher(grammar)
     for i, token in enumerate(tokens):
         if not matcher.consume_token(token):
@@ -1206,6 +1230,174 @@ def _generate_json_schema(mistral_tokenizer: MistralTokenizer, factory: GrammarF
     return cases
 
 
+def _generate_json_schema_reasoning(mistral_tokenizer: MistralTokenizer, factory: GrammarFactory) -> list[TestCase]:
+    instruct_tokenizer = mistral_tokenizer.instruct_tokenizer
+    tokenizer = instruct_tokenizer.tokenizer
+    assert isinstance(instruct_tokenizer, InstructTokenizerBase)
+
+    cases: list[TestCase] = []
+
+    # Valid JSON should be accepted even under reasoning templates with json_only
+    items: list[tuple[str, str, int | None, dict[str, Any]]] = [
+        (
+            "json_schema_reasoning_valid",
+            '{"name": "John", "age": 30}',
+            None,
+            SchemaProvider.basic_person(),
+        ),
+        (
+            "json_schema_reasoning_whitespace_valid",
+            '\n {"name": "John", "age": 30}',
+            None,
+            {"type": "object"},
+        ),
+        (
+            "json_schema_reasoning_invalid_bracket",
+            '"name": "John", "age": 30}',
+            0,
+            {"type": "object"},
+        ),
+    ]
+    for case_name, text, should_fail_on, json_schema in items:
+        tokens = _encode_content(instruct_tokenizer, text)
+        cases.append(
+            TestCase(
+                tokenizer=tokenizer,
+                tokens=tokens,
+                should_fail_on=should_fail_on,
+                case_name=case_name,
+                mode="auto",
+                json_schema=json_schema,
+                reasoning=True,
+            )
+        )
+
+    return cases
+
+
+def _generate_json_only_negative(mistral_tokenizer: MistralTokenizer, factory: GrammarFactory) -> list[TestCase]:
+    instruct_tokenizer = mistral_tokenizer.instruct_tokenizer
+    tokenizer = instruct_tokenizer.tokenizer
+    assert isinstance(instruct_tokenizer, InstructTokenizerBase)
+
+    cases: list[TestCase] = []
+
+    # Plain text should be rejected by json_only grammar
+    text_tokens = _encode_content(instruct_tokenizer, "Hello world!")
+    cases.append(
+        TestCase(
+            tokenizer=tokenizer,
+            tokens=text_tokens,
+            should_fail_on=0,
+            case_name="json_only_rejects_text",
+            mode="auto",
+            json_schema={"type": "object"},
+            reasoning=False,
+        )
+    )
+
+    # Tool calls should be rejected by json_only grammar
+    tool_call_tokens = _encode_content(
+        instruct_tokenizer,
+        [ToolCall(function=FunctionCall(name="hello", arguments='{"arg1": "val1"}'))],
+    )
+    cases.append(
+        TestCase(
+            tokenizer=tokenizer,
+            tokens=tool_call_tokens,
+            should_fail_on=0,
+            case_name="json_only_rejects_tool_call",
+            mode="auto",
+            json_schema={"type": "object"},
+            reasoning=False,
+        )
+    )
+
+    # Plain text should also be rejected with reasoning=True
+    cases.append(
+        TestCase(
+            tokenizer=tokenizer,
+            tokens=text_tokens,
+            should_fail_on=0,
+            case_name="json_only_reasoning_rejects_text",
+            mode="auto",
+            json_schema={"type": "object"},
+            reasoning=True,
+        )
+    )
+
+    return cases
+
+
+def _generate_json_schema_think_with_json(
+    mistral_tokenizer: MistralTokenizer, factory: GrammarFactory
+) -> list[TestCase]:
+    instruct_tokenizer = mistral_tokenizer.instruct_tokenizer
+    tokenizer = instruct_tokenizer.tokenizer
+    assert isinstance(instruct_tokenizer, InstructTokenizerBase)
+    assert isinstance(instruct_tokenizer, InstructTokenizerV13)
+
+    cases: list[TestCase] = []
+
+    json_schema = SchemaProvider.basic_person()
+    valid_json = '{"name": "John", "age": 30}'
+
+    def _think_tokens(text: str) -> list[int]:
+        return instruct_tokenizer.encode_think(ThinkChunk(thinking=text))
+
+    # Think + valid JSON should be accepted with json_only + reasoning
+    think_json_tokens = [
+        *_think_tokens("Let me think about this..."),
+        *tokenizer.encode(valid_json, bos=False, eos=False),
+        tokenizer.eos_id,
+    ]
+    cases.append(
+        TestCase(
+            tokenizer=tokenizer,
+            tokens=think_json_tokens,
+            should_fail_on=None,
+            case_name="think_with_json_valid",
+            mode="auto",
+            json_schema=json_schema,
+            reasoning=True,
+        )
+    )
+
+    json_only_tokens = _encode_content(instruct_tokenizer, valid_json)
+    cases.append(
+        TestCase(
+            tokenizer=tokenizer,
+            tokens=json_only_tokens,
+            should_fail_on=None,
+            case_name="think_with_json_no_think_valid",
+            mode="auto",
+            json_schema=json_schema,
+            reasoning=True,
+        )
+    )
+
+    think_text_tokens = [
+        *_think_tokens("Let me think..."),
+        *tokenizer.encode("Hello world!", bos=False, eos=False),
+        tokenizer.eos_id,
+    ]
+
+    fail_idx = len(_think_tokens("Let me think..."))
+    cases.append(
+        TestCase(
+            tokenizer=tokenizer,
+            tokens=think_text_tokens,
+            should_fail_on=fail_idx,
+            case_name="think_with_json_rejects_text_after_think",
+            mode="auto",
+            json_schema=json_schema,
+            reasoning=True,
+        )
+    )
+
+    return cases
+
+
 def _generate_cases(mistral_tokenizer: MistralTokenizer, factory: GrammarFactory) -> list[TestCase]:
     instruct_tokenizer = mistral_tokenizer.instruct_tokenizer
     assert isinstance(instruct_tokenizer, InstructTokenizerBase)
@@ -1214,6 +1406,8 @@ def _generate_cases(mistral_tokenizer: MistralTokenizer, factory: GrammarFactory
     cases = _generate_general_cases(mistral_tokenizer)
     cases += _generate_emoji_cases(mistral_tokenizer)
     cases += _generate_json_schema(mistral_tokenizer, factory)
+    cases += _generate_json_schema_reasoning(mistral_tokenizer, factory)
+    cases += _generate_json_only_negative(mistral_tokenizer, factory)
     cases += _generate_cases_tool_calls(mistral_tokenizer)
     cases += _generate_single_tool_call(mistral_tokenizer)
     cases += _generate_strict_tool_calls(mistral_tokenizer, factory)
@@ -1224,6 +1418,10 @@ def _generate_cases(mistral_tokenizer: MistralTokenizer, factory: GrammarFactory
         cases += _generate_cases_thinking(mistral_tokenizer)
     else:
         cases += _generate_cases_thinking_v11(mistral_tokenizer)
+
+    # v15+ supports think_with_json (thinking before JSON in json_only mode)
+    if tokenizer_version.supports_model_settings:
+        cases += _generate_json_schema_think_with_json(mistral_tokenizer, factory)
 
     return cases
 
@@ -1241,6 +1439,9 @@ def _get_grammar_factory(mistral_tokenizer: MistralTokenizer) -> GrammarFactory:
 _ALL_TOKENIZERS: list[MistralTokenizer] = [
     _build_tekken_mistral_tokenizer(TokenizerVersion.v11),
     _build_tekken_mistral_tokenizer(TokenizerVersion.v13, add_think=True),
+    _build_tekken_mistral_tokenizer(
+        TokenizerVersion.v15, add_think=True, model_settings_builder=_V15_MODEL_SETTINGS_BUILDER
+    ),
 ]
 
 _ALL_CASES: list[TestCase] = []
@@ -1261,7 +1462,8 @@ class TestGrammarFactory:
         if test_case.raw_lark is not None:
             grammar = test_case.raw_lark
         elif test_case.json_schema is not None and test_case.tools is None:
-            grammar = factory.get_lark_for_json_schema(json_schema=test_case.json_schema)
+            template = factory.select_jinja_template(reasoning=test_case.reasoning)
+            grammar = factory.get_lark_for_json_schema(template=template, json_schema=test_case.json_schema)
         else:
             template = factory.select_jinja_template(reasoning=test_case.reasoning)
             resolved_mode: ToolChoice
@@ -1318,6 +1520,12 @@ class TestGrammarFactory:
             (MistralTokenizer.v3(is_tekken=True), False),
             (_build_tekken_mistral_tokenizer(TokenizerVersion.v11), True),
             (_build_tekken_mistral_tokenizer(TokenizerVersion.v13, add_think=True), True),
+            (
+                _build_tekken_mistral_tokenizer(
+                    TokenizerVersion.v15, add_think=True, model_settings_builder=_V15_MODEL_SETTINGS_BUILDER
+                ),
+                True,
+            ),
         ],
     )
     def test_grammar_factory_is_supported(self, tokenizer: MistralTokenizer, expected: bool) -> None:

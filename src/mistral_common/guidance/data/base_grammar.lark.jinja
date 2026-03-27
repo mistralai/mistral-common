@@ -1,5 +1,9 @@
 {% if json_schema_str != None -%}
+{% if json_only -%}
+start: SAFE_WS? %json {{ json_schema_str }}
+{% else -%}
 start: body | SAFE_WS? %json {{ json_schema_str }}
+{% endif -%}
 {% else -%}
 start: body
 {% endif -%}
@@ -18,4 +22,4 @@ fcalls: {{ fcall }}
 
 content: (/(.|\n)+/)+
 
-SAFE_WS: /[ \t\r\n]+/
+SAFE_WS: /[ \t\r\n]{1,8}/

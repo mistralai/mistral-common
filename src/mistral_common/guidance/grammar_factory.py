@@ -42,6 +42,8 @@ def _cached_get_lark_from_jinja(
     fcall: str,
     json_schema_str: str | None,
     parallel_tool_calls: bool,
+    json_only: bool = False,
+    think_with_json: bool = False,
 ) -> str:
     jinja_template = Template(template)
     lark_grammar = jinja_template.render(
@@ -49,6 +51,8 @@ def _cached_get_lark_from_jinja(
         fcall=fcall,
         json_schema_str=json_schema_str,
         parallel_tool_calls=parallel_tool_calls,
+        json_only=json_only,
+        think_with_json=think_with_json,
     )
     return lark_grammar
 
@@ -179,6 +183,7 @@ class GrammarFactory:
         tools: list[Tool] | None,
         json_schema: dict[str, Any] | None,
         parallel_tool_calls: bool,
+        json_only: bool = False,
     ) -> str:
         r"""Renders a lark grammar from a jinja template.
 
@@ -188,6 +193,7 @@ class GrammarFactory:
             tools: The list of tools available.
             json_schema: JSON schema to additionally allow, unioned with the grammar.
             parallel_tool_calls: Whether parallel tool calls are allowed.
+            json_only: If True, generates only JSON schema grammar without text/tool call alternatives.
 
         Returns:
             The rendered lark grammar string.
@@ -196,17 +202,35 @@ class GrammarFactory:
         json_schema_str = json.dumps(json_schema, ensure_ascii=False) if json_schema else None
         # NamedToolChoice forces a specific tool, which maps to "required" grammar
         template_mode = ToolChoiceEnum.required if isinstance(mode, NamedToolChoice) else ToolChoiceEnum(mode)
+        think_with_json = self._tokenizer.version.supports_model_settings
         return _cached_get_lark_from_jinja(
             template=template,
             mode=template_mode.value,
             fcall=fcall,
             json_schema_str=json_schema_str,
             parallel_tool_calls=parallel_tool_calls,
+            json_only=json_only,
+            think_with_json=think_with_json,
         )
 
-    def get_lark_for_json_schema(self, json_schema: dict[str, Any]) -> str:
-        r"""Returns a lark grammar that only accepts JSON objects matching the given schema."""
-        return f"start: SAFE_WS? %json {json.dumps(json_schema, ensure_ascii=False)} \nSAFE_WS: /[ \t\r\n]+/"
+    def get_lark_for_json_schema(self, template: str, json_schema: dict[str, Any]) -> str:
+        r"""Returns a lark grammar that only accepts JSON objects matching the given schema.
+
+        Args:
+            template: Jinja template to render as a string.
+            json_schema: The JSON schema to validate against.
+
+        Returns:
+            The rendered lark grammar string that only matches the given JSON schema.
+        """
+        return self.get_lark_from_jinja(
+            template=template,
+            mode=ToolChoiceEnum.none,
+            tools=None,
+            json_schema=json_schema,
+            parallel_tool_calls=True,
+            json_only=True,
+        )
 
     def get_matcher(self, lark: str) -> "llg.LLMatcher":
         r"""Creates an LLMatcher from a lark grammar string.

@@ -1,5 +1,9 @@
 {% if json_schema_str != None -%}
-start: body | %json {{ json_schema_str }}
+{% if json_only -%}
+start: SAFE_WS? %json {{ json_schema_str }}
+{% else -%}
+start: body | SAFE_WS? %json {{ json_schema_str }}
+{% endif -%}
 {% else -%}
 start: body
 {% endif -%}
@@ -22,4 +26,4 @@ content: NO_THINK
 
 think: SAFE_WS? /<think>/ text_first_optional end_think
 
-SAFE_WS: /[ \t\r\n]+/
+SAFE_WS: /[ \t\r\n]{1,8}/
