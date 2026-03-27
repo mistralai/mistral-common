@@ -1,19 +1,23 @@
 import builtins
 from functools import _lru_cache_wrapper
 from types import ModuleType
-from typing import Any, Callable
+from typing import Any
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
 from mistral_common.imports import (
     assert_hf_hub_installed,
+    assert_jinja2_installed,
+    assert_llguidance_installed,
     assert_opencv_installed,
     assert_package_installed,
     assert_sentencepiece_installed,
     assert_soundfile_installed,
     assert_soxr_installed,
     is_hf_hub_installed,
+    is_jinja2_installed,
+    is_llguidance_installed,
     is_opencv_installed,
     is_package_installed,
     is_sentencepiece_installed,
@@ -23,6 +27,8 @@ from mistral_common.imports import (
 
 _IS_INSTALLED_TO_TESTS = [
     is_hf_hub_installed,
+    is_jinja2_installed,
+    is_llguidance_installed,
     is_sentencepiece_installed,
     is_soundfile_installed,
     is_soxr_installed,
@@ -33,6 +39,16 @@ _ASSERT_TO_TESTS = {
         is_hf_hub_installed,
         assert_hf_hub_installed,
         "`huggingface_hub` is not installed. Please install it with `pip install mistral-common[hf-hub]`",
+    ),
+    (
+        is_jinja2_installed,
+        assert_jinja2_installed,
+        "`jinja2` is not installed. Please install it with `pip install mistral-common[guidance]`",
+    ),
+    (
+        is_llguidance_installed,
+        assert_llguidance_installed,
+        "`llguidance` is not installed. Please install it with `pip install mistral-common[guidance]`",
     ),
     (
         is_opencv_installed,
@@ -117,16 +133,19 @@ def test_is_installed(mock_is_package_installed: MagicMock, is_installed_fn: _lr
 def test_assert_installed(
     mock_is_package_installed: MagicMock,
     is_installed_fn: _lru_cache_wrapper,
-    assert_fn: Callable[[], None],
+    assert_fn: _lru_cache_wrapper,
     error_message: str,
 ) -> None:
     is_installed_fn.cache_clear()
+    assert_fn.cache_clear()
     mock_is_package_installed.return_value = True
     assert_fn()
     is_installed_fn.cache_clear()
+    assert_fn.cache_clear()
 
     mock_is_package_installed.return_value = False
     with pytest.raises(ImportError) as exc_info:
         assert_fn()
     assert str(exc_info.value) == error_message
     is_installed_fn.cache_clear()
+    assert_fn.cache_clear()
