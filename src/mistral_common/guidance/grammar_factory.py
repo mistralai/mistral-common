@@ -42,8 +42,8 @@ def _cached_get_lark_from_jinja(
     fcall: str,
     json_schema_str: str | None,
     parallel_tool_calls: bool,
-    json_only: bool = False,
-    think_with_json: bool = False,
+    json_only: bool,
+    think_with_json: bool,
 ) -> str:
     jinja_template = Template(template)
     lark_grammar = jinja_template.render(
