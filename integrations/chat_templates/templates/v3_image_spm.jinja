@@ -226,7 +226,7 @@
             {{- raise_exception('Assistant message must have a string or a list of chunks in content or a list of tool calls.') }}
         {%- endif %}
 
-        {{- '</s>' }}
+        {{- eos_token }}
         {%- set ns.prev_tool=false %}
 
     {#- Tool messages only supports text content. #}

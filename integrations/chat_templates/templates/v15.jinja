@@ -169,7 +169,7 @@
             {%- endfor %}
         {%- endif %}
 
-        {{- '</s>' }}
+        {{- eos_token }}
 
     {#- Tool messages only supports text content. #}
     {%- elif message['role'] == 'tool' %}

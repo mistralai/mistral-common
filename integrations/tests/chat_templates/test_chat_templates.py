@@ -75,7 +75,7 @@ _IMAGE = _create_dummy_image()
 
 
 @pytest.fixture(autouse=True, scope="module")
-def mock_download_image():
+def mock_download_image() -> None:
     """Mock the download_image function to return a dummy image for all tests."""
     with patch("mistral_common.image.download_image") as mock_download:
         mock_download.return_value = _IMAGE
@@ -165,7 +165,8 @@ def _get_audio_encoder() -> AudioEncoder:
         ),
     )
     audio_encoder = AudioEncoder(
-        audio_config=audio_config, special_ids=SpecialAudioIDs(audio=24, begin_audio=25, streaming_pad=26)
+        audio_config=audio_config,
+        special_ids=SpecialAudioIDs(audio=24, begin_audio=25, streaming_pad=26, text_to_audio=27, audio_to_text=28),
     )
     return audio_encoder
 
