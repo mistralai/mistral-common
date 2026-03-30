@@ -413,7 +413,7 @@ def _generate_cases_tool_calls(mistral_tokenizer: MistralTokenizer) -> list[Test
         (
             "single_fcall",
             [ToolCall(function=FunctionCall(name="hello", arguments='{"arg1": "val1", "arg2": "val2"}'))],
-            {"auto": None, "any": None, "none": 0, "required": None},
+            {"auto": None, "none": 0},
         ),
         (
             "multi_fcall",
@@ -422,7 +422,7 @@ def _generate_cases_tool_calls(mistral_tokenizer: MistralTokenizer) -> list[Test
                 ToolCall(function=FunctionCall(name="hello_1", arguments='{"arg1": "val1", "arg2": "val2"}')),
                 ToolCall(function=FunctionCall(name="hello_2_3", arguments='{"arg1": "val1", "arg2": "val2"}')),
             ],
-            {"auto": None, "any": None, "none": 0, "required": None},
+            {"auto": None, "none": 0},
         ),
         (
             "emoji_fcall",
@@ -431,7 +431,7 @@ def _generate_cases_tool_calls(mistral_tokenizer: MistralTokenizer) -> list[Test
                     function=FunctionCall(name="he🧦🧦o", arguments='{"arg1": "🐱", "arg2": "🐶", "arg🧦": "🧦"}'),
                 )
             ],
-            {"auto": None, "any": None, "none": 0, "required": None},
+            {"auto": None, "none": 0},
         ),
         (
             "pretty_printed_args",
@@ -443,12 +443,12 @@ def _generate_cases_tool_calls(mistral_tokenizer: MistralTokenizer) -> list[Test
                     ),
                 )
             ],
-            {"auto": None, "any": None, "none": 0, "required": None},
+            {"auto": None, "none": 0},
         ),
         (
             "japanese_fcall",
             [ToolCall(function=FunctionCall(name="こんにちは", arguments='{"こん": "にちは"}'))],
-            {"auto": None, "any": None, "none": 0, "required": None},
+            {"auto": None, "none": 0},
         ),
     ]
     for case_name, content, valid_for in items:
@@ -465,9 +465,9 @@ def _generate_cases_tool_calls(mistral_tokenizer: MistralTokenizer) -> list[Test
             )
 
         if tokenizer.version < TokenizerVersion.v13:
-            reasoning_valid_for: dict[Mode, int | None] = {"auto": 0, "any": 0, "none": 0, "required": 0}
+            reasoning_valid_for: dict[Mode, int | None] = {"auto": 0, "none": 0}
         else:
-            reasoning_valid_for = {"auto": None, "any": None, "none": 0, "required": None}
+            reasoning_valid_for = {"auto": None, "none": 0}
         for mode, should_fail_on in reasoning_valid_for.items():
             cases.append(
                 TestCase(
@@ -491,7 +491,7 @@ def _generate_cases_tool_calls(mistral_tokenizer: MistralTokenizer) -> list[Test
                 *tokenizer.encode('{"a', bos=False, eos=False),
                 tokenizer.eos_id,
             ],
-            {"auto": -1, "any": -1, "none": 0, "required": -1},
+            {"auto": -1, "none": 0},
         ),
         (
             "fcall_missing_args",
@@ -501,7 +501,7 @@ def _generate_cases_tool_calls(mistral_tokenizer: MistralTokenizer) -> list[Test
                 tokenizer.get_special_token("[ARGS]"),
                 tokenizer.get_special_token("[TOOL_CALLS]"),
             ],
-            {"auto": -1, "any": -1, "none": 0, "required": -1},
+            {"auto": -1, "none": 0},
         ),
     ]
 
@@ -532,7 +532,7 @@ def _generate_cases_text_and_tool_calls(mistral_tokenizer: MistralTokenizer) -> 
     tokens = _encode_content(instruct_tokenizer, content)
     text_len = len(tokenizer.encode("Hello!", bos=False, eos=False))
 
-    valid_for: dict[Mode, int | None] = {"auto": None, "any": 0, "none": text_len, "required": None}
+    valid_for: dict[Mode, int | None] = {"auto": None, "none": text_len}
 
     for mode, should_fail_on in valid_for.items():
         cases.append(
@@ -546,9 +546,9 @@ def _generate_cases_text_and_tool_calls(mistral_tokenizer: MistralTokenizer) -> 
         )
 
     if tokenizer.version < TokenizerVersion.v13:
-        reasoning_valid_for: dict[Mode, int | None] = {"auto": 0, "any": 0, "none": 0, "required": 0}
+        reasoning_valid_for: dict[Mode, int | None] = {"auto": 0, "none": 0}
     else:
-        reasoning_valid_for = {"auto": None, "any": None, "none": text_len, "required": None}
+        reasoning_valid_for = {"auto": None, "none": text_len}
     for mode, should_fail_on in reasoning_valid_for.items():
         cases.append(
             TestCase(
@@ -571,31 +571,29 @@ def _generate_cases_thinking_v11(mistral_tokenizer: MistralTokenizer) -> list[Te
     assert isinstance(instruct_tokenizer, InstructTokenizerBase)
 
     cases: list[TestCase] = []
+    # Note: "any"/"required" modes require tools, so only "auto"/"none" are used here (tools=None).
     thinks: list[tuple[str, list[Any], dict[Mode, int | None]]] = [
         (
             "force_think",
             [TextChunk(text="Hello world!")],
-            {"auto": 0, "any": 0, "none": 0, "required": 0},
+            {"auto": 0, "none": 0},
         ),
         (
             "think_without_response",
             [TextChunk(text="<think>Hello!</think>")],
-            {"auto": -1, "any": -1, "none": -1, "required": -1},
+            {"auto": -1, "none": -1},
         ),
         (
             "unclosed_think",
             [TextChunk(text="<think>Hello!")],
-            {"auto": -1, "any": -1, "none": -1, "required": -1},
+            {"auto": -1, "none": -1},
         ),
         (
             "plain_think_with_response",
             [TextChunk(text="<think>Hello!</think>World!")],
             {
                 "auto": None,
-                # any/required: think fcalls — after think, "World!" doesn't match fcalls
-                "any": len(tokenizer.encode("<think>Hello!</think>", bos=False, eos=False)),
                 "none": None,
-                "required": len(tokenizer.encode("<think>Hello!</think>", bos=False, eos=False)),
             },
         ),
         (
@@ -606,9 +604,7 @@ def _generate_cases_thinking_v11(mistral_tokenizer: MistralTokenizer) -> list[Te
             ],
             {
                 "auto": None,
-                "any": None,
                 "none": len(tokenizer.encode("<think>Hello!</think>", bos=False, eos=False)),
-                "required": None,
             },
         ),
         (
@@ -620,10 +616,7 @@ def _generate_cases_thinking_v11(mistral_tokenizer: MistralTokenizer) -> list[Te
             {
                 # auto: think (content | fcalls) — picks content for "Ho!", then tool call rejected
                 "auto": len(tokenizer.encode("<think>Hello!</think>Ho!", bos=False, eos=False)),
-                # any/required: think fcalls — after think, "Ho!" doesn't match fcalls
-                "any": len(tokenizer.encode("<think>Hello!</think>", bos=False, eos=False)),
                 "none": len(tokenizer.encode("<think>Hello!</think>Ho!", bos=False, eos=False)),
-                "required": len(tokenizer.encode("<think>Hello!</think>", bos=False, eos=False)),
             },
         ),
     ]
@@ -656,21 +649,22 @@ def _generate_cases_thinking(mistral_tokenizer: MistralTokenizer) -> list[TestCa
         assert isinstance(instruct_tokenizer, InstructTokenizerV13)
         return instruct_tokenizer.encode_think(ThinkChunk(thinking=text))
 
+    # Note: "any"/"required" modes require tools, so only "auto"/"none" are used here (tools=None).
     thinks: list[tuple[str, list[Any], dict[Mode, int | None]]] = [
         (
             "plain_text",
             [TextChunk(text="Hello world!")],
-            {"auto": None, "any": -1, "none": None, "required": -1},
+            {"auto": None, "none": None},
         ),
         (
             "plain_think",
             [ThinkChunk(thinking="Hello!")],
-            {"auto": -1, "any": -1, "none": -1, "required": -1},
+            {"auto": -1, "none": -1},
         ),
         (
             "plain_think_with_response",
             [ThinkChunk(thinking="Hello!"), TextChunk(text="World!")],
-            {"auto": None, "any": -1, "none": None, "required": -1},
+            {"auto": None, "none": None},
         ),
         (
             "think_with_tool_call",
@@ -680,9 +674,7 @@ def _generate_cases_thinking(mistral_tokenizer: MistralTokenizer) -> list[TestCa
             ],
             {
                 "auto": None,
-                "any": None,
                 "none": len(_think_tokens("Hello!")),
-                "required": None,
             },
         ),
         (
@@ -694,10 +686,7 @@ def _generate_cases_thinking(mistral_tokenizer: MistralTokenizer) -> list[TestCa
             ],
             {
                 "auto": None,
-                "any": None,
                 "none": len(_think_tokens("Hello!")) + len(tokenizer.encode("World!", bos=False, eos=False)),
-                # required: think? content? fcalls — think+content+fcalls all present, passes
-                "required": None,
             },
         ),
     ]
@@ -725,17 +714,17 @@ def _generate_single_tool_call(mistral_tokenizer: MistralTokenizer) -> list[Test
     cases: list[TestCase] = []
     single_call = [ToolCall(function=FunctionCall(name="hello", arguments='{"arg1": "val1", "arg2": "val2"}'))]
     single_tokens = _encode_content(instruct_tokenizer, single_call)
-    for mode in _AUTO_ANY_REQUIRED:
-        cases.append(
-            TestCase(
-                tokenizer=tokenizer,
-                tokens=single_tokens,
-                should_fail_on=None,
-                case_name="single_tool_call",
-                mode=mode,
-                parallel_tool_calls=False,
-            )
+    # Only "auto" can be used without tools; "any"/"required" require tools.
+    cases.append(
+        TestCase(
+            tokenizer=tokenizer,
+            tokens=single_tokens,
+            should_fail_on=None,
+            case_name="single_tool_call",
+            mode="auto",
+            parallel_tool_calls=False,
         )
+    )
     cases.append(
         TestCase(
             tokenizer=tokenizer,
@@ -748,9 +737,9 @@ def _generate_single_tool_call(mistral_tokenizer: MistralTokenizer) -> list[Test
     )
 
     if tokenizer.version < TokenizerVersion.v13:
-        reasoning_valid_for: dict[Mode, int | None] = {"auto": 0, "any": 0, "none": 0, "required": 0}
+        reasoning_valid_for: dict[Mode, int | None] = {"auto": 0, "none": 0}
     else:
-        reasoning_valid_for = {"auto": None, "any": None, "none": 0, "required": None}
+        reasoning_valid_for = {"auto": None, "none": 0}
     for mode, should_fail_on in reasoning_valid_for.items():
         cases.append(
             TestCase(
@@ -772,17 +761,17 @@ def _generate_single_tool_call(mistral_tokenizer: MistralTokenizer) -> list[Test
     single_tokens_with_eos = _encode_content(instruct_tokenizer, [multi_calls[0]])
     fail_idx = len(single_tokens_with_eos) - 1
 
-    for mode in _AUTO_ANY_REQUIRED:
-        cases.append(
-            TestCase(
-                tokenizer=tokenizer,
-                tokens=multi_tokens,
-                should_fail_on=fail_idx,
-                case_name="multi_tool_call_disallowed",
-                mode=mode,
-                parallel_tool_calls=False,
-            )
+    # Only "auto" can be used without tools; "any"/"required" require tools.
+    cases.append(
+        TestCase(
+            tokenizer=tokenizer,
+            tokens=multi_tokens,
+            should_fail_on=fail_idx,
+            case_name="multi_tool_call_disallowed",
+            mode="auto",
+            parallel_tool_calls=False,
         )
+    )
 
     return cases
 
@@ -1518,6 +1507,52 @@ class TestGrammarFactory:
         with pytest.raises(ValueError, match="Invalid grammar"):
             factory.get_matcher("start: INVALID_RULE_REF_THAT_DOES_NOT_EXIST")
 
+    @pytest.mark.parametrize("mode", [ToolChoiceEnum.any, ToolChoiceEnum.required])
+    def test_get_lark_rejects_any_required_without_tools(
+        self, v11_tekken: MistralTokenizer, mode: ToolChoiceEnum
+    ) -> None:
+        factory = GrammarFactory(v11_tekken)
+        template = factory.select_jinja_template(reasoning=False)
+        with pytest.raises(ValueError, match="please ensure to pass tools"):
+            factory.get_lark_from_jinja(
+                template=template, mode=mode, tools=None, json_schema=None, parallel_tool_calls=True
+            )
+
+    def test_get_lark_rejects_named_tool_not_in_tools(self, v11_tekken: MistralTokenizer) -> None:
+        factory = GrammarFactory(v11_tekken)
+        template = factory.select_jinja_template(reasoning=False)
+        named = NamedToolChoice(function=FunctionName(name="non_existent"))
+        tools = [ToolProvider.retrieve_payment_date(strict=True)]
+        with pytest.raises(ValueError, match="no tools with this name"):
+            factory.get_lark_from_jinja(
+                template=template, mode=named, tools=tools, json_schema=None, parallel_tool_calls=True
+            )
+
+    @pytest.mark.parametrize("mode", [ToolChoiceEnum.any, ToolChoiceEnum.required])
+    @pytest.mark.parametrize("tools", [None, []])
+    def test_any_required_without_tools_raises(
+        self, v11_tekken: MistralTokenizer, mode: ToolChoiceEnum, tools: list[Tool] | None
+    ) -> None:
+        factory = GrammarFactory(v11_tekken)
+        template = factory.select_jinja_template(reasoning=False)
+        with pytest.raises(ValueError, match="please ensure to pass tools"):
+            factory.get_lark_from_jinja(
+                template=template, tools=tools, mode=mode, json_schema=None, parallel_tool_calls=True
+            )
+
+    @pytest.mark.parametrize("tools", [None, [], [Tool(function=Function(name="existing_tool", parameters={}))]])
+    def test_named_wrong_tools_raises(self, v11_tekken: MistralTokenizer, tools: list[Tool] | None) -> None:
+        factory = GrammarFactory(v11_tekken)
+        template = factory.select_jinja_template(reasoning=False)
+        with pytest.raises(ValueError, match="no tools with this name"):
+            factory.get_lark_from_jinja(
+                template=template,
+                tools=tools,
+                mode=NamedToolChoice(function=FunctionName(name="non_existent_tool")),
+                json_schema=None,
+                parallel_tool_calls=True,
+            )
+
 
 def _stub_get_special_token_id(token_name: str) -> str:
     r"""Returns a stub lark grammar token for testing."""
@@ -1632,14 +1667,3 @@ class TestConvertToolCalls:
         assert '"additionalProperties": false' in result
         assert '"properties": {}' in result
         assert not result.endswith(")+")
-
-    def test_named_tool_not_in_strict_tools_raises(self) -> None:
-        named = NamedToolChoice(function=FunctionName(name="non_existent_tool"))
-        tools = [ToolProvider.retrieve_payment_date(strict=True)]
-        with pytest.raises(ValueError):
-            _convert_tool_calls(
-                tools=tools,
-                mode=named,
-                parallel_tool_calls=False,
-                get_special_token_id=_stub_get_special_token_id,
-            )

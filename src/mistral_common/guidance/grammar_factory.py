@@ -25,6 +25,15 @@ if is_jinja2_installed():
 JINJA_DIR = Path(__file__).parent / "data"
 
 
+def _validate_mode_and_tools(mode: ToolChoice, tools: list[Tool] | None):
+    if isinstance(mode, NamedToolChoice) and all(mode.function.name != tool.function.name for tool in (tools or [])):
+        raise ValueError(
+            f"Tool choice requires the {mode.function.name} tool but no tools with this name has been passed."
+        )
+    elif mode in [ToolChoiceEnum.any, ToolChoiceEnum.required] and not tools:
+        raise ValueError(f"When {mode=} please ensure to pass tools, got {tools=}.")
+
+
 @lru_cache()
 def _cached_get_jinja_template(tokenizer_version: TokenizerVersion, reasoning: bool) -> str:
     if tokenizer_version < TokenizerVersion.v13:
@@ -96,11 +105,6 @@ def _convert_tool_calls(
     """
     if mode == "none":
         return ""
-
-    if isinstance(mode, NamedToolChoice) and all(mode.function.name != tool.function.name for tool in (tools or [])):
-        raise ValueError(
-            f"Tool choice requires the {mode.function.name} tool but no tools with this name has been passed."
-        )
 
     tool_calls_token = get_special_token_id("[TOOL_CALLS]")
     args_token = get_special_token_id("[ARGS]")
@@ -219,10 +223,12 @@ class GrammarFactory:
         Returns:
             The rendered lark grammar string.
         """
+        # Verifies that the NamedToolChoice has a valid tool and "any", "required" has tools.
+        _validate_mode_and_tools(mode=mode, tools=tools)
+
         fcall = _convert_tool_calls(tools, mode, parallel_tool_calls, self._special_token_lark)
         json_schema_str = json.dumps(json_schema, ensure_ascii=False) if json_schema else None
         # NamedToolChoice forces a specific tool, which maps to "required" grammar.
-        # Note: _convert_tool_calls verifies that the NamedToolChoice has a valid tool.
         template_mode = ToolChoiceEnum.required if isinstance(mode, NamedToolChoice) else ToolChoiceEnum(mode)
         think_with_json = self._tokenizer.version.supports_model_settings
         return _cached_get_lark_from_jinja(
