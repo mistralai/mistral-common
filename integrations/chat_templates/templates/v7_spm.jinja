@@ -6,8 +6,6 @@
 
 
 {#- Handle system prompt if it exists. #}
-{#- System messages are handled in the message loop. #}
-{#- Only emit default system prompt if no system message is at position 0. #}
 {%- set loop_messages = messages %}
 {%- if messages[0]['role'] != 'system' and default_system_message != '' %}
     {{- '[SYSTEM_PROMPT]' + default_system_message + '[/SYSTEM_PROMPT]' }}
@@ -23,9 +21,7 @@
 {%- endif %}
 
 {#- Aggregate consecutive messages with the same role. #}
-{#- System and tool messages are never merged across consecutive messages. #}
-{#- A sentinel message is appended so the last group gets flushed inside the loop #}
-{#- without duplicating the flush logic after the loop. #}
+{#- A sentinel message is appended so the last group gets flushed inside the loop. #}
 {%- set ns_agg = namespace(messages=[], current_group=[], current_role=none) %}
 {%- for message in loop_messages + [{'role': '__sentinel__'}] %}
     {%- if message['role'] != ns_agg.current_role or message['role'] == 'system' or message['role'] == 'tool' %}
@@ -78,18 +74,37 @@
 {%- endfor %}
 {%- set loop_messages = ns_agg.messages %}
 
-{#- Checks for alternating user/assistant messages. #}
-{%- set ns = namespace(index=0, max_idx_user=-1, add_space=false) %}
+{#- Validates message ordering. #}
+{%- set ns = namespace(max_idx_user=-1, add_space=false) %}
+{%- if loop_messages | length > 0 and loop_messages[0]['role'] != 'user' and loop_messages[0]['role'] != 'system' %}
+    {{- raise_exception('Conversation must start with a user or system message, got ' + loop_messages[0]['role'] + '.') }}
+{%- endif %}
+{%- set ns_order = namespace(previous_role=none) %}
 {%- for message in loop_messages %}
-    {%- if message.role == 'user' or (message.role == 'assistant' and (message.tool_calls is not defined or message.tool_calls is none or message.tool_calls | length == 0)) %}
-        {%- if (message['role'] == 'user') != (ns.index % 2 == 0) %}
-            {{- raise_exception('After the optional system message, conversation roles must alternate user and assistant roles except for tool calls, results and system messages.') }}
-        {%- endif %}
-        {%- set ns.index = ns.index + 1 %}
-        {%- if message.role == 'user' %}
-            {%- set ns.max_idx_user = ns.max_idx_user + 1 %}
+    {%- set current_role = message['role'] %}
+    {%- if ns_order.previous_role is not none %}
+        {%- if ns_order.previous_role == 'system' %}
+            {%- if current_role != 'user' and current_role != 'assistant' and current_role != 'system' %}
+                {{- raise_exception('Unexpected role \'' + current_role + '\' after role \'' + ns_order.previous_role + '\'') }}
+            {%- endif %}
+        {%- elif ns_order.previous_role == 'user' %}
+            {%- if current_role != 'assistant' and current_role != 'system' and current_role != 'user' %}
+                {{- raise_exception('Unexpected role \'' + current_role + '\' after role \'' + ns_order.previous_role + '\'') }}
+            {%- endif %}
+        {%- elif ns_order.previous_role == 'assistant' %}
+            {%- if current_role != 'assistant' and current_role != 'user' and current_role != 'tool' %}
+                {{- raise_exception('Unexpected role \'' + current_role + '\' after role \'' + ns_order.previous_role + '\'') }}
+            {%- endif %}
+        {%- elif ns_order.previous_role == 'tool' %}
+            {%- if current_role != 'assistant' and current_role != 'tool' %}
+                {{- raise_exception('Unexpected role \'' + current_role + '\' after role \'' + ns_order.previous_role + '\'') }}
+            {%- endif %}
         {%- endif %}
     {%- endif %}
+    {%- if message.role == 'user' %}
+        {%- set ns.max_idx_user = ns.max_idx_user + 1 %}
+    {%- endif %}
+    {%- set ns_order.previous_role = current_role %}
 {%- endfor %}
 
 

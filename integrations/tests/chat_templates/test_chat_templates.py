@@ -1417,7 +1417,7 @@ def test_role_error(
     }
     encode_transformers(chat_template, VALID_CONSECUTIVE_ASSISTANTS)
 
-    # Genuine alternation violation: starts with assistant (no aggregation can fix this)
+    # Starting with assistant is rejected by the first-message constraint
     INVALID_STARTS_WITH_ASSISTANT = {
         "messages": [
             {"role": "assistant", "content": "Hi"},
@@ -1425,15 +1425,15 @@ def test_role_error(
         ]
     }
 
-    if version > TokenizerVersion.v1:
-        # v2+ has tools, so the error message mentions tool calls
-        alternate_match = r"After the optional system message, conversation roles must alternate user and assistant roles except for tool calls, results and system messages\."  # noqa: E501
+    if version >= TokenizerVersion.v7:
+        first_msg_match = r"Conversation must start with a user or system message, got assistant\."
     else:
-        alternate_match = r"After the optional system message, conversation roles must alternate user and assistant\."
+        first_msg_match = r"Conversation must start with a user message, got assistant\."
 
-    with pytest.raises(TemplateError, match=alternate_match):
+    with pytest.raises(TemplateError, match=first_msg_match):
         encode_transformers(chat_template, INVALID_STARTS_WITH_ASSISTANT)
 
+    # Invalid role after user is caught by the transition table
     INVALID_ROLE = {
         "messages": [
             {"role": "user", "content": "Hello"},
@@ -1441,15 +1441,32 @@ def test_role_error(
         ]
     }
 
-    if version >= TokenizerVersion.v7:
-        role_match = r"Only user, assistant, system and tool roles are supported, got invalid\."
-    elif version > TokenizerVersion.v1:
-        role_match = r"Only user, assistant and tool roles are supported, got invalid\."
-    else:
-        role_match = r"Only user and assistant roles are supported, got invalid\."
-
-    with pytest.raises(TemplateError, match=role_match):
+    with pytest.raises(TemplateError, match=r"Unexpected role 'invalid' after role 'user'"):
         encode_transformers(chat_template, INVALID_ROLE)
+
+    # Tool after user is rejected by the transition table (tool can only follow assistant or tool)
+    if version >= TokenizerVersion.v2:
+        INVALID_TOOL_AFTER_USER = {
+            "messages": [
+                {"role": "user", "content": "Hello"},
+                {"role": "tool", "content": "result", "tool_call_id": "123456789"},
+            ]
+        }
+        with pytest.raises(TemplateError, match=r"Unexpected role 'tool' after role 'user'"):
+            encode_transformers(chat_template, INVALID_TOOL_AFTER_USER)
+
+    # System after assistant is rejected for v7+ (system stays in loop_messages)
+    if version >= TokenizerVersion.v7:
+        INVALID_SYSTEM_AFTER_ASSISTANT = {
+            "messages": [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi"},
+                {"role": "system", "content": "New system prompt"},
+                {"role": "user", "content": "World"},
+            ]
+        }
+        with pytest.raises(TemplateError, match=r"Unexpected role 'system' after role 'assistant'"):
+            encode_transformers(chat_template, INVALID_SYSTEM_AFTER_ASSISTANT)
 
 
 @pytest.mark.parametrize(
@@ -1678,6 +1695,7 @@ def test_invalid_assistant(
 ) -> None:
     invalid_message_conv = {
         "messages": [
+            {"role": "user", "content": "Hello"},
             {
                 "role": "assistant",
                 "content": "hey",
