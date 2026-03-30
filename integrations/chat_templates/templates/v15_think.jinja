@@ -42,9 +42,7 @@
             {%- set ns_c = namespace(text_parts=[], chunks=[], has_non_text=false, tool_calls=[]) %}
             {%- for msg in ns_agg.current_group %}
                 {%- if msg['content'] is string %}
-                    {%- if msg['content'] != '' %}
-                        {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}
-                    {%- endif %}
+                    {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}
                 {%- elif msg['content'] is not none %}
                     {%- for block in msg['content'] %}
                         {%- if block['type'] == 'text' %}
@@ -90,11 +88,6 @@
 {#- Checks for alternating user/assistant messages. #}
 {%- set ns = namespace(index=0, tools_and_settings_emitted=false) %}
 {%- for message in loop_messages %}
-    {%- if message.role == 'system' %}
-        {%- if ns.index % 2 != 0 %}
-            {%- set ns.index = ns.index + 1 %}
-        {%- endif %}
-    {%- endif %}
     {%- if message.role == 'user' or (message.role == 'assistant' and (message.tool_calls is not defined or message.tool_calls is none or message.tool_calls | length == 0)) %}
         {%- if (message['role'] == 'user') != (ns.index % 2 == 0) %}
             {{- raise_exception('After the optional system message, conversation roles must alternate user and assistant roles except for tool calls, results and system messages.') }}

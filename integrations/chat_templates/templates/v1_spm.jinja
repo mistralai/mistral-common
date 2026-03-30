@@ -45,9 +45,7 @@
             {%- set ns_c = namespace(text_parts=[], chunks=[], has_non_text=false, tool_calls=[]) %}
             {%- for msg in ns_agg.current_group %}
                 {%- if msg['content'] is string %}
-                    {%- if msg['content'] != '' %}
-                        {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}
-                    {%- endif %}
+                    {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}
                 {%- elif msg['content'] is not none %}
                     {%- for block in msg['content'] %}
                         {%- if block['type'] == 'text' %}
