@@ -483,17 +483,6 @@ def test_dynamic_template_comprehensive(
             }
         )
 
-    # Test no system prompt at first message — tools/settings must still work
-    test_cases.append(
-        {
-            "name": "no_system_first",
-            "messages": [
-                {"role": "user", "content": "Hello"},
-                {"role": "assistant", "content": "Hi"},
-            ],
-        }
-    )
-
     # Add message aggregation test cases
     test_cases.extend(
         [
@@ -531,6 +520,24 @@ def test_dynamic_template_comprehensive(
                     {"role": "system", "content": "System 2."},
                     {"role": "user", "content": "Hello"},
                     {"role": "assistant", "content": "Hi"},
+                ],
+            },
+            {
+                "name": "mid_conv_system",
+                "messages": [
+                    {"role": "user", "content": "Hello"},
+                    {"role": "system", "content": "New instruction."},
+                    {"role": "assistant", "content": "Got it"},
+                ],
+            },
+            {
+                "name": "mid_conv_system_with_consecutive_users",
+                "messages": [
+                    {"role": "system", "content": "Be helpful."},
+                    {"role": "user", "content": "Hello"},
+                    {"role": "user", "content": "World"},
+                    {"role": "system", "content": "Now be concise."},
+                    {"role": "assistant", "content": "Got it"},
                 ],
             },
         ]

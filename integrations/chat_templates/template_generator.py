@@ -274,10 +274,12 @@ def _generate_tools_and_settings_definition(config: TemplateConfig) -> str:
     r"""Generate tools and model settings definition.
 
     Builds a ``tools_and_settings`` string variable that contains
-    ``[AVAILABLE_TOOLS]...[/AVAILABLE_TOOLS]`` (if tools are provided)
-    followed by ``[MODEL_SETTINGS]...[/MODEL_SETTINGS]`` (for v15+, if
-    reasoning_effort is not ``"none"``). This string is emitted later in the
-    message loop at the appropriate user message position.
+    ``[AVAILABLE_TOOLS]...[/AVAILABLE_TOOLS]`` (if tools are provided).
+    For v15+, also builds a separate ``model_settings`` variable containing
+    ``[MODEL_SETTINGS]...[/MODEL_SETTINGS]`` which is always emitted
+    (defaults to ``reasoning_effort="none"`` when not specified).
+    Both variables are emitted later in the message loop at the appropriate
+    user message position.
 
     Args:
         config: The template configuration.
@@ -404,9 +406,7 @@ def _generate_flush_logic() -> list[str]:
         "            {%- set ns_c = namespace(text_parts=[], chunks=[], has_non_text=false, tool_calls=[]) %}",
         "            {%- for msg in ns_agg.current_group %}",
         "                {%- if msg['content'] is string %}",
-        "                    {%- if msg['content'] != '' %}",
-        "                        {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}",
-        "                    {%- endif %}",
+        "                    {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}",
         "                {%- elif msg['content'] is not none %}",
         "                    {%- for block in msg['content'] %}",
         "                        {%- if block['type'] == 'text' %}",
@@ -543,16 +543,13 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
 
     lines.append("{%- for message in loop_messages %}")
 
-    # For v7+, system messages reset the alternation index so the next message
-    # should be a user (even index). This allows user -> system -> user sequences.
+    # For v7+, system messages are transparent in the alternation check — skip them entirely.
     if config.uses_system_prompt_tokens:
-        lines.append("    {%- if message.role == 'system' %}")
-        lines.append("        {%- if ns.index % 2 != 0 %}")
-        lines.append("            {%- set ns.index = ns.index + 1 %}")
-        lines.append("        {%- endif %}")
-        lines.append("    {%- endif %}")
-
-    if config.has_tools:
+        if config.has_tools:
+            condition = "    {%- if message.role == 'user' or (message.role == 'assistant' and (message.tool_calls is not defined or message.tool_calls is none or message.tool_calls | length == 0)) %}"  # noqa: E501
+        else:
+            condition = "    {%- if message.role == 'user' or message.role == 'assistant' %}"
+    elif config.has_tools:
         condition = "    {%- if message.role == 'user' or (message.role == 'assistant' and (message.tool_calls is not defined or message.tool_calls is none or message.tool_calls | length == 0)) %}"  # noqa: E501
     else:
         condition = "    {%- if message.role == 'user' or message.role == 'assistant' %}"
@@ -1124,17 +1121,15 @@ def _generate_else_role_block(config: TemplateConfig) -> str:
     lines.append("    {#- Raise exception for unsupported roles. #}")
 
     if config.uses_system_prompt_tokens:
-        # v7+: system messages are handled in the loop
+        # v7+: system messages are handled in the loop, so 'system' is a valid role.
+        # v7+ always has tools (has_tools is True for v2+), but we keep the branch
+        # for clarity in case the property semantics change.
+        lines.append("    {%- else %}")
         if config.has_tools:
-            if config.version == TokenizerVersion.v2 or (config.spm and config.version == TokenizerVersion.v3):
-                lines.append("    {%- elif message['role'] != 'tool' or ns.index > ns.max_idx_user %}")
-            else:
-                lines.append("    {%- else %}")
             lines.append(
                 "        {{- raise_exception('Only user, assistant, system and tool roles are supported, got ' + message['role'] + '.') }}"  # noqa: E501
             )
         else:
-            lines.append("    {%- else %}")
             lines.append(
                 "        {{- raise_exception('Only user, assistant and system roles are supported, got ' + message['role'] + '.') }}"  # noqa: E501
             )

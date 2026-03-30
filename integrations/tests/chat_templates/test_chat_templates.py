@@ -1147,6 +1147,24 @@ REQUEST_CONSECUTIVE_SYSTEMS_THINK_TRAIN = ChatCompletionRequest(  # type: ignore
     ]
 )
 
+REQUEST_MID_CONV_SYSTEM_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="Hello"),
+        SystemMessage(content="New instruction."),
+        AssistantMessage(content="Got it"),
+    ]
+)
+
+REQUEST_MID_CONV_SYSTEM_WITH_CONSECUTIVE_USERS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="Be helpful."),
+        UserMessage(content="Hello"),
+        UserMessage(content="World"),
+        SystemMessage(content="Now be concise."),
+        AssistantMessage(content="Got it"),
+    ]
+)
+
 
 def _get_conversations(
     tokenizer_version: TokenizerVersion,
@@ -1248,9 +1266,16 @@ def _get_conversations(
     else:
         conversations.append(REQUEST_CONSECUTIVE_USERS_TEST)
 
-    # v7+ only: consecutive assistants with tool calls (requires content+tool_calls in same message)
+    # v7+ only: mid-conversation system messages and combined aggregation scenarios
     if tokenizer_version >= TokenizerVersion.v7 and validation_mode == ValidationMode.finetuning:
-        conversations.append(REQUEST_CONSECUTIVE_ASSISTANTS_TOOL_CALLS_TRAIN)
+        conversations.extend(
+            [
+                REQUEST_MID_CONV_SYSTEM_TRAIN,
+                REQUEST_MID_CONV_SYSTEM_WITH_CONSECUTIVE_USERS_TRAIN,
+                # consecutive assistants with tool calls (requires content+tool_calls in same message)
+                REQUEST_CONSECUTIVE_ASSISTANTS_TOOL_CALLS_TRAIN,
+            ]
+        )
 
     conversations = [c.model_copy(deep=True) for c in conversations]
 
@@ -1380,19 +1405,34 @@ def test_role_error(
     # This should not raise
     encode_transformers(chat_template, VALID_CONSECUTIVE_USERS)
 
-    # But actual alternation violations should still be caught
-    INVALID_ALTERNATE_CONVERSATION = {
+    # Consecutive assistants get aggregated: user, assistant*3, user → user, assistant, user
+    VALID_CONSECUTIVE_ASSISTANTS = {
         "messages": [
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": "Hi"},
             {"role": "assistant", "content": "Help?"},
             {"role": "assistant", "content": "More"},
             {"role": "user", "content": "Thanks"},
-            # After aggregation: user, assistant, user — this is valid
         ]
     }
-    # This should be valid since consecutive assistants get aggregated
-    encode_transformers(chat_template, INVALID_ALTERNATE_CONVERSATION)
+    encode_transformers(chat_template, VALID_CONSECUTIVE_ASSISTANTS)
+
+    # Genuine alternation violation: starts with assistant (no aggregation can fix this)
+    INVALID_STARTS_WITH_ASSISTANT = {
+        "messages": [
+            {"role": "assistant", "content": "Hi"},
+            {"role": "user", "content": "Hello"},
+        ]
+    }
+
+    if version > TokenizerVersion.v1:
+        # v2+ has tools, so the error message mentions tool calls
+        alternate_match = r"After the optional system message, conversation roles must alternate user and assistant roles except for tool calls, results and system messages\."  # noqa: E501
+    else:
+        alternate_match = r"After the optional system message, conversation roles must alternate user and assistant\."
+
+    with pytest.raises(TemplateError, match=alternate_match):
+        encode_transformers(chat_template, INVALID_STARTS_WITH_ASSISTANT)
 
     INVALID_ROLE = {
         "messages": [
