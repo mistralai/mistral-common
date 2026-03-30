@@ -6,7 +6,7 @@ from typing import Any, Literal
 import pytest
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from mistral_common.guidance.grammar_factory import GrammarFactory, convert_tool_calls
+from mistral_common.guidance.grammar_factory import GrammarFactory, _convert_tool_calls
 from mistral_common.protocol.instruct.chunk import TextChunk, ThinkChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage
 from mistral_common.protocol.instruct.normalize import get_normalizer
@@ -1098,32 +1098,6 @@ def _generate_named_tool_choice(mistral_tokenizer: MistralTokenizer, factory: Gr
         )
     )
 
-    # 6. NamedToolChoice with non-existent tool in tools list
-    named_nonexistent = NamedToolChoice(
-        type=ToolTypes.function,
-        function=FunctionName(name="non_existent_tool"),
-    )
-    nonexistent_call = [
-        ToolCall(
-            function=FunctionCall(
-                name="non_existent_tool",
-                arguments='{"arg": "value"}',
-            )
-        )
-    ]
-    nonexistent_tokens = _encode_content(instruct_tokenizer, nonexistent_call)
-
-    cases.append(
-        TestCase(
-            tokenizer=tokenizer,
-            tokens=nonexistent_tokens,
-            should_fail_on=None,
-            case_name="named_tool_choice_nonexistent_tool",
-            mode=named_nonexistent,
-            tools=[],
-        )
-    )
-
     return cases
 
 
@@ -1552,7 +1526,7 @@ def _stub_get_special_token_id(token_name: str) -> str:
 
 class TestConvertToolCalls:
     def test_none_mode(self) -> None:
-        result = convert_tool_calls(
+        result = _convert_tool_calls(
             tools=None,
             mode=ToolChoiceEnum.none,
             parallel_tool_calls=False,
@@ -1562,7 +1536,7 @@ class TestConvertToolCalls:
 
     def test_none_mode_with_tools(self) -> None:
         tools = [ToolProvider.retrieve_payment_date(strict=True)]
-        result = convert_tool_calls(
+        result = _convert_tool_calls(
             tools=tools,
             mode=ToolChoiceEnum.none,
             parallel_tool_calls=True,
@@ -1571,7 +1545,7 @@ class TestConvertToolCalls:
         assert result == ""
 
     def test_auto_mode_no_tools(self) -> None:
-        result = convert_tool_calls(
+        result = _convert_tool_calls(
             tools=None,
             mode=ToolChoiceEnum.auto,
             parallel_tool_calls=False,
@@ -1584,7 +1558,7 @@ class TestConvertToolCalls:
 
     def test_auto_mode_non_strict(self) -> None:
         tools = [ToolProvider.retrieve_payment_date(strict=False)]
-        result = convert_tool_calls(
+        result = _convert_tool_calls(
             tools=tools,
             mode=ToolChoiceEnum.auto,
             parallel_tool_calls=False,
@@ -1599,7 +1573,7 @@ class TestConvertToolCalls:
             ToolProvider.retrieve_payment_date(strict=True),
             ToolProvider.retrieve_payment_status(strict=True),
         ]
-        result = convert_tool_calls(
+        result = _convert_tool_calls(
             tools=tools,
             mode=ToolChoiceEnum.auto,
             parallel_tool_calls=False,
@@ -1612,7 +1586,7 @@ class TestConvertToolCalls:
     def test_named_tool_choice_non_strict(self) -> None:
         named = NamedToolChoice(function=FunctionName(name="retrieve_payment_date"))
         tools = [ToolProvider.retrieve_payment_date(strict=False)]
-        result = convert_tool_calls(
+        result = _convert_tool_calls(
             tools=tools,
             mode=named,
             parallel_tool_calls=False,
@@ -1628,7 +1602,7 @@ class TestConvertToolCalls:
             ToolProvider.retrieve_payment_date(strict=True),
             ToolProvider.retrieve_payment_status(strict=True),
         ]
-        result = convert_tool_calls(
+        result = _convert_tool_calls(
             tools=tools,
             mode=named,
             parallel_tool_calls=False,
@@ -1639,7 +1613,7 @@ class TestConvertToolCalls:
         assert not result.endswith(")+")
 
     def test_parallel_tool_calls(self) -> None:
-        result = convert_tool_calls(
+        result = _convert_tool_calls(
             tools=None,
             mode=ToolChoiceEnum.auto,
             parallel_tool_calls=True,
@@ -1649,7 +1623,7 @@ class TestConvertToolCalls:
 
     def test_empty_params_strict_tool(self) -> None:
         tool = Tool(function=Function(name="empty_fn", parameters={}, strict=True))
-        result = convert_tool_calls(
+        result = _convert_tool_calls(
             tools=[tool],
             mode=ToolChoiceEnum.auto,
             parallel_tool_calls=False,
@@ -1662,8 +1636,8 @@ class TestConvertToolCalls:
     def test_named_tool_not_in_strict_tools_raises(self) -> None:
         named = NamedToolChoice(function=FunctionName(name="non_existent_tool"))
         tools = [ToolProvider.retrieve_payment_date(strict=True)]
-        with pytest.raises(StopIteration):
-            convert_tool_calls(
+        with pytest.raises(ValueError):
+            _convert_tool_calls(
                 tools=tools,
                 mode=named,
                 parallel_tool_calls=False,

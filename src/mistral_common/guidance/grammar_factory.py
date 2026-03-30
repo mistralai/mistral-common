@@ -78,7 +78,7 @@ def _get_tool_args_json(tool: Tool) -> dict[str, Any]:
     return args
 
 
-def convert_tool_calls(
+def _convert_tool_calls(
     tools: list[Tool] | None,
     mode: ToolChoice,
     parallel_tool_calls: bool,
@@ -96,6 +96,11 @@ def convert_tool_calls(
     """
     if mode == "none":
         return ""
+
+    if isinstance(mode, NamedToolChoice) and all(mode.function.name != tool.function.name for tool in (tools or [])):
+        raise ValueError(
+            f"Tool choice requires the {mode.function.name} tool but no tools with this name has been passed."
+        )
 
     tool_calls_token = get_special_token_id("[TOOL_CALLS]")
     args_token = get_special_token_id("[ARGS]")
@@ -126,7 +131,6 @@ def convert_tool_calls(
                 f"{json.dumps(args, ensure_ascii=False)} SAFE_WS?)"
             )
         grammar_tool_call = f"{' | '.join(grammar_per_tool)}"
-    print(grammar_tool_call)
     return f"({grammar_tool_call})+" if parallel_tool_calls else grammar_tool_call
 
 
@@ -215,9 +219,10 @@ class GrammarFactory:
         Returns:
             The rendered lark grammar string.
         """
-        fcall = convert_tool_calls(tools, mode, parallel_tool_calls, self._special_token_lark)
+        fcall = _convert_tool_calls(tools, mode, parallel_tool_calls, self._special_token_lark)
         json_schema_str = json.dumps(json_schema, ensure_ascii=False) if json_schema else None
-        # NamedToolChoice forces a specific tool, which maps to "required" grammar
+        # NamedToolChoice forces a specific tool, which maps to "required" grammar.
+        # Note: _convert_tool_calls verifies that the NamedToolChoice has a valid tool.
         template_mode = ToolChoiceEnum.required if isinstance(mode, NamedToolChoice) else ToolChoiceEnum(mode)
         think_with_json = self._tokenizer.version.supports_model_settings
         return _cached_get_lark_from_jinja(
