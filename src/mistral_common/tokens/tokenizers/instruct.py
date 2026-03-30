@@ -193,7 +193,9 @@ class InstructTokenizerBase(
                 images.extend(new_images)
                 audios.extend(new_audios)
             elif isinstance(msg, ToolMessage):
-                new_tokens = self.encode_tool_message(msg, msg_idx < last_user_idx)
+                new_tokens, new_images, new_audios = self.encode_tool_message(msg, msg_idx < last_user_idx)
+                images.extend(new_images)
+                audios.extend(new_audios)
             elif isinstance(msg, AssistantMessage):
                 continue_message = request.continue_final_message and (msg_idx == len(request.messages) - 1)
 
@@ -1283,28 +1285,31 @@ class InstructTokenizerV13(InstructTokenizerV11):
             ]
         return curr_tokens
 
-    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> list[int]:
+    def encode_tool_message(
+        self, message: ToolMessage, is_before_last_user_message: bool
+    ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a tool message.
 
         Args:
             message: The message to encode.
             is_before_last_user_message: Not used.
         Returns:
-            The encoded tokens.
+            The encoded tokens and the list of images.
         """
         assert message.tool_call_id is not None, "Tool call id must be provided for tokenizer >= v13"
 
-        content = message.content
-        if not isinstance(content, str):
-            content = "".join(chunk.text for chunk in content)
-
-        tokens = self.tokenizer.encode(content, bos=False, eos=False)
+        tokens, image, audio = self.encode_user_content(
+            content=message.content,
+            is_last=False,
+            system_prompt=None,
+            force_img_first=True,
+        )
         curr_tokens = [
             self.BEGIN_TOOL_RESULTS,
             *tokens,
             self.END_TOOL_RESULTS,
         ]
-        return curr_tokens
+        return curr_tokens, image, audio
 
     def encode_think(self, chunk: ThinkChunk) -> list[int]:
         r"""Encode a thinking chunk.
