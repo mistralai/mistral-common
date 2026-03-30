@@ -160,7 +160,7 @@
 
         {%- if message['content'] is string and message['content'] != '' %}
             {{- message['content'] }}
-            {{- '</s>' }}
+            {{- eos_token }}
         {%- elif message['content'] | length > 0 %}
             {%- for block in message['content'] %}
                 {%- if block['type'] == 'text' %}
@@ -169,7 +169,7 @@
                     {{- raise_exception('Only text chunks are supported in assistant message contents.') }}
                 {%- endif %}
             {%- endfor %}
-            {{- '</s>' }}
+            {{- eos_token }}
         {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 and ns.index > ns.max_idx_user %}
             {{- '[TOOL_CALLS][' }}
             {%- for tool in message['tool_calls'] %}
@@ -186,7 +186,7 @@
                 {%- endif %}
             {%- endfor %}
             {{- ']' }}
-            {{- '</s>' }}
+            {{- eos_token }}
         {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 and ns.index <= ns.max_idx_user %}
         {%- else %}
             {{- raise_exception('Assistant message must have a string or a list of chunks in content or a list of tool calls.') }}

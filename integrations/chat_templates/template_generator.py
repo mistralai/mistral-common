@@ -238,8 +238,9 @@ def _generate_system_prompt_handling_v7_plus(config: TemplateConfig) -> list[str
     aggregation pre-pass (which coalesces their `TextChunks`) and the message
     processing loop (which emits `[SYSTEM_PROMPT]...[/SYSTEM_PROMPT]`).
 
-    Only the default system prompt needs special handling: if the first message
-    is not a system message, emit the default before the loop.
+    Sets `loop_messages = messages` (no filtering needed since system messages
+    are kept in place) and emits the default system prompt if the first message
+    is not a system message.
 
     Args:
         config: The template configuration.
@@ -247,16 +248,25 @@ def _generate_system_prompt_handling_v7_plus(config: TemplateConfig) -> list[str
     Returns:
         Lines of Jinja2 template code for v7+ system prompt handling.
     """
-    if not config.tracks_has_sp_for_audio:
-        return []
-
-    return [
-        "{%- if messages[0]['role'] == 'system' or default_system_message != '' %}",
-        "    {%- set has_sp = true %}",
-        "{%- else %}",
-        "    {%- set has_sp = false %}",
+    lines = [
+        "{%- set loop_messages = messages %}",
+        "{%- if messages[0]['role'] != 'system' and default_system_message != '' %}",
+        "    {{- '[SYSTEM_PROMPT]' + default_system_message + '[/SYSTEM_PROMPT]' }}",
         "{%- endif %}",
     ]
+
+    if config.tracks_has_sp_for_audio:
+        lines.extend(
+            [
+                "{%- if messages[0]['role'] == 'system' or default_system_message != '' %}",
+                "    {%- set has_sp = true %}",
+                "{%- else %}",
+                "    {%- set has_sp = false %}",
+                "{%- endif %}",
+            ]
+        )
+
+    return lines
 
 
 def _generate_tools_and_settings_definition(config: TemplateConfig) -> str:
@@ -807,7 +817,7 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     lines.append("            {{- message['content'] }}")
 
     if config.uses_v2_tool_format:
-        lines.append("            {{- '</s>' }}")
+        lines.append("            {{- eos_token }}")
 
     lines.append("        {%- elif message['content'] | length > 0 %}")
 
@@ -833,7 +843,7 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     lines.append("            {%- endfor %}")
 
     if config.uses_v2_tool_format:
-        lines.append("            {{- '</s>' }}")
+        lines.append("            {{- eos_token }}")
 
     if config.version == TokenizerVersion.v2 or (config.spm and config.version == TokenizerVersion.v3):
         lines.append(_generate_tool_calls_elif_v2_v3(config))
@@ -853,7 +863,7 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
 
     if not config.uses_v2_tool_format:
         lines.append("")
-        lines.append("        {{- '</s>' }}")
+        lines.append("        {{- eos_token }}")
 
     if config.uses_spm_space_tracking:
         lines.append("        {%- set ns.prev_tool=false %}")
@@ -919,7 +929,7 @@ def _generate_tool_calls_elif_v2_v3(config: TemplateConfig) -> str:
     lines.append("            {{- ']' }}")
     # v2 has EOS inside the elif, v3_spm has EOS after the endif
     if config.uses_v2_tool_format:
-        lines.append("            {{- '</s>' }}")
+        lines.append("            {{- eos_token }}")
 
     if config.uses_v2_tool_format:
         # v2: additional elif for tool calls during user messages (ignored)
