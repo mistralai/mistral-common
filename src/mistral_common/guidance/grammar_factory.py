@@ -25,7 +25,7 @@ if is_jinja2_installed():
 JINJA_DIR = Path(__file__).parent / "data"
 
 
-def _validate_mode_and_tools(mode: ToolChoice, tools: list[Tool] | None):
+def _validate_mode_and_tools(mode: ToolChoice, tools: list[Tool] | None) -> None:
     if isinstance(mode, NamedToolChoice) and all(mode.function.name != tool.function.name for tool in (tools or [])):
         raise ValueError(
             f"Tool choice requires the {mode.function.name} tool but no tools with this name has been passed."
