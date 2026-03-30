@@ -164,9 +164,9 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
     r"""Generate system prompt handling section.
 
     For pre-v7: Extract ALL system messages from anywhere in the conversation,
-    merge their text content with ``"\\n\\n"``, and filter them out of ``loop_messages``.
+    merge their text content with `"\\n\\n"`, and filter them out of `loop_messages`.
 
-    For v7+: Keep system messages in ``loop_messages`` so they are handled individually
+    For v7+: Keep system messages in `loop_messages` so they are handled individually
     in the message processing loop. Only emit default system prompt if no system
     message is at position 0.
 
@@ -193,7 +193,7 @@ def _generate_system_prompt_handling_pre_v7(config: TemplateConfig) -> list[str]
     r"""Generate pre-v7 system prompt handling that extracts all system messages.
 
     Loops through all messages to collect system content and filters them
-    out of ``loop_messages``.
+    out of `loop_messages`.
 
     Args:
         config: The template configuration.
@@ -234,9 +234,9 @@ def _generate_system_prompt_handling_pre_v7(config: TemplateConfig) -> list[str]
 def _generate_system_prompt_handling_v7_plus(config: TemplateConfig) -> list[str]:
     r"""Generate v7+ system prompt handling.
 
-    For v7+, system messages stay in ``loop_messages`` and are handled by the
-    aggregation pre-pass (which coalesces their ``TextChunks``) and the message
-    processing loop (which emits ``[SYSTEM_PROMPT]...[/SYSTEM_PROMPT]``).
+    For v7+, system messages stay in `loop_messages` and are handled by the
+    aggregation pre-pass (which coalesces their `TextChunks`) and the message
+    processing loop (which emits `[SYSTEM_PROMPT]...[/SYSTEM_PROMPT]`).
 
     Only the default system prompt needs special handling: if the first message
     is not a system message, emit the default before the loop.
@@ -247,37 +247,26 @@ def _generate_system_prompt_handling_v7_plus(config: TemplateConfig) -> list[str
     Returns:
         Lines of Jinja2 template code for v7+ system prompt handling.
     """
-    lines = [
-        "{#- System messages are handled in the message loop. #}",
-        "{#- Only emit default system prompt if no system message is at position 0. #}",
-        "{%- set loop_messages = messages %}",
-        "{%- if messages[0]['role'] != 'system' and default_system_message != '' %}",
-        "    {{- '[SYSTEM_PROMPT]' + default_system_message + '[/SYSTEM_PROMPT]' }}",
+    if not config.tracks_has_sp_for_audio:
+        return []
+
+    return [
+        "{%- if messages[0]['role'] == 'system' or default_system_message != '' %}",
+        "    {%- set has_sp = true %}",
+        "{%- else %}",
+        "    {%- set has_sp = false %}",
         "{%- endif %}",
     ]
-
-    if config.tracks_has_sp_for_audio:
-        lines.extend(
-            [
-                "{%- if messages[0]['role'] == 'system' or default_system_message != '' %}",
-                "    {%- set has_sp = true %}",
-                "{%- else %}",
-                "    {%- set has_sp = false %}",
-                "{%- endif %}",
-            ]
-        )
-
-    return lines
 
 
 def _generate_tools_and_settings_definition(config: TemplateConfig) -> str:
     r"""Generate tools and model settings definition.
 
-    Builds a ``tools_and_settings`` string variable that contains
-    ``[AVAILABLE_TOOLS]...[/AVAILABLE_TOOLS]`` (if tools are provided).
-    For v15+, also builds a separate ``model_settings`` variable containing
-    ``[MODEL_SETTINGS]...[/MODEL_SETTINGS]`` which is always emitted
-    (defaults to ``reasoning_effort="none"`` when not specified).
+    Builds a `tools_and_settings` string variable that contains
+    `[AVAILABLE_TOOLS]...[/AVAILABLE_TOOLS]` (if tools are provided).
+    For v15+, also builds a separate `model_settings` variable containing
+    `[MODEL_SETTINGS]...[/MODEL_SETTINGS]` which is always emitted
+    (defaults to `reasoning_effort="none"` when not specified).
     Both variables are emitted later in the message loop at the appropriate
     user message position.
 
@@ -333,11 +322,11 @@ def _generate_message_aggregation(config: TemplateConfig) -> str:
     check to match the behavior of the mistral-common normalizer:
 
     - **User messages**: consecutive messages merged into one, text content joined
-      with ``"\\n\\n"``, non-text chunks (image, audio) preserved in order.
+      with `"\\n\\n"`, non-text chunks (image, audio) preserved in order.
     - **Assistant messages**: consecutive messages merged into one, text content joined
-      with ``"\\n\\n"``, ``tool_calls`` lists concatenated.
-    - **System messages**: each message coalesced individually (adjacent ``TextChunks``
-      joined with ``"\\n\\n"``), but NOT merged across consecutive messages.
+      with `"\\n\\n"`, `tool_calls` lists concatenated.
+    - **System messages**: each message coalesced individually (adjacent `TextChunks`
+      joined with `"\\n\\n"`), but NOT merged across consecutive messages.
     - **Tool messages**: passed through as-is.
 
     Non-text chunk type validation is deferred to the message rendering loop.
@@ -386,15 +375,15 @@ def _generate_flush_logic() -> list[str]:
     r"""Generate the flush logic for aggregating a group of same-role messages.
 
     Called when the role changes (or at end of messages) to coalesce all messages
-    in the current group into a single output message. Adjacent ``TextChunks`` are
-    joined with ``"\\n\\n"``, non-text chunks are preserved as barriers, and
-    ``tool_calls`` from all messages in the group are concatenated. Chunk type
+    in the current group into a single output message. Adjacent `TextChunks` are
+    joined with `"\\n\\n"`, non-text chunks are preserved as barriers, and
+    `tool_calls` from all messages in the group are concatenated. Chunk type
     validation is deferred to the message rendering loop.
 
     The logic is role-agnostic for user, assistant, and system: system messages
     always form single-message groups (enforced by the grouping logic), so they
     are effectively coalesced individually. Tool messages pass through as-is to
-    preserve extra fields like ``tool_call_id`` and ``name``.
+    preserve extra fields like `tool_call_id` and `name`.
 
     Returns:
         Lines of Jinja2 template code for flushing the current aggregation group.
@@ -448,7 +437,7 @@ def _generate_flush_logic() -> list[str]:
 def _generate_system_message_handling(config: TemplateConfig) -> str:
     r"""Generate system message handling in the message loop for v7+.
 
-    Emits ``[SYSTEM_PROMPT]...[/SYSTEM_PROMPT]`` for each system message
+    Emits `[SYSTEM_PROMPT]...[/SYSTEM_PROMPT]` for each system message
     encountered during message processing.
 
     Args:
@@ -511,23 +500,33 @@ def _generate_system_message_handling(config: TemplateConfig) -> str:
 
 
 def _generate_alternation_check(config: TemplateConfig) -> str:
-    r"""Generate message alternation validation.
+    r"""Generate message ordering validation using a role transition table.
 
-    For v7+, system messages are skipped in the alternation check since they
-    can appear between user and assistant messages without breaking alternation.
+    Validates that message roles follow a valid ordering, matching the rules
+    from `mistral_common.protocol.instruct.validator._validate_message_order`.
+
+    The transition table defines which roles can follow each previous role:
+
+    - After `system`: `user`, `assistant`, `system`
+    - After `user`: `assistant`, `system`, `user`
+    - After `assistant`: `assistant`, `user`, `tool`
+    - After `tool`: `assistant`, `tool`
+
+    For pre-v7 templates, system messages are extracted before this check,
+    so only `user`, `assistant`, and `tool` roles are seen.
 
     Args:
         config: The template configuration.
 
     Returns:
-        The alternation check section of the chat template.
+        The message ordering validation section of the chat template.
     """
     lines = [
         "",
-        "{#- Checks for alternating user/assistant messages. #}",
+        "{#- Validates message ordering. #}",
     ]
 
-    ns_vars = ["index=0"]
+    ns_vars: list[str] = []
     if config.tracks_max_idx_user:
         ns_vars.append("max_idx_user=-1")
     if config.uses_spm_space_tracking:
@@ -541,37 +540,69 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
 
     lines.append("{%- set ns = namespace(" + ", ".join(ns_vars) + ") %}")
 
-    lines.append("{%- for message in loop_messages %}")
-
-    # For v7+, system messages are transparent in the alternation check — skip them entirely.
+    # First-message constraint
     if config.uses_system_prompt_tokens:
-        if config.has_tools:
-            condition = "    {%- if message.role == 'user' or (message.role == 'assistant' and (message.tool_calls is not defined or message.tool_calls is none or message.tool_calls | length == 0)) %}"  # noqa: E501
-        else:
-            condition = "    {%- if message.role == 'user' or message.role == 'assistant' %}"
-    elif config.has_tools:
-        condition = "    {%- if message.role == 'user' or (message.role == 'assistant' and (message.tool_calls is not defined or message.tool_calls is none or message.tool_calls | length == 0)) %}"  # noqa: E501
+        # v7+: system messages remain in loop_messages, so first message can be user or system
+        first_msg_cond = "{%- if loop_messages | length > 0 and loop_messages[0]['role'] != 'user' and loop_messages[0]['role'] != 'system' %}"  # noqa: E501
+        first_msg_err = "    {{- raise_exception('Conversation must start with a user or system message, got ' + loop_messages[0]['role'] + '.') }}"  # noqa: E501
     else:
-        condition = "    {%- if message.role == 'user' or message.role == 'assistant' %}"
+        # pre-v7: system messages are extracted, so first message must be user
+        first_msg_cond = "{%- if loop_messages | length > 0 and loop_messages[0]['role'] != 'user' %}"
+        first_msg_err = "    {{- raise_exception('Conversation must start with a user message, got ' + loop_messages[0]['role'] + '.') }}"  # noqa: E501
+    lines.append(first_msg_cond)
+    lines.append(first_msg_err)
+    lines.append("{%- endif %}")
 
-    lines.append(condition)
+    # Transition table validation
+    lines.append("{%- set ns_order = namespace(previous_role=none) %}")
+    lines.append("{%- for message in loop_messages %}")
+    lines.append("    {%- set current_role = message['role'] %}")
+    lines.append("    {%- if ns_order.previous_role is not none %}")
 
-    if config.has_tools:
-        error_msg = "After the optional system message, conversation roles must alternate user and assistant roles except for tool calls, results and system messages."  # noqa: E501
+    transition_error = "                {{- raise_exception('Unexpected role \\'' + current_role + '\\' after role \\'' + ns_order.previous_role + '\\'') }}"  # noqa: E501
+
+    if config.uses_system_prompt_tokens:
+        # v7+: full transition table including system
+        system_allowed = (
+            "            {%- if current_role != 'user' and current_role != 'assistant' and current_role != 'system' %}"  # noqa: E501
+        )
+        user_allowed = (
+            "            {%- if current_role != 'assistant' and current_role != 'system' and current_role != 'user' %}"  # noqa: E501
+        )
+        lines.append("        {%- if ns_order.previous_role == 'system' %}")
+        lines.append(system_allowed)
+        lines.append(transition_error)
+        lines.append("            {%- endif %}")
+        lines.append("        {%- elif ns_order.previous_role == 'user' %}")
+        lines.append(user_allowed)
     else:
-        error_msg = "After the optional system message, conversation roles must alternate user and assistant except for system messages."  # noqa: E501
+        # pre-v7: no system in loop_messages
+        lines.append("        {%- if ns_order.previous_role == 'user' %}")
+        lines.append("            {%- if current_role != 'assistant' and current_role != 'user' %}")
 
-    lines.append("        {%- if (message['role'] == 'user') != (ns.index % 2 == 0) %}")
-    lines.append(f"            {{{{- raise_exception('{error_msg}') }}}}")
+    lines.append(transition_error)
+    lines.append("            {%- endif %}")
+    lines.append("        {%- elif ns_order.previous_role == 'assistant' %}")
+    assistant_allowed = (
+        "            {%- if current_role != 'assistant' and current_role != 'user' and current_role != 'tool' %}"  # noqa: E501
+    )
+    lines.append(assistant_allowed)
+    lines.append(transition_error)
+    lines.append("            {%- endif %}")
+    lines.append("        {%- elif ns_order.previous_role == 'tool' %}")
+    lines.append("            {%- if current_role != 'assistant' and current_role != 'tool' %}")
+    lines.append(transition_error)
+    lines.append("            {%- endif %}")
     lines.append("        {%- endif %}")
-    lines.append("        {%- set ns.index = ns.index + 1 %}")
-
-    if config.tracks_max_idx_user:
-        lines.append("        {%- if message.role == 'user' %}")
-        lines.append("            {%- set ns.max_idx_user = ns.max_idx_user + 1 %}")
-        lines.append("        {%- endif %}")
-
     lines.append("    {%- endif %}")
+
+    # Track max_idx_user in the same loop
+    if config.tracks_max_idx_user:
+        lines.append("    {%- if message.role == 'user' %}")
+        lines.append("        {%- set ns.max_idx_user = ns.max_idx_user + 1 %}")
+        lines.append("    {%- endif %}")
+
+    lines.append("    {%- set ns_order.previous_role = current_role %}")
     lines.append("{%- endfor %}")
 
     return "\n".join(lines)
@@ -1196,17 +1227,31 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append(_generate_system_prompt_handling(config))
     lines.append(_generate_message_aggregation(config))
     lines.append("")
-    lines.append("{#- Checks for alternating user/assistant messages. #}")
-    lines.append("{%- set ns = namespace(index=0) %}")
-    lines.append("{%- for message in loop_messages %}")
-    lines.append("    {%- if message.role == 'user' or message.role == 'assistant' %}")
-    lines.append("        {%- if (message['role'] == 'user') != (ns.index % 2 == 0) %}")
+    lines.append("{#- Validates message ordering. #}")
+    lines.append("{%- if loop_messages | length > 0 and loop_messages[0]['role'] != 'user' %}")
     lines.append(
-        "            {{- raise_exception('After the optional system message, conversation roles must alternate user and assistant.') }}"  # noqa: E501
+        "    {{- raise_exception('Conversation must start with a user message, got ' + loop_messages[0]['role'] + '.') }}"  # noqa: E501
     )
+    lines.append("{%- endif %}")
+    lines.append("{%- set ns_order = namespace(previous_role=none) %}")
+    lines.append("{%- for message in loop_messages %}")
+    lines.append("    {%- set current_role = message['role'] %}")
+    lines.append("    {%- if ns_order.previous_role is not none %}")
+    lines.append("        {%- if ns_order.previous_role == 'user' %}")
+    lines.append("            {%- if current_role != 'assistant' and current_role != 'user' %}")
+    lines.append(
+        "                {{- raise_exception('Unexpected role \\'' + current_role + '\\' after role \\'' + ns_order.previous_role + '\\'') }}"  # noqa: E501
+    )
+    lines.append("            {%- endif %}")
+    lines.append("        {%- elif ns_order.previous_role == 'assistant' %}")
+    lines.append("            {%- if current_role != 'assistant' and current_role != 'user' %}")
+    lines.append(
+        "                {{- raise_exception('Unexpected role \\'' + current_role + '\\' after role \\'' + ns_order.previous_role + '\\'') }}"  # noqa: E501
+    )
+    lines.append("            {%- endif %}")
     lines.append("        {%- endif %}")
-    lines.append("        {%- set ns.index = ns.index + 1 %}")
     lines.append("    {%- endif %}")
+    lines.append("    {%- set ns_order.previous_role = current_role %}")
     lines.append("{%- endfor %}")
     lines.append("")
     lines.append("{#- Handle conversation messages. #}")

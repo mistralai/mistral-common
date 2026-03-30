@@ -33,9 +33,7 @@
 {%- set loop_messages = ns_sys.filtered %}
 
 {#- Aggregate consecutive messages with the same role. #}
-{#- System and tool messages are never merged across consecutive messages. #}
-{#- A sentinel message is appended so the last group gets flushed inside the loop #}
-{#- without duplicating the flush logic after the loop. #}
+{#- A sentinel message is appended so the last group gets flushed inside the loop. #}
 {%- set ns_agg = namespace(messages=[], current_group=[], current_role=none) %}
 {%- for message in loop_messages + [{'role': '__sentinel__'}] %}
     {%- if message['role'] != ns_agg.current_role or message['role'] == 'system' or message['role'] == 'tool' %}
@@ -88,15 +86,25 @@
 {%- endfor %}
 {%- set loop_messages = ns_agg.messages %}
 
-{#- Checks for alternating user/assistant messages. #}
-{%- set ns = namespace(index=0) %}
+{#- Validates message ordering. #}
+{%- if loop_messages | length > 0 and loop_messages[0]['role'] != 'user' %}
+    {{- raise_exception('Conversation must start with a user message, got ' + loop_messages[0]['role'] + '.') }}
+{%- endif %}
+{%- set ns_order = namespace(previous_role=none) %}
 {%- for message in loop_messages %}
-    {%- if message.role == 'user' or message.role == 'assistant' %}
-        {%- if (message['role'] == 'user') != (ns.index % 2 == 0) %}
-            {{- raise_exception('After the optional system message, conversation roles must alternate user and assistant.') }}
+    {%- set current_role = message['role'] %}
+    {%- if ns_order.previous_role is not none %}
+        {%- if ns_order.previous_role == 'user' %}
+            {%- if current_role != 'assistant' and current_role != 'user' %}
+                {{- raise_exception('Unexpected role \'' + current_role + '\' after role \'' + ns_order.previous_role + '\'') }}
+            {%- endif %}
+        {%- elif ns_order.previous_role == 'assistant' %}
+            {%- if current_role != 'assistant' and current_role != 'user' %}
+                {{- raise_exception('Unexpected role \'' + current_role + '\' after role \'' + ns_order.previous_role + '\'') }}
+            {%- endif %}
         {%- endif %}
-        {%- set ns.index = ns.index + 1 %}
     {%- endif %}
+    {%- set ns_order.previous_role = current_role %}
 {%- endfor %}
 
 {#- Handle conversation messages. #}
