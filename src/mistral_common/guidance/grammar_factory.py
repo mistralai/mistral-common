@@ -2,7 +2,7 @@ import json
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from mistral_common.guidance.tokenizer import from_mistral_tokenizer
 from mistral_common.imports import (
@@ -82,6 +82,7 @@ def convert_tool_calls(
     tools: list[Tool] | None,
     mode: ToolChoice,
     parallel_tool_calls: bool,
+    get_special_token_id: Callable[[str], str],
 ) -> str:
     r"""Converts tool calls to a lark grammar string.
 
@@ -96,14 +97,20 @@ def convert_tool_calls(
     if mode == "none":
         return ""
 
+    tool_calls_token = get_special_token_id("[TOOL_CALLS]")
+    args_token = get_special_token_id("[ARGS]")
+
     any_strict_true = any(tool.function.strict for tool in tools) if tools else False
 
     if not tools or not any_strict_true:
         if not isinstance(mode, NamedToolChoice):
-            grammar_tool_call = '<TOOL_CALLS> SAFE_WS? /.+/ <ARGS> SAFE_WS? %json {"type": "object"} SAFE_WS?'
+            grammar_tool_call = (
+                f'{tool_calls_token} SAFE_WS? /.+/ {args_token} SAFE_WS? %json {{"type": "object"}} SAFE_WS?'
+            )
         else:
             grammar_tool_call = (
-                f'<TOOL_CALLS> SAFE_WS? "{mode.function.name}" <ARGS> SAFE_WS? %json {{"type": "object"}} SAFE_WS?'
+                f'{tool_calls_token} SAFE_WS? "{mode.function.name}" {args_token} '
+                'SAFE_WS? %json {"type": "object"} SAFE_WS?'
             )
     else:
         grammar_per_tool = []
@@ -115,11 +122,11 @@ def convert_tool_calls(
         for tool in tools:
             args = _get_tool_args_json(tool)
             grammar_per_tool.append(
-                f'(<TOOL_CALLS> SAFE_WS? "{tool.function.name}" <ARGS> SAFE_WS? %json '
+                f'({tool_calls_token} SAFE_WS? "{tool.function.name}" {args_token} SAFE_WS? %json '
                 f"{json.dumps(args, ensure_ascii=False)} SAFE_WS?)"
             )
         grammar_tool_call = f"{' | '.join(grammar_per_tool)}"
-
+    print(grammar_tool_call)
     return f"({grammar_tool_call})+" if parallel_tool_calls else grammar_tool_call
 
 
@@ -160,6 +167,16 @@ class GrammarFactory:
                 f"got {type(self._tokenizer).__name__} {self._tokenizer.version.value}"
             )
         self._llg_tokenizer = from_mistral_tokenizer(tokenizer)
+        self._special_token_map = self._build_special_token_map()
+
+    def _build_special_token_map(self) -> dict[str, str]:
+        """Build a mapping from special token names to their grammar syntax."""
+        return {self._tokenizer.id_to_piece(i): f"<[{i}]>" for i in range(self._tokenizer.num_special_tokens)}
+
+    def _special_token_lark(self, token_name: str) -> str:
+        """Convert special token name to lark grammar syntax."""
+        assert token_name in self._special_token_map, f"Unknown special token: {token_name}"
+        return self._special_token_map[token_name]
 
     @property
     def llg_tokenizer(self) -> "llg.LLTokenizer":
@@ -198,7 +215,7 @@ class GrammarFactory:
         Returns:
             The rendered lark grammar string.
         """
-        fcall = convert_tool_calls(tools, mode, parallel_tool_calls)
+        fcall = convert_tool_calls(tools, mode, parallel_tool_calls, self._special_token_lark)
         json_schema_str = json.dumps(json_schema, ensure_ascii=False) if json_schema else None
         # NamedToolChoice forces a specific tool, which maps to "required" grammar
         template_mode = ToolChoiceEnum.required if isinstance(mode, NamedToolChoice) else ToolChoiceEnum(mode)
