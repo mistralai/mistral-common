@@ -12,7 +12,7 @@ from mistral_common.imports import (
     is_llguidance_installed,
 )
 from mistral_common.protocol.instruct.tool_calls import NamedToolChoice, Tool, ToolChoice, ToolChoiceEnum
-from mistral_common.tokens.tokenizers.base import TokenizerVersion
+from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import is_tekkenizer
 
@@ -36,12 +36,14 @@ def _validate_mode_and_tools(mode: ToolChoice, tools: list[Tool] | None) -> None
 
 @lru_cache()
 def _cached_get_jinja_template(tokenizer_version: TokenizerVersion, reasoning: bool) -> str:
-    if tokenizer_version < TokenizerVersion.v13:
-        jinja_key = _GrammarVariant.plain_think if reasoning else _GrammarVariant.base
+    if not reasoning:
+        jinja_key = _GrammarVariant.base
+    elif tokenizer_version < TokenizerVersion.v13:
+        jinja_key = _GrammarVariant.plain_think
     else:
-        jinja_key = _GrammarVariant.think if reasoning else _GrammarVariant.base
-    jinja_path = JINJA_PATHS[jinja_key]
-    return jinja_path.read_text(encoding="utf-8")
+        jinja_key = _GrammarVariant.think
+
+    return JINJA_PATHS[jinja_key].read_text(encoding="utf-8")
 
 
 @lru_cache()
@@ -53,6 +55,8 @@ def _cached_get_lark_from_jinja(
     parallel_tool_calls: bool,
     json_only: bool,
     think_with_json: bool,
+    begin_think_token: str | None,
+    end_think_token: str | None,
 ) -> str:
     jinja_template = Template(template)
     lark_grammar = jinja_template.render(
@@ -62,6 +66,8 @@ def _cached_get_lark_from_jinja(
         parallel_tool_calls=parallel_tool_calls,
         json_only=json_only,
         think_with_json=think_with_json,
+        begin_think_token=begin_think_token,
+        end_think_token=end_think_token,
     )
     return lark_grammar
 
@@ -82,9 +88,7 @@ JINJA_PATHS = {
 def _get_tool_args_json(tool: Tool) -> dict[str, Any]:
     r"""Returns the JSON schema for a tool's arguments."""
     args = tool.function.parameters if tool.function.strict else {"type": "object"}
-    if args == {}:
-        args = {"type": "object", "properties": {}, "additionalProperties": False}
-    return args
+    return args or {"type": "object", "properties": {}, "additionalProperties": False}
 
 
 def _convert_tool_calls(
@@ -99,6 +103,7 @@ def _convert_tool_calls(
         tools: The list of tools available.
         mode: The tool choice mode.
         parallel_tool_calls: Whether parallel tool calls are allowed.
+        get_special_token_id: Callable that maps a special token name to its lark grammar syntax.
 
     Returns:
         The lark grammar string for tool calls.
@@ -106,21 +111,16 @@ def _convert_tool_calls(
     if mode == "none":
         return ""
 
-    tool_calls_token = get_special_token_id("[TOOL_CALLS]")
-    args_token = get_special_token_id("[ARGS]")
+    tool_calls_token = get_special_token_id(SpecialTokens.tool_calls.value)
+    args_token = get_special_token_id(SpecialTokens.args.value)
 
     any_strict_true = any(tool.function.strict for tool in tools) if tools else False
 
     if not tools or not any_strict_true:
-        if not isinstance(mode, NamedToolChoice):
-            grammar_tool_call = (
-                f'{tool_calls_token} SAFE_WS? /.+/ {args_token} SAFE_WS? %json {{"type": "object"}} SAFE_WS?'
-            )
-        else:
-            grammar_tool_call = (
-                f'{tool_calls_token} SAFE_WS? "{mode.function.name}" {args_token} '
-                'SAFE_WS? %json {"type": "object"} SAFE_WS?'
-            )
+        tool_name = f'"{mode.function.name}"' if isinstance(mode, NamedToolChoice) else "/.+/"
+        grammar_tool_call = (
+            f'{tool_calls_token} SAFE_WS? {tool_name} {args_token} SAFE_WS? %json {{"type": "object"}} SAFE_WS?'
+        )
     else:
         grammar_per_tool = []
         tools = (
@@ -186,6 +186,10 @@ class GrammarFactory:
         assert token_name in self._special_token_map, f"Unknown special token: {token_name}"
         return self._special_token_map[token_name]
 
+    def _get_optional_special_token_lark(self, token_name: str) -> str | None:
+        r"""Returns lark grammar syntax for a special token, or `None` if absent."""
+        return self._special_token_map.get(token_name)
+
     @property
     def llg_tokenizer(self) -> "llg.LLTokenizer":
         return self._llg_tokenizer
@@ -231,6 +235,10 @@ class GrammarFactory:
         # NamedToolChoice forces a specific tool, which maps to "required" grammar.
         template_mode = ToolChoiceEnum.required if isinstance(mode, NamedToolChoice) else ToolChoiceEnum(mode)
         think_with_json = self._tokenizer.version.supports_model_settings
+
+        begin_think_token = self._get_optional_special_token_lark(SpecialTokens.begin_think.value)
+        end_think_token = self._get_optional_special_token_lark(SpecialTokens.end_think.value)
+
         return _cached_get_lark_from_jinja(
             template=template,
             mode=template_mode.value,
@@ -239,6 +247,8 @@ class GrammarFactory:
             parallel_tool_calls=parallel_tool_calls,
             json_only=json_only,
             think_with_json=think_with_json,
+            begin_think_token=begin_think_token,
+            end_think_token=end_think_token,
         )
 
     def get_lark_for_json_schema(self, template: str, json_schema: dict[str, Any]) -> str:

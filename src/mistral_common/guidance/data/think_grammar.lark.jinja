@@ -26,6 +26,6 @@ fcalls: content? {{ fcall }}
 
 content: (/(.|\n)+/)+
 
-think: <THINK> content </THINK>
+think: {{ begin_think_token }} content {{ end_think_token }}
 
 SAFE_WS: /[ \t\r\n]{1,8}/
