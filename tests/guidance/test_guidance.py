@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal
 
+import llguidance as llg
 import pytest
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -284,7 +285,7 @@ def _find_first_rejection(
     grammar = factory.get_lark_from_jinja(
         template=template, mode=mode, tools=tools, json_schema=None, parallel_tool_calls=True
     )
-    matcher = factory.get_matcher(grammar)
+    matcher = llg.LLMatcher(factory.llg_tokenizer, grammar)
     for i, token in enumerate(tokens):
         if not matcher.consume_token(token):
             return i
@@ -1110,7 +1111,7 @@ def _find_first_json_schema_rejection(
     """
     template = factory.select_jinja_template(reasoning=False)
     grammar = factory.get_lark_for_json_schema(template=template, json_schema=json_schema)
-    matcher = factory.get_matcher(grammar)
+    matcher = llg.LLMatcher(factory.llg_tokenizer, grammar)
     for i, token in enumerate(tokens):
         if not matcher.consume_token(token):
             return i
@@ -1442,7 +1443,7 @@ class TestGrammarFactory:
                 parallel_tool_calls=test_case.parallel_tool_calls,
             )
 
-        matcher = factory.get_matcher(grammar)
+        matcher = llg.LLMatcher(factory.llg_tokenizer, grammar)
 
         assert is_tekkenizer(test_case.tokenizer)
         debug_tokens = [_token_debug_repr(test_case.tokenizer, t) for t in test_case.tokens]
@@ -1501,11 +1502,6 @@ class TestGrammarFactory:
     def test_grammar_factory_init_rejects_unsupported(self, tokenizer: MistralTokenizer) -> None:
         with pytest.raises(ValueError, match="Guidance requires a Tekken tokenizer with version >= v11"):
             GrammarFactory(tokenizer)
-
-    def test_get_matcher_rejects_invalid_grammar(self, v11_tekken: MistralTokenizer) -> None:
-        factory = GrammarFactory(v11_tekken)
-        with pytest.raises(ValueError, match="Invalid grammar"):
-            factory.get_matcher("start: INVALID_RULE_REF_THAT_DOES_NOT_EXIST")
 
     @pytest.mark.parametrize("mode", [ToolChoiceEnum.any, ToolChoiceEnum.required])
     def test_get_lark_rejects_any_required_without_tools(

@@ -281,20 +281,3 @@ class GrammarFactory:
             parallel_tool_calls=True,
             json_only=True,
         )
-
-    def get_matcher(self, lark: str) -> "llg.LLMatcher":
-        r"""Creates an LLMatcher from a lark grammar string.
-
-        Args:
-            lark: The lark grammar string.
-
-        Returns:
-            The LLMatcher instance.
-
-        Raises:
-            ValueError: If the grammar is invalid.
-        """
-        error = llg.LLMatcher.validate_grammar(lark)
-        if error:
-            raise ValueError(f"Invalid grammar: {error}")
-        return llg.LLMatcher(self._llg_tokenizer, lark)
