@@ -1,6 +1,5 @@
 import logging
 import math
-import warnings
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -138,13 +137,6 @@ class AudioConfig:
             audio_len = audio_len // self.encoding_config.hop_length
 
         return math.ceil(audio_len / self.audio_length_per_tok)
-
-    @property
-    def num_delay_tokens(self) -> int:
-        # TODO(Patrick) - delete in 1.11.0
-        # only used in vLLM in voxtral_realtime.py
-        warnings.warn("Use get_num_delay_tokens instead of num_delay_tokens", DeprecationWarning)
-        return self.get_num_delay_tokens()
 
     def get_num_delay_tokens(self, transcription_delay_ms: float | None = None) -> int:
         assert self.is_streaming, f"Can't call get_num_delay_tokens if {self.is_streaming=}."
