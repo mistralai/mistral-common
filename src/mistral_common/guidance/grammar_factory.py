@@ -111,7 +111,7 @@ def _convert_tool_calls(
     Returns:
         The lark grammar string for tool calls.
     """
-    if mode == "none":
+    if mode == ToolChoiceEnum.none:
         return ""
 
     tool_calls_token = get_special_token_id(SpecialTokens.tool_calls.value)
