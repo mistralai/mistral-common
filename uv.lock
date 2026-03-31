@@ -873,7 +873,7 @@ wheels = [
 
 [[package]]
 name = "mistral-common"
-version = "1.10.0"
+version = "1.11.0"
 source = { editable = "." }
 dependencies = [
     { name = "jsonschema" },
