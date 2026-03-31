@@ -1,0 +1,31 @@
+{% if json_schema_str != None -%}
+{% if json_only -%}
+start: json_grammar
+{% else -%}
+start: body | json_grammar
+{% endif -%}
+
+{% if think_with_json -%}
+json_grammar: think? SAFE_WS? %json {{ json_schema_str }}
+{% else -%}
+json_grammar: SAFE_WS? %json {{ json_schema_str }}
+{% endif -%}
+{% else -%}
+start: body
+{% endif -%}
+
+{% if mode == "auto" -%}
+body: think? (content | fcalls)
+{% elif mode == "any" or mode == "required" -%}
+body: think? fcalls
+{% elif mode == "none" -%}
+body: think? content
+{% endif -%}
+
+fcalls: content? {{ fcall }}
+
+content: (/(.|\n)+/)+
+
+think: {{ begin_think_token }} content {{ end_think_token }}
+
+SAFE_WS: /[ \t\r\n]{1,8}/

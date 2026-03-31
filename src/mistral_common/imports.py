@@ -25,6 +25,16 @@ def is_hf_hub_installed() -> bool:
 
 
 @lru_cache()
+def is_jinja2_installed() -> bool:
+    return is_package_installed("jinja2")
+
+
+@lru_cache()
+def is_llguidance_installed() -> bool:
+    return is_package_installed("llguidance")
+
+
+@lru_cache()
 def is_opencv_installed() -> bool:
     try:
         import cv2  # noqa: F401
@@ -59,21 +69,36 @@ def is_soxr_installed() -> bool:
     return is_package_installed("soxr")
 
 
+@lru_cache()
 def assert_hf_hub_installed() -> None:
     assert_package_installed("huggingface_hub", _get_dependency_error_message("huggingface_hub", "hf-hub"))
 
 
+@lru_cache()
+def assert_jinja2_installed() -> None:
+    assert_package_installed("jinja2", _get_dependency_error_message("jinja2", "guidance"))
+
+
+@lru_cache()
+def assert_llguidance_installed() -> None:
+    assert_package_installed("llguidance", _get_dependency_error_message("llguidance", "guidance"))
+
+
+@lru_cache()
 def assert_opencv_installed() -> None:
     assert_package_installed("cv2", _get_dependency_error_message("opencv", "opencv"))
 
 
+@lru_cache()
 def assert_sentencepiece_installed() -> None:
     assert_package_installed("sentencepiece", _get_dependency_error_message("sentencepiece", "sentencepiece"))
 
 
+@lru_cache()
 def assert_soundfile_installed() -> None:
     assert_package_installed("soundfile", _get_dependency_error_message("soundfile", "soundfile"))
 
 
+@lru_cache()
 def assert_soxr_installed() -> None:
     assert_package_installed("soxr", _get_dependency_error_message("soxr", "soxr"))

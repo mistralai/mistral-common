@@ -1,0 +1,29 @@
+{% if json_schema_str != None -%}
+{% if json_only -%}
+start: SAFE_WS? %json {{ json_schema_str }}
+{% else -%}
+start: body | SAFE_WS? %json {{ json_schema_str }}
+{% endif -%}
+{% else -%}
+start: body
+{% endif -%}
+
+{% if mode == "auto" -%}
+body: think (content | fcalls)
+{% elif mode == "any" or mode == "required" -%}
+body: think fcalls
+{% elif mode == "none" -%}
+body: think content
+{% endif -%}
+
+fcalls: {{ fcall }}
+
+NO_THINK: /(.|\n)+/ & ~/(?s:.*)(<\/think>|<think>)(?s:.*)/
+end_think[capture, lazy]: /(.|\n)*<\/think>/
+
+text_first_optional: (NO_THINK)*
+content: NO_THINK
+
+think: SAFE_WS? /<think>/ text_first_optional end_think
+
+SAFE_WS: /[ \t\r\n]{1,8}/
