@@ -17,6 +17,7 @@ It encodes requests for Instruct, Transcription or Fill-In-The-Middle (FIM) task
 mistral-common/
 ├── src/
 │   └── mistral_common/
+│       ├── guidance/
 │       ├── protocol/
 │       ├── tokens/
 │       └── ...
@@ -66,6 +67,12 @@ mistral-common/
     - `tekken.py`: Tekken tokenizer used by all recent models
     - `utils.py`: Utility functions for the tokenizers
   - `instruct/`: deprecated in favor of `src/mistral_common/protocol/instruct/request.py`
+
+### Guidance (Grammar)
+- `src/mistral_common/guidance/`: Creates Lark grammars for tool calls, JSON schema and reasoning using llguidance
+  - `grammar_factory.py`: `GrammarFactory` that builds and renders Lark grammars from Jinja templates
+  - `tokenizer.py`: Adapts Tekken tokenizer for llguidance
+  - `data/`: Jinja-templated Lark grammar files for base, thinking (special tokens) and thinking (plain text) modes
 
 ## Experimental
 - `src/mistral_common/experimental/`: Experimental features
