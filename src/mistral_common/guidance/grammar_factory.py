@@ -190,11 +190,11 @@ class GrammarFactory:
         self._special_token_map = self._build_special_token_map()
 
     def _build_special_token_map(self) -> dict[str, str]:
-        """Build a mapping from special token names to their grammar syntax."""
+        r"""Build a mapping from special token names to their grammar syntax."""
         return {self._tokenizer.id_to_piece(i): f"<[{i}]>" for i in range(self._tokenizer.num_special_tokens)}
 
     def _special_token_lark(self, token_name: str) -> str:
-        """Convert special token name to lark grammar syntax."""
+        r"""Convert special token name to lark grammar syntax."""
         assert token_name in self._special_token_map, f"Unknown special token: {token_name}"
         return self._special_token_map[token_name]
 
