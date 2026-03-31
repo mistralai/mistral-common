@@ -325,6 +325,42 @@ def _generate_tools_and_settings_definition(config: TemplateConfig) -> str:
     return "\n".join(lines)
 
 
+def _generate_reasoning_to_thinking_inline() -> list[str]:
+    r"""Generate inline reasoning-to-thinking conversion inside the aggregation loop.
+
+    Emitted inside the ``for msg in ns_agg.current_group`` loop when
+    ``config.thinking_support`` is enabled. For each assistant message, converts
+    a top-level ``reasoning_content`` or ``reasoning`` field into a leading
+    ``{"type": "thinking", "thinking": ...}`` chunk prepended to the content,
+    so that reasoning traces from third-party APIs (OpenAI, DeepSeek, vLLM, …)
+    are aggregated uniformly with inline ``ThinkChunk``\s.
+
+    ``reasoning_content`` takes precedence over ``reasoning`` when both are present.
+
+    Returns:
+        Lines of Jinja2 template code for the inline conversion.
+    """
+    return [
+        "                {#- Convert reasoning / reasoning_content to a leading thinking chunk. #}",
+        "                {%- set reasoning = msg.get('reasoning_content', msg.get('reasoning', none)) %}",
+        "                {%- if reasoning is not none and reasoning != '' %}",
+        "                    {%- set think_chunk = {'type': 'thinking', 'thinking': reasoning} %}",
+        "                    {%- if msg['content'] is string and msg['content'] != '' %}",
+        "                        {%- set new_content = [think_chunk, {'type': 'text', 'text': msg['content']}] %}",
+        "                    {%- elif msg['content'] is not none and msg['content'] is not string and msg['content'] | length > 0 %}",  # noqa: E501
+        "                        {%- set new_content = [think_chunk] + msg['content'] | list %}",
+        "                    {%- else %}",
+        "                        {%- set new_content = [think_chunk] %}",
+        "                    {%- endif %}",
+        "                    {%- if msg['tool_calls'] is defined and msg['tool_calls'] is not none %}",
+        "                        {%- set msg = {'role': msg['role'], 'content': new_content, 'tool_calls': msg['tool_calls']} %}",  # noqa: E501
+        "                    {%- else %}",
+        "                        {%- set msg = {'role': msg['role'], 'content': new_content} %}",
+        "                    {%- endif %}",
+        "                {%- endif %}",
+    ]
+
+
 def _generate_message_aggregation(config: TemplateConfig) -> str:
     r"""Generate message aggregation pre-processing block.
 
@@ -353,16 +389,14 @@ def _generate_message_aggregation(config: TemplateConfig) -> str:
     """
     lines = [
         "",
-        "{#- Aggregate consecutive messages with the same role. #}",
-        "{#- System and tool messages are never merged across consecutive messages. #}",
-        "{#- A sentinel message is appended so the last group gets flushed inside the loop #}",
-        "{#- without duplicating the flush logic after the loop. #}",
+        "{#- Aggregate consecutive messages with the same role except system and tool. #}",
+        "{#- A sentinel message is appended so the last group gets flushed inside the loop. #}",
         "{%- set ns_agg = namespace(messages=[], current_group=[], current_role=none) %}",
         "{%- for message in loop_messages + [{'role': '__sentinel__'}] %}",
         "    {%- if message['role'] != ns_agg.current_role or message['role'] == 'system' or message['role'] == 'tool' %}",  # noqa: E501
     ]
 
-    lines.extend(_generate_flush_logic())
+    lines.extend(_generate_flush_logic(config))
 
     lines.extend(
         [
@@ -381,19 +415,27 @@ def _generate_message_aggregation(config: TemplateConfig) -> str:
     return "\n".join(lines)
 
 
-def _generate_flush_logic() -> list[str]:
+def _generate_flush_logic(config: TemplateConfig) -> list[str]:
     r"""Generate the flush logic for aggregating a group of same-role messages.
 
     Called when the role changes (or at end of messages) to coalesce all messages
-    in the current group into a single output message. Adjacent `TextChunks` are
-    joined with `"\\n\\n"`, non-text chunks are preserved as barriers, and
-    `tool_calls` from all messages in the group are concatenated. Chunk type
+    in the current group into a single output message. Adjacent ``TextChunk``\s are
+    joined with ``"\\n\\n"``, non-text chunks are preserved as barriers, and
+    ``tool_calls`` from all messages in the group are concatenated. Chunk type
     validation is deferred to the message rendering loop.
+
+    When ``config.thinking_support`` is enabled, ``reasoning_content`` /
+    ``reasoning`` fields on assistant messages are converted to a leading thinking
+    chunk prepended to the message content **inside** the aggregation loop, so that
+    reasoning traces are aggregated uniformly with inline ``ThinkChunk``\s.
 
     The logic is role-agnostic for user, assistant, and system: system messages
     always form single-message groups (enforced by the grouping logic), so they
     are effectively coalesced individually. Tool messages pass through as-is to
-    preserve extra fields like `tool_call_id` and `name`.
+    preserve extra fields like ``tool_call_id`` and ``name``.
+
+    Args:
+        config: The template configuration.
 
     Returns:
         Lines of Jinja2 template code for flushing the current aggregation group.
@@ -404,43 +446,51 @@ def _generate_flush_logic() -> list[str]:
         "        {%- elif ns_agg.current_role is not none %}",
         "            {%- set ns_c = namespace(text_parts=[], chunks=[], has_non_text=false, tool_calls=[]) %}",
         "            {%- for msg in ns_agg.current_group %}",
-        "                {%- if msg['content'] is string %}",
-        "                    {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}",
-        "                {%- elif msg['content'] is not none %}",
-        "                    {%- for block in msg['content'] %}",
-        "                        {%- if block['type'] == 'text' %}",
-        "                            {%- set ns_c.text_parts = ns_c.text_parts + [block['text']] %}",
-        "                        {%- else %}",
-        "                            {%- if ns_c.text_parts | length > 0 %}",
-        "                                {%- set ns_c.chunks = ns_c.chunks + [{'type': 'text', 'text': ns_c.text_parts | join('\\n\\n')}] %}",  # noqa: E501
-        "                                {%- set ns_c.text_parts = [] %}",
-        "                            {%- endif %}",
-        "                            {%- set ns_c.chunks = ns_c.chunks + [block] %}",
-        "                            {%- set ns_c.has_non_text = true %}",
-        "                        {%- endif %}",
-        "                    {%- endfor %}",
-        "                {%- endif %}",
-        "                {%- if msg['tool_calls'] is defined and msg['tool_calls'] is not none %}",
-        "                    {%- set ns_c.tool_calls = ns_c.tool_calls + msg['tool_calls'] | list %}",
-        "                {%- endif %}",
-        "            {%- endfor %}",
-        # Finalize: flush remaining text, build merged_content
-        "            {%- if ns_c.has_non_text %}",
-        "                {%- if ns_c.text_parts | length > 0 %}",
-        "                    {%- set ns_c.chunks = ns_c.chunks + [{'type': 'text', 'text': ns_c.text_parts | join('\\n\\n')}] %}",  # noqa: E501
-        "                {%- endif %}",
-        "                {%- set merged_content = ns_c.chunks %}",
-        "            {%- else %}",
-        "                {%- set merged_content = ns_c.text_parts | join('\\n\\n') %}",
-        "            {%- endif %}",
-        # Emit the merged message with role and optional tool_calls
-        "            {%- if ns_c.tool_calls | length > 0 %}",
-        "                {%- set ns_agg.messages = ns_agg.messages + [{'role': ns_agg.current_role, 'content': merged_content, 'tool_calls': ns_c.tool_calls}] %}",  # noqa: E501
-        "            {%- else %}",
-        "                {%- set ns_agg.messages = ns_agg.messages + [{'role': ns_agg.current_role, 'content': merged_content}] %}",  # noqa: E501
-        "            {%- endif %}",
-        "        {%- endif %}",
     ]
+
+    if config.thinking_support:
+        lines.extend(_generate_reasoning_to_thinking_inline())
+
+    lines.extend(
+        [
+            "                {%- if msg['content'] is string %}",
+            "                    {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}",
+            "                {%- elif msg['content'] is not none %}",
+            "                    {%- for block in msg['content'] %}",
+            "                        {%- if block['type'] == 'text' %}",
+            "                            {%- set ns_c.text_parts = ns_c.text_parts + [block['text']] %}",
+            "                        {%- else %}",
+            "                            {%- if ns_c.text_parts | length > 0 %}",
+            "                                {%- set ns_c.chunks = ns_c.chunks + [{'type': 'text', 'text': ns_c.text_parts | join('\\n\\n')}] %}",  # noqa: E501
+            "                                {%- set ns_c.text_parts = [] %}",
+            "                            {%- endif %}",
+            "                            {%- set ns_c.chunks = ns_c.chunks + [block] %}",
+            "                            {%- set ns_c.has_non_text = true %}",
+            "                        {%- endif %}",
+            "                    {%- endfor %}",
+            "                {%- endif %}",
+            "                {%- if msg['tool_calls'] is defined and msg['tool_calls'] is not none %}",
+            "                    {%- set ns_c.tool_calls = ns_c.tool_calls + msg['tool_calls'] | list %}",
+            "                {%- endif %}",
+            "            {%- endfor %}",
+            # Finalize: flush remaining text, build merged_content
+            "            {%- if ns_c.has_non_text %}",
+            "                {%- if ns_c.text_parts | length > 0 %}",
+            "                    {%- set ns_c.chunks = ns_c.chunks + [{'type': 'text', 'text': ns_c.text_parts | join('\\n\\n')}] %}",  # noqa: E501
+            "                {%- endif %}",
+            "                {%- set merged_content = ns_c.chunks %}",
+            "            {%- else %}",
+            "                {%- set merged_content = ns_c.text_parts | join('\\n\\n') %}",
+            "            {%- endif %}",
+            # Emit the merged message with role and optional tool_calls
+            "            {%- if ns_c.tool_calls | length > 0 %}",
+            "                {%- set ns_agg.messages = ns_agg.messages + [{'role': ns_agg.current_role, 'content': merged_content, 'tool_calls': ns_c.tool_calls}] %}",  # noqa: E501
+            "            {%- else %}",
+            "                {%- set ns_agg.messages = ns_agg.messages + [{'role': ns_agg.current_role, 'content': merged_content}] %}",  # noqa: E501
+            "            {%- endif %}",
+            "        {%- endif %}",
+        ]
+    )
     return lines
 
 

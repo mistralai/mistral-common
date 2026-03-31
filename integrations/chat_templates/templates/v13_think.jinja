@@ -20,7 +20,7 @@
     {%- set tools_and_settings = '[AVAILABLE_TOOLS]' + (tools| tojson) + '[/AVAILABLE_TOOLS]' %}
 {%- endif %}
 
-{#- Aggregate consecutive messages with the same role. #}
+{#- Aggregate consecutive messages with the same role except system and tool. #}
 {#- A sentinel message is appended so the last group gets flushed inside the loop. #}
 {%- set ns_agg = namespace(messages=[], current_group=[], current_role=none) %}
 {%- for message in loop_messages + [{'role': '__sentinel__'}] %}
@@ -30,6 +30,23 @@
         {%- elif ns_agg.current_role is not none %}
             {%- set ns_c = namespace(text_parts=[], chunks=[], has_non_text=false, tool_calls=[]) %}
             {%- for msg in ns_agg.current_group %}
+                {#- Convert reasoning / reasoning_content to a leading thinking chunk. #}
+                {%- set reasoning = msg.get('reasoning_content', msg.get('reasoning', none)) %}
+                {%- if reasoning is not none and reasoning != '' %}
+                    {%- set think_chunk = {'type': 'thinking', 'thinking': reasoning} %}
+                    {%- if msg['content'] is string and msg['content'] != '' %}
+                        {%- set new_content = [think_chunk, {'type': 'text', 'text': msg['content']}] %}
+                    {%- elif msg['content'] is not none and msg['content'] is not string and msg['content'] | length > 0 %}
+                        {%- set new_content = [think_chunk] + msg['content'] | list %}
+                    {%- else %}
+                        {%- set new_content = [think_chunk] %}
+                    {%- endif %}
+                    {%- if msg['tool_calls'] is defined and msg['tool_calls'] is not none %}
+                        {%- set msg = {'role': msg['role'], 'content': new_content, 'tool_calls': msg['tool_calls']} %}
+                    {%- else %}
+                        {%- set msg = {'role': msg['role'], 'content': new_content} %}
+                    {%- endif %}
+                {%- endif %}
                 {%- if msg['content'] is string %}
                     {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}
                 {%- elif msg['content'] is not none %}

@@ -24,6 +24,24 @@ Supported features are:
 - audio
 - think
 
+### Reasoning / `reasoning_content` support (think templates only)
+
+Templates with `think` support (v13+ with `_think` suffix) automatically convert the `reasoning_content` or `reasoning` field on assistant messages into a leading `[THINK]...[/THINK]` chunk before the message content.
+
+This provides compatibility with third-party APIs (OpenAI, DeepSeek, vLLM, SGLang, …) that return reasoning traces as a top-level field rather than as inline thinking chunks:
+
+```json
+{"role": "assistant", "reasoning_content": "Let me think step by step...", "content": "The answer is 42."}
+```
+
+becomes equivalent to:
+
+```json
+{"role": "assistant", "content": [{"type": "thinking", "thinking": "Let me think step by step..."}, {"type": "text", "text": "The answer is 42."}]}
+```
+
+Both `reasoning_content` and `reasoning` are supported; `reasoning_content` takes precedence when both are present. The conversion happens before message aggregation, so consecutive assistant messages with reasoning fields are merged just like any other content. Non-think templates silently ignore these fields.
+
 The JINJA files do not contain a default system prompt as it should be defined per model. To customize the system prompt, you can either copy the template and modify it or use the `chat_templates.py` script:
 ```bash
 python chat_templates.py -h

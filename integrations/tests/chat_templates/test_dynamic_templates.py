@@ -866,3 +866,223 @@ def test_v15_tools_and_settings_ordering(has_system: bool, has_tools: bool, reas
 
     inst_pos = output.index("[INST]")
     assert inst_pos > settings_pos
+
+
+# ── reasoning / reasoning_content → thinking chunk conversion ──────────
+
+
+THINK_CONFIGS = [
+    (TokenizerVersion.v13, False, False),
+    (TokenizerVersion.v13, True, False),
+    (TokenizerVersion.v15, False, False),
+    (TokenizerVersion.v15, True, False),
+]
+
+
+@pytest.mark.parametrize(("version", "image", "audio"), THINK_CONFIGS)
+def test_reasoning_content_to_thinking_chunk(version: TokenizerVersion, image: bool, audio: bool) -> None:
+    r"""``reasoning_content`` on an assistant message produces a leading ``[THINK]...[/THINK]``."""
+    template = generate_chat_template_dynamic(False, version, image, audio, thinking_support=True)
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "What is 2+2?"},
+        {"role": "assistant", "reasoning_content": "Let me add 2 and 2.", "content": "The answer is 4."},
+    ]
+
+    output = render_template(template, messages)
+    assert "[THINK]Let me add 2 and 2.[/THINK]The answer is 4." in output
+
+
+@pytest.mark.parametrize(("version", "image", "audio"), THINK_CONFIGS)
+def test_reasoning_field_to_thinking_chunk(version: TokenizerVersion, image: bool, audio: bool) -> None:
+    r"""``reasoning`` field (alias) produces the same ``[THINK]...[/THINK]``."""
+    template = generate_chat_template_dynamic(False, version, image, audio, thinking_support=True)
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "What is 3+3?"},
+        {"role": "assistant", "reasoning": "Adding three and three.", "content": "The answer is 6."},
+    ]
+
+    output = render_template(template, messages)
+    assert "[THINK]Adding three and three.[/THINK]The answer is 6." in output
+
+
+@pytest.mark.parametrize(("version", "image", "audio"), THINK_CONFIGS)
+def test_reasoning_content_takes_precedence_over_reasoning(version: TokenizerVersion, image: bool, audio: bool) -> None:
+    r"""When both ``reasoning_content`` and ``reasoning`` are present, ``reasoning_content`` wins."""
+    template = generate_chat_template_dynamic(False, version, image, audio, thinking_support=True)
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "Hi"},
+        {
+            "role": "assistant",
+            "reasoning_content": "RC wins",
+            "reasoning": "R loses",
+            "content": "Hello!",
+        },
+    ]
+
+    output = render_template(template, messages)
+    assert "[THINK]RC wins[/THINK]Hello!" in output
+    assert "R loses" not in output
+
+
+@pytest.mark.parametrize(("version", "image", "audio"), THINK_CONFIGS)
+def test_reasoning_with_existing_think_chunks(version: TokenizerVersion, image: bool, audio: bool) -> None:
+    r"""``reasoning_content`` is prepended before existing inline ``ThinkChunk``\s."""
+    template = generate_chat_template_dynamic(False, version, image, audio, thinking_support=True)
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "Hi"},
+        {
+            "role": "assistant",
+            "reasoning_content": "Top-level reasoning",
+            "content": [
+                {"type": "thinking", "thinking": "Inline thinking"},
+                {"type": "text", "text": "Hello!"},
+            ],
+        },
+    ]
+
+    output = render_template(template, messages)
+    assert "[THINK]Top-level reasoning[/THINK][THINK]Inline thinking[/THINK]Hello!" in output
+
+
+@pytest.mark.parametrize(("version", "image", "audio"), THINK_CONFIGS)
+def test_reasoning_content_only_no_text_content(version: TokenizerVersion, image: bool, audio: bool) -> None:
+    r"""``reasoning_content`` with empty/null text content produces just the thinking chunk."""
+    template = generate_chat_template_dynamic(False, version, image, audio, thinking_support=True)
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "Hi"},
+        {"role": "assistant", "reasoning_content": "Just thinking...", "content": ""},
+    ]
+
+    output = render_template(template, messages)
+    assert "[THINK]Just thinking...[/THINK]" in output
+
+
+@pytest.mark.parametrize(("version", "image", "audio"), THINK_CONFIGS)
+def test_reasoning_content_with_tool_calls(version: TokenizerVersion, image: bool, audio: bool) -> None:
+    r"""``reasoning_content`` is preserved alongside ``tool_calls``."""
+    template = generate_chat_template_dynamic(False, version, image, audio, thinking_support=True)
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "What's the weather?"},
+        {
+            "role": "assistant",
+            "reasoning_content": "I should call a tool.",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "abc123",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": '{"city": "Paris"}'},
+                },
+            ],
+        },
+        {"role": "tool", "name": "get_weather", "content": "22C", "tool_call_id": "abc123"},
+        {"role": "assistant", "content": "It's 22C in Paris."},
+    ]
+
+    tools: list[dict[str, Any]] = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "",
+                "parameters": {"type": "object", "properties": {"city": {"type": "string"}}},
+            },
+        }
+    ]
+
+    output = render_template(template, messages, tools=tools)
+    assert "[THINK]I should call a tool.[/THINK]" in output
+    assert "get_weather" in output
+
+
+@pytest.mark.parametrize(("version", "image", "audio"), THINK_CONFIGS)
+def test_reasoning_aggregation_consecutive_assistants(version: TokenizerVersion, image: bool, audio: bool) -> None:
+    r"""Consecutive assistant messages with ``reasoning_content`` aggregate correctly."""
+    template = generate_chat_template_dynamic(False, version, image, audio, thinking_support=True)
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "Solve this."},
+        {"role": "assistant", "reasoning_content": "Step 1 reasoning", "content": "Partial answer."},
+        {"role": "assistant", "reasoning_content": "Step 2 reasoning", "content": "Final answer."},
+    ]
+
+    output = render_template(template, messages)
+    # Both reasoning traces should appear as thinking chunks
+    assert "[THINK]Step 1 reasoning[/THINK]" in output
+    assert "[THINK]Step 2 reasoning[/THINK]" in output
+    # Text from both messages should be aggregated
+    assert "Partial answer." in output
+    assert "Final answer." in output
+
+
+@pytest.mark.parametrize(("version", "image", "audio"), THINK_CONFIGS)
+def test_reasoning_static_dynamic_parity(version: TokenizerVersion, image: bool, audio: bool) -> None:
+    r"""Static and dynamic templates produce identical output for ``reasoning_content`` input."""
+    static_template = get_chat_template(
+        spm=False,
+        tokenizer_version=version,
+        image_support=image,
+        audio_support=audio,
+        thinking_support=True,
+    )
+    dynamic_template = generate_chat_template_dynamic(False, version, image, audio, thinking_support=True)
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "reasoning_content": "Thinking...", "content": "Hi!"},
+        {"role": "user", "content": "How are you?"},
+        {"role": "assistant", "reasoning": "Considering the question.", "content": "I'm well!"},
+    ]
+
+    static_output = render_template(static_template, messages)
+    dynamic_output = render_template(dynamic_template, messages)
+
+    assert static_output == dynamic_output
+
+
+def test_non_think_template_ignores_reasoning_field() -> None:
+    r"""Non-think templates silently ignore ``reasoning_content`` (no conversion happens)."""
+    template = generate_chat_template_dynamic(False, TokenizerVersion.v13, False, False, thinking_support=False)
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "Hi"},
+        {"role": "assistant", "reasoning_content": "This is ignored", "content": "Hello!"},
+    ]
+
+    output = render_template(template, messages)
+    assert "[THINK]" not in output
+    assert "Hello!" in output
+
+
+def test_empty_reasoning_content_is_ignored() -> None:
+    r"""Empty-string ``reasoning_content`` does not produce a thinking chunk."""
+    template = generate_chat_template_dynamic(False, TokenizerVersion.v13, False, False, thinking_support=True)
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "Hi"},
+        {"role": "assistant", "reasoning_content": "", "content": "Hello!"},
+    ]
+
+    output = render_template(template, messages)
+    assert "[THINK]" not in output
+    assert "Hello!" in output
+
+
+def test_none_reasoning_content_is_ignored() -> None:
+    r"""``None`` value for ``reasoning_content`` does not produce a thinking chunk."""
+    template = generate_chat_template_dynamic(False, TokenizerVersion.v13, False, False, thinking_support=True)
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "Hi"},
+        {"role": "assistant", "reasoning_content": None, "content": "Hello!"},
+    ]
+
+    output = render_template(template, messages)
+    assert "[THINK]" not in output
+    assert "Hello!" in output
