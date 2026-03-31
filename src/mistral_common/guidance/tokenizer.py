@@ -1,5 +1,4 @@
 import re
-from typing import Any
 
 from mistral_common.imports import assert_llguidance_installed, is_llguidance_installed
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenizer
@@ -80,13 +79,11 @@ class MistralLLGTokenizer:
                 f"{len(self._special_token_ids)}"
             )
 
-    def __call__(self, s: str, *args: Any, **kwargs: Any) -> list[int]:
+    def __call__(self, s: str) -> list[int]:
         r"""Tokenizes a string into token ids.
 
         Args:
             s: The string to tokenize.
-            *args: Additional positional arguments (ignored).
-            **kwargs: Additional keyword arguments (ignored).
 
         Returns:
             The list of token ids.
