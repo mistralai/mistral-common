@@ -85,6 +85,9 @@ JINJA_PATHS = {
 }
 
 
+_TOOL_CALL_GRAMMAR = "{tool_calls_token} SAFE_WS? {tool_name} {args_token} SAFE_WS? %json {args_json} SAFE_WS?"
+
+
 def _get_tool_args_json(tool: Tool) -> dict[str, Any]:
     r"""Returns the JSON schema for a tool's arguments."""
     args = tool.function.parameters if tool.function.strict else {"type": "object"}
@@ -118,23 +121,32 @@ def _convert_tool_calls(
 
     if not tools or not any_strict_true:
         tool_name = f'"{mode.function.name}"' if isinstance(mode, NamedToolChoice) else "/.+/"
-        grammar_tool_call = (
-            f'{tool_calls_token} SAFE_WS? {tool_name} {args_token} SAFE_WS? %json {{"type": "object"}} SAFE_WS?'
-        )
+        tool_entries = [(tool_name, '{"type": "object"}')]
     else:
-        grammar_per_tool = []
-        tools = (
+        filtered_tools = (
             [next(tool for tool in tools if tool.function.name == mode.function.name)]
             if isinstance(mode, NamedToolChoice)
             else tools
         )
-        for tool in tools:
-            args = _get_tool_args_json(tool)
-            grammar_per_tool.append(
-                f'({tool_calls_token} SAFE_WS? "{tool.function.name}" {args_token} SAFE_WS? %json '
-                f"{json.dumps(args, ensure_ascii=False)} SAFE_WS?)"
-            )
-        grammar_tool_call = f"{' | '.join(grammar_per_tool)}"
+        tool_entries = [
+            (f'"{tool.function.name}"', json.dumps(_get_tool_args_json(tool), ensure_ascii=False))
+            for tool in filtered_tools
+        ]
+
+    grammar_parts = [
+        _TOOL_CALL_GRAMMAR.format(
+            tool_calls_token=tool_calls_token,
+            args_token=args_token,
+            tool_name=name,
+            args_json=args_json,
+        )
+        for name, args_json in tool_entries
+    ]
+
+    grammar_tool_call = (
+        " | ".join(f"({part})" for part in grammar_parts) if len(grammar_parts) > 1 else grammar_parts[0]
+    )
+
     return f"({grammar_tool_call})+" if parallel_tool_calls else grammar_tool_call
 
 

@@ -1589,6 +1589,7 @@ class TestConvertToolCalls:
         assert "<[[TOOL_CALLS]]>" in result
         assert "<[[ARGS]]>" in result
         assert "/.+/" in result
+        assert not result.startswith("(")
         assert not result.endswith(")+")
 
     def test_auto_mode_non_strict(self) -> None:
@@ -1601,6 +1602,7 @@ class TestConvertToolCalls:
         )
         assert "<[[TOOL_CALLS]]>" in result
         assert "/.+/" in result
+        assert not result.startswith("(")
         assert not result.endswith(")+")
 
     def test_auto_mode_strict(self) -> None:
@@ -1616,6 +1618,21 @@ class TestConvertToolCalls:
         )
         assert '"retrieve_payment_date"' in result
         assert '"retrieve_payment_status"' in result
+        assert " | " in result
+        assert result.count("(") >= 2
+        assert not result.endswith(")+")
+
+    def test_auto_mode_single_strict(self) -> None:
+        tools = [ToolProvider.retrieve_payment_date(strict=True)]
+        result = _convert_tool_calls(
+            tools=tools,
+            mode=ToolChoiceEnum.auto,
+            parallel_tool_calls=False,
+            get_special_token_id=_stub_get_special_token_id,
+        )
+        assert '"retrieve_payment_date"' in result
+        assert " | " not in result
+        assert not result.startswith("(")
         assert not result.endswith(")+")
 
     def test_named_tool_choice_non_strict(self) -> None:
@@ -1645,6 +1662,8 @@ class TestConvertToolCalls:
         )
         assert '"retrieve_payment_date"' in result
         assert '"retrieve_payment_status"' not in result
+        assert " | " not in result
+        assert not result.startswith("(")
         assert not result.endswith(")+")
 
     def test_parallel_tool_calls(self) -> None:
@@ -1666,4 +1685,5 @@ class TestConvertToolCalls:
         )
         assert '"additionalProperties": false' in result
         assert '"properties": {}' in result
+        assert not result.startswith("(")
         assert not result.endswith(")+")
