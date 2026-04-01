@@ -141,7 +141,7 @@ class AudioConfig:
 
     @property
     def num_delay_tokens(self) -> int:
-        # TODO(Patrick) - delete in 1.11.0
+        # TODO(Patrick) - delete in 1.13.0
         # only used in vLLM in voxtral_realtime.py
         warnings.warn("Use get_num_delay_tokens instead of num_delay_tokens", DeprecationWarning)
         return self.get_num_delay_tokens()
@@ -264,7 +264,7 @@ class AudioEncoder:
         """
         # TODO(Patrick) - remove **kwargs as it's just there to swallow deprecated
         # keyword args from voxtral_realtime in vLLM. It was
-        # relevant for the release. Remove in mistral_common version 1.11
+        # relevant for the release. Remove in mistral_common version 1.13.0
         if self.audio_config.chunk_length_s:
             next_multiple_of_chunk_frames = self.next_multiple_of_chunk_frames(audio_array.shape[-1], sampling_rate)
             audio_array = np.pad(audio_array, (0, next_multiple_of_chunk_frames - audio_array.shape[-1]))
