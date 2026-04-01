@@ -92,7 +92,7 @@
 {%- set loop_messages = ns_agg.messages %}
 
 {#- Validates message ordering. #}
-{%- set ns = namespace(tools_and_settings_emitted=false) %}
+{%- set ns = namespace(max_idx_user=-1) %}
 {%- if loop_messages | length > 0 and loop_messages[0]['role'] != 'user' and loop_messages[0]['role'] != 'system' %}
     {{- raise_exception('Conversation must start with a user or system message, got ' + loop_messages[0]['role'] + '.') }}
 {%- endif %}
@@ -118,33 +118,30 @@
             {%- endif %}
         {%- endif %}
     {%- endif %}
+    {%- if message.role == 'user' %}
+        {%- set ns.max_idx_user = ns.max_idx_user + 1 %}
+    {%- endif %}
     {%- set ns_order.previous_role = current_role %}
 {%- endfor %}
 
+
+{%- set ns.index = 0 %}
 {#- Handle conversation messages. #}
 {%- for message in loop_messages %}
-    {#- User messages supports text, image and image_url content. #}
+    {#- User messages supports text content. #}
     {%- if message['role'] == 'user' %}
-        {%- if not ns.tools_and_settings_emitted %}
+        {%- if (ns.index == ns.max_idx_user) and has_tools %}
             {{- tools_and_settings }}
-            {%- set ns.tools_and_settings_emitted = true %}
         {%- endif %}
         {%- if message['content'] is string %}
             {{- '[INST]' + message['content'] + '[/INST]' }}
         {%- elif message['content'] | length > 0 %}
             {{- '[INST]' }}
-            {%- if message['content'] | length == 2 %}
-                {%- set blocks = message['content'] | sort(attribute='type') %}
-            {%- else %}
-                {%- set blocks = message['content'] %}
-            {%- endif %}
-            {%- for block in blocks %}
+            {%- for block in message['content'] %}
                 {%- if block['type'] == 'text' %}
                     {{- block['text'] }}
-                {%- elif block['type'] in ['image', 'image_url'] %}
-                    {{- '[IMG]' }}
                 {%- else %}
-                    {{- raise_exception('Only text, image and image_url chunks are supported in user message content.') }}
+                    {{- raise_exception('Only text chunks are supported in user message content.') }}
                 {%- endif %}
             {%- endfor %}
             {{- '[/INST]' }}
@@ -165,8 +162,8 @@
                 {%- if block['type'] == 'text' %}
                     {{- block['text'] }}
                 {%- elif block['type'] == 'thinking' %}
-                    {{- '[THINK]' + block['thinking'] }}
-                    {%- if block.get('closed', true) %}{{- '[/THINK]' }}{%- endif %}
+                    {{- '<think>' + block['thinking'] }}
+                    {%- if block.get('closed', true) %}{{- '</think>' }}{%- endif %}
                 {%- else %}
                     {{- raise_exception('Only text and thinking chunks are supported in assistant message contents.') }}
                 {%- endif %}
@@ -178,12 +175,16 @@
                 {{- '[TOOL_CALLS]' }}
                 {%- set name = tool['function']['name'] %}
                 {%- set arguments = tool['function']['arguments'] %}
+                {%- set id = tool['id']%}
+                {%- if id is not defined or id|length != 9 %}
+                    {{- raise_exception('Tool call must have an id of 9 characters or numbers.') }}
+                {%- endif %}
                 {%- if arguments is not string %}
                     {%- set arguments = arguments|tojson|safe %}
                 {%- elif arguments == '' %}
                     {%- set arguments = '{}' %}
                 {%- endif %}
-                {{- name + '[ARGS]' + arguments }}
+                {{- name + '[CALL_ID]' + id + '[ARGS]' + arguments }}
             {%- endfor %}
         {%- endif %}
 
@@ -191,7 +192,14 @@
 
     {#- Tool messages only supports text content. #}
     {%- elif message['role'] == 'tool' %}
-        {{- '[TOOL_RESULTS]' + message['content']|string + '[/TOOL_RESULTS]' }}
+        {%- if message['call_id'] is not undefined and message['call_id']|length == 9 %}
+            {%- set tool_id = message['call_id'] %}
+        {%- elif message['tool_call_id'] is not undefined and message['tool_call_id']|length == 9  %}
+            {%- set tool_id = message['tool_call_id'] %}
+        {%- else %}
+            {{- raise_exception('Tool message must have a call_id or tool_call_id of 9 characters or numbers.') }}
+        {%- endif %}
+        {{- '[TOOL_RESULTS]' + tool_id + '[TOOL_CONTENT]' + message['content']|string + '[/TOOL_RESULTS]' }}
 
     {#- System messages. #}
     {%- elif message['role'] == 'system' %}
@@ -203,8 +211,8 @@
                 {%- if block['type'] == 'text' %}
                     {{- block['text'] }}
                 {%- elif block['type'] == 'thinking' %}
-                    {{- '[THINK]' + block['thinking'] }}
-                    {%- if block.get('closed', true) %}{{- '[/THINK]' }}{%- endif %}
+                    {{- '<think>' + block['thinking'] }}
+                    {%- if block.get('closed', true) %}{{- '</think>' }}{%- endif %}
                 {%- else %}
                     {{- raise_exception('Only text and thinking chunks are supported in system message contents.') }}
                 {%- endif %}
@@ -215,5 +223,8 @@
     {#- Raise exception for unsupported roles. #}
     {%- else %}
         {{- raise_exception('Only user, assistant, system and tool roles are supported, got ' + message['role'] + '.') }}
+    {%- endif %}
+    {%- if message['role'] == 'user' %}
+        {%- set ns.index = ns.index + 1 %}
     {%- endif %}
 {%- endfor %}

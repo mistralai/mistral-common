@@ -22,6 +22,9 @@ class TemplateConfig:
             Adds [AUDIO] token support. Requires version v7+. Mutually exclusive with image.
         thinking_support: Whether to enable thinking chunks in system and assistant messages.
             Adds [THINK]/[/THINK] token support. Requires version v13+.
+        plain_thinking_support: Whether to enable plain text thinking chunks using
+            ``<think>``/``</think>`` tags instead of special tokens. Only available for v11.
+            Mutually exclusive with `thinking_support`.
 
     Raises:
         ValueError: If the configuration is invalid (e.g., conflicting options like
@@ -40,8 +43,11 @@ class TemplateConfig:
     image_support: bool = False
     audio_support: bool = False
     thinking_support: bool = False
+    plain_thinking_support: bool = False
 
     def __post_init__(self) -> None:
+        if self.plain_thinking_support and self.thinking_support:
+            raise ValueError("Plain thinking support and thinking support are mutually exclusive")
         if self.spm and (self.version >= TokenizerVersion.v11 or self.audio_support):
             raise ValueError("SPM tokenizer is not supported for tokenizer versions v11 and above or audio")
         if self.image_support and self.audio_support:
@@ -54,6 +60,15 @@ class TemplateConfig:
             raise ValueError("Thinking support is only available for tokenizer versions v13 and above")
         if self.audio_support and self.thinking_support:
             raise ValueError("Audio and thinking support are mutually exclusive")
+        if self.plain_thinking_support and self.version != TokenizerVersion.v11:
+            raise ValueError("Plain thinking support is only available for tokenizer version v11")
+        if self.audio_support and self.plain_thinking_support:
+            raise ValueError("Audio and plain thinking support are mutually exclusive")
+
+    @property
+    def any_thinking_support(self) -> bool:
+        r"""Whether any form of thinking support is enabled."""
+        return self.thinking_support or self.plain_thinking_support
 
     @property
     def has_tools(self) -> bool:
@@ -329,7 +344,7 @@ def _generate_reasoning_to_thinking_inline() -> list[str]:
     r"""Generate inline reasoning-to-thinking conversion inside the aggregation loop.
 
     Emitted inside the ``for msg in ns_agg.current_group`` loop when
-    ``config.thinking_support`` is enabled. For each assistant message, converts
+    ``config.any_thinking_support`` is enabled. For each assistant message, converts
     a top-level ``reasoning_content`` or ``reasoning`` field into a leading
     ``{"type": "thinking", "thinking": ...}`` chunk prepended to the content,
     so that reasoning traces from third-party APIs (OpenAI, DeepSeek, vLLM, …)
@@ -424,7 +439,7 @@ def _generate_flush_logic(config: TemplateConfig) -> list[str]:
     ``tool_calls`` from all messages in the group are concatenated. Chunk type
     validation is deferred to the message rendering loop.
 
-    When ``config.thinking_support`` is enabled, ``reasoning_content`` /
+    When ``config.any_thinking_support`` is enabled, ``reasoning_content`` /
     ``reasoning`` fields on assistant messages are converted to a leading thinking
     chunk prepended to the message content **inside** the aggregation loop, so that
     reasoning traces are aggregated uniformly with inline ``ThinkChunk``\s.
@@ -448,7 +463,7 @@ def _generate_flush_logic(config: TemplateConfig) -> list[str]:
         "            {%- for msg in ns_agg.current_group %}",
     ]
 
-    if config.thinking_support:
+    if config.any_thinking_support:
         lines.extend(_generate_reasoning_to_thinking_inline())
 
     lines.extend(
@@ -525,13 +540,16 @@ def _generate_system_message_handling(config: TemplateConfig) -> str:
     lines.append("        {%- else %}")
     lines.append("            {%- for block in message['content'] %}")
 
-    if config.thinking_support and config.version < TokenizerVersion.v15:
+    if config.any_thinking_support and config.version < TokenizerVersion.v15:
+        begin_tag = "<think>" if config.plain_thinking_support else "[THINK]"
+        end_tag = "</think>" if config.plain_thinking_support else "[/THINK]"
         lines.extend(
             [
                 "                {%- if block['type'] == 'text' %}",
                 "                    {{- block['text'] }}",
                 "                {%- elif block['type'] == 'thinking' %}",
-                "                    {{- '[THINK]' + block['thinking'] + '[/THINK]' }}",
+                "                    {{- '" + begin_tag + "' + block['thinking'] }}",
+                "                    {%- if block.get('closed', true) %}{{- '" + end_tag + "' }}{%- endif %}",
                 "                {%- else %}",
                 "                    {{- raise_exception('Only text and thinking chunks are supported in system message contents.') }}",  # noqa: E501
                 "                {%- endif %}",
@@ -824,7 +842,7 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     r"""Generate assistant message handling section."""
     lines = []
 
-    if config.thinking_support:
+    if config.any_thinking_support:
         chunk_types = "text and thinking"
     else:
         chunk_types = "text"
@@ -881,9 +899,12 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     lines.append("                {%- if block['type'] == 'text' %}")
     lines.append("                    {{- block['text'] }}")
 
-    if config.thinking_support:
+    if config.any_thinking_support:
+        begin_tag = "<think>" if config.plain_thinking_support else "[THINK]"
+        end_tag = "</think>" if config.plain_thinking_support else "[/THINK]"
         lines.append("                {%- elif block['type'] == 'thinking' %}")
-        lines.append("                    {{- '[THINK]' + block['thinking'] + '[/THINK]' }}")
+        lines.append("                    {{- '" + begin_tag + "' + block['thinking'] }}")
+        lines.append("                    {%- if block.get('closed', true) %}{{- '" + end_tag + "' }}{%- endif %}")
 
     lines.append("                {%- else %}")
     lines.append(

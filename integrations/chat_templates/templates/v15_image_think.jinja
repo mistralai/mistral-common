@@ -173,7 +173,8 @@
                 {%- if block['type'] == 'text' %}
                     {{- block['text'] }}
                 {%- elif block['type'] == 'thinking' %}
-                    {{- '[THINK]' + block['thinking'] + '[/THINK]' }}
+                    {{- '[THINK]' + block['thinking'] }}
+                    {%- if block.get('closed', true) %}{{- '[/THINK]' }}{%- endif %}
                 {%- else %}
                     {{- raise_exception('Only text and thinking chunks are supported in assistant message contents.') }}
                 {%- endif %}

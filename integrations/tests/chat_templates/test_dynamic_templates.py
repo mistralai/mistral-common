@@ -1086,3 +1086,200 @@ def test_none_reasoning_content_is_ignored() -> None:
     output = render_template(template, messages)
     assert "[THINK]" not in output
     assert "Hello!" in output
+
+
+def test_invalid_config_plain_thinking_with_thinking() -> None:
+    r"""``plain_thinking_support`` and ``thinking_support`` are mutually exclusive."""
+    with pytest.raises(ValueError, match="Plain thinking support and thinking support are mutually exclusive"):
+        TemplateConfig(version=TokenizerVersion.v11, thinking_support=True, plain_thinking_support=True)
+
+
+def test_invalid_config_plain_thinking_non_v11() -> None:
+    r"""``plain_thinking_support`` only works with v11."""
+    with pytest.raises(ValueError, match="Plain thinking support is only available for tokenizer version v11"):
+        TemplateConfig(version=TokenizerVersion.v15, plain_thinking_support=True)
+
+
+def test_invalid_config_plain_thinking_with_audio() -> None:
+    r"""``plain_thinking_support`` and ``audio_support`` are mutually exclusive."""
+    with pytest.raises(ValueError, match="Audio and plain thinking support are mutually exclusive"):
+        TemplateConfig(version=TokenizerVersion.v11, audio_support=True, plain_thinking_support=True)
+
+
+def test_plain_think_template_produces_correct_output() -> None:
+    r"""Plain think template emits ``<think>``/``</think>`` tags, not ``[THINK]``/``[/THINK]``."""
+    template = generate_chat_template_dynamic(
+        False, TokenizerVersion.v11, False, False, thinking_support=False, plain_thinking_support=True
+    )
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "Solve this"},
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "thinking", "thinking": "Let me think..."},
+                {"type": "text", "text": "The answer is 42."},
+            ],
+        },
+    ]
+
+    output = render_template(template, messages)
+    assert "<think>Let me think...</think>The answer is 42." in output
+    assert "[THINK]" not in output
+    assert "[/THINK]" not in output
+
+
+@pytest.mark.parametrize("image", [False, True])
+def test_plain_think_static_dynamic_parity(image: bool) -> None:
+    r"""Static and dynamic plain think templates produce identical output."""
+    static_template = get_chat_template(
+        spm=False,
+        tokenizer_version=TokenizerVersion.v11,
+        image_support=image,
+        audio_support=False,
+        thinking_support=False,
+        plain_thinking_support=True,
+    )
+    dynamic_template = generate_chat_template_dynamic(
+        False, TokenizerVersion.v11, image, False, thinking_support=False, plain_thinking_support=True
+    )
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "Hello"},
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "thinking", "thinking": "Thinking..."},
+                {"type": "text", "text": "Hi!"},
+            ],
+        },
+    ]
+
+    static_output = render_template(static_template, messages)
+    dynamic_output = render_template(dynamic_template, messages)
+    assert static_output == dynamic_output
+
+
+def test_plain_think_reasoning_content_conversion() -> None:
+    r"""``reasoning_content`` produces ``<think>`` tags in plain think mode."""
+    template = generate_chat_template_dynamic(
+        False, TokenizerVersion.v11, False, False, thinking_support=False, plain_thinking_support=True
+    )
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "What is 2+2?"},
+        {"role": "assistant", "reasoning_content": "Let me add.", "content": "4."},
+    ]
+
+    output = render_template(template, messages)
+    assert "<think>Let me add.</think>4." in output
+    assert "[THINK]" not in output
+
+
+def test_plain_think_closed_false() -> None:
+    r"""``closed: false`` omits the ``</think>`` closing tag in plain think mode."""
+    template = generate_chat_template_dynamic(
+        False, TokenizerVersion.v11, False, False, thinking_support=False, plain_thinking_support=True
+    )
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "Hi"},
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "thinking", "thinking": "Still thinking...", "closed": False},
+            ],
+        },
+    ]
+
+    output = render_template(template, messages)
+    assert "<think>Still thinking..." in output
+    assert "</think>" not in output
+
+
+def test_plain_think_image_template() -> None:
+    r"""Image + plain think template handles both ``[IMG]`` and ``<think>`` tags."""
+    template = generate_chat_template_dynamic(
+        False, TokenizerVersion.v11, True, False, thinking_support=False, plain_thinking_support=True
+    )
+
+    messages: list[dict[str, Any]] = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "What is this?"},
+                {"type": "image_url", "image_url": "http://example.com/img.png"},
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "thinking", "thinking": "It looks like..."},
+                {"type": "text", "text": "A red square."},
+            ],
+        },
+    ]
+
+    output = render_template(template, messages)
+    assert "[IMG]" in output
+    assert "<think>It looks like...</think>A red square." in output
+    assert "[THINK]" not in output
+
+
+# ── closed attribute handling for special token think ──────────────────
+
+
+@pytest.mark.parametrize(
+    ("version", "image"),
+    [
+        (TokenizerVersion.v13, False),
+        (TokenizerVersion.v13, True),
+        (TokenizerVersion.v15, False),
+        (TokenizerVersion.v15, True),
+    ],
+)
+def test_closed_false_special_token_think(version: TokenizerVersion, image: bool) -> None:
+    r"""``closed: false`` omits ``[/THINK]`` for special token think templates."""
+    template = generate_chat_template_dynamic(False, version, image, False, thinking_support=True)
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "Hi"},
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "thinking", "thinking": "Ongoing thought", "closed": False},
+            ],
+        },
+    ]
+
+    output = render_template(template, messages)
+    assert "[THINK]Ongoing thought" in output
+    assert "[/THINK]" not in output
+
+
+@pytest.mark.parametrize(
+    ("version", "image"),
+    [
+        (TokenizerVersion.v13, False),
+        (TokenizerVersion.v13, True),
+        (TokenizerVersion.v15, False),
+        (TokenizerVersion.v15, True),
+    ],
+)
+def test_closed_true_special_token_think(version: TokenizerVersion, image: bool) -> None:
+    r"""``closed: true`` (or absent) emits ``[/THINK]`` for special token think templates."""
+    template = generate_chat_template_dynamic(False, version, image, False, thinking_support=True)
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "Hi"},
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "thinking", "thinking": "Done thinking"},
+                {"type": "text", "text": "Hello!"},
+            ],
+        },
+    ]
+
+    output = render_template(template, messages)
+    assert "[THINK]Done thinking[/THINK]Hello!" in output

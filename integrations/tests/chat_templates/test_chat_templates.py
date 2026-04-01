@@ -9,7 +9,7 @@ from jinja2.exceptions import TemplateError
 from PIL import Image
 from transformers.utils.chat_template_utils import render_jinja_template  # type: ignore[import-not-found]
 
-from integrations.chat_templates.chat_templates import generate_chat_template_dynamic
+from integrations.chat_templates.chat_templates import generate_chat_template_dynamic, get_chat_template
 from mistral_common.audio import Audio
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
@@ -1977,3 +1977,175 @@ def test_reasoning_effort_validation(
     for conv in invalid_conversations:
         with pytest.raises(TemplateError, match='reasoning_effort must be either "none" or "high"'):
             encode_transformers(chat_template, conv)
+
+
+class TestGetChatTemplatePlainThinkingValidation:
+    r"""Validation tests for the ``plain_thinking_support`` parameter."""
+
+    def test_plain_thinking_with_thinking_raises(self) -> None:
+        r"""``plain_thinking_support`` and ``thinking_support`` are mutually exclusive."""
+        with pytest.raises(ValueError, match="Plain thinking support and thinking support are mutually exclusive"):
+            get_chat_template(
+                spm=False,
+                tokenizer_version=TokenizerVersion.v13,
+                image_support=False,
+                audio_support=False,
+                thinking_support=True,
+                plain_thinking_support=True,
+            )
+
+    def test_plain_thinking_non_v11_raises(self) -> None:
+        r"""``plain_thinking_support`` only works with v11."""
+        with pytest.raises(ValueError, match="Plain thinking support is only available for tokenizer version v11"):
+            get_chat_template(
+                spm=False,
+                tokenizer_version=TokenizerVersion.v15,
+                image_support=False,
+                audio_support=False,
+                thinking_support=False,
+                plain_thinking_support=True,
+            )
+
+    def test_plain_thinking_with_audio_raises(self) -> None:
+        r"""``plain_thinking_support`` and ``audio_support`` are mutually exclusive."""
+        with pytest.raises(ValueError, match="Audio and plain thinking support are mutually exclusive"):
+            get_chat_template(
+                spm=False,
+                tokenizer_version=TokenizerVersion.v11,
+                image_support=False,
+                audio_support=True,
+                thinking_support=False,
+                plain_thinking_support=True,
+            )
+
+    def test_plain_thinking_v11_works(self) -> None:
+        r"""``plain_thinking_support`` with v11 returns a valid template."""
+        template = get_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v11,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            plain_thinking_support=True,
+        )
+        assert "<think>" in template
+        assert "</think>" in template
+        assert "[THINK]" not in template
+
+
+@pytest.mark.parametrize(
+    ("image", "mode"),
+    [
+        (False, ValidationMode.test),
+        (False, ValidationMode.finetuning),
+        (True, ValidationMode.test),
+        (True, ValidationMode.finetuning),
+    ],
+)
+def test_plain_think_vs_mistral_common_baseline(image: bool, mode: ValidationMode) -> None:
+    r"""v11 plain think template matches mistral-common v11 on non-think conversations.
+
+    Verifies that the v11 plain think Jinja template produces identical output
+    to the v11 mistral-common tokenizer for all standard conversations. This
+    ensures adding thinking support did not break the base v11 template.
+    """
+    version = TokenizerVersion.v11
+    conversations = _get_conversations(version, mode, image, audio=False, think=False)
+
+    mistral_tok = _get_mistral_tokenizer(
+        spm=False, tokenizer_version=version, validation_mode=mode, image=image, audio=False, think=False
+    )
+    plain_think_template = generate_chat_template_dynamic(
+        spm=False,
+        tokenizer_version=version,
+        image_support=image,
+        audio_support=False,
+        thinking_support=False,
+        plain_thinking_support=True,
+    )
+
+    for conversation in conversations:
+        plain_think_encoded = encode_transformers(plain_think_template, conversation)
+        mistral_encoded = encode_mistral_common(mistral_tok, conversation, spm=False)
+
+        assert plain_think_encoded == mistral_encoded
+
+
+@pytest.mark.parametrize("image", [False, True])
+def test_plain_think_vs_mistral_common_with_thinking(image: bool) -> None:
+    r"""v11 plain think template renders thinking chunks as ``<think>``/``</think>``.
+
+    Uses the v11 mistral-common tokenizer on a stripped version of the
+    conversation (think chunks removed) as the baseline, then verifies
+    that the v11 plain think template output equals the baseline with
+    ``<think>...</think>`` tags inserted at the expected positions.
+    """
+    version = TokenizerVersion.v11
+
+    mistral_tok = _get_mistral_tokenizer(
+        spm=False,
+        tokenizer_version=version,
+        validation_mode=ValidationMode.finetuning,
+        image=image,
+        audio=False,
+        think=False,
+    )
+    plain_think_template = generate_chat_template_dynamic(
+        spm=False,
+        tokenizer_version=version,
+        image_support=image,
+        audio_support=False,
+        thinking_support=False,
+        plain_thinking_support=True,
+    )
+
+    # Build a conversation with thinking chunks
+    think_conversation = ChatCompletionRequest(
+        messages=[
+            SystemMessage(
+                content=[
+                    TextChunk(text="You are a helpful assistant."),
+                    ThinkChunk(thinking="System reasoning."),
+                    TextChunk(text="Be concise."),
+                ],
+            ),
+            UserMessage(content=[TextChunk(text="What is 2+2?")]),
+            AssistantMessage(
+                content=[
+                    ThinkChunk(thinking="Simple arithmetic."),
+                    TextChunk(text="4."),
+                ],
+                tool_calls=[],
+            ),
+            UserMessage(content=[TextChunk(text="Thanks.")]),
+            AssistantMessage(content=[TextChunk(text="You're welcome.")]),
+        ],
+    )
+
+    # Same conversation without thinking chunks
+    no_think_conversation = ChatCompletionRequest(
+        messages=[
+            SystemMessage(content="You are a helpful assistant.Be concise."),
+            UserMessage(content=[TextChunk(text="What is 2+2?")]),
+            AssistantMessage(content="4.", tool_calls=[]),
+            UserMessage(content=[TextChunk(text="Thanks.")]),
+            AssistantMessage(content=[TextChunk(text="You're welcome.")]),
+        ],
+    )
+
+    # Render with plain think template (has <think> tags)
+    plain_think_encoded = encode_transformers(plain_think_template, think_conversation)
+
+    # Render baseline without think chunks via mistral-common
+    baseline_encoded = encode_mistral_common(mistral_tok, no_think_conversation, spm=False)
+
+    # Verify think tags are present
+    assert "<think>System reasoning.</think>" in plain_think_encoded
+    assert "<think>Simple arithmetic.</think>" in plain_think_encoded
+    assert "[THINK]" not in plain_think_encoded
+
+    # Verify stripping think tags recovers the baseline
+    stripped = plain_think_encoded.replace("<think>System reasoning.</think>", "").replace(
+        "<think>Simple arithmetic.</think>", ""
+    )
+    assert stripped == baseline_encoded

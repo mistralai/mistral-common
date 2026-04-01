@@ -29,6 +29,8 @@ V7_AUDIO = _TEMPLATE_PATH / "v7_audio.jinja"
 V11 = _TEMPLATE_PATH / "v11.jinja"
 V11_IMAGE = _TEMPLATE_PATH / "v11_image.jinja"
 V11_AUDIO = _TEMPLATE_PATH / "v11_audio.jinja"
+V11_THINK = _TEMPLATE_PATH / "v11_think.jinja"
+V11_IMAGE_THINK = _TEMPLATE_PATH / "v11_image_think.jinja"
 V13 = _TEMPLATE_PATH / "v13.jinja"
 V13_IMAGE = _TEMPLATE_PATH / "v13_image.jinja"
 V13_IMAGE_THINK = _TEMPLATE_PATH / "v13_image_think.jinja"
@@ -48,6 +50,7 @@ def generate_chat_template_dynamic(
     audio_support: bool,
     thinking_support: bool,
     default_system_prompt: str | None = None,
+    plain_thinking_support: bool = False,
 ) -> str:
     r"""Dynamically generate a chat template based on configuration.
 
@@ -60,8 +63,11 @@ def generate_chat_template_dynamic(
         tokenizer_version: The tokenizer version.
         image_support: Whether to support image chunks.
         audio_support: Whether to support audio chunks.
-        thinking_support: Whether to support thinking chunks.
+        thinking_support: Whether to support thinking chunks with special tokens.
         default_system_prompt: Optional default system prompt to embed.
+        plain_thinking_support: Whether to support thinking chunks with plain
+            ``<think>``/``</think>`` text tags. Only available for v11.
+            Mutually exclusive with `thinking_support`.
 
     Returns:
         The generated Jinja2 template as a string.
@@ -72,6 +78,7 @@ def generate_chat_template_dynamic(
         image_support=image_support,
         audio_support=audio_support,
         thinking_support=thinking_support,
+        plain_thinking_support=plain_thinking_support,
     )
     template = _generate_dynamic_template(config)
 
@@ -107,6 +114,7 @@ def get_chat_template(
     audio_support: bool,
     thinking_support: bool,
     default_system_prompt: str | None = None,
+    plain_thinking_support: bool = False,
 ) -> str:
     r"""Retrieve a chat template based on configuration.
 
@@ -118,8 +126,11 @@ def get_chat_template(
         tokenizer_version: The tokenizer version.
         image_support: Whether to support image chunks.
         audio_support: Whether to support audio chunks.
-        thinking_support: Whether to support thinking chunks.
+        thinking_support: Whether to support thinking chunks with special tokens.
         default_system_prompt: Optional default system prompt to embed.
+        plain_thinking_support: Whether to support thinking chunks with plain
+            ``<think>``/``</think>`` text tags. Only available for v11.
+            Mutually exclusive with `thinking_support`.
 
     Returns:
         The Jinja2 template as a string.
@@ -130,6 +141,8 @@ def get_chat_template(
     Examples:
         >>> get_chat_template(spm=False, tokenizer_version=TokenizerVersion.v3, image_support=True)
     """
+    if plain_thinking_support and thinking_support:
+        raise ValueError("Plain thinking support and thinking support are mutually exclusive")
     if spm and (tokenizer_version >= TokenizerVersion.v11 or audio_support):
         raise ValueError("SPM tokenizer is not supported for tokenizer versions v11 and above or audio")
     if image_support and audio_support:
@@ -140,6 +153,10 @@ def get_chat_template(
         raise ValueError("Audio support is only available for tokenizer versions v7 and above")
     if thinking_support and tokenizer_version < TokenizerVersion.v13:
         raise ValueError("Thinking support is only available for tokenizer versions v13 and above")
+    if plain_thinking_support and tokenizer_version != TokenizerVersion.v11:
+        raise ValueError("Plain thinking support is only available for tokenizer version v11")
+    if audio_support and plain_thinking_support:
+        raise ValueError("Audio and plain thinking support are mutually exclusive")
 
     if tokenizer_version == TokenizerVersion.v1:
         chat_path = V1_SPM if spm else V1
@@ -163,10 +180,14 @@ def get_chat_template(
             chat_path = V7_SPM if spm else V7
             return _load_chat_template(chat_path, default_system_prompt)
     elif tokenizer_version == TokenizerVersion.v11:
-        if image_support:
+        if image_support and plain_thinking_support:
+            return _load_chat_template(V11_IMAGE_THINK, default_system_prompt)
+        elif image_support:
             return _load_chat_template(V11_IMAGE, default_system_prompt)
         elif audio_support:
             return _load_chat_template(V11_AUDIO, default_system_prompt)
+        elif plain_thinking_support:
+            return _load_chat_template(V11_THINK, default_system_prompt)
         else:
             return _load_chat_template(V11, default_system_prompt)
     elif tokenizer_version == TokenizerVersion.v13:
@@ -193,7 +214,8 @@ def get_chat_template(
             return _load_chat_template(V15, default_system_prompt)
     raise ValueError(
         f"Unknown configuration: tokenizer_version={tokenizer_version}, image_support={image_support}, "
-        f"audio_support={audio_support}, thinking_support={thinking_support}"
+        f"audio_support={audio_support}, thinking_support={thinking_support}, "
+        f"plain_thinking_support={plain_thinking_support}"
     )
 
 
@@ -204,6 +226,7 @@ if __name__ == "__main__":
     parser.add_argument("--image", action="store_true", help="Image support")
     parser.add_argument("--audio", action="store_true", help="Audio support")
     parser.add_argument("--thinking", action="store_true", help="Thinking support")
+    parser.add_argument("--plain_thinking", action="store_true", help="Plain text thinking support (<think> tags)")
     parser.add_argument("--default_system_prompt", type=str, required=False, default=None, help="Default system prompt")
     parser.add_argument(
         "--saving_path", type=str, required=False, default="./chat_template.jinja", help="Saving path for the template"
@@ -214,6 +237,7 @@ if __name__ == "__main__":
     image_support = args.image
     audio_support = args.audio
     thinking_support = args.thinking
+    plain_thinking_support = args.plain_thinking
     default_system_prompt = args.default_system_prompt
     saving_path = args.saving_path
 
@@ -226,5 +250,6 @@ if __name__ == "__main__":
                 audio_support=audio_support,
                 thinking_support=thinking_support,
                 default_system_prompt=default_system_prompt,
+                plain_thinking_support=plain_thinking_support,
             )
         )
