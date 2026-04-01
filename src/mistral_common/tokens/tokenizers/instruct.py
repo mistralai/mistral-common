@@ -1,4 +1,5 @@
 import json
+import warnings
 from abc import abstractmethod
 from typing import Any, Generic, Sequence, overload
 
@@ -1026,13 +1027,33 @@ class InstructTokenizerV7(InstructTokenizerV3):
             left_pad, right_pad = self.audio_encoder.get_padding_audio(request.target_streaming_delay_ms)
             audios = [left_pad, right_pad]
 
-            assert not request.audio.data, (
-                "For online streaming, no audio bytes should be passed in the first request. "
-                "Audio buffering is taken care of directly by vLLM."
-            )
-            assert self.audio_encoder is not None, (
-                f"Audio encoder must be defined to encode audio, got {self.audio_encoder=}"
-            )
+            if len(request.audio.data) > 0:
+                # TODO(Patrick) - remove this if statement in 1.13.0
+                # only left to keep vLLM backwards compatibility in
+                # voxtral_realtime.py
+                warnings.warn(
+                    f"Passing audio with {request.streaming=} is "
+                    "deprecated. Make sure to not pass any audio to `TranscriptionRequest` when doing"
+                    " online streaming.",
+                    FutureWarning,
+                )
+                assert isinstance(request.audio.data, str)
+                request_audio = Audio.from_base64(request.audio.data)
+                audios = [
+                    Audio(
+                        np.concatenate((left_pad.audio_array, request_audio.audio_array)),
+                        request_audio.sampling_rate,
+                        request_audio.format,
+                    )
+                ]
+            else:
+                assert not request.audio.data, (
+                    "For online streaming, no audio bytes should be passed in the first request. "
+                    "Audio buffering is taken care of directly by vLLM."
+                )
+                assert self.audio_encoder is not None, (
+                    f"Audio encoder must be defined to encode audio, got {self.audio_encoder=}"
+                )
 
             # we also add a BOS token in the beginning
             tokens = self.start() + self.audio_encoder.encode_streaming_tokens(request.target_streaming_delay_ms)
