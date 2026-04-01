@@ -153,7 +153,7 @@ class TokenizerVersion(str, Enum):
     def _version_num(self) -> int:
         warnings.warn(
             "`TokenizerVersion._version_num` is deprecated in favor to `TokenizerVersion.version_num` and will "
-            "be removed in 1.12.0."
+            "be removed in 1.13.0."
         )
         return self.version_num
 
