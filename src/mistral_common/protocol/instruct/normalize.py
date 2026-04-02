@@ -182,6 +182,9 @@ class InstructRequestNormalizer(
         tool_messages: list[ToolMessageType] = []
         for message in messages:
             assert isinstance(message, self._tool_message_class), "Expected tool message"
+            if isinstance(message, self._tool_message_class):
+                tool_messages.append(message)
+                continue
             content = message.content
             if not isinstance(content, str):
                 content = CHUNK_JOIN_STR.join([chunk.text for chunk in content])
