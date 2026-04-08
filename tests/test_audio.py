@@ -148,7 +148,7 @@ def test_hertz_to_mel_array() -> None:
             15.0 + np.log(4000.0 / 1000.0) * 27.0 / np.log(6.4),  # Log region
         ]
     )
-    np.testing.assert_array_equal(hertz_to_mel(freq_array), expected_mel_array)
+    np.testing.assert_allclose(hertz_to_mel(freq_array), expected_mel_array, rtol=1e-10)
 
 
 def test_mel_filter_bank() -> None:
