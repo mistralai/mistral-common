@@ -9,7 +9,9 @@ from typing import TypedDict, TypeGuard
 
 import numpy as np
 import tiktoken
+from typing_extensions import NotRequired
 
+from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.audio import AudioConfig, AudioSpectrogramConfig
 from mistral_common.tokens.tokenizers.base import (
     SpecialTokenPolicy,
@@ -75,6 +77,7 @@ class TekkenConfig(TypedDict):
         default_vocab_size: The default vocabulary size.
         default_num_special_tokens: The default number of special tokens.
         version: The version of the tokenizer.
+        default_validation_mode: The default validation mode embedded in the tokenizer file.
     """
 
     pattern: str
@@ -82,6 +85,7 @@ class TekkenConfig(TypedDict):
     default_vocab_size: int
     default_num_special_tokens: int
     version: str
+    default_validation_mode: NotRequired[str | None]
 
 
 class ModelData(TypedDict):
@@ -152,6 +156,7 @@ class Tekkenizer(Tokenizer):
         image_config: ImageConfig | None = None,
         audio_config: AudioConfig | None = None,
         model_settings_builder: ModelSettingsBuilder | None = None,
+        default_validation_mode: ValidationMode | None = None,
     ):
         r"""Initialize the tekken tokenizer.
 
@@ -166,6 +171,7 @@ class Tekkenizer(Tokenizer):
             image_config: The image configuration of the tokenizer.
             audio_config: The audio configuration of the tokenizer.
             model_settings_builder: The builder for model settings, or None if unsupported.
+            default_validation_mode: The default validation mode embedded in the tokenizer file.
         """
         if not version.supports_model_settings and model_settings_builder is not None:
             raise ValueError(
@@ -226,6 +232,7 @@ class Tekkenizer(Tokenizer):
         self._special_token_policy = SpecialTokenPolicy.IGNORE
         self._file_path = Path(_path) if _path is not None else None
         self._model_settings_builder = model_settings_builder
+        self._default_validation_mode = default_validation_mode
 
     @property
     def file_path(self) -> Path:
@@ -238,6 +245,11 @@ class Tekkenizer(Tokenizer):
     def model_settings_builder(self) -> ModelSettingsBuilder | None:
         r"""The model settings builder, or None if unsupported by this version."""
         return self._model_settings_builder
+
+    @property
+    def default_validation_mode(self) -> ValidationMode | None:
+        r"""The default validation mode embedded in the tokenizer file."""
+        return self._default_validation_mode
 
     @classmethod
     def from_file(cls: type["Tekkenizer"], path: str | Path) -> "Tekkenizer":
@@ -305,6 +317,16 @@ class Tekkenizer(Tokenizer):
         elif model_settings_builder is not None:
             model_settings_builder = ModelSettingsBuilder.model_validate(model_settings_builder)
 
+        default_validation_mode: ValidationMode | None = None
+        if (dvm_str := untyped["config"].get("default_validation_mode")) is not None:
+            try:
+                default_validation_mode = ValidationMode(dvm_str)
+            except ValueError:
+                raise ValueError(
+                    f"Unknown default_validation_mode: {dvm_str!r} in {path}. "
+                    f"Valid values are: {[m.value for m in ValidationMode]}"
+                ) from None
+
         model_data: ModelData = untyped
 
         return cls(
@@ -318,6 +340,7 @@ class Tekkenizer(Tokenizer):
             image_config=model_data.get("image"),
             audio_config=model_data.get("audio"),
             model_settings_builder=model_settings_builder,
+            default_validation_mode=default_validation_mode,
             _path=path,
         )
 

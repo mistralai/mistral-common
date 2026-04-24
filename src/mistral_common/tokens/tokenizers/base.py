@@ -17,6 +17,7 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Tool
+from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import AudioEncoder
@@ -235,6 +236,11 @@ class Tokenizer(ABC):
     @abstractmethod
     def model_settings_builder(self) -> ModelSettingsBuilder | None:
         r"""The model settings builder, or None if unsupported by this version."""
+
+    @property
+    @abstractmethod
+    def default_validation_mode(self) -> ValidationMode | None:
+        r"""The default validation mode embedded in the tokenizer file."""
 
     @abstractmethod
     def vocab(self) -> list[str]:

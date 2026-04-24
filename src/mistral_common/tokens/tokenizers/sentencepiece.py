@@ -9,6 +9,7 @@ import numpy as np
 
 from mistral_common.exceptions import TokenizerException
 from mistral_common.imports import assert_sentencepiece_installed, is_sentencepiece_installed
+from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import (
     SpecialTokenPolicy,
     Tokenizer,
@@ -124,6 +125,11 @@ class SentencePieceTokenizer(Tokenizer):
         r"""Always returns None as SentencePiece does not support `model_settings_builder`."""
         if self.version.supports_model_settings:
             raise ValueError(f"SentencePieceTokenizer does not support model settings for version {self.version}")
+        return None
+
+    @property
+    def default_validation_mode(self) -> ValidationMode | None:
+        r"""Always returns None as SentencePiece does not support `default_validation_mode`."""
         return None
 
     def get_special_token(self, s: str) -> int:

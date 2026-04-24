@@ -7,6 +7,7 @@ from typing import Sequence
 import numpy as np
 import pytest
 
+from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTokens, TokenizerVersion
 from mistral_common.tokens.tokenizers.tekken import (
     ModelData,
@@ -150,6 +151,36 @@ def _write_tekkenizer_model(
     )
     with open(tmp_path, "w") as f:
         json.dump(model, f)
+
+
+def write_tekken_json_with_config(
+    path: Path,
+    *,
+    default_validation_mode: str | None = None,
+    version: str = "v3",
+) -> None:
+    """Write a tekken JSON file with optional extra config fields."""
+    vocab = quick_vocab()
+    num_special_tokens = 100
+
+    config: dict[str, object] = {
+        "pattern": ".",
+        "default_num_special_tokens": num_special_tokens,
+        "default_vocab_size": len(vocab) + num_special_tokens,
+        "version": version,
+    }
+    if default_validation_mode is not None:
+        config["default_validation_mode"] = default_validation_mode
+
+    model: dict[str, object] = {
+        "vocab": vocab,
+        "config": config,
+        "special_tokens": None,
+        "version": 1,
+        "type": "Tekken",
+    }
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(model, f, ensure_ascii=False)
 
 
 def test_roundtrip() -> None:
@@ -349,3 +380,22 @@ def test_special_tokens_property(dummy_v3: Tekkenizer) -> None:
     num_special = dummy_v3.num_special_tokens
     assert isinstance(num_special, int)
     assert num_special == len(dummy_v3._all_special_tokens)
+
+
+@pytest.mark.parametrize("mode_name", [None, *ValidationMode.__members__])
+def test_from_file_default_validation_mode(tmp_path: Path, mode_name: str | None) -> None:
+    tokpath = tmp_path / "tekken.json"
+    write_tekken_json_with_config(tokpath, default_validation_mode=mode_name)
+
+    tekkenizer = Tekkenizer.from_file(tokpath)
+
+    expected = ValidationMode(mode_name) if mode_name is not None else None
+    assert tekkenizer.default_validation_mode == expected
+
+
+def test_from_file_with_invalid_default_validation_mode(tmp_path: Path) -> None:
+    tokpath = tmp_path / "tekken.json"
+    write_tekken_json_with_config(tokpath, default_validation_mode="invalid_mode")
+
+    with pytest.raises(ValueError, match="Unknown default_validation_mode"):
+        Tekkenizer.from_file(tokpath)

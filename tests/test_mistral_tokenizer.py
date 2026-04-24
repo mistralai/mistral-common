@@ -1,9 +1,11 @@
 import multiprocessing
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from mistral_common.exceptions import TokenizerException
+from mistral_common.imports import is_sentencepiece_installed
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import (
@@ -12,6 +14,8 @@ from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV3,
 )
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
+from tests.test_tekken import write_tekken_json_with_config
 
 SPM_SPECIAL_WHITESPACE = "▁"
 SPM_WHITESPACE = "▁"
@@ -162,3 +166,40 @@ def test_mistral_tokenizer_mode_property() -> None:
     for mode in [ValidationMode.serving, ValidationMode.finetuning, ValidationMode.test]:
         tokenizer = MistralTokenizer.from_file(tokenizer_path, mode)
         assert tokenizer.mode == tokenizer._chat_completion_request_validator.mode == mode
+
+
+@pytest.mark.parametrize(
+    ["default_file_mode", "explicit_mode", "expected_mode"],
+    [
+        ("serving", None, ValidationMode.serving),
+        ("serving", ValidationMode.finetuning, ValidationMode.finetuning),
+        (None, None, ValidationMode.test),
+    ],
+)
+def test_from_file_mode_resolution(
+    tmp_path: Path,
+    default_file_mode: str | None,
+    explicit_mode: ValidationMode | None,
+    expected_mode: ValidationMode,
+) -> None:
+    tokpath = tmp_path / "tekken.json"
+    write_tekken_json_with_config(tokpath, default_validation_mode=default_file_mode)
+
+    tokenizer = MistralTokenizer.from_file(tokpath, mode=explicit_mode)
+
+    assert tokenizer.mode == expected_mode
+
+
+@pytest.mark.skipif(
+    not is_sentencepiece_installed(),
+    reason="sentencepiece not installed",
+)
+def test_sentencepiece_default_validation_mode_is_none() -> None:
+    spm_path = MistralTokenizer._data_path() / "tokenizer.model.v1"
+    spm_tokenizer = SentencePieceTokenizer(str(spm_path))
+
+    assert spm_tokenizer.default_validation_mode is None
+
+    tokenizer = MistralTokenizer.from_file(str(spm_path))
+
+    assert tokenizer.mode == ValidationMode.test

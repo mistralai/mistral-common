@@ -162,14 +162,12 @@ class MistralTokenizer(
     @classmethod
     def v1(cls) -> "MistralTokenizer":
         r"""Get the Mistral tokenizer v1."""
-        return cls.from_file(str(cls._data_path() / "tokenizer.model.v1"), mode=ValidationMode.test)
+        return cls.from_file(str(cls._data_path() / "tokenizer.model.v1"))
 
     @classmethod
     def v2(cls) -> "MistralTokenizer":
         r"""Get the Mistral tokenizer v2."""
-        return cls.from_file(
-            str(cls._data_path() / "mistral_instruct_tokenizer_240216.model.v2"), mode=ValidationMode.test
-        )
+        return cls.from_file(str(cls._data_path() / "mistral_instruct_tokenizer_240216.model.v2"))
 
     @classmethod
     def v3(cls, is_tekken: bool = False, is_mm: bool = False) -> "MistralTokenizer":
@@ -192,7 +190,7 @@ class MistralTokenizer(
         else:
             tokenizer_name = "mistral_instruct_tokenizer_240323.model.v3"
 
-        return cls.from_file(str(cls._data_path() / tokenizer_name), mode=ValidationMode.test)
+        return cls.from_file(str(cls._data_path() / tokenizer_name))
 
     @classmethod
     def v7(cls, is_mm: bool = False) -> "MistralTokenizer":
@@ -205,13 +203,9 @@ class MistralTokenizer(
             The Mistral tokenizer v7.
         """
         if is_mm:
-            return cls.from_file(
-                str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7m1"), mode=ValidationMode.test
-            )
+            return cls.from_file(str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7m1"))
         else:
-            return cls.from_file(
-                str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7"), mode=ValidationMode.test
-            )
+            return cls.from_file(str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7"))
 
     @classmethod
     def from_model(cls, model: str, strict: bool = True) -> "MistralTokenizer":
@@ -240,7 +234,7 @@ class MistralTokenizer(
         revision: str | None = None,
         force_download: bool = False,
         local_files_only: bool = False,
-        mode: ValidationMode = ValidationMode.test,
+        mode: ValidationMode | None = None,
     ) -> "MistralTokenizer":
         r"""Download the Mistral tokenizer for a given Hugging Face repository ID.
 
@@ -250,7 +244,8 @@ class MistralTokenizer(
             repo_id: The Hugging Face repo ID.
             token: The Hugging Face token to use to download the tokenizer.
             revision: The revision of the model to use. If `None`, the latest revision will be used.
-            mode: The validation mode to use.
+            mode: The validation mode to use. If `None`, the mode is resolved
+                from the tokenizer file or defaults to `ValidationMode.test`.
             force_download: Whether to force the download of the tokenizer. If `True`, the tokenizer will be downloaded
                 even if it is already cached.
             local_files_only: Whether to only use local files. If `True`, the tokenizer will be downloaded only if it is
@@ -272,13 +267,19 @@ class MistralTokenizer(
     def from_file(
         cls,
         tokenizer_filename: str | Path,
-        mode: ValidationMode = ValidationMode.test,
+        mode: ValidationMode | None = None,
     ) -> "MistralTokenizer":
         r"""Loads a tokenizer from a file.
 
+        The validation mode is resolved with the following priority:
+        1. Explicit `mode` argument if provided.
+        2. `default_validation_mode` from the tokenizer file config.
+        3. Falls back to `ValidationMode.test`.
+
         Args:
             tokenizer_filename: The path to the tokenizer file.
-            mode: The validation mode to use.
+            mode: The validation mode to use. If `None`, the mode is resolved
+                from the tokenizer file or defaults to `ValidationMode.test`.
 
         Returns:
             The loaded tokenizer.
@@ -304,8 +305,10 @@ class MistralTokenizer(
             assert isinstance(tokenizer, Tekkenizer), "Audio is only supported for tekken tokenizers"
             audio_encoder = load_audio_encoder(audio_config, tokenizer)
 
+        resolved_mode = mode or tokenizer.default_validation_mode or ValidationMode.test
+
         request_normalizer = get_normalizer(tokenizer.version, tokenizer.model_settings_builder)
-        validator = get_validator(tokenizer.version, mode=mode)
+        validator = get_validator(tokenizer.version, mode=resolved_mode)
 
         if tokenizer.version == TokenizerVersion.v1:
             assert image_encoder is None, "Tokenizer version needs to be >= v3"
