@@ -72,6 +72,40 @@ def validator_v15(request: pytest.FixtureRequest) -> MistralRequestValidator:
     return request.param  # type: ignore
 
 
+@pytest.fixture(
+    params=[
+        MistralRequestValidator(ValidationMode.agentic),
+        MistralRequestValidatorV3(ValidationMode.agentic),
+        MistralRequestValidatorV13(ValidationMode.agentic),
+    ]
+)
+def agentic_validator(request: pytest.FixtureRequest) -> MistralRequestValidator:
+    return request.param  # type: ignore
+
+
+@pytest.fixture(
+    params=[
+        MistralRequestValidatorV13(ValidationMode.agentic),
+    ]
+)
+def agentic_validator_v13(request: pytest.FixtureRequest) -> MistralRequestValidator:
+    return request.param  # type: ignore
+
+
+@pytest.fixture(
+    params=[
+        MistralRequestValidator(ValidationMode.serving),
+        MistralRequestValidatorV3(ValidationMode.serving),
+        MistralRequestValidatorV13(ValidationMode.serving),
+        MistralRequestValidator(ValidationMode.agentic),
+        MistralRequestValidatorV3(ValidationMode.agentic),
+        MistralRequestValidatorV13(ValidationMode.agentic),
+    ]
+)
+def serving_or_agentic_validator(request: pytest.FixtureRequest) -> MistralRequestValidator:
+    return request.param  # type: ignore
+
+
 class TestChatValidation:
     def test_multiple_system_messages_OK(self, validator: MistralRequestValidator) -> None:
         validator.validate_messages(
@@ -131,7 +165,7 @@ class TestChatValidation:
             continue_final_message=False,
         )
 
-    def test_ends_with_assistant(self, validator: MistralRequestValidator) -> None:
+    def test_ends_with_assistant(self, serving_or_agentic_validator: MistralRequestValidator) -> None:
         with pytest.raises(
             InvalidMessageStructureException,
             match=(
@@ -139,7 +173,7 @@ class TestChatValidation:
                 r"True\) for serving but got assistant"
             ),
         ):
-            validator.validate_messages(
+            serving_or_agentic_validator.validate_messages(
                 messages=[
                     UserMessage(content="foo"),
                     AssistantMessage(content="foo"),
@@ -147,8 +181,8 @@ class TestChatValidation:
                 continue_final_message=False,
             )
 
-    def test_assistant_prefix(self, validator: MistralRequestValidator) -> None:
-        validator.validate_messages(
+    def test_assistant_prefix(self, serving_or_agentic_validator: MistralRequestValidator) -> None:
+        serving_or_agentic_validator.validate_messages(
             messages=[
                 UserMessage(content="foo"),
                 AssistantMessage(content="foo", prefix=True),
@@ -159,7 +193,7 @@ class TestChatValidation:
             InvalidAssistantMessageException,
             match=r"Assistant message with prefix True must be last message",
         ):
-            validator.validate_messages(
+            serving_or_agentic_validator.validate_messages(
                 messages=[
                     UserMessage(content="foo"),
                     AssistantMessage(content="foo", prefix=True),
@@ -168,8 +202,8 @@ class TestChatValidation:
                 continue_final_message=False,
             )
 
-    def test_continue_final_message(self, validator: MistralRequestValidator) -> None:
-        validator.validate_messages(
+    def test_continue_final_message(self, serving_or_agentic_validator: MistralRequestValidator) -> None:
+        serving_or_agentic_validator.validate_messages(
             messages=[
                 UserMessage(content="foo"),
                 AssistantMessage(content="foo"),
@@ -183,7 +217,7 @@ class TestChatValidation:
                 r"but got user"
             ),
         ):
-            validator.validate_messages(
+            serving_or_agentic_validator.validate_messages(
                 messages=[
                     UserMessage(content="foo"),
                     AssistantMessage(content="foo", prefix=True),
@@ -198,7 +232,7 @@ class TestChatValidation:
                 r" for serving but got assistant"
             ),
         ):
-            validator.validate_messages(
+            serving_or_agentic_validator.validate_messages(
                 messages=[
                     UserMessage(content="foo"),
                     AssistantMessage(content="foo"),
@@ -212,7 +246,7 @@ class TestChatValidation:
                 r"but got assistant"
             ),
         ):
-            validator.validate_messages(
+            serving_or_agentic_validator.validate_messages(
                 messages=[
                     UserMessage(content="foo"),
                     AssistantMessage(content="foo", prefix=True),
@@ -297,6 +331,41 @@ class TestChatValidation:
 
         with pytest.raises(InvalidRequestException, match="reasoning_effort='none' is not supported for this model"):
             validator._validate_model_settings(request)
+
+    def test_agentic_tool_then_user_ok(self, agentic_validator: MistralRequestValidator) -> None:
+        agentic_validator.validate_messages(
+            messages=[
+                UserMessage(content="foo"),
+                AssistantMessage(
+                    tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]
+                ),
+                ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
+                UserMessage(content="continue with this context"),
+            ],
+            continue_final_message=False,
+        )
+
+    def test_agentic_full_loop(self, agentic_validator: MistralRequestValidator) -> None:
+        agentic_validator.validate_messages(
+            messages=[
+                UserMessage(content="search for info"),
+                AssistantMessage(
+                    tool_calls=[
+                        ToolCall(id="aaaaaaaaa", function=FunctionCall(name="search", arguments="{}")),
+                        ToolCall(id="ccccccccc", function=FunctionCall(name="search", arguments="{}")),
+                    ]
+                ),
+                ToolMessage(name="search", content="result1", tool_call_id="aaaaaaaaa"),
+                UserMessage(content="now refine the search"),
+                AssistantMessage(
+                    tool_calls=[ToolCall(id="bbbbbbbbb", function=FunctionCall(name="search", arguments="{}"))]
+                ),
+                ToolMessage(name="search", content="result2", tool_call_id="bbbbbbbbb"),
+                AssistantMessage(content="here is the final answer"),
+                UserMessage(content="thanks"),
+            ],
+            continue_final_message=False,
+        )
 
 
 class TestChatValidationV5:
@@ -498,6 +567,46 @@ class TestChatValidationV13:
             messages=[
                 SystemMessage(content="This is a system prompt"),
                 UserMessage(content=[audio_chunk]),
+            ],
+            continue_final_message=False,
+        )
+
+    def test_agentic_partial_tool_results_then_user_ok(self, agentic_validator_v13: MistralRequestValidator) -> None:
+        agentic_validator_v13.validate_messages(
+            messages=[
+                UserMessage(content="foo"),
+                AssistantMessage(
+                    tool_calls=[
+                        ToolCall(id="aaaaaaaaa", function=FunctionCall(name="foo", arguments="{}")),
+                        ToolCall(id="bbbbbbbbb", function=FunctionCall(name="bar", arguments="{}")),
+                        ToolCall(id="ccccccccc", function=FunctionCall(name="baz", arguments="{}")),
+                    ]
+                ),
+                ToolMessage(name="foo", content="result1", tool_call_id="aaaaaaaaa"),
+                UserMessage(content="stop, only need the first result"),
+            ],
+            continue_final_message=False,
+        )
+
+    def test_agentic_user_after_partial_results_then_new_tool_calls(
+        self, agentic_validator_v13: MistralRequestValidator
+    ) -> None:
+        agentic_validator_v13.validate_messages(
+            messages=[
+                UserMessage(content="foo"),
+                AssistantMessage(
+                    tool_calls=[
+                        ToolCall(id="aaaaaaaaa", function=FunctionCall(name="foo", arguments="{}")),
+                        ToolCall(id="bbbbbbbbb", function=FunctionCall(name="bar", arguments="{}")),
+                    ]
+                ),
+                ToolMessage(name="foo", content="result1", tool_call_id="aaaaaaaaa"),
+                UserMessage(content="skip bar, try something else"),
+                AssistantMessage(
+                    tool_calls=[ToolCall(id="ccccccccc", function=FunctionCall(name="baz", arguments="{}"))]
+                ),
+                ToolMessage(name="baz", content="result3", tool_call_id="ccccccccc"),
+                UserMessage(content="done"),
             ],
             continue_final_message=False,
         )

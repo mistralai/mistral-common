@@ -45,6 +45,8 @@ class ValidationMode(str, Enum):
         serving: The serving mode.
         finetuning: The finetuning mode.
         test: The test mode.
+        agentic: The agentic mode. Allows user messages after tool messages, enabling
+            agentic loops where the user can interrupt tool executions.
 
     Examples:
         >>> mode = ValidationMode.serving
@@ -53,6 +55,7 @@ class ValidationMode(str, Enum):
     serving = "serving"
     finetuning = "finetuning"
     test = "test"
+    agentic = "agentic"
 
 
 class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType]):
@@ -247,6 +250,9 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
                 if message.tool_calls is not None:
                     # Validate that the number of function calls and responses are the same
                     expected_tool_messages = len(message.tool_calls)
+            elif message.role == Roles.user and self._mode == ValidationMode.agentic:
+                # In agentic mode, a user message resets pending tool call expectations
+                expected_tool_messages = 0
 
             prev_role = message.role
 
@@ -272,6 +278,10 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
                     expected_roles = {Roles.assistant, Roles.user, Roles.tool}
                 elif previous_role == Roles.tool:
                     expected_roles = {Roles.assistant, Roles.tool}
+                    if self._mode == ValidationMode.agentic:
+                        expected_roles.add(Roles.user)
+                else:
+                    assert_never(previous_role)
 
                 if current_role not in expected_roles:
                     raise InvalidMessageStructureException(
@@ -497,6 +507,10 @@ class MistralRequestValidatorV13(MistralRequestValidatorV5):
                                 f"Duplicate tool call id {tool_call.id} in assistant message"
                             )
                         expected_tool_ids.add(tool_call.id)
+            elif message.role == Roles.user and self._mode == ValidationMode.agentic:
+                # In agentic mode, a user message resets pending tool call expectations
+                expected_tool_ids.clear()
+                observed_tool_ids.clear()
 
             prev_role = message.role
 
@@ -516,6 +530,15 @@ class MistralRequestValidatorV15(MistralRequestValidatorV13):
 
 
 def get_validator(version: TokenizerVersion, mode: ValidationMode) -> MistralRequestValidator:
+    r"""Get the appropriate validator for a given tokenizer version and validation mode.
+
+    Args:
+        version: The tokenizer version.
+        mode: The validation mode.
+
+    Returns:
+        The validator instance.
+    """
     validator: MistralRequestValidator
     match version:
         case TokenizerVersion.v1 | TokenizerVersion.v2:
