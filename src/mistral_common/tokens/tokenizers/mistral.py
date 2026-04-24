@@ -162,12 +162,14 @@ class MistralTokenizer(
     @classmethod
     def v1(cls) -> "MistralTokenizer":
         r"""Get the Mistral tokenizer v1."""
-        return cls.from_file(str(cls._data_path() / "tokenizer.model.v1"))
+        return cls.from_file(str(cls._data_path() / "tokenizer.model.v1"), mode=ValidationMode.test)
 
     @classmethod
     def v2(cls) -> "MistralTokenizer":
         r"""Get the Mistral tokenizer v2."""
-        return cls.from_file(str(cls._data_path() / "mistral_instruct_tokenizer_240216.model.v2"))
+        return cls.from_file(
+            str(cls._data_path() / "mistral_instruct_tokenizer_240216.model.v2"), mode=ValidationMode.test
+        )
 
     @classmethod
     def v3(cls, is_tekken: bool = False, is_mm: bool = False) -> "MistralTokenizer":
@@ -190,7 +192,7 @@ class MistralTokenizer(
         else:
             tokenizer_name = "mistral_instruct_tokenizer_240323.model.v3"
 
-        return cls.from_file(str(cls._data_path() / tokenizer_name))
+        return cls.from_file(str(cls._data_path() / tokenizer_name), mode=ValidationMode.test)
 
     @classmethod
     def v7(cls, is_mm: bool = False) -> "MistralTokenizer":
@@ -203,9 +205,13 @@ class MistralTokenizer(
             The Mistral tokenizer v7.
         """
         if is_mm:
-            return cls.from_file(str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7m1"))
+            return cls.from_file(
+                str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7m1"), mode=ValidationMode.test
+            )
         else:
-            return cls.from_file(str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7"))
+            return cls.from_file(
+                str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7"), mode=ValidationMode.test
+            )
 
     @classmethod
     def from_model(cls, model: str, strict: bool = True) -> "MistralTokenizer":

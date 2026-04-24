@@ -399,3 +399,20 @@ def test_from_file_with_invalid_default_validation_mode(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Unknown default_validation_mode"):
         Tekkenizer.from_file(tokpath)
+
+
+@pytest.mark.parametrize("mode", [None, ValidationMode.serving])
+def test_init_default_validation_mode(mode: ValidationMode | None) -> None:
+    vocab = quick_vocab()
+    special_tokens = _get_deprecated_special_tokens()
+
+    tekkenizer = Tekkenizer(
+        vocab,
+        special_tokens=special_tokens,
+        pattern=".",
+        vocab_size=len(vocab) + len(special_tokens),
+        num_special_tokens=len(special_tokens),
+        version=TokenizerVersion.v3,
+        default_validation_mode=mode,
+    )
+    assert tekkenizer.default_validation_mode == mode

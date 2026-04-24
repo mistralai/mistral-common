@@ -2,7 +2,7 @@ import warnings
 from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 import numpy as np
 from pydantic import ConfigDict, Field
@@ -17,12 +17,14 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Tool
-from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import AudioEncoder
 from mistral_common.tokens.tokenizers.image import ImageEncoder
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
+
+if TYPE_CHECKING:
+    from mistral_common.protocol.instruct.validator import ValidationMode
 
 
 class UserMessagePosition(str, Enum):
@@ -239,7 +241,7 @@ class Tokenizer(ABC):
 
     @property
     @abstractmethod
-    def default_validation_mode(self) -> ValidationMode | None:
+    def default_validation_mode(self) -> "ValidationMode | None":
         r"""The default validation mode embedded in the tokenizer file."""
 
     @abstractmethod
