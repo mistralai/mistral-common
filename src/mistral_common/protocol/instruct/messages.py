@@ -82,7 +82,7 @@ class UserMessage(BaseMessage):
     def from_openai(cls, openai_message: dict[str, str | list[dict[str, str | dict[str, Any]]]]) -> "UserMessage":
         r"""Converts the OpenAI message to the Mistral format."""
         if isinstance(openai_message["content"], str):
-            return cls.model_validate(openai_message)
+            return cls.model_validate(cls._filter_cls_fields(openai_message))
         return cls.model_validate(
             {
                 "role": openai_message["role"],
@@ -111,7 +111,7 @@ class SystemMessage(BaseMessage):
     @classmethod
     def from_openai(cls, openai_message: dict[str, str | list[dict[str, str | dict[str, Any]]]]) -> "SystemMessage":
         r"""Converts the OpenAI message to the Mistral format."""
-        return cls.model_validate(openai_message)
+        return cls.model_validate(cls._filter_cls_fields(openai_message))
 
 
 class AssistantMessage(BaseMessage):
@@ -218,7 +218,7 @@ class ToolMessage(BaseMessage):
     @classmethod
     def from_openai(cls, messages: dict[str, str | list[dict[str, str | dict[str, Any]]]]) -> "ToolMessage":
         r"""Converts the OpenAI message to the Mistral format."""
-        tool_message = cls.model_validate(messages)
+        tool_message = cls.model_validate(cls._filter_cls_fields(messages))
         assert tool_message.tool_call_id is not None, "tool_call_id must be provided for tool messages."
         return tool_message
 

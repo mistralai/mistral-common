@@ -1,11 +1,9 @@
 import io
-from inspect import signature
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pytest
-from openai.resources.chat.completions.completions import Completions
 from openai.types.audio.transcription_create_params import TranscriptionCreateParamsBase as OpenAITranscriptionRequest
 from openai.types.chat.chat_completion_assistant_message_param import (
     ChatCompletionAssistantMessageParam as OpenAIAssistantMessage,
@@ -43,7 +41,6 @@ from mistral_common.protocol.instruct.chunk import (
     TextChunk,
     ThinkChunk,
 )
-from mistral_common.protocol.instruct.converters import _OPENAI_COMPLETION_FIELDS, _check_openai_fields_names
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
@@ -112,27 +109,6 @@ DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX = AudioURLChunk(
     )
 )
 DUMMY_AUDIO_URL_CHUNK_URL = AudioURLChunk(audio_url=AudioURL(url=AUDIO_SAMPLE_URL))
-
-
-def test_openai_chat_fields() -> None:
-    completions_create_inspect_keys = set(signature(Completions.create).parameters.keys())
-    completions_create_inspect_keys.remove("self")
-    assert _OPENAI_COMPLETION_FIELDS == completions_create_inspect_keys
-
-
-def test_check_openai_fields_names() -> None:
-    # Valid names
-    valid_names = {"temperature"}
-    _check_openai_fields_names(valid_names, {"temperature"})
-
-    # Invalid openai names
-    valid_names = {"temperature"}
-    with pytest.raises(ValueError):
-        _check_openai_fields_names(valid_names, {"temperature", "max_tokens"})
-
-    # Invalid name
-    with pytest.raises(ValueError):
-        _check_openai_fields_names(valid_names, {"invalid_name"})
 
 
 def test_convert_image_chunk() -> None:
@@ -967,3 +943,121 @@ class TestToolChoice:
 
         reconstructed = ChatCompletionRequest.from_openai(**openai_request)
         assert reconstructed.tool_choice == expected_reconstructed
+
+
+@pytest.mark.parametrize(
+    ["from_openai_call", "expected"],
+    [
+        # Messages with extra fields
+        (
+            lambda: UserMessage.from_openai({"role": "user", "content": "Hello", "name": "user1"}),
+            UserMessage(content="Hello"),
+        ),
+        (
+            lambda: UserMessage.from_openai(
+                {"role": "user", "content": [{"type": "text", "text": "Hello"}], "name": "user1"}
+            ),
+            UserMessage(content=[TextChunk(text="Hello")]),
+        ),
+        (
+            lambda: SystemMessage.from_openai({"role": "system", "content": "Be helpful", "name": "sys"}),
+            SystemMessage(content="Be helpful"),
+        ),
+        (
+            lambda: ToolMessage.from_openai(
+                {"role": "tool", "content": "42", "tool_call_id": "c1", "extra": "ignored"}
+            ),
+            ToolMessage(content="42", tool_call_id="c1"),
+        ),
+        (
+            lambda: AssistantMessage.from_openai(
+                {"role": "assistant", "content": "Hi", "refusal": None, "audio": None}
+            ),
+            AssistantMessage(content="Hi"),
+        ),
+        # ToolCall with index
+        (
+            lambda: ToolCall.from_openai(
+                {"id": "c1", "index": 0, "type": "function", "function": {"name": "f", "arguments": "{}"}}
+            ),
+            ToolCall(id="c1", function=FunctionCall(name="f", arguments="{}")),
+        ),
+        # Tool with extra field
+        (
+            lambda: Tool.from_openai(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "description": "",
+                        "parameters": {"type": "object"},
+                        "strict": False,
+                    },
+                    "extra_openai_field": True,
+                }
+            ),
+            Tool(function=Function(name="get_weather", description="", parameters={"type": "object"})),
+        ),
+        # Chunks with extra fields
+        (
+            lambda: TextChunk.from_openai({"type": "text", "text": "Hello", "annotations": []}),
+            TextChunk(text="Hello"),
+        ),
+        (
+            lambda: ThinkChunk.from_openai({"type": "thinking", "thinking": "hmm", "closed": True, "extra": 1}),
+            ThinkChunk(thinking="hmm", closed=True),
+        ),
+        (
+            lambda: AudioURLChunk.from_openai(
+                {"type": "audio_url", "audio_url": {"url": AUDIO_SAMPLE_URL}, "extra": True}
+            ),
+            AudioURLChunk(audio_url=AudioURL(url=AUDIO_SAMPLE_URL)),
+        ),
+        (
+            lambda: AudioChunk.from_openai({**DUMMY_AUDIO_CHUNK.to_openai(), "extra": True}),
+            DUMMY_AUDIO_CHUNK,
+        ),
+        # ModelSettings with extra fields
+        (
+            lambda: ModelSettings.from_openai(reasoning_effort="high", unknown_setting="value"),
+            ModelSettings(reasoning_effort=ReasoningEffort.high),
+        ),
+        # Requests with unsupported OpenAI / unknown fields
+        (
+            lambda: ChatCompletionRequest.from_openai(
+                messages=[{"role": "user", "content": "Hello"}],
+                temperature=0.5,
+                stream=False,
+                n=2,
+                logprobs=True,
+                frequency_penalty=0.1,
+                unknown_field="value",
+            ),
+            ChatCompletionRequest(messages=[UserMessage(content="Hello")], temperature=0.5),
+        ),
+        (
+            lambda: InstructRequest.from_openai(
+                messages=[{"role": "user", "content": "Hello"}],
+                stream=True,
+                n=5,
+                logprobs=False,
+            ),
+            InstructRequest(messages=[UserMessage(content="Hello")]),
+        ),
+    ],
+)
+def test_from_openai_drops_extra_fields(from_openai_call: Any, expected: Any) -> None:
+    assert from_openai_call() == expected
+
+
+@pytest.mark.parametrize(
+    "constructor",
+    [
+        lambda: UserMessage(content="Hello", name="user1"),  # type: ignore[call-arg]
+        lambda: SystemMessage(content="Be helpful", name="sys"),  # type: ignore[call-arg]
+        lambda: TextChunk(text="Hello", extra="bad"),  # type: ignore[call-arg]
+    ],
+)
+def test_direct_construction_still_strict(constructor: Any) -> None:
+    with pytest.raises(Exception):
+        constructor()

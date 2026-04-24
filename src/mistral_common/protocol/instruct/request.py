@@ -6,8 +6,6 @@ from pydantic import Field
 from mistral_common.base import MistralBase
 from mistral_common.protocol.base import BaseCompletionRequest
 from mistral_common.protocol.instruct.converters import (
-    _check_openai_fields_names,
-    _is_openai_field_name,
     convert_openai_messages,
     convert_openai_tools,
 )
@@ -71,7 +69,7 @@ class ModelSettings(MistralBase):
     @classmethod
     def from_openai(cls, **kwargs: Any) -> "ModelSettings":
         r"""Create ModelSettings from OpenAI keywords API format."""
-        return ModelSettings.model_validate(kwargs)
+        return cls.model_validate(cls._filter_cls_fields(kwargs))
 
 
 class ResponseFormat(MistralBase):
@@ -174,16 +172,10 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             raise NotImplementedError("Truncating for context length is not implemented for OpenAI requests.")
 
         for kwarg in kwargs:
-            # Check for duplicate keyword arguments.
             if kwarg in openai_request:
                 raise ValueError(f"Duplicate keyword argument: {kwarg}")
-            # Check if kwarg should have been set in the request.
-            # This occurs when the field is different between the Mistral and OpenAI API.
             elif kwarg in ChatCompletionRequest.model_fields:
                 raise ValueError(f"Keyword argument {kwarg} is already set in the request.")
-            # Check if kwarg is a valid OpenAI field name.
-            elif not _is_openai_field_name(kwarg):
-                raise ValueError(f"Invalid keyword argument: {kwarg}, it should be an OpenAI field name.")
 
         openai_messages = []
         for message in self.messages:
@@ -234,7 +226,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
 
         random_seed = kwargs.pop("seed", None) or kwargs.pop("random_seed", None)
 
-        _check_openai_fields_names(set(cls.model_fields.keys()), set(kwargs.keys()))
+        filtered_kwargs = cls._filter_cls_fields(kwargs)
 
         converted_messages: list[ChatMessage] = convert_openai_messages(messages)
 
@@ -245,7 +237,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             tools=converted_tools,
             random_seed=random_seed,
             continue_final_message=continue_final_message,
-            **kwargs,
+            **filtered_kwargs,
         )
 
 
@@ -318,16 +310,10 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         )
 
         for kwarg in kwargs:
-            # Check for duplicate keyword arguments.
             if kwarg in openai_request:
                 raise ValueError(f"Duplicate keyword argument: {kwarg}")
-            # Check if kwarg should have been set in the request.
-            # This occurs when the field is different between the Mistral and OpenAI API.
             elif kwarg in InstructRequest.model_fields:
                 raise ValueError(f"Keyword argument {kwarg} is already set in the request.")
-            # Check if the keyword argument is a valid OpenAI field name.
-            elif not _is_openai_field_name(kwarg):
-                raise ValueError(f"Invalid keyword argument: {kwarg}, it should be an OpenAI field name.")
 
         openai_messages: list[dict[str, Any]] = []
         if self.system_prompt is not None:
@@ -383,14 +369,16 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
             "ModelSettings fields should not overlap with InstructRequest fields."
         )
         valid_fields = instruct_request_fields | model_settings_fields
-        _check_openai_fields_names(valid_fields, set(kwargs.keys()))
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_fields}
 
         converted_messages: list[ChatMessage] = convert_openai_messages(messages)
 
         converted_tools = convert_openai_tools(tools) if tools is not None else None
 
-        model_settings = ModelSettings.from_openai(**{k: v for k, v in kwargs.items() if k in model_settings_fields})
-        other_kwargs = {k: v for k, v in kwargs.items() if k not in model_settings_fields}
+        model_settings = ModelSettings.from_openai(
+            **{k: v for k, v in filtered_kwargs.items() if k in model_settings_fields}
+        )
+        other_kwargs = {k: v for k, v in filtered_kwargs.items() if k not in model_settings_fields}
 
         return cls(
             messages=converted_messages,  # type: ignore[arg-type]
