@@ -516,6 +516,15 @@ class MistralRequestValidatorV15(MistralRequestValidatorV13):
 
 
 def get_validator(version: TokenizerVersion, mode: ValidationMode) -> MistralRequestValidator:
+    r"""Get the appropriate validator for a given tokenizer version and validation mode.
+
+    Args:
+        version: The tokenizer version.
+        mode: The validation mode.
+
+    Returns:
+        The validator instance.
+    """
     validator: MistralRequestValidator
     match version:
         case TokenizerVersion.v1 | TokenizerVersion.v2:
