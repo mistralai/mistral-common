@@ -271,7 +271,9 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
                 elif previous_role == Roles.assistant:
                     expected_roles = {Roles.assistant, Roles.user, Roles.tool}
                 elif previous_role == Roles.tool:
-                    expected_roles = {Roles.assistant, Roles.tool}
+                    expected_roles = {Roles.assistant, Roles.tool, Roles.user}
+                else:
+                    assert_never(previous_role)
 
                 if current_role not in expected_roles:
                     raise InvalidMessageStructureException(
