@@ -37,7 +37,7 @@ jobs:
       - name: Install Dependencies
         run: |
           uv sync --frozen --all-extras --group dev
-          uv pip install transformers -U
+          uv pip install transformers regex>=2025.10.22
 
       # PyTest
       - name: Tests
