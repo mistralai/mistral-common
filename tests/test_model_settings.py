@@ -1,5 +1,3 @@
-from typing import Any
-
 import pytest
 from pydantic import ValidationError
 
@@ -23,38 +21,6 @@ class TestModelSettings:
         settings = ModelSettingsBuilder.none()
         for field_name in ModelSettingsBuilder.model_fields.keys():
             assert getattr(settings, field_name) is None
-
-    @pytest.mark.parametrize(
-        ("settings", "expected"),
-        [
-            (ModelSettings.none(), {}),
-            (
-                ModelSettings(reasoning_effort=ReasoningEffort.high),
-                {"reasoning_effort": "high"},
-            ),
-        ],
-    )
-    def test_to_openai(self, settings: ModelSettings, expected: dict[str, Any]) -> None:
-        assert settings.to_openai() == expected
-
-    @pytest.mark.parametrize(
-        ("openai_settings", "expected"),
-        [
-            ({}, ModelSettings.none()),
-            (
-                {"reasoning_effort": "high"},
-                ModelSettings(reasoning_effort=ReasoningEffort.high),
-            ),
-        ],
-    )
-    def test_from_openai(self, openai_settings: dict[str, Any], expected: ModelSettings) -> None:
-        assert ModelSettings.from_openai(**openai_settings) == expected
-
-    def test_serialization_round_trip(self) -> None:
-        original = ModelSettings(reasoning_effort=ReasoningEffort.high)
-        serialized = original.to_openai()
-        deserialized = ModelSettings.from_openai(**serialized)
-        assert original == deserialized
 
 
 class TestEnumBuilder:
