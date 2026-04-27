@@ -71,7 +71,7 @@ plugins:
             - https://docs.python.org/3.12/objects.inv
             - https://numpy.org/doc/1.23/objects.inv
             - https://pillow.readthedocs.io/en/stable/objects.inv
-            - https://docs.pydantic.dev/2.4/objects.inv
+            - https://docs.pydantic.dev/latest/objects.inv
             - https://pytorch.org/docs/stable/objects.inv
           options:
             docstring_style: google
