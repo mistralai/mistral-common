@@ -62,15 +62,6 @@ class ModelSettings(MistralBase):
         r"""Create a ModelSettings instance with default (None) values."""
         return ModelSettings()
 
-    def to_openai(self) -> dict[str, Any]:
-        r"""Convert ModelSettings to OpenAI API format with non-None values."""
-        return self.model_dump(exclude_none=True)
-
-    @classmethod
-    def from_openai(cls, **kwargs: Any) -> "ModelSettings":
-        r"""Create ModelSettings from OpenAI keywords API format."""
-        return cls.model_validate(cls._filter_cls_fields(kwargs))
-
 
 class ResponseFormat(MistralBase):
     r"""The format of the response.
@@ -331,7 +322,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
             raise NotImplementedError("Truncating at max tokens is not implemented for OpenAI requests.")
 
         openai_request.update(kwargs)
-        openai_request.update(**self.settings.to_openai())
+        openai_request.update(**self.settings.model_dump(exclude_none=True))
 
         return openai_request
 
@@ -375,9 +366,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
 
         converted_tools = convert_openai_tools(tools) if tools is not None else None
 
-        model_settings = ModelSettings.from_openai(
-            **{k: v for k, v in filtered_kwargs.items() if k in model_settings_fields}
-        )
+        model_settings = ModelSettings(**{k: v for k, v in filtered_kwargs.items() if k in model_settings_fields})
         other_kwargs = {k: v for k, v in filtered_kwargs.items() if k not in model_settings_fields}
 
         return cls(

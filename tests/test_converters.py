@@ -1017,11 +1017,6 @@ class TestToolChoice:
             lambda: AudioChunk.from_openai({**DUMMY_AUDIO_CHUNK.to_openai(), "extra": True}),
             DUMMY_AUDIO_CHUNK,
         ),
-        # ModelSettings with extra fields
-        (
-            lambda: ModelSettings.from_openai(reasoning_effort="high", unknown_setting="value"),
-            ModelSettings(reasoning_effort=ReasoningEffort.high),
-        ),
         # Requests with unsupported OpenAI / unknown fields
         (
             lambda: ChatCompletionRequest.from_openai(
