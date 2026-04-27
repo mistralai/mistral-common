@@ -103,7 +103,7 @@
                 {{- raise_exception('Unexpected role \'' + current_role + '\' after role \'' + ns_order.previous_role + '\'') }}
             {%- endif %}
         {%- elif ns_order.previous_role == 'tool' %}
-            {%- if current_role != 'assistant' and current_role != 'tool' %}
+            {%- if current_role != 'assistant' and current_role != 'tool' and current_role != 'user' %}
                 {{- raise_exception('Unexpected role \'' + current_role + '\' after role \'' + ns_order.previous_role + '\'') }}
             {%- endif %}
         {%- endif %}

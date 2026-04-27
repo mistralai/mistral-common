@@ -796,6 +796,117 @@ def test_aggregation_consecutive_assistants_both_tool_calls(version: TokenizerVe
 
 
 @pytest.mark.parametrize(
+    ("version", "spm"),
+    [
+        (TokenizerVersion.v2, False),
+        (TokenizerVersion.v2, True),
+        (TokenizerVersion.v3, False),
+        (TokenizerVersion.v3, True),
+        (TokenizerVersion.v7, False),
+        (TokenizerVersion.v7, True),
+        (TokenizerVersion.v11, False),
+        (TokenizerVersion.v13, False),
+        (TokenizerVersion.v15, False),
+    ],
+)
+def test_user_after_tool_accepted(version: TokenizerVersion, spm: bool) -> None:
+    r"""User message after tool results is accepted by the ordering check."""
+    template = generate_chat_template_dynamic(spm, version, False, False, False)
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "Search for info"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "aaaaaaaaa",
+                    "type": "function",
+                    "function": {"name": "search", "arguments": '{"q": "info"}'},
+                },
+            ],
+        },
+        {"role": "tool", "name": "search", "content": "result1", "tool_call_id": "aaaaaaaaa"},
+        {"role": "user", "content": "Now refine"},
+        {"role": "assistant", "content": "Here is the refined answer"},
+    ]
+
+    tools: list[dict[str, Any]] = [
+        {
+            "type": "function",
+            "function": {
+                "name": "search",
+                "description": "",
+                "parameters": {"type": "object", "properties": {"q": {"type": "string"}}},
+            },
+        }
+    ]
+
+    output = render_template(template, messages, tools=tools)
+    assert "Now refine" in output
+    assert "Here is the refined answer" in output
+
+
+@pytest.mark.parametrize(
+    ("version", "spm"),
+    [
+        (TokenizerVersion.v7, False),
+        (TokenizerVersion.v7, True),
+        (TokenizerVersion.v13, False),
+        (TokenizerVersion.v15, False),
+    ],
+)
+def test_user_after_tool_static_matches_dynamic(version: TokenizerVersion, spm: bool) -> None:
+    r"""Static and dynamic templates produce same output for tool->user transitions."""
+    static_template = get_chat_template(
+        spm=spm,
+        tokenizer_version=version,
+        image_support=False,
+        audio_support=False,
+        thinking_support=False,
+    )
+    dynamic_template = generate_chat_template_dynamic(spm, version, False, False, False)
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "Search for info"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "aaaaaaaaa",
+                    "type": "function",
+                    "function": {"name": "search", "arguments": '{"q": "info"}'},
+                },
+            ],
+        },
+        {"role": "tool", "name": "search", "content": "result1", "tool_call_id": "aaaaaaaaa"},
+        {"role": "user", "content": "Now refine"},
+        {"role": "assistant", "content": "Here is the refined answer"},
+    ]
+
+    tools: list[dict[str, Any]] = [
+        {
+            "type": "function",
+            "function": {
+                "name": "search",
+                "description": "",
+                "parameters": {"type": "object", "properties": {"q": {"type": "string"}}},
+            },
+        }
+    ]
+
+    static_output = render_template(static_template, messages, tools=tools)
+    dynamic_output = render_template(dynamic_template, messages, tools=tools)
+
+    assert static_output == dynamic_output, (
+        f"Output mismatch for version={version}, spm={spm}\n\n"
+        f"Static output: {static_output}\n"
+        f"Dynamic output: {dynamic_output}"
+    )
+
+
+@pytest.mark.parametrize(
     ("has_system", "has_tools", "reasoning_effort"),
     [
         (True, True, "high"),
@@ -811,10 +922,10 @@ def test_aggregation_consecutive_assistants_both_tool_calls(version: TokenizerVe
 def test_v15_tools_and_settings_ordering(has_system: bool, has_tools: bool, reasoning_effort: str | None) -> None:
     r"""Test that v15 emits system, tools, and model_settings in the correct order.
 
-    Expected order: ``[SYSTEM_PROMPT]...[/SYSTEM_PROMPT]`` (if system) then
-    ``[AVAILABLE_TOOLS]...[/AVAILABLE_TOOLS]`` (if tools) then
-    ``[MODEL_SETTINGS]...[/MODEL_SETTINGS]`` (always, None defaults to 'none') then
-    ``[INST]...[/INST]``.
+    Expected order: `[SYSTEM_PROMPT]...[/SYSTEM_PROMPT]` (if system) then
+    `[AVAILABLE_TOOLS]...[/AVAILABLE_TOOLS]` (if tools) then
+    `[MODEL_SETTINGS]...[/MODEL_SETTINGS]` (always, None defaults to 'none') then
+    `[INST]...[/INST]`.
     """
     template = generate_chat_template_dynamic(False, TokenizerVersion.v15, False, False, False)
 
@@ -881,7 +992,7 @@ THINK_CONFIGS = [
 
 @pytest.mark.parametrize(("version", "image", "audio"), THINK_CONFIGS)
 def test_reasoning_content_to_thinking_chunk(version: TokenizerVersion, image: bool, audio: bool) -> None:
-    r"""``reasoning_content`` on an assistant message produces a leading ``[THINK]...[/THINK]``."""
+    r"""`reasoning_content` on an assistant message produces a leading `[THINK]...[/THINK]`."""
     template = generate_chat_template_dynamic(False, version, image, audio, thinking_support=True)
 
     messages: list[dict[str, Any]] = [
@@ -895,7 +1006,7 @@ def test_reasoning_content_to_thinking_chunk(version: TokenizerVersion, image: b
 
 @pytest.mark.parametrize(("version", "image", "audio"), THINK_CONFIGS)
 def test_reasoning_field_to_thinking_chunk(version: TokenizerVersion, image: bool, audio: bool) -> None:
-    r"""``reasoning`` field (alias) produces the same ``[THINK]...[/THINK]``."""
+    r"""`reasoning` field (alias) produces the same `[THINK]...[/THINK]`."""
     template = generate_chat_template_dynamic(False, version, image, audio, thinking_support=True)
 
     messages: list[dict[str, Any]] = [
@@ -909,7 +1020,7 @@ def test_reasoning_field_to_thinking_chunk(version: TokenizerVersion, image: boo
 
 @pytest.mark.parametrize(("version", "image", "audio"), THINK_CONFIGS)
 def test_reasoning_content_takes_precedence_over_reasoning(version: TokenizerVersion, image: bool, audio: bool) -> None:
-    r"""When both ``reasoning_content`` and ``reasoning`` are present, ``reasoning_content`` wins."""
+    r"""When both `reasoning_content` and `reasoning` are present, `reasoning_content` wins."""
     template = generate_chat_template_dynamic(False, version, image, audio, thinking_support=True)
 
     messages: list[dict[str, Any]] = [
@@ -929,7 +1040,7 @@ def test_reasoning_content_takes_precedence_over_reasoning(version: TokenizerVer
 
 @pytest.mark.parametrize(("version", "image", "audio"), THINK_CONFIGS)
 def test_reasoning_with_existing_think_chunks(version: TokenizerVersion, image: bool, audio: bool) -> None:
-    r"""``reasoning_content`` is prepended before existing inline ``ThinkChunk``\s."""
+    r"""`reasoning_content` is prepended before existing inline `ThinkChunk`\s."""
     template = generate_chat_template_dynamic(False, version, image, audio, thinking_support=True)
 
     messages: list[dict[str, Any]] = [
@@ -950,7 +1061,7 @@ def test_reasoning_with_existing_think_chunks(version: TokenizerVersion, image: 
 
 @pytest.mark.parametrize(("version", "image", "audio"), THINK_CONFIGS)
 def test_reasoning_content_only_no_text_content(version: TokenizerVersion, image: bool, audio: bool) -> None:
-    r"""``reasoning_content`` with empty/null text content produces just the thinking chunk."""
+    r"""`reasoning_content` with empty/null text content produces just the thinking chunk."""
     template = generate_chat_template_dynamic(False, version, image, audio, thinking_support=True)
 
     messages: list[dict[str, Any]] = [
@@ -964,7 +1075,7 @@ def test_reasoning_content_only_no_text_content(version: TokenizerVersion, image
 
 @pytest.mark.parametrize(("version", "image", "audio"), THINK_CONFIGS)
 def test_reasoning_content_with_tool_calls(version: TokenizerVersion, image: bool, audio: bool) -> None:
-    r"""``reasoning_content`` is preserved alongside ``tool_calls``."""
+    r"""`reasoning_content` is preserved alongside `tool_calls`."""
     template = generate_chat_template_dynamic(False, version, image, audio, thinking_support=True)
 
     messages: list[dict[str, Any]] = [
@@ -1003,7 +1114,7 @@ def test_reasoning_content_with_tool_calls(version: TokenizerVersion, image: boo
 
 @pytest.mark.parametrize(("version", "image", "audio"), THINK_CONFIGS)
 def test_reasoning_aggregation_consecutive_assistants(version: TokenizerVersion, image: bool, audio: bool) -> None:
-    r"""Consecutive assistant messages with ``reasoning_content`` aggregate correctly."""
+    r"""Consecutive assistant messages with `reasoning_content` aggregate correctly."""
     template = generate_chat_template_dynamic(False, version, image, audio, thinking_support=True)
 
     messages: list[dict[str, Any]] = [
@@ -1023,7 +1134,7 @@ def test_reasoning_aggregation_consecutive_assistants(version: TokenizerVersion,
 
 @pytest.mark.parametrize(("version", "image", "audio"), THINK_CONFIGS)
 def test_reasoning_static_dynamic_parity(version: TokenizerVersion, image: bool, audio: bool) -> None:
-    r"""Static and dynamic templates produce identical output for ``reasoning_content`` input."""
+    r"""Static and dynamic templates produce identical output for `reasoning_content` input."""
     static_template = get_chat_template(
         spm=False,
         tokenizer_version=version,
@@ -1047,7 +1158,7 @@ def test_reasoning_static_dynamic_parity(version: TokenizerVersion, image: bool,
 
 
 def test_non_think_template_ignores_reasoning_field() -> None:
-    r"""Non-think templates silently ignore ``reasoning_content`` (no conversion happens)."""
+    r"""Non-think templates silently ignore `reasoning_content` (no conversion happens)."""
     template = generate_chat_template_dynamic(False, TokenizerVersion.v13, False, False, thinking_support=False)
 
     messages: list[dict[str, Any]] = [
@@ -1061,7 +1172,7 @@ def test_non_think_template_ignores_reasoning_field() -> None:
 
 
 def test_empty_reasoning_content_is_ignored() -> None:
-    r"""Empty-string ``reasoning_content`` does not produce a thinking chunk."""
+    r"""Empty-string `reasoning_content` does not produce a thinking chunk."""
     template = generate_chat_template_dynamic(False, TokenizerVersion.v13, False, False, thinking_support=True)
 
     messages: list[dict[str, Any]] = [
@@ -1075,7 +1186,7 @@ def test_empty_reasoning_content_is_ignored() -> None:
 
 
 def test_none_reasoning_content_is_ignored() -> None:
-    r"""``None`` value for ``reasoning_content`` does not produce a thinking chunk."""
+    r"""`None` value for `reasoning_content` does not produce a thinking chunk."""
     template = generate_chat_template_dynamic(False, TokenizerVersion.v13, False, False, thinking_support=True)
 
     messages: list[dict[str, Any]] = [
@@ -1089,25 +1200,25 @@ def test_none_reasoning_content_is_ignored() -> None:
 
 
 def test_invalid_config_plain_thinking_with_thinking() -> None:
-    r"""``plain_thinking_support`` and ``thinking_support`` are mutually exclusive."""
+    r"""`plain_thinking_support` and `thinking_support` are mutually exclusive."""
     with pytest.raises(ValueError, match="Plain thinking support and thinking support are mutually exclusive"):
         TemplateConfig(version=TokenizerVersion.v11, thinking_support=True, plain_thinking_support=True)
 
 
 def test_invalid_config_plain_thinking_non_v11() -> None:
-    r"""``plain_thinking_support`` only works with v11."""
+    r"""`plain_thinking_support` only works with v11."""
     with pytest.raises(ValueError, match="Plain thinking support is only available for tokenizer version v11"):
         TemplateConfig(version=TokenizerVersion.v15, plain_thinking_support=True)
 
 
 def test_invalid_config_plain_thinking_with_audio() -> None:
-    r"""``plain_thinking_support`` and ``audio_support`` are mutually exclusive."""
+    r"""`plain_thinking_support` and `audio_support` are mutually exclusive."""
     with pytest.raises(ValueError, match="Audio and plain thinking support are mutually exclusive"):
         TemplateConfig(version=TokenizerVersion.v11, audio_support=True, plain_thinking_support=True)
 
 
 def test_plain_think_template_produces_correct_output() -> None:
-    r"""Plain think template emits ``<think>``/``</think>`` tags, not ``[THINK]``/``[/THINK]``."""
+    r"""Plain think template emits `<think>`/`</think>` tags, not `[THINK]`/`[/THINK]`."""
     template = generate_chat_template_dynamic(
         False, TokenizerVersion.v11, False, False, thinking_support=False, plain_thinking_support=True
     )
@@ -1161,7 +1272,7 @@ def test_plain_think_static_dynamic_parity(image: bool) -> None:
 
 
 def test_plain_think_reasoning_content_conversion() -> None:
-    r"""``reasoning_content`` produces ``<think>`` tags in plain think mode."""
+    r"""`reasoning_content` produces `<think>` tags in plain think mode."""
     template = generate_chat_template_dynamic(
         False, TokenizerVersion.v11, False, False, thinking_support=False, plain_thinking_support=True
     )
@@ -1177,7 +1288,7 @@ def test_plain_think_reasoning_content_conversion() -> None:
 
 
 def test_plain_think_closed_false() -> None:
-    r"""``closed: false`` omits the ``</think>`` closing tag in plain think mode."""
+    r"""`closed: false` omits the `</think>` closing tag in plain think mode."""
     template = generate_chat_template_dynamic(
         False, TokenizerVersion.v11, False, False, thinking_support=False, plain_thinking_support=True
     )
@@ -1198,7 +1309,7 @@ def test_plain_think_closed_false() -> None:
 
 
 def test_plain_think_image_template() -> None:
-    r"""Image + plain think template handles both ``[IMG]`` and ``<think>`` tags."""
+    r"""Image + plain think template handles both `[IMG]` and `<think>` tags."""
     template = generate_chat_template_dynamic(
         False, TokenizerVersion.v11, True, False, thinking_support=False, plain_thinking_support=True
     )
@@ -1239,7 +1350,7 @@ def test_plain_think_image_template() -> None:
     ],
 )
 def test_closed_false_special_token_think(version: TokenizerVersion, image: bool) -> None:
-    r"""``closed: false`` omits ``[/THINK]`` for special token think templates."""
+    r"""`closed: false` omits `[/THINK]` for special token think templates."""
     template = generate_chat_template_dynamic(False, version, image, False, thinking_support=True)
 
     messages: list[dict[str, Any]] = [
@@ -1267,7 +1378,7 @@ def test_closed_false_special_token_think(version: TokenizerVersion, image: bool
     ],
 )
 def test_closed_true_special_token_think(version: TokenizerVersion, image: bool) -> None:
-    r"""``closed: true`` (or absent) emits ``[/THINK]`` for special token think templates."""
+    r"""`closed: true` (or absent) emits `[/THINK]` for special token think templates."""
     template = generate_chat_template_dynamic(False, version, image, False, thinking_support=True)
 
     messages: list[dict[str, Any]] = [

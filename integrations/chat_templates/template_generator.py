@@ -23,7 +23,7 @@ class TemplateConfig:
         thinking_support: Whether to enable thinking chunks in system and assistant messages.
             Adds [THINK]/[/THINK] token support. Requires version v13+.
         plain_thinking_support: Whether to enable plain text thinking chunks using
-            ``<think>``/``</think>`` tags instead of special tokens. Only available for v11.
+            `<think>`/`</think>` tags instead of special tokens. Only available for v11.
             Mutually exclusive with `thinking_support`.
 
     Raises:
@@ -343,14 +343,14 @@ def _generate_tools_and_settings_definition(config: TemplateConfig) -> str:
 def _generate_reasoning_to_thinking_inline() -> list[str]:
     r"""Generate inline reasoning-to-thinking conversion inside the aggregation loop.
 
-    Emitted inside the ``for msg in ns_agg.current_group`` loop when
-    ``config.any_thinking_support`` is enabled. For each assistant message, converts
-    a top-level ``reasoning_content`` or ``reasoning`` field into a leading
-    ``{"type": "thinking", "thinking": ...}`` chunk prepended to the content,
+    Emitted inside the `for msg in ns_agg.current_group` loop when
+    `config.any_thinking_support` is enabled. For each assistant message, converts
+    a top-level `reasoning_content` or `reasoning` field into a leading
+    `{"type": "thinking", "thinking": ...}` chunk prepended to the content,
     so that reasoning traces from third-party APIs (OpenAI, DeepSeek, vLLM, …)
-    are aggregated uniformly with inline ``ThinkChunk``\s.
+    are aggregated uniformly with inline `ThinkChunk`\s.
 
-    ``reasoning_content`` takes precedence over ``reasoning`` when both are present.
+    `reasoning_content` takes precedence over `reasoning` when both are present.
 
     Returns:
         Lines of Jinja2 template code for the inline conversion.
@@ -434,20 +434,20 @@ def _generate_flush_logic(config: TemplateConfig) -> list[str]:
     r"""Generate the flush logic for aggregating a group of same-role messages.
 
     Called when the role changes (or at end of messages) to coalesce all messages
-    in the current group into a single output message. Adjacent ``TextChunk``\s are
-    joined with ``"\\n\\n"``, non-text chunks are preserved as barriers, and
-    ``tool_calls`` from all messages in the group are concatenated. Chunk type
+    in the current group into a single output message. Adjacent `TextChunk`\s are
+    joined with `"\\n\\n"`, non-text chunks are preserved as barriers, and
+    `tool_calls` from all messages in the group are concatenated. Chunk type
     validation is deferred to the message rendering loop.
 
-    When ``config.any_thinking_support`` is enabled, ``reasoning_content`` /
-    ``reasoning`` fields on assistant messages are converted to a leading thinking
+    When `config.any_thinking_support` is enabled, `reasoning_content` /
+    `reasoning` fields on assistant messages are converted to a leading thinking
     chunk prepended to the message content **inside** the aggregation loop, so that
-    reasoning traces are aggregated uniformly with inline ``ThinkChunk``\s.
+    reasoning traces are aggregated uniformly with inline `ThinkChunk`\s.
 
     The logic is role-agnostic for user, assistant, and system: system messages
     always form single-message groups (enforced by the grouping logic), so they
     are effectively coalesced individually. Tool messages pass through as-is to
-    preserve extra fields like ``tool_call_id`` and ``name``.
+    preserve extra fields like `tool_call_id` and `name`.
 
     Args:
         config: The template configuration.
@@ -588,7 +588,7 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
     - After `system`: `user`, `assistant`, `system`
     - After `user`: `assistant`, `system`, `user`
     - After `assistant`: `assistant`, `user`, `tool`
-    - After `tool`: `assistant`, `tool`
+    - After `tool`: `assistant`, `tool`, `user`
 
     For pre-v7 templates, system messages are extracted before this check,
     so only `user`, `assistant`, and `tool` roles are seen.
@@ -668,7 +668,9 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
     lines.append(transition_error)
     lines.append("            {%- endif %}")
     lines.append("        {%- elif ns_order.previous_role == 'tool' %}")
-    lines.append("            {%- if current_role != 'assistant' and current_role != 'tool' %}")
+    lines.append(
+        "            {%- if current_role != 'assistant' and current_role != 'tool' and current_role != 'user' %}"
+    )
     lines.append(transition_error)
     lines.append("            {%- endif %}")
     lines.append("        {%- endif %}")

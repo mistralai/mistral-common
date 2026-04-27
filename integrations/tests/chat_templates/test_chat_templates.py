@@ -753,6 +753,319 @@ REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN = ChatCompletionRequest(  
     ],
 )
 
+REQUEST_TOOL_THEN_USER_TEST = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are a helpful assistant."),
+        UserMessage(content="User says hello"),
+        AssistantMessage(
+            content=None,
+            tool_calls=[
+                ToolCall(
+                    id="123456789",
+                    function=FunctionCall(
+                        name="tool1",
+                        arguments={  # type: ignore[arg-type]
+                            "location": "San Francisco, CA",
+                        },
+                    ),
+                ),
+            ],
+        ),
+        ToolMessage(content="32", tool_call_id="123456789"),
+        UserMessage(content="What does that mean?"),
+    ],
+    tools=[
+        Tool(
+            function=Function(
+                name="tool1",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description": "The city and state, e.g. San Francisco, CA",
+                            "required": ["location"],
+                        }
+                    },
+                },
+            )
+        ),
+        Tool(function=Function(name="tool2", parameters={})),
+    ],
+)
+
+REQUEST_TOOL_THEN_USER_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are a helpful assistant."),
+        UserMessage(content="User says hello"),
+        AssistantMessage(
+            content=None,
+            tool_calls=[
+                ToolCall(
+                    id="123456789",
+                    function=FunctionCall(
+                        name="tool1",
+                        arguments={  # type: ignore[arg-type]
+                            "location": "San Francisco, CA",
+                        },
+                    ),
+                ),
+            ],
+        ),
+        ToolMessage(content="32", tool_call_id="123456789"),
+        UserMessage(content="What does that mean?"),
+        AssistantMessage(content="The temperature is 32 degrees in San Francisco."),
+    ],
+    tools=[
+        Tool(
+            function=Function(
+                name="tool1",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description": "The city and state, e.g. San Francisco, CA",
+                            "required": ["location"],
+                        }
+                    },
+                },
+            )
+        ),
+        Tool(function=Function(name="tool2", parameters={})),
+    ],
+)
+
+REQUEST_TOOL_THEN_USER_FULL_LOOP_TEST = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are a helpful assistant."),
+        UserMessage(content="User says hello"),
+        AssistantMessage(
+            content=None,
+            tool_calls=[
+                ToolCall(
+                    id="123456789",
+                    function=FunctionCall(
+                        name="tool1",
+                        arguments={  # type: ignore[arg-type]
+                            "location": "San Francisco, CA",
+                        },
+                    ),
+                ),
+                ToolCall(
+                    id="023456789",
+                    function=FunctionCall(
+                        name="tool2",
+                        arguments={},  # type: ignore[arg-type]
+                    ),
+                ),
+            ],
+        ),
+        ToolMessage(content="32", tool_call_id="123456789"),
+        ToolMessage(content="sunny", tool_call_id="023456789"),
+        UserMessage(content="Now what about Tokyo?"),
+        AssistantMessage(
+            content=None,
+            tool_calls=[
+                ToolCall(
+                    id="234567890",
+                    function=FunctionCall(
+                        name="tool1",
+                        arguments={  # type: ignore[arg-type]
+                            "location": "Tokyo, JP",
+                        },
+                    ),
+                ),
+            ],
+        ),
+        ToolMessage(content="28", tool_call_id="234567890"),
+        AssistantMessage(content="San Francisco is 32 and sunny, Tokyo is 28."),
+        UserMessage(content="Thanks!"),
+    ],
+    tools=[
+        Tool(
+            function=Function(
+                name="tool1",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description": "The city and state, e.g. San Francisco, CA",
+                            "required": ["location"],
+                        }
+                    },
+                },
+            )
+        ),
+        Tool(function=Function(name="tool2", parameters={})),
+    ],
+)
+
+REQUEST_TOOL_THEN_USER_FULL_LOOP_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are a helpful assistant."),
+        UserMessage(content="User says hello"),
+        AssistantMessage(
+            content=None,
+            tool_calls=[
+                ToolCall(
+                    id="123456789",
+                    function=FunctionCall(
+                        name="tool1",
+                        arguments={  # type: ignore[arg-type]
+                            "location": "San Francisco, CA",
+                        },
+                    ),
+                ),
+                ToolCall(
+                    id="023456789",
+                    function=FunctionCall(
+                        name="tool2",
+                        arguments={},  # type: ignore[arg-type]
+                    ),
+                ),
+            ],
+        ),
+        ToolMessage(content="32", tool_call_id="123456789"),
+        ToolMessage(content="sunny", tool_call_id="023456789"),
+        UserMessage(content="Now what about Tokyo?"),
+        AssistantMessage(
+            content=None,
+            tool_calls=[
+                ToolCall(
+                    id="234567890",
+                    function=FunctionCall(
+                        name="tool1",
+                        arguments={  # type: ignore[arg-type]
+                            "location": "Tokyo, JP",
+                        },
+                    ),
+                ),
+            ],
+        ),
+        ToolMessage(content="28", tool_call_id="234567890"),
+        AssistantMessage(content="San Francisco is 32 and sunny, Tokyo is 28."),
+    ],
+    tools=[
+        Tool(
+            function=Function(
+                name="tool1",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description": "The city and state, e.g. San Francisco, CA",
+                            "required": ["location"],
+                        }
+                    },
+                },
+            )
+        ),
+        Tool(function=Function(name="tool2", parameters={})),
+    ],
+)
+
+REQUEST_TOOL_THEN_USER_WITH_CONTENT_TEST = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are a helpful assistant."),
+        UserMessage(content="User says hello"),
+        AssistantMessage(
+            content="Let me check the weather for you.",
+            tool_calls=[
+                ToolCall(
+                    id="123456789",
+                    function=FunctionCall(
+                        name="tool1",
+                        arguments={  # type: ignore[arg-type]
+                            "location": "San Francisco, CA",
+                        },
+                    ),
+                ),
+                ToolCall(
+                    id="023456789",
+                    function=FunctionCall(
+                        name="tool2",
+                        arguments={},  # type: ignore[arg-type]
+                    ),
+                ),
+            ],
+        ),
+        ToolMessage(content="32", tool_call_id="123456789"),
+        ToolMessage(content="sunny", tool_call_id="023456789"),
+        UserMessage(content="What does that mean?"),
+    ],
+    tools=[
+        Tool(
+            function=Function(
+                name="tool1",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description": "The city and state, e.g. San Francisco, CA",
+                            "required": ["location"],
+                        }
+                    },
+                },
+            )
+        ),
+        Tool(function=Function(name="tool2", parameters={})),
+    ],
+)
+
+REQUEST_TOOL_THEN_USER_WITH_CONTENT_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are a helpful assistant."),
+        UserMessage(content="User says hello"),
+        AssistantMessage(
+            content="Let me check the weather for you.",
+            tool_calls=[
+                ToolCall(
+                    id="123456789",
+                    function=FunctionCall(
+                        name="tool1",
+                        arguments={  # type: ignore[arg-type]
+                            "location": "San Francisco, CA",
+                        },
+                    ),
+                ),
+                ToolCall(
+                    id="023456789",
+                    function=FunctionCall(
+                        name="tool2",
+                        arguments={},  # type: ignore[arg-type]
+                    ),
+                ),
+            ],
+        ),
+        ToolMessage(content="32", tool_call_id="123456789"),
+        ToolMessage(content="sunny", tool_call_id="023456789"),
+        UserMessage(content="What does that mean?"),
+        AssistantMessage(content="It is 32 degrees and sunny in San Francisco."),
+    ],
+    tools=[
+        Tool(
+            function=Function(
+                name="tool1",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description": "The city and state, e.g. San Francisco, CA",
+                            "required": ["location"],
+                        }
+                    },
+                },
+            )
+        ),
+        Tool(function=Function(name="tool2", parameters={})),
+    ],
+)
+
 REQUEST_MULTI_TURN_IMAGE_URL_TEST = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         SystemMessage(content="You are a helpful assistant."),
@@ -1187,6 +1500,8 @@ def _get_conversations(
                     REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
                     REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
                     REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
+                    REQUEST_TOOL_THEN_USER_TEST,
+                    REQUEST_TOOL_THEN_USER_FULL_LOOP_TEST,
                 ]
             )
         else:
@@ -1195,14 +1510,25 @@ def _get_conversations(
                     REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN,
                     REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN,
                     REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
+                    REQUEST_TOOL_THEN_USER_TRAIN,
+                    REQUEST_TOOL_THEN_USER_FULL_LOOP_TRAIN,
                 ]
             )
     if tokenizer_version > TokenizerVersion.v7:
-        conversations.append(
-            REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST
-            if validation_mode == ValidationMode.test
-            else REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN
-        )
+        if validation_mode == ValidationMode.test:
+            conversations.extend(
+                [
+                    REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST,
+                    REQUEST_TOOL_THEN_USER_WITH_CONTENT_TEST,
+                ]
+            )
+        else:
+            conversations.extend(
+                [
+                    REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN,
+                    REQUEST_TOOL_THEN_USER_WITH_CONTENT_TRAIN,
+                ]
+            )
 
     if image:
         if validation_mode == ValidationMode.test:
@@ -1455,6 +1781,22 @@ def test_role_error(
         }
         with pytest.raises(TemplateError, match=r"Unexpected role 'tool' after role 'user'"):
             encode_transformers(chat_template, INVALID_TOOL_AFTER_USER)
+
+    # User after tool is accepted (user can follow tool results)
+    if version >= TokenizerVersion.v2:
+        VALID_USER_AFTER_TOOL: dict[str, Any] = {
+            "messages": [
+                {"role": "user", "content": "Hello"},
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [{"id": "123456789", "function": {"name": "func", "arguments": "{}"}}],
+                },
+                {"role": "tool", "content": "result", "tool_call_id": "123456789"},
+                {"role": "user", "content": "continue with this context"},
+            ]
+        }
+        encode_transformers(chat_template, VALID_USER_AFTER_TOOL)
 
     # System after assistant is rejected for v7+ (system stays in loop_messages)
     if version >= TokenizerVersion.v7:
@@ -1980,10 +2322,10 @@ def test_reasoning_effort_validation(
 
 
 class TestGetChatTemplatePlainThinkingValidation:
-    r"""Validation tests for the ``plain_thinking_support`` parameter."""
+    r"""Validation tests for the `plain_thinking_support` parameter."""
 
     def test_plain_thinking_with_thinking_raises(self) -> None:
-        r"""``plain_thinking_support`` and ``thinking_support`` are mutually exclusive."""
+        r"""`plain_thinking_support` and `thinking_support` are mutually exclusive."""
         with pytest.raises(ValueError, match="Plain thinking support and thinking support are mutually exclusive"):
             get_chat_template(
                 spm=False,
@@ -1995,7 +2337,7 @@ class TestGetChatTemplatePlainThinkingValidation:
             )
 
     def test_plain_thinking_non_v11_raises(self) -> None:
-        r"""``plain_thinking_support`` only works with v11."""
+        r"""`plain_thinking_support` only works with v11."""
         with pytest.raises(ValueError, match="Plain thinking support is only available for tokenizer version v11"):
             get_chat_template(
                 spm=False,
@@ -2007,7 +2349,7 @@ class TestGetChatTemplatePlainThinkingValidation:
             )
 
     def test_plain_thinking_with_audio_raises(self) -> None:
-        r"""``plain_thinking_support`` and ``audio_support`` are mutually exclusive."""
+        r"""`plain_thinking_support` and `audio_support` are mutually exclusive."""
         with pytest.raises(ValueError, match="Audio and plain thinking support are mutually exclusive"):
             get_chat_template(
                 spm=False,
@@ -2019,7 +2361,7 @@ class TestGetChatTemplatePlainThinkingValidation:
             )
 
     def test_plain_thinking_v11_works(self) -> None:
-        r"""``plain_thinking_support`` with v11 returns a valid template."""
+        r"""`plain_thinking_support` with v11 returns a valid template."""
         template = get_chat_template(
             spm=False,
             tokenizer_version=TokenizerVersion.v11,
@@ -2073,12 +2415,12 @@ def test_plain_think_vs_mistral_common_baseline(image: bool, mode: ValidationMod
 
 @pytest.mark.parametrize("image", [False, True])
 def test_plain_think_vs_mistral_common_with_thinking(image: bool) -> None:
-    r"""v11 plain think template renders thinking chunks as ``<think>``/``</think>``.
+    r"""v11 plain think template renders thinking chunks as `<think>`/`</think>`.
 
     Uses the v11 mistral-common tokenizer on a stripped version of the
     conversation (think chunks removed) as the baseline, then verifies
     that the v11 plain think template output equals the baseline with
-    ``<think>...</think>`` tags inserted at the expected positions.
+    `<think>...</think>` tags inserted at the expected positions.
     """
     version = TokenizerVersion.v11
 
