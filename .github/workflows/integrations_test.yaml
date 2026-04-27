@@ -37,7 +37,7 @@ jobs:
       - name: Install Dependencies
         run: |
           uv sync --frozen --all-extras --group dev
-          uv pip install transformers
+          uv pip install transformers -U
 
       # PyTest
       - name: Tests
