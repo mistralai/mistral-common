@@ -43,7 +43,7 @@ class BaseMessage(MistralBase):
 
     role: Literal[Roles.system, Roles.user, Roles.assistant, Roles.tool]
 
-    def to_openai(self) -> dict[str, str | list[dict[str, str | dict[str, Any]]]]:
+    def to_openai(self) -> dict[str, Any]:
         r"""Converts the message to the OpenAI format.
 
         Should be implemented by subclasses.
@@ -51,7 +51,7 @@ class BaseMessage(MistralBase):
         raise NotImplementedError(f"to_openai method not implemented for {type(self).__name__}")
 
     @classmethod
-    def from_openai(cls, openai_message: dict[str, str | list[dict[str, str | dict[str, Any]]]]) -> "BaseMessage":
+    def from_openai(cls, openai_message: dict[str, Any]) -> "BaseMessage":
         r"""Converts the OpenAI message to the Mistral format.
 
         Should be implemented by subclasses.
@@ -72,14 +72,14 @@ class UserMessage(BaseMessage):
     role: Literal[Roles.user] = Roles.user
     content: str | list[UserContentChunk]
 
-    def to_openai(self) -> dict[str, str | list[dict[str, str | dict[str, Any]]]]:
+    def to_openai(self) -> dict[str, Any]:
         r"""Converts the message to the OpenAI format."""
         if isinstance(self.content, str):
             return {"role": self.role, "content": self.content}
         return {"role": self.role, "content": [chunk.to_openai() for chunk in self.content]}
 
     @classmethod
-    def from_openai(cls, openai_message: dict[str, str | list[dict[str, str | dict[str, Any]]]]) -> "UserMessage":
+    def from_openai(cls, openai_message: dict[str, Any]) -> "UserMessage":
         r"""Converts the OpenAI message to the Mistral format."""
         if isinstance(openai_message["content"], str):
             return cls.model_validate(cls._filter_cls_fields(openai_message))
@@ -104,12 +104,12 @@ class SystemMessage(BaseMessage):
     role: Literal[Roles.system] = Roles.system
     content: str | list[TextChunk | ThinkChunk]
 
-    def to_openai(self) -> dict[str, str | list[dict[str, str | dict[str, Any]]]]:
+    def to_openai(self) -> dict[str, Any]:
         r"""Converts the message to the OpenAI format."""
         return self.model_dump()
 
     @classmethod
-    def from_openai(cls, openai_message: dict[str, str | list[dict[str, str | dict[str, Any]]]]) -> "SystemMessage":
+    def from_openai(cls, openai_message: dict[str, Any]) -> "SystemMessage":
         r"""Converts the OpenAI message to the Mistral format."""
         return cls.model_validate(cls._filter_cls_fields(openai_message))
 
@@ -132,7 +132,7 @@ class AssistantMessage(BaseMessage):
     tool_calls: list[ToolCall] | None = None
     prefix: bool = False
 
-    def to_openai(self) -> dict[str, str | list[dict[str, str | dict[str, Any]]]]:
+    def to_openai(self) -> dict[str, Any]:
         r"""Converts the message to the OpenAI format."""
         out_dict: dict[str, str | list[dict[str, str | dict[str, Any]]]] = {
             "role": self.role,
@@ -149,7 +149,7 @@ class AssistantMessage(BaseMessage):
         return out_dict
 
     @classmethod
-    def from_openai(cls, openai_message: dict[str, str | list[dict[str, str | dict[str, Any]]]]) -> "AssistantMessage":
+    def from_openai(cls, openai_message: dict[str, Any]) -> "AssistantMessage":
         r"""Converts the OpenAI message to the Mistral format."""
         openai_tool_calls = openai_message.get("tool_calls", None)
         if openai_tool_calls is None:
@@ -210,7 +210,7 @@ class ToolMessage(BaseMessage):
     # Deprecated in V3 tokenization
     name: str | None = None
 
-    def to_openai(self) -> dict[str, str | list[dict[str, str | dict[str, Any]]]]:
+    def to_openai(self) -> dict[str, Any]:
         r"""Converts the message to the OpenAI format."""
         assert self.tool_call_id is not None, "tool_call_id must be provided for tool messages."
         return self.model_dump(exclude={"name"})
