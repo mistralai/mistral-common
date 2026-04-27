@@ -42,4 +42,4 @@ jobs:
       # PyTest
       - name: Tests
         run: |
-          uv run pytest integrations/tests/
+          uv run --no-sync pytest integrations/tests/
