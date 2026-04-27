@@ -1,4 +1,5 @@
 import json
+from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -75,7 +76,7 @@ _IMAGE = _create_dummy_image()
 
 
 @pytest.fixture(autouse=True, scope="module")
-def mock_download_image() -> None:
+def mock_download_image() -> Generator[None, None, None]:
     """Mock the download_image function to return a dummy image for all tests."""
     with patch("mistral_common.image.download_image") as mock_download:
         mock_download.return_value = _IMAGE
@@ -1293,7 +1294,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
 
 # -- Message aggregation test fixtures --
 
-REQUEST_CONSECUTIVE_USERS_TEST = ChatCompletionRequest(  # type: ignore[type-var]
+REQUEST_CONSECUTIVE_USERS_TEST = ChatCompletionRequest(
     messages=[
         UserMessage(content="Hello"),
         UserMessage(content="World"),
@@ -2442,7 +2443,7 @@ def test_plain_think_vs_mistral_common_with_thinking(image: bool) -> None:
     )
 
     # Build a conversation with thinking chunks
-    think_conversation = ChatCompletionRequest(
+    think_conversation = ChatCompletionRequest(  # type: ignore[type-var]
         messages=[
             SystemMessage(
                 content=[
@@ -2465,7 +2466,7 @@ def test_plain_think_vs_mistral_common_with_thinking(image: bool) -> None:
     )
 
     # Same conversation without thinking chunks
-    no_think_conversation = ChatCompletionRequest(
+    no_think_conversation = ChatCompletionRequest(  # type: ignore[type-var]
         messages=[
             SystemMessage(content="You are a helpful assistant.Be concise."),
             UserMessage(content=[TextChunk(text="What is 2+2?")]),
