@@ -142,7 +142,7 @@ class Tool(MistralBase):
 
     @classmethod
     def from_openai(cls, openai_tool: dict[str, Any]) -> "Tool":
-        return cls.model_validate(cls._filter_cls_fields(openai_tool))
+        return cls.model_validate_ignore_extra(openai_tool)
 
 
 class FunctionCall(MistralBase):
@@ -204,7 +204,7 @@ class ToolCall(MistralBase):
 
     @classmethod
     def from_openai(cls, tool_call: dict[str, Any]) -> "ToolCall":
-        return cls.model_validate(cls._filter_cls_fields(tool_call))
+        return cls.model_validate_ignore_extra(tool_call)
 
 
 ToolType = TypeVar("ToolType", bound=Tool)

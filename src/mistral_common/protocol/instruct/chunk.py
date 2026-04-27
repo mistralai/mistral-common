@@ -280,7 +280,7 @@ class AudioURLChunk(BaseContentChunk):
     @classmethod
     def from_openai(cls, openai_chunk: dict[str, Any]) -> "AudioURLChunk":
         r"""Converts the OpenAI chunk to the Mistral format."""
-        return cls.model_validate(cls._filter_cls_fields(openai_chunk))
+        return cls.model_validate_ignore_extra(openai_chunk)
 
 
 class AudioChunk(BaseContentChunk):
@@ -342,7 +342,7 @@ class AudioChunk(BaseContentChunk):
         Returns:
             An AudioChunk instance initialized with the data from the OpenAI chunk.
         """
-        return cls.model_validate(cls._filter_cls_fields(openai_chunk))
+        return cls.model_validate_ignore_extra(openai_chunk)
 
 
 class TextChunk(BaseContentChunk):
@@ -365,7 +365,7 @@ class TextChunk(BaseContentChunk):
     @classmethod
     def from_openai(cls, openai_chunk: dict[str, Any]) -> "TextChunk":
         r"""Converts the OpenAI chunk to the Mistral format."""
-        return cls.model_validate(cls._filter_cls_fields(openai_chunk))
+        return cls.model_validate_ignore_extra(openai_chunk)
 
 
 class ThinkChunk(BaseContentChunk):
@@ -388,7 +388,7 @@ class ThinkChunk(BaseContentChunk):
     @classmethod
     def from_openai(cls, openai_chunk: dict[str, Any]) -> "ThinkChunk":
         r"""Converts the OpenAI chunk to the Mistral format."""
-        return cls.model_validate(cls._filter_cls_fields(openai_chunk))
+        return cls.model_validate_ignore_extra(openai_chunk)
 
 
 ContentChunk = Annotated[
