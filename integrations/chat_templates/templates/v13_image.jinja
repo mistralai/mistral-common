@@ -12,12 +12,12 @@
 {%- endif %}
 
 
-{#- Tools and model settings definition #}
-{%- set tools_and_settings = '' %}
+{#- Tools definition #}
+{%- set available_tools = '' %}
 {%- set has_tools = false %}
 {%- if tools is defined and tools is not none and tools|length > 0 %}
     {%- set has_tools = true %}
-    {%- set tools_and_settings = '[AVAILABLE_TOOLS]' + (tools| tojson) + '[/AVAILABLE_TOOLS]' %}
+    {%- set available_tools = '[AVAILABLE_TOOLS]' + (tools| tojson) + '[/AVAILABLE_TOOLS]' %}
 {%- endif %}
 
 {#- Aggregate consecutive messages with the same role. #}
@@ -75,7 +75,7 @@
 {%- set loop_messages = ns_agg.messages %}
 
 {#- Validates message ordering. #}
-{%- set ns = namespace(tools_and_settings_emitted=false) %}
+{%- set ns = namespace(available_tools_emitted=false) %}
 {%- if loop_messages | length > 0 and loop_messages[0]['role'] != 'user' and loop_messages[0]['role'] != 'system' %}
     {{- raise_exception('Conversation must start with a user or system message, got ' + loop_messages[0]['role'] + '.') }}
 {%- endif %}
@@ -108,9 +108,9 @@
 {%- for message in loop_messages %}
     {#- User messages supports text, image and image_url content. #}
     {%- if message['role'] == 'user' %}
-        {%- if not ns.tools_and_settings_emitted %}
-            {{- tools_and_settings }}
-            {%- set ns.tools_and_settings_emitted = true %}
+        {%- if not ns.available_tools_emitted %}
+            {{- available_tools }}
+            {%- set ns.available_tools_emitted = true %}
         {%- endif %}
         {%- if message['content'] is string %}
             {{- '[INST]' + message['content'] + '[/INST]' }}

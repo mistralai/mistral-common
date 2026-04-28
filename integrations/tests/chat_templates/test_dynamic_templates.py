@@ -919,8 +919,10 @@ def test_user_after_tool_static_matches_dynamic(version: TokenizerVersion, spm: 
         (False, False, None),
     ],
 )
-def test_v15_tools_and_settings_ordering(has_system: bool, has_tools: bool, reasoning_effort: str | None) -> None:
-    r"""Test that v15 emits system, tools, and model_settings in the correct order.
+def test_v15_available_tools_and_settings_ordering(
+    has_system: bool, has_tools: bool, reasoning_effort: str | None
+) -> None:
+    r"""Test that v15 emits system, available_tools, and model_settings in the correct order.
 
     Expected order: `[SYSTEM_PROMPT]...[/SYSTEM_PROMPT]` (if system) then
     `[AVAILABLE_TOOLS]...[/AVAILABLE_TOOLS]` (if tools) then

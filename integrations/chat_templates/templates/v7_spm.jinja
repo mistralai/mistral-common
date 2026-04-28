@@ -12,12 +12,12 @@
 {%- endif %}
 
 
-{#- Tools and model settings definition #}
-{%- set tools_and_settings = '' %}
+{#- Tools definition #}
+{%- set available_tools = '' %}
 {%- set has_tools = false %}
 {%- if tools is defined and tools is not none and tools|length > 0 %}
     {%- set has_tools = true %}
-    {%- set tools_and_settings = '[AVAILABLE_TOOLS] ' + (tools| tojson) + '[/AVAILABLE_TOOLS]' %}
+    {%- set available_tools = '[AVAILABLE_TOOLS] ' + (tools| tojson) + '[/AVAILABLE_TOOLS]' %}
 {%- endif %}
 
 {#- Aggregate consecutive messages with the same role. #}
@@ -114,7 +114,7 @@
     {#- User messages supports text content. #}
     {%- if message['role'] == 'user' %}
         {%- if (ns.index == ns.max_idx_user) and has_tools %}
-            {{- tools_and_settings }}
+            {{- available_tools }}
         {%- endif %}
         {%- if message['content'] is string %}
             {{- '[INST] ' + message['content'] + '[/INST]' }}

@@ -284,10 +284,10 @@ def _generate_system_prompt_handling_v7_plus(config: TemplateConfig) -> list[str
     return lines
 
 
-def _generate_tools_and_settings_definition(config: TemplateConfig) -> str:
-    r"""Generate tools and model settings definition.
+def _generate_available_tools_definition(config: TemplateConfig) -> str:
+    r"""Generate available tools and model settings definition.
 
-    Builds a `tools_and_settings` string variable that contains
+    Builds an `available_tools` string variable that contains
     `[AVAILABLE_TOOLS]...[/AVAILABLE_TOOLS]` (if tools are provided).
     For v15+, also builds a separate `model_settings` variable containing
     `[MODEL_SETTINGS]...[/MODEL_SETTINGS]` which is always emitted
@@ -301,11 +301,16 @@ def _generate_tools_and_settings_definition(config: TemplateConfig) -> str:
     Returns:
         The tools and settings definition section of the chat template.
     """
+    if config.version >= TokenizerVersion.v15:
+        comment = "{#- Tools and model settings definition #}"
+    else:
+        comment = "{#- Tools definition #}"
+
     lines = [
         "",
         "",
-        "{#- Tools and model settings definition #}",
-        "{%- set tools_and_settings = '' %}",
+        comment,
+        "{%- set available_tools = '' %}",
         "{%- set has_tools = false %}",
     ]
 
@@ -314,19 +319,17 @@ def _generate_tools_and_settings_definition(config: TemplateConfig) -> str:
         lines.append("    {%- set has_tools = true %}")
         if config.spm:
             lines.append(
-                "    {%- set tools_and_settings = '[AVAILABLE_TOOLS] ' + (tools| tojson) + '[/AVAILABLE_TOOLS]' %}"
+                "    {%- set available_tools = '[AVAILABLE_TOOLS] ' + (tools| tojson) + '[/AVAILABLE_TOOLS]' %}"
             )
         else:
             lines.append(
-                "    {%- set tools_and_settings = '[AVAILABLE_TOOLS]' + (tools| tojson) + '[/AVAILABLE_TOOLS]' %}"
+                "    {%- set available_tools = '[AVAILABLE_TOOLS]' + (tools| tojson) + '[/AVAILABLE_TOOLS]' %}"
             )
         lines.append("{%- endif %}")
 
     if config.version >= TokenizerVersion.v15:
         lines.extend(
             [
-                # model_settings is kept separate from tools_and_settings to avoid
-                # Jinja2 Markup escaping issues when tojson returns a Markup object.
                 "{%- if reasoning_effort is not defined or reasoning_effort is none %}",
                 "    {%- set reasoning_effort = 'none' %}",
                 "{%- endif %}",
@@ -614,7 +617,7 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
     if config.uses_spm_prev_img_tracking:
         ns_vars.append("prev_img=false")
     if config.tools_at_beginning:
-        ns_vars.append("tools_and_settings_emitted=false")
+        ns_vars.append("available_tools_emitted=false")
 
     lines.append("{%- set ns = namespace(" + ", ".join(ns_vars) + ") %}")
 
@@ -708,15 +711,15 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
     if config.tracks_max_idx_user:
         # Pre-v13: emit before the last user message
         lines.append("        {%- if (ns.index == ns.max_idx_user) and has_tools %}")
-        lines.append("            {{- tools_and_settings }}")
+        lines.append("            {{- available_tools }}")
         lines.append("        {%- endif %}")
     elif config.tools_at_beginning:
         # v13+: emit tools and settings before the first user message
-        lines.append("        {%- if not ns.tools_and_settings_emitted %}")
-        lines.append("            {{- tools_and_settings }}")
+        lines.append("        {%- if not ns.available_tools_emitted %}")
+        lines.append("            {{- available_tools }}")
         if config.version >= TokenizerVersion.v15:
             lines.append("            {{- model_settings }}")
-        lines.append("            {%- set ns.tools_and_settings_emitted = true %}")
+        lines.append("            {%- set ns.available_tools_emitted = true %}")
         lines.append("        {%- endif %}")
 
     if config.spm and not config.uses_spm_prev_img_tracking:
@@ -1420,7 +1423,7 @@ def generate_chat_template(config: TemplateConfig) -> str:
     parts = []
     parts.append(_generate_header())
     parts.append(_generate_system_prompt_handling(config))
-    parts.append(_generate_tools_and_settings_definition(config))
+    parts.append(_generate_available_tools_definition(config))
     parts.append(_generate_message_aggregation(config))
     parts.append(_generate_alternation_check(config))
     parts.append("")
