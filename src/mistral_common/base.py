@@ -1,6 +1,7 @@
-from typing import Any, Self
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
+from typing_extensions import Self
 
 
 class MistralBase(BaseModel):
