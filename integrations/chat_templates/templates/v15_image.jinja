@@ -82,7 +82,7 @@
 {%- set loop_messages = ns_agg.messages %}
 
 {#- Validates message ordering. #}
-{%- set ns = namespace(available_tools_emitted=false) %}
+{%- set ns = namespace(available_tools_and_settings_emitted=false) %}
 {%- if loop_messages | length > 0 and loop_messages[0]['role'] != 'user' and loop_messages[0]['role'] != 'system' %}
     {{- raise_exception('Conversation must start with a user or system message, got ' + loop_messages[0]['role'] + '.') }}
 {%- endif %}
@@ -115,10 +115,10 @@
 {%- for message in loop_messages %}
     {#- User messages supports text, image and image_url content. #}
     {%- if message['role'] == 'user' %}
-        {%- if not ns.available_tools_emitted %}
+        {%- if not ns.available_tools_and_settings_emitted %}
             {{- available_tools }}
             {{- model_settings }}
-            {%- set ns.available_tools_emitted = true %}
+            {%- set ns.available_tools_and_settings_emitted = true %}
         {%- endif %}
         {%- if message['content'] is string %}
             {{- '[INST]' + message['content'] + '[/INST]' }}

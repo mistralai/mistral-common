@@ -617,7 +617,12 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
     if config.uses_spm_prev_img_tracking:
         ns_vars.append("prev_img=false")
     if config.tools_at_beginning:
-        ns_vars.append("available_tools_emitted=false")
+        emitted_var = (
+            "available_tools_and_settings_emitted"
+            if config.version >= TokenizerVersion.v15
+            else "available_tools_emitted"
+        )
+        ns_vars.append(f"{emitted_var}=false")
 
     lines.append("{%- set ns = namespace(" + ", ".join(ns_vars) + ") %}")
 
@@ -715,11 +720,16 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
         lines.append("        {%- endif %}")
     elif config.tools_at_beginning:
         # v13+: emit tools and settings before the first user message
-        lines.append("        {%- if not ns.available_tools_emitted %}")
+        emitted_var = (
+            "available_tools_and_settings_emitted"
+            if config.version >= TokenizerVersion.v15
+            else "available_tools_emitted"
+        )
+        lines.append(f"        {{%- if not ns.{emitted_var} %}}")
         lines.append("            {{- available_tools }}")
         if config.version >= TokenizerVersion.v15:
             lines.append("            {{- model_settings }}")
-        lines.append("            {%- set ns.available_tools_emitted = true %}")
+        lines.append(f"            {{%- set ns.{emitted_var} = true %}}")
         lines.append("        {%- endif %}")
 
     if config.spm and not config.uses_spm_prev_img_tracking:
