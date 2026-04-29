@@ -169,6 +169,16 @@ class AssistantMessage(BaseMessage):
         else:
             raise ValueError(f"Unknown content type: {type(openai_content)}")
 
+        reasoning_content = openai_message.get("reasoning", openai_message.get("reasoning_content", None))
+        if reasoning_content is not None:
+            reasoning_chunk = ThinkChunk(thinking=reasoning_content, closed=True)
+            if isinstance(content, str):
+                content = [reasoning_chunk, TextChunk(text=content)]
+            elif content is None:
+                content = [reasoning_chunk]
+            else:
+                content.insert(0, reasoning_chunk)
+
         return cls.model_validate(
             {
                 "role": openai_message["role"],
