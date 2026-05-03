@@ -292,6 +292,61 @@ class TestChatValidation:
                 continue_final_message=False,
             )
 
+    def test_tool_then_user_ok(self, validator: MistralRequestValidator) -> None:
+        validator.validate_messages(
+            messages=[
+                UserMessage(content="foo"),
+                AssistantMessage(
+                    tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]
+                ),
+                ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
+                UserMessage(content="continue with this context"),
+            ],
+            continue_final_message=False,
+        )
+
+    def test_tool_then_user_full_loop(self, validator: MistralRequestValidator) -> None:
+        validator.validate_messages(
+            messages=[
+                UserMessage(content="search for info"),
+                AssistantMessage(
+                    tool_calls=[
+                        ToolCall(id="aaaaaaaaa", function=FunctionCall(name="search", arguments="{}")),
+                        ToolCall(id="bbbbbbbbb", function=FunctionCall(name="search", arguments="{}")),
+                    ]
+                ),
+                ToolMessage(name="search", content="result1", tool_call_id="aaaaaaaaa"),
+                ToolMessage(name="search", content="result2", tool_call_id="bbbbbbbbb"),
+                UserMessage(content="now refine"),
+                AssistantMessage(
+                    tool_calls=[ToolCall(id="ccccccccc", function=FunctionCall(name="search", arguments="{}"))]
+                ),
+                ToolMessage(name="search", content="result3", tool_call_id="ccccccccc"),
+                AssistantMessage(content="here is the final answer"),
+                UserMessage(content="thanks"),
+            ],
+            continue_final_message=False,
+        )
+
+    def test_partial_tool_results_then_user_fails(self, validator: MistralRequestValidator) -> None:
+        with pytest.raises(
+            InvalidMessageStructureException, match=r"Not the same number of function calls and responses"
+        ):
+            validator.validate_messages(
+                messages=[
+                    UserMessage(content="foo"),
+                    AssistantMessage(
+                        tool_calls=[
+                            ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}")),
+                            ToolCall(id="999999999", function=FunctionCall(name="bar", arguments="{}")),
+                        ]
+                    ),
+                    ToolMessage(name="foo", content="result1", tool_call_id="123456789"),
+                    UserMessage(content="stop, only need the first result"),
+                ],
+                continue_final_message=False,
+            )
+
     def test_build_settings_raises_error(self, validator: MistralRequestValidator) -> None:
         request = ChatCompletionRequest(messages=[UserMessage(content="Hello")], reasoning_effort=ReasoningEffort.none)
 
@@ -485,6 +540,62 @@ class TestChatValidationV13:
                 ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
                 AssistantMessage(content="h"),
                 UserMessage(content="foo"),
+            ],
+            continue_final_message=False,
+        )
+
+    def test_tool_then_user_ok_v13(self, validator_v13: MistralRequestValidatorV13) -> None:
+        validator_v13.validate_messages(
+            messages=[
+                UserMessage(content="foo"),
+                AssistantMessage(
+                    tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]
+                ),
+                ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
+                UserMessage(content="continue with this context"),
+            ],
+            continue_final_message=False,
+        )
+
+    def test_partial_tool_results_then_user_fails_v13(self, validator_v13: MistralRequestValidatorV13) -> None:
+        with pytest.raises(
+            InvalidMessageStructureException, match=r"Not the same number of function calls and responses"
+        ):
+            validator_v13.validate_messages(
+                messages=[
+                    UserMessage(content="foo"),
+                    AssistantMessage(
+                        tool_calls=[
+                            ToolCall(id="aaaaaaaaa", function=FunctionCall(name="foo", arguments="{}")),
+                            ToolCall(id="bbbbbbbbb", function=FunctionCall(name="bar", arguments="{}")),
+                            ToolCall(id="ccccccccc", function=FunctionCall(name="baz", arguments="{}")),
+                        ]
+                    ),
+                    ToolMessage(name="foo", content="result1", tool_call_id="aaaaaaaaa"),
+                    UserMessage(content="stop, only need the first result"),
+                ],
+                continue_final_message=False,
+            )
+
+    def test_full_loop_with_user_after_tools_v13(self, validator_v13: MistralRequestValidatorV13) -> None:
+        validator_v13.validate_messages(
+            messages=[
+                UserMessage(content="foo"),
+                AssistantMessage(
+                    tool_calls=[
+                        ToolCall(id="aaaaaaaaa", function=FunctionCall(name="foo", arguments="{}")),
+                        ToolCall(id="bbbbbbbbb", function=FunctionCall(name="bar", arguments="{}")),
+                    ]
+                ),
+                ToolMessage(name="foo", content="result1", tool_call_id="aaaaaaaaa"),
+                ToolMessage(name="bar", content="result2", tool_call_id="bbbbbbbbb"),
+                UserMessage(content="try something else"),
+                AssistantMessage(
+                    tool_calls=[ToolCall(id="ccccccccc", function=FunctionCall(name="baz", arguments="{}"))]
+                ),
+                ToolMessage(name="baz", content="result3", tool_call_id="ccccccccc"),
+                AssistantMessage(content="final answer"),
+                UserMessage(content="done"),
             ],
             continue_final_message=False,
         )

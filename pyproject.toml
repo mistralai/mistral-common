@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mistral_common"
-version = "1.10.0"
+version = "1.11.1"
 description = "Mistral-common is a library of common utilities for Mistral AI."
 authors = [{name = "bam4d", email = "bam4d@mistral.ai"}]
 license = "Apache-2.0"
@@ -33,13 +33,16 @@ soundfile = ["soundfile>=0.12.1"]
 soxr = ["soxr>=0.5.0"]
 audio = ["mistral_common[soundfile]", "mistral_common[soxr]"]
 image = ["mistral_common[opencv]"]
-
+guidance = ["llguidance>=1.3.0,<1.4.0", "jinja2>=3.1.0"]
 hf-hub = ["huggingface-hub>=1.0"]
 server = [
     "fastapi[standard]>=0.118.3",
     "pydantic-settings >= 2.9.1",
     "click>=8.1.0",
     "uvloop>=0.22.1; python_version >= '3.14'"
+]
+all = [
+    "mistral_common[opencv,sentencepiece,audio,image,guidance,hf-hub,server]"
 ]
 
 [project.scripts]
@@ -90,7 +93,7 @@ warn_unused_ignores = true
 exclude = ["docs", "tools", "build"]
 
 [[tool.mypy.overrides]]
-module = ["sentencepiece.*", "cv2", "cv2.*","soxr", "soundfile"]
+module = ["sentencepiece.*", "cv2", "cv2.*","soxr", "soundfile", "llguidance", "llguidance.*", "jinja2", "jinja2.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

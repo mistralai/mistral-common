@@ -202,4 +202,4 @@ def test_audio_config_delay(rate: float, delay: int, num_delay_tokens: int) -> N
         with pytest.raises(AssertionError, match="must be a multiple"):
             audio_config_fn()
     else:
-        assert audio_config_fn().num_delay_tokens == num_delay_tokens
+        assert audio_config_fn().get_num_delay_tokens() == num_delay_tokens

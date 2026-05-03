@@ -1030,8 +1030,8 @@ class InstructTokenizerV7(InstructTokenizerV3):
             audios = [left_pad, right_pad]
 
             if len(request.audio.data) > 0:
-                # TODO(Patrick) - remove this if statement in 1.11.0
-                # only left to keep vLLM backwards compability in
+                # TODO(Patrick) - remove this if statement in 1.13.0
+                # only left to keep vLLM backwards compatibility in
                 # voxtral_realtime.py
                 warnings.warn(
                     f"Passing audio with {request.streaming=} is "

@@ -11,7 +11,7 @@ In `mistral-common`, we currently support the following requests types:
 - Instruct requests:
     - [Chat completion requests](#chat-completion).
     - [Fill-In-the-Middle completion](#fim).
-- [Transcription requests](#transcription-request)
+- [Transcription requests](#transcription)
 
 Every instruct requests should be encoded with its corresponding `encode_function` function by the tokenizers.
 

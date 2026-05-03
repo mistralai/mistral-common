@@ -5,7 +5,7 @@ import warnings
 from functools import cached_property
 from itertools import groupby
 from pathlib import Path
-from typing import TypedDict
+from typing import TypedDict, TypeGuard
 
 import numpy as np
 import tiktoken
@@ -545,3 +545,8 @@ def _reload_mergeable_ranks(
     assert set(ranks.values()) == set(range(len(ranks)))
 
     return ranks
+
+
+def is_tekkenizer(tokenizer: Tokenizer) -> TypeGuard[Tekkenizer]:
+    r"""Returns whether the tokenizer is a Tekkenizer."""
+    return isinstance(tokenizer, Tekkenizer)

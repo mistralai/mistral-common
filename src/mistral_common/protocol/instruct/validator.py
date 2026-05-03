@@ -271,7 +271,9 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
                 elif previous_role == Roles.assistant:
                     expected_roles = {Roles.assistant, Roles.user, Roles.tool}
                 elif previous_role == Roles.tool:
-                    expected_roles = {Roles.assistant, Roles.tool}
+                    expected_roles = {Roles.assistant, Roles.tool, Roles.user}
+                else:
+                    assert_never(previous_role)
 
                 if current_role not in expected_roles:
                     raise InvalidMessageStructureException(
@@ -516,6 +518,15 @@ class MistralRequestValidatorV15(MistralRequestValidatorV13):
 
 
 def get_validator(version: TokenizerVersion, mode: ValidationMode) -> MistralRequestValidator:
+    r"""Get the appropriate validator for a given tokenizer version and validation mode.
+
+    Args:
+        version: The tokenizer version.
+        mode: The validation mode.
+
+    Returns:
+        The validator instance.
+    """
     validator: MistralRequestValidator
     match version:
         case TokenizerVersion.v1 | TokenizerVersion.v2:

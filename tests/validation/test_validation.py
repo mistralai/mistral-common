@@ -10,6 +10,7 @@ from mistral_common.protocol.instruct.validator import (
     MistralRequestValidatorV3,
     MistralRequestValidatorV5,
     MistralRequestValidatorV13,
+    MistralRequestValidatorV15,
     ValidationMode,
     get_validator,
 )
@@ -55,6 +56,7 @@ class TestValidateTools:
         (TokenizerVersion.v3, MistralRequestValidatorV3),
         (TokenizerVersion.v7, MistralRequestValidatorV5),
         (TokenizerVersion.v13, MistralRequestValidatorV13),
+        (TokenizerVersion.v15, MistralRequestValidatorV15),
     ],
 )
 def test_get_validator_version_mapping(version: TokenizerVersion, expected_class: type) -> None:
@@ -63,7 +65,7 @@ def test_get_validator_version_mapping(version: TokenizerVersion, expected_class
     assert validator._mode == ValidationMode.test
 
 
-@pytest.mark.parametrize("mode", [ValidationMode.serving, ValidationMode.finetuning, ValidationMode.test])
+@pytest.mark.parametrize("mode", list(ValidationMode))
 def test_get_validator_mode_passed_correctly(mode: ValidationMode) -> None:
     validator = get_validator(TokenizerVersion.v2, mode)
     assert validator._mode == validator.mode == mode

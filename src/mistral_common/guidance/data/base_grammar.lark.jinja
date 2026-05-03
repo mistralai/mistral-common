@@ -1,0 +1,25 @@
+{% if json_schema_str != None -%}
+{% if json_only -%}
+start: SAFE_WS? %json {{ json_schema_str }}
+{% else -%}
+start: body | SAFE_WS? %json {{ json_schema_str }}
+{% endif -%}
+{% else -%}
+start: body
+{% endif -%}
+
+{% if mode == "auto" -%}
+body: content | (content? fcalls)
+{% elif mode == "any" -%}
+body: fcalls
+{% elif mode == "required" -%}
+body: content? fcalls
+{% elif mode == "none" -%}
+body: content
+{% endif -%}
+
+fcalls: {{ fcall }}
+
+content: (/(.|\n)+/)+
+
+SAFE_WS: /[ \t\r\n]{1,8}/
