@@ -97,10 +97,11 @@ class ImageChunk(BaseContentChunk):
         image_url_dict = openai_chunk["image_url"]
         assert isinstance(image_url_dict, dict) and "url" in image_url_dict, image_url_dict
 
-        if re.match(r"^data:image/\w+;base64,", image_url_dict["url"]):  # Remove the prefix if it exists
-            image_url_dict["url"] = image_url_dict["url"].split(",")[1]
+        url = image_url_dict["url"]
+        if re.match(r"^data:image/\w+;base64,", url):  # Remove the prefix if it exists
+            url = url.split(",")[1]
 
-        return cls.model_validate({"image": image_url_dict["url"]})
+        return cls.model_validate({"image": url})
 
 
 class ImageURL(MistralBase):

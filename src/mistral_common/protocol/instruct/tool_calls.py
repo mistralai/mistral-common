@@ -152,11 +152,12 @@ class Tool(MistralBase):
         """
         openai_tool = openai_tool.copy()
         if function := openai_tool.get("function"):
-            function = function.copy()
+            function = Function._filter_cls_fields(function)
             if function.get("parameters") is None:
                 function["parameters"] = {}
             if function.get("description") is None:
                 function["description"] = ""
+            openai_tool["function"] = function
         return cls.model_validate_ignore_extra(openai_tool)
 
 

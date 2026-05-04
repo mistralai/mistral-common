@@ -1,3 +1,4 @@
+import copy
 import io
 from pathlib import Path
 from typing import Any
@@ -125,6 +126,17 @@ def test_convert_image_chunk() -> None:
     typeddict_openai = OpenAIImageChunk(**openai_image)  # type: ignore[typeddict-item]
 
     assert isinstance(ImageChunk.from_openai(typeddict_openai), ImageChunk)
+
+
+def test_convert_image_chunk_from_openai_does_not_mutate_input() -> None:
+    image = Image.open(LOGO_PATH.as_posix())
+    original_chunk = ImageChunk(image=image)
+    openai_chunk = original_chunk.to_openai()
+    original_url = openai_chunk["image_url"]["url"]
+
+    ImageChunk.from_openai(openai_chunk)
+
+    assert openai_chunk["image_url"]["url"] == original_url
 
 
 def test_convert_text_chunk() -> None:
@@ -299,6 +311,21 @@ def test_convert_tool() -> None:
 
     typeddict_openai = OpenAITool(**tool.to_openai())  # type: ignore[typeddict-item]
     assert Tool.from_openai(typeddict_openai) == tool
+
+
+def test_convert_tool_from_openai_missing_parameters_description_and_unknown_field() -> None:
+    openai_tool: dict[str, Any] = {
+        "type": "function",
+        "function": {
+            "name": "do_nothing",
+            "unknown_field": "should be ignored",
+        },
+    }
+    original_openai_tool = copy.deepcopy(openai_tool)
+    tool = Tool.from_openai(openai_tool)
+
+    assert tool == Tool(function=Function(name="do_nothing", description="", parameters={}))
+    assert openai_tool == original_openai_tool
 
 
 def test_convert_tool_call() -> None:
