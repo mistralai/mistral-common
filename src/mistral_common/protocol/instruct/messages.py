@@ -169,9 +169,22 @@ class AssistantMessage(BaseMessage):
         else:
             raise ValueError(f"Unknown content type: {type(openai_content)}")
 
-        reasoning_content = openai_message.get("reasoning", openai_message.get("reasoning_content", None))
-        if reasoning_content is not None:
-            reasoning_chunk = ThinkChunk(thinking=reasoning_content, closed=True)
+        reasoning_content: str | None = openai_message.get("reasoning_content")  # deprecated field
+        reasoning: str | None = openai_message.get("reasoning")
+
+        match reasoning_content, reasoning:
+            case None, None:
+                thinking = None
+            case None, _:
+                thinking = reasoning
+            case _, None:
+                thinking = reasoning_content
+            case _, _:
+                assert reasoning_content == reasoning, "`reasoning_content` and `reasoning` should be equal."
+                thinking = reasoning
+
+        if thinking is not None:
+            reasoning_chunk = ThinkChunk(thinking=thinking, closed=True)
             if isinstance(content, str):
                 content = [reasoning_chunk, TextChunk(text=content)]
             elif content is None:
