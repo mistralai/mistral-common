@@ -142,6 +142,11 @@ class Tool(MistralBase):
 
     @classmethod
     def from_openai(cls, openai_tool: dict[str, Any]) -> "Tool":
+        if function := openai_tool.get("function"):
+            if function.get("parameters") is None:
+                function["parameters"] = {}
+            if function.get("description") is None:
+                function["description"] = ""
         return cls.model_validate_ignore_extra(openai_tool)
 
 
@@ -163,7 +168,7 @@ class FunctionCall(MistralBase):
     arguments: str
 
     @field_validator("arguments", mode="before")
-    def validate_arguments(cls, v: str | dict[str, Any]) -> str:
+    def validate_arguments(cls, v: str | dict[str, Any] | None) -> str:
         """Convert arguments to a JSON string if they are a dictionary.
 
         Args:
@@ -174,6 +179,8 @@ class FunctionCall(MistralBase):
         """
         if isinstance(v, dict):
             return json.dumps(v)
+        elif v is None:
+            return json.dumps({})
         return v
 
 
