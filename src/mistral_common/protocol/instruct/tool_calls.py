@@ -191,7 +191,7 @@ class FunctionCall(MistralBase):
         if isinstance(v, dict):
             return json.dumps(v)
         elif v is None:
-            return json.dumps({})
+            return "{}"
         return v
 
 
