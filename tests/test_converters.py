@@ -466,39 +466,39 @@ def test_convert_openai_message_to_message_and_back(openai_message: dict, messag
     ["openai_message", "expected"],
     [
         (
-            {"role": "assistant", "content": "Hi", "reasoning_content": "Let me think..."},
+            {"role": "assistant", "content": "Hi", "reasoning": "Let me think..."},
             AssistantMessage(content=[ThinkChunk(thinking="Let me think...", closed=True), TextChunk(text="Hi")]),
         ),
         (
-            {"role": "assistant", "content": None, "reasoning_content": "Thinking aloud"},
+            {"role": "assistant", "content": None, "reasoning": "Thinking aloud"},
             AssistantMessage(content=[ThinkChunk(thinking="Thinking aloud", closed=True)]),
         ),
         (
-            {"role": "assistant", "reasoning_content": "Thinking aloud"},
+            {"role": "assistant", "reasoning": "Thinking aloud"},
             AssistantMessage(content=[ThinkChunk(thinking="Thinking aloud", closed=True)]),
         ),
         (
             {
                 "role": "assistant",
                 "content": [{"type": "text", "text": "Hello"}],
-                "reasoning_content": "Deep thought",
+                "reasoning": "Deep thought",
             },
             AssistantMessage(content=[ThinkChunk(thinking="Deep thought", closed=True), TextChunk(text="Hello")]),
         ),
         (
-            {"role": "assistant", "content": "Hi", "reasoning": "Primary", "reasoning_content": "Fallback"},
-            AssistantMessage(content=[ThinkChunk(thinking="Primary", closed=True), TextChunk(text="Hi")]),
-        ),
-        (
-            {"role": "assistant", "content": "Hi", "reasoning": "Only reasoning"},
+            {"role": "assistant", "content": "Hi", "reasoning_content": "Only reasoning"},
             AssistantMessage(content=[ThinkChunk(thinking="Only reasoning", closed=True), TextChunk(text="Hi")]),
         ),
     ],
 )
-def test_from_openai_reasoning_content_in_assistant_message(
-    openai_message: dict[str, Any], expected: AssistantMessage
-) -> None:
+def test_from_openai_reasoning_in_assistant_message(openai_message: dict[str, Any], expected: AssistantMessage) -> None:
     assert AssistantMessage.from_openai(openai_message) == expected
+
+
+def test_from_openai_reasoning_differ_reasoning_content_in_assistant_message() -> None:
+    openai_message = {"role": "assistant", "content": "Hi", "reasoning": "Primary", "reasoning_content": "Fallback"}
+    with pytest.raises(AssertionError, match=r"`reasoning_content` and `reasoning` should be equal"):
+        AssistantMessage.from_openai(openai_message)
 
 
 @pytest.mark.parametrize(
