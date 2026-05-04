@@ -257,6 +257,11 @@ def test_convert_audio_url_chunk(vllm_audio_url_chunk: dict, audio_url_chunk: Au
         assert AudioURLChunk.from_openai(vllm_audio_url_chunk) == audio_url_chunk
 
 
+def test_convert_function_from_openai_missing_parameters_and_description_and_unk_args() -> None:
+    openai_function: dict[str, Any] = {"name": "do_nothing", "unk_field": "1"}
+    assert Function.from_openai(openai_function) == Function(name="do_nothing", description="", parameters={})
+
+
 def test_convert_tool() -> None:
     tool = Tool(
         function=Function(

@@ -51,6 +51,25 @@ class Function(FunctionName):
     parameters: dict[str, Any]
     strict: bool = False
 
+    @classmethod
+    def from_openai(cls, openai_function: dict[str, Any]) -> "Function":
+        r"""Convert an OpenAI function definition to a Mistral `Function`.
+
+        Filters out unknown fields and defaults missing `parameters` and `description`.
+
+        Args:
+            openai_function: The OpenAI function definition.
+
+        Returns:
+            The Mistral function.
+        """
+        filtered = cls._filter_cls_fields(openai_function)
+        if filtered.get("parameters") is None:
+            filtered["parameters"] = {}
+        if filtered.get("description") is None:
+            filtered["description"] = ""
+        return cls.model_validate(filtered)
+
 
 class ToolTypes(str, Enum):
     r"""Enum of tool types.
@@ -144,6 +163,8 @@ class Tool(MistralBase):
     def from_openai(cls, openai_tool: dict[str, Any]) -> "Tool":
         r"""Convert an OpenAI tool definition to a Mistral `Tool`.
 
+        Delegates function parsing to `Function.from_openai`.
+
         Args:
             openai_tool: The OpenAI tool definition.
 
@@ -152,12 +173,7 @@ class Tool(MistralBase):
         """
         openai_tool = openai_tool.copy()
         if function := openai_tool.get("function"):
-            function = Function._filter_cls_fields(function)
-            if function.get("parameters") is None:
-                function["parameters"] = {}
-            if function.get("description") is None:
-                function["description"] = ""
-            openai_tool["function"] = function
+            openai_tool["function"] = Function.from_openai(function)
         return cls.model_validate_ignore_extra(openai_tool)
 
 
