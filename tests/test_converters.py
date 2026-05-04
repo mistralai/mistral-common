@@ -497,7 +497,7 @@ def test_from_openai_reasoning_in_assistant_message(openai_message: dict[str, An
 
 def test_from_openai_reasoning_differ_reasoning_content_in_assistant_message() -> None:
     openai_message = {"role": "assistant", "content": "Hi", "reasoning": "Primary", "reasoning_content": "Fallback"}
-    with pytest.raises(AssertionError, match=r"`reasoning_content` and `reasoning` should be equal"):
+    with pytest.raises(ValueError, match=r"`reasoning_content` and `reasoning` should be equal"):
         AssistantMessage.from_openai(openai_message)
 
 

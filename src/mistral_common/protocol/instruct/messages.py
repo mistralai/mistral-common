@@ -180,7 +180,8 @@ class AssistantMessage(BaseMessage):
             case _, None:
                 thinking = reasoning_content
             case _, _:
-                assert reasoning_content == reasoning, "`reasoning_content` and `reasoning` should be equal."
+                if reasoning_content != reasoning:
+                    raise ValueError("`reasoning_content` and `reasoning` should be equal.")
                 thinking = reasoning
 
         if thinking is not None:
