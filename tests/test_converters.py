@@ -497,7 +497,12 @@ def test_convert_openai_message_to_message_and_back(openai_message: dict, messag
             AssistantMessage(content=[ThinkChunk(thinking="Let me think...", closed=True), TextChunk(text="Hi")]),
         ),
         (
-            {"role": "assistant", "content": None, "reasoning": "Thinking aloud"},
+            {
+                "role": "assistant",
+                "content": None,
+                "reasoning": "Thinking aloud",
+                "reasoning_content": "Thinking aloud",
+            },
             AssistantMessage(content=[ThinkChunk(thinking="Thinking aloud", closed=True)]),
         ),
         (
