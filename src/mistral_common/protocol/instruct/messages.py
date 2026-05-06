@@ -1,3 +1,4 @@
+import warnings
 from enum import Enum
 from typing import Any, Literal, TypeVar
 
@@ -14,6 +15,26 @@ from mistral_common.protocol.instruct.chunk import (
     _convert_openai_content_chunks,
 )
 from mistral_common.protocol.instruct.tool_calls import ToolCall
+
+warnings.filterwarnings(
+    action="once",
+    category=FutureWarning,
+    message=r".*`convert_thinking_format` defaults to.*",
+)
+
+
+class OpenAIReasoningField(str, Enum):
+    r"""How to serialize leading `ThinkChunk` in `AssistantMessage.to_openai()`.
+
+    Attributes:
+        thinking: Use think chunks (Mistral convention).
+        reasoning: Flat `reasoning` string (vLLM convention).
+        reasoning_content: Flat `reasoning_content` string (SGLang convention).
+    """
+
+    thinking = "thinking"
+    reasoning = "reasoning"
+    reasoning_content = "reasoning_content"
 
 
 class Roles(str, Enum):
@@ -133,9 +154,19 @@ class AssistantMessage(BaseMessage):
     tool_calls: list[ToolCall] | None = None
     prefix: bool = False
 
-    def to_openai(self) -> dict[str, Any]:
-        r"""Converts the message to the OpenAI format."""
-        out_dict: dict[str, str | list[dict[str, str | dict[str, Any]]]] = {
+    def to_openai(
+        self,
+        convert_thinking_format: OpenAIReasoningField | None = None,
+    ) -> dict[str, Any]:
+        r"""Converts the message to the OpenAI format.
+
+        Args:
+            convert_thinking_format: Conversion strategy for think chunks. When ``None``, defaults to
+                `OpenAIReasoningField.thinking` (chunks kept inline) but emits a `FutureWarning` if the
+                content contains `ThinkChunk`. When not `thinking`, only leading think chunks are extracted;
+                remaining think chunks are kept inline.
+        """
+        out_dict: dict[str, Any] = {
             "role": self.role,
         }
         if self.content is None:
@@ -143,7 +174,44 @@ class AssistantMessage(BaseMessage):
         elif isinstance(self.content, str):
             out_dict["content"] = self.content
         else:
-            out_dict["content"] = [chunk.to_openai() for chunk in self.content]
+            if convert_thinking_format is None and any(isinstance(c, ThinkChunk) for c in self.content):
+                warnings.warn(
+                    "`convert_thinking_format` defaults to 'thinking' but will change to 'reasoning' "
+                    "in 1.13.0. Pass `convert_thinking_format` explicitly to silence this warning.",
+                    FutureWarning,
+                    stacklevel=2,
+                )
+
+            effective_format = convert_thinking_format or OpenAIReasoningField.thinking
+
+            if effective_format == OpenAIReasoningField.thinking:
+                out_dict["content"] = [chunk.to_openai() for chunk in self.content]
+            else:
+                # Find the split point between leading ThinkChunks and remaining content.
+                split_idx = 0
+                for chunk in self.content:
+                    if isinstance(chunk, ThinkChunk):
+                        split_idx += 1
+                    else:
+                        break
+
+                leading_thinks = self.content[:split_idx]
+                remaining = self.content[split_idx:]
+
+                if leading_thinks:
+                    match effective_format:
+                        case OpenAIReasoningField.reasoning | OpenAIReasoningField.reasoning_content:
+                            assert all(isinstance(tc, ThinkChunk) for tc in leading_thinks)
+                            combined = "\n".join(tc.thinking for tc in leading_thinks if isinstance(tc, ThinkChunk))
+                            out_dict[effective_format.value] = combined
+                        case _:
+                            raise ValueError(f"{effective_format=} is not supported.")
+
+                if len(remaining) == 1 and isinstance(remaining[0], TextChunk):
+                    out_dict["content"] = remaining[0].text
+                elif remaining:
+                    out_dict["content"] = [chunk.to_openai() for chunk in remaining]
+
         if self.tool_calls is not None:
             out_dict["tool_calls"] = [tool_call.to_openai() for tool_call in self.tool_calls]
 
