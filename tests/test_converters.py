@@ -31,6 +31,7 @@ from PIL import Image
 from pydantic_extra_types.language_code import LanguageAlpha2
 
 from mistral_common.audio import Audio
+from mistral_common.exceptions import InvalidAssistantMessageException
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURL,
@@ -535,6 +536,32 @@ def test_from_openai_reasoning_in_assistant_message(openai_message: dict[str, An
 def test_from_openai_reasoning_differ_reasoning_content_in_assistant_message() -> None:
     openai_message = {"role": "assistant", "content": "Hi", "reasoning": "Primary", "reasoning_content": "Fallback"}
     with pytest.raises(ValueError, match=r"`reasoning_content` and `reasoning` should be equal"):
+        AssistantMessage.from_openai(openai_message)
+
+
+@pytest.mark.parametrize(
+    "openai_message",
+    [
+        {
+            "role": "assistant",
+            "content": [{"type": "thinking", "thinking": "hmm", "closed": True}, {"type": "text", "text": "Hi"}],
+            "reasoning": "also thinking",
+        },
+        {
+            "role": "assistant",
+            "content": [{"type": "thinking", "thinking": "hmm", "closed": True}],
+            "reasoning_content": "also thinking",
+        },
+        {
+            "role": "assistant",
+            "content": [{"type": "thinking", "thinking": "hmm", "closed": True}],
+            "reasoning": "also thinking",
+            "reasoning_content": "also thinking",
+        },
+    ],
+)
+def test_from_openai_thinking_chunks_and_reasoning_raises(openai_message: dict[str, Any]) -> None:
+    with pytest.raises(InvalidAssistantMessageException):
         AssistantMessage.from_openai(openai_message)
 
 
