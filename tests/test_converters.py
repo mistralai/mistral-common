@@ -737,6 +737,7 @@ def test_request_to_openai_forwards_convert_thinking_format(
         UserMessage(content="Hi"),
         AssistantMessage(content=[ThinkChunk(thinking="Let me think", closed=True), TextChunk(text="Done")]),
     ]
+    request: ChatCompletionRequest | InstructRequest
     if request_cls == ChatCompletionRequest:
         request = ChatCompletionRequest(messages=messages)
     else:
