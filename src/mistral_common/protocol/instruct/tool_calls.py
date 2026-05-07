@@ -51,6 +51,25 @@ class Function(FunctionName):
     parameters: dict[str, Any]
     strict: bool = False
 
+    @classmethod
+    def from_openai(cls, openai_function: dict[str, Any]) -> "Function":
+        r"""Convert an OpenAI function definition to a Mistral `Function`.
+
+        Filters out unknown fields and defaults missing `parameters` and `description`.
+
+        Args:
+            openai_function: The OpenAI function definition.
+
+        Returns:
+            The Mistral function.
+        """
+        filtered = cls._filter_cls_fields(openai_function)
+        if filtered.get("parameters") is None:
+            filtered["parameters"] = {}
+        if filtered.get("description") is None:
+            filtered["description"] = ""
+        return cls.model_validate(filtered)
+
 
 class ToolTypes(str, Enum):
     r"""Enum of tool types.
@@ -142,6 +161,19 @@ class Tool(MistralBase):
 
     @classmethod
     def from_openai(cls, openai_tool: dict[str, Any]) -> "Tool":
+        r"""Convert an OpenAI tool definition to a Mistral `Tool`.
+
+        Delegates function parsing to `Function.from_openai`.
+
+        Args:
+            openai_tool: The OpenAI tool definition.
+
+        Returns:
+            The Mistral tool.
+        """
+        openai_tool = openai_tool.copy()
+        if function := openai_tool.get("function"):
+            openai_tool["function"] = Function.from_openai(function)
         return cls.model_validate_ignore_extra(openai_tool)
 
 
@@ -163,8 +195,8 @@ class FunctionCall(MistralBase):
     arguments: str
 
     @field_validator("arguments", mode="before")
-    def validate_arguments(cls, v: str | dict[str, Any]) -> str:
-        """Convert arguments to a JSON string if they are a dictionary.
+    def validate_arguments(cls, v: str | dict[str, Any] | None) -> str:
+        r"""Convert arguments to a JSON string if they are a dictionary.
 
         Args:
             v: The arguments to validate.
@@ -174,6 +206,8 @@ class FunctionCall(MistralBase):
         """
         if isinstance(v, dict):
             return json.dumps(v)
+        elif v is None:
+            return "{}"
         return v
 
 

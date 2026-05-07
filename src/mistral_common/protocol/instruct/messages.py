@@ -5,6 +5,7 @@ from pydantic import Field
 from typing_extensions import Annotated, TypeAlias
 
 from mistral_common.base import MistralBase
+from mistral_common.exceptions import InvalidAssistantMessageException
 from mistral_common.protocol.instruct.chunk import (
     ContentChunk,
     TextChunk,
@@ -168,6 +169,37 @@ class AssistantMessage(BaseMessage):
             content = [_convert_openai_content_chunks(chunk) for chunk in openai_content]
         else:
             raise ValueError(f"Unknown content type: {type(openai_content)}")
+
+        reasoning_content: str | None = openai_message.get("reasoning_content")
+        reasoning: str | None = openai_message.get("reasoning")
+
+        match reasoning_content, reasoning:
+            case None, None:
+                openai_thinking = None
+            case None, _:
+                openai_thinking = reasoning
+            case _, None:
+                openai_thinking = reasoning_content
+            case _, _:
+                if reasoning_content != reasoning:
+                    raise ValueError("`reasoning_content` and `reasoning` should be equal.")
+                openai_thinking = reasoning
+
+        if openai_thinking is not None:
+            has_thinking_chunks = isinstance(content, list) and any(isinstance(chunk, ThinkChunk) for chunk in content)
+            if has_thinking_chunks:
+                raise InvalidAssistantMessageException(
+                    "Message cannot have both thinking chunks in content and a top-level"
+                    " `reasoning` or `reasoning_content` field."
+                )
+
+            reasoning_chunk = ThinkChunk(thinking=openai_thinking, closed=True)
+            if isinstance(content, str):
+                content = [reasoning_chunk, TextChunk(text=content)]
+            elif content is None:
+                content = [reasoning_chunk]
+            else:
+                content.insert(0, reasoning_chunk)
 
         return cls.model_validate(
             {
