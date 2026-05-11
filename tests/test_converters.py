@@ -421,16 +421,16 @@ def test_convert_think_chunk() -> None:
             {
                 "role": "assistant",
                 "content": [
-                    {"type": "text", "text": "Hi"},
                     {"type": "thinking", "thinking": "Hello", "closed": True},
                     {"type": "thinking", "thinking": "Hello", "closed": False},
+                    {"type": "text", "text": "Hi"},
                 ],
             },
             AssistantMessage(
                 content=[
-                    TextChunk(text="Hi"),
                     ThinkChunk(thinking="Hello", closed=True),
                     ThinkChunk(thinking="Hello", closed=False),
+                    TextChunk(text="Hi"),
                 ]
             ),
         ),
@@ -582,14 +582,13 @@ def test_from_openai_thinking_chunks_and_reasoning_raises(openai_message: dict[s
                 ],
             },
         ),
-        # thinking: multiple chunks all inline
+        # thinking: multiple leading ThinkChunks stay as-is (no aggregation)
         (
             AssistantMessage(
                 content=[
                     ThinkChunk(thinking="First", closed=True),
                     ThinkChunk(thinking="Second", closed=False),
                     TextChunk(text="Reply"),
-                    ThinkChunk(thinking="Third", closed=False),
                 ]
             ),
             OpenAIReasoningField.thinking,
@@ -599,10 +598,29 @@ def test_from_openai_thinking_chunks_and_reasoning_raises(openai_message: dict[s
                     {"type": "thinking", "thinking": "First", "closed": True},
                     {"type": "thinking", "thinking": "Second", "closed": False},
                     {"type": "text", "text": "Reply"},
+                ],
+            },
+        ),
+        # thinking: non-leading ThinkChunks stay inline (no error)
+        (
+            AssistantMessage(
+                content=[
+                    ThinkChunk(thinking="First", closed=True),
+                    TextChunk(text="Reply"),
+                    ThinkChunk(thinking="Third", closed=False),
+                ]
+            ),
+            OpenAIReasoningField.thinking,
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "thinking", "thinking": "First", "closed": True},
+                    {"type": "text", "text": "Reply"},
                     {"type": "thinking", "thinking": "Third", "closed": False},
                 ],
             },
         ),
+
         # reasoning: single leading ThinkChunk extracted as flat string
         (
             AssistantMessage(content=[ThinkChunk(thinking="Let me think", closed=True), TextChunk(text="Done")]),
@@ -626,23 +644,6 @@ def test_from_openai_thinking_chunks_and_reasoning_raises(openai_message: dict[s
             ),
             OpenAIReasoningField.reasoning,
             {"role": "assistant", "reasoning": "Part 1\nPart 2", "content": "Final"},
-        ),
-        # reasoning: non-leading ThinkChunks stay inline in content
-        (
-            AssistantMessage(
-                content=[
-                    TextChunk(text="Hi"),
-                    ThinkChunk(thinking="After text", closed=True),
-                ]
-            ),
-            OpenAIReasoningField.reasoning,
-            {
-                "role": "assistant",
-                "content": [
-                    {"type": "text", "text": "Hi"},
-                    {"type": "thinking", "thinking": "After text", "closed": True},
-                ],
-            },
         ),
         # thinking: ThinkChunk only, no remaining content
         (

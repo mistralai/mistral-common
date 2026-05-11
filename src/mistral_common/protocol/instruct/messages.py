@@ -187,7 +187,6 @@ class AssistantMessage(BaseMessage):
             if effective_format == OpenAIReasoningField.thinking:
                 out_dict["content"] = [chunk.to_openai() for chunk in self.content]
             else:
-                # Find the split point between leading ThinkChunks and remaining content.
                 split_idx = 0
                 for chunk in self.content:
                     if isinstance(chunk, ThinkChunk):
