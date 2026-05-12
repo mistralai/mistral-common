@@ -106,7 +106,7 @@ EXPECTED_TEXT_V13: str = (
     r'"Math expression."}}}}}][/AVAILABLE_TOOLS][INST]U1[/INST]A1'
     r"[TOOL_CALLS]F1[ARGS]{}[TOOL_CALLS]F2[ARGS]{}</s>"
     r"[TOOL_RESULTS]R1[/TOOL_RESULTS][TOOL_RESULTS]R2"
-    r"[/TOOL_RESULTS]A2[THINK]T1[/THINK]</s>[INST]U2[/INST]"
+    r"[/TOOL_RESULTS][THINK]T1[/THINK]A2</s>[INST]U2[/INST]"
 )
 
 
@@ -158,7 +158,7 @@ def messages() -> list[BaseMessage]:
         ),
         ToolMessage(content="R1", tool_call_id="123456789"),
         ToolMessage(content="R2", tool_call_id="999999999"),
-        AssistantMessage(content=[TextChunk(text="A2"), ThinkChunk(thinking="T1")]),
+        AssistantMessage(content=[ThinkChunk(thinking="T1"), TextChunk(text="A2")]),
         UserMessage(content="U2"),
     ]
 
@@ -278,15 +278,15 @@ def test_encode_think_chunk(v13_tekkenizer_think: InstructTokenizerV13) -> None:
             "A1",
         ),
         (
-            AssistantMessage(content=[TextChunk(text="A1"), ThinkChunk(thinking="T1")]),
-            "A1[THINK]T1[/THINK]",
+            AssistantMessage(content=[ThinkChunk(thinking="T1"), TextChunk(text="A1")]),
+            "[THINK]T1[/THINK]A1",
         ),
         (
             AssistantMessage(
-                content=[TextChunk(text="A1"), ThinkChunk(thinking="R1", closed=False)],
+                content=[ThinkChunk(thinking="R1", closed=False), TextChunk(text="A1")],
                 tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="F1", arguments="{'a': 1}"))],
             ),
-            "A1[THINK]R1[TOOL_CALLS]F1[ARGS]\"{'a': 1}\"",
+            "[THINK]R1A1[TOOL_CALLS]F1[ARGS]\"{'a': 1}\"",
         ),
     ],
 )

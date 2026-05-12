@@ -2,7 +2,7 @@ import warnings
 from enum import Enum
 from typing import Any, Literal, TypeVar
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from typing_extensions import Annotated, TypeAlias
 
 from mistral_common.base import MistralBase
@@ -19,7 +19,7 @@ from mistral_common.protocol.instruct.tool_calls import ToolCall
 warnings.filterwarnings(
     action="once",
     category=FutureWarning,
-    message=r".*`convert_thinking_format` defaults to.*",
+    message=r".*`convert_thinking_format` defaults to 'thinking_chunks'.*",
 )
 
 
@@ -27,12 +27,12 @@ class OpenAIReasoningField(str, Enum):
     r"""How to serialize leading `ThinkChunk` in `AssistantMessage.to_openai()`.
 
     Attributes:
-        thinking: Use think chunks (Mistral convention).
+        thinking_chunks: Use think chunks (Mistral convention).
         reasoning: Flat `reasoning` string (vLLM convention).
         reasoning_content: Flat `reasoning_content` string (SGLang convention).
     """
 
-    thinking = "thinking"
+    thinking_chunks = "thinking_chunks"
     reasoning = "reasoning"
     reasoning_content = "reasoning_content"
 
@@ -154,6 +154,25 @@ class AssistantMessage(BaseMessage):
     tool_calls: list[ToolCall] | None = None
     prefix: bool = False
 
+    @field_validator("content")
+    @classmethod
+    def _validate_thinking_chunks_are_leading(
+        cls, content: str | list[TextChunk | ThinkChunk] | None
+    ) -> str | list[TextChunk | ThinkChunk] | None:
+        """Validates that all ThinkChunks are contiguous and at the start of the content list."""
+        if not isinstance(content, list):
+            return content
+        seen_non_think = False
+        for chunk in content:
+            if isinstance(chunk, ThinkChunk):
+                if seen_non_think:
+                    raise InvalidAssistantMessageException(
+                        "ThinkChunks must be leading: all ThinkChunks must appear before any other content chunk."
+                    )
+            else:
+                seen_non_think = True
+        return content
+
     def to_openai(
         self,
         convert_thinking_format: OpenAIReasoningField | None = None,
@@ -162,9 +181,8 @@ class AssistantMessage(BaseMessage):
 
         Args:
             convert_thinking_format: Conversion strategy for think chunks. When ``None``, defaults to
-                `OpenAIReasoningField.thinking` (chunks kept inline) but emits a `FutureWarning` if the
-                content contains `ThinkChunk`. When not `thinking`, only leading think chunks are extracted;
-                remaining think chunks are kept inline.
+                `OpenAIReasoningField.thinking_chunks` (chunks kept inline) but emits a `FutureWarning` if
+                the content contains `ThinkChunk`.
         """
         out_dict: dict[str, Any] = {
             "role": self.role,
@@ -176,15 +194,15 @@ class AssistantMessage(BaseMessage):
         else:
             if convert_thinking_format is None and any(isinstance(c, ThinkChunk) for c in self.content):
                 warnings.warn(
-                    "`convert_thinking_format` defaults to 'thinking' but will change to 'reasoning' "
+                    "`convert_thinking_format` defaults to 'thinking_chunks' but will change to 'reasoning' "
                     "in 1.13.0. Pass `convert_thinking_format` explicitly to silence this warning.",
                     FutureWarning,
                     stacklevel=2,
                 )
 
-            effective_format = convert_thinking_format or OpenAIReasoningField.thinking
+            effective_format = convert_thinking_format or OpenAIReasoningField.thinking_chunks
 
-            if effective_format == OpenAIReasoningField.thinking:
+            if effective_format == OpenAIReasoningField.thinking_chunks:
                 out_dict["content"] = [chunk.to_openai() for chunk in self.content]
             else:
                 split_idx = 0
@@ -200,7 +218,6 @@ class AssistantMessage(BaseMessage):
                 if leading_thinks:
                     match effective_format:
                         case OpenAIReasoningField.reasoning | OpenAIReasoningField.reasoning_content:
-                            assert all(isinstance(tc, ThinkChunk) for tc in leading_thinks)
                             combined = "\n".join(tc.thinking for tc in leading_thinks if isinstance(tc, ThinkChunk))
                             out_dict[effective_format.value] = combined
                         case _:

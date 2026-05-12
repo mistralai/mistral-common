@@ -567,13 +567,24 @@ def test_from_openai_thinking_chunks_and_reasoning_raises(openai_message: dict[s
         AssistantMessage.from_openai(openai_message)
 
 
+def test_non_leading_think_chunks_raises() -> None:
+    with pytest.raises(InvalidAssistantMessageException, match="ThinkChunks must be leading"):
+        AssistantMessage(
+            content=[
+                ThinkChunk(thinking="First", closed=True),
+                TextChunk(text="Reply"),
+                ThinkChunk(thinking="Third", closed=False),
+            ]
+        )
+
+
 @pytest.mark.parametrize(
     ["message", "convert_thinking_format", "expected"],
     [
         # thinking: chunks stay inline
         (
             AssistantMessage(content=[ThinkChunk(thinking="Deep thought", closed=True), TextChunk(text="Answer")]),
-            OpenAIReasoningField.thinking,
+            OpenAIReasoningField.thinking_chunks,
             {
                 "role": "assistant",
                 "content": [
@@ -591,32 +602,13 @@ def test_from_openai_thinking_chunks_and_reasoning_raises(openai_message: dict[s
                     TextChunk(text="Reply"),
                 ]
             ),
-            OpenAIReasoningField.thinking,
+            OpenAIReasoningField.thinking_chunks,
             {
                 "role": "assistant",
                 "content": [
                     {"type": "thinking", "thinking": "First", "closed": True},
                     {"type": "thinking", "thinking": "Second", "closed": False},
                     {"type": "text", "text": "Reply"},
-                ],
-            },
-        ),
-        # thinking: non-leading ThinkChunks stay inline (no error)
-        (
-            AssistantMessage(
-                content=[
-                    ThinkChunk(thinking="First", closed=True),
-                    TextChunk(text="Reply"),
-                    ThinkChunk(thinking="Third", closed=False),
-                ]
-            ),
-            OpenAIReasoningField.thinking,
-            {
-                "role": "assistant",
-                "content": [
-                    {"type": "thinking", "thinking": "First", "closed": True},
-                    {"type": "text", "text": "Reply"},
-                    {"type": "thinking", "thinking": "Third", "closed": False},
                 ],
             },
         ),
@@ -647,7 +639,7 @@ def test_from_openai_thinking_chunks_and_reasoning_raises(openai_message: dict[s
         # thinking: ThinkChunk only, no remaining content
         (
             AssistantMessage(content=[ThinkChunk(thinking="Just thinking", closed=True)]),
-            OpenAIReasoningField.thinking,
+            OpenAIReasoningField.thinking_chunks,
             {
                 "role": "assistant",
                 "content": [{"type": "thinking", "thinking": "Just thinking", "closed": True}],
@@ -684,7 +676,7 @@ def test_from_openai_thinking_chunks_and_reasoning_raises(openai_message: dict[s
         # None content unchanged
         (
             AssistantMessage(content=None),
-            OpenAIReasoningField.thinking,
+            OpenAIReasoningField.thinking_chunks,
             {"role": "assistant"},
         ),
     ],
@@ -699,7 +691,7 @@ def test_assistant_message_to_openai_convert_thinking_format(
 
 def test_assistant_message_to_openai_none_warns_with_think_chunks() -> None:
     message = AssistantMessage(content=[ThinkChunk(thinking="Hmm", closed=True), TextChunk(text="Answer")])
-    with pytest.warns(FutureWarning, match=r"convert_thinking_format.*defaults to 'thinking'"):
+    with pytest.warns(FutureWarning, match=r"convert_thinking_format.*defaults to 'thinking_chunks'"):
         result = message.to_openai()
     assert result == {
         "role": "assistant",

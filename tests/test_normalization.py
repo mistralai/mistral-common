@@ -174,10 +174,10 @@ class TestChatCompletionRequestNormalization:
             "a": AssistantMessage(content="a"),
             "a2": AssistantMessage(
                 content=[
-                    TextChunk(text="a1"),
-                    TextChunk(text="a2"),
                     ThinkChunk(thinking="t1"),
                     ThinkChunk(thinking="t2"),
+                    TextChunk(text="a1"),
+                    TextChunk(text="a2"),
                     TextChunk(text="a3"),
                 ]
             ),
@@ -221,10 +221,9 @@ class TestChatCompletionRequestNormalization:
             [
                 "u",
                 [
-                    TextChunk(text="a1\n\na2"),
                     ThinkChunk(thinking="t1"),
                     ThinkChunk(thinking="t2"),
-                    TextChunk(text="a3"),
+                    TextChunk(text="a1\n\na2\n\na3"),
                 ],
                 "u",
             ],

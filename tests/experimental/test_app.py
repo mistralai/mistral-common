@@ -364,27 +364,21 @@ def test_detokenize_assistant_message(
         ),
         AssistantMessage(
             content=[
-                TextChunk(text="Hello, world!"),
                 ThinkChunk(thinking="Let me think about this..."),
-                TextChunk(text="This is a complex question."),
                 ThinkChunk(thinking="I need to consider all options."),
                 TextChunk(text="Here is my final answer."),
             ],
         ),
         AssistantMessage(
             content=[
-                TextChunk(text="Hello, world!"),
                 ThinkChunk(thinking="Let me think about this..."),
-                TextChunk(text="This is a complex question."),
                 ThinkChunk(thinking="I need to consider all options.", closed=False),
             ],
             prefix=True,
         ),
         AssistantMessage(
             content=[
-                TextChunk(text="Hello, world!"),
                 ThinkChunk(thinking="Let me think about this..."),
-                TextChunk(text="This is a complex question."),
                 ThinkChunk(thinking="I need to consider all options.", closed=False),
             ],
             prefix=True,
@@ -455,9 +449,7 @@ class MockResponse:
         ),
         AssistantMessage(
             content=[
-                TextChunk(text="Hello, world!"),
                 ThinkChunk(thinking="Let me think about this..."),
-                TextChunk(text="This is a complex question."),
                 ThinkChunk(thinking="I need to consider all options."),
                 TextChunk(text="Here is my final answer."),
             ],
