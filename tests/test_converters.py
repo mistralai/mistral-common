@@ -620,7 +620,6 @@ def test_from_openai_thinking_chunks_and_reasoning_raises(openai_message: dict[s
                 ],
             },
         ),
-
         # reasoning: single leading ThinkChunk extracted as flat string
         (
             AssistantMessage(content=[ThinkChunk(thinking="Let me think", closed=True), TextChunk(text="Done")]),
