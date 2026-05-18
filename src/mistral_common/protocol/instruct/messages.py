@@ -173,6 +173,7 @@ class AssistantMessage(BaseMessage):
         elif isinstance(self.content, str):
             out_dict["content"] = self.content
         else:
+            split_idx = 0
             seen_non_think = False
             for chunk in self.content:
                 if isinstance(chunk, ThinkChunk):
@@ -180,10 +181,11 @@ class AssistantMessage(BaseMessage):
                         raise InvalidAssistantMessageException(
                             "ThinkChunks must be leading: all ThinkChunks must appear before any other content chunk."
                         )
+                    split_idx += 1
                 else:
                     seen_non_think = True
 
-            if convert_thinking_format is None and any(isinstance(c, ThinkChunk) for c in self.content):
+            if convert_thinking_format is None and split_idx > 0:
                 warnings.warn(
                     "`convert_thinking_format` defaults to 'thinking_chunks' but will change to 'reasoning' "
                     "in 1.13.0. Pass `convert_thinking_format` explicitly to silence this warning.",
@@ -196,13 +198,6 @@ class AssistantMessage(BaseMessage):
             if effective_format == OpenAIReasoningField.thinking_chunks:
                 out_dict["content"] = [chunk.to_openai() for chunk in self.content]
             else:
-                split_idx = 0
-                for chunk in self.content:
-                    if isinstance(chunk, ThinkChunk):
-                        split_idx += 1
-                    else:
-                        break
-
                 leading_thinks = self.content[:split_idx]
                 remaining = self.content[split_idx:]
 
