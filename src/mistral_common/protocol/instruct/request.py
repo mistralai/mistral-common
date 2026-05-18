@@ -215,7 +215,9 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         if "seed" in kwargs and "random_seed" in kwargs:
             raise ValueError("Cannot specify both `seed` and `random_seed`.")
 
-        random_seed = kwargs.pop("seed", None) or kwargs.pop("random_seed", None)
+        random_seed = kwargs.pop("seed", None)
+        if random_seed is None:
+            random_seed = kwargs.pop("random_seed", None)
 
         filtered_kwargs = cls._filter_cls_fields(kwargs)
 
