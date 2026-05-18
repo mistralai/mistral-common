@@ -2,7 +2,7 @@ import warnings
 from enum import Enum
 from typing import Any, Literal, TypeVar
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from typing_extensions import Annotated, TypeAlias
 
 from mistral_common.base import MistralBase
@@ -154,25 +154,6 @@ class AssistantMessage(BaseMessage):
     tool_calls: list[ToolCall] | None = None
     prefix: bool = False
 
-    @field_validator("content")
-    @classmethod
-    def _validate_thinking_chunks_are_leading(
-        cls, content: str | list[TextChunk | ThinkChunk] | None
-    ) -> str | list[TextChunk | ThinkChunk] | None:
-        """Validates that all ThinkChunks are contiguous and at the start of the content list."""
-        if not isinstance(content, list):
-            return content
-        seen_non_think = False
-        for chunk in content:
-            if isinstance(chunk, ThinkChunk):
-                if seen_non_think:
-                    raise InvalidAssistantMessageException(
-                        "ThinkChunks must be leading: all ThinkChunks must appear before any other content chunk."
-                    )
-            else:
-                seen_non_think = True
-        return content
-
     def to_openai(
         self,
         convert_thinking_format: OpenAIReasoningField | None = None,
@@ -192,6 +173,16 @@ class AssistantMessage(BaseMessage):
         elif isinstance(self.content, str):
             out_dict["content"] = self.content
         else:
+            seen_non_think = False
+            for chunk in self.content:
+                if isinstance(chunk, ThinkChunk):
+                    if seen_non_think:
+                        raise InvalidAssistantMessageException(
+                            "ThinkChunks must be leading: all ThinkChunks must appear before any other content chunk."
+                        )
+                else:
+                    seen_non_think = True
+
             if convert_thinking_format is None and any(isinstance(c, ThinkChunk) for c in self.content):
                 warnings.warn(
                     "`convert_thinking_format` defaults to 'thinking_chunks' but will change to 'reasoning' "

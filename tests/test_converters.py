@@ -567,15 +567,31 @@ def test_from_openai_thinking_chunks_and_reasoning_raises(openai_message: dict[s
         AssistantMessage.from_openai(openai_message)
 
 
-def test_non_leading_think_chunks_raises() -> None:
+def test_non_leading_think_chunks_construction_ok() -> None:
+    """Non-leading ThinkChunks are allowed at construction time."""
+    msg = AssistantMessage(
+        content=[
+            ThinkChunk(thinking="First", closed=True),
+            TextChunk(text="Reply"),
+            ThinkChunk(thinking="Third", closed=False),
+        ]
+    )
+    assert msg.content is not None
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        [ThinkChunk(thinking="First", closed=True), TextChunk(text="Reply"), ThinkChunk(thinking="Third")],
+        [TextChunk(text="Reply"), ThinkChunk(thinking="After", closed=True)],
+        [TextChunk(text="A"), TextChunk(text="B"), ThinkChunk(thinking="End", closed=True)],
+    ],
+)
+def test_non_leading_think_chunks_to_openai_raises(content: list[TextChunk | ThinkChunk]) -> None:
+    """to_openai raises when ThinkChunks are not leading."""
+    msg = AssistantMessage(content=content)
     with pytest.raises(InvalidAssistantMessageException, match="ThinkChunks must be leading"):
-        AssistantMessage(
-            content=[
-                ThinkChunk(thinking="First", closed=True),
-                TextChunk(text="Reply"),
-                ThinkChunk(thinking="Third", closed=False),
-            ]
-        )
+        msg.to_openai()
 
 
 @pytest.mark.parametrize(
