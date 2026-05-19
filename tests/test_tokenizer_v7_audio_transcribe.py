@@ -50,7 +50,7 @@ def test_tokenize_transcribe(tekkenizer: InstructTokenizerV7) -> None:
     ]
     assert tokenized.text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST][TRANSCRIBE]")
     assert len(tokenized.audios) == 1
-    base64_audio = request.audio.data
+    base64_audio = request.audio
     assert isinstance(base64_audio, str)
     audio_array = Audio.from_base64(base64_audio).audio_array
     assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)
@@ -84,7 +84,7 @@ def test_tokenize_transcribe_with_lang(tekkenizer: InstructTokenizerV7) -> None:
     ]
     assert tokenized.text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]lang:en[TRANSCRIBE]")
     assert len(tokenized.audios) == 1
-    base64_audio = request.audio.data
+    base64_audio = request.audio
     assert isinstance(base64_audio, str)
     audio_array = Audio.from_base64(base64_audio).audio_array
     assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)

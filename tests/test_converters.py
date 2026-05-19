@@ -31,7 +31,6 @@ from openai.types.chat.chat_completion_user_message_param import ChatCompletionU
 from PIL import Image
 from pydantic_extra_types.language_code import LanguageAlpha2
 
-from mistral_common.audio import Audio
 from mistral_common.exceptions import InvalidAssistantMessageException
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
@@ -40,7 +39,6 @@ from mistral_common.protocol.instruct.chunk import (
     ImageChunk,
     ImageURL,
     ImageURLChunk,
-    RawAudio,
     TextChunk,
     ThinkChunk,
 )
@@ -69,6 +67,7 @@ from mistral_common.protocol.instruct.tool_calls import (
 )
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
+from mistral_common.tokens.tokenizers.audio import Audio
 
 from .test_tokenizer_v7_audio_tts import _make_fake_audio
 
@@ -99,18 +98,15 @@ def _get_audio_chunk() -> AudioChunk:
 
     audio = Audio(audio_array=data, sampling_rate=sr, format="wav")
 
-    raw_audio = RawAudio.from_audio(audio)
-    return AudioChunk(input_audio=raw_audio)
+    return AudioChunk.from_audio(audio)
 
 
 DUMMY_AUDIO_CHUNK = _get_audio_chunk()
-assert isinstance(DUMMY_AUDIO_CHUNK.input_audio.data, str)
-DUMMY_AUDIO_URL_CHUNK_BASE64 = AudioURLChunk(audio_url=AudioURL(url=DUMMY_AUDIO_CHUNK.input_audio.data))
-DUMMY_AUDIO_URL_CHUNK_BASE64_STR = AudioURLChunk(audio_url=DUMMY_AUDIO_CHUNK.input_audio.data)
+assert isinstance(DUMMY_AUDIO_CHUNK.input_audio, str)
+DUMMY_AUDIO_URL_CHUNK_BASE64 = AudioURLChunk(audio_url=AudioURL(url=DUMMY_AUDIO_CHUNK.input_audio))
+DUMMY_AUDIO_URL_CHUNK_BASE64_STR = AudioURLChunk(audio_url=DUMMY_AUDIO_CHUNK.input_audio)
 DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX = AudioURLChunk(
-    audio_url=AudioURL(
-        url=f"data:audio/{DUMMY_AUDIO_CHUNK.input_audio.format};base64,{DUMMY_AUDIO_CHUNK.input_audio.data}"
-    )
+    audio_url=AudioURL(url=f"data:audio/wav;base64,{DUMMY_AUDIO_CHUNK.input_audio}")
 )
 DUMMY_AUDIO_URL_CHUNK_URL = AudioURLChunk(audio_url=AudioURL(url=AUDIO_SAMPLE_URL))
 
@@ -156,11 +152,19 @@ def test_convert_text_chunk() -> None:
 
 def test_convert_input_audio_chunk() -> None:
     chunk = DUMMY_AUDIO_CHUNK
-    text_openai = chunk.to_openai()
+    openai_dict = chunk.to_openai()
 
-    assert AudioChunk.from_openai(text_openai) == chunk
+    # Verify OpenAI-compliant shape
+    assert openai_dict["type"] == "input_audio"
+    assert isinstance(openai_dict["input_audio"], dict)
+    assert "data" in openai_dict["input_audio"]
+    assert "format" in openai_dict["input_audio"]
+    assert openai_dict["input_audio"]["format"] in ("wav", "mp3", "flac", "ogg")
 
-    typeddict_openai = OpenAIInputAudioChunk(**chunk.to_openai())  # type: ignore[typeddict-item]
+    # Roundtrip
+    assert AudioChunk.from_openai(openai_dict) == chunk
+
+    typeddict_openai = OpenAIInputAudioChunk(**openai_dict)  # type: ignore[typeddict-item]
     assert AudioChunk.from_openai(typeddict_openai) == chunk
 
 
@@ -225,25 +229,21 @@ def test_convert_image_url_chunk(openai_image_url_chunk: dict, image_url_chunk: 
         (
             {
                 "type": "audio_url",
-                "audio_url": {"url": DUMMY_AUDIO_CHUNK.input_audio.data},
+                "audio_url": {"url": DUMMY_AUDIO_CHUNK.input_audio},
             },
             DUMMY_AUDIO_URL_CHUNK_BASE64,
         ),
         (
             {
                 "type": "audio_url",
-                "audio_url": {"url": DUMMY_AUDIO_CHUNK.input_audio.data},
+                "audio_url": {"url": DUMMY_AUDIO_CHUNK.input_audio},
             },
             DUMMY_AUDIO_URL_CHUNK_BASE64_STR,
         ),
         (
             {
                 "type": "audio_url",
-                "audio_url": {
-                    "url": (
-                        f"data:audio/{DUMMY_AUDIO_CHUNK.input_audio.format};base64,{DUMMY_AUDIO_CHUNK.input_audio.data}"
-                    )
-                },
+                "audio_url": {"url": f"data:audio/wav;base64,{DUMMY_AUDIO_CHUNK.input_audio}"},
             },
             DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX,
         ),
@@ -1106,7 +1106,7 @@ def test_convert_requests(
 )
 def test_convert_transcription(audio: AudioChunk, language: LanguageAlpha2 | None, stream: bool) -> None:
     def check_equality(a: TranscriptionRequest, b: TranscriptionRequest) -> bool:
-        if a.audio.data != b.audio.data:
+        if a.audio != b.audio:
             return False
         if a.id != b.id:
             return False

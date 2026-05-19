@@ -144,11 +144,11 @@ print(tokenized.text)
 ### Audio
 
 ```py
-from mistral_common.protocol.instruct.chunk import TextChunk, AudioChunk, RawAudio
+from mistral_common.protocol.instruct.chunk import TextChunk, AudioChunk
 from mistral_common.protocol.instruct.messages import UserMessage, AssistantMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.audio import Audio
+from mistral_common.tokens.tokenizers.audio import Audio
 from huggingface_hub import hf_hub_download
 
 repo_id = "mistralai/Voxtral-Mini-3B-2507"
@@ -203,8 +203,7 @@ print(tokenized.text)
 
 ```python
 from mistral_common.protocol.transcription.request import TranscriptionRequest
-from mistral_common.protocol.instruct.chunk import RawAudio
-from mistral_common.audio import Audio
+from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 from huggingface_hub import hf_hub_download
@@ -215,8 +214,7 @@ tokenizer = MistralTokenizer.from_hf_hub(repo_id)
 obama_file = hf_hub_download("patrickvonplaten/audio_samples", "obama.mp3", repo_type="dataset")
 audio = Audio.from_file(obama_file, strict=False)
 
-audio = RawAudio.from_audio(audio)
-request = TranscriptionRequest(model=repo_id, audio=audio, language="en")
+request = TranscriptionRequest(model=repo_id, audio=audio.to_base64(audio.format), language="en")
 
 tokenized = tokenizer.encode_transcription(request)
 

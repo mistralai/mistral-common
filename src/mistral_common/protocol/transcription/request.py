@@ -2,13 +2,13 @@ import io
 from enum import Enum
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_extra_types.language_code import LanguageAlpha2
 
-from mistral_common.audio import Audio
+from mistral_common.base import MistralBase
 from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
 from mistral_common.protocol.base import BaseCompletionRequest
-from mistral_common.protocol.instruct.chunk import RawAudio
+from mistral_common.tokens.tokenizers.audio import Audio
 
 if is_soundfile_installed():
     import soundfile as sf
@@ -36,7 +36,7 @@ class TranscriptionRequest(BaseCompletionRequest):
 
     id: str | None = None
     model: str | None = None
-    audio: RawAudio
+    audio: str | bytes
     language: LanguageAlpha2 | None = Field(
         None,
         description=(
@@ -63,6 +63,19 @@ class TranscriptionRequest(BaseCompletionRequest):
         ),
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _from_legacy_raw_audio(cls, values: dict[str, Any]) -> dict[str, Any]:
+        r"""Flatten legacy RawAudio payloads."""
+        if not isinstance(values, dict):
+            return values
+        raw = values.get("audio")
+        if isinstance(raw, MistralBase):
+            raw = raw.model_dump()
+        if isinstance(raw, dict) and "data" in raw:
+            values["audio"] = raw["data"]
+        return values
+
     def to_openai(self, exclude: tuple = (), **kwargs: Any) -> dict[str, list[dict[str, Any]]]:
         r"""Convert the transcription request into the OpenAI format.
 
@@ -83,11 +96,11 @@ class TranscriptionRequest(BaseCompletionRequest):
 
         assert_soundfile_installed()
 
-        if isinstance(self.audio.data, bytes):
-            buffer = io.BytesIO(self.audio.data)
+        if isinstance(self.audio, bytes):
+            buffer = io.BytesIO(self.audio)
         else:
-            assert isinstance(self.audio.data, str)
-            audio = Audio.from_base64(self.audio.data)
+            assert isinstance(self.audio, str)
+            audio = Audio.from_base64(self.audio)
 
             buffer = io.BytesIO()
             sf.write(buffer, audio.audio_array, audio.sampling_rate, format=audio.format)
@@ -137,8 +150,7 @@ class TranscriptionRequest(BaseCompletionRequest):
 
         audio = Audio.from_bytes(audio_bytes, strict=strict)
         audio_str = audio.to_base64(audio.format)
-        raw_audio = RawAudio(data=audio_str, format=audio.format)
 
-        converted_dict["audio"] = raw_audio
+        converted_dict["audio"] = audio_str
         converted_dict["random_seed"] = seed
         return cls(**converted_dict)

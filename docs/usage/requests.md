@@ -115,8 +115,7 @@ A pydantic class [TranscriptionRequest][mistral_common.protocol.transcription.re
 
 ```python
 from mistral_common.protocol.transcription.request import TranscriptionRequest
-from mistral_common.protocol.instruct.chunk import RawAudio
-from mistral_common.audio import Audio
+from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 from huggingface_hub import hf_hub_download
@@ -127,8 +126,7 @@ tokenizer = MistralTokenizer.from_hf_hub(repo_id)
 obama_file = hf_hub_download("patrickvonplaten/audio_samples", "obama.mp3", repo_type="dataset")
 audio = Audio.from_file(obama_file, strict=False)
 
-audio = RawAudio.from_audio(audio)
-request = TranscriptionRequest(model=repo_id, audio=audio, language="en")
+request = TranscriptionRequest(model=repo_id, audio=audio.to_base64(audio.format), language="en")
 
 tokenizer.encode_transcription(request)
 ```

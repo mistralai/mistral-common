@@ -1,16 +1,268 @@
+import base64
+import io
 import logging
 import math
+import re
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+import requests as _requests_lib
 
-from mistral_common.audio import Audio
+from mistral_common.imports import (
+    assert_soundfile_installed,
+    assert_soxr_installed,
+    is_soundfile_installed,
+    is_soxr_installed,
+)
 from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk, AudioURLType
 
+if is_soxr_installed():
+    import soxr
+
+if is_soundfile_installed():
+    import soundfile as sf
+
+    # Get the available formats from soundfile
+    available_formats = sf.available_formats()
+
+    # Create an Enum dynamically
+    AudioFormat = Enum("AudioFormat", {format_name: format_name for format_name in available_formats})  # type: ignore[misc]
+else:
+    AudioFormat = Enum("AudioFormat", {"none": "none"})  # type: ignore[no-redef]
+
+
+if TYPE_CHECKING:
+    from mistral_common.protocol.instruct.chunk import RawAudio
+
 logger = logging.getLogger(__name__)
+
+_from_raw_audio_warned = False
+
+EXPECTED_FORMAT_VALUES = [v.value.lower() for v in AudioFormat.__members__.values()]
+
+
+class Audio:
+    def __init__(self, audio_array: np.ndarray, sampling_rate: int, format: str) -> None:
+        r"""Initialize an Audio instance with audio data, sampling rate, and format.
+
+        Args:
+            audio_array: The audio data as a numpy array.
+            sampling_rate: The sampling rate of the audio in Hz.
+            format: The format of the audio file.
+        """
+        self.audio_array = audio_array
+        self.sampling_rate = sampling_rate
+        self.format = format
+        self._check_valid()
+
+    def __repr__(self) -> str:
+        return (
+            f"Audio - sampling_rate={self.sampling_rate} Hz, "
+            f"duration={len(self.audio_array) / self.sampling_rate:.2f}s, "
+            f"shape={self.audio_array.shape}"
+        )
+
+    def _check_valid(self) -> None:
+        assert isinstance(self.audio_array, np.ndarray), type(np.ndarray)
+        assert self.audio_array.ndim == 1, f"{self.audio_array.ndim=}"
+        assert_soundfile_installed()
+        assert self.format in EXPECTED_FORMAT_VALUES, f"{self.format=} not in {EXPECTED_FORMAT_VALUES=}"
+
+    @property
+    def duration(self) -> float:
+        r"""Calculate the duration of the audio in seconds.
+
+        Returns:
+           The duration of the audio in seconds.
+        """
+        # in seconds
+        duration: float = self.audio_array.shape[0] / self.sampling_rate
+        return duration
+
+    @staticmethod
+    def from_url(url: str, strict: bool = True) -> "Audio":
+        r"""Create an Audio instance from a URL.
+
+        Args:
+            url: The URL of the audio file.
+            strict: Whether to strictly enforce mono audio.
+
+        Returns:
+            An instance of the Audio class.
+        """
+        try:
+            response = _requests_lib.get(url)
+            response.raise_for_status()
+            return Audio.from_bytes(response.content, strict=strict)
+        except _requests_lib.RequestException as e:  # Something went wrong with the request.
+            raise ValueError(f"Failed to download audio from URL: {url}") from e
+        except Exception as e:  # Something went wrong with the audio file.
+            raise ValueError(f"Failed to create Audio instance from URL: {url} .") from e
+
+    @staticmethod
+    def from_base64(audio_base64: str, strict: bool = True) -> "Audio":
+        r"""Create an Audio instance from a base64 encoded string.
+
+        Args:
+            audio_base64: The base64 encoded audio data.
+            strict: Whether to strictly enforce mono audio. Defaults to True.
+
+        Returns:
+            An instance of the Audio class.
+        """
+        assert_soundfile_installed()
+
+        if re.match(r"^data:audio/\w+;base64,", audio_base64):  # Remove the prefix if it exists
+            audio_base64 = audio_base64.split(",")[1]
+
+        try:
+            audio_bytes = base64.b64decode(audio_base64)
+        except Exception as e:
+            raise ValueError("base64 decoding failed. Please check the input string is a valid base64.") from e
+
+        return Audio.from_bytes(audio_bytes, strict=strict)
+
+    @staticmethod
+    def from_file(file: str, strict: bool = True) -> "Audio":
+        r"""Create an Audio instance from an audio file.
+
+        Args:
+            file: Path to the audio file.
+            strict: Whether to strictly enforce mono audio. Defaults to True.
+
+        Returns:
+            An instance of the Audio class.
+        """
+        assert_soundfile_installed()
+
+        if isinstance(file, str) and file.startswith("file://"):
+            file = file[7:]
+
+        if not Path(file).exists():
+            raise FileNotFoundError(f"{file=} does not exist")
+
+        with open(file, "rb") as f:
+            audio_bytes = f.read()
+
+        return Audio.from_bytes(audio_bytes, strict=strict)
+
+    @staticmethod
+    def from_bytes(audio_bytes: bytes, strict: bool = True) -> "Audio":
+        r"""Create an Audio instance from bytes.
+
+        Args:
+            audio_bytes: The audio data as bytes.
+            strict: Whether to strictly enforce mono audio. Defaults to True.
+
+        Returns:
+            An instance of the Audio class.
+        """
+        # Read the bytes into an audio file.
+        with io.BytesIO(audio_bytes) as audio_file:
+            with sf.SoundFile(audio_file) as f:
+                # Read the entire audio data
+                audio_array = f.read(dtype="float32")
+                sampling_rate = f.samplerate
+                audio_format = f.format
+
+        format_enum = AudioFormat(audio_format)
+        format = format_enum.value.lower()
+
+        if audio_array.ndim != 1:
+            if strict:
+                raise ValueError(f"{audio_array.ndim=}")
+            else:
+                audio_array = audio_array.mean(axis=1)
+
+        return Audio(audio_array=audio_array, sampling_rate=sampling_rate, format=format)
+
+    def to_base64(self, format: str, prefix: bool = False) -> str:
+        r"""Convert the audio data to a base64 encoded string.
+
+        Args:
+            format: The format to encode the audio in.
+            prefix: Whether to add a data prefix to the base64 encoded string.
+
+        Returns:
+            The base64 encoded audio data.
+        """
+        assert_soundfile_installed()
+
+        assert format in EXPECTED_FORMAT_VALUES, f"{format=} not in {EXPECTED_FORMAT_VALUES=}"
+
+        with io.BytesIO() as audio_file:
+            sf.write(audio_file, self.audio_array, self.sampling_rate, format=format.upper())
+            audio_file.seek(0)
+            base64_str = base64.b64encode(audio_file.read()).decode("utf-8")
+        if prefix:
+            base64_str = f"data:audio/{format.lower()};base64,{base64_str}"
+        return base64_str
+
+    @staticmethod
+    def from_raw_audio(audio: "RawAudio") -> "Audio":
+        r"""Create an Audio instance from a RawAudio object.
+
+        Deprecated: Use `from_base64()` or `from_bytes()` instead. Will be removed in 1.13.0.
+
+        Args:
+            audio: The RawAudio object containing audio data.
+
+        Returns:
+            An instance of the Audio class.
+        """
+        global _from_raw_audio_warned
+        if not _from_raw_audio_warned:
+            warnings.warn(
+                "Audio.from_raw_audio() is deprecated. "
+                "Use Audio.from_base64() or Audio.from_bytes() instead. "
+                "Will be removed in 1.13.0.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            _from_raw_audio_warned = True
+        if isinstance(audio.data, bytes):
+            return Audio.from_bytes(audio.data)
+        elif isinstance(audio.data, str):
+            return Audio.from_base64(audio.data)
+        else:
+            raise ValueError(f"Unsupported audio data type: {type(audio.data)}")
+
+    @staticmethod
+    def from_audio_chunk(chunk: "AudioChunk") -> "Audio":
+        r"""Create an Audio instance from an AudioChunk.
+
+        Args:
+            chunk: An AudioChunk with input_audio as str (base64) or bytes.
+
+        Returns:
+            An instance of the Audio class.
+        """
+        input_audio = chunk.input_audio
+        if isinstance(input_audio, bytes):
+            return Audio.from_bytes(input_audio)
+        elif isinstance(input_audio, str):
+            return Audio.from_base64(input_audio)
+        else:
+            raise ValueError(f"Unsupported input_audio type: {type(input_audio)}")
+
+    def resample(self, new_sampling_rate: int) -> None:
+        r"""Resample audio data to a new sampling rate.
+
+        Args:
+            new_sampling_rate: The new sampling rate to resample the audio to.
+        """
+        if self.sampling_rate == new_sampling_rate:
+            return
+
+        assert_soxr_installed()
+
+        self.audio_array = soxr.resample(self.audio_array, self.sampling_rate, new_sampling_rate, quality="HQ")
+        self.sampling_rate = new_sampling_rate
+
 
 # For offline streaming we're encoding the whole audio at once.
 # Because the model is delayed by <transcription_delay_ms> + word_length
@@ -449,7 +701,7 @@ class AudioEncoder:
         )
 
     def _encode_audio_chunk(self, content: AudioChunk) -> AudioEncoding:
-        audio = Audio.from_raw_audio(content.input_audio)
+        audio = Audio.from_audio_chunk(content)
         return self.encode_audio(audio)
 
     def _encode_audio_url_chunk(self, content: AudioURLChunk) -> AudioEncoding:

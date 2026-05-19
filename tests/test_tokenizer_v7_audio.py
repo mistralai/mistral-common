@@ -11,7 +11,6 @@ from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURL,
     AudioURLChunk,
-    RawAudio,
     TextChunk,
     UserContentChunk,
 )
@@ -144,12 +143,7 @@ def _get_audio_chunk(duration: float) -> AudioChunk:
         format=format,
     )
 
-    return AudioChunk(
-        input_audio=RawAudio(
-            data=audio.to_base64(format),
-            format=format,
-        ),
-    )
+    return AudioChunk(input_audio=audio.to_base64(format))
 
 
 def _get_specials(tekkenizer: InstructTokenizerV7) -> tuple[int, ...]:
@@ -207,7 +201,7 @@ def test_tokenize_user_assistant_message(tekkenizer: InstructTokenizerV7) -> Non
     ]
     assert tokenized.text == ("<s>[INST]a[BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]c b d</s>")
     assert len(tokenized.audios) == 1
-    base64_str = audio_chunk.input_audio.data
+    base64_str = audio_chunk.input_audio
     assert isinstance(base64_str, str)
     audio_array = Audio.from_base64(base64_str).audio_array
     assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)
@@ -254,7 +248,7 @@ def test_tokenize_user_message(tekkenizer: InstructTokenizerV7, audio_first: boo
         ]
         assert tokenized.text == ("<s>[INST]a[BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]")
     assert len(tokenized.audios) == 1
-    base64_str = audio_chunk.input_audio.data
+    base64_str = audio_chunk.input_audio
     assert isinstance(base64_str, str)
     audio_array = Audio.from_base64(base64_str).audio_array
     assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)
@@ -376,7 +370,7 @@ def test_tokenize_audio_url_chunk(
     audio_url_chunk_fixture: AudioURLChunk = request.getfixturevalue(audio_url_chunk)
     audio_url_chunk_path_fixture: AudioURLChunk = request.getfixturevalue("sample_audio_url_chunk_path")
 
-    with patch("mistral_common.audio.requests.get") as mock_get:
+    with patch("mistral_common.tokens.tokenizers.audio._requests_lib.get") as mock_get:
         mock_get.return_value.content = Path(audio_url_chunk_path_fixture.url).read_bytes()
         mock_get.return_value.status_code = 200
 
@@ -418,7 +412,7 @@ def test_tokenize_audio_url_chunk(
 def test_encode_invalid_audio_url_chunk(tekkenizer: InstructTokenizerV7) -> None:
     assert tekkenizer.audio_encoder is not None
     # Mock an invalid URL
-    with patch("mistral_common.audio.requests.get") as mock_get:
+    with patch("mistral_common.tokens.tokenizers.audio._requests_lib.get") as mock_get:
         mock_get.side_effect = requests.RequestException("connection failed")
         with pytest.raises(
             ValueError, match=r"Failed to download audio from URL: https://example.com/invalid_audio.wav"
