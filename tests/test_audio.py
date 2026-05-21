@@ -328,7 +328,7 @@ class TestRawAudioBackwardCompat:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             ra = RawAudio(data=b64, format="wav")
-            chunk = AudioChunk(input_audio=ra)
+            chunk = AudioChunk(input_audio=ra)  # type: ignore[arg-type]
         assert chunk.input_audio == b64
 
     def test_audiochunk_with_rawaudio_dict_backward_compat(self) -> None:
@@ -350,6 +350,6 @@ def test_transcription_request_with_rawaudio_backward_compat() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         ra = RawAudio(data=b64, format="wav")
-        req = TranscriptionRequest(audio=ra)
+        req = TranscriptionRequest(audio=ra, language=None, target_streaming_delay_ms=None)  # type: ignore[arg-type]
     assert isinstance(req.audio, str)
     assert req.audio == b64
