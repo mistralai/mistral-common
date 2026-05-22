@@ -76,6 +76,9 @@ docs = [
 ]
 
 
+[tool.uv]
+required-version = "==0.11.14"
+
 [tool.ruff]
 lint.select = ["E", "F", "W", "Q", "I"]
 lint.ignore = ["E203"]
