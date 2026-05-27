@@ -1,7 +1,6 @@
 import base64
 import io
 import re
-import warnings
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -11,6 +10,7 @@ from pydantic import ConfigDict, Field, ValidationError, field_validator, model_
 from typing_extensions import Annotated
 
 from mistral_common.base import MistralBase
+from mistral_common.deprecation import warn_once
 from mistral_common.image import SerializableImage
 from mistral_common.imports import is_soundfile_installed
 
@@ -18,9 +18,6 @@ if is_soundfile_installed:
     import soundfile as sf
 if TYPE_CHECKING:
     from mistral_common.tokens.tokenizers.audio import Audio
-
-
-_rawaudio_warned = False
 
 
 def _detect_audio_format(data: str | bytes) -> str:
@@ -197,14 +194,10 @@ class RawAudio(MistralBase):
     format: str
 
     def model_post_init(self, __context: Any) -> None:
-        global _rawaudio_warned
-        if not _rawaudio_warned:
-            warnings.warn(
-                "RawAudio is deprecated. Use str | bytes directly for audio data. Will be removed in 1.13.0.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            _rawaudio_warned = True
+        warn_once(
+            "RawAudio",
+            "RawAudio is deprecated. Use str | bytes directly for audio data. Will be removed in 1.13.0.",
+        )
 
     @classmethod
     def from_audio(cls, audio: "Audio") -> "RawAudio":

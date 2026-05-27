@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import requests as _requests_lib
 
+from mistral_common.deprecation import warn_once
 from mistral_common.imports import (
     assert_soundfile_installed,
     assert_soxr_installed,
@@ -39,8 +40,6 @@ if TYPE_CHECKING:
     from mistral_common.protocol.instruct.chunk import RawAudio
 
 logger = logging.getLogger(__name__)
-
-_from_raw_audio_warned = False
 
 EXPECTED_FORMAT_VALUES = [v.value.lower() for v in AudioFormat.__members__.values()]
 
@@ -214,16 +213,13 @@ class Audio:
         Returns:
             An instance of the Audio class.
         """
-        global _from_raw_audio_warned
-        if not _from_raw_audio_warned:
-            warnings.warn(
-                "Audio.from_raw_audio() is deprecated. "
-                "Use Audio.from_base64() or Audio.from_bytes() instead. "
-                "Will be removed in 1.13.0.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            _from_raw_audio_warned = True
+
+        warn_once(
+            "Audio.from_raw_audio",
+            "Audio.from_raw_audio() is deprecated. "
+            "Use Audio.from_base64() or Audio.from_bytes() instead. "
+            "Will be removed in 1.13.0.",
+        )
         if isinstance(audio.data, bytes):
             return Audio.from_bytes(audio.data)
         elif isinstance(audio.data, str):

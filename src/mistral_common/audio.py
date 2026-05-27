@@ -1,9 +1,9 @@
 import logging
-import warnings as _warnings
 from functools import cache
-from typing import Any
 
 import numpy as np
+
+from mistral_common.deprecation import deprecated_import
 
 logger = logging.getLogger(__name__)
 
@@ -128,48 +128,12 @@ def mel_filter_bank(
     return mel_filters
 
 
-_audio_import_warned = False
-
-
-def __getattr__(name: str) -> Any:
-    global _audio_import_warned
-    _msg = (
-        "Importing Audio, AudioFormat or EXPECTED_FORMAT_VALUES from mistral_common.audio is deprecated. "
-        "Use mistral_common.tokens.tokenizers.audio.Audio instead. "
-        "Will be removed in 1.13.0."
-    )
-    if name == "Audio":
-        if not _audio_import_warned:
-            _warnings.warn(
-                _msg,
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            _audio_import_warned = True
-        from mistral_common.tokens.tokenizers.audio import Audio
-
-        return Audio
-    elif name == "EXPECTED_FORMAT_VALUES":
-        if not _audio_import_warned:
-            _warnings.warn(
-                _msg,
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            _audio_import_warned = True
-        from mistral_common.tokens.tokenizers.audio import EXPECTED_FORMAT_VALUES
-
-        return EXPECTED_FORMAT_VALUES
-    elif name == "AudioFormat":
-        if not _audio_import_warned:
-            _warnings.warn(
-                _msg,
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            _audio_import_warned = True
-        from mistral_common.tokens.tokenizers.audio import AudioFormat
-
-        return AudioFormat
-
+def __getattr__(name: str) -> object:
+    if name in ("Audio", "AudioFormat", "EXPECTED_FORMAT_VALUES"):
+        return deprecated_import(
+            old_path="mistral_common.audio",
+            new_module="mistral_common.tokens.tokenizers.audio",
+            name=name,
+            version="1.13.0",
+        )
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
