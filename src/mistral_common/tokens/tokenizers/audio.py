@@ -219,6 +219,8 @@ class Audio:
             "Audio.from_raw_audio() is deprecated. "
             "Use Audio.from_base64() or Audio.from_bytes() instead. "
             "Will be removed in 1.13.0.",
+            DeprecationWarning,
+            stacklevel=2,
         )
         if isinstance(audio.data, bytes):
             return Audio.from_bytes(audio.data)

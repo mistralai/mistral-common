@@ -197,6 +197,8 @@ class RawAudio(MistralBase):
         warn_once(
             "RawAudio",
             "RawAudio is deprecated. Use str | bytes directly for audio data. Will be removed in 1.13.0.",
+            DeprecationWarning,
+            stacklevel=2,
         )
 
     @classmethod

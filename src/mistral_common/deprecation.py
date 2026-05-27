@@ -30,7 +30,7 @@ def deprecated_import(old_path: str, new_module: str, name: str, version: str) -
     return getattr(mod, name)
 
 
-def warn_once(key: str, message: str, category: type[Warning] = DeprecationWarning, stacklevel: int = 2) -> None:
+def warn_once(key: str, message: str, category: type[Warning], stacklevel: int) -> None:
     r"""Emit a warning only on the first call for a given key.
 
     Args:
