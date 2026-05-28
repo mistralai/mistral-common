@@ -26,8 +26,16 @@ class TestMistralToknizer:
             MistralTokenizer.from_model("open-mixtral-8x22b-2404").instruct_tokenizer, InstructTokenizerV3
         )
 
-        with pytest.raises(TokenizerException):
+        with pytest.raises(TokenizerException) as exc_info:
             MistralTokenizer.from_model("unknown-model")
+
+        # The error should point users at from_hf_hub / from_file so they can
+        # handle model snapshots that aren't in the static mapping, and echo
+        # the bad name so typos are obvious.
+        msg = str(exc_info.value)
+        assert "'unknown-model'" in msg
+        assert "from_hf_hub" in msg
+        assert "from_file" in msg
 
     @pytest.mark.parametrize(
         ["special_token_policy", "is_tekken"],

@@ -229,7 +229,13 @@ class MistralTokenizer(
             raise ValueError("strict has to be `True` since v1.10.0.")
 
         if model not in MODEL_NAME_TO_TOKENIZER_CLS:
-            raise TokenizerException(f"Unrecognized model: {model}")
+            known = ", ".join(sorted(MODEL_NAME_TO_TOKENIZER_CLS))
+            raise TokenizerException(
+                f"Unrecognized model: {model!r}. The static mapping in MistralTokenizer.from_model "
+                f"only covers older model snapshots; newer or custom models should be loaded with "
+                f"MistralTokenizer.from_hf_hub(repo_id=...) or MistralTokenizer.from_file(...). "
+                f"Known names: {known}."
+            )
 
         return MODEL_NAME_TO_TOKENIZER_CLS[model]()
 
