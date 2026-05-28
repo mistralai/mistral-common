@@ -65,8 +65,8 @@ class TranscriptionRequest(BaseCompletionRequest):
 
     @model_validator(mode="before")
     @classmethod
-    def _from_legacy_raw_audio(cls, values: dict[str, Any]) -> dict[str, Any]:
-        r"""Flatten legacy RawAudio payloads."""
+    def _flatten_audio_dict(cls, values: dict[str, Any]) -> dict[str, Any]:
+        r"""Extract audio data from a nested dict or legacy RawAudio payload."""
         if not isinstance(values, dict):
             return values
         raw = values.get("audio")
