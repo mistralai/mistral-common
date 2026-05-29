@@ -1,3 +1,4 @@
+import warnings
 from pathlib import Path
 from typing import Any, Callable, Generic
 
@@ -215,7 +216,10 @@ class MistralTokenizer(
 
     @classmethod
     def from_model(cls, model: str, strict: bool = True) -> "MistralTokenizer":
-        r"""Get the Mistral tokenizer for a given model.
+        r"""Deprecated in favor of `from_hf_hub` or `from_file`, will be removed in 1.12.0.
+
+        The static `MODEL_NAME_TO_TOKENIZER_CLS` mapping is no longer kept in sync
+        with new model releases. Load tokenizers by repo or file instead.
 
         Args:
             model: The model name.
@@ -224,17 +228,19 @@ class MistralTokenizer(
         Returns:
             The Mistral tokenizer for the given model.
         """
+        warnings.warn(
+            "`MistralTokenizer.from_model` is deprecated and will be removed in 1.12.0. "
+            "Use `MistralTokenizer.from_hf_hub(...)` or `MistralTokenizer.from_file(...)` instead.",
+            FutureWarning,
+        )
 
         if not strict:
             raise ValueError("strict has to be `True` since v1.10.0.")
 
         if model not in MODEL_NAME_TO_TOKENIZER_CLS:
-            known = ", ".join(sorted(MODEL_NAME_TO_TOKENIZER_CLS))
             raise TokenizerException(
-                f"Unrecognized model: {model!r}. The static mapping in MistralTokenizer.from_model "
-                f"only covers older model snapshots; newer or custom models should be loaded with "
-                f"MistralTokenizer.from_hf_hub(repo_id=...) or MistralTokenizer.from_file(...). "
-                f"Known names: {known}."
+                f"Unrecognized model: {model}. Use `MistralTokenizer.from_hf_hub(...)` "
+                f"or `MistralTokenizer.from_file(...)` to load newer or custom models."
             )
 
         return MODEL_NAME_TO_TOKENIZER_CLS[model]()
