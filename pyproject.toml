@@ -75,6 +75,11 @@ docs = [
     "pyyaml>=6.0.3"
 ]
 
+test-integrations = [
+    "transformers>=4.0.0",
+    "regex>=2025.10.22",
+]
+
 
 [tool.uv]
 required-version = "==0.11.14"
@@ -96,7 +101,7 @@ warn_unused_ignores = true
 exclude = ["docs", "tools", "build"]
 
 [[tool.mypy.overrides]]
-module = ["sentencepiece.*", "cv2", "cv2.*","soxr", "soundfile", "llguidance", "llguidance.*", "jinja2", "jinja2.*"]
+module = ["sentencepiece.*", "cv2", "cv2.*","soxr", "soundfile", "llguidance", "llguidance.*", "jinja2", "jinja2.*", "transformers", "transformers.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
