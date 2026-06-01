@@ -13,7 +13,7 @@ from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
     ChatMessageType,
-    OpenAIReasoningField,
+    ReasoningFieldFormat,
 )
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolChoice, ToolChoiceEnum, ToolType
 
@@ -117,7 +117,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
 
     def to_openai(
         self,
-        convert_thinking_format: OpenAIReasoningField | None = None,
+        convert_thinking_format: ReasoningFieldFormat | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         r"""Convert the request messages and tools into the OpenAI format.
@@ -179,7 +179,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         openai_messages = []
         for message in self.messages:
             if isinstance(message, AssistantMessage):
-                openai_messages.append(message.to_openai(convert_thinking_format=convert_thinking_format))
+                openai_messages.append(message.to_openai(reasoning_field_format=convert_thinking_format))
             else:
                 openai_messages.append(message.to_openai())
 
@@ -270,7 +270,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
 
     def to_openai(
         self,
-        convert_thinking_format: OpenAIReasoningField | None = None,
+        convert_thinking_format: ReasoningFieldFormat | None = None,
         **kwargs: Any,
     ) -> dict[str, list[dict[str, Any]]]:
         r"""Convert the request messages and tools into the OpenAI format.
@@ -329,7 +329,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
 
         for message in self.messages:
             if isinstance(message, AssistantMessage):
-                openai_messages.append(message.to_openai(convert_thinking_format=convert_thinking_format))
+                openai_messages.append(message.to_openai(reasoning_field_format=convert_thinking_format))
             else:
                 openai_messages.append(message.to_openai())
 

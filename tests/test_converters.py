@@ -47,7 +47,7 @@ from mistral_common.protocol.instruct.chunk import (
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
-    OpenAIReasoningField,
+    ReasoningFieldFormat,
     SystemMessage,
     ToolMessage,
     UserMessage,
@@ -600,7 +600,7 @@ def test_non_leading_think_chunks_to_openai_raises(content: list[TextChunk | Thi
         # thinking: chunks stay inline
         (
             AssistantMessage(content=[ThinkChunk(thinking="Deep thought", closed=True), TextChunk(text="Answer")]),
-            OpenAIReasoningField.thinking_chunks,
+            ReasoningFieldFormat.thinking_chunks,
             {
                 "role": "assistant",
                 "content": [
@@ -618,7 +618,7 @@ def test_non_leading_think_chunks_to_openai_raises(content: list[TextChunk | Thi
                     TextChunk(text="Reply"),
                 ]
             ),
-            OpenAIReasoningField.thinking_chunks,
+            ReasoningFieldFormat.thinking_chunks,
             {
                 "role": "assistant",
                 "content": [
@@ -631,13 +631,13 @@ def test_non_leading_think_chunks_to_openai_raises(content: list[TextChunk | Thi
         # reasoning: single leading ThinkChunk extracted as flat string
         (
             AssistantMessage(content=[ThinkChunk(thinking="Let me think", closed=True), TextChunk(text="Done")]),
-            OpenAIReasoningField.reasoning,
+            ReasoningFieldFormat.reasoning,
             {"role": "assistant", "reasoning": "Let me think", "content": "Done"},
         ),
         # reasoning_content: single leading ThinkChunk extracted as flat string
         (
             AssistantMessage(content=[ThinkChunk(thinking="Pondering", closed=True), TextChunk(text="Result")]),
-            OpenAIReasoningField.reasoning_content,
+            ReasoningFieldFormat.reasoning_content,
             {"role": "assistant", "reasoning_content": "Pondering", "content": "Result"},
         ),
         # reasoning: multiple leading ThinkChunks concatenated with newline
@@ -649,13 +649,13 @@ def test_non_leading_think_chunks_to_openai_raises(content: list[TextChunk | Thi
                     TextChunk(text="Final"),
                 ]
             ),
-            OpenAIReasoningField.reasoning,
+            ReasoningFieldFormat.reasoning,
             {"role": "assistant", "reasoning": "Part 1\nPart 2", "content": "Final"},
         ),
         # thinking: ThinkChunk only, no remaining content
         (
             AssistantMessage(content=[ThinkChunk(thinking="Just thinking", closed=True)]),
-            OpenAIReasoningField.thinking_chunks,
+            ReasoningFieldFormat.thinking_chunks,
             {
                 "role": "assistant",
                 "content": [{"type": "thinking", "thinking": "Just thinking", "closed": True}],
@@ -664,7 +664,7 @@ def test_non_leading_think_chunks_to_openai_raises(content: list[TextChunk | Thi
         # reasoning: ThinkChunk only, no remaining content
         (
             AssistantMessage(content=[ThinkChunk(thinking="Only reasoning", closed=True)]),
-            OpenAIReasoningField.reasoning,
+            ReasoningFieldFormat.reasoning,
             {"role": "assistant", "reasoning": "Only reasoning"},
         ),
         # reasoning: leading ThinkChunk with remaining list content (multiple chunks)
@@ -676,7 +676,7 @@ def test_non_leading_think_chunks_to_openai_raises(content: list[TextChunk | Thi
                     TextChunk(text="B"),
                 ]
             ),
-            OpenAIReasoningField.reasoning,
+            ReasoningFieldFormat.reasoning,
             {
                 "role": "assistant",
                 "reasoning": "Think",
@@ -686,23 +686,23 @@ def test_non_leading_think_chunks_to_openai_raises(content: list[TextChunk | Thi
         # String content unchanged regardless of convert_thinking_format
         (
             AssistantMessage(content="Simple text"),
-            OpenAIReasoningField.reasoning,
+            ReasoningFieldFormat.reasoning,
             {"role": "assistant", "content": "Simple text"},
         ),
         # None content unchanged
         (
             AssistantMessage(content=None),
-            OpenAIReasoningField.thinking_chunks,
+            ReasoningFieldFormat.thinking_chunks,
             {"role": "assistant"},
         ),
     ],
 )
 def test_assistant_message_to_openai_convert_thinking_format(
     message: AssistantMessage,
-    convert_thinking_format: OpenAIReasoningField,
+    convert_thinking_format: ReasoningFieldFormat,
     expected: dict[str, Any],
 ) -> None:
-    assert message.to_openai(convert_thinking_format=convert_thinking_format) == expected
+    assert message.to_openai(reasoning_field_format=convert_thinking_format) == expected
 
 
 def test_assistant_message_to_openai_none_warns_with_think_chunks() -> None:
@@ -751,7 +751,7 @@ def test_request_to_openai_forwards_convert_thinking_format(
     else:
         request = InstructRequest(messages=messages)
 
-    openai_request = request.to_openai(convert_thinking_format=OpenAIReasoningField.reasoning)
+    openai_request = request.to_openai(convert_thinking_format=ReasoningFieldFormat.reasoning)
     assistant_msg = [m for m in openai_request["messages"] if m["role"] == "assistant"][0]
     assert assistant_msg == {"role": "assistant", "reasoning": "Let me think", "content": "Done"}
 

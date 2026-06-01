@@ -1,6 +1,6 @@
 import warnings
 from enum import Enum
-from typing import Any, Literal, TypeVar
+from typing import Any, Literal, TypeGuard, TypeVar
 
 from pydantic import Field
 from typing_extensions import Annotated, TypeAlias
@@ -23,7 +23,15 @@ warnings.filterwarnings(
 )
 
 
-class OpenAIReasoningField(str, Enum):
+def _are_think_chunks(think_chunks: list[ThinkChunk | TextChunk]) -> TypeGuard[list[ThinkChunk]]:
+    return all(isinstance(c, ThinkChunk) for c in think_chunks)
+
+
+def _are_text_chunks(think_chunks: list[ThinkChunk | TextChunk]) -> TypeGuard[list[TextChunk]]:
+    return all(isinstance(c, TextChunk) for c in think_chunks)
+
+
+class ReasoningFieldFormat(str, Enum):
     r"""How to serialize leading `ThinkChunk` in `AssistantMessage.to_openai()`.
 
     Attributes:
@@ -156,66 +164,61 @@ class AssistantMessage(BaseMessage):
 
     def to_openai(
         self,
-        convert_thinking_format: OpenAIReasoningField | None = None,
+        reasoning_field_format: ReasoningFieldFormat | None = None,
     ) -> dict[str, Any]:
         r"""Converts the message to the OpenAI format.
 
         Args:
-            convert_thinking_format: Conversion strategy for think chunks. When ``None``, defaults to
-                `OpenAIReasoningField.thinking_chunks` (chunks kept inline) but emits a `FutureWarning` if
+            reasoning_field_format: Format for converting thinking chunks. When `None`, defaults to
+                `ReasoningFieldFormat.thinking_chunks` (chunks kept inline) but emits a `FutureWarning` if
                 the content contains `ThinkChunk`.
         """
         out_dict: dict[str, Any] = {
             "role": self.role,
         }
-        if self.content is None:
-            pass
-        elif isinstance(self.content, str):
-            out_dict["content"] = self.content
-        else:
-            split_idx = 0
-            seen_non_think = False
-            for chunk in self.content:
-                if isinstance(chunk, ThinkChunk):
-                    if seen_non_think:
-                        raise InvalidAssistantMessageException(
-                            "ThinkChunks must be leading: all ThinkChunks must appear before any other content chunk."
-                        )
-                    split_idx += 1
-                else:
-                    seen_non_think = True
-
-            if convert_thinking_format is None and split_idx > 0:
-                warnings.warn(
-                    "`convert_thinking_format` defaults to 'thinking_chunks' but will change to 'reasoning' "
-                    "in 1.13.0. Pass `convert_thinking_format` explicitly to silence this warning.",
-                    FutureWarning,
-                    stacklevel=2,
-                )
-
-            effective_format = convert_thinking_format or OpenAIReasoningField.thinking_chunks
-
-            if effective_format == OpenAIReasoningField.thinking_chunks:
-                out_dict["content"] = [chunk.to_openai() for chunk in self.content]
-            else:
-                leading_thinks = self.content[:split_idx]
-                remaining = self.content[split_idx:]
-
-                if leading_thinks:
-                    match effective_format:
-                        case OpenAIReasoningField.reasoning | OpenAIReasoningField.reasoning_content:
-                            combined = "\n".join(tc.thinking for tc in leading_thinks if isinstance(tc, ThinkChunk))
-                            out_dict[effective_format.value] = combined
-                        case _:
-                            raise ValueError(f"{effective_format=} is not supported.")
-
-                if len(remaining) == 1 and isinstance(remaining[0], TextChunk):
-                    out_dict["content"] = remaining[0].text
-                elif remaining:
-                    out_dict["content"] = [chunk.to_openai() for chunk in remaining]
-
         if self.tool_calls is not None:
             out_dict["tool_calls"] = [tool_call.to_openai() for tool_call in self.tool_calls]
+
+        if self.content is None:
+            return out_dict
+
+        if isinstance(self.content, str):
+            out_dict["content"] = self.content
+            return out_dict
+
+        last_think_idx: int = -1
+        for i, chunk in enumerate(self.content):
+            if isinstance(chunk, ThinkChunk):
+                if (i - last_think_idx) > 1:
+                    raise InvalidAssistantMessageException(
+                        "ThinkChunks must be leading: all ThinkChunks must appear before any other content chunk."
+                    )
+                last_think_idx = i
+
+        if reasoning_field_format is None and last_think_idx >= 0:
+            warnings.warn(
+                "`convert_thinking_format` defaults to 'thinking_chunks' but will change to 'reasoning' "
+                "in 1.13.0. Pass `reasoning_field_format` explicitly to silence this warning.",
+                FutureWarning,
+                stacklevel=2,
+            )
+
+        match reasoning_field_format:
+            case None | ReasoningFieldFormat.thinking_chunks:
+                out_dict["content"] = [chunk.to_openai() for chunk in self.content]
+            case ReasoningFieldFormat.reasoning | ReasoningFieldFormat.reasoning_content:
+                think_chunks, content_chunks = self.content[: last_think_idx + 1], self.content[last_think_idx + 1 :]
+                if not _are_think_chunks(think_chunks) or not _are_text_chunks(content_chunks):
+                    raise RuntimeError("Impossible, only think or content chunks should have been present.")
+                if len(think_chunks) > 0:
+                    out_dict[reasoning_field_format.value] = "\n".join(tc.thinking for tc in think_chunks)
+
+                if len(content_chunks) == 1:
+                    out_dict["content"] = content_chunks[0].text
+                elif content_chunks:
+                    out_dict["content"] = [chunk.to_openai() for chunk in content_chunks]
+            case _:
+                raise ValueError(f"{reasoning_field_format=} is not supported.")
 
         return out_dict
 
