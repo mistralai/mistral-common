@@ -14,50 +14,45 @@ from unittest.mock import patch
 import pytest
 
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.helpers import _IMAGE
+from tests.integrations.chat_templates.helpers import _IMAGE, TestConfig
 
 # All configurations for output comparison tests (including SPM).
-# Tuples: (version, spm, image, audio, think, plain_think)
-ALL_CONFIGS: list[tuple[TokenizerVersion, bool, bool, bool, bool, bool]] = [
+ALL_CONFIGS: list[TestConfig] = [
     # Non-SPM
-    (TokenizerVersion.v1, False, False, False, False, False),
-    (TokenizerVersion.v2, False, False, False, False, False),
-    (TokenizerVersion.v3, False, False, False, False, False),
-    (TokenizerVersion.v3, False, True, False, False, False),
-    (TokenizerVersion.v7, False, False, False, False, False),
-    (TokenizerVersion.v7, False, True, False, False, False),
-    (TokenizerVersion.v7, False, False, True, False, False),
-    (TokenizerVersion.v11, False, False, False, False, False),
-    (TokenizerVersion.v11, False, True, False, False, False),
-    (TokenizerVersion.v11, False, False, True, False, False),
-    (TokenizerVersion.v13, False, False, False, False, False),
-    (TokenizerVersion.v13, False, True, False, False, False),
-    (TokenizerVersion.v13, False, False, True, False, False),
-    (TokenizerVersion.v13, False, False, False, True, False),
-    (TokenizerVersion.v13, False, True, False, True, False),
-    (TokenizerVersion.v15, False, False, False, False, False),
-    (TokenizerVersion.v15, False, True, False, False, False),
-    (TokenizerVersion.v15, False, False, True, False, False),
-    (TokenizerVersion.v15, False, False, False, True, False),
-    (TokenizerVersion.v15, False, True, False, True, False),
+    TestConfig(version=TokenizerVersion.v1),
+    TestConfig(version=TokenizerVersion.v2),
+    TestConfig(version=TokenizerVersion.v3),
+    TestConfig(version=TokenizerVersion.v3, image=True),
+    TestConfig(version=TokenizerVersion.v7),
+    TestConfig(version=TokenizerVersion.v7, image=True),
+    TestConfig(version=TokenizerVersion.v7, audio=True),
+    TestConfig(version=TokenizerVersion.v11),
+    TestConfig(version=TokenizerVersion.v11, image=True),
+    TestConfig(version=TokenizerVersion.v11, audio=True),
+    TestConfig(version=TokenizerVersion.v13),
+    TestConfig(version=TokenizerVersion.v13, image=True),
+    TestConfig(version=TokenizerVersion.v13, audio=True),
+    TestConfig(version=TokenizerVersion.v13, think=True),
+    TestConfig(version=TokenizerVersion.v13, image=True, think=True),
+    TestConfig(version=TokenizerVersion.v15),
+    TestConfig(version=TokenizerVersion.v15, image=True),
+    TestConfig(version=TokenizerVersion.v15, audio=True),
+    TestConfig(version=TokenizerVersion.v15, think=True),
+    TestConfig(version=TokenizerVersion.v15, image=True, think=True),
     # SPM
-    (TokenizerVersion.v1, True, False, False, False, False),
-    (TokenizerVersion.v2, True, False, False, False, False),
-    (TokenizerVersion.v3, True, False, False, False, False),
-    (TokenizerVersion.v3, True, True, False, False, False),
-    (TokenizerVersion.v7, True, False, False, False, False),
-    (TokenizerVersion.v7, True, True, False, False, False),
+    TestConfig(version=TokenizerVersion.v1, spm=True),
+    TestConfig(version=TokenizerVersion.v2, spm=True),
+    TestConfig(version=TokenizerVersion.v3, spm=True),
+    TestConfig(version=TokenizerVersion.v3, spm=True, image=True),
+    TestConfig(version=TokenizerVersion.v7, spm=True),
+    TestConfig(version=TokenizerVersion.v7, spm=True, image=True),
     # Plain thinking (v11 only)
-    (TokenizerVersion.v11, False, False, False, False, True),
-    (TokenizerVersion.v11, False, True, False, False, True),
+    TestConfig(version=TokenizerVersion.v11, plain_think=True),
+    TestConfig(version=TokenizerVersion.v11, image=True, plain_think=True),
 ]
 
-# Parametrization configs for transformers tests, formatted as (spm, version, image, audio, think)
-ALL_TRANSFORMERS_CONFIGS: list[tuple[bool, TokenizerVersion, bool, bool, bool]] = [
-    (spm, version, image, audio, think)
-    for version, spm, image, audio, think, plain_think in ALL_CONFIGS
-    if not plain_think  # plain_think has separate tests
-]
+# Parametrization configs for transformers tests (excludes plain_think).
+ALL_TRANSFORMERS_CONFIGS: list[TestConfig] = [c for c in ALL_CONFIGS if not c.plain_think]
 
 
 INVALID_SP_THINK: dict[str, Any] = {
@@ -157,19 +152,18 @@ INVALID_USER_RANDOM: dict[str, Any] = {
 }
 
 
-def _config_id(c: tuple[TokenizerVersion, bool, bool, bool, bool, bool]) -> str:
-    r"""Generate a human-readable test ID for a config tuple."""
-    v, spm, img, aud, think, plain = c
-    parts = [v.value]
-    if spm:
+def _config_id(c: TestConfig) -> str:
+    r"""Generate a human-readable test ID for a config."""
+    parts = [c.version.value]
+    if c.spm:
         parts.append("spm")
-    if img:
+    if c.image:
         parts.append("img")
-    if aud:
+    if c.audio:
         parts.append("aud")
-    if think:
+    if c.think:
         parts.append("think")
-    if plain:
+    if c.plain_think:
         parts.append("plain_think")
     return "_".join(parts)
 

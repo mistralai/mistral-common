@@ -6,6 +6,7 @@ fixtures or test data -- those live in `conftest.py` and `fixtures_data.py`.
 """
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -57,16 +58,29 @@ _GOLDEN_DIR = Path(__file__).parent.parent.parent / "data" / "chat_templates"
 SPM_WHITESPACE = "▁"
 
 
-def _make_config(c: tuple[TokenizerVersion, bool, bool, bool, bool, bool]) -> TemplateConfig:
-    r"""Create a `TemplateConfig` from a config tuple."""
-    version, spm, image, audio, think, plain_think = c
+@dataclass(frozen=True)
+class TestConfig:
+    r"""Test configuration for chat template parametrization."""
+
+    __test__ = False
+
+    version: TokenizerVersion
+    spm: bool = False
+    image: bool = False
+    audio: bool = False
+    think: bool = False
+    plain_think: bool = False
+
+
+def _make_config(c: TestConfig) -> TemplateConfig:
+    r"""Create a `TemplateConfig` from a test config."""
     return TemplateConfig(
-        version=version,
-        spm=spm,
-        image_support=image,
-        audio_support=audio,
-        thinking_support=think,
-        plain_thinking_support=plain_think,
+        version=c.version,
+        spm=c.spm,
+        image_support=c.image,
+        audio_support=c.audio,
+        thinking_support=c.think,
+        plain_thinking_support=c.plain_think,
         use_special_token_variables=True,
     )
 

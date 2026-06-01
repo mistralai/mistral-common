@@ -5,7 +5,7 @@ import pytest
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.integrations.chat_templates.template_generator import TemplateConfig, build_chat_template
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.helpers import _load_golden_template, _make_config, render_template
+from tests.integrations.chat_templates.helpers import TestConfig, _load_golden_template, _make_config, render_template
 
 
 class TestGenerateChatTemplateAPI:
@@ -40,7 +40,7 @@ class TestGenerateChatTemplateAPI:
         assert "You are a helpful assistant." in template_with_prompt
 
     def test_basic_static_dynamic_parity(self, v13_template: str) -> None:
-        config = _make_config((TokenizerVersion.v13, False, False, False, False, False))
+        config = _make_config(TestConfig(version=TokenizerVersion.v13))
         static_template = _load_golden_template(config)
 
         messages = [

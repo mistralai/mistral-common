@@ -5,7 +5,7 @@ import pytest
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.integrations.chat_templates.template_generator import TemplateConfig, build_chat_template
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.helpers import _load_golden_template, _make_config, render_template
+from tests.integrations.chat_templates.helpers import TestConfig, _load_golden_template, _make_config, render_template
 
 THINK_CONFIGS = [
     (TokenizerVersion.v13, False, False),
@@ -185,7 +185,7 @@ class TestReasoningContentConversion:
 
     @pytest.mark.parametrize(("version", "image", "audio"), THINK_CONFIGS)
     def test_reasoning_static_dynamic_parity(self, version: TokenizerVersion, image: bool, audio: bool) -> None:
-        config = _make_config((version, False, image, audio, True, False))
+        config = _make_config(TestConfig(version=version, image=image, audio=audio, think=True))
         static_template = _load_golden_template(config)
         dynamic_template = generate_chat_template(
             spm=False,
@@ -413,7 +413,7 @@ class TestPlainThink:
 
     @pytest.mark.parametrize("image", [False, True])
     def test_plain_think_static_dynamic_parity(self, image: bool) -> None:
-        config = _make_config((TokenizerVersion.v11, False, image, False, False, True))
+        config = _make_config(TestConfig(version=TokenizerVersion.v11, image=image, plain_think=True))
         static_template = _load_golden_template(config)
         dynamic_template = generate_chat_template(
             spm=False,

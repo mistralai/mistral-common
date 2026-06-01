@@ -5,39 +5,35 @@ import pytest
 from mistral_common.integrations.chat_templates.template_generator import build_chat_template
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from tests.integrations.chat_templates.conftest import ALL_CONFIGS, _config_id
-from tests.integrations.chat_templates.helpers import _load_golden_template, _make_config, render_template
+from tests.integrations.chat_templates.helpers import (
+    TestConfig,
+    _load_golden_template,
+    _make_config,
+    render_template,
+)
 
 
 @pytest.mark.parametrize(
-    ("version", "spm", "image", "audio", "think", "plain_think"),
-    [c for c in ALL_CONFIGS if not c[5]],  # Exclude plain_think (templates intentionally differ from golden files)
-    ids=[_config_id(c) for c in ALL_CONFIGS if not c[5]],
+    "config",
+    [c for c in ALL_CONFIGS if not c.plain_think],
+    ids=[_config_id(c) for c in ALL_CONFIGS if not c.plain_think],
 )
-def test_dynamic_matches_static(
-    version: TokenizerVersion, spm: bool, image: bool, audio: bool, think: bool, plain_think: bool
-) -> None:
-    config = _make_config((version, spm, image, audio, think, plain_think))
-    dynamic = build_chat_template(config)
-    static = _load_golden_template(config)
+def test_dynamic_matches_static(config: TestConfig) -> None:
+    template_config = _make_config(config)
+    dynamic = build_chat_template(template_config)
+    static = _load_golden_template(template_config)
     assert dynamic == static
 
 
 @pytest.mark.parametrize(
-    ("version", "spm", "image", "audio", "think", "plain_think"),
-    [c for c in ALL_CONFIGS if not c[5]],
-    ids=[_config_id(c) for c in ALL_CONFIGS if not c[5]],
+    "config",
+    [c for c in ALL_CONFIGS if not c.plain_think],
+    ids=[_config_id(c) for c in ALL_CONFIGS if not c.plain_think],
 )
-def test_dynamic_template_produces_same_output(
-    version: TokenizerVersion,
-    spm: bool,
-    image: bool,
-    audio: bool,
-    think: bool,
-    plain_think: bool,
-) -> None:
-    config = _make_config((version, spm, image, audio, think, plain_think))
-    static_template = _load_golden_template(config)
-    dynamic_template = build_chat_template(config)
+def test_dynamic_template_produces_same_output(config: TestConfig) -> None:
+    template_config = _make_config(config)
+    static_template = _load_golden_template(template_config)
+    dynamic_template = build_chat_template(template_config)
 
     # Test with a simple conversation
     messages: list[Any] = [
@@ -45,37 +41,28 @@ def test_dynamic_template_produces_same_output(
     ]
 
     # Only add assistant message for training validation
-    if version != TokenizerVersion.v1:
+    if config.version != TokenizerVersion.v1:
         messages.append({"role": "assistant", "content": "Hi there!"})
 
     static_output = render_template(static_template, messages)
     dynamic_output = render_template(dynamic_template, messages)
 
     assert static_output == dynamic_output, (
-        f"Output mismatch for version={version}, spm={spm}, image={image}, audio={audio}, think={think}\n\n"
-        f"Static output: {static_output}\n"
-        f"Dynamic output: {dynamic_output}"
+        f"Output mismatch for {config}\n\nStatic output: {static_output}\nDynamic output: {dynamic_output}"
     )
 
 
 # Comprehensive functional tests — covers all configs except plain_think
 # (plain think template parity is tested separately in test_unit.py::test_plain_think_static_dynamic_parity)
 @pytest.mark.parametrize(
-    ("version", "spm", "image", "audio", "think", "plain_think"),
-    [c for c in ALL_CONFIGS if not c[5]],  # Exclude plain_think (templates intentionally differ from golden files)
-    ids=[_config_id(c) for c in ALL_CONFIGS if not c[5]],
+    "config",
+    [c for c in ALL_CONFIGS if not c.plain_think],
+    ids=[_config_id(c) for c in ALL_CONFIGS if not c.plain_think],
 )
-def test_dynamic_template_comprehensive(
-    version: TokenizerVersion,
-    spm: bool,
-    image: bool,
-    audio: bool,
-    think: bool,
-    plain_think: bool,
-) -> None:
-    config = _make_config((version, spm, image, audio, think, plain_think))
-    static_template = _load_golden_template(config)
-    dynamic_template = build_chat_template(config)
+def test_dynamic_template_comprehensive(config: TestConfig) -> None:
+    template_config = _make_config(config)
+    static_template = _load_golden_template(template_config)
+    dynamic_template = build_chat_template(template_config)
 
     # Test cases
     test_cases = [
@@ -117,7 +104,7 @@ def test_dynamic_template_comprehensive(
     ]
 
     # Tool call scenarios (v2+ only)
-    if version > TokenizerVersion.v1:
+    if config.version > TokenizerVersion.v1:
         test_cases.extend(
             [
                 {
@@ -170,7 +157,7 @@ def test_dynamic_template_comprehensive(
         )
 
     # Add image test case if image support
-    if image:
+    if config.image:
         test_cases.append(
             {
                 "name": "with_image",
@@ -188,7 +175,7 @@ def test_dynamic_template_comprehensive(
         )
 
     # Add audio test case if audio support
-    if audio:
+    if config.audio:
         test_cases.append(
             {
                 "name": "with_audio",
@@ -206,7 +193,7 @@ def test_dynamic_template_comprehensive(
         )
 
     # Add thinking test case if thinking support
-    if think:
+    if config.think:
         test_cases.append(
             {
                 "name": "with_thinking",
@@ -318,7 +305,7 @@ def test_dynamic_template_comprehensive(
         ]
     )
 
-    if image:
+    if config.image:
         test_cases.extend(
             [
                 {
@@ -360,7 +347,7 @@ def test_dynamic_template_comprehensive(
             ]
         )
 
-    if audio:
+    if config.audio:
         test_cases.append(
             {
                 "name": "consecutive_users_multi_audio",
@@ -386,7 +373,7 @@ def test_dynamic_template_comprehensive(
             }
         )
 
-    if think:
+    if config.think:
         test_cases.extend(
             [
                 {
@@ -454,22 +441,22 @@ def test_dynamic_template_comprehensive(
         messages = test_case["messages"]
         tools = test_case.get("tools")
 
-        if test_name in skip_names_image and not image:
+        if test_name in skip_names_image and not config.image:
             continue
-        if test_name in skip_names_audio and not audio:
+        if test_name in skip_names_audio and not config.audio:
             continue
-        if test_name in skip_names_think and not think:
+        if test_name in skip_names_think and not config.think:
             continue
-        if test_name in skip_names_think_system and version >= TokenizerVersion.v15:
+        if test_name in skip_names_think_system and config.version >= TokenizerVersion.v15:
             continue
-        if test_name in skip_names_tools and version <= TokenizerVersion.v1:
+        if test_name in skip_names_tools and config.version <= TokenizerVersion.v1:
             continue
 
         static_output = render_template(static_template, messages, tools=tools)  # type: ignore
         dynamic_output = render_template(dynamic_template, messages, tools=tools)  # type: ignore
 
         assert static_output == dynamic_output, (
-            f"Output mismatch for version={version}, case={test_name}\n\n"
+            f"Output mismatch for {config}, case={test_name}\n\n"
             f"Static output: {static_output}\n"
             f"Dynamic output: {dynamic_output}"
         )
