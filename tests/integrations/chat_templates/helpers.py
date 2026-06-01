@@ -94,7 +94,13 @@ def _load_golden_template(config: TemplateConfig) -> str:
 def render_template(
     template: str, messages: list[Any], tools: list[Any] | None = None, reasoning_effort: str | None = None
 ) -> str:
-    r"""Render a jinja2 template with the given messages."""
+    r"""Render a Jinja2 template with the given messages using a pure Jinja2 sandbox.
+
+    This function tests template rendering independently of HuggingFace transformers.
+    It uses ImmutableSandboxedEnvironment directly, while `encode_transformers`
+    tests integration with the HuggingFace `render_jinja_template` function.
+    Both should produce identical output for the same input.
+    """
 
     def raise_exception(msg: str) -> None:
         raise ValueError(msg)
@@ -118,7 +124,12 @@ def render_template(
 
 
 def encode_mistral_common(mistral_tokenizer: MistralTokenizer, chat_request: ChatCompletionRequest, spm: bool) -> str:
-    r"""Encode a chat request using mistral-common tokenizer."""
+    r"""Encode a chat request using mistral-common tokenizer.
+
+    Returns the text representation (not token IDs) because the transformers side
+    (`render_jinja_template`) also returns text. Token ID comparison would require
+    a full HF tokenizer with matching vocabulary, which is planned for a future PR.
+    """
     mistral_encoded = str(mistral_tokenizer.encode_chat_completion(chat_request).text)
     # Remove image tokens except one per image
     mistral_encoded = mistral_encoded.replace("[IMG]", "").replace("[IMG_BREAK]", "").replace("[IMG_END]", "[IMG]")
@@ -250,13 +261,23 @@ def _get_instruct_tokenizer_class(tokenizer_version: TokenizerVersion) -> type[I
 def _get_mistral_tekkenizer(
     tokenizer_version: TokenizerVersion, validation_mode: ValidationMode, image: bool, audio: bool, think: bool
 ) -> MistralTokenizer:
-    r"""Build a `MistralTokenizer` with Tekken backend."""
+    r"""Build a `MistralTokenizer` with Tekken backend.
+
+    We construct the tokenizer manually instead of using `MistralTokenizer.from_file`
+    because `from_file` reads version, special tokens, and image/audio config from the
+    JSON file with no override mechanism. Tests need to pair a single base tokenizer file
+    (`tekken_240911.json`, which is v3) with arbitrary versions (v1-v15) and feature
+    combinations (image, audio, thinking) that aren't present in any shipped JSON file.
+    """
     special_tokens = get_special_tokens(tokenizer_version=tokenizer_version, add_audio=audio, add_think=think)
     with open(MistralTokenizer._data_path() / "tekken_240911.json", "r", encoding="utf-8") as f:
         json_tekkenizer = json.load(f)
     vocab = json_tekkenizer["vocab"]
     vocab_size = json_tekkenizer["config"]["default_vocab_size"]
     pattern = json_tekkenizer["config"]["pattern"]
+    # ModelSettingsBuilder is constructed manually because from_file reads it from the
+    # JSON file's model_settings_builder key, which is absent in shipped tokenizer files.
+    # This mirrors what from_file would produce for a v15 tokenizer config.
     model_settings_builder = (
         ModelSettingsBuilder(
             reasoning_effort=EnumBuilder(

@@ -46,6 +46,8 @@ class TestTransformersMistralCommonParity:
         if version <= TokenizerVersion.v2:
             for conv in conversations:
                 for message in conv.messages:
+                    # v1/v2 expect string content, not structured chunks.
+                    # Mutate here rather than duplicating fixtures per version.
                     if isinstance(message, (UserMessage, AssistantMessage)) and isinstance(message.content, list):
                         assert len(message.content) == 1 and isinstance(message.content[0], TextChunk), (
                             "Only text content is supported for v1 and v2"
