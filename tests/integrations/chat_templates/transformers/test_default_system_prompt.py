@@ -2,7 +2,7 @@ import pytest
 
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.helpers import encode_transformers
+from tests.integrations.chat_templates.helpers import encode_transformers_from_openai
 
 CONV_NO_SYSTEM: dict[str, list[dict[str, str]]] = {
     "messages": [
@@ -51,7 +51,7 @@ class TestDefaultSystemPromptInjection:
             use_special_token_variables=True,
         )
 
-        output = encode_transformers(chat_template, CONV_NO_SYSTEM)
+        output = encode_transformers_from_openai(chat_template, CONV_NO_SYSTEM)
 
         assert self.DEFAULT_SYSTEM_PROMPT in output
         assert expected_fragment in output
@@ -72,7 +72,7 @@ class TestDefaultSystemPromptInjection:
             use_special_token_variables=True,
         )
 
-        output = encode_transformers(chat_template, self.CONV_WITH_SYSTEM)
+        output = encode_transformers_from_openai(chat_template, self.CONV_WITH_SYSTEM)
 
         assert self.DEFAULT_SYSTEM_PROMPT not in output
         assert "You are a custom assistant." in output
@@ -89,7 +89,7 @@ class TestDefaultSystemPromptInjection:
             use_special_token_variables=True,
         )
 
-        output = encode_transformers(chat_template, CONV_NO_SYSTEM)
+        output = encode_transformers_from_openai(chat_template, CONV_NO_SYSTEM)
 
         assert "[INST]Hello[/INST]" in output
 
@@ -105,7 +105,7 @@ class TestDefaultSystemPromptInjection:
             use_special_token_variables=True,
         )
 
-        output = encode_transformers(chat_template, CONV_NO_SYSTEM)
+        output = encode_transformers_from_openai(chat_template, CONV_NO_SYSTEM)
 
         assert "[SYSTEM_PROMPT]" not in output
         assert "[/SYSTEM_PROMPT]" not in output
@@ -122,12 +122,12 @@ class TestDefaultSystemPromptInjection:
             use_special_token_variables=True,
         )
 
-        result = encode_transformers(template, CONV_NO_SYSTEM)
+        result = encode_transformers_from_openai(template, CONV_NO_SYSTEM)
         assert self.DEFAULT_SYSTEM_PROMPT in result
         assert "[SYSTEM_PROMPT]" in result
         assert "[MODEL_SETTINGS]" in result
 
-        result_with_system = encode_transformers(template, self.CONV_WITH_SYSTEM)
+        result_with_system = encode_transformers_from_openai(template, self.CONV_WITH_SYSTEM)
         assert self.DEFAULT_SYSTEM_PROMPT not in result_with_system
         assert "You are a custom assistant." in result_with_system
 
@@ -155,6 +155,6 @@ class TestSystemPromptEscaping:
             use_special_token_variables=True,
         )
 
-        result = encode_transformers(template, CONV_NO_SYSTEM)
+        result = encode_transformers_from_openai(template, CONV_NO_SYSTEM)
 
         assert prompt in result

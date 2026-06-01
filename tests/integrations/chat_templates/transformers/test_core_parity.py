@@ -10,7 +10,12 @@ from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from tests.integrations.chat_templates.conftest import ALL_TRANSFORMERS_CONFIGS
 from tests.integrations.chat_templates.fixtures_data import _get_conversations
-from tests.integrations.chat_templates.helpers import _get_mistral_tokenizer, encode_mistral_common, encode_transformers
+from tests.integrations.chat_templates.helpers import (
+    _get_mistral_tokenizer,
+    encode_mistral_common,
+    encode_transformers,
+    encode_transformers_from_openai,
+)
 
 
 class TestTransformersMistralCommonParity:
@@ -98,7 +103,7 @@ class TestTransformersMistralCommonParity:
             ]
         }
         # This should not raise
-        encode_transformers(chat_template, valid_consecutive_users)
+        encode_transformers_from_openai(chat_template, valid_consecutive_users)
 
         # Consecutive assistants get aggregated: user, assistant*3, user -> user, assistant, user
         valid_consecutive_assistants = {
@@ -110,7 +115,7 @@ class TestTransformersMistralCommonParity:
                 {"role": "user", "content": "Thanks"},
             ]
         }
-        encode_transformers(chat_template, valid_consecutive_assistants)
+        encode_transformers_from_openai(chat_template, valid_consecutive_assistants)
 
         # Starting with assistant is rejected by the first-message constraint
         invalid_starts_with_assistant = {
@@ -126,7 +131,7 @@ class TestTransformersMistralCommonParity:
             first_msg_match = r"Conversation must start with a user message, got assistant\."
 
         with pytest.raises(TemplateError, match=first_msg_match):
-            encode_transformers(chat_template, invalid_starts_with_assistant)
+            encode_transformers_from_openai(chat_template, invalid_starts_with_assistant)
 
         # Invalid role after user is caught by the transition table
         invalid_role = {
@@ -137,7 +142,7 @@ class TestTransformersMistralCommonParity:
         }
 
         with pytest.raises(TemplateError, match=r"Unexpected role 'invalid' after role 'user'"):
-            encode_transformers(chat_template, invalid_role)
+            encode_transformers_from_openai(chat_template, invalid_role)
 
         # Tool after user is rejected by the transition table (tool can only follow assistant or tool)
         if version >= TokenizerVersion.v2:
@@ -148,7 +153,7 @@ class TestTransformersMistralCommonParity:
                 ]
             }
             with pytest.raises(TemplateError, match=r"Unexpected role 'tool' after role 'user'"):
-                encode_transformers(chat_template, invalid_tool_after_user)
+                encode_transformers_from_openai(chat_template, invalid_tool_after_user)
 
         # User after tool is accepted (user can follow tool results)
         if version >= TokenizerVersion.v2:
@@ -164,7 +169,7 @@ class TestTransformersMistralCommonParity:
                     {"role": "user", "content": "continue with this context"},
                 ]
             }
-            encode_transformers(chat_template, valid_user_after_tool)
+            encode_transformers_from_openai(chat_template, valid_user_after_tool)
 
         # System after assistant is rejected for v7+ (system stays in loop_messages)
         if version >= TokenizerVersion.v7:
@@ -177,7 +182,7 @@ class TestTransformersMistralCommonParity:
                 ]
             }
             with pytest.raises(TemplateError, match=r"Unexpected role 'system' after role 'assistant'"):
-                encode_transformers(chat_template, invalid_system_after_assistant)
+                encode_transformers_from_openai(chat_template, invalid_system_after_assistant)
 
     @pytest.mark.parametrize(
         ("spm", "version", "image", "audio", "think"),
@@ -330,4 +335,4 @@ class TestTransformersMistralCommonParity:
 
             err_msg = msg_template.format(chunks=chunks, role=role)
             with pytest.raises(TemplateError, match=err_msg):
-                encode_transformers(chat_template, conv)
+                encode_transformers_from_openai(chat_template, conv)

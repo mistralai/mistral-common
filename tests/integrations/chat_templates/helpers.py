@@ -117,7 +117,7 @@ def render_template(
     }
 
     # Only add reasoning_effort for v15+ templates that support it
-    if reasoning_effort is not None or "reasoning_effort" in template:
+    if reasoning_effort is not None:
         render_kwargs["reasoning_effort"] = reasoning_effort
 
     return jinja_template.render(**render_kwargs)
@@ -131,7 +131,7 @@ def encode_mistral_common(mistral_tokenizer: MistralTokenizer, chat_request: Cha
     a full HF tokenizer with matching vocabulary, which is planned for a future PR.
     """
     mistral_encoded = str(mistral_tokenizer.encode_chat_completion(chat_request).text)
-    # Remove image tokens except one per image
+    # Collapse all image tokens to a single [IMG] per image sequence.
     mistral_encoded = mistral_encoded.replace("[IMG]", "").replace("[IMG_BREAK]", "").replace("[IMG_END]", "[IMG]")
     # Remove audio tokens except one per audio
     mistral_encoded = mistral_encoded.replace("[AUDIO]", "").replace("[BEGIN_AUDIO]", "[AUDIO]")
@@ -141,18 +141,34 @@ def encode_mistral_common(mistral_tokenizer: MistralTokenizer, chat_request: Cha
 
 
 def encode_transformers(
-    chat_template: str, chat_request: ChatCompletionRequest | dict[str, Any], keep_name_for_tools: bool = False
+    chat_template: str, chat_request: ChatCompletionRequest, keep_name_for_tools: bool = False
 ) -> str:
-    r"""Encode a chat request using the transformers `render_jinja_template`."""
+    r"""Encode a chat request using the transformers render_jinja_template.
+
+    Converts a ChatCompletionRequest to OpenAI format and renders through
+    the HuggingFace transformers rendering pipeline.
+    """
     assert _HAS_TRANSFORMERS, "transformers is required"
-    if isinstance(chat_request, ChatCompletionRequest):
-        openai_request = chat_request.to_openai()
-        if keep_name_for_tools:
-            for openai_message, chat_message in zip(openai_request["messages"], chat_request.messages):
-                if chat_message.role == "tool":
-                    openai_message["name"] = chat_message.name
-    else:
-        openai_request = chat_request
+    openai_request = chat_request.to_openai()
+    if keep_name_for_tools:
+        for openai_message, chat_message in zip(openai_request["messages"], chat_request.messages):
+            if chat_message.role == "tool":
+                openai_message["name"] = chat_message.name
+    return _render_via_transformers(chat_template, openai_request)
+
+
+def encode_transformers_from_openai(chat_template: str, openai_request: dict[str, Any]) -> str:
+    r"""Encode a raw OpenAI-format dict using the transformers render_jinja_template.
+
+    Use this for tests with hand-crafted dicts (e.g., invalid input tests)
+    that cannot be represented as a ChatCompletionRequest.
+    """
+    assert _HAS_TRANSFORMERS, "transformers is required"
+    return _render_via_transformers(chat_template, openai_request)
+
+
+def _render_via_transformers(chat_template: str, openai_request: dict[str, Any]) -> str:
+    r"""Shared rendering logic for transformers-based encoding."""
     for tool in openai_request.get("tools", []):
         tool["function"].pop("strict", False)
 
@@ -276,7 +292,7 @@ def _get_mistral_tekkenizer(
     vocab_size = json_tekkenizer["config"]["default_vocab_size"]
     pattern = json_tekkenizer["config"]["pattern"]
     # ModelSettingsBuilder is constructed manually because from_file reads it from the
-    # JSON file's model_settings_builder key, which is absent in shipped tokenizer files.
+    # JSON file's model_settings_builder key, which is absent in fixture tokenizer files.
     # This mirrors what from_file would produce for a v15 tokenizer config.
     model_settings_builder = (
         ModelSettingsBuilder(

@@ -3,7 +3,7 @@ from jinja2.exceptions import TemplateError
 
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.helpers import encode_transformers
+from tests.integrations.chat_templates.helpers import encode_transformers_from_openai
 
 
 class TestToolCallValidation:
@@ -54,7 +54,7 @@ class TestToolCallValidation:
             use_special_token_variables=True,
         )
         with pytest.raises(TemplateError, match="Tool call must have an id of 9 characters or numbers."):
-            encode_transformers(chat_template, invalid_id_conv)
+            encode_transformers_from_openai(chat_template, invalid_id_conv)
 
     @pytest.mark.parametrize(
         ("spm", "version", "image", "audio", "think"),
@@ -97,4 +97,4 @@ class TestToolCallValidation:
             use_special_token_variables=True,
         )
         with pytest.raises(TemplateError, match="Assistant message cannot have both content and tool calls."):
-            encode_transformers(chat_template, invalid_message_conv)
+            encode_transformers_from_openai(chat_template, invalid_message_conv)

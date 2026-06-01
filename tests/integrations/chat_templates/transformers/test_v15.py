@@ -5,7 +5,7 @@ from jinja2.exceptions import TemplateError
 
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.helpers import encode_transformers
+from tests.integrations.chat_templates.helpers import encode_transformers_from_openai
 
 
 class TestV15ReasoningEffort:
@@ -52,7 +52,7 @@ class TestV15ReasoningEffort:
         if reasoning_effort is not None:
             conv["reasoning_effort"] = reasoning_effort
 
-        result = encode_transformers(chat_template, conv)
+        result = encode_transformers_from_openai(chat_template, conv)
         assert "[MODEL_SETTINGS]" in result
 
     @pytest.mark.parametrize(
@@ -97,4 +97,4 @@ class TestV15ReasoningEffort:
         }
 
         with pytest.raises(TemplateError, match='reasoning_effort must be either "none" or "high"'):
-            encode_transformers(chat_template, conv)
+            encode_transformers_from_openai(chat_template, conv)
