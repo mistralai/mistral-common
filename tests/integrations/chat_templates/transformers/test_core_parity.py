@@ -5,10 +5,19 @@ from jinja2.exceptions import TemplateError
 
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.protocol.instruct.chunk import TextChunk
-from mistral_common.protocol.instruct.messages import AssistantMessage, ToolMessage, UserMessage
+from mistral_common.protocol.instruct.messages import AssistantMessage, UserMessage
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.conftest import ALL_TRANSFORMERS_CONFIGS
+from tests.integrations.chat_templates.conftest import (
+    ALL_TRANSFORMERS_CONFIGS,
+    INVALID_ASSISTANT_RANDOM,
+    INVALID_ASSISTANT_THINK,
+    INVALID_SP_RANDOM,
+    INVALID_SP_THINK,
+    INVALID_USER_AUDIO,
+    INVALID_USER_IMAGE,
+    INVALID_USER_RANDOM,
+)
 from tests.integrations.chat_templates.fixtures_data import _get_conversations
 from tests.integrations.chat_templates.helpers import (
     _get_mistral_tokenizer,
@@ -59,14 +68,12 @@ class TestTransformersMistralCommonParity:
                         )
                         message.content = str(message.content[0].text)
         for conversation in conversations:
-            if version == TokenizerVersion.v2:
-                for message in conversation.messages:
-                    if isinstance(message, ToolMessage):
-                        message.name = "tool"
+            for message in conversation.messages:
+                if message.role == "tool" and message.name is None:
+                    message.name = "tool"
+
             # Run transformers first since encode_mistral_common may mutate the conversation in-place
-            transformers_encoded = encode_transformers(
-                chat_template, conversation, keep_name_for_tools=version == TokenizerVersion.v2
-            )
+            transformers_encoded = encode_transformers(chat_template, conversation, keep_name_for_tools=True)
             mistral_common_encoded = encode_mistral_common(mistral_tokenizer, conversation, spm)
 
             assert mistral_common_encoded == transformers_encoded
@@ -102,7 +109,8 @@ class TestTransformersMistralCommonParity:
                 {"role": "assistant", "content": "Hi"},
             ]
         }
-        # This should not raise
+        # Only test transformers side for consecutive users — the dict fixture
+        # cannot be converted to ChatCompletionRequest for mistral-common parity.
         encode_transformers_from_openai(chat_template, valid_consecutive_users)
 
         # Consecutive assistants get aggregated: user, assistant*3, user -> user, assistant, user
@@ -196,113 +204,17 @@ class TestTransformersMistralCommonParity:
         audio: bool,
         think: bool,
     ) -> None:
-        invalid_sp_think = {
-            "messages": [
-                {
-                    "role": "system",
-                    "content": [
-                        {"type": "text", "text": "Hello"},
-                        {"type": "think", "thinking": "Hello"},
-                    ],
-                }
-            ]
-        }
+        sp_invalids = [INVALID_SP_RANDOM, INVALID_SP_THINK]
+        assistant_invalids = [INVALID_ASSISTANT_RANDOM, INVALID_ASSISTANT_THINK]
+        user_invalids = [INVALID_USER_IMAGE, INVALID_USER_AUDIO, INVALID_USER_RANDOM]
 
-        invalid_sp_random = {
-            "messages": [
-                {
-                    "role": "system",
-                    "content": [
-                        {"type": "text", "text": "Hello"},
-                        {"type": "random", "random": "Hello"},
-                    ],
-                }
-            ]
-        }
-
-        invalid_assistant_think = {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Hello"},
-                    ],
-                },
-                {
-                    "role": "assistant",
-                    "content": [
-                        {"type": "text", "text": "Hello"},
-                        {"type": "think", "thinking": "Hello"},
-                    ],
-                },
-            ]
-        }
-
-        invalid_assistant_random = {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Hello"},
-                    ],
-                },
-                {
-                    "role": "assistant",
-                    "content": [
-                        {"type": "text", "text": "Hello"},
-                        {"type": "random", "random": "Hello"},
-                    ],
-                },
-            ]
-        }
-
-        invalid_user_image = {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Hello"},
-                        {"type": "image", "image_url": "Hello"},
-                    ],
-                }
-            ]
-        }
-
-        invalid_user_audio = {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Hello"},
-                        {"type": "audio", "audio_url": "Hello"},
-                    ],
-                }
-            ]
-        }
-
-        invalid_user_random = {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Hello"},
-                        {"type": "random", "random": "Hello"},
-                    ],
-                }
-            ]
-        }
-
-        sp_invalids = [invalid_sp_random, invalid_sp_think]
-        assistant_invalids = [invalid_assistant_random, invalid_assistant_think]
-        user_invalids = [invalid_user_image, invalid_user_audio, invalid_user_random]
-
-        invalid_convs = [invalid_sp_random, invalid_user_random, invalid_assistant_random]
+        invalid_convs = [INVALID_SP_RANDOM, INVALID_USER_RANDOM, INVALID_ASSISTANT_RANDOM]
         if not think:
-            invalid_convs += [invalid_sp_think, invalid_assistant_think]
+            invalid_convs += [INVALID_SP_THINK, INVALID_ASSISTANT_THINK]
         if not image:
-            invalid_convs += [invalid_user_image]
+            invalid_convs += [INVALID_USER_IMAGE]
         if not audio:
-            invalid_convs += [invalid_user_audio]
+            invalid_convs += [INVALID_USER_AUDIO]
 
         chat_template = generate_chat_template(
             spm=spm,

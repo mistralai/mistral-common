@@ -8,6 +8,7 @@ Test data constants (`REQUEST_*`) live in `fixtures_data.py`.
 """
 
 from collections.abc import Generator
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -57,6 +58,103 @@ ALL_TRANSFORMERS_CONFIGS: list[tuple[bool, TokenizerVersion, bool, bool, bool]] 
     for version, spm, image, audio, think, plain_think in ALL_CONFIGS
     if not plain_think  # plain_think has separate tests
 ]
+
+
+INVALID_SP_THINK: dict[str, Any] = {
+    "messages": [
+        {
+            "role": "system",
+            "content": [
+                {"type": "text", "text": "Hello"},
+                {"type": "think", "thinking": "Hello"},
+            ],
+        }
+    ]
+}
+
+INVALID_SP_RANDOM: dict[str, Any] = {
+    "messages": [
+        {
+            "role": "system",
+            "content": [
+                {"type": "text", "text": "Hello"},
+                {"type": "random", "random": "Hello"},
+            ],
+        }
+    ]
+}
+
+INVALID_ASSISTANT_THINK: dict[str, Any] = {
+    "messages": [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Hello"},
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "Hello"},
+                {"type": "think", "thinking": "Hello"},
+            ],
+        },
+    ]
+}
+
+INVALID_ASSISTANT_RANDOM: dict[str, Any] = {
+    "messages": [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Hello"},
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "Hello"},
+                {"type": "random", "random": "Hello"},
+            ],
+        },
+    ]
+}
+
+INVALID_USER_IMAGE: dict[str, Any] = {
+    "messages": [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Hello"},
+                {"type": "image", "image_url": "Hello"},
+            ],
+        }
+    ]
+}
+
+INVALID_USER_AUDIO: dict[str, Any] = {
+    "messages": [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Hello"},
+                {"type": "audio", "audio_url": "Hello"},
+            ],
+        }
+    ]
+}
+
+INVALID_USER_RANDOM: dict[str, Any] = {
+    "messages": [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Hello"},
+                {"type": "random", "random": "Hello"},
+            ],
+        }
+    ]
+}
 
 
 def _config_id(c: tuple[TokenizerVersion, bool, bool, bool, bool, bool]) -> str:
