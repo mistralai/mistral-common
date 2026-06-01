@@ -15,6 +15,9 @@ class TestToolRoleSupport:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -47,6 +50,9 @@ class TestToolRoleSupport:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -100,6 +106,9 @@ class TestToolRoleSupport:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -150,6 +159,9 @@ class TestV2ToolResultParsing:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
     @pytest.mark.parametrize(
@@ -271,6 +283,9 @@ class TestV3ToolResultParsing:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
     @pytest.mark.parametrize(
@@ -369,6 +384,9 @@ class TestV7ToolCalls:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -420,6 +438,9 @@ class TestV7ToolCalls:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -489,6 +510,9 @@ class TestV7ToolCalls:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -525,6 +549,9 @@ class TestV11ToolCalls:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -578,6 +605,9 @@ class TestV11ToolCalls:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -629,6 +659,9 @@ class TestV13PlusToolCalls:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [

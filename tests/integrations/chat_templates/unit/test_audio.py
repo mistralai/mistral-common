@@ -19,6 +19,9 @@ class TestAudioSystemPrompt:
             image_support=False,
             audio_support=True,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -45,6 +48,9 @@ class TestAudioSystemPrompt:
             image_support=False,
             audio_support=True,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [

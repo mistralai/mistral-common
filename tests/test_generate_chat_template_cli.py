@@ -163,8 +163,8 @@ def test_cli_spm_with_audio_invalid(tmp_path: Path) -> None:
     assert result.returncode != 0
 
 
-def test_cli_no_token_variables_flag(tmp_path: Path) -> None:
-    """CLI --no_token_variables embeds literal BOS/EOS values."""
+def test_cli_no_special_token_variables_flag(tmp_path: Path) -> None:
+    """CLI --no_special_token_variables embeds literal BOS/EOS values."""
     output_path = tmp_path / "template.jinja"
     result = subprocess.run(
         [
@@ -172,7 +172,7 @@ def test_cli_no_token_variables_flag(tmp_path: Path) -> None:
             str(SCRIPT_PATH),
             "--version",
             "v7",
-            "--no_token_variables",
+            "--no_special_token_variables",
             "--saving_path",
             str(output_path),
         ],

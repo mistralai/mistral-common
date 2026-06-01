@@ -16,6 +16,9 @@ class TestV15ModelSettings:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
     def test_v15_template_contains_model_settings(self, v15_template: str) -> None:
@@ -58,6 +61,9 @@ class TestV15ModelSettings:
             image_support=True,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages = [
@@ -82,6 +88,9 @@ class TestV15ModelSettings:
             image_support=False,
             audio_support=False,
             thinking_support=True,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages = [
@@ -106,6 +115,9 @@ class TestV15ModelSettings:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         tools = [
@@ -155,6 +167,9 @@ class TestV15ModelSettings:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = []
@@ -212,6 +227,9 @@ class TestV15ModelSettings:
             image_support=image,
             audio_support=False,
             thinking_support=True,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [

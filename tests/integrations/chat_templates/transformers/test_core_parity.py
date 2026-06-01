@@ -34,7 +34,14 @@ class TestTransformersMistralCommonParity:
             spm=spm, tokenizer_version=version, validation_mode=mode, image=image, audio=audio, think=think
         )
         chat_template = generate_chat_template(
-            spm=spm, tokenizer_version=version, image_support=image, audio_support=audio, thinking_support=think
+            spm=spm,
+            tokenizer_version=version,
+            image_support=image,
+            audio_support=audio,
+            thinking_support=think,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
         if version <= TokenizerVersion.v2:
             for conv in conversations:
@@ -70,7 +77,14 @@ class TestTransformersMistralCommonParity:
         think: bool,
     ) -> None:
         chat_template = generate_chat_template(
-            spm=spm, tokenizer_version=version, image_support=image, audio_support=audio, thinking_support=think
+            spm=spm,
+            tokenizer_version=version,
+            image_support=image,
+            audio_support=audio,
+            thinking_support=think,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         # Consecutive user messages should be aggregated (not raise an error)
@@ -284,7 +298,14 @@ class TestTransformersMistralCommonParity:
             invalid_convs += [invalid_user_audio]
 
         chat_template = generate_chat_template(
-            spm=spm, tokenizer_version=version, image_support=image, audio_support=audio, thinking_support=think
+            spm=spm,
+            tokenizer_version=version,
+            image_support=image,
+            audio_support=audio,
+            thinking_support=think,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
         # Not using parametrize here because invalid_convs depends on the version/image/audio/think
         # parameters from the outer parametrize. Each sub-case is identifiable via the TemplateError

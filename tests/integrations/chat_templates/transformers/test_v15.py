@@ -33,7 +33,14 @@ class TestV15ReasoningEffort:
         reasoning_effort: Optional[str],
     ) -> None:
         chat_template = generate_chat_template(
-            spm=spm, tokenizer_version=version, image_support=image, audio_support=audio, thinking_support=think
+            spm=spm,
+            tokenizer_version=version,
+            image_support=image,
+            audio_support=audio,
+            thinking_support=think,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         conv: dict = {
@@ -71,7 +78,14 @@ class TestV15ReasoningEffort:
         reasoning_effort: str,
     ) -> None:
         chat_template = generate_chat_template(
-            spm=spm, tokenizer_version=version, image_support=image, audio_support=audio, thinking_support=think
+            spm=spm,
+            tokenizer_version=version,
+            image_support=image,
+            audio_support=audio,
+            thinking_support=think,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         conv = {

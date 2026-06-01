@@ -16,7 +16,7 @@ def main() -> None:
     parser.add_argument("--default_system_prompt", type=str, default=None, help="Default system prompt to embed")
     parser.add_argument("--saving_path", type=str, default="./chat_template.jinja", help="Output path for the template")
     parser.add_argument(
-        "--no_token_variables",
+        "--no_special_token_variables",
         action="store_true",
         help="Embed literal BOS/EOS values instead of using bos_token/eos_token variables",
     )
@@ -30,7 +30,7 @@ def main() -> None:
         thinking_support=args.thinking,
         default_system_prompt=args.default_system_prompt,
         plain_thinking_support=args.plain_thinking,
-        use_token_variables=not args.no_token_variables,
+        use_special_token_variables=not args.no_special_token_variables,
     )
 
     with open(args.saving_path, "w", encoding="utf-8") as f:

@@ -47,6 +47,8 @@ class TestDefaultSystemPromptInjection:
             audio_support=False,
             thinking_support=False,
             default_system_prompt=self.DEFAULT_SYSTEM_PROMPT,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         output = encode_transformers(chat_template, CONV_NO_SYSTEM)
@@ -66,6 +68,8 @@ class TestDefaultSystemPromptInjection:
             audio_support=False,
             thinking_support=False,
             default_system_prompt=self.DEFAULT_SYSTEM_PROMPT,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         output = encode_transformers(chat_template, self.CONV_WITH_SYSTEM)
@@ -81,6 +85,8 @@ class TestDefaultSystemPromptInjection:
             audio_support=False,
             thinking_support=False,
             default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         output = encode_transformers(chat_template, CONV_NO_SYSTEM)
@@ -95,6 +101,8 @@ class TestDefaultSystemPromptInjection:
             audio_support=False,
             thinking_support=False,
             default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         output = encode_transformers(chat_template, CONV_NO_SYSTEM)
@@ -110,6 +118,8 @@ class TestDefaultSystemPromptInjection:
             audio_support=False,
             thinking_support=False,
             default_system_prompt=self.DEFAULT_SYSTEM_PROMPT,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         result = encode_transformers(template, CONV_NO_SYSTEM)
@@ -141,6 +151,8 @@ class TestSystemPromptEscaping:
             audio_support=False,
             thinking_support=False,
             default_system_prompt=prompt,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         result = encode_transformers(template, CONV_NO_SYSTEM)

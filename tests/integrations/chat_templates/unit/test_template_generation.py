@@ -17,6 +17,9 @@ class TestGenerateChatTemplateAPI:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
     def test_basic_generation(self, v13_template: str) -> None:
@@ -31,6 +34,8 @@ class TestGenerateChatTemplateAPI:
             audio_support=False,
             thinking_support=False,
             default_system_prompt="You are a helpful assistant.",
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
         assert "You are a helpful assistant." in template_with_prompt
 
@@ -62,6 +67,8 @@ class TestGenerateChatTemplateAPI:
             audio_support=False,
             thinking_support=False,
             default_system_prompt='You are "the best" assistant.',
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
         messages: list[dict[str, Any]] = [{"role": "user", "content": "Hello"}]
         result = render_template(template, messages=messages)
@@ -77,15 +84,15 @@ class TestTokenVariables:
         ],
     )
     def test_token_variable_content(self, use_vars: bool, present: list[str], absent: list[str]) -> None:
-        config = TemplateConfig(version=TokenizerVersion.v7, use_token_variables=use_vars)
+        config = TemplateConfig(version=TokenizerVersion.v7, use_special_token_variables=use_vars)
         template = build_chat_template(config)
         for expected in present:
             assert expected in template
         for unexpected in absent:
             assert unexpected not in template
 
-    def test_use_token_variables_false_renders_correctly(self) -> None:
-        config = TemplateConfig(version=TokenizerVersion.v15, use_token_variables=False)
+    def test_use_special_token_variables_false_renders_correctly(self) -> None:
+        config = TemplateConfig(version=TokenizerVersion.v15, use_special_token_variables=False)
         template = build_chat_template(config)
         messages: list[dict[str, Any]] = [
             {"role": "user", "content": "Hello"},
@@ -95,9 +102,9 @@ class TestTokenVariables:
         assert "<s>" in result
         assert "</s>" in result
 
-    def test_use_token_variables_default_is_true(self) -> None:
+    def test_use_special_token_variables_default_is_false(self) -> None:
         config = TemplateConfig(version=TokenizerVersion.v7)
-        assert config.use_token_variables is True
+        assert config.use_special_token_variables is False
 
 
 class TestMessageContentValidation:
@@ -110,6 +117,9 @@ class TestMessageContentValidation:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -128,6 +138,9 @@ class TestMessageContentValidation:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -148,6 +161,9 @@ class TestMessageContentValidation:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -165,6 +181,9 @@ class TestMessageContentValidation:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [

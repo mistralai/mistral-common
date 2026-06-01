@@ -13,9 +13,9 @@ def generate_chat_template(
     image_support: bool,
     audio_support: bool,
     thinking_support: bool,
-    default_system_prompt: str | None = None,
-    plain_thinking_support: bool = False,
-    use_token_variables: bool = True,
+    default_system_prompt: str | None,
+    plain_thinking_support: bool,
+    use_special_token_variables: bool,
 ) -> str:
     r"""Generate a chat template based on configuration.
 
@@ -33,7 +33,7 @@ def generate_chat_template(
         plain_thinking_support: Whether to support thinking chunks with plain
             `<think>`/`</think>` text tags. Only available for v11.
             Mutually exclusive with `thinking_support`.
-        use_token_variables: Whether to emit BOS/EOS as Jinja variable
+        use_special_token_variables: Whether to emit BOS/EOS as Jinja variable
             references (`bos_token`/`eos_token`) or as literal values.
 
     Returns:
@@ -46,7 +46,7 @@ def generate_chat_template(
         audio_support=audio_support,
         thinking_support=thinking_support,
         plain_thinking_support=plain_thinking_support,
-        use_token_variables=use_token_variables,
+        use_special_token_variables=use_special_token_variables,
     )
     template = _build_chat_template(config)
 

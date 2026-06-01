@@ -18,7 +18,9 @@ class TestPlainThinkingValidation:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
             plain_thinking_support=True,
+            use_special_token_variables=True,
         )
         assert "<think>" in template
         assert "</think>" in template
@@ -48,7 +50,9 @@ class TestPlainThinkParity:
             image_support=image,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
             plain_thinking_support=True,
+            use_special_token_variables=True,
         )
 
         for conversation in conversations:
@@ -75,7 +79,9 @@ class TestPlainThinkParity:
             image_support=image,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
             plain_thinking_support=True,
+            use_special_token_variables=True,
         )
 
         # Build a conversation with thinking chunks
@@ -150,7 +156,9 @@ class TestPlainThinkParity:
             image_support=image,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
             plain_thinking_support=True,
+            use_special_token_variables=True,
         )
 
         for conversation in conversations:

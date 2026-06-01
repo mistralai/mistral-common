@@ -47,9 +47,9 @@ class TemplateConfig:
         plain_thinking_support: Whether to enable plain text thinking chunks using
             `<think>`/`</think>` tags instead of special tokens. Only available for v11.
             Mutually exclusive with `thinking_support`.
-        use_token_variables: Whether to emit BOS/EOS as Jinja variable references
+        use_special_token_variables: Whether to emit BOS/EOS as Jinja variable references
             (`bos_token`/`eos_token`) or as literal string values (`'<s>'`/`'</s>'`).
-            When True (default), the template expects `bos_token` and `eos_token`
+            When True, the template expects `bos_token` and `eos_token`
             to be passed as render kwargs.
 
     Raises:
@@ -70,7 +70,7 @@ class TemplateConfig:
     audio_support: bool = False
     thinking_support: bool = False
     plain_thinking_support: bool = False
-    use_token_variables: bool = True
+    use_special_token_variables: bool = False
 
     def __post_init__(self) -> None:
         if self.plain_thinking_support and self.thinking_support:
@@ -95,14 +95,14 @@ class TemplateConfig:
     @property
     def bos_expr(self) -> str:
         r"""Jinja expression for the BOS token."""
-        if self.use_token_variables:
+        if self.use_special_token_variables:
             return "bos_token"
         return "'" + _BOS + "'"
 
     @property
     def eos_expr(self) -> str:
         r"""Jinja expression for the EOS token."""
-        if self.use_token_variables:
+        if self.use_special_token_variables:
             return "eos_token"
         return "'" + _EOS + "'"
 

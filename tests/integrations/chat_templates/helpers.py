@@ -67,6 +67,7 @@ def _make_config(c: tuple[TokenizerVersion, bool, bool, bool, bool, bool]) -> Te
         audio_support=audio,
         thinking_support=think,
         plain_thinking_support=plain_think,
+        use_special_token_variables=True,
     )
 
 

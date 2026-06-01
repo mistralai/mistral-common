@@ -44,7 +44,14 @@ class TestToolCallValidation:
         }
 
         chat_template = generate_chat_template(
-            spm=spm, tokenizer_version=version, image_support=image, audio_support=audio, thinking_support=think
+            spm=spm,
+            tokenizer_version=version,
+            image_support=image,
+            audio_support=audio,
+            thinking_support=think,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
         with pytest.raises(TemplateError, match="Tool call must have an id of 9 characters or numbers."):
             encode_transformers(chat_template, invalid_id_conv)
@@ -80,7 +87,14 @@ class TestToolCallValidation:
         }
 
         chat_template = generate_chat_template(
-            spm=spm, tokenizer_version=version, image_support=image, audio_support=audio, thinking_support=think
+            spm=spm,
+            tokenizer_version=version,
+            image_support=image,
+            audio_support=audio,
+            thinking_support=think,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
         with pytest.raises(TemplateError, match="Assistant message cannot have both content and tool calls."):
             encode_transformers(chat_template, invalid_message_conv)

@@ -24,6 +24,9 @@ class TestReasoningContentConversion:
             image_support=image,
             audio_support=audio,
             thinking_support=True,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -42,6 +45,9 @@ class TestReasoningContentConversion:
             image_support=image,
             audio_support=audio,
             thinking_support=True,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -62,6 +68,9 @@ class TestReasoningContentConversion:
             image_support=image,
             audio_support=audio,
             thinking_support=True,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -86,6 +95,9 @@ class TestReasoningContentConversion:
             image_support=image,
             audio_support=audio,
             thinking_support=True,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -104,6 +116,9 @@ class TestReasoningContentConversion:
             image_support=image,
             audio_support=audio,
             thinking_support=True,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -149,6 +164,9 @@ class TestReasoningContentConversion:
             image_support=image,
             audio_support=audio,
             thinking_support=True,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -175,6 +193,9 @@ class TestReasoningContentConversion:
             image_support=image,
             audio_support=audio,
             thinking_support=True,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -215,6 +236,9 @@ class TestReasoningContentConversion:
             image_support=image,
             audio_support=audio,
             thinking_support=True,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         reasoning_text = (
@@ -249,6 +273,9 @@ class TestReasoningEdgeCases:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -268,6 +295,9 @@ class TestReasoningEdgeCases:
             image_support=False,
             audio_support=False,
             thinking_support=True,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -297,6 +327,9 @@ class TestClosedAttribute:
             image_support=image,
             audio_support=False,
             thinking_support=True,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -329,6 +362,9 @@ class TestClosedAttribute:
             image_support=image,
             audio_support=False,
             thinking_support=True,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -354,7 +390,9 @@ class TestPlainThink:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
             plain_thinking_support=True,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -383,7 +421,9 @@ class TestPlainThink:
             image_support=image,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
             plain_thinking_support=True,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -408,7 +448,9 @@ class TestPlainThink:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
             plain_thinking_support=True,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -427,7 +469,9 @@ class TestPlainThink:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
             plain_thinking_support=True,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -451,7 +495,9 @@ class TestPlainThink:
             image_support=True,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
             plain_thinking_support=True,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
@@ -483,7 +529,9 @@ class TestPlainThink:
             image_support=False,
             audio_support=False,
             thinking_support=False,
+            default_system_prompt=None,
             plain_thinking_support=True,
+            use_special_token_variables=True,
         )
 
         messages: list[dict[str, Any]] = [
