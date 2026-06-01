@@ -97,14 +97,14 @@ class TemplateConfig:
         r"""Jinja expression for the BOS token."""
         if self.use_special_token_variables:
             return "bos_token"
-        return "'" + _BOS + "'"
+        return f"'{_BOS}'"
 
     @property
     def eos_expr(self) -> str:
         r"""Jinja expression for the EOS token."""
         if self.use_special_token_variables:
             return "eos_token"
-        return "'" + _EOS + "'"
+        return f"'{_EOS}'"
 
     @property
     def any_thinking_support(self) -> bool:
