@@ -186,6 +186,36 @@ class TemplateConfig:
         r"""Whether to track has_sp for audio constraint. V15+ allows audio with system prompts."""
         return self.audio_support and self.version < TokenizerVersion.v15
 
+    @property
+    def supports_model_settings(self) -> bool:
+        r"""Whether model settings (reasoning_effort) are supported. V15+."""
+        return self.version >= TokenizerVersion.v15
+
+    @property
+    def is_v1(self) -> bool:
+        r"""Whether this is a v1 template with minimal features."""
+        return self.version == TokenizerVersion.v1
+
+    @property
+    def system_supports_thinking(self) -> bool:
+        r"""Whether system messages support thinking chunks. Pre-v15 only."""
+        return self.any_thinking_support and self.version < TokenizerVersion.v15
+
+    @property
+    def uses_v2_v3spm_tool_branch(self) -> bool:
+        r"""Whether assistant tool calls use the v2/v3-SPM inline elif branch."""
+        return self.version == TokenizerVersion.v2 or (self.spm and self.version == TokenizerVersion.v3)
+
+    @property
+    def forbids_assistant_content_with_tools(self) -> bool:
+        r"""Whether assistant messages cannot have both content and tool calls."""
+        return self.version in [TokenizerVersion.v2, TokenizerVersion.v3]
+
+    @property
+    def validates_assistant_non_empty(self) -> bool:
+        r"""Whether to validate that assistant messages have non-empty content or tool calls."""
+        return self.version >= TokenizerVersion.v7 or (self.version >= TokenizerVersion.v3 and not self.spm)
+
 
 def _generate_header(config: TemplateConfig) -> str:
     r"""Generate template header with default system message.
@@ -334,7 +364,7 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
     Returns:
         The tools and settings definition section of the chat template.
     """
-    if config.version >= TokenizerVersion.v15:
+    if config.supports_model_settings:
         comment = "{#- Tools and model settings definition #}"
     else:
         comment = "{#- Tools definition #}"
@@ -360,7 +390,7 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
             )
         lines.append("{%- endif %}")
 
-    if config.version >= TokenizerVersion.v15:
+    if config.supports_model_settings:
         lines.extend(
             [
                 "{%- if reasoning_effort is not defined or reasoning_effort is none %}",
@@ -399,7 +429,7 @@ def _generate_macros(config: TemplateConfig) -> str:
         The macro definitions section of the chat template. Returns empty
         string only for v1 templates.
     """
-    if config.version == TokenizerVersion.v1:
+    if config.is_v1:
         return ""
 
     has_extra_types = config.any_thinking_support or config.image_support or config.audio_support
@@ -808,12 +838,12 @@ def _generate_system_message_handling(config: TemplateConfig) -> str:
     has_extra_types = config.any_thinking_support or config.image_support or config.audio_support
     rc_args = "message['content'], 'system message contents'"
     if has_extra_types:
-        if config.any_thinking_support and config.version < TokenizerVersion.v15:
+        if config.system_supports_thinking:
             rc_args += ", supported_types_desc='text and thinking'"
         else:
             rc_args += ", supported_types_desc='text'"
     if config.any_thinking_support:
-        if config.version < TokenizerVersion.v15:
+        if config.system_supports_thinking:
             rc_args += ", support_thinking=true"
         else:
             rc_args += ", support_thinking=false"
@@ -864,9 +894,7 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
         ns_vars.append("prev_tool=false")
     if config.tools_at_beginning:
         emitted_var = (
-            "available_tools_and_settings_emitted"
-            if config.version >= TokenizerVersion.v15
-            else "available_tools_emitted"
+            "available_tools_and_settings_emitted" if config.supports_model_settings else "available_tools_emitted"
         )
         ns_vars.append(f"{emitted_var}=false")
 
@@ -963,13 +991,11 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
     elif config.tools_at_beginning:
         # v13+: emit tools and settings before the first user message
         emitted_var = (
-            "available_tools_and_settings_emitted"
-            if config.version >= TokenizerVersion.v15
-            else "available_tools_emitted"
+            "available_tools_and_settings_emitted" if config.supports_model_settings else "available_tools_emitted"
         )
         lines.append(f"        {{%- if not ns.{emitted_var} %}}")
         lines.append("            {{- available_tools }}")
-        if config.version >= TokenizerVersion.v15:
+        if config.supports_model_settings:
             lines.append("            {{- model_settings }}")
         lines.append(f"            {{%- set ns.{emitted_var} = true %}}")
         lines.append("        {%- endif %}")
@@ -1076,7 +1102,7 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
             lines.append("        {%- elif message['content'] | length > 0 %}")
         else:
             lines.append(f"        {{{{- '{inst_open}' }}}}")
-            if config.version == TokenizerVersion.v1:
+            if config.is_v1:
                 lines.append("        {%- if loop.index0 == 0 and system_message != '' %}")
             else:
                 lines.append("        {%- if (ns.index == ns.max_idx_user) and system_message != '' %}")
@@ -1156,7 +1182,7 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     lines.append(f"    {comment}")
     lines.append("    {%- elif message['role'] == 'assistant' %}")
 
-    if config.version in [TokenizerVersion.v2, TokenizerVersion.v3]:
+    if config.forbids_assistant_content_with_tools:
         lines.append(
             "        {%- if message['content'] is not none and message['content'] | length > 0 and message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}"  # noqa: E501
         )
@@ -1164,7 +1190,7 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
         lines.append("        {%- endif %}")
         lines.append("")
 
-    if config.version >= TokenizerVersion.v7 or (config.version >= TokenizerVersion.v3 and not config.spm):
+    if config.validates_assistant_non_empty:
         lines.append(
             "        {%- if (message['content'] is none or message['content'] == '' or message['content']|length == 0) and (message['tool_calls'] is not defined or message['tool_calls'] is none or message['tool_calls']|length == 0) %}"  # noqa: E501
         )
@@ -1201,7 +1227,7 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     if config.uses_v2_tool_format:
         lines.append("            {{- " + config.eos_expr + " }}")
 
-    if config.version == TokenizerVersion.v2 or (config.spm and config.version == TokenizerVersion.v3):
+    if config.uses_v2_v3spm_tool_branch:
         lines.append(_generate_tool_calls_elif_v2_v3(config))
         lines.append("        {%- else %}")
         lines.append(
@@ -1211,9 +1237,7 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     else:
         lines.append("        {%- endif %}")
 
-    if config.has_tools and not (
-        config.version == TokenizerVersion.v2 or (config.spm and config.version == TokenizerVersion.v3)
-    ):
+    if config.has_tools and not config.uses_v2_v3spm_tool_branch:
         lines.append("")
         lines.append(_generate_tool_calls_block(config))
 
@@ -1480,7 +1504,7 @@ def _generate_else_role_block(config: TemplateConfig) -> str:
     else:
         # pre-v7: system messages are already filtered out
         if config.has_tools:
-            if config.version == TokenizerVersion.v2 or (config.spm and config.version == TokenizerVersion.v3):
+            if config.uses_v2_v3spm_tool_branch:
                 lines.append("    {%- elif message['role'] != 'tool' or ns.index > ns.max_idx_user %}")
             else:
                 lines.append("    {%- else %}")
@@ -1653,7 +1677,7 @@ def build_chat_template(config: TemplateConfig) -> str:
         >>> "bos_token" in template
         True
     """
-    if config.version == TokenizerVersion.v1:
+    if config.is_v1:
         return _generate_v1_template(config)
 
     parts = []
