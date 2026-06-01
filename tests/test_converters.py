@@ -738,7 +738,7 @@ def test_assistant_message_to_openai_none_no_warning_with_none_content() -> None
     "request_cls",
     [ChatCompletionRequest, InstructRequest],
 )
-def test_request_to_openai_forwards_convert_thinking_format(
+def test_request_to_openai_forwards_reasoning_field_format(
     request_cls: type[ChatCompletionRequest | InstructRequest],
 ) -> None:
     messages: list[ChatMessage] = [
@@ -751,7 +751,7 @@ def test_request_to_openai_forwards_convert_thinking_format(
     else:
         request = InstructRequest(messages=messages)
 
-    openai_request = request.to_openai(convert_thinking_format=ReasoningFieldFormat.reasoning)
+    openai_request = request.to_openai(reasoning_field_format=ReasoningFieldFormat.reasoning)
     assistant_msg = [m for m in openai_request["messages"] if m["role"] == "assistant"][0]
     assert assistant_msg == {"role": "assistant", "reasoning": "Let me think", "content": "Done"}
 

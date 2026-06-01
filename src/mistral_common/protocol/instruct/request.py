@@ -117,13 +117,13 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
 
     def to_openai(
         self,
-        convert_thinking_format: ReasoningFieldFormat | None = None,
+        reasoning_field_format: ReasoningFieldFormat | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         r"""Convert the request messages and tools into the OpenAI format.
 
         Args:
-            convert_thinking_format: Conversion strategy for think chunks in assistant messages.
+            reasoning_field_format: Format for converting thinking chunks in assistant messages.
                 See `AssistantMessage.to_openai` for details.
             kwargs: Additional parameters to be added to the request.
 
@@ -179,7 +179,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         openai_messages = []
         for message in self.messages:
             if isinstance(message, AssistantMessage):
-                openai_messages.append(message.to_openai(reasoning_field_format=convert_thinking_format))
+                openai_messages.append(message.to_openai(reasoning_field_format=reasoning_field_format))
             else:
                 openai_messages.append(message.to_openai())
 
@@ -270,13 +270,13 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
 
     def to_openai(
         self,
-        convert_thinking_format: ReasoningFieldFormat | None = None,
+        reasoning_field_format: ReasoningFieldFormat | None = None,
         **kwargs: Any,
     ) -> dict[str, list[dict[str, Any]]]:
         r"""Convert the request messages and tools into the OpenAI format.
 
         Args:
-            convert_thinking_format: Conversion strategy for think chunks in assistant messages.
+            reasoning_field_format: Format for converting thinking chunks in assistant messages.
                 See `AssistantMessage.to_openai` for details.
             kwargs: Additional parameters to be added to the request.
 
@@ -329,7 +329,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
 
         for message in self.messages:
             if isinstance(message, AssistantMessage):
-                openai_messages.append(message.to_openai(reasoning_field_format=convert_thinking_format))
+                openai_messages.append(message.to_openai(reasoning_field_format=reasoning_field_format))
             else:
                 openai_messages.append(message.to_openai())
 
