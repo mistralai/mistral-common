@@ -1,3 +1,4 @@
+import warnings
 from pathlib import Path
 from typing import Any, Callable, Generic
 
@@ -215,7 +216,7 @@ class MistralTokenizer(
 
     @classmethod
     def from_model(cls, model: str, strict: bool = True) -> "MistralTokenizer":
-        r"""Get the Mistral tokenizer for a given model.
+        r"""Deprecated in favor of `from_hf_hub` or `from_file`, will be removed in 1.13.0.
 
         Args:
             model: The model name.
@@ -224,12 +225,20 @@ class MistralTokenizer(
         Returns:
             The Mistral tokenizer for the given model.
         """
+        warnings.warn(
+            "`MistralTokenizer.from_model` is deprecated and will be removed in 1.13.0. "
+            "Use `MistralTokenizer.from_hf_hub(...)` or `MistralTokenizer.from_file(...)` instead.",
+            FutureWarning,
+        )
 
         if not strict:
             raise ValueError("strict has to be `True` since v1.10.0.")
 
         if model not in MODEL_NAME_TO_TOKENIZER_CLS:
-            raise TokenizerException(f"Unrecognized model: {model}")
+            raise TokenizerException(
+                f"Unrecognized model: {model}. Use `MistralTokenizer.from_hf_hub(...)` "
+                f"or `MistralTokenizer.from_file(...)` to load newer or custom models."
+            )
 
         return MODEL_NAME_TO_TOKENIZER_CLS[model]()
 
