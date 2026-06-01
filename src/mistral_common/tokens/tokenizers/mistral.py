@@ -216,10 +216,7 @@ class MistralTokenizer(
 
     @classmethod
     def from_model(cls, model: str, strict: bool = True) -> "MistralTokenizer":
-        r"""Deprecated in favor of `from_hf_hub` or `from_file`, will be removed in 1.12.0.
-
-        The static `MODEL_NAME_TO_TOKENIZER_CLS` mapping is no longer kept in sync
-        with new model releases. Load tokenizers by repo or file instead.
+        r"""Deprecated in favor of `from_hf_hub` or `from_file`, will be removed in 1.13.0.
 
         Args:
             model: The model name.
@@ -229,7 +226,7 @@ class MistralTokenizer(
             The Mistral tokenizer for the given model.
         """
         warnings.warn(
-            "`MistralTokenizer.from_model` is deprecated and will be removed in 1.12.0. "
+            "`MistralTokenizer.from_model` is deprecated and will be removed in 1.13.0. "
             "Use `MistralTokenizer.from_hf_hub(...)` or `MistralTokenizer.from_file(...)` instead.",
             FutureWarning,
         )
