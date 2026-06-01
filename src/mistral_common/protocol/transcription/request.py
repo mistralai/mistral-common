@@ -8,6 +8,7 @@ from pydantic_extra_types.language_code import LanguageAlpha2
 from mistral_common.base import MistralBase
 from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
 from mistral_common.protocol.base import BaseCompletionRequest
+from mistral_common.protocol.instruct.chunk import _detect_audio_format
 from mistral_common.tokens.tokenizers.audio import Audio
 
 if is_soundfile_installed():
@@ -98,14 +99,21 @@ class TranscriptionRequest(BaseCompletionRequest):
 
         if isinstance(self.audio, bytes):
             buffer = io.BytesIO(self.audio)
+            fmt = _detect_audio_format(self.audio)
+            buffer.seek(0)
         else:
             assert isinstance(self.audio, str)
             audio = Audio.from_base64(self.audio)
+            assert audio.format is not None
+            fmt = audio.format.lower()
 
             buffer = io.BytesIO()
             sf.write(buffer, audio.audio_array, audio.sampling_rate, format=audio.format)
             # reset cursor to beginning
             buffer.seek(0)
+
+        # OpenAI's client uses the filename extension from .name to set the Content-Type.
+        buffer.name = f"audio.{fmt}"
 
         openai_request["file"] = buffer
         openai_request["seed"] = openai_request.pop("random_seed")

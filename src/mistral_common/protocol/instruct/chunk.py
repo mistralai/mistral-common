@@ -14,7 +14,7 @@ from mistral_common.deprecation import warn_once
 from mistral_common.image import SerializableImage
 from mistral_common.imports import is_soundfile_installed
 
-if is_soundfile_installed:
+if is_soundfile_installed():
     import soundfile as sf
 if TYPE_CHECKING:
     from mistral_common.tokens.tokenizers.audio import Audio
@@ -30,14 +30,19 @@ def _detect_audio_format(data: str | bytes) -> str:
 
     Returns:
         The detected audio format as a lowercase string (e.g. "wav", "mp3").
-    """
 
+    Raises:
+        ValueError: If the audio format cannot be detected.
+    """
     if isinstance(data, str):
         audio_bytes = base64.b64decode(data)
     else:
         audio_bytes = data
 
-    info = sf.info(io.BytesIO(audio_bytes))
+    try:
+        info = sf.info(io.BytesIO(audio_bytes))
+    except RuntimeError as e:
+        raise ValueError("Failed to detect audio format. Verify that the given file is valid wav or mp3.") from e
     fmt: str = info.format.lower()
     return fmt
 

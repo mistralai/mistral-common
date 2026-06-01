@@ -1151,6 +1151,43 @@ def _audio_to_wav_bytes(audio: Audio) -> bytes:
     return buffer.getvalue()
 
 
+def test_convert_transcription_str_buffer_name() -> None:
+    """Verify that the BytesIO buffer has a .name when audio is a base64 string."""
+    audio = _make_fake_audio(0.5)
+    b64 = audio.to_base64("wav")
+
+    request = TranscriptionRequest(audio=b64, model="model", language=None, target_streaming_delay_ms=None)
+    openai_request = request.to_openai()
+
+    buffer = openai_request["file"]
+    assert isinstance(buffer, io.BytesIO)
+    assert hasattr(buffer, "name")
+    assert buffer.name == "audio.wav"
+
+
+def test_convert_transcription_bytes_buffer_name() -> None:
+    """Verify that the BytesIO buffer has a .name when audio is raw bytes."""
+    audio = _make_fake_audio(0.5)
+    raw_bytes = _audio_to_wav_bytes(audio)
+
+    request = TranscriptionRequest(audio=raw_bytes, model="model", language=None, target_streaming_delay_ms=None)
+    openai_request = request.to_openai()
+
+    buffer = openai_request["file"]
+    assert isinstance(buffer, io.BytesIO)
+    assert hasattr(buffer, "name")
+    assert buffer.name == "audio.wav"
+
+
+def test_convert_transcription_bytes_invalid_format() -> None:
+    """Verify that invalid audio bytes raise a ValueError."""
+    request = TranscriptionRequest(
+        audio=b"not valid audio data", model="model", language=None, target_streaming_delay_ms=None
+    )
+    with pytest.raises(ValueError, match="Failed to detect audio format"):
+        request.to_openai()
+
+
 def test_convert_speech_request_from_openai() -> None:
     audio = _make_fake_audio(0.5)
     raw_bytes = _audio_to_wav_bytes(audio)
