@@ -27,10 +27,7 @@ if is_soxr_installed():
 if is_soundfile_installed():
     import soundfile as sf
 
-    # Get the available formats from soundfile
     available_formats = sf.available_formats()
-
-    # Create an Enum dynamically
     AudioFormat = Enum("AudioFormat", {format_name: format_name for format_name in available_formats})  # type: ignore[misc]
 else:
     AudioFormat = Enum("AudioFormat", {"none": "none"})  # type: ignore[no-redef]
@@ -78,7 +75,6 @@ class Audio:
         Returns:
            The duration of the audio in seconds.
         """
-        # in seconds
         duration: float = self.audio_array.shape[0] / self.sampling_rate
         return duration
 
@@ -115,7 +111,7 @@ class Audio:
         """
         assert_soundfile_installed()
 
-        if re.match(r"^data:audio/\w+;base64,", audio_base64):  # Remove the prefix if it exists
+        if re.match(r"^data:audio/\w+;base64,", audio_base64):
             audio_base64 = audio_base64.split(",")[1]
 
         try:
@@ -160,10 +156,8 @@ class Audio:
         Returns:
             An instance of the Audio class.
         """
-        # Read the bytes into an audio file.
         with io.BytesIO(audio_bytes) as audio_file:
             with sf.SoundFile(audio_file) as f:
-                # Read the entire audio data
                 audio_array = f.read(dtype="float32")
                 sampling_rate = f.samplerate
                 audio_format = f.format
