@@ -6,6 +6,7 @@ fixtures or test data -- those live in `conftest.py` and `fixtures_data.py`.
 """
 
 import json
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ from jinja2.sandbox import ImmutableSandboxedEnvironment
 from PIL import Image
 
 try:
+    from transformers.tokenization_mistral_common import MistralCommonBackend
     from transformers.utils.chat_template_utils import render_jinja_template
 
     _HAS_TRANSFORMERS = True
@@ -140,9 +142,9 @@ def render_template(
 def encode_mistral_common(mistral_tokenizer: MistralTokenizer, chat_request: ChatCompletionRequest, spm: bool) -> str:
     r"""Encode a chat request using mistral-common tokenizer.
 
-    Returns the text representation (not token IDs) because the transformers side
-    (`render_jinja_template`) also returns text. Token ID comparison would require
-    a full HF tokenizer with matching vocabulary, which is planned for a future PR.
+    Returns the text representation (not token IDs) for parity comparison
+    with the Jinja template rendering. Token ID comparison is handled
+    separately via MistralCommonBackend.
     """
     mistral_encoded = str(mistral_tokenizer.encode_chat_completion(chat_request).text)
     # Collapse all image tokens to a single [IMG] per image sequence.
@@ -179,6 +181,52 @@ def encode_transformers_from_openai(chat_template: str, openai_request: dict[str
     """
     assert _HAS_TRANSFORMERS, "transformers is required"
     return _render_via_transformers(chat_template, openai_request)
+
+
+def encode_backend_tokens(
+    backend: "MistralCommonBackend", chat_request: ChatCompletionRequest, keep_name_for_tools: bool = False
+) -> list[int]:
+    r"""Get token IDs from MistralCommonBackend.apply_chat_template.
+
+    Converts the ChatCompletionRequest to OpenAI format and encodes via the
+    HuggingFace MistralCommonBackend, returning raw token IDs for parity
+    comparison with mistral-common's ``encode_chat_completion().tokens``.
+
+    Args:
+        backend: A MistralCommonBackend instance.
+        chat_request: The chat completion request to encode.
+        keep_name_for_tools: If True, preserve tool message ``name`` fields
+            in the OpenAI format (they are dropped by ``to_openai()``).
+
+    Returns:
+        Token IDs produced by MistralCommonBackend.
+    """
+    assert _HAS_TRANSFORMERS, "transformers is required"
+    openai_request = chat_request.to_openai()
+    if keep_name_for_tools:
+        for openai_message, chat_message in zip(openai_request["messages"], chat_request.messages):
+            if chat_message.role == "tool":
+                openai_message["name"] = chat_message.name
+
+    for tool in openai_request.get("tools", []):
+        tool["function"].pop("strict", False)
+
+    kwargs: dict[str, Any] = {}
+    reasoning_effort = openai_request.get("reasoning_effort")
+    if reasoning_effort is not None:
+        kwargs["reasoning_effort"] = reasoning_effort
+
+    tokens = backend.apply_chat_template(
+        conversation=openai_request["messages"],
+        tools=openai_request.get("tools"),
+        tokenize=True,
+        return_dict=False,
+        padding=False,
+        truncation=False,
+        **kwargs,
+    )
+    assert isinstance(tokens, list), f"Expected list[int], got {type(tokens)}"
+    return tokens
 
 
 def _render_via_transformers(chat_template: str, openai_request: dict[str, Any]) -> str:
@@ -258,6 +306,99 @@ def _get_audio_encoder() -> AudioEncoder:
         audio_config=audio_config,
         special_ids=SpecialAudioIDs(audio=24, begin_audio=25, streaming_pad=26, text_to_audio=27, audio_to_text=28),
     )
+
+
+def _build_tekken_json(config: TestConfig, output_dir: Path) -> Path:
+    r"""Build a tekken.json file for the given test config.
+
+    Constructs a complete Tekken tokenizer JSON file by combining the base
+    vocabulary from the shipped tokenizer with version-specific special tokens
+    and optional image/audio/model_settings configuration. The file is written
+    to ``output_dir / "tekken.json"`` and can be loaded by both
+    `MistralTokenizer.from_file` and `MistralCommonBackend.from_pretrained`.
+
+    Args:
+        config: Test configuration specifying version and feature flags.
+        output_dir: Directory to write the JSON file into.
+
+    Returns:
+        Path to the written tekken.json file.
+    """
+    with open(MistralTokenizer._data_path() / "tekken_240911.json", "r", encoding="utf-8") as f:
+        base_data = json.load(f)
+
+    special_tokens = get_special_tokens(
+        tokenizer_version=config.version, add_audio=config.audio, add_think=config.think
+    )
+
+    tekken_data: dict[str, Any] = {
+        "config": {
+            "pattern": base_data["config"]["pattern"],
+            "default_vocab_size": base_data["config"]["default_vocab_size"],
+            "default_num_special_tokens": 100,
+            "version": config.version.value,
+        },
+        "vocab": base_data["vocab"],
+        "special_tokens": special_tokens,
+    }
+
+    if config.image:
+        tekken_data["image"] = {
+            "image_patch_size": 2,
+            "max_image_size": 10,
+            "spatial_merge_size": 1,
+        }
+
+    if config.audio:
+        tekken_data["audio"] = {
+            "sampling_rate": 24_000,
+            "frame_rate": 12.5,
+            "audio_encoding_config": {
+                "num_mel_bins": 128,
+                "window_size": 400,
+                "hop_length": 160,
+            },
+        }
+
+    if config.version.supports_model_settings:
+        model_settings_builder = ModelSettingsBuilder(
+            reasoning_effort=EnumBuilder(
+                accepts_none=True,
+                default=ReasoningEffort.none,
+                values=[ReasoningEffort.none, ReasoningEffort.high],
+            )
+        )
+        tekken_data["model_settings_builder"] = model_settings_builder.model_dump(mode="json")
+
+    tekken_path = output_dir / "tekken.json"
+    with open(tekken_path, "w", encoding="utf-8") as f:
+        json.dump(tekken_data, f, ensure_ascii=False)
+
+    return tekken_path
+
+
+def _build_spm_path(config: TestConfig, output_dir: Path) -> Path:
+    r"""Copy the SPM model file with the correct version suffix.
+
+    The SPM tokenizer version is determined by the filename suffix (e.g.,
+    ``.model.v3`` for v3). Image support is indicated by an ``m1`` suffix
+    (e.g., ``.model.v3m1``). The shipped v7m1 model file is copied with the
+    appropriate suffix for the requested config.
+
+    Args:
+        config: Test configuration specifying version and image flag.
+        output_dir: Directory to copy the file into.
+
+    Returns:
+        Path to the copied model file.
+    """
+    source = MistralTokenizer._data_path() / "mistral_instruct_tokenizer_241114.model.v7m1"
+    suffix = f".model.{config.version.value}"
+    if config.image:
+        suffix += "m1"
+    dest = output_dir / f"tokenizer{suffix}"
+    shutil.copy2(source, dest)
+    return dest
 
 
 def _get_instruct_tokenizer_class(tokenizer_version: TokenizerVersion) -> type[InstructTokenizerBase]:

@@ -1,13 +1,16 @@
+from pathlib import Path
 from typing import Any
 
 import pytest
 from jinja2.exceptions import TemplateError
+from transformers.tokenization_mistral_common import MistralCommonBackend
 
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.protocol.instruct.chunk import TextChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage, UserMessage
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.integrations.chat_templates.conftest import (
     ALL_TRANSFORMERS_CONFIGS,
     _config_id,
@@ -15,7 +18,9 @@ from tests.integrations.chat_templates.conftest import (
 from tests.integrations.chat_templates.fixtures_data import _get_conversations
 from tests.integrations.chat_templates.helpers import (
     TestConfig,
-    _get_mistral_tokenizer,
+    _build_spm_path,
+    _build_tekken_json,
+    encode_backend_tokens,
     encode_mistral_common,
     encode_transformers,
     encode_transformers_from_openai,
@@ -29,17 +34,17 @@ class TestTransformersMistralCommonParity:
         ids=[_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
     )
     @pytest.mark.parametrize("mode", [ValidationMode.test, ValidationMode.finetuning])
-    def test_chat_template(self, config: TestConfig, mode: ValidationMode) -> None:
+    def test_chat_template(self, config: TestConfig, mode: ValidationMode, tmp_path: Path) -> None:
         conversations = _get_conversations(config.version, mode, config.image, config.audio, config.think)
 
-        mistral_tokenizer = _get_mistral_tokenizer(
-            spm=config.spm,
-            tokenizer_version=config.version,
-            validation_mode=mode,
-            image=config.image,
-            audio=config.audio,
-            think=config.think,
-        )
+        if config.spm:
+            tokenizer_path = _build_spm_path(config, tmp_path)
+        else:
+            tokenizer_path = _build_tekken_json(config, tmp_path)
+
+        mistral_tokenizer = MistralTokenizer.from_file(str(tokenizer_path), mode=mode)
+        backend = MistralCommonBackend.from_pretrained(str(tmp_path), mode=mode)
+
         chat_template = generate_chat_template(
             spm=config.spm,
             tokenizer_version=config.version,
@@ -64,6 +69,14 @@ class TestTransformersMistralCommonParity:
             for message in conversation.messages:
                 if message.role == "tool" and message.name is None:
                     message.name = "tool"
+
+            # Token ID comparison: mistral-common vs MistralCommonBackend
+            # Done before text comparison because encode_mistral_common may mutate the conversation
+            mc_tokens = mistral_tokenizer.encode_chat_completion(conversation.model_copy(deep=True)).tokens
+            backend_tokens = encode_backend_tokens(
+                backend, conversation.model_copy(deep=True), keep_name_for_tools=True
+            )
+            assert mc_tokens == backend_tokens
 
             # Run transformers first since encode_mistral_common may mutate the conversation in-place
             transformers_encoded = encode_transformers(chat_template, conversation, keep_name_for_tools=True)
