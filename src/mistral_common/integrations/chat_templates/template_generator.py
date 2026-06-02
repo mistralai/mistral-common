@@ -1672,7 +1672,7 @@ def build_chat_template(config: TemplateConfig) -> str:
         The complete Jinja2 template as a string.
 
     Examples:
-        >>> config = TemplateConfig(version=TokenizerVersion.v3, image_support=True)
+        >>> config = TemplateConfig(version=TokenizerVersion.v3, image_support=True, use_special_token_variables=True)
         >>> template = build_chat_template(config)
         >>> "bos_token" in template
         True

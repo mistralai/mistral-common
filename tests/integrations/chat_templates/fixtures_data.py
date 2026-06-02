@@ -661,8 +661,8 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TEST = ChatCompletionRequest(  # type: ign
         ),
         AssistantMessage(
             content=[
-                TextChunk(text="Assistant says wow I need to think."),
                 ThinkChunk(thinking="Assistant thinks it's a red square."),
+                TextChunk(text="Assistant says wow I need to think."),
                 TextChunk(text="Assistant says it is a red square."),
             ],
             tool_calls=[],
@@ -687,8 +687,8 @@ REQUEST_MULTI_TURN_THINKING_TRAIN = ChatCompletionRequest(  # type: ignore[type-
         ),
         AssistantMessage(
             content=[
-                TextChunk(text="Assistant says wow I need to think."),
                 ThinkChunk(thinking="Assistant thinks it's a red square."),
+                TextChunk(text="Assistant says wow I need to think."),
                 TextChunk(text="Assistant says it is a red square."),
             ],
             tool_calls=[],
@@ -714,8 +714,8 @@ REQUEST_MULTI_TURN_THINKING_TEST = ChatCompletionRequest(  # type: ignore[type-v
         ),
         AssistantMessage(
             content=[
-                TextChunk(text="Assistant says wow I need to think."),
                 ThinkChunk(thinking="Assistant thinks it's a red square."),
+                TextChunk(text="Assistant says wow I need to think."),
                 TextChunk(text="Assistant says it is a red square."),
             ],
             tool_calls=[],
@@ -741,8 +741,8 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
         ),
         AssistantMessage(
             content=[
-                TextChunk(text="Assistant says wow I need to think."),
                 ThinkChunk(thinking="Assistant thinks it's a red square."),
+                TextChunk(text="Assistant says wow I need to think."),
                 TextChunk(text="Assistant says it is a red square."),
             ],
             tool_calls=[],
@@ -855,15 +855,15 @@ REQUEST_CONSECUTIVE_ASSISTANTS_THINK_TRAIN = ChatCompletionRequest(  # type: ign
         UserMessage(content="Solve this problem"),
         AssistantMessage(
             content=[
-                TextChunk(text="Hmm."),
                 ThinkChunk(thinking="Let me think..."),
+                TextChunk(text="Hmm."),
                 TextChunk(text="I need more context."),
             ]
         ),
         AssistantMessage(
             content=[
-                TextChunk(text="OK."),
                 ThinkChunk(thinking="Now I understand."),
+                TextChunk(text="OK."),
                 TextChunk(text="The answer is 42."),
             ]
         ),
