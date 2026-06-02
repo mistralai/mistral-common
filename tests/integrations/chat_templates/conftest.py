@@ -1,7 +1,7 @@
 r"""Chat template test configuration.
 
-Provides package-level fixtures, parametrize config lists, and module-level
-constants used across all chat template test layers.
+Provides package-level fixtures, parametrize config lists, and invalid-message
+fixtures used across all chat template test layers.
 
 Reusable helper functions live in `helpers.py`.
 Test data constants (`REQUEST_*`) live in `fixtures_data.py`.
@@ -55,101 +55,128 @@ ALL_CONFIGS: list[TestConfig] = [
 ALL_TRANSFORMERS_CONFIGS: list[TestConfig] = [c for c in ALL_CONFIGS if not c.plain_think]
 
 
-INVALID_SP_THINK: dict[str, Any] = {
-    "messages": [
-        {
-            "role": "system",
-            "content": [
-                {"type": "text", "text": "Hello"},
-                {"type": "think", "thinking": "Hello"},
-            ],
-        }
-    ]
-}
+@pytest.fixture(scope="module")
+def invalid_sp_think() -> dict[str, Any]:
+    r"""Invalid system message containing a think chunk."""
+    return {
+        "messages": [
+            {
+                "role": "system",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                    {"type": "think", "thinking": "Hello"},
+                ],
+            }
+        ]
+    }
 
-INVALID_SP_RANDOM: dict[str, Any] = {
-    "messages": [
-        {
-            "role": "system",
-            "content": [
-                {"type": "text", "text": "Hello"},
-                {"type": "random", "random": "Hello"},
-            ],
-        }
-    ]
-}
 
-INVALID_ASSISTANT_THINK: dict[str, Any] = {
-    "messages": [
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "Hello"},
-            ],
-        },
-        {
-            "role": "assistant",
-            "content": [
-                {"type": "text", "text": "Hello"},
-                {"type": "think", "thinking": "Hello"},
-            ],
-        },
-    ]
-}
+@pytest.fixture(scope="module")
+def invalid_sp_random() -> dict[str, Any]:
+    r"""Invalid system message containing an unknown chunk type."""
+    return {
+        "messages": [
+            {
+                "role": "system",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                    {"type": "random", "random": "Hello"},
+                ],
+            }
+        ]
+    }
 
-INVALID_ASSISTANT_RANDOM: dict[str, Any] = {
-    "messages": [
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "Hello"},
-            ],
-        },
-        {
-            "role": "assistant",
-            "content": [
-                {"type": "text", "text": "Hello"},
-                {"type": "random", "random": "Hello"},
-            ],
-        },
-    ]
-}
 
-INVALID_USER_IMAGE: dict[str, Any] = {
-    "messages": [
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "Hello"},
-                {"type": "image", "image_url": "Hello"},
-            ],
-        }
-    ]
-}
+@pytest.fixture(scope="module")
+def invalid_assistant_think() -> dict[str, Any]:
+    r"""Invalid assistant message containing a think chunk."""
+    return {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                ],
+            },
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                    {"type": "think", "thinking": "Hello"},
+                ],
+            },
+        ]
+    }
 
-INVALID_USER_AUDIO: dict[str, Any] = {
-    "messages": [
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "Hello"},
-                {"type": "audio", "audio_url": "Hello"},
-            ],
-        }
-    ]
-}
 
-INVALID_USER_RANDOM: dict[str, Any] = {
-    "messages": [
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "Hello"},
-                {"type": "random", "random": "Hello"},
-            ],
-        }
-    ]
-}
+@pytest.fixture(scope="module")
+def invalid_assistant_random() -> dict[str, Any]:
+    r"""Invalid assistant message containing an unknown chunk type."""
+    return {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                ],
+            },
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                    {"type": "random", "random": "Hello"},
+                ],
+            },
+        ]
+    }
+
+
+@pytest.fixture(scope="module")
+def invalid_user_image() -> dict[str, Any]:
+    r"""Invalid user message containing an image chunk."""
+    return {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                    {"type": "image", "image_url": "Hello"},
+                ],
+            }
+        ]
+    }
+
+
+@pytest.fixture(scope="module")
+def invalid_user_audio() -> dict[str, Any]:
+    r"""Invalid user message containing an audio chunk."""
+    return {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                    {"type": "audio", "audio_url": "Hello"},
+                ],
+            }
+        ]
+    }
+
+
+@pytest.fixture(scope="module")
+def invalid_user_random() -> dict[str, Any]:
+    r"""Invalid user message containing an unknown chunk type."""
+    return {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                    {"type": "random", "random": "Hello"},
+                ],
+            }
+        ]
+    }
 
 
 def _config_id(c: TestConfig) -> str:
