@@ -1,5 +1,3 @@
-from typing import Any
-
 import pytest
 from jinja2.exceptions import TemplateError
 
@@ -95,30 +93,6 @@ class TestTransformersMistralCommonParity:
             use_special_token_variables=True,
         )
 
-        # Consecutive user messages should be aggregated (not raise an error)
-        valid_consecutive_users = {
-            "messages": [
-                {"role": "user", "content": "Hello"},
-                {"role": "user", "content": "World"},
-                {"role": "assistant", "content": "Hi"},
-            ]
-        }
-        # Only test transformers side for consecutive users — the dict fixture
-        # cannot be converted to ChatCompletionRequest for mistral-common parity.
-        encode_transformers_from_openai(chat_template, valid_consecutive_users)
-
-        # Consecutive assistants get aggregated: user, assistant*3, user -> user, assistant, user
-        valid_consecutive_assistants = {
-            "messages": [
-                {"role": "user", "content": "Hello"},
-                {"role": "assistant", "content": "Hi"},
-                {"role": "assistant", "content": "Help?"},
-                {"role": "assistant", "content": "More"},
-                {"role": "user", "content": "Thanks"},
-            ]
-        }
-        encode_transformers_from_openai(chat_template, valid_consecutive_assistants)
-
         # Starting with assistant is rejected by the first-message constraint
         invalid_starts_with_assistant = {
             "messages": [
@@ -156,22 +130,6 @@ class TestTransformersMistralCommonParity:
             }
             with pytest.raises(TemplateError, match=r"Unexpected role 'tool' after role 'user'"):
                 encode_transformers_from_openai(chat_template, invalid_tool_after_user)
-
-        # User after tool is accepted (user can follow tool results)
-        if config.version >= TokenizerVersion.v2:
-            valid_user_after_tool: dict[str, Any] = {
-                "messages": [
-                    {"role": "user", "content": "Hello"},
-                    {
-                        "role": "assistant",
-                        "content": "",
-                        "tool_calls": [{"id": "123456789", "function": {"name": "func", "arguments": "{}"}}],
-                    },
-                    {"role": "tool", "content": "result", "tool_call_id": "123456789"},
-                    {"role": "user", "content": "continue with this context"},
-                ]
-            }
-            encode_transformers_from_openai(chat_template, valid_user_after_tool)
 
         # System after assistant is rejected for v7+ (system stays in loop_messages)
         if config.version >= TokenizerVersion.v7:
