@@ -3,7 +3,6 @@ from typing import Any
 
 import pytest
 from jinja2.exceptions import TemplateError
-from transformers.tokenization_mistral_common import MistralCommonBackend
 
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.protocol.instruct.chunk import TextChunk
@@ -18,9 +17,10 @@ from tests.integrations.chat_templates.conftest import (
 from tests.integrations.chat_templates.fixtures_data import _get_conversations
 from tests.integrations.chat_templates.helpers import (
     TestConfig,
+    _build_hf_tokenizer,
     _build_spm_path,
     _build_tekken_json,
-    encode_backend_tokens,
+    encode_hf_tokens,
     encode_mistral_common,
     encode_transformers,
     encode_transformers_from_openai,
@@ -43,7 +43,6 @@ class TestTransformersMistralCommonParity:
             tokenizer_path = _build_tekken_json(config, tmp_path)
 
         mistral_tokenizer = MistralTokenizer.from_file(str(tokenizer_path), mode=mode)
-        backend = MistralCommonBackend.from_pretrained(str(tmp_path), mode=mode)
 
         chat_template = generate_chat_template(
             spm=config.spm,
@@ -55,6 +54,12 @@ class TestTransformersMistralCommonParity:
             plain_thinking_support=False,
             use_special_token_variables=True,
         )
+
+        # Build HF tokenizer for Tekken-based token ID comparison
+        hf_tokenizer = None
+        if not config.spm:
+            hf_tokenizer = _build_hf_tokenizer(tokenizer_path, chat_template, mistral_tokenizer.instruct_tokenizer)
+
         if config.version <= TokenizerVersion.v2:
             for conv in conversations:
                 for message in conv.messages:
@@ -70,18 +75,20 @@ class TestTransformersMistralCommonParity:
                 if message.role == "tool" and message.name is None:
                     message.name = "tool"
 
-            # Token ID comparison: mistral-common vs MistralCommonBackend
-            # Done before text comparison because encode_mistral_common may mutate the conversation
-            mc_tokens = mistral_tokenizer.encode_chat_completion(conversation.model_copy(deep=True)).tokens
-            backend_tokens = encode_backend_tokens(
-                backend, conversation.model_copy(deep=True), keep_name_for_tools=True
-            )
-            assert mc_tokens == backend_tokens
-
             # Run transformers first since encode_mistral_common may mutate the conversation in-place
             transformers_encoded = encode_transformers(chat_template, conversation, keep_name_for_tools=True)
-            mistral_common_encoded = encode_mistral_common(mistral_tokenizer, conversation, config.spm)
 
+            # Token ID comparison: apply_chat_template(tokenize=True) vs mistral-common
+            # Skipped for image/audio configs because multimodal tokens are generated
+            # by encoders (not from text), so token IDs won't match.
+            # Skipped for SPM because building an HF tokenizer from SPM is a separate concern.
+            if not config.image and not config.audio and not config.spm:
+                assert hf_tokenizer is not None
+                hf_tokens = encode_hf_tokens(hf_tokenizer, conversation.model_copy(deep=True), keep_name_for_tools=True)
+                mc_tokens = mistral_tokenizer.encode_chat_completion(conversation.model_copy(deep=True)).tokens
+                assert mc_tokens == hf_tokens
+
+            mistral_common_encoded = encode_mistral_common(mistral_tokenizer, conversation, config.spm)
             assert mistral_common_encoded == transformers_encoded
 
     @pytest.mark.parametrize(

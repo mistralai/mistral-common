@@ -9,7 +9,7 @@ import json
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from jinja2 import BaseLoader
@@ -17,7 +17,7 @@ from jinja2.sandbox import ImmutableSandboxedEnvironment
 from PIL import Image
 
 try:
-    from transformers.tokenization_mistral_common import MistralCommonBackend
+    from transformers import PreTrainedTokenizerFast
     from transformers.utils.chat_template_utils import render_jinja_template
 
     _HAS_TRANSFORMERS = True
@@ -144,7 +144,7 @@ def encode_mistral_common(mistral_tokenizer: MistralTokenizer, chat_request: Cha
 
     Returns the text representation (not token IDs) for parity comparison
     with the Jinja template rendering. Token ID comparison is handled
-    separately via MistralCommonBackend.
+    separately via `encode_hf_tokens`.
     """
     mistral_encoded = str(mistral_tokenizer.encode_chat_completion(chat_request).text)
     # Collapse all image tokens to a single [IMG] per image sequence.
@@ -183,50 +183,212 @@ def encode_transformers_from_openai(chat_template: str, openai_request: dict[str
     return _render_via_transformers(chat_template, openai_request)
 
 
-def encode_backend_tokens(
-    backend: "MistralCommonBackend", chat_request: ChatCompletionRequest, keep_name_for_tools: bool = False
-) -> list[int]:
-    r"""Get token IDs from MistralCommonBackend.apply_chat_template.
+def _get_active_special_token_ids(instruct_tokenizer: InstructTokenizer) -> set[int]:
+    r"""Collect special token IDs that the instruct tokenizer actively uses.
 
-    Converts the ChatCompletionRequest to OpenAI format and encodes via the
-    HuggingFace MistralCommonBackend, returning raw token IDs for parity
-    comparison with mistral-common's ``encode_chat_completion().tokens``.
+    Scans instance attributes of the instruct tokenizer for integer values
+    that fall within the base tokenizer's special token range. This
+    determines which tokens `encode_chat_completion` inserts as dedicated
+    special-token IDs (e.g. `[INST]` in V2+) versus encoding as regular
+    text (e.g. `[INST]` in V1).
+
+    BOS and EOS are always included because `encode_instruct` prepends BOS
+    and the template text may contain `</s>` as an EOS marker.
 
     Args:
-        backend: A MistralCommonBackend instance.
-        chat_request: The chat completion request to encode.
-        keep_name_for_tools: If True, preserve tool message ``name`` fields
-            in the OpenAI format (they are dropped by ``to_openai()``).
+        instruct_tokenizer: The instruct tokenizer whose attributes to scan.
 
     Returns:
-        Token IDs produced by MistralCommonBackend.
+        Set of special token IDs actively used by this instruct tokenizer.
     """
-    assert _HAS_TRANSFORMERS, "transformers is required"
+    tokenizer = instruct_tokenizer.tokenizer
+    # BOS and EOS are always active
+    active_ids: set[int] = {tokenizer.bos_id, tokenizer.eos_id}
+
+    num_special = getattr(tokenizer, "num_special_tokens", 0)
+    if num_special == 0:
+        return active_ids
+
+    for attr_name in vars(instruct_tokenizer):
+        val = getattr(instruct_tokenizer, attr_name)
+        if isinstance(val, int) and 0 <= val < num_special:
+            active_ids.add(val)
+
+    return active_ids
+
+
+def _build_hf_tokenizer(
+    tekken_path: Path, chat_template: str, instruct_tokenizer: InstructTokenizer
+) -> "PreTrainedTokenizerFast":
+    r"""Build a `PreTrainedTokenizerFast` from a tekken.json file.
+
+    Converts the Tekken BPE vocabulary to a HuggingFace tokenizers format,
+    preserving the Tekkenizer's ID scheme: special tokens at IDs 0 to
+    `num_special - 1`, regular BPE tokens at IDs `num_special` and above.
+
+    Only special tokens that the instruct tokenizer actively uses are
+    registered as `AddedToken` objects. Inactive special tokens (e.g.
+    `[INST]` in V1) remain in the BPE vocab but are not treated as special
+    by the HuggingFace tokenizer, so they get byte-level encoded like
+    regular text.
+
+    .. note::
+
+        TODO: The ID-offset conversion done here should be fixed upstream
+        in transformers' `MistralConverter` so that it produces IDs matching
+        the Tekkenizer natively. Until then, we apply the offset manually to
+        ensure a fair token-level comparison.
+
+    Args:
+        tekken_path: Path to the tekken.json file.
+        chat_template: Jinja chat template string to set on the tokenizer.
+        instruct_tokenizer: The instruct tokenizer used to determine active
+            special tokens.
+
+    Returns:
+        A configured `PreTrainedTokenizerFast` with matching token IDs.
+    """
+    import base64
+    from functools import lru_cache
+
+    from tokenizers import Regex, decoders, pre_tokenizers, processors
+    from tokenizers import Tokenizer as HFTokenizer
+    from tokenizers.models import BPE
+    from transformers import AddedToken
+    from transformers.convert_slow_tokenizer import bytes_to_unicode
+
+    with open(tekken_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    pattern: str = data["config"]["pattern"]
+    special_tokens_list: list[dict[str, Any]] = data["special_tokens"]
+    num_special: int = data["config"]["default_num_special_tokens"]
+    vocab_size: int = data["config"]["default_vocab_size"]
+    inner_vocab_size = vocab_size - num_special
+    vocab_entries: list[dict[str, Any]] = data["vocab"][:inner_vocab_size]
+
+    active_ids = _get_active_special_token_ids(instruct_tokenizer)
+
+    byte_encoder = bytes_to_unicode()
+
+    @lru_cache
+    def token_bytes_to_string(b: bytes) -> str:
+        return "".join([byte_encoder[ord(char)] for char in b.decode("latin-1")])
+
+    # Decode raw bytes for each vocab entry
+    raw_tokens = [base64.b64decode(entry["token_bytes"]) for entry in vocab_entries]
+    rank_set = set(raw_tokens)
+    token_to_rank: dict[bytes, int] = {token: rank for rank, token in enumerate(raw_tokens)}
+
+    # Build BPE vocab with regular tokens at IDs num_special+ and special tokens at 0..num_special-1.
+    # All special token slots (active and filler) must appear in the BPE vocab so the
+    # HuggingFace tokenizer recognizes IDs 0 through num_special-1.
+    bpe_vocab: dict[str, int] = {}
+    defined_ids: set[int] = set()
+    for st in special_tokens_list:
+        bpe_vocab[st["token_str"]] = st["rank"]
+        defined_ids.add(st["rank"])
+    for i in range(num_special):
+        if i not in defined_ids:
+            bpe_vocab[f"<SPECIAL_{i}>"] = i
+    for rank, token in enumerate(raw_tokens):
+        bpe_vocab[token_bytes_to_string(token)] = rank + num_special
+
+    # Extract BPE merges (same algorithm as MistralConverter.extract_vocab_merges_from_model)
+    merges: list[tuple[bytes, bytes, int]] = []
+    for rank, token in enumerate(raw_tokens):
+        if len(token) == 1:
+            continue
+        local: list[tuple[bytes, bytes, int]] = []
+        for index in range(1, len(token)):
+            piece_l, piece_r = token[:index], token[index:]
+            if piece_l in rank_set and piece_r in rank_set and (piece_l + piece_r) in rank_set:
+                local.append((piece_l, piece_r, rank))
+        local = sorted(local, key=lambda x: (token_to_rank[x[0]], token_to_rank[x[1]]))
+        merges.extend(local)
+    merges = sorted(merges, key=lambda val: val[2])
+    bpe_merges = [(token_bytes_to_string(m[0]), token_bytes_to_string(m[1])) for m in merges]
+
+    # Create tokenizer with BPE model
+    tokenizer = HFTokenizer(BPE(bpe_vocab, bpe_merges, fuse_unk=False))
+    if hasattr(tokenizer.model, "ignore_merges"):
+        tokenizer.model.ignore_merges = True
+
+    # Set pre-tokenizer, decoder, and post-processor
+    tokenizer.pre_tokenizer = pre_tokenizers.Sequence(
+        [
+            pre_tokenizers.Split(Regex(pattern), behavior="isolated", invert=False),
+            pre_tokenizers.ByteLevel(add_prefix_space=False, use_regex=False),
+        ]
+    )
+    tokenizer.decoder = decoders.ByteLevel()
+    tokenizer.post_processor = processors.ByteLevel(trim_offsets=False)
+
+    # Register only active special tokens in added_tokens_decoder.
+    # Inactive special tokens remain in the BPE vocab but are not treated
+    # specially, so they get byte-level encoded like regular text (matching
+    # how older instruct tokenizers like V1 handle them).
+    added_tokens_decoder: dict[int, AddedToken] = {}
+    for st in special_tokens_list:
+        if st["rank"] in active_ids:
+            added_tokens_decoder[st["rank"]] = AddedToken(st["token_str"], special=True, normalized=False)
+    for i in range(num_special):
+        if i not in defined_ids and i in active_ids:
+            added_tokens_decoder[i] = AddedToken(f"<SPECIAL_{i}>", special=True, normalized=False)
+
+    return PreTrainedTokenizerFast(
+        tokenizer_object=tokenizer,
+        added_tokens_decoder=added_tokens_decoder,
+        bos_token="<s>",
+        eos_token="</s>",
+        chat_template=chat_template,
+    )
+
+
+def encode_hf_tokens(
+    hf_tokenizer: "PreTrainedTokenizerFast", chat_request: ChatCompletionRequest, keep_name_for_tools: bool = False
+) -> list[int]:
+    r"""Get token IDs from a standard HuggingFace tokenizer.
+
+    Converts the `ChatCompletionRequest` to OpenAI format and encodes via
+    `apply_chat_template(tokenize=True)`.
+
+    Args:
+        hf_tokenizer: A `PreTrainedTokenizerFast` instance.
+        chat_request: The chat completion request to encode.
+        keep_name_for_tools: If True, preserve tool message `name` fields.
+
+    Returns:
+        Token IDs produced by the HuggingFace tokenizer.
+    """
     openai_request = chat_request.to_openai()
+    messages = openai_request["messages"]
+
     if keep_name_for_tools:
-        for openai_message, chat_message in zip(openai_request["messages"], chat_request.messages):
+        for openai_message, chat_message in zip(messages, chat_request.messages):
             if chat_message.role == "tool":
                 openai_message["name"] = chat_message.name
 
-    for tool in openai_request.get("tools", []):
-        tool["function"].pop("strict", False)
+    tools = openai_request.get("tools", None)
+    if tools is not None:
+        for tool in tools:
+            tool["function"].pop("strict", None)
 
-    kwargs: dict[str, Any] = {}
+    template_kwargs: dict[str, Any] = {}
     reasoning_effort = openai_request.get("reasoning_effort")
     if reasoning_effort is not None:
-        kwargs["reasoning_effort"] = reasoning_effort
+        template_kwargs["reasoning_effort"] = reasoning_effort
 
-    tokens = backend.apply_chat_template(
-        conversation=openai_request["messages"],
-        tools=openai_request.get("tools"),
+    result = hf_tokenizer.apply_chat_template(
+        conversation=messages,
+        tools=tools,
         tokenize=True,
         return_dict=False,
         padding=False,
         truncation=False,
-        **kwargs,
+        **template_kwargs,
     )
-    assert isinstance(tokens, list), f"Expected list[int], got {type(tokens)}"
-    return tokens
+    return cast(list[int], result)
 
 
 def _render_via_transformers(chat_template: str, openai_request: dict[str, Any]) -> str:
@@ -314,8 +476,8 @@ def _build_tekken_json(config: TestConfig, output_dir: Path) -> Path:
     Constructs a complete Tekken tokenizer JSON file by combining the base
     vocabulary from the shipped tokenizer with version-specific special tokens
     and optional image/audio/model_settings configuration. The file is written
-    to ``output_dir / "tekken.json"`` and can be loaded by both
-    `MistralTokenizer.from_file` and `MistralCommonBackend.from_pretrained`.
+    to `output_dir / "tekken.json"` and can be loaded by
+    `MistralTokenizer.from_file`.
 
     Args:
         config: Test configuration specifying version and feature flags.
@@ -381,8 +543,8 @@ def _build_spm_path(config: TestConfig, output_dir: Path) -> Path:
     r"""Copy the SPM model file with the correct version suffix.
 
     The SPM tokenizer version is determined by the filename suffix (e.g.,
-    ``.model.v3`` for v3). Image support is indicated by an ``m1`` suffix
-    (e.g., ``.model.v3m1``). The shipped v7m1 model file is copied with the
+    `.model.v3` for v3). Image support is indicated by an `m1` suffix
+    (e.g., `.model.v3m1`). The shipped v7m1 model file is copied with the
     appropriate suffix for the requested config.
 
     Args:
