@@ -147,13 +147,34 @@ def encode_mistral_common(mistral_tokenizer: MistralTokenizer, chat_request: Cha
     separately via `encode_hf_tokens`.
     """
     mistral_encoded = str(mistral_tokenizer.encode_chat_completion(chat_request).text)
-    # Collapse all image tokens to a single [IMG] per image sequence.
+    # Collapse each image token sequence ([IMG]...[IMG_BREAK]...[IMG_END]) into a single [IMG].
+    # Each sequence has exactly one [IMG_END], so replacing inner tokens and converting [IMG_END]
+    # preserves one [IMG] per image (important for multi-image inputs).
     mistral_encoded = mistral_encoded.replace("[IMG]", "").replace("[IMG_BREAK]", "").replace("[IMG_END]", "[IMG]")
     # Remove audio tokens except one per audio
     mistral_encoded = mistral_encoded.replace("[AUDIO]", "").replace("[BEGIN_AUDIO]", "[AUDIO]")
     if spm:
         mistral_encoded = mistral_encoded.replace(SPM_WHITESPACE, " ").replace("<0x0A>", "\n")
     return mistral_encoded
+
+
+def _to_openai_request(chat_request: ChatCompletionRequest, keep_name_for_tools: bool = False) -> dict[str, Any]:
+    r"""Convert a ChatCompletionRequest to OpenAI format.
+
+    Args:
+        chat_request: The chat completion request to convert.
+        keep_name_for_tools: If True, preserve tool message `name` fields
+            that `to_openai` strips by default.
+
+    Returns:
+        OpenAI-format request dictionary.
+    """
+    openai_request = chat_request.to_openai()
+    if keep_name_for_tools:
+        for openai_message, chat_message in zip(openai_request["messages"], chat_request.messages):
+            if chat_message.role == "tool":
+                openai_message["name"] = chat_message.name
+    return openai_request
 
 
 def encode_transformers(
@@ -165,11 +186,7 @@ def encode_transformers(
     the HuggingFace transformers rendering pipeline.
     """
     assert _HAS_TRANSFORMERS, "transformers is required"
-    openai_request = chat_request.to_openai()
-    if keep_name_for_tools:
-        for openai_message, chat_message in zip(openai_request["messages"], chat_request.messages):
-            if chat_message.role == "tool":
-                openai_message["name"] = chat_message.name
+    openai_request = _to_openai_request(chat_request, keep_name_for_tools)
     return _render_via_transformers(chat_template, openai_request)
 
 
@@ -361,13 +378,8 @@ def encode_hf_tokens(
     Returns:
         Token IDs produced by the HuggingFace tokenizer.
     """
-    openai_request = chat_request.to_openai()
+    openai_request = _to_openai_request(chat_request, keep_name_for_tools)
     messages = openai_request["messages"]
-
-    if keep_name_for_tools:
-        for openai_message, chat_message in zip(messages, chat_request.messages):
-            if chat_message.role == "tool":
-                openai_message["name"] = chat_message.name
 
     tools = openai_request.get("tools", None)
     if tools is not None:
