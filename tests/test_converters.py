@@ -1207,9 +1207,11 @@ def test_transcription_to_openai_format_detection(fmt: str) -> None:
     request = TranscriptionRequest(audio=b64, model="model", language=None, target_streaming_delay_ms=None)
     openai_request = request.to_openai()
 
-    assert openai_request["file"].name == f"audio.{fmt}"
+    buffer = openai_request["file"]
+    assert isinstance(buffer, io.BytesIO)
+    assert buffer.name == f"audio.{fmt}"
 
-    recovered = Audio.from_bytes(openai_request["file"].getvalue())
+    recovered = Audio.from_bytes(buffer.getvalue())
     assert np.allclose(recovered.audio_array, audio.audio_array, atol=1e-3)
 
 
@@ -1218,14 +1220,16 @@ def test_transcription_to_openai_bytes_format_detection(fmt: str) -> None:
     import soundfile as sf
 
     audio = _make_fake_audio(0.5)
-    buffer = io.BytesIO()
-    sf.write(buffer, audio.audio_array, audio.sampling_rate, format=fmt)
-    raw_bytes = buffer.getvalue()
+    buf = io.BytesIO()
+    sf.write(buf, audio.audio_array, audio.sampling_rate, format=fmt)
+    raw_bytes = buf.getvalue()
 
     request = TranscriptionRequest(audio=raw_bytes, model="model", language=None, target_streaming_delay_ms=None)
     openai_request = request.to_openai()
 
-    assert openai_request["file"].name == f"audio.{fmt}"
+    buffer = openai_request["file"]
+    assert isinstance(buffer, io.BytesIO)
+    assert buffer.name == f"audio.{fmt}"
 
 
 def test_convert_speech_request_from_openai() -> None:
