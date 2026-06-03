@@ -17,11 +17,13 @@ from tests.integrations.chat_templates.conftest import (
 from tests.integrations.chat_templates.fixtures_data import _get_conversations
 from tests.integrations.chat_templates.helpers import (
     TestConfig,
-    _build_hf_tokenizer,
     _build_spm_path,
     _build_tekken_json,
-    encode_hf_tokens,
     encode_mistral_common,
+)
+from tests.integrations.chat_templates.hf_utils import (
+    _build_hf_tokenizer,
+    encode_hf_tokens,
     encode_transformers,
     encode_transformers_from_openai,
 )

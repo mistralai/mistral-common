@@ -9,7 +9,8 @@ from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from tests.integrations.chat_templates.fixtures_data import _get_conversations
-from tests.integrations.chat_templates.helpers import _get_mistral_tokenizer, encode_mistral_common, encode_transformers
+from tests.integrations.chat_templates.helpers import _get_mistral_tokenizer, encode_mistral_common
+from tests.integrations.chat_templates.hf_utils import encode_transformers
 
 
 class TestPlainThinkingValidation:
