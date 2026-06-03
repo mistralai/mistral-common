@@ -518,3 +518,22 @@ def test_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkeni
     tokens_2 = mistral_tokenizer.encode_chat_completion(chat_completion_request)
 
     assert tokens == tokens_2.tokens
+
+
+def test_encode_chat_completion_continue_final_message() -> None:
+    # Regression: the tekken normalizers (V7/V15) dropped continue_final_message
+    # when converting ChatCompletionRequest -> InstructRequest, so the full
+    # encode_chat_completion path appended EOS. encode_instruct was unaffected,
+    # which is why the existing test missed it. See #232.
+    tokenizer = MistralTokenizer.v7(is_mm=True)
+    eos_id = tokenizer.instruct_tokenizer.tokenizer.eos_id
+
+    request: ChatCompletionRequest = ChatCompletionRequest(
+        messages=[UserMessage(content="a"), AssistantMessage(content="b")],
+        continue_final_message=True,
+    )
+    encoded = tokenizer.encode_chat_completion(request)
+
+    assert encoded.tokens == [1, 3, 1032, 4, 1055]
+    assert encoded.tokens[-1] != eos_id
+    assert eos_id not in encoded.prefix_ids
