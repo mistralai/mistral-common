@@ -11,6 +11,7 @@ from mistral_common.protocol.instruct.chunk import (
     ContentChunk,
     TextChunk,
     ThinkChunk,
+    ToolContentChunk,
     UserContentChunk,
     _convert_openai_content_chunks,
 )
@@ -308,7 +309,7 @@ class ToolMessage(BaseMessage):
        >>> message = ToolMessage(content="Hello, how can I help you?", tool_call_id="123")
     """
 
-    content: str | list[TextChunk]
+    content: str | list[ToolContentChunk]
     role: Literal[Roles.tool] = Roles.tool
     tool_call_id: str | None = None
 
@@ -318,11 +319,27 @@ class ToolMessage(BaseMessage):
     def to_openai(self) -> dict[str, Any]:
         r"""Converts the message to the OpenAI format."""
         assert self.tool_call_id is not None, "tool_call_id must be provided for tool messages."
-        return self.model_dump(exclude={"name"})
+        if isinstance(self.content, str):
+            return {"role": self.role, "tool_call_id": self.tool_call_id, "content": self.content}
+        return {
+            "role": self.role,
+            "tool_call_id": self.tool_call_id,
+            "content": [chunk.to_openai() for chunk in self.content],
+        }
 
     @classmethod
     def from_openai(cls, messages: dict[str, str | list[dict[str, str | dict[str, Any]]]]) -> "ToolMessage":
         r"""Converts the OpenAI message to the Mistral format."""
+        content = messages.get("content")
+        if isinstance(content, list):
+            return cls.model_validate(
+                {
+                    "role": messages.get("role", "tool"),
+                    "tool_call_id": messages.get("tool_call_id"),
+                    "content": [_convert_openai_content_chunks(chunk) for chunk in content],
+                    "name": messages.get("name"),
+                }
+            )
         tool_message = cls.model_validate_ignore_extra(messages)
         assert tool_message.tool_call_id is not None, "tool_call_id must be provided for tool messages."
         return tool_message

@@ -237,13 +237,30 @@ def test_end_to_end_v13_wrong_order(
 def test_encode_tool_message(v13_tekkenizer: InstructTokenizerV13) -> None:
     tool_message = ToolMessage(content="R1", tool_call_id="123456789")
     assert isinstance(v13_tekkenizer, InstructTokenizerV13)
-    encoded = v13_tekkenizer.encode_tool_message(tool_message, is_before_last_user_message=False)
+    encoded, images, audios = v13_tekkenizer.encode_tool_message(tool_message, is_before_last_user_message=False)
     assert encoded == [7, 182, 149, 8]
+    assert images == []
+    assert audios == []
 
     tool_message = ToolMessage(content=[TextChunk(text="R1"), TextChunk(text="R2")], tool_call_id="123456789")
     assert isinstance(v13_tekkenizer, InstructTokenizerV13)
-    encoded = v13_tekkenizer.encode_tool_message(tool_message, is_before_last_user_message=False)
+    encoded, images, audios = v13_tekkenizer.encode_tool_message(tool_message, is_before_last_user_message=False)
     assert encoded == [7, 182, 149, 182, 150, 8]
+    assert images == []
+    assert audios == []
+
+
+def test_encode_tool_message_with_audio(v13_tekkenizer_audio: InstructTokenizerV13, audio_chunk: AudioChunk) -> None:
+    tool_message = ToolMessage(
+        content=[TextChunk(text="R1"), audio_chunk],
+        tool_call_id="123456789",
+    )
+    encoded, images, audios = v13_tekkenizer_audio.encode_tool_message(tool_message, is_before_last_user_message=False)
+    assert len(audios) == 1
+    assert images == []
+    # Tokens should contain BEGIN_TOOL_RESULTS, text tokens, audio tokens, END_TOOL_RESULTS
+    assert encoded[0] == v13_tekkenizer_audio.BEGIN_TOOL_RESULTS
+    assert encoded[-1] == v13_tekkenizer_audio.END_TOOL_RESULTS
 
 
 def test_encode_think_chunk(v13_tekkenizer_think: InstructTokenizerV13) -> None:

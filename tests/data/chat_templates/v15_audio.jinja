@@ -179,7 +179,9 @@
 
     {#- Tool messages only supports text content. #}
     {%- elif message['role'] == 'tool' %}
-        {{- '[TOOL_RESULTS]' + message['content']|string + '[/TOOL_RESULTS]' }}
+        {{- '[TOOL_RESULTS]' -}}
+        {{- render_content(message['content'], 'tool message contents', supported_types_desc='text', support_audio=true) -}}
+        {{- '[/TOOL_RESULTS]' }}
 
     {#- System messages. #}
     {%- elif message['role'] == 'system' %}

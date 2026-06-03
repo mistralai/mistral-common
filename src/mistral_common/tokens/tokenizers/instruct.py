@@ -104,7 +104,9 @@ class InstructTokenizerBase(
         return first_user_idx, last_user_idx
 
     @abstractmethod
-    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> list[int]:
+    def encode_tool_message(
+        self, message: ToolMessage, is_before_last_user_message: bool
+    ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a tool message.
 
         Raises:
@@ -192,7 +194,9 @@ class InstructTokenizerBase(
                 images.extend(new_images)
                 audios.extend(new_audios)
             elif isinstance(msg, ToolMessage):
-                new_tokens = self.encode_tool_message(msg, msg_idx < last_user_idx)
+                new_tokens, new_images, new_audios = self.encode_tool_message(msg, msg_idx < last_user_idx)
+                images.extend(new_images)
+                audios.extend(new_audios)
             elif isinstance(msg, AssistantMessage):
                 continue_message = request.continue_final_message and (msg_idx == len(request.messages) - 1)
 
@@ -318,7 +322,9 @@ class InstructTokenizerV1(
         tokens = self.tokenizer.encode(content, bos=False, eos=False)
         return tokens, [], []
 
-    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> list[int]:
+    def encode_tool_message(
+        self, message: ToolMessage, is_before_last_user_message: bool
+    ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a tool message.
 
         Raises:
@@ -480,9 +486,9 @@ class InstructTokenizerV2(
         except json.JSONDecodeError:
             return content
 
-    def _parse_tool_content(self, content: str | list[TextChunk]) -> Any:
+    def _parse_tool_content(self, content: str | list[ContentChunk]) -> Any:
         if isinstance(content, list):
-            content = "".join(chunk.text for chunk in content)
+            content = "".join(chunk.text for chunk in content if isinstance(chunk, TextChunk))
         return self._parse_json_content(content)
 
     def _prepare_tool_result(self, tool_message: ToolMessage) -> dict[str, Any]:
@@ -492,7 +498,9 @@ class InstructTokenizerV2(
             "content": self._parse_tool_content(tool_message.content),
         }
 
-    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> list[int]:
+    def encode_tool_message(
+        self, message: ToolMessage, is_before_last_user_message: bool
+    ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a tool message.
 
         Args:
@@ -501,11 +509,11 @@ class InstructTokenizerV2(
                 not encoded.
 
         Returns:
-            The encoded tokens.
+            The encoded tokens, images, and audios.
         """
         if is_before_last_user_message:
             # don't tokenize last tool response before last user msg
-            return []
+            return [], [], []
 
         # Currently only supports single tool results
         tool_result_str = json.dumps([self._prepare_tool_result(message)], ensure_ascii=False)
@@ -514,7 +522,7 @@ class InstructTokenizerV2(
             *self.tokenizer.encode(tool_result_str, bos=False, eos=False),
             self.END_TOOL_RESULTS,
         ]
-        return curr_tokens
+        return curr_tokens, [], []
 
     def _prepare_function_call(self, tool_call: ToolCall) -> dict[str, Any]:
         r"""Bit of a hack due to the way function calls are tokenized."""
@@ -652,7 +660,9 @@ class InstructTokenizerV3(
             "call_id": tool_message.tool_call_id,
         }
 
-    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> list[int]:
+    def encode_tool_message(
+        self, message: ToolMessage, is_before_last_user_message: bool
+    ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a tool message.
 
         Note:
@@ -665,7 +675,7 @@ class InstructTokenizerV3(
                 not encoded.
 
         Returns:
-            The encoded tokens.
+            The encoded tokens, images, and audios.
         """
         tool_result_str = json.dumps(self._prepare_tool_result(message), ensure_ascii=False)
         curr_tokens = [
@@ -673,7 +683,7 @@ class InstructTokenizerV3(
             *self.tokenizer.encode(tool_result_str, bos=False, eos=False),
             self.END_TOOL_RESULTS,
         ]
-        return curr_tokens
+        return curr_tokens, [], []
 
     def encode_assistant_message(
         self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
@@ -1081,24 +1091,27 @@ class InstructTokenizerV7(InstructTokenizerV3):
             for message in messages
         )
 
-    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> list[int]:
-        r"""Encode a tool message.
-
-        Note:
-            Same as [V3][mistral_common.tokens.tokenizers.instruct.InstructTokenizerV3.encode_tool_message]
-            but tools are not wrapped in a list and history is also tokenized
+    def encode_tool_message(
+        self, message: ToolMessage, is_before_last_user_message: bool
+    ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
+        """Encode a tool message with multimodal content support.
 
         Args:
             message: The message to encode.
             is_before_last_user_message: Not used.
 
         Returns:
-            The encoded tokens.
+            The encoded tokens, images, and audios.
         """
         assert message.tool_call_id is not None
-        assert isinstance(message.content, str), "Message content must be normalized"
         tool_call_id_tokens = self.tokenizer.encode(message.tool_call_id, bos=False, eos=False)
-        tokens = self.tokenizer.encode(message.content, bos=False, eos=False)
+
+        if isinstance(message.content, str):
+            content_tokens = self.tokenizer.encode(message.content, bos=False, eos=False)
+            images: list[np.ndarray] = []
+            audios: list[Audio] = []
+        else:
+            content_tokens, images, audios = self._encode_content_chunks(message.content)
 
         prefix_tokens = [
             self.BEGIN_TOOL_RESULTS,
@@ -1107,10 +1120,10 @@ class InstructTokenizerV7(InstructTokenizerV3):
         ]
         curr_tokens = [
             *prefix_tokens,
-            *tokens,
+            *content_tokens,
             self.END_TOOL_RESULTS,
         ]
-        return curr_tokens
+        return curr_tokens, images, audios
 
     def encode_assistant_message(
         self, message: AssistantMessageType, is_before_last_user_message: bool, continue_message: bool
@@ -1282,28 +1295,33 @@ class InstructTokenizerV13(InstructTokenizerV11):
             ]
         return curr_tokens
 
-    def encode_tool_message(self, message: ToolMessage, is_before_last_user_message: bool) -> list[int]:
-        r"""Encode a tool message.
+    def encode_tool_message(
+        self, message: ToolMessage, is_before_last_user_message: bool
+    ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
+        """Encode a tool message with multimodal content support.
 
         Args:
             message: The message to encode.
             is_before_last_user_message: Not used.
+
         Returns:
-            The encoded tokens.
+            The encoded tokens, images, and audios.
         """
         assert message.tool_call_id is not None, "Tool call id must be provided for tokenizer >= v13"
 
-        content = message.content
-        if not isinstance(content, str):
-            content = "".join(chunk.text for chunk in content)
+        if isinstance(message.content, str):
+            content_tokens = self.tokenizer.encode(message.content, bos=False, eos=False)
+            images: list[np.ndarray] = []
+            audios: list[Audio] = []
+        else:
+            content_tokens, images, audios = self._encode_content_chunks(message.content)
 
-        tokens = self.tokenizer.encode(content, bos=False, eos=False)
         curr_tokens = [
             self.BEGIN_TOOL_RESULTS,
-            *tokens,
+            *content_tokens,
             self.END_TOOL_RESULTS,
         ]
-        return curr_tokens
+        return curr_tokens, images, audios
 
     def encode_think(self, chunk: ThinkChunk) -> list[int]:
         r"""Encode a thinking chunk.

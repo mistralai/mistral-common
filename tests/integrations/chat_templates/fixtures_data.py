@@ -861,6 +861,28 @@ REQUEST_CONSECUTIVE_USERS_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[t
     ]
 )
 
+REQUEST_TOOL_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="Get me an image of a cat"),
+        AssistantMessage(
+            tool_calls=[
+                ToolCall(
+                    function=FunctionCall(name="get_image", arguments='{"query": "cat"}'),
+                    id="tool_img_1",
+                ),
+            ]
+        ),
+        ToolMessage(
+            content=[
+                TextChunk(text="Here is the result:"),
+                ImageURLChunk(image_url=_IMAGE_URL),
+            ],
+            tool_call_id="tool_img_1",
+        ),
+        AssistantMessage(content="Here is a cat image."),
+    ]
+)
+
 REQUEST_CONSECUTIVE_ASSISTANTS_THINK_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         UserMessage(content="Solve this problem"),
@@ -1080,6 +1102,8 @@ def _get_conversations(
                     REQUEST_CONSECUTIVE_USERS_MULTI_IMAGE_TRAIN,
                 ]
             )
+            if tokenizer_version >= TokenizerVersion.v15:
+                conversations.append(REQUEST_TOOL_IMAGE_TRAIN)
         if audio:
             conversations.append(REQUEST_CONSECUTIVE_USERS_AUDIO_TRAIN)
         if think:

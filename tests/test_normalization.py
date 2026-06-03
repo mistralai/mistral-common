@@ -3,6 +3,7 @@ import json
 import pytest
 
 from mistral_common.protocol.instruct.chunk import (
+    AudioURLChunk,
     ChunkTypes,
     ContentChunk,
     ImageURLChunk,
@@ -571,7 +572,6 @@ class TestChatCompletionRequestNormalizationV7:
 
     def test_complex_user_aggregation(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
         """Complex multi-user-message aggregation with mixed str, chunks, empty, and non-text chunks."""
-
         chat_completion_request = mock_chat_completion(
             messages=[
                 UserMessage(content=""),
@@ -1093,6 +1093,81 @@ class TestChatCompletionRequestNormalizationV15:
         tool_msg = parsed.messages[2]
         assert isinstance(tool_msg, ToolMessage)
         assert tool_msg.content == "XY"
+
+
+class TestToolMessageContentChunk:
+    @pytest.fixture(autouse=True)
+    def normalizer(self) -> InstructRequestNormalizer:
+        return InstructRequestNormalizer(
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
+        )
+
+    def test_tool_message_accepts_all_chunk_types(self, normalizer: InstructRequestNormalizer) -> None:
+        ToolMessage(content=[TextChunk(text="hello")], tool_call_id="1")
+        ToolMessage(content=[ThinkChunk(thinking="reasoning")], tool_call_id="1")
+        ToolMessage(content=[ImageURLChunk(image_url="https://example.com/img.png")], tool_call_id="1")
+        ToolMessage(content=[AudioURLChunk(audio_url="https://example.com/audio.wav")], tool_call_id="1")
+
+    def test_pre_v15_rejects_non_text_chunks_in_tool(self, normalizer: InstructRequestNormalizer) -> None:
+        """Pre-V15 normalizers reduce tool content to str, rejecting non-text chunks."""
+        normalizer_v7 = InstructRequestNormalizerV7.normalizer()
+        messages: list[ChatMessage] = [
+            UserMessage(content="What is this?"),
+            AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="analyze", arguments="{}"), id="call_1")]),
+            ToolMessage(
+                content=[
+                    TextChunk(text="Analysis result:"),
+                    ImageURLChunk(image_url="https://example.com/result.png"),
+                ],
+                tool_call_id="call_1",
+            ),
+        ]
+        request = ChatCompletionRequest(messages=messages)
+        with pytest.raises(AssertionError):
+            normalizer_v7.from_chat_completion_request(request)
+
+    def test_v15_preserves_non_text_chunks_in_tool(self, normalizer: InstructRequestNormalizer) -> None:
+        """V15 normalizer preserves non-text chunks in tool messages."""
+        normalizer_v15 = InstructRequestNormalizerV15(
+            UserMessage,
+            AssistantMessage,
+            ToolMessage,
+            SystemMessage,
+            InstructRequest,
+            ModelSettingsBuilder(
+                reasoning_effort=EnumBuilder[ReasoningEffort](
+                    values=list(ReasoningEffort), accepts_none=False, default=None
+                )
+            ),
+        )
+        request = ChatCompletionRequest(
+            messages=[
+                UserMessage(content="What is this?"),
+                AssistantMessage(
+                    tool_calls=[ToolCall(function=FunctionCall(name="analyze", arguments="{}"), id="call_1")]
+                ),
+                ToolMessage(
+                    content=[
+                        TextChunk(text="Analysis result:"),
+                        ImageURLChunk(image_url="https://example.com/result.png"),
+                    ],
+                    tool_call_id="call_1",
+                ),
+            ],
+            reasoning_effort=ReasoningEffort.high,
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
+        tool_msg = parsed.messages[2]
+        assert isinstance(tool_msg, ToolMessage)
+        assert isinstance(tool_msg.content, list)
+        assert len(tool_msg.content) == 2
+
+    def test_tool_message_text_only_still_normalized(self, normalizer: InstructRequestNormalizer) -> None:
+        messages: list[ToolMessage] = [
+            ToolMessage(content=[TextChunk(text='{"key": "value"}')], tool_call_id="call_1"),
+        ]
+        result = normalizer._aggregate_tool_messages(messages, ["call_1"])
+        assert result[0].content == '{"key": "value"}'
 
 
 @pytest.mark.parametrize(

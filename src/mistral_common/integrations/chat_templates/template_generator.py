@@ -1484,9 +1484,22 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
                 + "' }}"  # noqa: E501
             )
     elif config.uses_simple_tool_results:
-        lines.append(
-            "        {{- '" + _BEGIN_TOOL_RESULTS + "' + message['content']|string + '" + _END_TOOL_RESULTS + "' }}"
-        )  # noqa: E501
+        if config.version >= TokenizerVersion.v15:
+            # V15+: tool messages support non-text content (images, audio)
+            tool_rc_args = "message['content'], 'tool message contents'"
+            if config.image_support or config.audio_support:
+                tool_rc_args += ", supported_types_desc='text'"
+            if config.image_support:
+                tool_rc_args += ", support_images=true"
+            if config.audio_support:
+                tool_rc_args += ", support_audio=true"
+            lines.append("        {{- '" + _BEGIN_TOOL_RESULTS + "' -}}")
+            lines.append("        {{- render_content(" + tool_rc_args + ") -}}")
+            lines.append("        {{- '" + _END_TOOL_RESULTS + "' }}")
+        else:
+            lines.append(
+                "        {{- '" + _BEGIN_TOOL_RESULTS + "' + message['content']|string + '" + _END_TOOL_RESULTS + "' }}"
+            )  # noqa: E501
     else:
         # v3 non-spm style
         lines.extend(_emit_int_float_parsing("        "))
