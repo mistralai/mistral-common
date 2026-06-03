@@ -588,7 +588,7 @@ def test_non_leading_think_chunks_construction_ok() -> None:
 )
 def test_non_leading_think_chunks_to_openai_raises(content: list[TextChunk | ThinkChunk]) -> None:
     """to_openai raises when ThinkChunks are not leading."""
-    msg = AssistantMessage(content=content)
+    msg = AssistantMessage(content=content)  # type: ignore[arg-type]
     with pytest.raises(InvalidAssistantMessageException, match="ThinkChunks must be leading"):
         msg.to_openai()
 

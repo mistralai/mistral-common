@@ -1232,6 +1232,10 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
         lines.append("        {%- endif %}")
         lines.append("")
 
+    # V15+ allows images/audio in assistant messages (matching normalizer's widened ContentChunk types)
+    assistant_supports_images = config.image_support and config.version >= TokenizerVersion.v15
+    assistant_supports_audio = config.audio_support and config.version >= TokenizerVersion.v15
+
     has_extra_types = config.any_thinking_support or config.image_support or config.audio_support
     rc_call_args = "message['content'], 'assistant message contents'"
     if has_extra_types:
@@ -1242,9 +1246,9 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     if config.any_thinking_support:
         rc_call_args += ", support_thinking=true"
     if config.image_support:
-        rc_call_args += ", support_images=false"
+        rc_call_args += f", support_images={'true' if assistant_supports_images else 'false'}"
     if config.audio_support:
-        rc_call_args += ", support_audio=false"
+        rc_call_args += f", support_audio={'true' if assistant_supports_audio else 'false'}"
 
     lines.append("        {%- if message['content'] %}")
 

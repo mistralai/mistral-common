@@ -266,6 +266,28 @@ class InstructRequestNormalizer(
             id=tool_call.id,
         )
 
+    def _narrow_assistant_content(self, content: list[ContentChunk] | str) -> str | list[TextChunk | ThinkChunk]:
+        """Validate and narrow content chunks for assistant messages.
+
+        Pre-V15 normalizers only allow TextChunk and ThinkChunk.
+
+        Args:
+            content: The aggregated content chunks.
+
+        Returns:
+            The validated and narrowed content.
+
+        Raises:
+            InvalidRequestException: If unsupported chunk types are found.
+        """
+        if isinstance(content, str):
+            return content
+        if _is_assistant_content(content):
+            return content
+        raise InvalidRequestException(
+            f"Unexpected content chunk types in assistant message: {[type(c).__name__ for c in content]}"
+        )
+
     def _aggregate_system_messages(self, messages: list[UATS]) -> list[SystemMessageType]:
         return []
 
@@ -296,15 +318,10 @@ class InstructRequestNormalizer(
                     )
                 weight = message.weight
 
-        if isinstance(content, str) or _is_assistant_content(content):
-            narrowed_content: str | list[TextChunk | ThinkChunk] = content
-        else:
-            raise InvalidRequestException(
-                f"Unexpected content chunk types in assistant message: {[type(c).__name__ for c in content]}"
-            )
+        validated_content = self._narrow_assistant_content(content)
 
         aggregated_message = self._assistant_message_class(
-            content=narrowed_content,
+            content=validated_content,
             tool_calls=tool_calls or None,
             prefix=prefix,
         )
@@ -554,6 +571,10 @@ class InstructRequestNormalizerV15(InstructRequestNormalizerV13):
     """
 
     _chunk_join_str: str = ""
+
+    def _narrow_assistant_content(self, content: list[ContentChunk] | str) -> str | list[ContentChunk]:
+        """V15 accepts all ContentChunk types in assistant messages."""
+        return content
 
     @staticmethod
     def normalizer(model_settings_builder: ModelSettingsBuilder | None = None) -> "InstructRequestNormalizerV15":

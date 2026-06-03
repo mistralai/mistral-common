@@ -246,6 +246,20 @@ def test_encode_tool_message(v13_tekkenizer: InstructTokenizerV13) -> None:
     assert encoded == [7, 182, 149, 182, 150, 8]
 
 
+def test_encode_assistant_message_with_audio(
+    v13_tekkenizer_audio: InstructTokenizerV13, audio_chunk: AudioChunk
+) -> None:
+    message = AssistantMessage(content=[TextChunk(text="result"), audio_chunk])
+    tokens, images, audios = v13_tekkenizer_audio.encode_assistant_message(
+        message, is_before_last_user_message=False, continue_message=False
+    )
+    decoded = v13_tekkenizer_audio.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    assert "result" in decoded
+    assert "[BEGIN_AUDIO]" in decoded
+    assert len(audios) == 1
+    assert images == []
+
+
 def test_encode_think_chunk(v13_tekkenizer_think: InstructTokenizerV13) -> None:
     assert isinstance(v13_tekkenizer_think, InstructTokenizerV13)
     think_chunk = ThinkChunk(
@@ -295,7 +309,7 @@ def test_tokenize_assistant_message(
     v13_tekkenizer_think: InstructTokenizerV13, message: AssistantMessage, expected: str, continue_final_message: bool
 ) -> None:
     if not continue_final_message:
-        tokens = v13_tekkenizer_think.encode_assistant_message(
+        tokens, images, audios = v13_tekkenizer_think.encode_assistant_message(
             message, is_before_last_user_message=False, continue_message=continue_final_message
         )
         if not message.prefix:
@@ -310,7 +324,7 @@ def test_tokenize_assistant_message(
                     message, is_before_last_user_message=False, continue_message=continue_final_message
                 )
             return
-        tokens = v13_tekkenizer_think.encode_assistant_message(
+        tokens, images, audios = v13_tekkenizer_think.encode_assistant_message(
             message, is_before_last_user_message=False, continue_message=continue_final_message
         )
     assert v13_tekkenizer_think.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP) == expected

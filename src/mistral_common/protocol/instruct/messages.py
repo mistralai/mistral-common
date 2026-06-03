@@ -8,6 +8,7 @@ from typing_extensions import Annotated, TypeAlias
 from mistral_common.base import MistralBase
 from mistral_common.exceptions import InvalidAssistantMessageException
 from mistral_common.protocol.instruct.chunk import (
+    AssistantContentChunk,
     ContentChunk,
     TextChunk,
     ThinkChunk,
@@ -23,11 +24,11 @@ warnings.filterwarnings(
 )
 
 
-def _are_think_chunks(think_chunks: list[ThinkChunk | TextChunk]) -> TypeGuard[list[ThinkChunk]]:
+def _are_think_chunks(think_chunks: list[ContentChunk]) -> TypeGuard[list[ThinkChunk]]:
     return all(isinstance(c, ThinkChunk) for c in think_chunks)
 
 
-def _are_text_chunks(think_chunks: list[ThinkChunk | TextChunk]) -> TypeGuard[list[TextChunk]]:
+def _are_text_chunks(think_chunks: list[ContentChunk]) -> TypeGuard[list[TextChunk]]:
     return all(isinstance(c, TextChunk) for c in think_chunks)
 
 
@@ -158,7 +159,7 @@ class AssistantMessage(BaseMessage):
     """
 
     role: Literal[Roles.assistant] = Roles.assistant
-    content: str | list[TextChunk | ThinkChunk] | None = None
+    content: str | list[AssistantContentChunk] | None = None
     tool_calls: list[ToolCall] | None = None
     prefix: bool = False
 

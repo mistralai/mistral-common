@@ -145,7 +145,7 @@ async def detokenize_to_assistant_message(
 
     has_eos = tokens[-1] == settings.tokenizer.instruct_tokenizer.tokenizer.eos_id
 
-    return AssistantMessage(content=content, tool_calls=tool_calls, prefix=not has_eos)
+    return AssistantMessage(content=content, tool_calls=tool_calls, prefix=not has_eos)  # type: ignore[arg-type]
 
 
 @main_router.post("/v1/chat/completions", tags=["chat", "completions"])

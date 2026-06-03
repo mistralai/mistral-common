@@ -2,7 +2,9 @@ import json
 
 import pytest
 
+from mistral_common.exceptions import InvalidRequestException
 from mistral_common.protocol.instruct.chunk import (
+    AudioURLChunk,
     ChunkTypes,
     ContentChunk,
     ImageURLChunk,
@@ -1093,6 +1095,95 @@ class TestChatCompletionRequestNormalizationV15:
         tool_msg = parsed.messages[2]
         assert isinstance(tool_msg, ToolMessage)
         assert tool_msg.content == "XY"
+
+
+class TestAssistantMessageContentChunk:
+    def test_assistant_message_accepts_all_chunk_types(self) -> None:
+        AssistantMessage(content=[TextChunk(text="hello")])
+        AssistantMessage(content=[ThinkChunk(thinking="reasoning")])
+        AssistantMessage(content=[ImageURLChunk(image_url="https://example.com/img.png")])
+        AssistantMessage(content=[AudioURLChunk(audio_url="https://example.com/audio.wav")])
+
+    @staticmethod
+    def _make_v15_normalizer() -> InstructRequestNormalizerV15:
+        """Create a V15 normalizer with required model settings builder."""
+        return InstructRequestNormalizerV15(
+            UserMessage,
+            AssistantMessage,
+            ToolMessage,
+            SystemMessage,
+            InstructRequest,
+            ModelSettingsBuilder(
+                reasoning_effort=EnumBuilder[ReasoningEffort](
+                    values=list(ReasoningEffort), accepts_none=False, default=None
+                )
+            ),
+        )
+
+    def test_pre_v15_rejects_non_text_chunks_in_assistant(self) -> None:
+        """Pre-V15 normalizers reject non-text/think chunks in assistant messages."""
+        normalizer_v7 = InstructRequestNormalizerV7.normalizer()
+        messages: list[ChatMessage] = [
+            AssistantMessage(
+                content=[
+                    TextChunk(text="result"),
+                    ImageURLChunk(image_url="https://example.com/img.png"),
+                ]
+            ),
+        ]
+        request = ChatCompletionRequest(messages=messages)
+        with pytest.raises(InvalidRequestException, match="Unexpected content chunk types"):
+            normalizer_v7.from_chat_completion_request(request)
+
+    def test_v15_preserves_non_text_chunks_in_assistant(self) -> None:
+        """V15 normalizer accepts all ContentChunk types in assistant messages."""
+        normalizer_v15 = self._make_v15_normalizer()
+        request = ChatCompletionRequest(
+            messages=[
+                AssistantMessage(
+                    content=[
+                        TextChunk(text="result"),
+                        ImageURLChunk(image_url="https://example.com/img.png"),
+                    ]
+                ),
+            ],
+            reasoning_effort=ReasoningEffort.high,
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
+        assistant_msg = parsed.messages[0]
+        assert isinstance(assistant_msg, AssistantMessage)
+        assert isinstance(assistant_msg.content, list)
+        assert len(assistant_msg.content) == 2
+
+    def test_complex_assistant_aggregation_with_image_v15(self) -> None:
+        """Multi-assistant-message aggregation with ImageURLChunk on V15 (widened type, chunk_join_str="")."""
+        normalizer_v15 = self._make_v15_normalizer()
+        chat_completion_request = ChatCompletionRequest(
+            messages=[
+                AssistantMessage(content="A"),
+                AssistantMessage(content=[TextChunk(text="B")]),
+                AssistantMessage(
+                    content=[
+                        TextChunk(text="C"),
+                        TextChunk(text="D"),
+                        ImageURLChunk(image_url="E"),
+                        TextChunk(text="G"),
+                        TextChunk(text="H"),
+                    ]
+                ),
+            ],
+            reasoning_effort=ReasoningEffort.high,
+        )
+        parsed_request: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(
+            chat_completion_request
+        )
+        first_message = parsed_request.messages[0]
+        assert isinstance(first_message, AssistantMessage)
+        assert first_message.content == [
+            TextChunk(text="A\n\nB\n\nCD"),
+            ImageURLChunk(image_url="E"),
+            TextChunk(text="GH"),
+        ]
 
 
 @pytest.mark.parametrize(

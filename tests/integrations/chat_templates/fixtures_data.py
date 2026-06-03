@@ -861,6 +861,19 @@ REQUEST_CONSECUTIVE_USERS_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[t
     ]
 )
 
+REQUEST_ASSISTANT_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="Describe this image"),
+        AssistantMessage(
+            content=[
+                TextChunk(text="Here is the image:"),
+                ImageURLChunk(image_url=_IMAGE_URL),
+                TextChunk(text="It shows a landscape."),
+            ]
+        ),
+    ]
+)
+
 REQUEST_CONSECUTIVE_ASSISTANTS_THINK_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         UserMessage(content="Solve this problem"),
@@ -1080,6 +1093,8 @@ def _get_conversations(
                     REQUEST_CONSECUTIVE_USERS_MULTI_IMAGE_TRAIN,
                 ]
             )
+            if tokenizer_version >= TokenizerVersion.v15:
+                conversations.append(REQUEST_ASSISTANT_IMAGE_TRAIN)
         if audio:
             conversations.append(REQUEST_CONSECUTIVE_USERS_AUDIO_TRAIN)
         if think:
