@@ -392,3 +392,19 @@ def test_encode_chat_completion_request_with_sp_and_audio(
     encoded = mistral_tokenizer_v13.encode_chat_completion(ChatCompletionRequest(messages=messages))
     assert encoded.text == "<s>[SYSTEM_PROMPT]hello[/SYSTEM_PROMPT][INST][BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
     assert len(encoded.audios) == 1
+
+
+def test_encode_chat_completion_continue_final_message(v13_tekkenizer: InstructTokenizerV13) -> None:
+    request_normalizer = InstructRequestNormalizerV13.normalizer()
+    validator = MistralRequestValidatorV13()
+    mistral_tokenizer = MistralTokenizer(
+        instruct_tokenizer=v13_tekkenizer, validator=validator, request_normalizer=request_normalizer
+    )
+    request: ChatCompletionRequest = ChatCompletionRequest(
+        messages=[UserMessage(content="a"), AssistantMessage(content="b")],
+        continue_final_message=True,
+    )
+    encoded = mistral_tokenizer.encode_chat_completion(request)
+
+    eos_id = v13_tekkenizer.tokenizer.eos_id
+    assert encoded.tokens[-1] != eos_id
