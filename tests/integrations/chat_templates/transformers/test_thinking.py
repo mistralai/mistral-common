@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
@@ -37,12 +39,18 @@ class TestPlainThinkParity:
             (True, ValidationMode.finetuning),
         ],
     )
-    def test_plain_think_vs_mistral_common_baseline(self, image: bool, mode: ValidationMode) -> None:
+    def test_plain_think_vs_mistral_common_baseline(self, image: bool, mode: ValidationMode, tmp_path: Path) -> None:
         version = TokenizerVersion.v11
         conversations = _get_conversations(version, mode, image, audio=False, think=False)
 
         mistral_tok = _get_mistral_tokenizer(
-            spm=False, tokenizer_version=version, validation_mode=mode, image=image, audio=False, think=False
+            spm=False,
+            tokenizer_version=version,
+            validation_mode=mode,
+            image=image,
+            audio=False,
+            think=False,
+            output_dir=tmp_path,
         )
         plain_think_template = generate_chat_template(
             spm=False,
@@ -62,7 +70,7 @@ class TestPlainThinkParity:
             assert plain_think_encoded == mistral_encoded
 
     @pytest.mark.parametrize("image", [False, True])
-    def test_plain_think_vs_mistral_common_with_thinking(self, image: bool) -> None:
+    def test_plain_think_vs_mistral_common_with_thinking(self, image: bool, tmp_path: Path) -> None:
         version = TokenizerVersion.v11
 
         mistral_tok = _get_mistral_tokenizer(
@@ -72,6 +80,7 @@ class TestPlainThinkParity:
             image=image,
             audio=False,
             think=False,
+            output_dir=tmp_path,
         )
         plain_think_template = generate_chat_template(
             spm=False,
@@ -137,7 +146,7 @@ class TestPlainThinkParity:
 
     @pytest.mark.parametrize("image", [False, True])
     @pytest.mark.parametrize("mode", [ValidationMode.test, ValidationMode.finetuning])
-    def test_plain_think_comprehensive(self, image: bool, mode: ValidationMode) -> None:
+    def test_plain_think_comprehensive(self, image: bool, mode: ValidationMode, tmp_path: Path) -> None:
         version = TokenizerVersion.v11
         # Use non-thinking conversations (plain think uses same base conversations)
         conversations = _get_conversations(version, mode, image, audio=False, think=False)
@@ -149,6 +158,7 @@ class TestPlainThinkParity:
             image=image,
             audio=False,
             think=False,
+            output_dir=tmp_path,
         )
         plain_think_template = generate_chat_template(
             spm=False,

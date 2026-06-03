@@ -30,12 +30,6 @@ from mistral_common.protocol.instruct.chunk import RawAudio
 from mistral_common.protocol.instruct.normalize import get_normalizer
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, ReasoningEffort
 from mistral_common.protocol.instruct.validator import ValidationMode, get_validator
-from mistral_common.tokens.tokenizers.audio import (
-    AudioConfig,
-    AudioEncoder,
-    AudioSpectrogramConfig,
-    SpecialAudioIDs,
-)
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenizer, TokenizerVersion
 from mistral_common.tokens.tokenizers.image import ImageConfig, ImageEncoder, SpecialImageIDs
 from mistral_common.tokens.tokenizers.instruct import (
@@ -51,7 +45,6 @@ from mistral_common.tokens.tokenizers.instruct import (
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
 from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
-from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import get_special_tokens
 
 # Golden template files live in the data/ tree (outside src/).
@@ -420,23 +413,6 @@ def _get_image_encoder(tokenizer: Tokenizer) -> ImageEncoder:
     )
 
 
-def _get_audio_encoder() -> AudioEncoder:
-    r"""Create an `AudioEncoder` for testing."""
-    audio_config = AudioConfig(
-        sampling_rate=24_000,
-        frame_rate=12.5,
-        encoding_config=AudioSpectrogramConfig(
-            num_mel_bins=128,
-            window_size=400,
-            hop_length=160,
-        ),
-    )
-    return AudioEncoder(
-        audio_config=audio_config,
-        special_ids=SpecialAudioIDs(audio=24, begin_audio=25, streaming_pad=26, text_to_audio=27, audio_to_text=28),
-    )
-
-
 def _build_tekken_json(config: TestConfig, output_dir: Path) -> Path:
     r"""Build a tekken.json file for the given test config.
 
@@ -558,59 +534,23 @@ def _get_instruct_tokenizer_class(tokenizer_version: TokenizerVersion) -> type[I
             raise ValueError(f"Unknown tokenizer version: {tokenizer_version}")
 
 
-def _get_mistral_tekkenizer(
-    tokenizer_version: TokenizerVersion, validation_mode: ValidationMode, image: bool, audio: bool, think: bool
-) -> MistralTokenizer:
-    r"""Build a `MistralTokenizer` with Tekken backend.
+def _get_mistral_tekkenizer(config: TestConfig, output_dir: Path, validation_mode: ValidationMode) -> MistralTokenizer:
+    r"""Build a `MistralTokenizer` with Tekken backend via `from_file`.
 
-    We construct the tokenizer manually instead of using `MistralTokenizer.from_file`
-    because `from_file` reads version, special tokens, and image/audio config from the
-    JSON file with no override mechanism. Tests need to pair a single base tokenizer file
-    (`tekken_240911.json`, which is v3) with arbitrary versions (v1-v15) and feature
-    combinations (image, audio, thinking) that aren't present in any shipped JSON file.
+    Writes a tekken.json with the desired version and features via
+    `_build_tekken_json`, then loads it through the production
+    `MistralTokenizer.from_file` path.
+
+    Args:
+        config: Test configuration specifying version, image, audio, think.
+        output_dir: Directory to write the temporary tekken.json file.
+        validation_mode: Validation mode (test or finetuning).
+
+    Returns:
+        A configured `MistralTokenizer` instance.
     """
-    special_tokens = get_special_tokens(tokenizer_version=tokenizer_version, add_audio=audio, add_think=think)
-    with open(MistralTokenizer._data_path() / "tekken_240911.json", "r", encoding="utf-8") as f:
-        json_tekkenizer = json.load(f)
-    vocab = json_tekkenizer["vocab"]
-    vocab_size = json_tekkenizer["config"]["default_vocab_size"]
-    pattern = json_tekkenizer["config"]["pattern"]
-    # ModelSettingsBuilder is constructed manually because from_file reads it from the
-    # JSON file's model_settings_builder key, which is absent in fixture tokenizer files.
-    # This mirrors what from_file would produce for a v15 tokenizer config.
-    model_settings_builder = (
-        ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder(
-                accepts_none=True, default=ReasoningEffort.none, values=[ReasoningEffort.none, ReasoningEffort.high]
-            )
-        )
-        if tokenizer_version.supports_model_settings
-        else None
-    )
-    tokenizer = Tekkenizer(
-        vocab,
-        special_tokens,
-        pattern=pattern,
-        vocab_size=vocab_size,
-        num_special_tokens=100,
-        version=tokenizer_version,
-        model_settings_builder=model_settings_builder,
-    )
-
-    audio_encoder = _get_audio_encoder() if audio else None
-    image_encoder = _get_image_encoder(tokenizer) if image else None
-
-    instruct_tokenizer: InstructTokenizer = _get_instruct_tokenizer_class(tokenizer_version)(
-        tokenizer=tokenizer,
-        image_encoder=image_encoder,
-        audio_encoder=audio_encoder,
-    )
-    model_settings_builder = tokenizer.model_settings_builder if isinstance(tokenizer, Tekkenizer) else None
-    return MistralTokenizer(
-        instruct_tokenizer,
-        validator=get_validator(mode=validation_mode, version=tokenizer_version),
-        request_normalizer=get_normalizer(version=tokenizer_version, model_settings_builder=model_settings_builder),
-    )
+    tekken_path = _build_tekken_json(config, output_dir)
+    return MistralTokenizer.from_file(str(tekken_path), mode=validation_mode)
 
 
 def _get_mistral_sentencepiece(
@@ -642,6 +582,7 @@ def _get_mistral_tokenizer(
     image: bool,
     audio: bool,
     think: bool,
+    output_dir: Path,
 ) -> MistralTokenizer:
     r"""Get a `MistralTokenizer` instance for testing.
 
@@ -652,11 +593,20 @@ def _get_mistral_tokenizer(
         image: Whether to attach an image encoder.
         audio: Whether to attach an audio encoder (Tekken only).
         think: Whether to enable thinking special tokens (Tekken only).
+        output_dir: Temporary directory for tokenizer files.
 
     Returns:
         A configured `MistralTokenizer` instance.
     """
     if spm:
         return _get_mistral_sentencepiece(tokenizer_version, validation_mode, image)
-    else:
-        return _get_mistral_tekkenizer(tokenizer_version, validation_mode, image, audio, think)
+
+    config = TestConfig(
+        version=tokenizer_version,
+        spm=False,
+        image=image,
+        audio=audio,
+        think=think,
+        plain_think=False,
+    )
+    return _get_mistral_tekkenizer(config, output_dir, validation_mode)
