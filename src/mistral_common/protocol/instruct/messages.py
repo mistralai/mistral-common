@@ -9,6 +9,7 @@ from mistral_common.base import MistralBase
 from mistral_common.exceptions import InvalidAssistantMessageException
 from mistral_common.protocol.instruct.chunk import (
     ContentChunk,
+    SystemContentChunk,
     TextChunk,
     ThinkChunk,
     UserContentChunk,
@@ -132,15 +133,25 @@ class SystemMessage(BaseMessage):
     """
 
     role: Literal[Roles.system] = Roles.system
-    content: str | list[TextChunk | ThinkChunk]
+    content: str | list[SystemContentChunk]
 
     def to_openai(self) -> dict[str, Any]:
         r"""Converts the message to the OpenAI format."""
-        return self.model_dump()
+        if isinstance(self.content, str):
+            return {"role": self.role, "content": self.content}
+        return {"role": self.role, "content": [chunk.to_openai() for chunk in self.content]}
 
     @classmethod
     def from_openai(cls, openai_message: dict[str, Any]) -> "SystemMessage":
         r"""Converts the OpenAI message to the Mistral format."""
+        content = openai_message.get("content")
+        if isinstance(content, list):
+            return cls.model_validate(
+                {
+                    "role": openai_message.get("role", "system"),
+                    "content": [_convert_openai_content_chunks(chunk) for chunk in content],
+                }
+            )
         return cls.model_validate_ignore_extra(openai_message)
 
 

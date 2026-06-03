@@ -184,7 +184,7 @@
     {#- System messages. #}
     {%- elif message['role'] == 'system' %}
         {{- '[SYSTEM_PROMPT]' -}}
-        {{- render_content(message['content'], 'system message contents', supported_types_desc='text', support_audio=false) -}}
+        {{- render_content(message['content'], 'system message contents', supported_types_desc='text and audio', support_audio=true) -}}
         {{- '[/SYSTEM_PROMPT]' -}}
 
     {#- Raise exception for unsupported roles. #}

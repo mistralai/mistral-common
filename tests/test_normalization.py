@@ -1,8 +1,10 @@
 import json
 
 import pytest
+from pydantic import ValidationError
 
 from mistral_common.protocol.instruct.chunk import (
+    AudioChunk,
     ChunkTypes,
     ContentChunk,
     ImageURLChunk,
@@ -34,6 +36,7 @@ from mistral_common.protocol.instruct.request import (
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
+from tests.fixtures.audio import get_dummy_audio_chunk
 
 
 def mock_chat_completion(messages: list[ChatMessage]) -> ChatCompletionRequest:
@@ -571,7 +574,6 @@ class TestChatCompletionRequestNormalizationV7:
 
     def test_complex_user_aggregation(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
         """Complex multi-user-message aggregation with mixed str, chunks, empty, and non-text chunks."""
-
         chat_completion_request = mock_chat_completion(
             messages=[
                 UserMessage(content=""),
@@ -1093,6 +1095,49 @@ class TestChatCompletionRequestNormalizationV15:
         tool_msg = parsed.messages[2]
         assert isinstance(tool_msg, ToolMessage)
         assert tool_msg.content == "XY"
+
+
+class TestSystemMessageContentChunk:
+    def test_system_message_accepts_text_audio_think(self) -> None:
+        audio_chunk = get_dummy_audio_chunk()
+        message = SystemMessage(
+            content=[
+                TextChunk(text="hello"),
+                audio_chunk,
+                ThinkChunk(thinking="thinking", closed=True),
+            ]
+        )
+        assert len(message.content) == 3
+
+    def test_system_message_rejects_image_url_chunk(self) -> None:
+        with pytest.raises(ValidationError):
+            SystemMessage(
+                content=[
+                    TextChunk(text="hello"),
+                    ImageURLChunk(image_url="https://example.com/image.png"),  # type: ignore[list-item]
+                ]
+            )
+
+    def test_v7_normalization_preserves_audio_in_system_message(self) -> None:
+        audio_chunk = get_dummy_audio_chunk()
+        normalizer = InstructRequestNormalizerV7.normalizer()
+        messages: list[ChatMessage] = [
+            SystemMessage(
+                content=[
+                    TextChunk(text="hello"),
+                    audio_chunk,
+                ]
+            ),
+            UserMessage(content="test"),
+        ]
+        request = mock_chat_completion(messages)
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(request)
+        system_msg = parsed.messages[0]
+        assert isinstance(system_msg, SystemMessage)
+        assert isinstance(system_msg.content, list)
+        assert len(system_msg.content) == 2
+        assert isinstance(system_msg.content[0], TextChunk)
+        assert isinstance(system_msg.content[1], AudioChunk)
 
 
 @pytest.mark.parametrize(

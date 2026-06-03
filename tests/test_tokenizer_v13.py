@@ -371,8 +371,19 @@ def test_tokenize_assistant_message_error(v13_tekkenizer: InstructTokenizerV13) 
 def test_encode_system_message(
     v13_tekkenizer_think: InstructTokenizerV13, message: SystemMessage, expected: str
 ) -> None:
-    encoded = v13_tekkenizer_think.encode_system_message(message)
+    encoded, images, audios = v13_tekkenizer_think.encode_system_message(message)
     assert v13_tekkenizer_think.decode(encoded, special_token_policy=SpecialTokenPolicy.KEEP) == expected
+    assert images == []
+    assert audios == []
+
+
+def test_encode_system_message_with_audio(v13_tekkenizer_audio: InstructTokenizerV13, audio_chunk: AudioChunk) -> None:
+    message = SystemMessage(content=[TextChunk(text="hello"), audio_chunk])
+    encoded, images, audios = v13_tekkenizer_audio.encode_system_message(message)
+    decoded = v13_tekkenizer_audio.decode(encoded, special_token_policy=SpecialTokenPolicy.KEEP)
+    assert decoded == "[SYSTEM_PROMPT]hello[BEGIN_AUDIO][AUDIO][AUDIO][/SYSTEM_PROMPT]"
+    assert images == []
+    assert len(audios) == 1
 
 
 @pytest.mark.parametrize("audio_fixture", ["audio_chunk", "audio_url_chunk"])

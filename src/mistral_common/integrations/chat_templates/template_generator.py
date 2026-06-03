@@ -867,11 +867,16 @@ def _generate_system_message_handling(config: TemplateConfig) -> str:
     else:
         lines.append("        {{- '" + _BEGIN_SYSTEM + "' -}}")
 
+    # V15+ allows audio in system messages (matching tokenizer's widened SystemContentChunk types)
+    system_supports_audio = config.audio_support and config.version >= TokenizerVersion.v15
+
     has_extra_types = config.any_thinking_support or config.image_support or config.audio_support
     rc_args = "message['content'], 'system message contents'"
     if has_extra_types:
         if config.system_supports_thinking:
             rc_args += ", supported_types_desc='text and thinking'"
+        elif system_supports_audio:
+            rc_args += ", supported_types_desc='text and audio'"
         else:
             rc_args += ", supported_types_desc='text'"
     if config.any_thinking_support:
@@ -882,7 +887,7 @@ def _generate_system_message_handling(config: TemplateConfig) -> str:
     if config.image_support:
         rc_args += ", support_images=false"
     if config.audio_support:
-        rc_args += ", support_audio=false"
+        rc_args += f", support_audio={'true' if system_supports_audio else 'false'}"
     lines.append("        {{- render_content(" + rc_args + ") -}}")
 
     lines.append("        {{- '" + _END_SYSTEM + "' -}}")

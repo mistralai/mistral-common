@@ -861,6 +861,19 @@ REQUEST_CONSECUTIVE_USERS_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[t
     ]
 )
 
+REQUEST_SYSTEM_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(
+            content=[
+                TextChunk(text="You are a transcription assistant. Listen to this context:"),
+                AudioURLChunk(audio_url=_AUDIO_URL),
+            ]
+        ),
+        UserMessage(content="Summarize what you heard"),
+        AssistantMessage(content="The audio contains a brief conversation."),
+    ]
+)
+
 REQUEST_CONSECUTIVE_ASSISTANTS_THINK_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         UserMessage(content="Solve this problem"),
@@ -1082,6 +1095,8 @@ def _get_conversations(
             )
         if audio:
             conversations.append(REQUEST_CONSECUTIVE_USERS_AUDIO_TRAIN)
+            if tokenizer_version >= TokenizerVersion.v15:
+                conversations.append(REQUEST_SYSTEM_AUDIO_TRAIN)
         if think:
             conversations.extend(
                 [
