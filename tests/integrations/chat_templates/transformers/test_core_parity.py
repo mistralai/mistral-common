@@ -58,7 +58,7 @@ class TestTransformersMistralCommonParity:
         # Build HF tokenizer for Tekken-based token ID comparison
         hf_tokenizer = None
         if not config.spm:
-            hf_tokenizer = _build_hf_tokenizer(tokenizer_path, chat_template, mistral_tokenizer.instruct_tokenizer)
+            hf_tokenizer = _build_hf_tokenizer(tokenizer_path, chat_template)
 
         if config.version <= TokenizerVersion.v2:
             for conv in conversations:
@@ -82,7 +82,10 @@ class TestTransformersMistralCommonParity:
             # Skipped for image/audio configs because multimodal tokens are generated
             # by encoders (not from text), so token IDs won't match.
             # Skipped for SPM because building an HF tokenizer from SPM is a separate concern.
-            if not config.image and not config.audio and not config.spm:
+            # Skipped for V1 because V1 emits control markers (e.g. [INST]) as literal
+            # text, but the HF tokenizer treats them as special tokens and encodes
+            # them as single IDs, making token-level parity impossible.
+            if not config.image and not config.audio and not config.spm and config.version > TokenizerVersion.v1:
                 assert hf_tokenizer is not None
                 hf_tokens = encode_hf_tokens(hf_tokenizer, conversation.model_copy(deep=True), keep_name_for_tools=True)
                 mc_tokens = mistral_tokenizer.encode_chat_completion(conversation.model_copy(deep=True)).tokens

@@ -200,54 +200,16 @@ def encode_transformers_from_openai(chat_template: str, openai_request: dict[str
     return _render_via_transformers(chat_template, openai_request)
 
 
-def _get_active_special_token_ids(instruct_tokenizer: InstructTokenizer) -> set[int]:
-    r"""Collect special token IDs that the instruct tokenizer actively uses.
-
-    Scans instance attributes of the instruct tokenizer for integer values
-    that fall within the base tokenizer's special token range. This
-    determines which tokens `encode_chat_completion` inserts as dedicated
-    special-token IDs (e.g. `[INST]` in V2+) versus encoding as regular
-    text (e.g. `[INST]` in V1).
-
-    BOS and EOS are always included because `encode_instruct` prepends BOS
-    and the template text may contain `</s>` as an EOS marker.
-
-    Args:
-        instruct_tokenizer: The instruct tokenizer whose attributes to scan.
-
-    Returns:
-        Set of special token IDs actively used by this instruct tokenizer.
-    """
-    tokenizer = instruct_tokenizer.tokenizer
-    # BOS and EOS are always active
-    active_ids: set[int] = {tokenizer.bos_id, tokenizer.eos_id}
-
-    num_special = getattr(tokenizer, "num_special_tokens", 0)
-    if num_special == 0:
-        return active_ids
-
-    for attr_name in vars(instruct_tokenizer):
-        val = getattr(instruct_tokenizer, attr_name)
-        if isinstance(val, int) and 0 <= val < num_special:
-            active_ids.add(val)
-
-    return active_ids
-
-
-def _build_hf_tokenizer(
-    tekken_path: Path, chat_template: str, instruct_tokenizer: InstructTokenizer
-) -> "PreTrainedTokenizerFast":
+def _build_hf_tokenizer(tekken_path: Path, chat_template: str) -> "PreTrainedTokenizerFast":
     r"""Build a `PreTrainedTokenizerFast` from a tekken.json file.
 
     Converts the Tekken BPE vocabulary to a HuggingFace tokenizers format,
     preserving the Tekkenizer's ID scheme: special tokens at IDs 0 to
     `num_special - 1`, regular BPE tokens at IDs `num_special` and above.
 
-    Only special tokens that the instruct tokenizer actively uses are
-    registered as `AddedToken` objects. Inactive special tokens (e.g.
-    `[INST]` in V1) remain in the BPE vocab but are not treated as special
-    by the HuggingFace tokenizer, so they get byte-level encoded like
-    regular text.
+    All special tokens in the file are unconditionally registered as
+    `AddedToken` objects, matching Tekkenizer behavior where every token
+    in the special range is treated as special.
 
     .. note::
 
@@ -259,8 +221,6 @@ def _build_hf_tokenizer(
     Args:
         tekken_path: Path to the tekken.json file.
         chat_template: Jinja chat template string to set on the tokenizer.
-        instruct_tokenizer: The instruct tokenizer used to determine active
-            special tokens.
 
     Returns:
         A configured `PreTrainedTokenizerFast` with matching token IDs.
@@ -283,8 +243,6 @@ def _build_hf_tokenizer(
     vocab_size: int = data["config"]["default_vocab_size"]
     inner_vocab_size = vocab_size - num_special
     vocab_entries: list[dict[str, Any]] = data["vocab"][:inner_vocab_size]
-
-    active_ids = _get_active_special_token_ids(instruct_tokenizer)
 
     byte_encoder = bytes_to_unicode()
 
@@ -341,16 +299,13 @@ def _build_hf_tokenizer(
     tokenizer.decoder = decoders.ByteLevel()
     tokenizer.post_processor = processors.ByteLevel(trim_offsets=False)
 
-    # Register only active special tokens in added_tokens_decoder.
-    # Inactive special tokens remain in the BPE vocab but are not treated
-    # specially, so they get byte-level encoded like regular text (matching
-    # how older instruct tokenizers like V1 handle them).
+    # Register all special tokens in added_tokens_decoder, matching Tekkenizer
+    # behavior where every token in the special range is treated as special.
     added_tokens_decoder: dict[int, AddedToken] = {}
     for st in special_tokens_list:
-        if st["rank"] in active_ids:
-            added_tokens_decoder[st["rank"]] = AddedToken(st["token_str"], special=True, normalized=False)
+        added_tokens_decoder[st["rank"]] = AddedToken(st["token_str"], special=True, normalized=False)
     for i in range(num_special):
-        if i not in defined_ids and i in active_ids:
+        if i not in defined_ids:
             added_tokens_decoder[i] = AddedToken(f"<SPECIAL_{i}>", special=True, normalized=False)
 
     return PreTrainedTokenizerFast(
