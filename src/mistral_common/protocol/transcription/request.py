@@ -120,6 +120,7 @@ class TranscriptionRequest(BaseCompletionRequest):
         openai_request.update(kwargs)
 
         # remove mistral-specific
+        # TODO: revisit which fields to expose in the OpenAI format
         default_exclude = ("id", "max_tokens", "strict_audio_validation", "streaming")
         default_exclude += exclude
         for k in default_exclude:

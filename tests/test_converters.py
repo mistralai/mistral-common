@@ -1188,6 +1188,46 @@ def test_convert_transcription_bytes_invalid_format() -> None:
         request.to_openai()
 
 
+@pytest.mark.parametrize("fmt", ["wav", "flac"])
+def test_audio_chunk_to_openai_format_detection(fmt: str) -> None:
+    audio = _make_fake_audio(0.5)
+    b64 = audio.to_base64(fmt)
+    chunk = AudioChunk(input_audio=b64)
+    result = chunk.to_openai()
+
+    assert result["input_audio"]["format"] == fmt
+    assert result["input_audio"]["data"] == b64
+    assert AudioChunk.from_openai(result).input_audio == b64
+
+
+@pytest.mark.parametrize("fmt", ["wav", "flac"])
+def test_transcription_to_openai_format_detection(fmt: str) -> None:
+    audio = _make_fake_audio(0.5)
+    b64 = audio.to_base64(fmt)
+    request = TranscriptionRequest(audio=b64, model="model", language=None, target_streaming_delay_ms=None)
+    openai_request = request.to_openai()
+
+    assert openai_request["file"].name == f"audio.{fmt}"
+
+    recovered = Audio.from_bytes(openai_request["file"].getvalue())
+    assert np.allclose(recovered.audio_array, audio.audio_array, atol=1e-3)
+
+
+@pytest.mark.parametrize("fmt", ["wav", "flac"])
+def test_transcription_to_openai_bytes_format_detection(fmt: str) -> None:
+    import soundfile as sf
+
+    audio = _make_fake_audio(0.5)
+    buffer = io.BytesIO()
+    sf.write(buffer, audio.audio_array, audio.sampling_rate, format=fmt)
+    raw_bytes = buffer.getvalue()
+
+    request = TranscriptionRequest(audio=raw_bytes, model="model", language=None, target_streaming_delay_ms=None)
+    openai_request = request.to_openai()
+
+    assert openai_request["file"].name == f"audio.{fmt}"
+
+
 def test_convert_speech_request_from_openai() -> None:
     audio = _make_fake_audio(0.5)
     raw_bytes = _audio_to_wav_bytes(audio)
