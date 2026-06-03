@@ -223,7 +223,7 @@ class TestChatCompletionRequestNormalization:
                 [
                     ThinkChunk(thinking="t1"),
                     ThinkChunk(thinking="t2"),
-                    TextChunk(text="a1\n\na2\n\na3"),
+                    TextChunk(text="a1a2a3"),
                 ],
                 "u",
             ],
@@ -240,7 +240,7 @@ class TestChatCompletionRequestNormalization:
         expected = [
             ToolMessage(content="C", tool_call_id="1"),
             ToolMessage(content=json.dumps({"a": 2}), tool_call_id="2"),
-            ToolMessage(content="B\n\nA", tool_call_id="3"),
+            ToolMessage(content="BA", tool_call_id="3"),
         ]
 
         assert (
@@ -286,7 +286,34 @@ class TestChatCompletionRequestNormalization:
         parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
         first_message = parsed_request.messages[0]
         assert isinstance(first_message, UserMessage)
-        assert first_message.content == "foo\n\nchunk1\n\nchunk2\n\nchunk3"
+        assert first_message.content == "foo\n\nchunk1chunk2chunk3"
+
+    def test_ignore_middle_empty_text_chunks(self, normalizer: InstructRequestNormalizer) -> None:
+        chat_completion_request = mock_chat_completion(
+            messages=[
+                UserMessage(
+                    content=[
+                        TextChunk(text="U"),
+                        TextChunk(text=""),
+                        TextChunk(text="V"),
+                    ],
+                ),
+                AssistantMessage(
+                    content=[
+                        TextChunk(text="A"),
+                        TextChunk(text=""),
+                        TextChunk(text="B"),
+                    ],
+                ),
+            ]
+        )
+        parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
+        first_message = parsed_request.messages[0]
+        assert isinstance(first_message, UserMessage)
+        assert first_message.content == "UV"
+        second_message = parsed_request.messages[1]
+        assert isinstance(second_message, AssistantMessage)
+        assert second_message.content == "AB"
 
     def test_safety_prompt_aggregated(self, normalizer: InstructRequestNormalizer) -> None:
         chat_completion_request = ChatCompletionRequest[ChatMessage](
@@ -519,6 +546,89 @@ class TestChatCompletionRequestNormalizationV7:
         )
         result: InstructRequest[ChatMessage, Tool] = normalizer_v7.from_chat_completion_request(request)
         assert result.continue_final_message is True
+
+    @pytest.mark.parametrize("num_empty", [0, 1, 2])
+    def test_only_empty_text_chunks(self, normalizer_v7: InstructRequestNormalizerV7, num_empty: int) -> None:
+        """Messages with only empty TextChunks produce empty content."""
+        chat_completion_request = mock_chat_completion(
+            messages=[
+                UserMessage(content=[TextChunk(text="") for _ in range(num_empty)]),
+                AssistantMessage(content=[TextChunk(text="") for _ in range(num_empty)]),
+            ]
+        )
+        parsed_request: InstructRequest[ChatMessage, Tool] = normalizer_v7.from_chat_completion_request(
+            chat_completion_request
+        )
+        first_message = parsed_request.messages[0]
+        assert isinstance(first_message, UserMessage)
+        assert first_message.content == ""
+        second_message = parsed_request.messages[1]
+        assert isinstance(second_message, AssistantMessage)
+        # Empty string content is converted to None for assistant messages
+        assert second_message.content is None
+
+    def test_complex_user_aggregation(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
+        """Complex multi-user-message aggregation with mixed str, chunks, empty, and non-text chunks."""
+        from mistral_common.protocol.instruct.chunk import ImageURLChunk
+
+        chat_completion_request = mock_chat_completion(
+            messages=[
+                UserMessage(content=""),
+                UserMessage(content="A"),
+                UserMessage(content=""),
+                UserMessage(content=[TextChunk(text="B")]),
+                UserMessage(content=[TextChunk(text="")]),
+                UserMessage(
+                    content=[
+                        TextChunk(text="C"),
+                        TextChunk(text="D"),
+                        ImageURLChunk(image_url="E"),
+                        TextChunk(text="G"),
+                        TextChunk(text=""),
+                        TextChunk(text="H"),
+                    ]
+                ),
+            ]
+        )
+        parsed_request: InstructRequest[ChatMessage, Tool] = normalizer_v7.from_chat_completion_request(
+            chat_completion_request
+        )
+        first_message = parsed_request.messages[0]
+        assert isinstance(first_message, UserMessage)
+        assert first_message.content == [
+            TextChunk(text="A\n\nB\n\nCD"),
+            ImageURLChunk(image_url="E"),
+            TextChunk(text="GH"),
+        ]
+
+    def test_complex_assistant_aggregation(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
+        """Complex multi-assistant-message aggregation with mixed str, chunks, and empty content."""
+        chat_completion_request = mock_chat_completion(
+            messages=[
+                AssistantMessage(content=""),
+                AssistantMessage(content="A"),
+                AssistantMessage(content=""),
+                AssistantMessage(content=[TextChunk(text="B")]),
+                AssistantMessage(content=[TextChunk(text="")]),
+                AssistantMessage(
+                    content=[
+                        ThinkChunk(thinking="T"),
+                        TextChunk(text="C"),
+                        TextChunk(text="D"),
+                    ]
+                ),
+            ]
+        )
+        parsed_request: InstructRequest[ChatMessage, Tool] = normalizer_v7.from_chat_completion_request(
+            chat_completion_request
+        )
+        first_message = parsed_request.messages[0]
+        assert isinstance(first_message, AssistantMessage)
+        assert first_message.content == [
+            TextChunk(text="A\n\nB"),
+            ThinkChunk(thinking="T"),
+            TextChunk(text="CD"),
+        ]
 
 
 class TestFineTuningNormalizer:
@@ -777,11 +887,11 @@ class TestChatCompletionRequestNormalizationV13:
             ),
             (
                 SystemMessage(content=[TextChunk(text="A"), TextChunk(text="B")]),
-                SystemMessage(content="A\n\nB"),
+                SystemMessage(content="AB"),
             ),
             (
                 SystemMessage(content=[TextChunk(text="A"), TextChunk(text="B"), ThinkChunk(thinking="C")]),
-                SystemMessage(content=[TextChunk(text="A\n\nB"), ThinkChunk(thinking="C")]),
+                SystemMessage(content=[TextChunk(text="AB"), ThinkChunk(thinking="C")]),
             ),
             (
                 SystemMessage(
@@ -792,7 +902,7 @@ class TestChatCompletionRequestNormalizationV13:
                         ThinkChunk(thinking="D"),
                     ]
                 ),
-                SystemMessage(content=[TextChunk(text="A\n\nB"), ThinkChunk(thinking="C"), ThinkChunk(thinking="D")]),
+                SystemMessage(content=[TextChunk(text="AB"), ThinkChunk(thinking="C"), ThinkChunk(thinking="D")]),
             ),
         ],
     )
@@ -809,6 +919,42 @@ class TestChatCompletionRequestNormalizationV13:
             chat_completion_request
         )
         assert parsed_request.messages == [expected_system_message, UserMessage(content="B")]
+
+    def test_system_messages_no_aggregation(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
+        """Consecutive system messages are NOT aggregated into one in V7+."""
+        chat_completion_request = self._mock_chat_completion(
+            messages=[
+                SystemMessage(content="A"),
+                SystemMessage(content="B"),
+                UserMessage(content="C"),
+                SystemMessage(content="D"),
+            ]
+        )
+        parsed_request: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(
+            chat_completion_request
+        )
+        assert parsed_request.messages == [
+            SystemMessage(content="A"),
+            SystemMessage(content="B"),
+            UserMessage(content="C"),
+            SystemMessage(content="D"),
+        ]
+
+    def test_system_messages_normalization(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
+        """System message chunks within the same message are aggregated with no separator."""
+        chat_completion_request = self._mock_chat_completion(
+            messages=[
+                SystemMessage(content=[TextChunk(text="A"), TextChunk(text="B")]),
+                SystemMessage(content=[TextChunk(text="C")]),
+            ]
+        )
+        parsed_request: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(
+            chat_completion_request
+        )
+        assert parsed_request.messages == [
+            SystemMessage(content="AB"),
+            SystemMessage(content="C"),
+        ]
 
     def test_assert_parsed_settings(
         self,
