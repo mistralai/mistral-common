@@ -18,9 +18,11 @@ mistral-common/
 ├── src/
 │   └── mistral_common/
 │       ├── guidance/
+│       ├── integrations/
 │       ├── protocol/
 │       ├── tokens/
 │       └── ...
+├── scripts/
 ├── tests/
 ├── docs/
 ├── .github/
@@ -73,6 +75,15 @@ mistral-common/
   - `grammar_factory.py`: `GrammarFactory` that builds and renders Lark grammars from Jinja templates
   - `tokenizer.py`: Adapts Tekken tokenizer for llguidance
   - `data/`: Jinja-templated Lark grammar files for base, thinking (special tokens) and thinking (plain text) modes
+
+### Integrations
+- `src/mistral_common/integrations/`: Third-party framework integrations
+  - `chat_templates/`: Chat template generation for HuggingFace Transformers
+    - `chat_templates.py`: Public API for generating chat templates (`generate_chat_template`)
+    - `template_generator.py`: Core template generation engine with `TemplateConfig` and `build_chat_template`
+
+### Scripts
+- `scripts/generate_chat_template.py`: CLI for generating and saving chat templates
 
 ## Experimental
 - `src/mistral_common/experimental/`: Experimental features
