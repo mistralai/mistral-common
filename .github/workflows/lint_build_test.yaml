@@ -96,7 +96,7 @@ jobs:
         run: |
           uv run mkdocs build --strict
 
-  parity_tests:
+  chat_template_parity_tests:
     if: ${{ github.event.pull_request.draft != true }}
     runs-on: ubuntu-latest
     strategy:

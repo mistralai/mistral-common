@@ -51,7 +51,7 @@ jobs:
           uv sync --frozen --all-extras --group dev --group test-integrations
 
       # Parity tests (tests/integrations/chat_templates/transformers/) are handled
-      # by the parity_tests job in lint_build_test.yaml which runs on every PR.
+      # by the chat_template_parity_tests job in lint_build_test.yaml which runs on every PR.
       - name: Integration Tests
         run: |
           uv run --no-sync pytest tests/integrations/ --ignore=tests/integrations/chat_templates/transformers -v
