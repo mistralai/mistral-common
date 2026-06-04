@@ -5,6 +5,7 @@ import pytest
 from mistral_common.protocol.instruct.chunk import (
     ChunkTypes,
     ContentChunk,
+    ImageURLChunk,
     TextChunk,
     ThinkChunk,
 )
@@ -223,7 +224,7 @@ class TestChatCompletionRequestNormalization:
                 [
                     ThinkChunk(thinking="t1"),
                     ThinkChunk(thinking="t2"),
-                    TextChunk(text="a1a2a3"),
+                    TextChunk(text="a1\n\na2\n\na3"),
                 ],
                 "u",
             ],
@@ -240,7 +241,7 @@ class TestChatCompletionRequestNormalization:
         expected = [
             ToolMessage(content="C", tool_call_id="1"),
             ToolMessage(content=json.dumps({"a": 2}), tool_call_id="2"),
-            ToolMessage(content="BA", tool_call_id="3"),
+            ToolMessage(content="B\n\nA", tool_call_id="3"),
         ]
 
         assert (
@@ -286,7 +287,7 @@ class TestChatCompletionRequestNormalization:
         parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
         first_message = parsed_request.messages[0]
         assert isinstance(first_message, UserMessage)
-        assert first_message.content == "foo\n\nchunk1chunk2chunk3"
+        assert first_message.content == "foo\n\nchunk1\n\nchunk2\n\nchunk3"
 
     def test_ignore_middle_empty_text_chunks(self, normalizer: InstructRequestNormalizer) -> None:
         chat_completion_request = mock_chat_completion(
@@ -310,10 +311,10 @@ class TestChatCompletionRequestNormalization:
         parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
         first_message = parsed_request.messages[0]
         assert isinstance(first_message, UserMessage)
-        assert first_message.content == "UV"
+        assert first_message.content == "U\n\nV"
         second_message = parsed_request.messages[1]
         assert isinstance(second_message, AssistantMessage)
-        assert second_message.content == "AB"
+        assert second_message.content == "A\n\nB"
 
     def test_safety_prompt_aggregated(self, normalizer: InstructRequestNormalizer) -> None:
         chat_completion_request = ChatCompletionRequest[ChatMessage](
@@ -570,7 +571,6 @@ class TestChatCompletionRequestNormalizationV7:
 
     def test_complex_user_aggregation(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
         """Complex multi-user-message aggregation with mixed str, chunks, empty, and non-text chunks."""
-        from mistral_common.protocol.instruct.chunk import ImageURLChunk
 
         chat_completion_request = mock_chat_completion(
             messages=[
@@ -597,9 +597,9 @@ class TestChatCompletionRequestNormalizationV7:
         first_message = parsed_request.messages[0]
         assert isinstance(first_message, UserMessage)
         assert first_message.content == [
-            TextChunk(text="A\n\nB\n\nCD"),
+            TextChunk(text="A\n\nB\n\nC\n\nD"),
             ImageURLChunk(image_url="E"),
-            TextChunk(text="GH"),
+            TextChunk(text="G\n\nH"),
         ]
 
     def test_complex_assistant_aggregation(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
@@ -628,7 +628,7 @@ class TestChatCompletionRequestNormalizationV7:
         assert first_message.content == [
             TextChunk(text="A\n\nB"),
             ThinkChunk(thinking="T"),
-            TextChunk(text="CD"),
+            TextChunk(text="C\n\nD"),
         ]
 
 
@@ -888,11 +888,11 @@ class TestChatCompletionRequestNormalizationV13:
             ),
             (
                 SystemMessage(content=[TextChunk(text="A"), TextChunk(text="B")]),
-                SystemMessage(content="AB"),
+                SystemMessage(content="A\n\nB"),
             ),
             (
                 SystemMessage(content=[TextChunk(text="A"), TextChunk(text="B"), ThinkChunk(thinking="C")]),
-                SystemMessage(content=[TextChunk(text="AB"), ThinkChunk(thinking="C")]),
+                SystemMessage(content=[TextChunk(text="A\n\nB"), ThinkChunk(thinking="C")]),
             ),
             (
                 SystemMessage(
@@ -903,7 +903,7 @@ class TestChatCompletionRequestNormalizationV13:
                         ThinkChunk(thinking="D"),
                     ]
                 ),
-                SystemMessage(content=[TextChunk(text="AB"), ThinkChunk(thinking="C"), ThinkChunk(thinking="D")]),
+                SystemMessage(content=[TextChunk(text="A\n\nB"), ThinkChunk(thinking="C"), ThinkChunk(thinking="D")]),
             ),
         ],
     )
@@ -953,7 +953,7 @@ class TestChatCompletionRequestNormalizationV13:
             chat_completion_request
         )
         assert parsed_request.messages == [
-            SystemMessage(content="AB"),
+            SystemMessage(content="A\n\nB"),
             SystemMessage(content="C"),
         ]
 
@@ -1012,6 +1012,87 @@ class TestChatCompletionRequestNormalizationV15:
         )
         result: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
         assert result.continue_final_message is True
+
+    def test_v15_intra_message_chunks_joined_without_separator(
+        self, normalizer_v15: InstructRequestNormalizerV15
+    ) -> None:
+        """V15 joins TextChunks within the same message with no separator (chunk_join_str='')."""
+        request = ChatCompletionRequest[ChatMessage](
+            messages=[
+                UserMessage(content=[TextChunk(text="A"), TextChunk(text="B")]),
+                AssistantMessage(content=[TextChunk(text="C"), TextChunk(text="D")]),
+            ],
+            reasoning_effort=ReasoningEffort.high,
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
+        user_msg = parsed.messages[0]
+        assert isinstance(user_msg, UserMessage)
+        assert user_msg.content == "AB"
+        assistant_msg = parsed.messages[1]
+        assert isinstance(assistant_msg, AssistantMessage)
+        assert assistant_msg.content == "CD"
+
+    def test_v15_inter_message_join_still_uses_separator(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
+        r"""V15 still joins text across different messages with '\n\n'."""
+        request = ChatCompletionRequest[ChatMessage](
+            messages=[
+                UserMessage(content="First"),
+                UserMessage(content="Second"),
+                AssistantMessage(content="Reply"),
+            ],
+            reasoning_effort=ReasoningEffort.high,
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
+        user_msg = parsed.messages[0]
+        assert isinstance(user_msg, UserMessage)
+        assert user_msg.content == "First\n\nSecond"
+
+    def test_v15_mixed_intra_and_inter_message(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
+        r"""V15 combines intra-message ('') and inter-message ('\n\n') joining."""
+        request = ChatCompletionRequest[ChatMessage](
+            messages=[
+                UserMessage(content=[TextChunk(text="A"), TextChunk(text="B")]),
+                UserMessage(content=[TextChunk(text="C"), TextChunk(text="D")]),
+                AssistantMessage(content="Reply"),
+            ],
+            reasoning_effort=ReasoningEffort.high,
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
+        user_msg = parsed.messages[0]
+        assert isinstance(user_msg, UserMessage)
+        assert user_msg.content == "AB\n\nCD"
+
+    def test_v15_mixed_intra_and_inter_assistant_messages(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
+        r"""V15 combines intra-message ('') and inter-message ('\n\n') joining for assistant messages."""
+        request = ChatCompletionRequest[ChatMessage](
+            messages=[
+                UserMessage(content="Hello"),
+                AssistantMessage(content=[TextChunk(text="A"), TextChunk(text="B")]),
+                AssistantMessage(content=[TextChunk(text="C"), TextChunk(text="D")]),
+            ],
+            reasoning_effort=ReasoningEffort.high,
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
+        assistant_msg = parsed.messages[1]
+        assert isinstance(assistant_msg, AssistantMessage)
+        assert assistant_msg.content == "AB\n\nCD"
+
+    def test_v15_tool_message_text_chunks_joined_without_separator(
+        self, normalizer_v15: InstructRequestNormalizerV15
+    ) -> None:
+        """V15 tool message TextChunks are joined with no separator."""
+        request = ChatCompletionRequest[ChatMessage](
+            messages=[
+                UserMessage(content="query"),
+                AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="fn", arguments="{}"), id="c1")]),
+                ToolMessage(content=[TextChunk(text="X"), TextChunk(text="Y")], tool_call_id="c1"),
+            ],
+            reasoning_effort=ReasoningEffort.high,
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
+        tool_msg = parsed.messages[2]
+        assert isinstance(tool_msg, ToolMessage)
+        assert tool_msg.content == "XY"
 
 
 @pytest.mark.parametrize(

@@ -287,17 +287,13 @@ def _generate_system_prompt_handling_pre_v7(config: TemplateConfig) -> list[str]
         "        {%- if message['content'] is string %}",
         "            {%- set ns_sys.system_parts = ns_sys.system_parts + [message['content']] %}",
         "        {%- else %}",
-        "            {%- set ns_sys_msg = namespace(parts=[]) %}",
         "            {%- for block in message['content'] %}",
         "                {%- if block['type'] == 'text' %}",
-        "                    {%- set ns_sys_msg.parts = ns_sys_msg.parts + [block['text']] %}",
+        "                    {%- set ns_sys.system_parts = ns_sys.system_parts + [block['text']] %}",
         "                {%- else %}",
         "                    {{- raise_exception('Only text chunks are supported in system message content.') }}",
         "                {%- endif %}",
         "            {%- endfor %}",
-        "            {%- if ns_sys_msg.parts | length > 0 %}",
-        "                {%- set ns_sys.system_parts = ns_sys.system_parts + [ns_sys_msg.parts | join('')] %}",
-        "            {%- endif %}",
         "        {%- endif %}",
         "    {%- else %}",
         "        {%- set ns_sys.filtered = ns_sys.filtered + [message] %}",
@@ -770,10 +766,10 @@ def _generate_flush_logic(config: TemplateConfig) -> list[str]:
     if config.any_thinking_support:
         lines.extend(_generate_reasoning_to_thinking_inline())
 
-    lines.extend(
-        [
-            "                {%- if msg['content'] is string %}",
-            "                    {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}",
+    # Build list-content processing block: v15+ joins intra-message TextChunks with ""
+    # (no separator), pre-v15 joins all TextChunks with "\n\n" (same as inter-message).
+    if config.version >= TokenizerVersion.v15:
+        list_content_lines = [
             "                {%- elif msg['content'] is not none %}",
             "                    {%- set ns_msg = namespace(msg_text_parts=[]) %}",
             "                    {%- for block in msg['content'] %}",
@@ -796,6 +792,30 @@ def _generate_flush_logic(config: TemplateConfig) -> list[str]:
             "                        {%- set ns_c.text_parts = ns_c.text_parts + [ns_msg.msg_text_parts | join('')] %}",
             "                    {%- endif %}",
             "                {%- endif %}",
+        ]
+    else:
+        list_content_lines = [
+            "                {%- elif msg['content'] is not none %}",
+            "                    {%- for block in msg['content'] %}",
+            "                        {%- if block['type'] == 'text' %}",
+            "                            {%- set ns_c.text_parts = ns_c.text_parts + [block['text']] %}",
+            "                        {%- else %}",
+            "                            {%- if ns_c.text_parts | length > 0 %}",
+            "                                {%- set ns_c.chunks = ns_c.chunks + [{'type': 'text', 'text': ns_c.text_parts | join('\\n\\n')}] %}",  # noqa: E501
+            "                                {%- set ns_c.text_parts = [] %}",
+            "                            {%- endif %}",
+            "                            {%- set ns_c.chunks = ns_c.chunks + [block] %}",
+            "                            {%- set ns_c.has_non_text = true %}",
+            "                        {%- endif %}",
+            "                    {%- endfor %}",
+            "                {%- endif %}",
+        ]
+
+    lines.extend(
+        [
+            "                {%- if msg['content'] is string %}",
+            "                    {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}",
+            *list_content_lines,
             "                {%- if msg['tool_calls'] is defined and msg['tool_calls'] is not none %}",
             "                    {%- set ns_c.tool_calls = ns_c.tool_calls + msg['tool_calls'] | list %}",
             "                {%- endif %}",

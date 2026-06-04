@@ -246,7 +246,7 @@ def test_image_tokenization_integration(mm_tokenizer: MistralTokenizer) -> None:
         [1, 3, 1065, 1398, 1267, *img_toks, 1067, 4],
         [1, 3, 1065, 1398, 1267, *img_toks, 1067, 4],
         [1, 3, *img_toks, *img_toks, 1067, 4, 1068, 2, 3, 1065, 1398, 1267, *img_toks, 1069, *img_toks, 4],
-        [1, 3, 1065, *img_toks, 6535, *img_toks, 5088, 4],
+        [1, 3, 1065, *img_toks, 1066, 1267, 1067, *img_toks, 1068, 1267, 1069, 4],
     ]
     # fmt: on
     image_encoder = mm_tokenizer.instruct_tokenizer.image_encoder
