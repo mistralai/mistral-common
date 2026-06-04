@@ -4,7 +4,6 @@ from typing import Any
 import numpy as np
 import pytest
 
-from mistral_common.protocol.instruct.chunk import RawAudio
 from mistral_common.protocol.transcription.request import (
     StreamingMode,
     TranscriptionRequest,
@@ -140,7 +139,7 @@ def test_tokenize_streaming_request(
     )
 
     streaming_request = TranscriptionRequest(
-        audio=RawAudio.from_audio(audio) if mode == StreamingMode.OFFLINE else RawAudio(data="", format="wav"),
+        audio=audio.to_base64("wav") if mode == StreamingMode.OFFLINE else "",
         streaming=mode,
         target_streaming_delay_ms=target_streaming_delay_ms,
         language=None,

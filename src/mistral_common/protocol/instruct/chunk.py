@@ -1,15 +1,52 @@
+import base64
+import io
 import re
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlparse
 
-from pydantic import ConfigDict, Field, ValidationError, field_validator
+from pydantic import ConfigDict, Field, ValidationError, field_validator, model_validator
 from typing_extensions import Annotated
 
-from mistral_common.audio import EXPECTED_FORMAT_VALUES, Audio
 from mistral_common.base import MistralBase
+from mistral_common.deprecation import warn_once
 from mistral_common.image import SerializableImage
+from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
+
+if is_soundfile_installed():
+    import soundfile as sf
+if TYPE_CHECKING:
+    from mistral_common.tokens.tokenizers.audio import Audio
+
+
+def _detect_audio_format(data: str | bytes) -> str:
+    r"""Detect audio format from base64-encoded string or raw bytes.
+
+    Uses soundfile to read only the file header, avoiding full audio decoding.
+
+    Args:
+        data: Base64-encoded audio string or raw audio bytes.
+
+    Returns:
+        The detected audio format as a lowercase string (e.g. "wav", "mp3").
+
+    Raises:
+        ValueError: If the audio format cannot be detected.
+    """
+    assert_soundfile_installed()
+
+    if isinstance(data, str):
+        audio_bytes = base64.b64decode(data)
+    else:
+        audio_bytes = data
+
+    try:
+        info = sf.info(io.BytesIO(audio_bytes))
+    except RuntimeError as e:
+        raise ValueError("Failed to detect audio format. Verify that the given file is valid wav or mp3.") from e
+    fmt: str = info.format.lower()
+    return fmt
 
 
 class ChunkTypes(str, Enum):
@@ -158,40 +195,37 @@ class ImageURLChunk(BaseContentChunk):
 
 
 class RawAudio(MistralBase):
-    r"""Base64 encoded audio data.
-
-    This class represents raw audio data encoded in base64 format.
-
-    Attributes:
-        data: The base64 encoded audio data, which can be a string or bytes.
-        format: The format of the audio data.
-
-    Examples:
-        >>> audio = RawAudio(data="base64_encoded_audio_data", format="mp3")
-    """
+    r"""Deprecated: Use `str | bytes` directly. Will be removed in 1.13.0."""
 
     data: str | bytes
     format: str
 
+    def model_post_init(self, __context: Any) -> None:
+        warn_once(
+            "RawAudio",
+            "RawAudio is deprecated. Use str | bytes directly for audio data. Will be removed in 1.13.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
     @classmethod
-    def from_audio(cls, audio: Audio) -> "RawAudio":
-        """Creates a RawAudio instance from an Audio object.
+    def from_audio(cls, audio: "Audio") -> "RawAudio":
+        r"""Create a RawAudio instance from an Audio object.
 
         Args:
             audio: An Audio object containing audio data, format, and duration.
 
         Returns:
-            An AudioChunk instance initialized with the audio data.
+            A RawAudio instance initialized with the audio data.
         """
         format = audio.format
         data = audio.to_base64(format, False)
-
         return cls(data=data, format=format)
 
     @field_validator("format")
     def should_not_be_empty(cls, v: str) -> str:
-        if v not in EXPECTED_FORMAT_VALUES:
-            raise ValidationError(f"`format` should be one of {EXPECTED_FORMAT_VALUES}. Got: {v}`")
+        if not v.strip():
+            raise ValidationError("`format` should not be empty")
 
         return v
 
@@ -287,29 +321,49 @@ class AudioURLChunk(BaseContentChunk):
 class AudioChunk(BaseContentChunk):
     r"""Audio chunk containing raw audio data.
 
-    This class represents a chunk of audio data that can be used as input.
-
     Attributes:
         type: The type of the chunk, which is always ChunkTypes.input_audio.
-        input_audio: The RawAudio object containing the audio data.
+        input_audio: The audio data as a base64-encoded string or raw bytes.
 
     Examples:
-        >>> audio_chunk = AudioChunk(input_audio=RawAudio(data="base64_encoded_audio_data", format="mp3"))
+        >>> audio_chunk = AudioChunk(input_audio="base64_encoded_audio_data")
     """
 
     type: Literal[ChunkTypes.input_audio] = ChunkTypes.input_audio
-    input_audio: RawAudio
+    input_audio: str | bytes
+
+    @model_validator(mode="before")
+    @classmethod
+    def _flatten_audio_dict(cls, values: dict[str, Any]) -> dict[str, Any]:
+        r"""Extract audio data from a nested dict or legacy RawAudio payload.
+
+        Handles the OpenAI format where `input_audio` is a dict with a
+        `data` key (e.g. `{"data": "...", "format": "wav"}`) as well as
+        deprecated `RawAudio` instances, flattening them to a plain
+        `str | bytes` value.
+        """
+        if not isinstance(values, dict):
+            return values
+        raw = values.get("input_audio")
+        if isinstance(raw, MistralBase):
+            raw = raw.model_dump()
+        if isinstance(raw, dict) and "data" in raw:
+            values["input_audio"] = raw["data"]
+        return values
 
     @field_validator("input_audio")
-    def should_not_be_empty(cls, v: RawAudio) -> RawAudio:
-        if not v.data.strip():
-            raise ValidationError(f"`InputAudio` should not be empty. Got: {v}`")
-
+    @classmethod
+    def should_not_be_empty(cls, v: str | bytes) -> str | bytes:
+        r"""Validate that the audio data is not empty."""
+        if isinstance(v, str) and not v.strip():
+            raise ValidationError("`input_audio` should not be empty.")
+        if isinstance(v, bytes) and not v:
+            raise ValidationError("`input_audio` should not be empty.")
         return v
 
     @classmethod
-    def from_audio(cls, audio: Audio) -> "AudioChunk":
-        r"""Creates an AudioChunk instance from an Audio object.
+    def from_audio(cls, audio: "Audio") -> "AudioChunk":
+        r"""Create an AudioChunk instance from an Audio object.
 
         Args:
             audio: An Audio object containing audio data.
@@ -317,25 +371,27 @@ class AudioChunk(BaseContentChunk):
         Returns:
             An AudioChunk instance initialized with the audio data.
         """
-        return cls(input_audio=RawAudio.from_audio(audio))
+        return cls(input_audio=audio.to_base64(audio.format, False))
 
     def to_openai(self) -> dict[str, Any]:
-        r"""Converts the chunk to the OpenAI format.
+        r"""Convert the chunk to the OpenAI format.
 
         Returns:
             A dictionary representing the audio chunk in the OpenAI format.
         """
-        content = (
-            self.input_audio.data.decode("utf-8") if isinstance(self.input_audio.data, bytes) else self.input_audio.data
-        )
+        content = self.input_audio.decode("utf-8") if isinstance(self.input_audio, bytes) else self.input_audio
+        fmt = _detect_audio_format(self.input_audio)
         return {
             "type": self.type,
-            "input_audio": RawAudio(data=content, format=self.input_audio.format).model_dump(),
+            "input_audio": {
+                "data": content,
+                "format": fmt,
+            },
         }
 
     @classmethod
     def from_openai(cls, openai_chunk: dict[str, Any]) -> "AudioChunk":
-        r"""Converts the OpenAI chunk to the Mistral format.
+        r"""Convert the OpenAI chunk to the Mistral format.
 
         Args:
             openai_chunk: A dictionary representing the audio chunk in the OpenAI format.

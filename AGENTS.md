@@ -34,6 +34,7 @@ mistral-common/
 ### Root-level files in src/mistral_common/
 - `audio.py`: Audio processing utilities including Audio class and mel-scale conversions
 - `base.py`: Base Pydantic model configuration
+- `deprecation.py`: Deprecation utilities (`deprecated_import`, `warn_once`) for emitting one-shot warnings on moved or removed symbols
 - `exceptions.py`: Custom exception classes for the library
 - `image.py`: Image processing utilities including download and serialization
 - `imports.py`: Import utilities and dependency checks
@@ -117,6 +118,7 @@ mistral-common/
 - Do NOT use wildcard imports
 - Do NOT add import inside `__init__`
 - Use `TYPE_CHECKING` blocks for type-only imports
+- Do NOT use `from __future__ import annotations`
 
 ### Type Hints (Required)
 - Use Python's type hints extensively

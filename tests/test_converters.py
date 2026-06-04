@@ -6,6 +6,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+import soundfile as sf
 from openai.types.audio.transcription_create_params import TranscriptionCreateParamsBase as OpenAITranscriptionRequest
 from openai.types.chat.chat_completion_assistant_message_param import (
     ChatCompletionAssistantMessageParam as OpenAIAssistantMessage,
@@ -31,7 +32,6 @@ from openai.types.chat.chat_completion_user_message_param import ChatCompletionU
 from PIL import Image
 from pydantic_extra_types.language_code import LanguageAlpha2
 
-from mistral_common.audio import Audio
 from mistral_common.exceptions import InvalidAssistantMessageException
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
@@ -40,7 +40,6 @@ from mistral_common.protocol.instruct.chunk import (
     ImageChunk,
     ImageURL,
     ImageURLChunk,
-    RawAudio,
     TextChunk,
     ThinkChunk,
 )
@@ -69,6 +68,7 @@ from mistral_common.protocol.instruct.tool_calls import (
 )
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
+from mistral_common.tokens.tokenizers.audio import Audio
 
 from .test_tokenizer_v7_audio_tts import _make_fake_audio
 
@@ -79,8 +79,6 @@ AUDIO_SAMPLE_URL = "https://freetestdata.com/wp-content/uploads/2021/09/Free_Tes
 
 
 def _get_audio_chunk() -> AudioChunk:
-    import soundfile as sf
-
     sample_rate = 44100  # Sample rate in Hz
     duration = 3  # Duration in seconds
     frequency = 440  # Frequency of the sine wave in Hz
@@ -99,18 +97,15 @@ def _get_audio_chunk() -> AudioChunk:
 
     audio = Audio(audio_array=data, sampling_rate=sr, format="wav")
 
-    raw_audio = RawAudio.from_audio(audio)
-    return AudioChunk(input_audio=raw_audio)
+    return AudioChunk.from_audio(audio)
 
 
 DUMMY_AUDIO_CHUNK = _get_audio_chunk()
-assert isinstance(DUMMY_AUDIO_CHUNK.input_audio.data, str)
-DUMMY_AUDIO_URL_CHUNK_BASE64 = AudioURLChunk(audio_url=AudioURL(url=DUMMY_AUDIO_CHUNK.input_audio.data))
-DUMMY_AUDIO_URL_CHUNK_BASE64_STR = AudioURLChunk(audio_url=DUMMY_AUDIO_CHUNK.input_audio.data)
+assert isinstance(DUMMY_AUDIO_CHUNK.input_audio, str)
+DUMMY_AUDIO_URL_CHUNK_BASE64 = AudioURLChunk(audio_url=AudioURL(url=DUMMY_AUDIO_CHUNK.input_audio))
+DUMMY_AUDIO_URL_CHUNK_BASE64_STR = AudioURLChunk(audio_url=DUMMY_AUDIO_CHUNK.input_audio)
 DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX = AudioURLChunk(
-    audio_url=AudioURL(
-        url=f"data:audio/{DUMMY_AUDIO_CHUNK.input_audio.format};base64,{DUMMY_AUDIO_CHUNK.input_audio.data}"
-    )
+    audio_url=AudioURL(url=f"data:audio/wav;base64,{DUMMY_AUDIO_CHUNK.input_audio}")
 )
 DUMMY_AUDIO_URL_CHUNK_URL = AudioURLChunk(audio_url=AudioURL(url=AUDIO_SAMPLE_URL))
 
@@ -156,11 +151,19 @@ def test_convert_text_chunk() -> None:
 
 def test_convert_input_audio_chunk() -> None:
     chunk = DUMMY_AUDIO_CHUNK
-    text_openai = chunk.to_openai()
+    openai_dict = chunk.to_openai()
 
-    assert AudioChunk.from_openai(text_openai) == chunk
+    # Verify OpenAI-compliant shape
+    assert openai_dict["type"] == "input_audio"
+    assert isinstance(openai_dict["input_audio"], dict)
+    assert "data" in openai_dict["input_audio"]
+    assert "format" in openai_dict["input_audio"]
+    assert openai_dict["input_audio"]["format"] in ("wav", "mp3", "flac", "ogg")
 
-    typeddict_openai = OpenAIInputAudioChunk(**chunk.to_openai())  # type: ignore[typeddict-item]
+    # Roundtrip
+    assert AudioChunk.from_openai(openai_dict) == chunk
+
+    typeddict_openai = OpenAIInputAudioChunk(**openai_dict)  # type: ignore[typeddict-item]
     assert AudioChunk.from_openai(typeddict_openai) == chunk
 
 
@@ -225,25 +228,21 @@ def test_convert_image_url_chunk(openai_image_url_chunk: dict, image_url_chunk: 
         (
             {
                 "type": "audio_url",
-                "audio_url": {"url": DUMMY_AUDIO_CHUNK.input_audio.data},
+                "audio_url": {"url": DUMMY_AUDIO_CHUNK.input_audio},
             },
             DUMMY_AUDIO_URL_CHUNK_BASE64,
         ),
         (
             {
                 "type": "audio_url",
-                "audio_url": {"url": DUMMY_AUDIO_CHUNK.input_audio.data},
+                "audio_url": {"url": DUMMY_AUDIO_CHUNK.input_audio},
             },
             DUMMY_AUDIO_URL_CHUNK_BASE64_STR,
         ),
         (
             {
                 "type": "audio_url",
-                "audio_url": {
-                    "url": (
-                        f"data:audio/{DUMMY_AUDIO_CHUNK.input_audio.format};base64,{DUMMY_AUDIO_CHUNK.input_audio.data}"
-                    )
-                },
+                "audio_url": {"url": f"data:audio/wav;base64,{DUMMY_AUDIO_CHUNK.input_audio}"},
             },
             DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX,
         ),
@@ -1106,7 +1105,7 @@ def test_convert_requests(
 )
 def test_convert_transcription(audio: AudioChunk, language: LanguageAlpha2 | None, stream: bool) -> None:
     def check_equality(a: TranscriptionRequest, b: TranscriptionRequest) -> bool:
-        if a.audio.data != b.audio.data:
+        if a.audio != b.audio:
             return False
         if a.id != b.id:
             return False
@@ -1144,11 +1143,88 @@ def test_convert_transcription(audio: AudioChunk, language: LanguageAlpha2 | Non
 
 
 def _audio_to_wav_bytes(audio: Audio) -> bytes:
-    import soundfile as sf
-
     buffer = io.BytesIO()
     sf.write(buffer, audio.audio_array, audio.sampling_rate, format="wav")
     return buffer.getvalue()
+
+
+def test_convert_transcription_str_buffer_name() -> None:
+    """Verify that the BytesIO buffer has a .name when audio is a base64 string."""
+    audio = _make_fake_audio(0.5)
+    b64 = audio.to_base64("wav")
+
+    request = TranscriptionRequest(audio=b64, model="model", language=None, target_streaming_delay_ms=None)
+    openai_request = request.to_openai()
+
+    buffer = openai_request["file"]
+    assert isinstance(buffer, io.BytesIO)
+    assert hasattr(buffer, "name")
+    assert buffer.name == "audio.wav"
+
+
+def test_convert_transcription_bytes_buffer_name() -> None:
+    """Verify that the BytesIO buffer has a .name when audio is raw bytes."""
+    audio = _make_fake_audio(0.5)
+    raw_bytes = _audio_to_wav_bytes(audio)
+
+    request = TranscriptionRequest(audio=raw_bytes, model="model", language=None, target_streaming_delay_ms=None)
+    openai_request = request.to_openai()
+
+    buffer = openai_request["file"]
+    assert isinstance(buffer, io.BytesIO)
+    assert hasattr(buffer, "name")
+    assert buffer.name == "audio.wav"
+
+
+def test_convert_transcription_bytes_invalid_format() -> None:
+    """Verify that invalid audio bytes raise a ValueError."""
+    request = TranscriptionRequest(
+        audio=b"not valid audio data", model="model", language=None, target_streaming_delay_ms=None
+    )
+    with pytest.raises(ValueError, match="Failed to detect audio format"):
+        request.to_openai()
+
+
+@pytest.mark.parametrize("fmt", ["wav", "flac"])
+def test_audio_chunk_to_openai_format_detection(fmt: str) -> None:
+    audio = _make_fake_audio(0.5)
+    b64 = audio.to_base64(fmt)
+    chunk = AudioChunk(input_audio=b64)
+    result = chunk.to_openai()
+
+    assert result["input_audio"]["format"] == fmt
+    assert result["input_audio"]["data"] == b64
+    assert AudioChunk.from_openai(result).input_audio == b64
+
+
+@pytest.mark.parametrize("fmt", ["wav", "flac"])
+def test_transcription_to_openai_format_detection(fmt: str) -> None:
+    audio = _make_fake_audio(0.5)
+    b64 = audio.to_base64(fmt)
+    request = TranscriptionRequest(audio=b64, model="model", language=None, target_streaming_delay_ms=None)
+    openai_request = request.to_openai()
+
+    buffer = openai_request["file"]
+    assert isinstance(buffer, io.BytesIO)
+    assert buffer.name == f"audio.{fmt}"
+
+    recovered = Audio.from_bytes(buffer.getvalue())
+    assert np.allclose(recovered.audio_array, audio.audio_array, atol=1e-3)
+
+
+@pytest.mark.parametrize("fmt", ["wav", "flac"])
+def test_transcription_to_openai_bytes_format_detection(fmt: str) -> None:
+    audio = _make_fake_audio(0.5)
+    buf = io.BytesIO()
+    sf.write(buf, audio.audio_array, audio.sampling_rate, format=fmt)
+    raw_bytes = buf.getvalue()
+
+    request = TranscriptionRequest(audio=raw_bytes, model="model", language=None, target_streaming_delay_ms=None)
+    openai_request = request.to_openai()
+
+    buffer = openai_request["file"]
+    assert isinstance(buffer, io.BytesIO)
+    assert buffer.name == f"audio.{fmt}"
 
 
 def test_convert_speech_request_from_openai() -> None:

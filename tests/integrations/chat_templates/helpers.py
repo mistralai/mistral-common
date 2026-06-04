@@ -4,7 +4,7 @@ This module contains utility functions used by test files across the
 `unit/` and `transformers/` subdirectories.  It intentionally has no
 fixtures or test data -- those live in `conftest.py` and `fixtures_data.py`.
 
-HuggingFace-specific helpers live in ``hf_utils.py``.
+HuggingFace-specific helpers live in `hf_utils.py`.
 """
 
 import json
@@ -18,11 +18,10 @@ from jinja2 import BaseLoader
 from jinja2.sandbox import ImmutableSandboxedEnvironment
 from PIL import Image
 
-from mistral_common.audio import Audio
 from mistral_common.integrations.chat_templates.template_generator import TemplateConfig
-from mistral_common.protocol.instruct.chunk import RawAudio
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, ReasoningEffort
 from mistral_common.protocol.instruct.validator import ValidationMode
+from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
@@ -156,7 +155,7 @@ def _sample_audio() -> Audio:
 _IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/7/78/Red_Square_%282x2_Pixel%29.png"
 _IMAGE = _create_dummy_image()
 _AUDIO_URL = _sample_audio().to_base64("wav")
-_AUDIO = RawAudio(data=_AUDIO_URL, format="wav")
+_AUDIO = _AUDIO_URL
 
 
 def _build_tekken_json(config: TestConfig, output_dir: Path) -> Path:

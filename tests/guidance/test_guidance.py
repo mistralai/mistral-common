@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pathlib import Path
 from typing import Any, Literal
 
@@ -208,7 +206,7 @@ class TestCase(BaseModel):
     raw_lark: str | None = None
 
     @model_validator(mode="after")
-    def validate_should_fail_on(self) -> TestCase:
+    def validate_should_fail_on(self) -> "TestCase":
         if self.should_fail_on is not None and self.should_fail_on < 0:
             self.should_fail_on += len(self.tokens)
             if self.should_fail_on < 0:

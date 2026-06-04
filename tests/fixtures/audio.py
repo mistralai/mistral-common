@@ -1,7 +1,7 @@
 import numpy as np
 
-from mistral_common.audio import Audio
-from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURL, AudioURLChunk, RawAudio
+from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURL, AudioURLChunk
+from mistral_common.tokens.tokenizers.audio import Audio
 
 
 def get_dummy_audio_chunk() -> AudioChunk:
@@ -14,14 +14,9 @@ def get_dummy_audio_chunk() -> AudioChunk:
         format="wav",
     )
 
-    return AudioChunk(
-        input_audio=RawAudio(
-            data=audio.to_base64("wav"),
-            format="wav",
-        ),
-    )
+    return AudioChunk(input_audio=audio.to_base64("wav"))
 
 
 def get_dummy_audio_url_chunk() -> AudioURLChunk:
     audio_chunk = get_dummy_audio_chunk()
-    return AudioURLChunk(audio_url=AudioURL(url=str(audio_chunk.input_audio.data)))
+    return AudioURLChunk(audio_url=AudioURL(url=str(audio_chunk.input_audio)))
