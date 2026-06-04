@@ -121,6 +121,6 @@ jobs:
         run: |
           uv sync --frozen --all-extras --group dev --group test-integrations
 
-      - name: Parity Tests (mistral-common vs transformers)
+      - name: Chat Template Parity Tests (mistral-common vs transformers)
         run: |
-          uv run --no-sync pytest tests/integrations/chat_templates/transformers/ -v
+          uv run --no-sync pytest tests/integrations/chat_templates/transformers/test_core_parity.py tests/integrations/chat_templates/transformers/test_thinking.py -v
