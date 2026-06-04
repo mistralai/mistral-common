@@ -159,6 +159,8 @@ class Audio:
         Returns:
             An instance of the Audio class.
         """
+        assert_soundfile_installed()
+
         with io.BytesIO(audio_bytes) as audio_file:
             with sf.SoundFile(audio_file) as f:
                 audio_array = f.read(dtype="float32")

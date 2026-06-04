@@ -12,7 +12,7 @@ from typing_extensions import Annotated
 from mistral_common.base import MistralBase
 from mistral_common.deprecation import warn_once
 from mistral_common.image import SerializableImage
-from mistral_common.imports import is_soundfile_installed
+from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
 
 if is_soundfile_installed():
     import soundfile as sf
@@ -34,6 +34,8 @@ def _detect_audio_format(data: str | bytes) -> str:
     Raises:
         ValueError: If the audio format cannot be detected.
     """
+    assert_soundfile_installed()
+
     if isinstance(data, str):
         audio_bytes = base64.b64decode(data)
     else:
