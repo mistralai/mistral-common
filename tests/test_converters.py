@@ -6,6 +6,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+import soundfile as sf
 from openai.types.audio.transcription_create_params import TranscriptionCreateParamsBase as OpenAITranscriptionRequest
 from openai.types.chat.chat_completion_assistant_message_param import (
     ChatCompletionAssistantMessageParam as OpenAIAssistantMessage,
@@ -78,8 +79,6 @@ AUDIO_SAMPLE_URL = "https://freetestdata.com/wp-content/uploads/2021/09/Free_Tes
 
 
 def _get_audio_chunk() -> AudioChunk:
-    import soundfile as sf
-
     sample_rate = 44100  # Sample rate in Hz
     duration = 3  # Duration in seconds
     frequency = 440  # Frequency of the sine wave in Hz
@@ -1144,8 +1143,6 @@ def test_convert_transcription(audio: AudioChunk, language: LanguageAlpha2 | Non
 
 
 def _audio_to_wav_bytes(audio: Audio) -> bytes:
-    import soundfile as sf
-
     buffer = io.BytesIO()
     sf.write(buffer, audio.audio_array, audio.sampling_rate, format="wav")
     return buffer.getvalue()
@@ -1217,8 +1214,6 @@ def test_transcription_to_openai_format_detection(fmt: str) -> None:
 
 @pytest.mark.parametrize("fmt", ["wav", "flac"])
 def test_transcription_to_openai_bytes_format_detection(fmt: str) -> None:
-    import soundfile as sf
-
     audio = _make_fake_audio(0.5)
     buf = io.BytesIO()
     sf.write(buf, audio.audio_array, audio.sampling_rate, format=fmt)
