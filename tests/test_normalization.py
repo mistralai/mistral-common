@@ -387,9 +387,10 @@ class TestChatCompletionRequestNormalization:
             messages=[
                 UserMessage(content="a"),
                 AssistantMessage(
+                    content="",
                     tool_calls=[
                         ToolCall(function=FunctionCall(name="tool1", arguments='{"input": "11"}')),  # clean json string
-                    ]
+                    ],
                 ),
                 ToolMessage(
                     name="tool1",
@@ -564,8 +565,8 @@ class TestChatCompletionRequestNormalizationV7:
         assert first_message.content == ""
         second_message = parsed_request.messages[1]
         assert isinstance(second_message, AssistantMessage)
-        # Empty string content is converted to None for assistant messages
-        assert second_message.content is None
+        # Empty string content is passed through directly
+        assert second_message.content == ""
 
     def test_complex_user_aggregation(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
         """Complex multi-user-message aggregation with mixed str, chunks, empty, and non-text chunks."""

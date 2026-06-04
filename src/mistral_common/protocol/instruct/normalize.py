@@ -1,13 +1,18 @@
 import json
 import warnings
-from typing import Generic, Sequence
+from typing import Generic, Sequence, TypeGuard
 
 from typing_extensions import assert_never
 
 from mistral_common.exceptions import InvalidRequestException
 from mistral_common.protocol.instruct.chunk import (
+    AudioChunk,
+    AudioURLChunk,
     ContentChunk,
+    ImageChunk,
+    ImageURLChunk,
     TextChunk,
+    ThinkChunk,
 )
 from mistral_common.protocol.instruct.messages import (
     UATS,
@@ -97,6 +102,18 @@ def _aggregate_content_chunks_impl(
     _flush_text()
 
     return all_content
+
+
+def _is_assistant_content(chunks: list[ContentChunk]) -> TypeGuard[list[TextChunk | ThinkChunk]]:
+    """Narrow ContentChunk list to assistant-compatible types."""
+    return all(isinstance(c, (TextChunk, ThinkChunk)) for c in chunks)
+
+
+def _is_user_content(
+    chunks: list[ContentChunk],
+) -> TypeGuard[list[TextChunk | ImageChunk | ImageURLChunk | AudioChunk | AudioURLChunk]]:
+    """Narrow ContentChunk list to user-compatible types."""
+    return all(not isinstance(c, ThinkChunk) for c in chunks)
 
 
 class InstructRequestNormalizer(
@@ -285,8 +302,17 @@ class InstructRequestNormalizer(
                     )
                 weight = message.weight
 
+        if isinstance(content, str):
+            narrowed_content: str | list[TextChunk | ThinkChunk] = content
+        elif _is_assistant_content(content):
+            narrowed_content = content
+        else:
+            raise InvalidRequestException(
+                f"Unexpected content chunk types in assistant message: {[type(c).__name__ for c in content]}"
+            )
+
         aggregated_message = self._assistant_message_class(
-            content=content if content else None,  # type: ignore[arg-type]
+            content=narrowed_content,
             tool_calls=tool_calls or None,
             prefix=prefix,
         )
@@ -297,7 +323,15 @@ class InstructRequestNormalizer(
 
     def _aggregate_user_messages(self, messages: list[UATS]) -> UserMessageType:
         """Coalesce neighboring blocks of ContentChunks in user messages."""
-        return self._user_message_class(content=self._aggregate_content_chunks(messages))  # type: ignore[arg-type]
+        content = self._aggregate_content_chunks(messages)
+        if isinstance(content, str):
+            return self._user_message_class(content=content)
+        elif _is_user_content(content):
+            return self._user_message_class(content=content)
+        else:
+            raise InvalidRequestException(
+                f"Unexpected content chunk types in user message: {[type(c).__name__ for c in content]}"
+            )
 
     def _aggregate_role(self, messages: list[UATS], role: Roles | None, latest_call_ids: list[str]) -> Sequence[UATS]:
         if role == Roles.tool:
