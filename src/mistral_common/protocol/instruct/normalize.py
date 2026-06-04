@@ -32,14 +32,13 @@ from mistral_common.protocol.instruct.tool_calls import FunctionCall, Tool, Tool
 from mistral_common.tokens.tokenizers.base import InstructRequestType, TokenizerVersion
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
 
-_MSG_JOIN_STR = "\n\n"
-_CHUNK_JOIN_STR = ""
+_DEFAULT_JOIN_STR = "\n\n"
 
 
 def _aggregate_content_chunks_impl(
     contents: list[list[ContentChunk] | str | None],
-    msg_join_str: str = _MSG_JOIN_STR,
-    chunk_join_str: str = _CHUNK_JOIN_STR,
+    msg_join_str: str,
+    chunk_join_str: str,
 ) -> list[ContentChunk] | str:
     r"""Coalesce TextChunks within the same message and across different messages.
 
@@ -129,8 +128,8 @@ class InstructRequestNormalizer(
 
     _system_prompt_in_begin: bool = False
     _allow_tool_call_and_content: bool = False
-    _chunk_join_str: str = _CHUNK_JOIN_STR
-    _msg_join_str: str = _MSG_JOIN_STR
+    _chunk_join_str: str = _DEFAULT_JOIN_STR
+    _msg_join_str: str = _DEFAULT_JOIN_STR
 
     def __init__(
         self,
