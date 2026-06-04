@@ -21,24 +21,11 @@ from PIL import Image
 from mistral_common.audio import Audio
 from mistral_common.integrations.chat_templates.template_generator import TemplateConfig
 from mistral_common.protocol.instruct.chunk import RawAudio
-from mistral_common.protocol.instruct.normalize import get_normalizer
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, ReasoningEffort
-from mistral_common.protocol.instruct.validator import ValidationMode, get_validator
-from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenizer, TokenizerVersion
-from mistral_common.tokens.tokenizers.image import ImageConfig, ImageEncoder, SpecialImageIDs
-from mistral_common.tokens.tokenizers.instruct import (
-    InstructTokenizerBase,
-    InstructTokenizerV1,
-    InstructTokenizerV2,
-    InstructTokenizerV3,
-    InstructTokenizerV7,
-    InstructTokenizerV11,
-    InstructTokenizerV13,
-    InstructTokenizerV15,
-)
+from mistral_common.protocol.instruct.validator import ValidationMode
+from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
-from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
 from tests.test_tekken import get_special_tokens
 
 # Golden template files live in the data/ tree (outside src/).
@@ -172,19 +159,6 @@ _AUDIO_URL = _sample_audio().to_base64("wav")
 _AUDIO = RawAudio(data=_AUDIO_URL, format="wav")
 
 
-def _get_image_encoder(tokenizer: Tokenizer) -> ImageEncoder:
-    r"""Create an `ImageEncoder` for testing."""
-    image_config = ImageConfig(image_patch_size=2, max_image_size=10, spatial_merge_size=1)
-    return ImageEncoder(
-        image_config=image_config,
-        special_ids=SpecialImageIDs(
-            img=tokenizer.get_special_token("[IMG]"),
-            img_break=tokenizer.get_special_token("[IMG_BREAK]"),
-            img_end=tokenizer.get_special_token("[IMG_END]"),
-        ),
-    )
-
-
 def _build_tekken_json(config: TestConfig, output_dir: Path) -> Path:
     r"""Build a tekken.json file for the given test config.
 
@@ -278,34 +252,6 @@ def _build_spm_path(config: TestConfig, output_dir: Path) -> Path:
     return dest
 
 
-def _get_instruct_tokenizer_class(tokenizer_version: TokenizerVersion) -> type[InstructTokenizerBase]:
-    r"""Get the instruct tokenizer class for a given tokenizer version.
-
-    Args:
-        tokenizer_version: Tokenizer version to look up.
-
-    Returns:
-        The instruct tokenizer class for the given version.
-    """
-    match tokenizer_version:
-        case TokenizerVersion.v1:
-            return InstructTokenizerV1
-        case TokenizerVersion.v2:
-            return InstructTokenizerV2
-        case TokenizerVersion.v3:
-            return InstructTokenizerV3
-        case TokenizerVersion.v7:
-            return InstructTokenizerV7
-        case TokenizerVersion.v11:
-            return InstructTokenizerV11
-        case TokenizerVersion.v13:
-            return InstructTokenizerV13
-        case TokenizerVersion.v15:
-            return InstructTokenizerV15
-        case _:
-            raise ValueError(f"Unknown tokenizer version: {tokenizer_version}")
-
-
 def _get_mistral_tekkenizer(config: TestConfig, output_dir: Path, validation_mode: ValidationMode) -> MistralTokenizer:
     r"""Build a `MistralTokenizer` with Tekken backend via `from_file`.
 
@@ -326,25 +272,24 @@ def _get_mistral_tekkenizer(config: TestConfig, output_dir: Path, validation_mod
 
 
 def _get_mistral_sentencepiece(
-    tokenizer_version: TokenizerVersion, validation_mode: ValidationMode, image: bool
+    config: TestConfig, output_dir: Path, validation_mode: ValidationMode
 ) -> MistralTokenizer:
-    r"""Build a `MistralTokenizer` with SentencePiece backend."""
-    tokenizer = SentencePieceTokenizer(
-        MistralTokenizer._data_path() / "mistral_instruct_tokenizer_241114.model.v7m1",
-        tokenizer_version,
-    )
+    r"""Build a `MistralTokenizer` with SentencePiece backend via `from_file`.
 
-    image_encoder = _get_image_encoder(tokenizer) if image else None
+    Copies the shipped SPM model with the correct version suffix via
+    `_build_spm_path`, then loads it through the production
+    `MistralTokenizer.from_file` path.
 
-    instruct_tokenizer: InstructTokenizer = _get_instruct_tokenizer_class(tokenizer_version)(
-        tokenizer=tokenizer,
-        image_encoder=image_encoder,
-    )
-    return MistralTokenizer(
-        instruct_tokenizer,
-        validator=get_validator(mode=validation_mode, version=tokenizer_version),
-        request_normalizer=get_normalizer(version=tokenizer_version),
-    )
+    Args:
+        config: Test configuration specifying version and image flag.
+        output_dir: Directory to copy the SPM model file into.
+        validation_mode: Validation mode (test or finetuning).
+
+    Returns:
+        A configured `MistralTokenizer` instance.
+    """
+    spm_path = _build_spm_path(config, output_dir)
+    return MistralTokenizer.from_file(str(spm_path), mode=validation_mode)
 
 
 def _get_mistral_tokenizer(
@@ -370,15 +315,15 @@ def _get_mistral_tokenizer(
     Returns:
         A configured `MistralTokenizer` instance.
     """
-    if spm:
-        return _get_mistral_sentencepiece(tokenizer_version, validation_mode, image)
-
     config = TestConfig(
         version=tokenizer_version,
-        spm=False,
+        spm=spm,
         image=image,
         audio=audio,
         think=think,
         plain_think=False,
     )
+    if spm:
+        return _get_mistral_sentencepiece(config, output_dir, validation_mode)
+
     return _get_mistral_tekkenizer(config, output_dir, validation_mode)
