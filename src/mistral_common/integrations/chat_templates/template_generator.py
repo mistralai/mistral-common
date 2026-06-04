@@ -287,13 +287,17 @@ def _generate_system_prompt_handling_pre_v7(config: TemplateConfig) -> list[str]
         "        {%- if message['content'] is string %}",
         "            {%- set ns_sys.system_parts = ns_sys.system_parts + [message['content']] %}",
         "        {%- else %}",
+        "            {%- set ns_sys_msg = namespace(parts=[]) %}",
         "            {%- for block in message['content'] %}",
         "                {%- if block['type'] == 'text' %}",
-        "                    {%- set ns_sys.system_parts = ns_sys.system_parts + [block['text']] %}",
+        "                    {%- set ns_sys_msg.parts = ns_sys_msg.parts + [block['text']] %}",
         "                {%- else %}",
         "                    {{- raise_exception('Only text chunks are supported in system message content.') }}",
         "                {%- endif %}",
         "            {%- endfor %}",
+        "            {%- if ns_sys_msg.parts | length > 0 %}",
+        "                {%- set ns_sys.system_parts = ns_sys.system_parts + [ns_sys_msg.parts | join('')] %}",
+        "            {%- endif %}",
         "        {%- endif %}",
         "    {%- else %}",
         "        {%- set ns_sys.filtered = ns_sys.filtered + [message] %}",
@@ -796,10 +800,15 @@ def _generate_flush_logic(config: TemplateConfig) -> list[str]:
     else:
         list_content_lines = [
             "                {%- elif msg['content'] is not none %}",
+            "                    {%- set ns_msg = namespace(msg_text_parts=[]) %}",
             "                    {%- for block in msg['content'] %}",
             "                        {%- if block['type'] == 'text' %}",
-            "                            {%- set ns_c.text_parts = ns_c.text_parts + [block['text']] %}",
+            "                            {%- set ns_msg.msg_text_parts = ns_msg.msg_text_parts + [block['text']] %}",
             "                        {%- else %}",
+            "                            {%- if ns_msg.msg_text_parts | length > 0 %}",
+            "                                {%- set ns_c.text_parts = ns_c.text_parts + [ns_msg.msg_text_parts | join('')] %}",  # noqa: E501
+            "                                {%- set ns_msg.msg_text_parts = [] %}",
+            "                            {%- endif %}",
             "                            {%- if ns_c.text_parts | length > 0 %}",
             "                                {%- set ns_c.chunks = ns_c.chunks + [{'type': 'text', 'text': ns_c.text_parts | join('\\n\\n')}] %}",  # noqa: E501
             "                                {%- set ns_c.text_parts = [] %}",
@@ -808,6 +817,9 @@ def _generate_flush_logic(config: TemplateConfig) -> list[str]:
             "                            {%- set ns_c.has_non_text = true %}",
             "                        {%- endif %}",
             "                    {%- endfor %}",
+            "                    {%- if ns_msg.msg_text_parts | length > 0 %}",
+            "                        {%- set ns_c.text_parts = ns_c.text_parts + [ns_msg.msg_text_parts | join('')] %}",
+            "                    {%- endif %}",
             "                {%- endif %}",
         ]
 
