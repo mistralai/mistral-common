@@ -182,9 +182,9 @@ def _build_model_settings_builder(
 ) -> ModelSettingsBuilder:
     """Build a ModelSettingsBuilder from allowed reasoning effort values.
 
-    When ``allowed_reasoning_effort`` is ``None``, returns ``ModelSettingsBuilder.none()``
-    (all fields ignored). This matches the behavior of ``Tekkenizer.from_file`` when no
-    ``model_settings_builder`` key is present in the JSON.
+    When `allowed_reasoning_effort` is `None`, returns `ModelSettingsBuilder.none()`
+    (all fields ignored). This matches the behavior of `Tekkenizer.from_file` when no
+    `model_settings_builder` key is present in the JSON.
     """
     if allowed_reasoning_effort is None:
         return ModelSettingsBuilder.none()

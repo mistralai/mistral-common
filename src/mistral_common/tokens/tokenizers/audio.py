@@ -24,17 +24,19 @@ from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk, Au
 if is_soxr_installed():
     import soxr
 
-if is_soundfile_installed():
-    import soundfile as sf
-
-    available_formats = sf.available_formats()
-    AudioFormat = Enum("AudioFormat", {format_name: format_name for format_name in available_formats})  # type: ignore[misc]
-else:
-    AudioFormat = Enum("AudioFormat", {"none": "none"})  # type: ignore[no-redef]
-
-
 if TYPE_CHECKING:
     from mistral_common.protocol.instruct.chunk import RawAudio
+
+    class AudioFormat(Enum):
+        """Dynamic enum whose members depend on soundfile availability at runtime."""
+
+else:
+    if is_soundfile_installed():
+        import soundfile as sf
+
+        AudioFormat = Enum("AudioFormat", {format_name: format_name for format_name in sf.available_formats()})
+    else:
+        AudioFormat = Enum("AudioFormat", {"none": "none"})
 
 logger = logging.getLogger(__name__)
 
@@ -660,8 +662,8 @@ class AudioEncoder:
     def encode_audio_for_speech_request(self, audio: Audio | None, voice: str | None) -> AudioEncoding:
         r"""Encode audio or voice preset into an AudioEncoding for speech synthesis.
 
-        Either ``audio`` (reference audio for voice cloning) or ``voice`` (preset name)
-        must be provided. When ``audio`` is given it takes precedence.
+        Either `audio` (reference audio for voice cloning) or `voice` (preset name)
+        must be provided. When `audio` is given it takes precedence.
 
         Args:
             audio: Reference audio waveform, or None to use a voice preset.

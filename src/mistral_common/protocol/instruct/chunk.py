@@ -335,10 +335,10 @@ class AudioChunk(BaseContentChunk):
     def _flatten_audio_dict(cls, values: dict[str, Any]) -> dict[str, Any]:
         r"""Extract audio data from a nested dict or legacy RawAudio payload.
 
-        Handles the OpenAI format where ``input_audio`` is a dict with a
-        ``data`` key (e.g. ``{"data": "...", "format": "wav"}``) as well as
-        deprecated ``RawAudio`` instances, flattening them to a plain
-        ``str | bytes`` value.
+        Handles the OpenAI format where `input_audio` is a dict with a
+        `data` key (e.g. `{"data": "...", "format": "wav"}`) as well as
+        deprecated `RawAudio` instances, flattening them to a plain
+        `str | bytes` value.
         """
         if not isinstance(values, dict):
             return values

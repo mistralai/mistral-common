@@ -8,9 +8,9 @@ def deprecated_import(old_path: str, new_module: str, name: str, version: str) -
     r"""Warn once and lazily import a symbol that moved to a new module.
 
     Args:
-        old_path: The old module path (e.g. ``"mistral_common.audio"``).
-        new_module: The new module path (e.g. ``"mistral_common.tokens.tokenizers.audio"``).
-        name: The symbol name (e.g. ``"Audio"``).
+        old_path: The old module path (e.g. `"mistral_common.audio"`).
+        new_module: The new module path (e.g. `"mistral_common.tokens.tokenizers.audio"`).
+        name: The symbol name (e.g. `"Audio"`).
         version: The version in which the symbol will be removed.
 
     Returns:

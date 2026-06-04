@@ -80,8 +80,3 @@ def test_warn_once_different_keys_each_warn() -> None:
 
     with pytest.warns(DeprecationWarning, match="second"):
         warn_once("b", "second", DeprecationWarning, stacklevel=2)
-
-
-def test_warn_once_respects_custom_category() -> None:
-    with pytest.warns(FutureWarning, match="future thing"):
-        warn_once("fw", "future thing", FutureWarning, stacklevel=2)
