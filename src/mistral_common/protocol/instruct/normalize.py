@@ -28,20 +28,26 @@ from mistral_common.tokens.tokenizers.base import InstructRequestType, Tokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
 
 _MSG_JOIN_STR = "\n\n"
+_CHUNK_JOIN_STR = ""
 
 
 def _aggregate_content_chunks_impl(
     contents: list[list[ContentChunk] | str | None],
+    msg_join_str: str = _MSG_JOIN_STR,
+    chunk_join_str: str = _CHUNK_JOIN_STR,
 ) -> list[ContentChunk] | str:
     r"""Coalesce TextChunks within the same message and across different messages.
 
-    Adjacent TextChunks within the same message are joined with no separator.
-    Text from different messages is joined with `\n\n`.
+    Adjacent TextChunks within the same message are joined with `chunk_join_str`.
+    Text from different messages is joined with `msg_join_str`.
 
     Args:
         contents: A list of message contents, where each element is either a string,
             a list of ContentChunks, or None. This is typically
             `[message.content for message in messages]`.
+        msg_join_str: Separator inserted between text from different messages.
+        chunk_join_str: Separator inserted between adjacent text chunks within
+            the same message.
 
     Returns:
         A plain string if only text chunks were present, otherwise a list of
@@ -63,7 +69,7 @@ def _aggregate_content_chunks_impl(
         if not content:  # skip None or empty string
             continue
         elif isinstance(content, str):
-            join = _MSG_JOIN_STR if needs_new_msg_sep else ""
+            join = msg_join_str if needs_new_msg_sep else ""
             cur_text_parts.append(join + content)
             cur_text_len += len(join) + len(content)
         else:  # list[ContentChunk]
@@ -74,9 +80,9 @@ def _aggregate_content_chunks_impl(
                     if cur_text_len == 0:
                         join = ""
                     elif needs_new_msg_sep:
-                        join = _MSG_JOIN_STR
+                        join = msg_join_str
                     else:
-                        join = ""
+                        join = chunk_join_str
                     cur_text_parts.append(join + chunk.text)
                     cur_text_len += len(join) + len(chunk.text)
                     needs_new_msg_sep = False
@@ -112,6 +118,8 @@ class InstructRequestNormalizer(
 
     _system_prompt_in_begin: bool = False
     _allow_tool_call_and_content: bool = False
+    _chunk_join_str: str = _CHUNK_JOIN_STR
+    _msg_join_str: str = _MSG_JOIN_STR
 
     def __init__(
         self,
@@ -194,7 +202,11 @@ class InstructRequestNormalizer(
 
     def _aggregate_content_chunks(self, messages: list[UATS]) -> list[ContentChunk] | str:
         """Coalesce neighboring blocks of ContentChunks across messages."""
-        return _aggregate_content_chunks_impl([message.content for message in messages])
+        return _aggregate_content_chunks_impl(
+            [message.content for message in messages],
+            msg_join_str=self._msg_join_str,
+            chunk_join_str=self._chunk_join_str,
+        )
 
     def _aggregate_content_chunks_to_str_same_message(self, message: UATS) -> str:
         """Aggregate a single message's content chunks to a string.
@@ -217,7 +229,7 @@ class InstructRequestNormalizer(
             if message.role == Roles.system and message.content:
                 system_prompt.append(self._aggregate_content_chunks_to_str_same_message(message))
 
-        return _MSG_JOIN_STR.join(system_prompt) if len(system_prompt) else None
+        return self._msg_join_str.join(system_prompt) if len(system_prompt) else None
 
     def _aggregate_tool_messages(self, messages: list[UATS], latest_call_ids: list[str]) -> list[ToolMessageType]:
         """Normalize tool messages without aggregation across messages.
