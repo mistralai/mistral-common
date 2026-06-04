@@ -446,31 +446,32 @@ def test_truncation_failed(request: pytest.FixtureRequest, tekkenizer: str, mess
 
 
 def test_from_model() -> None:
-    tokenizer = MistralTokenizer.from_model("ministral-8b-2410")
-    assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v3
-    assert tokenizer.instruct_tokenizer.image_encoder is None
+    with pytest.warns(FutureWarning, match="from_model.*deprecated"):
+        tokenizer = MistralTokenizer.from_model("ministral-8b-2410")
+        assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v3
+        assert tokenizer.instruct_tokenizer.image_encoder is None
 
-    tokenizer = MistralTokenizer.from_model("mistral-small-2402")
-    assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v2
-    assert tokenizer.instruct_tokenizer.image_encoder is None
+        tokenizer = MistralTokenizer.from_model("mistral-small-2402")
+        assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v2
+        assert tokenizer.instruct_tokenizer.image_encoder is None
 
-    tokenizer = MistralTokenizer.from_model("mistral-small-2409")
-    assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v3
-    assert tokenizer.instruct_tokenizer.image_encoder is None
+        tokenizer = MistralTokenizer.from_model("mistral-small-2409")
+        assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v3
+        assert tokenizer.instruct_tokenizer.image_encoder is None
 
-    tokenizer = MistralTokenizer.from_model("mistral-large-2411")
-    assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v7
-    assert tokenizer.instruct_tokenizer.image_encoder is None
+        tokenizer = MistralTokenizer.from_model("mistral-large-2411")
+        assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v7
+        assert tokenizer.instruct_tokenizer.image_encoder is None
 
-    tokenizer = MistralTokenizer.from_model("pixtral-large-2411")
-    assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v7
-    assert tokenizer.instruct_tokenizer.image_encoder is not None
+        tokenizer = MistralTokenizer.from_model("pixtral-large-2411")
+        assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v7
+        assert tokenizer.instruct_tokenizer.image_encoder is not None
 
-    tokenizer = MistralTokenizer.from_model("pixtral-12b-2409")
-    assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v3
-    assert tokenizer.instruct_tokenizer.image_encoder is not None
+        tokenizer = MistralTokenizer.from_model("pixtral-12b-2409")
+        assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v3
+        assert tokenizer.instruct_tokenizer.image_encoder is not None
 
-    with pytest.raises(TokenizerException):
+    with pytest.warns(FutureWarning), pytest.raises(TokenizerException):
         MistralTokenizer.from_model("unknown-model")
 
 
@@ -517,3 +518,18 @@ def test_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkeni
     tokens_2 = mistral_tokenizer.encode_chat_completion(chat_completion_request)
 
     assert tokens == tokens_2.tokens
+
+
+def test_encode_chat_completion_continue_final_message() -> None:
+    tokenizer = MistralTokenizer.v7(is_mm=True)
+    eos_id = tokenizer.instruct_tokenizer.tokenizer.eos_id
+
+    request: ChatCompletionRequest = ChatCompletionRequest(
+        messages=[UserMessage(content="a"), AssistantMessage(content="b")],
+        continue_final_message=True,
+    )
+    encoded = tokenizer.encode_chat_completion(request)
+
+    assert encoded.tokens == [1, 3, 1032, 4, 1055]
+    assert encoded.tokens[-1] != eos_id
+    assert eos_id not in encoded.prefix_ids

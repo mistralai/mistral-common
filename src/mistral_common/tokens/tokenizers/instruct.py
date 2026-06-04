@@ -5,7 +5,6 @@ from typing import Any, Generic, Sequence, overload
 
 import numpy as np
 
-from mistral_common.audio import Audio
 from mistral_common.exceptions import (
     InvalidAssistantMessageException,
     InvalidMessageStructureException,
@@ -35,7 +34,7 @@ from mistral_common.protocol.instruct.request import InstructRequest, ModelSetti
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolCall
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import StreamingMode, TranscriptionRequest
-from mistral_common.tokens.tokenizers.audio import AudioEncoder, TranscriptionFormat
+from mistral_common.tokens.tokenizers.audio import Audio, AudioEncoder, TranscriptionFormat
 from mistral_common.tokens.tokenizers.base import (
     FIMRequestType,
     InstructRequestType,
@@ -1018,7 +1017,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
     def _encode_streaming_transcription(self, request: TranscriptionRequest) -> Tokenized:
         if request.streaming == StreamingMode.OFFLINE:
-            tokenized = self._encode_audio(request.audio.data, request.target_streaming_delay_ms)
+            tokenized = self._encode_audio(request.audio, request.target_streaming_delay_ms)
 
             # we also add a BOS token in the beginning
             tokens = self.start() + tokenized.tokens
@@ -1029,7 +1028,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
             left_pad, right_pad = self.audio_encoder.get_padding_audio(request.target_streaming_delay_ms)
             audios = [left_pad, right_pad]
 
-            if len(request.audio.data) > 0:
+            if len(request.audio) > 0:
                 # TODO(Patrick) - remove this if statement in 1.13.0
                 # only left to keep vLLM backwards compatibility in
                 # voxtral_realtime.py
@@ -1039,8 +1038,8 @@ class InstructTokenizerV7(InstructTokenizerV3):
                     " online streaming.",
                     FutureWarning,
                 )
-                assert isinstance(request.audio.data, str)
-                request_audio = Audio.from_base64(request.audio.data)
+                assert isinstance(request.audio, str)
+                request_audio = Audio.from_base64(request.audio)
                 audios = [
                     Audio(
                         np.concatenate((left_pad.audio_array, request_audio.audio_array)),
@@ -1049,7 +1048,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
                     )
                 ]
             else:
-                assert not request.audio.data, (
+                assert not request.audio, (
                     "For online streaming, no audio bytes should be passed in the first request. "
                     "Audio buffering is taken care of directly by vLLM."
                 )

@@ -453,7 +453,11 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
         if settings != ModelSettings.none():
             raise InvalidRequestException(f"Model settings are not supported for {type(self).__name__}, got {settings}")
         return self._instruct_request_class(  # type: ignore[no-any-return]
-            messages=messages, system_prompt=None, available_tools=request.tools, settings=settings
+            messages=messages,
+            system_prompt=None,
+            available_tools=request.tools,
+            continue_final_message=request.continue_final_message,
+            settings=settings,
         )
 
 
@@ -557,7 +561,11 @@ class InstructRequestNormalizerV15(InstructRequestNormalizerV13):
         messages = self._aggregate_messages(request.messages)
         settings = self.build_settings(request)
         return self._instruct_request_class(  # type: ignore[no-any-return]
-            messages=messages, system_prompt=None, available_tools=request.tools, settings=settings
+            messages=messages,
+            system_prompt=None,
+            available_tools=request.tools,
+            continue_final_message=request.continue_final_message,
+            settings=settings,
         )
 
 

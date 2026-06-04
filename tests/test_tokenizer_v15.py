@@ -182,9 +182,9 @@ def _build_model_settings_builder(
 ) -> ModelSettingsBuilder:
     """Build a ModelSettingsBuilder from allowed reasoning effort values.
 
-    When ``allowed_reasoning_effort`` is ``None``, returns ``ModelSettingsBuilder.none()``
-    (all fields ignored). This matches the behavior of ``Tekkenizer.from_file`` when no
-    ``model_settings_builder`` key is present in the JSON.
+    When `allowed_reasoning_effort` is `None`, returns `ModelSettingsBuilder.none()`
+    (all fields ignored). This matches the behavior of `Tekkenizer.from_file` when no
+    `model_settings_builder` key is present in the JSON.
     """
     if allowed_reasoning_effort is None:
         return ModelSettingsBuilder.none()
@@ -281,3 +281,16 @@ def test_end_to_end_no_default(messages: list[ChatMessage], reasoning_effort: Re
     else:
         # None with no default -> no model settings encoded
         assert "[MODEL_SETTINGS]" not in text
+
+
+def test_encode_chat_completion_continue_final_message() -> None:
+    builder = _build_model_settings_builder(("none", "high"))
+    tokenizer_v15 = get_v15_mistral_tokenizer(builder)
+    request: ChatCompletionRequest = ChatCompletionRequest(
+        messages=[UserMessage(content="a"), AssistantMessage(content="b")],
+        continue_final_message=True,
+    )
+    encoded = tokenizer_v15.encode_chat_completion(request)
+
+    eos_id = tokenizer_v15.instruct_tokenizer.tokenizer.eos_id
+    assert encoded.tokens[-1] != eos_id

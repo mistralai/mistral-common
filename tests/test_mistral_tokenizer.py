@@ -19,15 +19,26 @@ SPM_WHITESPACE = "▁"
 
 class TestMistralToknizer:
     def test_from_model(self) -> None:
-        assert isinstance(MistralTokenizer.from_model("mistral-medium-2312").instruct_tokenizer, InstructTokenizerV1)
-        assert isinstance(MistralTokenizer.from_model("mistral-tiny-2312").instruct_tokenizer, InstructTokenizerV2)
-        assert isinstance(MistralTokenizer.from_model("mistral-large-2402").instruct_tokenizer, InstructTokenizerV2)
-        assert isinstance(
-            MistralTokenizer.from_model("open-mixtral-8x22b-2404").instruct_tokenizer, InstructTokenizerV3
-        )
+        with pytest.warns(FutureWarning, match="from_model.*deprecated"):
+            assert isinstance(
+                MistralTokenizer.from_model("mistral-medium-2312").instruct_tokenizer, InstructTokenizerV1
+            )
+        with pytest.warns(FutureWarning):
+            assert isinstance(MistralTokenizer.from_model("mistral-tiny-2312").instruct_tokenizer, InstructTokenizerV2)
+        with pytest.warns(FutureWarning):
+            assert isinstance(MistralTokenizer.from_model("mistral-large-2402").instruct_tokenizer, InstructTokenizerV2)
+        with pytest.warns(FutureWarning):
+            assert isinstance(
+                MistralTokenizer.from_model("open-mixtral-8x22b-2404").instruct_tokenizer, InstructTokenizerV3
+            )
 
-        with pytest.raises(TokenizerException):
+        with pytest.warns(FutureWarning), pytest.raises(TokenizerException) as exc_info:
             MistralTokenizer.from_model("unknown-model")
+
+        msg = str(exc_info.value)
+        assert "unknown-model" in msg
+        assert "from_hf_hub" in msg
+        assert "from_file" in msg
 
     @pytest.mark.parametrize(
         ["special_token_policy", "is_tekken"],
@@ -139,7 +150,7 @@ def test_tokenizer_is_pickleable_with_multiprocessing(
 
 
 def test_mistral_tokenizer_version_property() -> None:
-    tokenizer_v1 = MistralTokenizer.from_model("mistral-medium-2312")
+    tokenizer_v1 = MistralTokenizer.v1()
     assert (
         tokenizer_v1.version
         == tokenizer_v1.instruct_tokenizer.version
@@ -147,7 +158,7 @@ def test_mistral_tokenizer_version_property() -> None:
         == TokenizerVersion.v1
     )
 
-    tokenizer_v3 = MistralTokenizer.from_model("open-mixtral-8x22b-2404")
+    tokenizer_v3 = MistralTokenizer.v3()
     assert (
         tokenizer_v3.version
         == tokenizer_v3.instruct_tokenizer.version

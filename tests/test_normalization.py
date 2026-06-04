@@ -174,10 +174,10 @@ class TestChatCompletionRequestNormalization:
             "a": AssistantMessage(content="a"),
             "a2": AssistantMessage(
                 content=[
-                    TextChunk(text="a1"),
-                    TextChunk(text="a2"),
                     ThinkChunk(thinking="t1"),
                     ThinkChunk(thinking="t2"),
+                    TextChunk(text="a1"),
+                    TextChunk(text="a2"),
                     TextChunk(text="a3"),
                 ]
             ),
@@ -221,10 +221,9 @@ class TestChatCompletionRequestNormalization:
             [
                 "u",
                 [
-                    TextChunk(text="a1\n\na2"),
                     ThinkChunk(thinking="t1"),
                     ThinkChunk(thinking="t2"),
-                    TextChunk(text="a3"),
+                    TextChunk(text="a1\n\na2\n\na3"),
                 ],
                 "u",
             ],
@@ -387,6 +386,14 @@ class TestChatCompletionRequestNormalization:
         )
         assert parsed_request.settings == ModelSettings.none()
 
+    def test_continue_final_message_forwarded(self, normalizer: InstructRequestNormalizer) -> None:
+        request = ChatCompletionRequest[ChatMessage](
+            messages=[UserMessage(content="a"), AssistantMessage(content="b")],
+            continue_final_message=True,
+        )
+        result: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(request)
+        assert result.continue_final_message is True
+
 
 class TestChatCompletionRequestNormalizationV7:
     @pytest.fixture(autouse=True)
@@ -504,6 +511,14 @@ class TestChatCompletionRequestNormalizationV7:
             chat_completion_request
         )
         assert parsed_request.settings == ModelSettings.none()
+
+    def test_continue_final_message_forwarded(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
+        request = ChatCompletionRequest[ChatMessage](
+            messages=[UserMessage(content="a"), AssistantMessage(content="b")],
+            continue_final_message=True,
+        )
+        result: InstructRequest[ChatMessage, Tool] = normalizer_v7.from_chat_completion_request(request)
+        assert result.continue_final_message is True
 
 
 class TestFineTuningNormalizer:
@@ -805,6 +820,14 @@ class TestChatCompletionRequestNormalizationV13:
         )
         assert parsed_request.settings == ModelSettings.none()
 
+    def test_continue_final_message_forwarded(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
+        request = ChatCompletionRequest[ChatMessage](
+            messages=[UserMessage(content="a"), AssistantMessage(content="b")],
+            continue_final_message=True,
+        )
+        result: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(request)
+        assert result.continue_final_message is True
+
 
 class TestChatCompletionRequestNormalizationV15:
     @pytest.fixture(autouse=True)
@@ -833,6 +856,15 @@ class TestChatCompletionRequestNormalizationV15:
             chat_completion_request
         )
         assert parsed_request.settings == ModelSettings(reasoning_effort=reasoning_effort)
+
+    def test_continue_final_message_forwarded(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
+        request = ChatCompletionRequest[ChatMessage](
+            messages=[UserMessage(content="a"), AssistantMessage(content="b")],
+            continue_final_message=True,
+            reasoning_effort=ReasoningEffort.high,
+        )
+        result: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
+        assert result.continue_final_message is True
 
 
 @pytest.mark.parametrize(

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mistral_common"
-version = "1.11.2"
+version = "1.11.3"
 description = "Mistral-common is a library of common utilities for Mistral AI."
 authors = [{name = "bam4d", email = "bam4d@mistral.ai"}]
 license = "Apache-2.0"
@@ -75,6 +75,14 @@ docs = [
     "pyyaml>=6.0.3"
 ]
 
+test-integrations = [
+    "transformers>=4.0.0",
+    "regex>=2025.10.22",
+]
+
+
+[tool.uv]
+required-version = "==0.11.14"
 
 [tool.ruff]
 lint.select = ["E", "F", "W", "Q", "I"]
@@ -93,7 +101,7 @@ warn_unused_ignores = true
 exclude = ["docs", "tools", "build"]
 
 [[tool.mypy.overrides]]
-module = ["sentencepiece.*", "cv2", "cv2.*","soxr", "soundfile", "llguidance", "llguidance.*", "jinja2", "jinja2.*"]
+module = ["sentencepiece.*", "cv2", "cv2.*","soxr", "soundfile", "llguidance", "llguidance.*", "jinja2", "jinja2.*", "tokenizers", "tokenizers.*", "transformers", "transformers.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

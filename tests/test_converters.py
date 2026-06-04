@@ -1,10 +1,12 @@
 import copy
 import io
+import warnings
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pytest
+import soundfile as sf
 from openai.types.audio.transcription_create_params import TranscriptionCreateParamsBase as OpenAITranscriptionRequest
 from openai.types.chat.chat_completion_assistant_message_param import (
     ChatCompletionAssistantMessageParam as OpenAIAssistantMessage,
@@ -30,7 +32,6 @@ from openai.types.chat.chat_completion_user_message_param import ChatCompletionU
 from PIL import Image
 from pydantic_extra_types.language_code import LanguageAlpha2
 
-from mistral_common.audio import Audio
 from mistral_common.exceptions import InvalidAssistantMessageException
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
@@ -39,13 +40,13 @@ from mistral_common.protocol.instruct.chunk import (
     ImageChunk,
     ImageURL,
     ImageURLChunk,
-    RawAudio,
     TextChunk,
     ThinkChunk,
 )
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
+    ReasoningFieldFormat,
     SystemMessage,
     ToolMessage,
     UserMessage,
@@ -67,6 +68,7 @@ from mistral_common.protocol.instruct.tool_calls import (
 )
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
+from mistral_common.tokens.tokenizers.audio import Audio
 
 from .test_tokenizer_v7_audio_tts import _make_fake_audio
 
@@ -77,8 +79,6 @@ AUDIO_SAMPLE_URL = "https://freetestdata.com/wp-content/uploads/2021/09/Free_Tes
 
 
 def _get_audio_chunk() -> AudioChunk:
-    import soundfile as sf
-
     sample_rate = 44100  # Sample rate in Hz
     duration = 3  # Duration in seconds
     frequency = 440  # Frequency of the sine wave in Hz
@@ -97,18 +97,15 @@ def _get_audio_chunk() -> AudioChunk:
 
     audio = Audio(audio_array=data, sampling_rate=sr, format="wav")
 
-    raw_audio = RawAudio.from_audio(audio)
-    return AudioChunk(input_audio=raw_audio)
+    return AudioChunk.from_audio(audio)
 
 
 DUMMY_AUDIO_CHUNK = _get_audio_chunk()
-assert isinstance(DUMMY_AUDIO_CHUNK.input_audio.data, str)
-DUMMY_AUDIO_URL_CHUNK_BASE64 = AudioURLChunk(audio_url=AudioURL(url=DUMMY_AUDIO_CHUNK.input_audio.data))
-DUMMY_AUDIO_URL_CHUNK_BASE64_STR = AudioURLChunk(audio_url=DUMMY_AUDIO_CHUNK.input_audio.data)
+assert isinstance(DUMMY_AUDIO_CHUNK.input_audio, str)
+DUMMY_AUDIO_URL_CHUNK_BASE64 = AudioURLChunk(audio_url=AudioURL(url=DUMMY_AUDIO_CHUNK.input_audio))
+DUMMY_AUDIO_URL_CHUNK_BASE64_STR = AudioURLChunk(audio_url=DUMMY_AUDIO_CHUNK.input_audio)
 DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX = AudioURLChunk(
-    audio_url=AudioURL(
-        url=f"data:audio/{DUMMY_AUDIO_CHUNK.input_audio.format};base64,{DUMMY_AUDIO_CHUNK.input_audio.data}"
-    )
+    audio_url=AudioURL(url=f"data:audio/wav;base64,{DUMMY_AUDIO_CHUNK.input_audio}")
 )
 DUMMY_AUDIO_URL_CHUNK_URL = AudioURLChunk(audio_url=AudioURL(url=AUDIO_SAMPLE_URL))
 
@@ -154,11 +151,19 @@ def test_convert_text_chunk() -> None:
 
 def test_convert_input_audio_chunk() -> None:
     chunk = DUMMY_AUDIO_CHUNK
-    text_openai = chunk.to_openai()
+    openai_dict = chunk.to_openai()
 
-    assert AudioChunk.from_openai(text_openai) == chunk
+    # Verify OpenAI-compliant shape
+    assert openai_dict["type"] == "input_audio"
+    assert isinstance(openai_dict["input_audio"], dict)
+    assert "data" in openai_dict["input_audio"]
+    assert "format" in openai_dict["input_audio"]
+    assert openai_dict["input_audio"]["format"] in ("wav", "mp3", "flac", "ogg")
 
-    typeddict_openai = OpenAIInputAudioChunk(**chunk.to_openai())  # type: ignore[typeddict-item]
+    # Roundtrip
+    assert AudioChunk.from_openai(openai_dict) == chunk
+
+    typeddict_openai = OpenAIInputAudioChunk(**openai_dict)  # type: ignore[typeddict-item]
     assert AudioChunk.from_openai(typeddict_openai) == chunk
 
 
@@ -223,25 +228,21 @@ def test_convert_image_url_chunk(openai_image_url_chunk: dict, image_url_chunk: 
         (
             {
                 "type": "audio_url",
-                "audio_url": {"url": DUMMY_AUDIO_CHUNK.input_audio.data},
+                "audio_url": {"url": DUMMY_AUDIO_CHUNK.input_audio},
             },
             DUMMY_AUDIO_URL_CHUNK_BASE64,
         ),
         (
             {
                 "type": "audio_url",
-                "audio_url": {"url": DUMMY_AUDIO_CHUNK.input_audio.data},
+                "audio_url": {"url": DUMMY_AUDIO_CHUNK.input_audio},
             },
             DUMMY_AUDIO_URL_CHUNK_BASE64_STR,
         ),
         (
             {
                 "type": "audio_url",
-                "audio_url": {
-                    "url": (
-                        f"data:audio/{DUMMY_AUDIO_CHUNK.input_audio.format};base64,{DUMMY_AUDIO_CHUNK.input_audio.data}"
-                    )
-                },
+                "audio_url": {"url": f"data:audio/wav;base64,{DUMMY_AUDIO_CHUNK.input_audio}"},
             },
             DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX,
         ),
@@ -419,16 +420,16 @@ def test_convert_think_chunk() -> None:
             {
                 "role": "assistant",
                 "content": [
-                    {"type": "text", "text": "Hi"},
                     {"type": "thinking", "thinking": "Hello", "closed": True},
                     {"type": "thinking", "thinking": "Hello", "closed": False},
+                    {"type": "text", "text": "Hi"},
                 ],
             },
             AssistantMessage(
                 content=[
-                    TextChunk(text="Hi"),
                     ThinkChunk(thinking="Hello", closed=True),
                     ThinkChunk(thinking="Hello", closed=False),
+                    TextChunk(text="Hi"),
                 ]
             ),
         ),
@@ -563,6 +564,195 @@ def test_from_openai_reasoning_differ_reasoning_content_in_assistant_message() -
 def test_from_openai_thinking_chunks_and_reasoning_raises(openai_message: dict[str, Any]) -> None:
     with pytest.raises(InvalidAssistantMessageException):
         AssistantMessage.from_openai(openai_message)
+
+
+def test_non_leading_think_chunks_construction_ok() -> None:
+    """Non-leading ThinkChunks are allowed at construction time."""
+    msg = AssistantMessage(
+        content=[
+            ThinkChunk(thinking="First", closed=True),
+            TextChunk(text="Reply"),
+            ThinkChunk(thinking="Third", closed=False),
+        ]
+    )
+    assert msg.content is not None
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        [ThinkChunk(thinking="First", closed=True), TextChunk(text="Reply"), ThinkChunk(thinking="Third")],
+        [TextChunk(text="Reply"), ThinkChunk(thinking="After", closed=True)],
+        [TextChunk(text="A"), TextChunk(text="B"), ThinkChunk(thinking="End", closed=True)],
+    ],
+)
+def test_non_leading_think_chunks_to_openai_raises(content: list[TextChunk | ThinkChunk]) -> None:
+    """to_openai raises when ThinkChunks are not leading."""
+    msg = AssistantMessage(content=content)
+    with pytest.raises(InvalidAssistantMessageException, match="ThinkChunks must be leading"):
+        msg.to_openai()
+
+
+@pytest.mark.parametrize(
+    ["message", "convert_thinking_format", "expected"],
+    [
+        # thinking: chunks stay inline
+        (
+            AssistantMessage(content=[ThinkChunk(thinking="Deep thought", closed=True), TextChunk(text="Answer")]),
+            ReasoningFieldFormat.thinking_chunks,
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "thinking", "thinking": "Deep thought", "closed": True},
+                    {"type": "text", "text": "Answer"},
+                ],
+            },
+        ),
+        # thinking: multiple leading ThinkChunks stay as-is (no aggregation)
+        (
+            AssistantMessage(
+                content=[
+                    ThinkChunk(thinking="First", closed=True),
+                    ThinkChunk(thinking="Second", closed=False),
+                    TextChunk(text="Reply"),
+                ]
+            ),
+            ReasoningFieldFormat.thinking_chunks,
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "thinking", "thinking": "First", "closed": True},
+                    {"type": "thinking", "thinking": "Second", "closed": False},
+                    {"type": "text", "text": "Reply"},
+                ],
+            },
+        ),
+        # reasoning: single leading ThinkChunk extracted as flat string
+        (
+            AssistantMessage(content=[ThinkChunk(thinking="Let me think", closed=True), TextChunk(text="Done")]),
+            ReasoningFieldFormat.reasoning,
+            {"role": "assistant", "reasoning": "Let me think", "content": "Done"},
+        ),
+        # reasoning_content: single leading ThinkChunk extracted as flat string
+        (
+            AssistantMessage(content=[ThinkChunk(thinking="Pondering", closed=True), TextChunk(text="Result")]),
+            ReasoningFieldFormat.reasoning_content,
+            {"role": "assistant", "reasoning_content": "Pondering", "content": "Result"},
+        ),
+        # reasoning: multiple leading ThinkChunks concatenated with newline
+        (
+            AssistantMessage(
+                content=[
+                    ThinkChunk(thinking="Part 1", closed=True),
+                    ThinkChunk(thinking="Part 2", closed=True),
+                    TextChunk(text="Final"),
+                ]
+            ),
+            ReasoningFieldFormat.reasoning,
+            {"role": "assistant", "reasoning": "Part 1\nPart 2", "content": "Final"},
+        ),
+        # thinking: ThinkChunk only, no remaining content
+        (
+            AssistantMessage(content=[ThinkChunk(thinking="Just thinking", closed=True)]),
+            ReasoningFieldFormat.thinking_chunks,
+            {
+                "role": "assistant",
+                "content": [{"type": "thinking", "thinking": "Just thinking", "closed": True}],
+            },
+        ),
+        # reasoning: ThinkChunk only, no remaining content
+        (
+            AssistantMessage(content=[ThinkChunk(thinking="Only reasoning", closed=True)]),
+            ReasoningFieldFormat.reasoning,
+            {"role": "assistant", "reasoning": "Only reasoning"},
+        ),
+        # reasoning: leading ThinkChunk with remaining list content (multiple chunks)
+        (
+            AssistantMessage(
+                content=[
+                    ThinkChunk(thinking="Think", closed=True),
+                    TextChunk(text="A"),
+                    TextChunk(text="B"),
+                ]
+            ),
+            ReasoningFieldFormat.reasoning,
+            {
+                "role": "assistant",
+                "reasoning": "Think",
+                "content": [{"type": "text", "text": "A"}, {"type": "text", "text": "B"}],
+            },
+        ),
+        # String content unchanged regardless of convert_thinking_format
+        (
+            AssistantMessage(content="Simple text"),
+            ReasoningFieldFormat.reasoning,
+            {"role": "assistant", "content": "Simple text"},
+        ),
+        # None content unchanged
+        (
+            AssistantMessage(content=None),
+            ReasoningFieldFormat.thinking_chunks,
+            {"role": "assistant"},
+        ),
+    ],
+)
+def test_assistant_message_to_openai_convert_thinking_format(
+    message: AssistantMessage,
+    convert_thinking_format: ReasoningFieldFormat,
+    expected: dict[str, Any],
+) -> None:
+    assert message.to_openai(reasoning_field_format=convert_thinking_format) == expected
+
+
+def test_assistant_message_to_openai_none_warns_with_think_chunks() -> None:
+    message = AssistantMessage(content=[ThinkChunk(thinking="Hmm", closed=True), TextChunk(text="Answer")])
+    with pytest.warns(FutureWarning, match=r"convert_thinking_format.*defaults to 'thinking_chunks'"):
+        result = message.to_openai()
+    assert result == {
+        "role": "assistant",
+        "content": [
+            {"type": "thinking", "thinking": "Hmm", "closed": True},
+            {"type": "text", "text": "Answer"},
+        ],
+    }
+
+
+def test_assistant_message_to_openai_none_no_warning_without_think_chunks() -> None:
+    message = AssistantMessage(content="Plain text")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        result = message.to_openai()
+    assert result == {"role": "assistant", "content": "Plain text"}
+
+
+def test_assistant_message_to_openai_none_no_warning_with_none_content() -> None:
+    message = AssistantMessage(content=None)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        result = message.to_openai()
+    assert result == {"role": "assistant"}
+
+
+@pytest.mark.parametrize(
+    "request_cls",
+    [ChatCompletionRequest, InstructRequest],
+)
+def test_request_to_openai_forwards_reasoning_field_format(
+    request_cls: type[ChatCompletionRequest | InstructRequest],
+) -> None:
+    messages: list[ChatMessage] = [
+        UserMessage(content="Hi"),
+        AssistantMessage(content=[ThinkChunk(thinking="Let me think", closed=True), TextChunk(text="Done")]),
+    ]
+    request: ChatCompletionRequest | InstructRequest
+    if request_cls == ChatCompletionRequest:
+        request = ChatCompletionRequest(messages=messages)
+    else:
+        request = InstructRequest(messages=messages)
+
+    openai_request = request.to_openai(reasoning_field_format=ReasoningFieldFormat.reasoning)
+    assistant_msg = [m for m in openai_request["messages"] if m["role"] == "assistant"][0]
+    assert assistant_msg == {"role": "assistant", "reasoning": "Let me think", "content": "Done"}
 
 
 @pytest.mark.parametrize(
@@ -915,7 +1105,7 @@ def test_convert_requests(
 )
 def test_convert_transcription(audio: AudioChunk, language: LanguageAlpha2 | None, stream: bool) -> None:
     def check_equality(a: TranscriptionRequest, b: TranscriptionRequest) -> bool:
-        if a.audio.data != b.audio.data:
+        if a.audio != b.audio:
             return False
         if a.id != b.id:
             return False
@@ -953,11 +1143,88 @@ def test_convert_transcription(audio: AudioChunk, language: LanguageAlpha2 | Non
 
 
 def _audio_to_wav_bytes(audio: Audio) -> bytes:
-    import soundfile as sf
-
     buffer = io.BytesIO()
     sf.write(buffer, audio.audio_array, audio.sampling_rate, format="wav")
     return buffer.getvalue()
+
+
+def test_convert_transcription_str_buffer_name() -> None:
+    """Verify that the BytesIO buffer has a .name when audio is a base64 string."""
+    audio = _make_fake_audio(0.5)
+    b64 = audio.to_base64("wav")
+
+    request = TranscriptionRequest(audio=b64, model="model", language=None, target_streaming_delay_ms=None)
+    openai_request = request.to_openai()
+
+    buffer = openai_request["file"]
+    assert isinstance(buffer, io.BytesIO)
+    assert hasattr(buffer, "name")
+    assert buffer.name == "audio.wav"
+
+
+def test_convert_transcription_bytes_buffer_name() -> None:
+    """Verify that the BytesIO buffer has a .name when audio is raw bytes."""
+    audio = _make_fake_audio(0.5)
+    raw_bytes = _audio_to_wav_bytes(audio)
+
+    request = TranscriptionRequest(audio=raw_bytes, model="model", language=None, target_streaming_delay_ms=None)
+    openai_request = request.to_openai()
+
+    buffer = openai_request["file"]
+    assert isinstance(buffer, io.BytesIO)
+    assert hasattr(buffer, "name")
+    assert buffer.name == "audio.wav"
+
+
+def test_convert_transcription_bytes_invalid_format() -> None:
+    """Verify that invalid audio bytes raise a ValueError."""
+    request = TranscriptionRequest(
+        audio=b"not valid audio data", model="model", language=None, target_streaming_delay_ms=None
+    )
+    with pytest.raises(ValueError, match="Failed to detect audio format"):
+        request.to_openai()
+
+
+@pytest.mark.parametrize("fmt", ["wav", "flac"])
+def test_audio_chunk_to_openai_format_detection(fmt: str) -> None:
+    audio = _make_fake_audio(0.5)
+    b64 = audio.to_base64(fmt)
+    chunk = AudioChunk(input_audio=b64)
+    result = chunk.to_openai()
+
+    assert result["input_audio"]["format"] == fmt
+    assert result["input_audio"]["data"] == b64
+    assert AudioChunk.from_openai(result).input_audio == b64
+
+
+@pytest.mark.parametrize("fmt", ["wav", "flac"])
+def test_transcription_to_openai_format_detection(fmt: str) -> None:
+    audio = _make_fake_audio(0.5)
+    b64 = audio.to_base64(fmt)
+    request = TranscriptionRequest(audio=b64, model="model", language=None, target_streaming_delay_ms=None)
+    openai_request = request.to_openai()
+
+    buffer = openai_request["file"]
+    assert isinstance(buffer, io.BytesIO)
+    assert buffer.name == f"audio.{fmt}"
+
+    recovered = Audio.from_bytes(buffer.getvalue())
+    assert np.allclose(recovered.audio_array, audio.audio_array, atol=1e-3)
+
+
+@pytest.mark.parametrize("fmt", ["wav", "flac"])
+def test_transcription_to_openai_bytes_format_detection(fmt: str) -> None:
+    audio = _make_fake_audio(0.5)
+    buf = io.BytesIO()
+    sf.write(buf, audio.audio_array, audio.sampling_rate, format=fmt)
+    raw_bytes = buf.getvalue()
+
+    request = TranscriptionRequest(audio=raw_bytes, model="model", language=None, target_streaming_delay_ms=None)
+    openai_request = request.to_openai()
+
+    buffer = openai_request["file"]
+    assert isinstance(buffer, io.BytesIO)
+    assert buffer.name == f"audio.{fmt}"
 
 
 def test_convert_speech_request_from_openai() -> None:

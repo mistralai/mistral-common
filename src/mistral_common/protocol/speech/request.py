@@ -1,9 +1,9 @@
 import io
 from typing import Any
 
-from mistral_common.audio import Audio
 from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
 from mistral_common.protocol.base import BaseCompletionRequest
+from mistral_common.tokens.tokenizers.audio import Audio
 
 if is_soundfile_installed():
     import soundfile as sf

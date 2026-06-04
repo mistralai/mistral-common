@@ -7,7 +7,6 @@ from typing import Any, Generic, TypeVar
 import numpy as np
 from pydantic import ConfigDict, Field
 
-from mistral_common.audio import Audio
 from mistral_common.base import MistralBase
 from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.instruct.chunk import UserContentChunk
@@ -19,7 +18,7 @@ from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Tool
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
-from mistral_common.tokens.tokenizers.audio import AudioEncoder
+from mistral_common.tokens.tokenizers.audio import Audio, AudioEncoder
 from mistral_common.tokens.tokenizers.image import ImageEncoder
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
 
