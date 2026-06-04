@@ -94,8 +94,7 @@ def _aggregate_content_chunks_impl(
         # Only text encountered: return as str
         return "".join(cur_text_parts)
 
-    if cur_text_len > 0:
-        all_content.append(TextChunk(text="".join(cur_text_parts)))
+    _flush_text()
 
     return all_content
 
