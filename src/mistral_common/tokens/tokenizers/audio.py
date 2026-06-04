@@ -24,6 +24,9 @@ from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk, Au
 if is_soxr_installed():
     import soxr
 
+if is_soundfile_installed():
+    import soundfile as sf
+
 if TYPE_CHECKING:
     from mistral_common.protocol.instruct.chunk import RawAudio
 
@@ -32,8 +35,6 @@ if TYPE_CHECKING:
 
 else:
     if is_soundfile_installed():
-        import soundfile as sf
-
         AudioFormat = Enum("AudioFormat", {format_name: format_name for format_name in sf.available_formats()})
     else:
         AudioFormat = Enum("AudioFormat", {"none": "none"})
@@ -65,7 +66,7 @@ class Audio:
         )
 
     def _check_valid(self) -> None:
-        assert isinstance(self.audio_array, np.ndarray), type(np.ndarray)
+        assert isinstance(self.audio_array, np.ndarray), type(self.audio_array)
         assert self.audio_array.ndim == 1, f"{self.audio_array.ndim=}"
         assert_soundfile_installed()
         assert self.format in EXPECTED_FORMAT_VALUES, f"{self.format=} not in {EXPECTED_FORMAT_VALUES=}"
