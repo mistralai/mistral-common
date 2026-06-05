@@ -296,10 +296,8 @@ class InstructRequestNormalizer(
                     )
                 weight = message.weight
 
-        if isinstance(content, str):
+        if isinstance(content, str) or _is_assistant_content(content):
             narrowed_content: str | list[TextChunk | ThinkChunk] = content
-        elif _is_assistant_content(content):
-            narrowed_content = content
         else:
             raise InvalidRequestException(
                 f"Unexpected content chunk types in assistant message: {[type(c).__name__ for c in content]}"
@@ -318,9 +316,7 @@ class InstructRequestNormalizer(
     def _aggregate_user_messages(self, messages: list[UATS]) -> UserMessageType:
         """Coalesce neighboring blocks of ContentChunks in user messages."""
         content = self._aggregate_content_chunks(messages)
-        if isinstance(content, str):
-            return self._user_message_class(content=content)
-        elif _is_user_content(content):
+        if isinstance(content, str) or _is_user_content(content):
             return self._user_message_class(content=content)
         else:
             raise InvalidRequestException(
