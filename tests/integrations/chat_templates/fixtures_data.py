@@ -822,6 +822,17 @@ REQUEST_CONSECUTIVE_USERS_TEXT_CHUNKS_TRAIN = ChatCompletionRequest(  # type: ig
     ]
 )
 
+REQUEST_CONSECUTIVE_ASSISTANTS_TEXT_CHUNKS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="Hello"),
+        AssistantMessage(content="First as string"),
+        AssistantMessage(content=[TextChunk(text="Second as chunk")]),
+        AssistantMessage(content=[TextChunk(text="Third part A"), TextChunk(text="Third part B")]),
+        UserMessage(content="Thanks"),
+        AssistantMessage(content="Response"),
+    ]
+)
+
 REQUEST_CONSECUTIVE_USERS_MULTI_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         UserMessage(content=[TextChunk(text="Describe this"), ImageChunk(image=_IMAGE), TextChunk(text="What color?")]),
@@ -1058,6 +1069,7 @@ def _get_conversations(
             conversations.extend(
                 [
                     REQUEST_CONSECUTIVE_USERS_TEXT_CHUNKS_TRAIN,
+                    REQUEST_CONSECUTIVE_ASSISTANTS_TEXT_CHUNKS_TRAIN,
                     REQUEST_SYSTEM_TEXT_CHUNKS_TRAIN,
                 ]
             )
