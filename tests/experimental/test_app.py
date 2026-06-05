@@ -394,7 +394,9 @@ def test_detokenize_assistant_message(
 def test_detokenize_assistant_message_think_chunks(
     assistant_message: AssistantMessage, mistral_tokenizer_v13: MistralTokenizer, tekken_v13_client: TestClient
 ) -> None:
-    encoded_tokens = mistral_tokenizer_v13.instruct_tokenizer.encode_assistant_message(assistant_message, False, False)  # type: ignore[attr-defined]
+    encoded_tokens, _, _ = mistral_tokenizer_v13.instruct_tokenizer.encode_assistant_message(  # type: ignore[attr-defined]
+        assistant_message, False, False
+    )
 
     response = tekken_v13_client.post("/v1/detokenize/", json=encoded_tokens)
     assert response.status_code == 200
@@ -462,7 +464,7 @@ def test_generate(
     engine_request: dict | ChatCompletionRequest | OpenAIChatCompletionRequest,
     output_assistant_message: AssistantMessage,
 ) -> None:
-    output_tokens = mistral_tokenizer_v13.instruct_tokenizer.encode_assistant_message(  # type: ignore[attr-defined]
+    output_tokens, _, _ = mistral_tokenizer_v13.instruct_tokenizer.encode_assistant_message(  # type: ignore[attr-defined]
         output_assistant_message, False, False
     )
     if output_assistant_message.tool_calls:

@@ -237,13 +237,17 @@ def test_end_to_end_v13_wrong_order(
 def test_encode_tool_message(v13_tekkenizer: InstructTokenizerV13) -> None:
     tool_message = ToolMessage(content="R1", tool_call_id="123456789")
     assert isinstance(v13_tekkenizer, InstructTokenizerV13)
-    encoded = v13_tekkenizer.encode_tool_message(tool_message, is_before_last_user_message=False)
+    encoded, images, audios = v13_tekkenizer.encode_tool_message(tool_message, is_before_last_user_message=False)
     assert encoded == [7, 182, 149, 8]
+    assert images == []
+    assert audios == []
 
     tool_message = ToolMessage(content=[TextChunk(text="R1"), TextChunk(text="R2")], tool_call_id="123456789")
     assert isinstance(v13_tekkenizer, InstructTokenizerV13)
-    encoded = v13_tekkenizer.encode_tool_message(tool_message, is_before_last_user_message=False)
+    encoded, images, audios = v13_tekkenizer.encode_tool_message(tool_message, is_before_last_user_message=False)
     assert encoded == [7, 182, 149, 182, 150, 8]
+    assert images == []
+    assert audios == []
 
 
 def test_encode_think_chunk(v13_tekkenizer_think: InstructTokenizerV13) -> None:
@@ -295,7 +299,7 @@ def test_tokenize_assistant_message(
     v13_tekkenizer_think: InstructTokenizerV13, message: AssistantMessage, expected: str, continue_final_message: bool
 ) -> None:
     if not continue_final_message:
-        tokens = v13_tekkenizer_think.encode_assistant_message(
+        tokens, images, audios = v13_tekkenizer_think.encode_assistant_message(
             message, is_before_last_user_message=False, continue_message=continue_final_message
         )
         if not message.prefix:
@@ -310,10 +314,12 @@ def test_tokenize_assistant_message(
                     message, is_before_last_user_message=False, continue_message=continue_final_message
                 )
             return
-        tokens = v13_tekkenizer_think.encode_assistant_message(
+        tokens, images, audios = v13_tekkenizer_think.encode_assistant_message(
             message, is_before_last_user_message=False, continue_message=continue_final_message
         )
     assert v13_tekkenizer_think.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP) == expected
+    assert images == []
+    assert audios == []
 
 
 def test_tokenize_assistant_message_error(v13_tekkenizer: InstructTokenizerV13) -> None:
@@ -371,8 +377,10 @@ def test_tokenize_assistant_message_error(v13_tekkenizer: InstructTokenizerV13) 
 def test_encode_system_message(
     v13_tekkenizer_think: InstructTokenizerV13, message: SystemMessage, expected: str
 ) -> None:
-    encoded = v13_tekkenizer_think.encode_system_message(message)
+    encoded, images, audios = v13_tekkenizer_think.encode_system_message(message)
     assert v13_tekkenizer_think.decode(encoded, special_token_policy=SpecialTokenPolicy.KEEP) == expected
+    assert images == []
+    assert audios == []
 
 
 @pytest.mark.parametrize("audio_fixture", ["audio_chunk", "audio_url_chunk"])

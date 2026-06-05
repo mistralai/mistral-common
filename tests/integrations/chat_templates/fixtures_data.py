@@ -952,6 +952,60 @@ REQUEST_MID_CONV_SYSTEM_WITH_CONSECUTIVE_USERS_TRAIN = ChatCompletionRequest(  #
     ]
 )
 
+# -- Multimodal content in non-user messages (v15+) --
+
+REQUEST_TOOL_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="What is in this image?"),
+        AssistantMessage(
+            content=None,
+            tool_calls=[
+                ToolCall(
+                    id="tl1mg2345",
+                    function=FunctionCall(
+                        name="tool1",
+                        arguments={"location": "San Francisco, CA"},  # type: ignore[arg-type]
+                    ),
+                ),
+            ],
+        ),
+        ToolMessage(
+            content=[
+                TextChunk(text="Here is the result."),
+                ImageURLChunk(image_url=_IMAGE_URL),
+            ],
+            tool_call_id="tl1mg2345",
+        ),
+        AssistantMessage(content="The tool returned an image of a red square."),
+    ],
+    tools=_TOOLS,
+)
+
+REQUEST_ASSISTANT_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="Generate an image for me."),
+        AssistantMessage(
+            content=[
+                TextChunk(text="Here is the generated image."),
+                ImageURLChunk(image_url=_IMAGE_URL),
+            ],
+        ),
+    ],
+)
+
+REQUEST_SYSTEM_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(
+            content=[
+                TextChunk(text="You are an audio assistant."),
+                AudioChunk(input_audio=_AUDIO),
+            ],
+        ),
+        UserMessage(content="What was that sound?"),
+        AssistantMessage(content="That was a sine wave tone."),
+    ],
+)
+
 
 def _get_conversations(
     tokenizer_version: TokenizerVersion,
@@ -1101,6 +1155,18 @@ def _get_conversations(
                 REQUEST_CONSECUTIVE_ASSISTANTS_TOOL_CALLS_TRAIN,
             ]
         )
+
+    # v15+ only: multimodal content in non-user messages (finetuning only)
+    if tokenizer_version >= TokenizerVersion.v15 and validation_mode == ValidationMode.finetuning:
+        if image:
+            conversations.extend(
+                [
+                    REQUEST_TOOL_IMAGE_TRAIN,
+                    REQUEST_ASSISTANT_IMAGE_TRAIN,
+                ]
+            )
+        if audio:
+            conversations.append(REQUEST_SYSTEM_AUDIO_TRAIN)
 
     conversations = [c.model_copy(deep=True) for c in conversations]
 

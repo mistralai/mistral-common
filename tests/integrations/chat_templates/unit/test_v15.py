@@ -246,3 +246,284 @@ class TestV15ModelSettings:
 
         with pytest.raises(ValueError, match="Only text chunks are supported in system message contents"):
             render_template(template, messages)
+
+
+class TestV15MultimodalContent:
+    def test_v15_tool_message_with_image_content(self) -> None:
+        r"""V15 image template renders tool message with image content using render_content."""
+        template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v15,
+            image_support=True,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+
+        messages: list[dict[str, Any]] = [
+            {"role": "user", "content": "Use tool"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"id": "test12345", "function": {"name": "fn", "arguments": "{}"}}],
+            },
+            {
+                "role": "tool",
+                "content": [
+                    {"type": "text", "text": "result"},
+                    {"type": "image_url", "image_url": "http://example.com/img.png"},
+                ],
+                "tool_call_id": "test12345",
+            },
+            {"role": "assistant", "content": "Done"},
+        ]
+
+        tools = [{"type": "function", "function": {"name": "fn", "description": "test", "parameters": {}}}]
+        output = render_template(template, messages, tools=tools, reasoning_effort="none")
+        assert "[TOOL_RESULTS]" in output
+        assert "[IMG]" in output
+        assert "result" in output
+
+    def test_v15_tool_message_with_audio_content(self) -> None:
+        r"""V15 audio template renders tool message with audio content."""
+        template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v15,
+            image_support=False,
+            audio_support=True,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+
+        messages: list[dict[str, Any]] = [
+            {"role": "user", "content": "Use tool"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"id": "test12345", "function": {"name": "fn", "arguments": "{}"}}],
+            },
+            {
+                "role": "tool",
+                "content": [
+                    {"type": "text", "text": "result"},
+                    {"type": "input_audio", "input_audio": {"data": "abc", "format": "wav"}},
+                ],
+                "tool_call_id": "test12345",
+            },
+            {"role": "assistant", "content": "Done"},
+        ]
+
+        tools = [{"type": "function", "function": {"name": "fn", "description": "test", "parameters": {}}}]
+        output = render_template(template, messages, tools=tools, reasoning_effort="none")
+        assert "[TOOL_RESULTS]" in output
+        assert "[AUDIO]" in output
+        assert "result" in output
+
+    def test_v15_assistant_message_with_image_content(self) -> None:
+        r"""V15 image template renders assistant message with image content."""
+        template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v15,
+            image_support=True,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+
+        messages: list[dict[str, Any]] = [
+            {"role": "user", "content": "Show me"},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "Here is the image"},
+                    {"type": "image_url", "image_url": "http://example.com/img.png"},
+                ],
+            },
+        ]
+
+        output = render_template(template, messages, reasoning_effort="none")
+        assert "Here is the image" in output
+        assert "[IMG]" in output
+
+    def test_v15_assistant_message_with_audio_content(self) -> None:
+        r"""V15 audio template renders assistant message with audio content."""
+        template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v15,
+            image_support=False,
+            audio_support=True,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+
+        messages: list[dict[str, Any]] = [
+            {"role": "user", "content": "Listen"},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "Here is audio"},
+                    {"type": "input_audio", "input_audio": {"data": "abc", "format": "wav"}},
+                ],
+            },
+        ]
+
+        output = render_template(template, messages, reasoning_effort="none")
+        assert "Here is audio" in output
+        assert "[AUDIO]" in output
+
+    def test_v15_system_message_with_audio_content(self) -> None:
+        r"""V15 audio template renders system message with audio content."""
+        template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v15,
+            image_support=False,
+            audio_support=True,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+
+        messages: list[dict[str, Any]] = [
+            {
+                "role": "system",
+                "content": [
+                    {"type": "text", "text": "Listen to context"},
+                    {"type": "input_audio", "input_audio": {"data": "abc", "format": "wav"}},
+                ],
+            },
+            {"role": "user", "content": "Summarize"},
+            {"role": "assistant", "content": "Done"},
+        ]
+
+        output = render_template(template, messages, reasoning_effort="none")
+        assert "[SYSTEM_PROMPT]" in output
+        assert "Listen to context" in output
+        assert "[AUDIO]" in output
+
+    def test_pre_v15_image_template_rejects_image_in_assistant(self) -> None:
+        r"""Pre-V15 image template rejects image chunks in assistant message."""
+        template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v13,
+            image_support=True,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+
+        messages: list[dict[str, Any]] = [
+            {"role": "user", "content": "Show me"},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "Here"},
+                    {"type": "image_url", "image_url": "http://example.com/img.png"},
+                ],
+            },
+        ]
+
+        with pytest.raises(ValueError, match="Only text chunks are supported in assistant message contents"):
+            render_template(template, messages)
+
+    def test_pre_v15_audio_template_rejects_audio_in_assistant(self) -> None:
+        r"""Pre-V15 audio template rejects audio chunks in assistant message."""
+        template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v13,
+            image_support=False,
+            audio_support=True,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+
+        messages: list[dict[str, Any]] = [
+            {"role": "user", "content": "Listen"},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "Here"},
+                    {"type": "input_audio", "input_audio": {"data": "abc", "format": "wav"}},
+                ],
+            },
+        ]
+
+        with pytest.raises(ValueError, match="Only text chunks are supported in assistant message contents"):
+            render_template(template, messages)
+
+    def test_pre_v15_audio_template_rejects_audio_in_system(self) -> None:
+        r"""Pre-V15 audio template rejects audio chunks in system message."""
+        template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v13,
+            image_support=False,
+            audio_support=True,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+
+        messages: list[dict[str, Any]] = [
+            {
+                "role": "system",
+                "content": [
+                    {"type": "text", "text": "Context"},
+                    {"type": "input_audio", "input_audio": {"data": "abc", "format": "wav"}},
+                ],
+            },
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi"},
+        ]
+
+        with pytest.raises(ValueError, match="Only text chunks are supported in system message contents"):
+            render_template(template, messages)
+
+    def test_pre_v15_image_template_rejects_image_in_tool(self) -> None:
+        r"""Pre-V15 image template rejects image chunks in tool message content."""
+        template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v13,
+            image_support=True,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+
+        messages: list[dict[str, Any]] = [
+            {"role": "user", "content": "Use tool"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"id": "test12345", "function": {"name": "fn", "arguments": "{}"}}],
+            },
+            {
+                "role": "tool",
+                "content": [
+                    {"type": "text", "text": "result"},
+                    {"type": "image_url", "image_url": "http://example.com/img.png"},
+                ],
+                "tool_call_id": "test12345",
+            },
+            {"role": "assistant", "content": "Done"},
+        ]
+
+        tools = [{"type": "function", "function": {"name": "fn", "description": "test", "parameters": {}}}]
+        # Pre-V15 uses message['content']|string which coerces list to string representation
+        # rather than rendering through render_content — no [IMG] token produced
+        output = render_template(template, messages, tools=tools)
+        assert "[IMG]" not in output

@@ -426,12 +426,133 @@ def test_dynamic_template_comprehensive(config: TestConfig) -> None:
             ]
         )
 
+    # V15+ multimodal: tool messages with image/audio content
+    if config.version >= TokenizerVersion.v15 and config.image:
+        test_cases.append(
+            {
+                "name": "v15_tool_with_image",
+                "messages": [
+                    {"role": "user", "content": "Use tool"},
+                    {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {"id": "abc123def", "function": {"name": "fn", "arguments": "{}"}},
+                        ],
+                    },
+                    {
+                        "role": "tool",
+                        "content": [
+                            {"type": "text", "text": "result"},
+                            {"type": "image_url", "image_url": "http://example.com/img.png"},
+                        ],
+                        "tool_call_id": "abc123def",
+                    },
+                    {"role": "assistant", "content": "Done"},
+                ],
+                "tools": [
+                    {
+                        "type": "function",
+                        "function": {"name": "fn", "description": "test", "parameters": {}},
+                    }
+                ],
+            }
+        )
+
+    if config.version >= TokenizerVersion.v15 and config.audio:
+        test_cases.append(
+            {
+                "name": "v15_tool_with_audio",
+                "messages": [
+                    {"role": "user", "content": "Use tool"},
+                    {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {"id": "abc123def", "function": {"name": "fn", "arguments": "{}"}},
+                        ],
+                    },
+                    {
+                        "role": "tool",
+                        "content": [
+                            {"type": "text", "text": "result"},
+                            {"type": "input_audio", "input_audio": {"data": "abc", "format": "wav"}},
+                        ],
+                        "tool_call_id": "abc123def",
+                    },
+                    {"role": "assistant", "content": "Done"},
+                ],
+                "tools": [
+                    {
+                        "type": "function",
+                        "function": {"name": "fn", "description": "test", "parameters": {}},
+                    }
+                ],
+            }
+        )
+
+    # V15+ multimodal: assistant messages with image/audio content
+    if config.version >= TokenizerVersion.v15 and config.image:
+        test_cases.append(
+            {
+                "name": "v15_assistant_with_image",
+                "messages": [
+                    {"role": "user", "content": "Show me"},
+                    {
+                        "role": "assistant",
+                        "content": [
+                            {"type": "text", "text": "Here is the image"},
+                            {"type": "image_url", "image_url": "http://example.com/img.png"},
+                        ],
+                    },
+                ],
+            }
+        )
+
+    if config.version >= TokenizerVersion.v15 and config.audio:
+        test_cases.append(
+            {
+                "name": "v15_assistant_with_audio",
+                "messages": [
+                    {"role": "user", "content": "Listen"},
+                    {
+                        "role": "assistant",
+                        "content": [
+                            {"type": "text", "text": "Here is audio"},
+                            {"type": "input_audio", "input_audio": {"data": "abc", "format": "wav"}},
+                        ],
+                    },
+                ],
+            }
+        )
+
+    # V15+ multimodal: system messages with audio content
+    if config.version >= TokenizerVersion.v15 and config.audio:
+        test_cases.append(
+            {
+                "name": "v15_system_with_audio",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": [
+                            {"type": "text", "text": "Listen to context"},
+                            {"type": "input_audio", "input_audio": {"data": "abc", "format": "wav"}},
+                        ],
+                    },
+                    {"role": "user", "content": "Summarize"},
+                    {"role": "assistant", "content": "Done"},
+                ],
+            }
+        )
+
     skip_names_image = {"with_image", "consecutive_users_with_image", "consecutive_users_multi_image"}
     skip_names_audio = {"with_audio", "consecutive_users_multi_audio"}
     skip_names_think = {"with_thinking", "consecutive_assistants_think", "consecutive_systems_think"}
     # ThinkChunks in system messages are only supported in v13 (not v15+)
     skip_names_think_system = {"consecutive_systems_think"}
     skip_names_tools = {"with_tools_definition", "with_tool_call_and_result"}
+    skip_names_v15_image = {"v15_tool_with_image", "v15_assistant_with_image"}
+    skip_names_v15_audio = {"v15_tool_with_audio", "v15_assistant_with_audio", "v15_system_with_audio"}
 
     # Not using parametrize here because test_cases are built dynamically based on the
     # config (version/image/audio/think) from the outer parametrize. Each sub-case is
@@ -450,6 +571,10 @@ def test_dynamic_template_comprehensive(config: TestConfig) -> None:
         if test_name in skip_names_think_system and config.version >= TokenizerVersion.v15:
             continue
         if test_name in skip_names_tools and config.version <= TokenizerVersion.v1:
+            continue
+        if test_name in skip_names_v15_image and (config.version < TokenizerVersion.v15 or not config.image):
+            continue
+        if test_name in skip_names_v15_audio and (config.version < TokenizerVersion.v15 or not config.audio):
             continue
 
         static_output = render_template(static_template, messages, tools=tools)  # type: ignore

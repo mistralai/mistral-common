@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlparse
 
 from pydantic import ConfigDict, Field, ValidationError, field_validator, model_validator
-from typing_extensions import Annotated
+from typing_extensions import Annotated, TypeAlias
 
 from mistral_common.base import MistralBase
 from mistral_common.deprecation import warn_once
@@ -454,6 +454,12 @@ ContentChunk = Annotated[
 UserContentChunk = Annotated[
     TextChunk | ImageChunk | ImageURLChunk | AudioChunk | AudioURLChunk, Field(discriminator="type")
 ]
+
+AssistantContentChunk: TypeAlias = ContentChunk
+
+SystemContentChunk = Annotated[TextChunk | AudioChunk | ThinkChunk, Field(discriminator="type")]
+
+ToolContentChunk: TypeAlias = ContentChunk
 
 
 def _convert_openai_content_chunks(openai_content_chunks: dict[str, Any]) -> ContentChunk:

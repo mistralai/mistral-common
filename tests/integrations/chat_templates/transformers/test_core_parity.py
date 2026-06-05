@@ -205,10 +205,16 @@ class TestTransformersMistralCommonParity:
         # Not using parametrize here because invalid_convs depends on the version/image/audio/think
         # parameters from the outer parametrize. Each sub-case is identifiable via the TemplateError
         # match string which includes the role and allowed chunks.
+        is_v15_plus = config.version >= TokenizerVersion.v15
         for conv in invalid_convs:
             msg_template = "Only {chunks} chunks are supported in {role} message content."
             if conv in sp_invalids:
-                chunks = "text and thinking" if config.think and config.version < TokenizerVersion.v15 else "text"
+                if config.think and not is_v15_plus:
+                    chunks = "text and thinking"
+                elif config.audio and is_v15_plus:
+                    chunks = "text and audio"
+                else:
+                    chunks = "text"
                 role = "system"
             elif conv in user_invalids:
                 chunks = "text"
@@ -218,7 +224,17 @@ class TestTransformersMistralCommonParity:
                     chunks += ", input_audio and audio_url"
                 role = "user"
             elif conv in assistant_invalids:
-                chunks = "text and thinking" if config.think else "text"
+                desc_parts = ["text"]
+                if config.think:
+                    desc_parts.append("thinking")
+                if is_v15_plus and config.image:
+                    desc_parts.append("image")
+                if is_v15_plus and config.audio:
+                    desc_parts.append("audio")
+                if len(desc_parts) == 1:
+                    chunks = "text"
+                else:
+                    chunks = ", ".join(desc_parts[:-1]) + " and " + desc_parts[-1]
                 role = "assistant"
 
             err_msg = msg_template.format(chunks=chunks, role=role)

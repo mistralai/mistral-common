@@ -32,13 +32,15 @@ def test_special_tokens(tekkenizer: InstructTokenizerV11) -> None:
 
 
 def test_tokenize_assistant_message(tekkenizer: InstructTokenizerV11) -> None:
-    tokens = tekkenizer.encode_assistant_message(
+    tokens, images, audios = tekkenizer.encode_assistant_message(
         AssistantMessage(
             tool_calls=[ToolCall(function=FunctionCall(name="a_a_a", arguments="blabla"))],
         ),
         is_before_last_user_message=False,
         continue_message=False,
     )
+    assert images == []
+    assert audios == []
     assert tokens == [
         tekkenizer.TOOL_CALLS,
         197,
@@ -61,13 +63,15 @@ def test_tokenize_assistant_message(tekkenizer: InstructTokenizerV11) -> None:
 
 
 def test_tokenize_assistant_message_continue_message(tekkenizer: InstructTokenizerV11) -> None:
-    tokens = tekkenizer.encode_assistant_message(
+    tokens, images, audios = tekkenizer.encode_assistant_message(
         AssistantMessage(
             content='"blabla"',
         ),
         is_before_last_user_message=False,
         continue_message=True,
     )
+    assert images == []
+    assert audios == []
     assert tokens == [
         134,
         198,
@@ -95,7 +99,7 @@ def test_tokenize_assistant_message_continue_message(tekkenizer: InstructTokeniz
 
 
 def test_tokenize_assistant_messages(tekkenizer: InstructTokenizerV11) -> None:
-    tokens = tekkenizer.encode_assistant_message(
+    tokens, images, audios = tekkenizer.encode_assistant_message(
         AssistantMessage(
             tool_calls=[
                 ToolCall(function=FunctionCall(name="a_a_a", arguments="blabla")),
@@ -105,6 +109,8 @@ def test_tokenize_assistant_messages(tekkenizer: InstructTokenizerV11) -> None:
         is_before_last_user_message=False,
         continue_message=False,
     )
+    assert images == []
+    assert audios == []
     assert tokens == [
         tekkenizer.TOOL_CALLS,
         197,
@@ -135,13 +141,15 @@ def test_tokenize_assistant_messages(tekkenizer: InstructTokenizerV11) -> None:
 
 
 def test_tokenize_assistant_message_train(tekkenizer: InstructTokenizerV11) -> None:
-    tokens = tekkenizer.encode_assistant_message(
+    tokens, images, audios = tekkenizer.encode_assistant_message(
         AssistantMessage(
             tool_calls=[ToolCall(function=FunctionCall(name="a_a_a", arguments="blabla"), id="ABC")],
         ),
         is_before_last_user_message=True,
         continue_message=False,
     )
+    assert images == []
+    assert audios == []
     assert tokens == [
         tekkenizer.TOOL_CALLS,
         197,

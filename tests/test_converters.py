@@ -588,7 +588,7 @@ def test_non_leading_think_chunks_construction_ok() -> None:
 )
 def test_non_leading_think_chunks_to_openai_raises(content: list[TextChunk | ThinkChunk]) -> None:
     """to_openai raises when ThinkChunks are not leading."""
-    msg = AssistantMessage(content=content)
+    msg = AssistantMessage(content=content)  # type: ignore[arg-type]
     with pytest.raises(InvalidAssistantMessageException, match="ThinkChunks must be leading"):
         msg.to_openai()
 
@@ -1426,3 +1426,20 @@ def test_from_openai_drops_extra_fields(from_openai_call: Any, expected: Any) ->
 def test_direct_construction_still_strict(constructor: Any) -> None:
     with pytest.raises(Exception):
         constructor()
+
+
+def test_assistant_message_to_openai_reasoning_with_multimodal() -> None:
+    r"""Reasoning format with multimodal content serializes non-think portion as list."""
+    msg = AssistantMessage(
+        content=[
+            ThinkChunk(thinking="Let me think", closed=True),
+            TextChunk(text="Here is the result"),
+            ImageURLChunk(image_url="data:image/png;base64,iVBORw0"),
+        ]
+    )
+    result = msg.to_openai(reasoning_field_format=ReasoningFieldFormat.reasoning)
+    assert result["reasoning"] == "Let me think"
+    assert isinstance(result["content"], list)
+    assert len(result["content"]) == 2
+    assert result["content"][0] == {"type": "text", "text": "Here is the result"}
+    assert result["content"][1]["type"] == "image_url"

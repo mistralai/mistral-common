@@ -216,6 +216,35 @@ class TemplateConfig:
         r"""Whether to validate that assistant messages have non-empty content or tool calls."""
         return self.version >= TokenizerVersion.v7 or (self.version >= TokenizerVersion.v3 and not self.spm)
 
+    @property
+    def tool_supports_multimodal(self) -> bool:
+        r"""Whether tool messages can contain non-text content chunks. V15+."""
+        return self.version >= TokenizerVersion.v15
+
+    @property
+    def assistant_supports_multimodal(self) -> bool:
+        r"""Whether assistant messages can contain non-text content chunks. V15+."""
+        return self.version >= TokenizerVersion.v15
+
+    @property
+    def system_supports_audio(self) -> bool:
+        r"""Whether system messages can contain audio. V15+ with audio support."""
+        return self.audio_support and self.version >= TokenizerVersion.v15
+
+
+def _join_types_desc(parts: list[str]) -> str:
+    r"""Join type names into a human-readable description string.
+
+    Args:
+        parts: List of type names (e.g. ["text", "thinking", "image"]).
+
+    Returns:
+        Formatted string like "text", "text and thinking", or "text, thinking and image".
+    """
+    if len(parts) == 1:
+        return parts[0]
+    return ", ".join(parts[:-1]) + " and " + parts[-1]
+
 
 def _generate_header(config: TemplateConfig) -> str:
     r"""Generate template header with default system message.
@@ -873,6 +902,8 @@ def _generate_system_message_handling(config: TemplateConfig) -> str:
     if has_extra_types:
         if config.system_supports_thinking:
             rc_args += ", supported_types_desc='text and thinking'"
+        elif config.system_supports_audio:
+            rc_args += ", supported_types_desc='text and audio'"
         else:
             rc_args += ", supported_types_desc='text'"
     if config.any_thinking_support:
@@ -883,7 +914,7 @@ def _generate_system_message_handling(config: TemplateConfig) -> str:
     if config.image_support:
         rc_args += ", support_images=false"
     if config.audio_support:
-        rc_args += ", support_audio=false"
+        rc_args += f", support_audio={'true' if config.system_supports_audio else 'false'}"
     lines.append("        {{- render_content(" + rc_args + ") -}}")
 
     lines.append("        {{- '" + _END_SYSTEM + "' -}}")
@@ -1236,16 +1267,20 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     has_extra_types = config.any_thinking_support or config.image_support or config.audio_support
     rc_call_args = "message['content'], 'assistant message contents'"
     if has_extra_types:
+        desc_parts = ["text"]
         if config.any_thinking_support:
-            rc_call_args += ", supported_types_desc='text and thinking'"
-        else:
-            rc_call_args += ", supported_types_desc='text'"
+            desc_parts.append("thinking")
+        if config.assistant_supports_multimodal and config.image_support:
+            desc_parts.append("image")
+        if config.assistant_supports_multimodal and config.audio_support:
+            desc_parts.append("audio")
+        rc_call_args += f", supported_types_desc='{_join_types_desc(desc_parts)}'"
     if config.any_thinking_support:
         rc_call_args += ", support_thinking=true"
     if config.image_support:
-        rc_call_args += ", support_images=false"
+        rc_call_args += f", support_images={'true' if config.assistant_supports_multimodal else 'false'}"
     if config.audio_support:
-        rc_call_args += ", support_audio=false"
+        rc_call_args += f", support_audio={'true' if config.assistant_supports_multimodal else 'false'}"
 
     lines.append("        {%- if message['content'] %}")
 
@@ -1485,9 +1520,26 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
                 + "' }}"  # noqa: E501
             )
     elif config.uses_simple_tool_results:
-        lines.append(
-            "        {{- '" + _BEGIN_TOOL_RESULTS + "' + message['content']|string + '" + _END_TOOL_RESULTS + "' }}"
-        )  # noqa: E501
+        if config.tool_supports_multimodal:
+            tool_rc_args = "message['content'], 'tool message contents'"
+            if config.image_support or config.audio_support:
+                desc_parts = ["text"]
+                if config.image_support:
+                    desc_parts.append("image")
+                if config.audio_support:
+                    desc_parts.append("audio")
+                tool_rc_args += f", supported_types_desc='{_join_types_desc(desc_parts)}'"
+            if config.image_support:
+                tool_rc_args += ", support_images=true"
+            if config.audio_support:
+                tool_rc_args += ", support_audio=true"
+            lines.append("        {{- '" + _BEGIN_TOOL_RESULTS + "' -}}")
+            lines.append("        {{- render_content(" + tool_rc_args + ") -}}")
+            lines.append("        {{- '" + _END_TOOL_RESULTS + "' }}")
+        else:
+            lines.append(
+                "        {{- '" + _BEGIN_TOOL_RESULTS + "' + message['content']|string + '" + _END_TOOL_RESULTS + "' }}"
+            )  # noqa: E501
     else:
         # v3 non-spm style
         lines.extend(_emit_int_float_parsing("        "))
