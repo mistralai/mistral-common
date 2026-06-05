@@ -59,36 +59,31 @@ def _aggregate_content_chunks_impl(
     """
     all_content: list[ContentChunk] = []
     cur_text_parts: list[str] = []
-    cur_text_len: int = 0
 
     def _flush_text() -> None:
-        nonlocal cur_text_len
-        if cur_text_len > 0:
+        if cur_text_parts:
             all_content.append(TextChunk(text="".join(cur_text_parts)))
             cur_text_parts.clear()
-            cur_text_len = 0
 
     for content in contents:
-        needs_new_msg_sep = cur_text_len > 0
+        needs_new_msg_sep = bool(cur_text_parts)
         if not content:  # skip None or empty string
             continue
         elif isinstance(content, str):
             join = msg_join_str if needs_new_msg_sep else ""
             cur_text_parts.append(join + content)
-            cur_text_len += len(join) + len(content)
         else:  # list[ContentChunk]
             for chunk in content:
                 if isinstance(chunk, TextChunk):
                     if not chunk.text:  # skip empty text chunks
                         continue
-                    if cur_text_len == 0:
+                    if not cur_text_parts:
                         join = ""
                     elif needs_new_msg_sep:
                         join = msg_join_str
                     else:
                         join = chunk_join_str
                     cur_text_parts.append(join + chunk.text)
-                    cur_text_len += len(join) + len(chunk.text)
                     needs_new_msg_sep = False
                 else:
                     _flush_text()
@@ -301,10 +296,8 @@ class InstructRequestNormalizer(
                     )
                 weight = message.weight
 
-        if isinstance(content, str):
+        if isinstance(content, str) or _is_assistant_content(content):
             narrowed_content: str | list[TextChunk | ThinkChunk] = content
-        elif _is_assistant_content(content):
-            narrowed_content = content
         else:
             raise InvalidRequestException(
                 f"Unexpected content chunk types in assistant message: {[type(c).__name__ for c in content]}"
@@ -323,9 +316,7 @@ class InstructRequestNormalizer(
     def _aggregate_user_messages(self, messages: list[UATS]) -> UserMessageType:
         """Coalesce neighboring blocks of ContentChunks in user messages."""
         content = self._aggregate_content_chunks(messages)
-        if isinstance(content, str):
-            return self._user_message_class(content=content)
-        elif _is_user_content(content):
+        if isinstance(content, str) or _is_user_content(content):
             return self._user_message_class(content=content)
         else:
             raise InvalidRequestException(
