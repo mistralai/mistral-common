@@ -20,6 +20,7 @@ from mistral_common.protocol.instruct.chunk import (
     ImageURLChunk,
     TextChunk,
     ThinkChunk,
+    ToolContentChunk,
     UserContentChunk,
 )
 from mistral_common.protocol.instruct.messages import (
@@ -487,7 +488,7 @@ class InstructTokenizerV2(
         except json.JSONDecodeError:
             return content
 
-    def _parse_tool_content(self, content: str | list[ContentChunk]) -> Any:
+    def _parse_tool_content(self, content: str | list[ToolContentChunk]) -> Any:
         if isinstance(content, list):
             content = "".join(chunk.text for chunk in content if isinstance(chunk, TextChunk))
         return self._parse_json_content(content)
