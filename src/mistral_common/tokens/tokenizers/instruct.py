@@ -206,8 +206,7 @@ class InstructTokenizerBase(
                 if msg_idx == len(request.messages) - 1:
                     prefix_ids = new_tokens
             elif isinstance(msg, SystemMessage):
-                new_tokens, new_images, new_audios = self.encode_system_message(msg)
-                images.extend(new_images)
+                new_tokens, new_audios = self.encode_system_message(msg)
                 audios.extend(new_audios)
             else:
                 raise TokenizerException(f"Unknown message type {type(msg)}")
@@ -295,7 +294,7 @@ class InstructTokenizerV1(
         curr_tokens, image, audio = self.encode_user_content(content=message_txt, is_last=False, system_prompt=None)
         return curr_tokens, image, audio
 
-    def encode_system_message(self, message: SystemMessage) -> tuple[list[int], list[np.ndarray], list[Audio]]:
+    def encode_system_message(self, message: SystemMessage) -> tuple[list[int], list[Audio]]:
         raise NotImplementedError(f"System message encoding not implemented for {self.__class__.__name__}")
 
     def encode_user_content(
@@ -879,22 +878,22 @@ class InstructTokenizerV7(InstructTokenizerV3):
         if to_drop > 0:
             raise TokenizerException("Input couldn't fit in truncate_at_max_token")
 
-    def encode_system_message(self, message: SystemMessage) -> tuple[list[int], list[np.ndarray], list[Audio]]:
+    def encode_system_message(self, message: SystemMessage) -> tuple[list[int], list[Audio]]:
         r"""Encode a system message.
 
         Args:
             message: The message to encode.
 
         Returns:
-            The encoded tokens, images, and audios.
+            The encoded tokens and audios.
         """
         tokens = [self.BEGIN_SYSTEM]
         if isinstance(content := message.content, str):
             content = [TextChunk(text=content)]
-        content_tokens, images, audios = self._encode_content_chunks(content)
+        content_tokens, _images, audios = self._encode_content_chunks(content)
         tokens += content_tokens
         tokens.append(self.END_SYSTEM)
-        return tokens, images, audios
+        return tokens, audios
 
     def encode_user_content(
         self,
@@ -1386,7 +1385,7 @@ class InstructTokenizerV15(InstructTokenizerV13):
         ]
         return settings_tokens
 
-    def encode_system_message(self, message: SystemMessage) -> tuple[list[int], list[np.ndarray], list[Audio]]:
+    def encode_system_message(self, message: SystemMessage) -> tuple[list[int], list[Audio]]:
         r"""Encode a system message, rejecting ThinkChunk content."""
         if isinstance(message.content, list):
             if any(isinstance(chunk, ThinkChunk) for chunk in message.content):

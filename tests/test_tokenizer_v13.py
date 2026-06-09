@@ -375,9 +375,8 @@ def test_tokenize_assistant_message_error(v13_tekkenizer: InstructTokenizerV13) 
 def test_encode_system_message(
     v13_tekkenizer_think: InstructTokenizerV13, message: SystemMessage, expected: str
 ) -> None:
-    encoded, images, audios = v13_tekkenizer_think.encode_system_message(message)
+    encoded, audios = v13_tekkenizer_think.encode_system_message(message)
     assert v13_tekkenizer_think.decode(encoded, special_token_policy=SpecialTokenPolicy.KEEP) == expected
-    assert images == []
     assert audios == []
 
 
