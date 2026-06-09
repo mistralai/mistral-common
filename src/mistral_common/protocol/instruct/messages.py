@@ -354,7 +354,7 @@ class ToolMessage(BaseMessage):
     @classmethod
     def from_openai(cls, openai_message: dict[str, Any]) -> "ToolMessage":
         r"""Converts the OpenAI message to the Mistral format."""
-        content = cls._content_from_openai(openai_message.get("content"))
+        content = cls._content_from_openai(openai_message["content"])
         tool_message = cls.model_validate(
             {
                 "role": openai_message["role"],
