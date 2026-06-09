@@ -1230,10 +1230,17 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     """
     lines = []
 
+    assistant_supports_image = config.image_support and config.version >= TokenizerVersion.v15
+    assistant_supports_audio = config.audio_support and config.version >= TokenizerVersion.v15
+
+    comment_parts = ["text"]
     if config.any_thinking_support:
-        chunk_types = "text and thinking"
-    else:
-        chunk_types = "text"
+        comment_parts.append("thinking")
+    if assistant_supports_image:
+        comment_parts.append("image")
+    if assistant_supports_audio:
+        comment_parts.append("audio")
+    chunk_types = _join_types_desc(comment_parts)
 
     comment = f"{{#- Assistant messages supports {chunk_types} content. #}}"
     lines.append("")
@@ -1264,13 +1271,17 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
         desc_parts = ["text"]
         if config.any_thinking_support:
             desc_parts.append("thinking")
+        if assistant_supports_image:
+            desc_parts.append("image")
+        if assistant_supports_audio:
+            desc_parts.append("audio")
         rc_call_args += f", supported_types_desc='{_join_types_desc(desc_parts)}'"
     if config.any_thinking_support:
         rc_call_args += ", support_thinking=true"
     if config.image_support:
-        rc_call_args += ", support_images=false"
+        rc_call_args += f", support_images={'true' if assistant_supports_image else 'false'}"
     if config.audio_support:
-        rc_call_args += ", support_audio=false"
+        rc_call_args += f", support_audio={'true' if assistant_supports_audio else 'false'}"
 
     lines.append("        {%- if message['content'] %}")
 

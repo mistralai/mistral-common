@@ -1152,7 +1152,7 @@ class TestAssistantContentNarrowing:
                 )
             ),
         )
-        request = ChatCompletionRequest(
+        request = ChatCompletionRequest[ChatMessage](
             messages=[
                 UserMessage(content="query"),
                 AssistantMessage(content="plain text"),
