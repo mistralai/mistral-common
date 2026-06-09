@@ -287,9 +287,7 @@ class InstructRequestNormalizer(
         Raises:
             InvalidRequestException: If unsupported chunk types are found.
         """
-        if isinstance(content, str):
-            return content
-        if _is_assistant_content(content):
+        if isinstance(content, str) or _is_assistant_content(content):
             return content
         raise InvalidRequestException(
             f"Unexpected content chunk types in assistant message: {[type(c).__name__ for c in content]}"

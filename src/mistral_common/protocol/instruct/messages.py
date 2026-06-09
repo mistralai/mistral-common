@@ -252,7 +252,7 @@ class AssistantMessage(BaseMessage):
                 if len(think_chunks) > 0:
                     out_dict[reasoning_field_format.value] = "\n".join(tc.thinking for tc in think_chunks)
 
-                if len(content_chunks) == 1 and isinstance(content_chunks[0], TextChunk):
+                if len(content_chunks) == 1:
                     out_dict["content"] = content_chunks[0].text
                 elif content_chunks:
                     out_dict["content"] = self._content_to_openai(content_chunks)
