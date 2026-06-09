@@ -434,29 +434,6 @@ def test_encode_chat_completion_with_multimodal_tool(
 
 @pytest.mark.parametrize(
     ("content_chunk", "expected_audios", "expected_images", "tokenizer_factory"),
-    _ALL_MULTIMODAL_PARAMS,
-)
-def test_encode_chat_completion_with_multimodal_assistant(
-    content_chunk: AudioChunk | AudioURLChunk | ImageURLChunk,
-    expected_audios: int,
-    expected_images: int,
-    tokenizer_factory: Callable[[], MistralTokenizer],
-) -> None:
-    mistral_tokenizer = tokenizer_factory()
-    chat_request = ChatCompletionRequest(  # type: ignore[type-var]
-        messages=[
-            UserMessage(content="Hello"),
-            AssistantMessage(content=[TextChunk(text="Here is content"), content_chunk]),
-            UserMessage(content="Thanks"),
-        ],
-    )
-    encoded = mistral_tokenizer.encode_chat_completion(chat_request)
-    assert len(encoded.audios) == expected_audios
-    assert len(encoded.images) == expected_images
-
-
-@pytest.mark.parametrize(
-    ("content_chunk", "expected_audios", "expected_images", "tokenizer_factory"),
     _AUDIO_ONLY_PARAMS,
 )
 def test_encode_chat_completion_with_multimodal_system(

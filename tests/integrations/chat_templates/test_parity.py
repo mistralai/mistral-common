@@ -491,41 +491,6 @@ def test_dynamic_template_comprehensive(config: TestConfig) -> None:
             }
         )
 
-    # V15+ multimodal: assistant messages with image/audio content
-    if config.version >= TokenizerVersion.v15 and config.image:
-        test_cases.append(
-            {
-                "name": "v15_assistant_with_image",
-                "messages": [
-                    {"role": "user", "content": "Show me"},
-                    {
-                        "role": "assistant",
-                        "content": [
-                            {"type": "text", "text": "Here is the image"},
-                            {"type": "image_url", "image_url": "http://example.com/img.png"},
-                        ],
-                    },
-                ],
-            }
-        )
-
-    if config.version >= TokenizerVersion.v15 and config.audio:
-        test_cases.append(
-            {
-                "name": "v15_assistant_with_audio",
-                "messages": [
-                    {"role": "user", "content": "Listen"},
-                    {
-                        "role": "assistant",
-                        "content": [
-                            {"type": "text", "text": "Here is audio"},
-                            {"type": "input_audio", "input_audio": {"data": "abc", "format": "wav"}},
-                        ],
-                    },
-                ],
-            }
-        )
-
     # V15+ multimodal: system messages with audio content
     if config.version >= TokenizerVersion.v15 and config.audio:
         test_cases.append(
@@ -551,8 +516,8 @@ def test_dynamic_template_comprehensive(config: TestConfig) -> None:
     # ThinkChunks in system messages are only supported in v13 (not v15+)
     skip_names_think_system = {"consecutive_systems_think"}
     skip_names_tools = {"with_tools_definition", "with_tool_call_and_result"}
-    skip_names_v15_image = {"v15_tool_with_image", "v15_assistant_with_image"}
-    skip_names_v15_audio = {"v15_tool_with_audio", "v15_assistant_with_audio", "v15_system_with_audio"}
+    skip_names_v15_image = {"v15_tool_with_image"}
+    skip_names_v15_audio = {"v15_tool_with_audio", "v15_system_with_audio"}
 
     # Not using parametrize here because test_cases are built dynamically based on the
     # config (version/image/audio/think) from the outer parametrize. Each sub-case is

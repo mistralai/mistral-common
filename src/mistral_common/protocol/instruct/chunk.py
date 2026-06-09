@@ -455,7 +455,7 @@ UserContentChunk = Annotated[
     TextChunk | ImageChunk | ImageURLChunk | AudioChunk | AudioURLChunk, Field(discriminator="type")
 ]
 
-AssistantContentChunk: TypeAlias = ContentChunk
+AssistantContentChunk = Annotated[TextChunk | ThinkChunk, Field(discriminator="type")]
 
 SystemContentChunk = Annotated[TextChunk | AudioChunk | ThinkChunk, Field(discriminator="type")]
 

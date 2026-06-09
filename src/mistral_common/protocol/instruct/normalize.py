@@ -1,6 +1,6 @@
 import json
 import warnings
-from typing import Generic, Sequence
+from typing import Generic, Sequence, cast
 
 from typing_extensions import TypeGuard, assert_never
 
@@ -38,8 +38,8 @@ _DEFAULT_JOIN_STR = "\n\n"
 def _is_user_content(
     chunks: list[ContentChunk],
 ) -> TypeGuard[list[TextChunk | ImageChunk | ImageURLChunk | AudioChunk | AudioURLChunk]]:
-    r"""Narrow ContentChunk list to user-compatible types (no ThinkChunk)."""
-    return all(not isinstance(c, ThinkChunk) for c in chunks)
+    r"""Narrow ContentChunk list to user-compatible types."""
+    return all(isinstance(c, (TextChunk, ImageChunk, ImageURLChunk, AudioChunk, AudioURLChunk)) for c in chunks)
 
 
 def _aggregate_content_chunks_impl(
@@ -265,7 +265,7 @@ class InstructRequestNormalizer(
             id=tool_call.id,
         )
 
-    def _narrow_assistant_content(self, content: list[ContentChunk] | str) -> str | list[ContentChunk]:
+    def _narrow_assistant_content(self, content: list[ContentChunk] | str) -> str | list[TextChunk | ThinkChunk]:
         r"""Validate and narrow content chunks for assistant messages.
 
         Pre-V15 normalizers only allow TextChunk and ThinkChunk.
@@ -279,8 +279,10 @@ class InstructRequestNormalizer(
         Raises:
             InvalidRequestException: If unsupported chunk types are found.
         """
-        if isinstance(content, str) or all(isinstance(c, (TextChunk, ThinkChunk)) for c in content):
+        if isinstance(content, str):
             return content
+        if all(isinstance(c, (TextChunk, ThinkChunk)) for c in content):
+            return cast(list[TextChunk | ThinkChunk], content)
         raise InvalidRequestException(
             f"Unexpected content chunk types in assistant message: {[type(c).__name__ for c in content]}"
         )
@@ -609,20 +611,9 @@ class InstructRequestNormalizerV15(InstructRequestNormalizerV13):
 
     _chunk_join_str: str = ""
 
-    def _narrow_assistant_content(self, content: list[ContentChunk] | str) -> str | list[ContentChunk]:
-        r"""V15 accepts all ContentChunk types in assistant messages."""
-        return content
-
     def _narrow_tool_content(self, content: list[ContentChunk] | str) -> str | list[ContentChunk]:
         r"""V15 accepts all ContentChunk types in tool messages."""
-        if isinstance(content, str):
-            return content
-        text_parts: list[str] = []
-        for c in content:
-            if not isinstance(c, TextChunk):
-                return content
-            text_parts.append(c.text)
-        return "".join(text_parts)
+        return content
 
     def _narrow_system_content(self, content: list[ContentChunk] | str) -> str | list[ContentChunk]:
         r"""V15 system messages allow TextChunk and AudioChunk but reject ThinkChunk."""
@@ -631,37 +622,6 @@ class InstructRequestNormalizerV15(InstructRequestNormalizerV13):
         if any(isinstance(c, ThinkChunk) for c in content):
             raise InvalidRequestException("ThinkChunk in system message is not supported for V15")
         return content
-
-    def _aggregate_tool_messages(self, messages: list[UATS], latest_call_ids: list[str]) -> list[ToolMessageType]:
-        r"""V15 tool messages preserve non-text content chunks.
-
-        Text-only content is aggregated and JSON-normalized. Mixed content is preserved as-is.
-        """
-        tool_messages: list[ToolMessageType] = []
-        for message in messages:
-            assert isinstance(message, self._tool_message_class), "Expected tool message"
-            content = self._aggregate_content_chunks([message])
-            validated = self._narrow_tool_content(content)
-            if isinstance(validated, str):
-                normalized_content: str | list[ContentChunk] = self._normalize_json_content(validated)
-            else:
-                normalized_content = validated
-            tool_messages.append(
-                self._tool_message_class(
-                    content=normalized_content, tool_call_id=message.tool_call_id, name=message.name
-                )
-            )
-
-        # Reorder by tool call order
-        id_to_tool_call_idx = {call_id: idx for idx, call_id in enumerate(latest_call_ids)}
-        id_to_tool_result_idx = {message.tool_call_id: idx for idx, message in enumerate(tool_messages)}
-        tool_messages.sort(
-            key=lambda msg: (
-                id_to_tool_call_idx.get(msg.tool_call_id or "null", float("inf")),
-                id_to_tool_result_idx[msg.tool_call_id],
-            ),
-        )
-        return tool_messages
 
     @staticmethod
     def normalizer(model_settings_builder: ModelSettingsBuilder | None = None) -> "InstructRequestNormalizerV15":

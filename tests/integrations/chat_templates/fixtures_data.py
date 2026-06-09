@@ -981,18 +981,6 @@ REQUEST_TOOL_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
     tools=_TOOLS,
 )
 
-REQUEST_ASSISTANT_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
-    messages=[
-        UserMessage(content="Generate an image for me."),
-        AssistantMessage(
-            content=[
-                TextChunk(text="Here is the generated image."),
-                ImageURLChunk(image_url=_IMAGE_URL),
-            ],
-        ),
-    ],
-)
-
 REQUEST_SYSTEM_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         SystemMessage(
@@ -1162,7 +1150,6 @@ def _get_conversations(
             conversations.extend(
                 [
                     REQUEST_TOOL_IMAGE_TRAIN,
-                    REQUEST_ASSISTANT_IMAGE_TRAIN,
                 ]
             )
         if audio:

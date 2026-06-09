@@ -27,8 +27,8 @@ warnings.filterwarnings(
 )
 
 
-def _are_think_chunks(chunks: list[ContentChunk]) -> TypeGuard[list[ThinkChunk]]:
-    r"""Narrow a ContentChunk list to ThinkChunk list."""
+def _are_think_chunks(chunks: Sequence[TextChunk | ThinkChunk]) -> TypeGuard[list[ThinkChunk]]:
+    r"""Narrow a chunk list to ThinkChunk list."""
     return all(isinstance(c, ThinkChunk) for c in chunks)
 
 
@@ -358,12 +358,11 @@ class ToolMessage(BaseMessage):
         tool_message = cls.model_validate(
             {
                 "role": openai_message["role"],
-                "tool_call_id": openai_message.get("tool_call_id"),
+                "tool_call_id": openai_message["tool_call_id"],
                 "content": content,
                 "name": openai_message.get("name"),
             }
         )
-        assert tool_message.tool_call_id is not None, "tool_call_id must be provided for tool messages."
         return tool_message
 
 

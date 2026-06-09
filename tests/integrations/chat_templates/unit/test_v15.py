@@ -323,62 +323,6 @@ class TestV15MultimodalContent:
         assert "[AUDIO]" in output
         assert "result" in output
 
-    def test_v15_assistant_message_with_image_content(self) -> None:
-        r"""V15 image template renders assistant message with image content."""
-        template = generate_chat_template(
-            spm=False,
-            tokenizer_version=TokenizerVersion.v15,
-            image_support=True,
-            audio_support=False,
-            thinking_support=False,
-            default_system_prompt=None,
-            plain_thinking_support=False,
-            use_special_token_variables=True,
-        )
-
-        messages: list[dict[str, Any]] = [
-            {"role": "user", "content": "Show me"},
-            {
-                "role": "assistant",
-                "content": [
-                    {"type": "text", "text": "Here is the image"},
-                    {"type": "image_url", "image_url": "http://example.com/img.png"},
-                ],
-            },
-        ]
-
-        output = render_template(template, messages, reasoning_effort="none")
-        assert "Here is the image" in output
-        assert "[IMG]" in output
-
-    def test_v15_assistant_message_with_audio_content(self) -> None:
-        r"""V15 audio template renders assistant message with audio content."""
-        template = generate_chat_template(
-            spm=False,
-            tokenizer_version=TokenizerVersion.v15,
-            image_support=False,
-            audio_support=True,
-            thinking_support=False,
-            default_system_prompt=None,
-            plain_thinking_support=False,
-            use_special_token_variables=True,
-        )
-
-        messages: list[dict[str, Any]] = [
-            {"role": "user", "content": "Listen"},
-            {
-                "role": "assistant",
-                "content": [
-                    {"type": "text", "text": "Here is audio"},
-                    {"type": "input_audio", "input_audio": {"data": "abc", "format": "wav"}},
-                ],
-            },
-        ]
-
-        output = render_template(template, messages, reasoning_effort="none")
-        assert "Here is audio" in output
-        assert "[AUDIO]" in output
-
     def test_v15_system_message_with_audio_content(self) -> None:
         r"""V15 audio template renders system message with audio content."""
         template = generate_chat_template(

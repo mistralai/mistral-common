@@ -222,11 +222,6 @@ class TemplateConfig:
         return self.version >= TokenizerVersion.v15
 
     @property
-    def assistant_supports_multimodal(self) -> bool:
-        r"""Whether assistant messages can contain non-text content chunks. V15+."""
-        return self.version >= TokenizerVersion.v15
-
-    @property
     def system_supports_audio(self) -> bool:
         r"""Whether system messages can contain audio. V15+ with audio support."""
         return self.audio_support and self.version >= TokenizerVersion.v15
@@ -837,7 +832,6 @@ def _generate_flush_logic(config: TemplateConfig) -> list[str]:
             "                            {%- set ns_c.has_non_text = true %}",
             "                        {%- endif %}",
             "                    {%- endfor %}",
-
             "                {%- endif %}",
         ]
 
@@ -1270,17 +1264,13 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
         desc_parts = ["text"]
         if config.any_thinking_support:
             desc_parts.append("thinking")
-        if config.assistant_supports_multimodal and config.image_support:
-            desc_parts.append("image")
-        if config.assistant_supports_multimodal and config.audio_support:
-            desc_parts.append("audio")
         rc_call_args += f", supported_types_desc='{_join_types_desc(desc_parts)}'"
     if config.any_thinking_support:
         rc_call_args += ", support_thinking=true"
     if config.image_support:
-        rc_call_args += f", support_images={'true' if config.assistant_supports_multimodal else 'false'}"
+        rc_call_args += ", support_images=false"
     if config.audio_support:
-        rc_call_args += f", support_audio={'true' if config.assistant_supports_multimodal else 'false'}"
+        rc_call_args += ", support_audio=false"
 
     lines.append("        {%- if message['content'] %}")
 
