@@ -1366,6 +1366,36 @@ class TestSystemMessageContentChunk:
         assert isinstance(system_msg.content[0], TextChunk)
         assert isinstance(system_msg.content[1], AudioChunk)
 
+    def test_pre_v7_rejects_audio_in_system_message(self) -> None:
+        r"""Pre-V7 normalizer rejects AudioChunk in system messages."""
+        normalizer = InstructRequestNormalizer(
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
+        )
+        request = mock_chat_completion(
+            messages=[
+                SystemMessage(content=[TextChunk(text="hello"), AudioChunk(input_audio=b"fake_audio_data")]),
+                UserMessage(content="query"),
+                AssistantMessage(content="answer"),
+            ]
+        )
+        with pytest.raises(AssertionError):
+            normalizer.from_chat_completion_request(request)
+
+    def test_pre_v7_rejects_think_in_system_message(self) -> None:
+        r"""Pre-V7 normalizer rejects ThinkChunk in system messages."""
+        normalizer = InstructRequestNormalizer(
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
+        )
+        request = mock_chat_completion(
+            messages=[
+                SystemMessage(content=[TextChunk(text="hello"), ThinkChunk(thinking="thinking", closed=True)]),
+                UserMessage(content="query"),
+                AssistantMessage(content="answer"),
+            ]
+        )
+        with pytest.raises(AssertionError):
+            normalizer.from_chat_completion_request(request)
+
     def test_v15_preserves_audio_in_system_message(self) -> None:
         r"""V15 normalizer preserves AudioChunk in system messages."""
         normalizer = get_normalizer(
