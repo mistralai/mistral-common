@@ -459,7 +459,7 @@ AssistantContentChunk = Annotated[TextChunk | ThinkChunk, Field(discriminator="t
 
 SystemContentChunk = Annotated[TextChunk | AudioChunk | ThinkChunk, Field(discriminator="type")]
 
-ToolContentChunk: TypeAlias = ContentChunk
+ToolContentChunk: TypeAlias = ContentChunk  # Accepts all content chunk types (no restriction on tool messages).
 
 
 def _convert_openai_content_chunks(openai_content_chunks: dict[str, Any]) -> ContentChunk:

@@ -608,7 +608,7 @@ class InstructRequestNormalizerV13(InstructRequestNormalizerV7):
         id_to_tool_call_idx = {call_id: idx for idx, call_id in enumerate(latest_call_ids)}
         id_to_tool_result_idx = {message.tool_call_id: idx for idx, message in enumerate(tool_messages)}
         # First order by tool call idx and then by tool result idx
-        return tool_messages.sort(
+        tool_messages.sort(
             key=lambda msg: (
                 id_to_tool_call_idx.get(msg.tool_call_id or "null", float("inf")),
                 id_to_tool_result_idx[msg.tool_call_id],

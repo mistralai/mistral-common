@@ -1449,7 +1449,10 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         lines.append("    {#- Tool messages supports int, float or text content. #}")
         lines.append("    {%- elif message['role'] == 'tool' and ns.index > ns.max_idx_user %}")
     else:
-        lines.append("    {#- Tool messages only supports text content. #}")
+        if config.tool_supports_multimodal:
+            lines.append("    {#- Tool messages (multimodal). #}")
+        else:
+            lines.append("    {#- Tool messages only supports text content. #}")
         lines.append("    {%- elif message['role'] == 'tool' %}")
 
     if config.uses_spm_space_tracking:

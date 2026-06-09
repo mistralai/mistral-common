@@ -207,7 +207,7 @@
 
         {{- eos_token }}
 
-    {#- Tool messages only supports text content. #}
+    {#- Tool messages (multimodal). #}
     {%- elif message['role'] == 'tool' %}
         {{- '[TOOL_RESULTS]' -}}
         {{- render_content(message['content'], 'tool message contents') -}}
