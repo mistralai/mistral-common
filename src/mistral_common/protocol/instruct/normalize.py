@@ -498,6 +498,21 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
         """
         return content
 
+    def _aggregate_tool_messages(self, messages: list[UATS], latest_call_ids: list[str]) -> list[ToolMessageType]:
+        """Normalize tool messages without JSON normalization.
+
+        V7+ normalizers skip JSON content normalization for tool messages.
+        """
+        tool_messages: list[ToolMessageType] = []
+        for message in messages:
+            assert isinstance(message, self._tool_message_class), "Expected tool message"
+            content = self._aggregate_content_chunks([message])
+            validated = self._narrow_tool_content(content)
+            tool_messages.append(
+                self._tool_message_class(content=validated, tool_call_id=message.tool_call_id, name=message.name)
+            )
+        return tool_messages
+
     def _aggregate_system_messages(self, messages: list[UATS]) -> list[SystemMessageType]:
         aggregated: list[SystemMessageType] = []
         for message in messages:
