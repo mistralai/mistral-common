@@ -6,13 +6,16 @@ from typing_extensions import TypeGuard, assert_never
 
 from mistral_common.exceptions import InvalidRequestException
 from mistral_common.protocol.instruct.chunk import (
+    AssistantContentChunk,
     AudioChunk,
     AudioURLChunk,
     ContentChunk,
     ImageChunk,
     ImageURLChunk,
+    SystemContentChunk,
     TextChunk,
     ThinkChunk,
+    UserContentChunk,
 )
 from mistral_common.protocol.instruct.messages import (
     UATS,
@@ -37,16 +40,23 @@ _DEFAULT_JOIN_STR = "\n\n"
 
 def _is_user_content(
     chunks: list[ContentChunk],
-) -> TypeGuard[list[TextChunk | ImageChunk | ImageURLChunk | AudioChunk | AudioURLChunk]]:
+) -> TypeGuard[list[UserContentChunk]]:
     r"""Narrow ContentChunk list to user-compatible types."""
     return all(isinstance(c, (TextChunk, ImageChunk, ImageURLChunk, AudioChunk, AudioURLChunk)) for c in chunks)
 
 
 def _is_assistant_content(
     chunks: list[ContentChunk],
-) -> TypeGuard[list[TextChunk | ThinkChunk]]:
+) -> TypeGuard[list[AssistantContentChunk]]:
     r"""Narrow ContentChunk list to assistant-compatible types."""
     return all(isinstance(c, (TextChunk, ThinkChunk)) for c in chunks)
+
+
+def _is_system_content(
+    chunks: list[ContentChunk],
+) -> TypeGuard[list[SystemContentChunk]]:
+    r"""Narrow ContentChunk list to system-compatible types."""
+    return all(isinstance(c, (TextChunk, AudioChunk, ThinkChunk)) for c in chunks)
 
 
 def _aggregate_content_chunks_impl(
@@ -273,7 +283,7 @@ class InstructRequestNormalizer(
             id=tool_call.id,
         )
 
-    def _narrow_assistant_content(self, content: list[ContentChunk] | str) -> str | list[TextChunk | ThinkChunk]:
+    def _narrow_assistant_content(self, content: list[ContentChunk] | str) -> str | list[AssistantContentChunk]:
         r"""Validate and narrow content chunks for assistant messages.
 
         Only TextChunk and ThinkChunk are allowed.
@@ -465,7 +475,7 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
             UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest[UATS, Tool], None
         )
 
-    def _narrow_system_content(self, content: list[ContentChunk] | str) -> str | list[ContentChunk]:
+    def _narrow_system_content(self, content: list[ContentChunk] | str) -> str | list[SystemContentChunk]:
         r"""Validate content chunks for system messages.
 
         V7+ accepts all SystemContentChunk types (Pydantic validates at construction).
@@ -476,8 +486,15 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
 
         Returns:
             The validated content.
+
+        Raises:
+            InvalidRequestException: If unsupported chunk types are found.
         """
-        return content
+        if isinstance(content, str) or _is_system_content(content):
+            return content
+        raise InvalidRequestException(
+            f"Unexpected content chunk types in system message: {[type(c).__name__ for c in content]}"
+        )
 
     def _aggregate_tool_messages(self, messages: list[UATS], latest_call_ids: list[str]) -> list[ToolMessageType]:
         """Normalize tool messages without JSON normalization.
@@ -627,13 +644,14 @@ class InstructRequestNormalizerV15(InstructRequestNormalizerV13):
         self._inplace_sort_tool_messages(tool_messages=tool_messages, latest_call_ids=latest_call_ids)
         return tool_messages
 
-    def _narrow_system_content(self, content: list[ContentChunk] | str) -> str | list[ContentChunk]:
+    def _narrow_system_content(self, content: list[ContentChunk] | str) -> str | list[SystemContentChunk]:
         r"""V15 system messages allow TextChunk and AudioChunk but reject ThinkChunk."""
-        if isinstance(content, str):
-            return content
-        if any(isinstance(c, ThinkChunk) for c in content):
+        validated = super()._narrow_system_content(content)
+        if isinstance(validated, str):
+            return validated
+        if any(isinstance(c, ThinkChunk) for c in validated):
             raise InvalidRequestException("ThinkChunk in system message is not supported for V15")
-        return content
+        return validated
 
     @staticmethod
     def normalizer(model_settings_builder: ModelSettingsBuilder | None = None) -> "InstructRequestNormalizerV15":

@@ -27,12 +27,12 @@ warnings.filterwarnings(
 )
 
 
-def _are_think_chunks(chunks: Sequence[TextChunk | ThinkChunk]) -> TypeGuard[list[ThinkChunk]]:
+def _are_think_chunks(chunks: Sequence[AssistantContentChunk]) -> TypeGuard[list[ThinkChunk]]:
     r"""Narrow a chunk list to ThinkChunk list."""
     return all(isinstance(c, ThinkChunk) for c in chunks)
 
 
-def _are_text_chunks(chunks: Sequence[TextChunk | ThinkChunk]) -> TypeGuard[list[TextChunk]]:
+def _are_text_chunks(chunks: Sequence[AssistantContentChunk]) -> TypeGuard[list[TextChunk]]:
     r"""Narrow a chunk list to TextChunk list."""
     return all(isinstance(c, TextChunk) for c in chunks)
 
