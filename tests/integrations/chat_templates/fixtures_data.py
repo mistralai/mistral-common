@@ -981,6 +981,33 @@ REQUEST_TOOL_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
     tools=_TOOLS,
 )
 
+REQUEST_TOOL_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="What does this sound like?"),
+        AssistantMessage(
+            content=None,
+            tool_calls=[
+                ToolCall(
+                    id="tl1mg2345",
+                    function=FunctionCall(
+                        name="tool1",
+                        arguments={"location": "San Francisco, CA"},  # type: ignore[arg-type]
+                    ),
+                ),
+            ],
+        ),
+        ToolMessage(
+            content=[
+                TextChunk(text="Here is the audio result."),
+                AudioChunk(input_audio=_AUDIO),
+            ],
+            tool_call_id="tl1mg2345",
+        ),
+        AssistantMessage(content="The tool returned audio of a sine wave."),
+    ],
+    tools=_TOOLS,
+)
+
 REQUEST_SYSTEM_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         SystemMessage(
@@ -1154,6 +1181,7 @@ def _get_conversations(
             )
         if audio:
             conversations.append(REQUEST_SYSTEM_AUDIO_TRAIN)
+            conversations.append(REQUEST_TOOL_AUDIO_TRAIN)
 
     conversations = [c.model_copy(deep=True) for c in conversations]
 
