@@ -1349,14 +1349,36 @@ class TestSystemMessageContentChunk:
         with pytest.raises(InvalidRequestException, match="ThinkChunk"):
             normalizer.from_chat_completion_request(request)
 
-    def test_v7_normalization_preserves_audio_in_system_message(self) -> None:
-        r"""V7 normalizer preserves AudioChunk in system messages."""
+    def test_v7_rejects_audio_in_system_content(self) -> None:
+        r"""V7 normalizer rejects AudioChunk in system messages."""
         normalizer = InstructRequestNormalizerV7.normalizer()
         request = mock_chat_completion(
             messages=[
                 SystemMessage(content=[TextChunk(text="hello"), AudioChunk(input_audio=b"fake_audio_data")]),
                 UserMessage(content="test"),
             ]
+        )
+        with pytest.raises(
+            InvalidRequestException, match="Audio chunks in system messages are only supported from V15"
+        ):
+            normalizer.from_chat_completion_request(request)
+
+    def test_v15_preserves_audio_in_system_message(self) -> None:
+        r"""V15 normalizer preserves AudioChunk in system messages."""
+        normalizer = get_normalizer(
+            TokenizerVersion.v15,
+            model_settings_builder=ModelSettingsBuilder(
+                reasoning_effort=EnumBuilder[ReasoningEffort](
+                    values=list(ReasoningEffort), accepts_none=False, default=None
+                )
+            ),
+        )
+        request = ChatCompletionRequest[ChatMessage](
+            messages=[
+                SystemMessage(content=[TextChunk(text="hello"), AudioChunk(input_audio=b"fake_audio_data")]),
+                UserMessage(content="test"),
+            ],
+            reasoning_effort=ReasoningEffort.high,
         )
         parsed: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(request)
         system_msg = parsed.messages[0]

@@ -228,7 +228,7 @@ def _encode_content(
     tokenizer = instruct_tokenizer.tokenizer
 
     if isinstance(content, str):
-        result, _, _ = instruct_tokenizer.encode_assistant_message(
+        result = instruct_tokenizer.encode_assistant_message(
             AssistantMessage(content=content), is_before_last_user_message=False, continue_message=False
         )
         return result
@@ -238,7 +238,7 @@ def _encode_content(
 
     tokens: list[int] = []
     if content_chunks:
-        tokens, _, _ = instruct_tokenizer.encode_assistant_message(
+        tokens = instruct_tokenizer.encode_assistant_message(
             AssistantMessage(content=content_chunks),
             is_before_last_user_message=False,
             continue_message=False,

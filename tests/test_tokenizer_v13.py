@@ -299,7 +299,7 @@ def test_tokenize_assistant_message(
     v13_tekkenizer_think: InstructTokenizerV13, message: AssistantMessage, expected: str, continue_final_message: bool
 ) -> None:
     if not continue_final_message:
-        tokens, images, audios = v13_tekkenizer_think.encode_assistant_message(
+        tokens = v13_tekkenizer_think.encode_assistant_message(
             message, is_before_last_user_message=False, continue_message=continue_final_message
         )
         if not message.prefix:
@@ -314,12 +314,10 @@ def test_tokenize_assistant_message(
                     message, is_before_last_user_message=False, continue_message=continue_final_message
                 )
             return
-        tokens, images, audios = v13_tekkenizer_think.encode_assistant_message(
+        tokens = v13_tekkenizer_think.encode_assistant_message(
             message, is_before_last_user_message=False, continue_message=continue_final_message
         )
     assert v13_tekkenizer_think.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP) == expected
-    assert images == []
-    assert audios == []
 
 
 def test_tokenize_assistant_message_error(v13_tekkenizer: InstructTokenizerV13) -> None:

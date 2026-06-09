@@ -478,8 +478,8 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
     def _narrow_system_content(self, content: list[ContentChunk] | str) -> str | list[SystemContentChunk]:
         r"""Validate content chunks for system messages.
 
-        V7+ accepts all SystemContentChunk types (Pydantic validates at construction).
-        V15 overrides to reject ThinkChunk.
+        V7-V13 accepts text and thinking chunks. V15 overrides to allow audio
+        and reject thinking.
 
         Args:
             content: The aggregated content chunks.
@@ -491,6 +491,8 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
             InvalidRequestException: If unsupported chunk types are found.
         """
         if isinstance(content, str) or _is_system_content(content):
+            if isinstance(content, list) and any(isinstance(c, (AudioChunk, AudioURLChunk)) for c in content):
+                raise InvalidRequestException("Audio chunks in system messages are only supported from V15")
             return content
         raise InvalidRequestException(
             f"Unexpected content chunk types in system message: {[type(c).__name__ for c in content]}"
@@ -646,12 +648,15 @@ class InstructRequestNormalizerV15(InstructRequestNormalizerV13):
 
     def _narrow_system_content(self, content: list[ContentChunk] | str) -> str | list[SystemContentChunk]:
         r"""V15 system messages allow TextChunk and AudioChunk but reject ThinkChunk."""
-        validated = super()._narrow_system_content(content)
-        if isinstance(validated, str):
-            return validated
-        if any(isinstance(c, ThinkChunk) for c in validated):
+        if isinstance(content, str):
+            return content
+        if not _is_system_content(content):
+            raise InvalidRequestException(
+                f"Unexpected content chunk types in system message: {[type(c).__name__ for c in content]}"
+            )
+        if any(isinstance(c, ThinkChunk) for c in content):
             raise InvalidRequestException("ThinkChunk in system message is not supported for V15")
-        return validated
+        return content
 
     @staticmethod
     def normalizer(model_settings_builder: ModelSettingsBuilder | None = None) -> "InstructRequestNormalizerV15":
