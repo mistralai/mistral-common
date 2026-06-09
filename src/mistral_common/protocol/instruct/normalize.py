@@ -1,6 +1,6 @@
 import json
 import warnings
-from typing import Generic, Sequence, cast
+from typing import Generic, Sequence
 
 from typing_extensions import TypeGuard, assert_never
 
@@ -40,6 +40,13 @@ def _is_user_content(
 ) -> TypeGuard[list[TextChunk | ImageChunk | ImageURLChunk | AudioChunk | AudioURLChunk]]:
     r"""Narrow ContentChunk list to user-compatible types."""
     return all(isinstance(c, (TextChunk, ImageChunk, ImageURLChunk, AudioChunk, AudioURLChunk)) for c in chunks)
+
+
+def _is_assistant_content(
+    chunks: list[ContentChunk],
+) -> TypeGuard[list[TextChunk | ThinkChunk]]:
+    r"""Narrow ContentChunk list to assistant-compatible types."""
+    return all(isinstance(c, (TextChunk, ThinkChunk)) for c in chunks)
 
 
 def _aggregate_content_chunks_impl(
@@ -268,7 +275,7 @@ class InstructRequestNormalizer(
     def _narrow_assistant_content(self, content: list[ContentChunk] | str) -> str | list[TextChunk | ThinkChunk]:
         r"""Validate and narrow content chunks for assistant messages.
 
-        Pre-V15 normalizers only allow TextChunk and ThinkChunk.
+        Only TextChunk and ThinkChunk are allowed.
 
         Args:
             content: The aggregated content chunks.
@@ -281,36 +288,33 @@ class InstructRequestNormalizer(
         """
         if isinstance(content, str):
             return content
-        if all(isinstance(c, (TextChunk, ThinkChunk)) for c in content):
-            return cast(list[TextChunk | ThinkChunk], content)
+        if _is_assistant_content(content):
+            return content
         raise InvalidRequestException(
             f"Unexpected content chunk types in assistant message: {[type(c).__name__ for c in content]}"
         )
 
     def _narrow_tool_content(self, content: list[ContentChunk] | str) -> str | list[ContentChunk]:
-        r"""Validate and narrow content for tool messages.
+        r"""Validate that tool content is text-only.
 
-        Pre-V15 normalizers only allow text content.
+        Pre-V15 normalizers only allow text content. Since ``_aggregate_content_chunks``
+        already collapses text-only content to ``str``, receiving a list here means
+        non-text chunks are present.
 
         Args:
-            content: The raw or aggregated content.
+            content: The aggregated content.
 
         Returns:
-            The content as a string.
+            The validated content as a string.
 
         Raises:
             InvalidRequestException: If non-text content chunks are found.
         """
         if isinstance(content, str):
             return content
-        text_parts: list[str] = []
-        for c in content:
-            if not isinstance(c, TextChunk):
-                raise InvalidRequestException(
-                    f"Unexpected content chunk types in tool message: {[type(c).__name__ for c in content]}"
-                )
-            text_parts.append(c.text)
-        return "".join(text_parts)
+        raise InvalidRequestException(
+            f"Unexpected content chunk types in tool message: {[type(c).__name__ for c in content]}"
+        )
 
     def _aggregate_system_messages(self, messages: list[UATS]) -> list[SystemMessageType]:
         return []

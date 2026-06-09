@@ -1126,6 +1126,45 @@ def test_get_normalizer_version_mapping(
     assert normalizer._model_settings_builder == model_settings_builder
 
 
+class TestAssistantContentNarrowing:
+    def test_accepts_text_and_think_chunks(self) -> None:
+        r"""Normalizer accepts TextChunk and ThinkChunk in assistant messages."""
+        normalizer = get_normalizer(TokenizerVersion.v13)
+        request = mock_chat_completion(
+            messages=[
+                UserMessage(content="query"),
+                AssistantMessage(content=[ThinkChunk(thinking="reasoning"), TextChunk(text="answer")]),
+            ],
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(request)
+        assistant_msg = parsed.messages[1]
+        assert isinstance(assistant_msg, AssistantMessage)
+        assert isinstance(assistant_msg.content, list)
+        assert len(assistant_msg.content) == 2
+
+    def test_accepts_string_content(self) -> None:
+        r"""Normalizer accepts string content in assistant messages."""
+        normalizer = get_normalizer(
+            TokenizerVersion.v15,
+            model_settings_builder=ModelSettingsBuilder(
+                reasoning_effort=EnumBuilder[ReasoningEffort](
+                    values=list(ReasoningEffort), accepts_none=False, default=None
+                )
+            ),
+        )
+        request = ChatCompletionRequest(
+            messages=[
+                UserMessage(content="query"),
+                AssistantMessage(content="plain text"),
+            ],
+            reasoning_effort=ReasoningEffort.high,
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(request)
+        assistant_msg = parsed.messages[1]
+        assert isinstance(assistant_msg, AssistantMessage)
+        assert assistant_msg.content == "plain text"
+
+
 class TestToolMessageContentChunk:
     @pytest.fixture()
     def normalizer_v15(self) -> InstructRequestNormalizerV15:
@@ -1213,6 +1252,42 @@ class TestToolMessageContentChunk:
         )
         with pytest.raises(InvalidRequestException, match="Unexpected content chunk types in tool message"):
             normalizer.from_chat_completion_request(request)
+
+    def test_base_normalizer_json_normalizes_tool_content(self) -> None:
+        r"""Base normalizer (v1-v3) JSON-normalizes tool message content."""
+        normalizer = InstructRequestNormalizer(
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
+        )
+        messy_json = '{"key" :  "value" ,  "num": 1}'
+        request = mock_chat_completion(
+            messages=[
+                UserMessage(content="query"),
+                AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="fn", arguments="{}"), id="c1")]),
+                ToolMessage(content=messy_json, tool_call_id="c1"),
+            ],
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(request)
+        tool_msg = parsed.messages[2]
+        assert isinstance(tool_msg, ToolMessage)
+        assert tool_msg.content == '{"key": "value", "num": 1}'
+
+    def test_v7_skips_json_normalization_on_tool_content(self) -> None:
+        r"""V7+ normalizers do not JSON-normalize tool message content."""
+        normalizer = InstructRequestNormalizerV7(
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
+        )
+        messy_json = '{"key" :  "value" ,  "num": 1}'
+        request = mock_chat_completion(
+            messages=[
+                UserMessage(content="query"),
+                AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="fn", arguments="{}"), id="c1")]),
+                ToolMessage(content=messy_json, tool_call_id="c1"),
+            ],
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(request)
+        tool_msg = parsed.messages[2]
+        assert isinstance(tool_msg, ToolMessage)
+        assert tool_msg.content == messy_json
 
 
 class TestSystemMessageContentChunk:
