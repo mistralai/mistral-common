@@ -1127,10 +1127,34 @@ def test_get_normalizer_version_mapping(
 
 
 class TestAssistantContentNarrowing:
-    def test_accepts_text_and_think_chunks(self) -> None:
+    @pytest.fixture(params=[TokenizerVersion.v7, TokenizerVersion.v13, TokenizerVersion.v15])
+    def normalizer(self, request: pytest.FixtureRequest) -> InstructRequestNormalizer:
+        r"""Normalizer fixture parametrized across V7, V13, V15."""
+        version = request.param
+        if version == TokenizerVersion.v15:
+            return get_normalizer(
+                version,
+                model_settings_builder=ModelSettingsBuilder(
+                    reasoning_effort=EnumBuilder[ReasoningEffort](
+                        values=list(ReasoningEffort), accepts_none=False, default=None
+                    )
+                ),
+            )
+        return get_normalizer(version)
+
+    @staticmethod
+    def _make_request(
+        normalizer: InstructRequestNormalizer, messages: list[ChatMessage]
+    ) -> ChatCompletionRequest[ChatMessage]:
+        r"""Build a ChatCompletionRequest, adding reasoning_effort for V15."""
+        if isinstance(normalizer, InstructRequestNormalizerV15):
+            return ChatCompletionRequest(messages=messages, reasoning_effort=ReasoningEffort.high)
+        return mock_chat_completion(messages=messages)
+
+    def test_accepts_text_and_think_chunks(self, normalizer: InstructRequestNormalizer) -> None:
         r"""Normalizer accepts TextChunk and ThinkChunk in assistant messages."""
-        normalizer = get_normalizer(TokenizerVersion.v13)
-        request = mock_chat_completion(
+        request = self._make_request(
+            normalizer,
             messages=[
                 UserMessage(content="query"),
                 AssistantMessage(content=[ThinkChunk(thinking="reasoning"), TextChunk(text="answer")]),
@@ -1142,27 +1166,31 @@ class TestAssistantContentNarrowing:
         assert isinstance(assistant_msg.content, list)
         assert len(assistant_msg.content) == 2
 
-    def test_accepts_string_content(self) -> None:
+    def test_accepts_string_content(self, normalizer: InstructRequestNormalizer) -> None:
         r"""Normalizer accepts string content in assistant messages."""
-        normalizer = get_normalizer(
-            TokenizerVersion.v15,
-            model_settings_builder=ModelSettingsBuilder(
-                reasoning_effort=EnumBuilder[ReasoningEffort](
-                    values=list(ReasoningEffort), accepts_none=False, default=None
-                )
-            ),
-        )
-        request = ChatCompletionRequest[ChatMessage](
+        request = self._make_request(
+            normalizer,
             messages=[
                 UserMessage(content="query"),
                 AssistantMessage(content="plain text"),
             ],
-            reasoning_effort=ReasoningEffort.high,
         )
         parsed: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(request)
         assistant_msg = parsed.messages[1]
         assert isinstance(assistant_msg, AssistantMessage)
         assert assistant_msg.content == "plain text"
+
+    def test_pydantic_rejects_image_in_assistant(self) -> None:
+        with pytest.raises(ValidationError):
+            AssistantMessage(
+                content=[TextChunk(text="answer"), ImageURLChunk(image_url="https://example.com/img.png")]  # type: ignore[list-item]
+            )
+
+    def test_pydantic_rejects_audio_in_assistant(self) -> None:
+        with pytest.raises(ValidationError):
+            AssistantMessage(
+                content=[TextChunk(text="answer"), AudioChunk(input_audio=b"fake_audio_data")]  # type: ignore[list-item]
+            )
 
 
 class TestToolMessageContentChunk:
