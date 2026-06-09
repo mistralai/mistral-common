@@ -149,7 +149,7 @@ class UserMessage(BaseMessage):
     def from_openai(cls, openai_message: dict[str, Any]) -> "UserMessage":
         r"""Converts the OpenAI message to the Mistral format."""
         return cls.model_validate(
-            {"role": openai_message["role"], "content": cls._content_from_openai(openai_message.get("content"))}
+            {"role": openai_message["role"], "content": cls._content_from_openai(openai_message["content"])}
         )
 
 
@@ -174,7 +174,7 @@ class SystemMessage(BaseMessage):
     def from_openai(cls, openai_message: dict[str, Any]) -> "SystemMessage":
         r"""Converts the OpenAI message to the Mistral format."""
         return cls.model_validate(
-            {"role": openai_message["role"], "content": cls._content_from_openai(openai_message.get("content"))}
+            {"role": openai_message["role"], "content": cls._content_from_openai(openai_message["content"])}
         )
 
 
