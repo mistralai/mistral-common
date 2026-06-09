@@ -19,15 +19,15 @@ from tests.integrations.chat_templates.helpers import (
 def _request_to_render_args(request: ChatCompletionRequest) -> dict[str, Any]:
     r"""Convert a ChatCompletionRequest to render_template kwargs.
 
-    Enriches tool messages with the ``name`` field resolved from the preceding
-    assistant's ``tool_calls``, which the v2 Jinja template requires but
-    ``ToolMessage.to_openai()`` omits.
+    Enriches tool messages with the `name` field resolved from the preceding
+    assistant's `tool_calls`, which the v2 Jinja template requires but
+    `ToolMessage.to_openai()` omits.
     """
     openai = request.to_openai()
     messages = openai["messages"]
 
     # Build a mapping from tool_call_id -> function name so tool messages
-    # can carry the ``name`` field expected by v2 templates.
+    # can carry the `name` field expected by v2 templates.
     tool_call_names: dict[str, str] = {}
     for msg in messages:
         for tc in msg.get("tool_calls", []):
@@ -47,8 +47,7 @@ def _request_to_render_args(request: ChatCompletionRequest) -> dict[str, Any]:
     }
     if "tools" in openai and openai["tools"]:
         kwargs["tools"] = openai["tools"]
-    reasoning = openai.get("reasoning_effort")
-    if reasoning is not None:
+    if (reasoning := openai.get("reasoning_effort")) is not None:
         kwargs["reasoning_effort"] = reasoning
     return kwargs
 
