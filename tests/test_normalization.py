@@ -426,6 +426,71 @@ class TestChatCompletionRequestNormalization:
         result: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(request)
         assert result.continue_final_message is True
 
+    def test_pydantic_rejects_image_in_assistant(self) -> None:
+        r"""Pydantic rejects ImageURLChunk in assistant message content."""
+        with pytest.raises(ValidationError, match="union_tag_invalid"):
+            AssistantMessage(
+                content=[TextChunk(text="answer"), ImageURLChunk(image_url="https://example.com/img.png")]  # type: ignore[list-item]
+            )
+
+    def test_pydantic_rejects_audio_in_assistant(self) -> None:
+        r"""Pydantic rejects AudioChunk in assistant message content."""
+        with pytest.raises(ValidationError, match="union_tag_invalid"):
+            AssistantMessage(
+                content=[TextChunk(text="answer"), AudioChunk(input_audio=b"fake_audio_data")]  # type: ignore[list-item]
+            )
+
+    def test_system_message_accepts_audio_chunk(self) -> None:
+        r"""SystemMessage Pydantic model accepts AudioChunk in content."""
+        msg = SystemMessage(content=[AudioChunk(input_audio="dGVzdA==")])
+        assert isinstance(msg.content, list)
+        assert len(msg.content) == 1
+        assert isinstance(msg.content[0], AudioChunk)
+
+    def test_system_message_rejects_image_chunk(self) -> None:
+        r"""SystemMessage Pydantic model rejects ImageURLChunk in content."""
+        with pytest.raises(ValidationError, match="union_tag_invalid"):
+            SystemMessage(content=[ImageURLChunk(image_url="https://example.com/image.png")])  # type: ignore[list-item]
+
+    def test_rejects_audio_in_system_message(self, normalizer: InstructRequestNormalizer) -> None:
+        r"""Pre-V7 normalizer rejects AudioChunk in system messages."""
+        request = mock_chat_completion(
+            messages=[
+                SystemMessage(content=[TextChunk(text="hello"), AudioChunk(input_audio=b"fake_audio_data")]),
+                UserMessage(content="query"),
+                AssistantMessage(content="answer"),
+            ]
+        )
+        with pytest.raises(AssertionError, match="AudioChunk"):
+            normalizer.from_chat_completion_request(request)
+
+    def test_rejects_think_in_system_message(self, normalizer: InstructRequestNormalizer) -> None:
+        r"""Pre-V7 normalizer rejects ThinkChunk in system messages."""
+        request = mock_chat_completion(
+            messages=[
+                SystemMessage(content=[TextChunk(text="hello"), ThinkChunk(thinking="thinking", closed=True)]),
+                UserMessage(content="query"),
+                AssistantMessage(content="answer"),
+            ]
+        )
+        with pytest.raises(AssertionError, match="ThinkChunk"):
+            normalizer.from_chat_completion_request(request)
+
+    def test_json_normalizes_tool_content(self, normalizer: InstructRequestNormalizer) -> None:
+        r"""Base normalizer (v1-v3) JSON-normalizes tool message content."""
+        messy_json = '{"key" :  "value" ,  "num": 1}'
+        request = mock_chat_completion(
+            messages=[
+                UserMessage(content="query"),
+                AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="fn", arguments="{}"), id="c1")]),
+                ToolMessage(content=messy_json, tool_call_id="c1"),
+            ],
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(request)
+        tool_msg = parsed.messages[2]
+        assert isinstance(tool_msg, ToolMessage)
+        assert tool_msg.content == '{"key": "value", "num": 1}'
+
 
 class TestChatCompletionRequestNormalizationV7:
     @pytest.fixture(autouse=True)
@@ -633,6 +698,64 @@ class TestChatCompletionRequestNormalizationV7:
             ThinkChunk(thinking="T"),
             TextChunk(text="C\n\nD"),
         ]
+
+    def test_accepts_text_and_think_chunks(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
+        r"""V7 normalizer accepts TextChunk and ThinkChunk in assistant messages."""
+        request = mock_chat_completion(
+            messages=[
+                UserMessage(content="query"),
+                AssistantMessage(content=[ThinkChunk(thinking="reasoning"), TextChunk(text="answer")]),
+            ],
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v7.from_chat_completion_request(request)
+        assistant_msg = parsed.messages[1]
+        assert isinstance(assistant_msg, AssistantMessage)
+        assert isinstance(assistant_msg.content, list)
+        assert len(assistant_msg.content) == 2
+
+    def test_accepts_string_content(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
+        r"""V7 normalizer accepts string content in assistant messages."""
+        request = mock_chat_completion(
+            messages=[
+                UserMessage(content="query"),
+                AssistantMessage(content="plain text"),
+            ],
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v7.from_chat_completion_request(request)
+        assistant_msg = parsed.messages[1]
+        assert isinstance(assistant_msg, AssistantMessage)
+        assert assistant_msg.content == "plain text"
+
+    def test_skips_json_normalization_on_tool_content(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
+        r"""V7+ normalizers do not JSON-normalize tool message content."""
+        messy_json = '{"key" :  "value" ,  "num": 1}'
+        request = mock_chat_completion(
+            messages=[
+                UserMessage(content="query"),
+                AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="fn", arguments="{}"), id="c1")]),
+                ToolMessage(content=messy_json, tool_call_id="c1"),
+            ],
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v7.from_chat_completion_request(request)
+        tool_msg = parsed.messages[2]
+        assert isinstance(tool_msg, ToolMessage)
+        assert tool_msg.content == messy_json
+
+    def test_preserves_audio_in_system_message(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
+        r"""V7 normalizer preserves AudioChunk in system messages."""
+        request = mock_chat_completion(
+            messages=[
+                SystemMessage(content=[TextChunk(text="hello"), AudioChunk(input_audio=b"fake_audio_data")]),
+                UserMessage(content="test"),
+            ]
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v7.from_chat_completion_request(request)
+        system_msg = parsed.messages[0]
+        assert isinstance(system_msg, SystemMessage)
+        assert isinstance(system_msg.content, list)
+        assert len(system_msg.content) == 2
+        assert isinstance(system_msg.content[0], TextChunk)
+        assert isinstance(system_msg.content[1], AudioChunk)
 
 
 class TestFineTuningNormalizer:
@@ -978,6 +1101,82 @@ class TestChatCompletionRequestNormalizationV13:
         result: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(request)
         assert result.continue_final_message is True
 
+    def test_accepts_text_and_think_chunks(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
+        r"""V13 normalizer accepts TextChunk and ThinkChunk in assistant messages."""
+        request = mock_chat_completion(
+            messages=[
+                UserMessage(content="query"),
+                AssistantMessage(content=[ThinkChunk(thinking="reasoning"), TextChunk(text="answer")]),
+            ],
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(request)
+        assistant_msg = parsed.messages[1]
+        assert isinstance(assistant_msg, AssistantMessage)
+        assert isinstance(assistant_msg.content, list)
+        assert len(assistant_msg.content) == 2
+
+    def test_accepts_string_content(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
+        r"""V13 normalizer accepts string content in assistant messages."""
+        request = mock_chat_completion(
+            messages=[
+                UserMessage(content="query"),
+                AssistantMessage(content="plain text"),
+            ],
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(request)
+        assistant_msg = parsed.messages[1]
+        assert isinstance(assistant_msg, AssistantMessage)
+        assert assistant_msg.content == "plain text"
+
+    def test_rejects_non_text_tool_content(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
+        r"""V13 normalizer raises InvalidRequestException for non-text tool content."""
+        request = mock_chat_completion(
+            messages=[
+                UserMessage(content="hi"),
+                AssistantMessage(
+                    tool_calls=[ToolCall(function=FunctionCall(name="fn", arguments="{}"), id="test12345")],
+                ),
+                ToolMessage(
+                    content=[ImageURLChunk(image_url="data:image/png;base64,iVBORw0")],
+                    tool_call_id="test12345",
+                ),
+            ]
+        )
+        with pytest.raises(InvalidRequestException, match="Unexpected content chunk types in tool message"):
+            normalizer_v13.from_chat_completion_request(request)
+
+    def test_aggregates_text_tool_content(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
+        r"""V13 normalizer aggregates TextChunks in tool messages to a string."""
+        request = mock_chat_completion(
+            messages=[
+                UserMessage(content="query"),
+                AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="fn", arguments="{}"), id="c1")]),
+                ToolMessage(content=[TextChunk(text="hello"), TextChunk(text="world")], tool_call_id="c1"),
+            ],
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(request)
+        tool_msg = parsed.messages[2]
+        assert isinstance(tool_msg, ToolMessage)
+        assert isinstance(tool_msg.content, str)
+        assert tool_msg.content == "hello\n\nworld"
+
+    def test_rejects_audio_in_tool_content(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
+        r"""V13 normalizer raises InvalidRequestException for audio tool content."""
+        request = mock_chat_completion(
+            messages=[
+                UserMessage(content="hi"),
+                AssistantMessage(
+                    tool_calls=[ToolCall(function=FunctionCall(name="fn", arguments="{}"), id="test12345")],
+                ),
+                ToolMessage(
+                    content=[AudioChunk(input_audio=b"fake_audio_data")],
+                    tool_call_id="test12345",
+                ),
+            ]
+        )
+        with pytest.raises(InvalidRequestException, match="Unexpected content chunk types in tool message"):
+            normalizer_v13.from_chat_completion_request(request)
+
 
 class TestChatCompletionRequestNormalizationV15:
     @pytest.fixture(autouse=True)
@@ -1097,125 +1296,37 @@ class TestChatCompletionRequestNormalizationV15:
         assert isinstance(tool_msg, ToolMessage)
         assert tool_msg.content == "XY"
 
-
-@pytest.mark.parametrize(
-    "version,expected_class,model_settings_builder",
-    [
-        (TokenizerVersion.v1, InstructRequestNormalizer, None),
-        (TokenizerVersion.v2, InstructRequestNormalizer, None),
-        (TokenizerVersion.v3, InstructRequestNormalizer, None),
-        (TokenizerVersion.v7, InstructRequestNormalizerV7, None),
-        (TokenizerVersion.v11, InstructRequestNormalizerV7, None),
-        (TokenizerVersion.v13, InstructRequestNormalizerV13, None),
-        (
-            TokenizerVersion.v15,
-            InstructRequestNormalizerV15,
-            ModelSettingsBuilder(
-                reasoning_effort=EnumBuilder[ReasoningEffort](
-                    values=list(ReasoningEffort), accepts_none=False, default=None
-                )
-            ),
-        ),
-    ],
-)
-def test_get_normalizer_version_mapping(
-    version: TokenizerVersion, expected_class: type, model_settings_builder: ModelSettingsBuilder
-) -> None:
-    normalizer = get_normalizer(version, model_settings_builder)
-    assert isinstance(normalizer, expected_class)
-    assert normalizer._model_settings_builder == model_settings_builder
-
-
-class TestAssistantContentNarrowing:
-    @pytest.fixture(params=[TokenizerVersion.v7, TokenizerVersion.v13, TokenizerVersion.v15])
-    def normalizer(self, request: pytest.FixtureRequest) -> InstructRequestNormalizer:
-        r"""Normalizer fixture parametrized across V7, V13, V15."""
-        version = request.param
-        if version == TokenizerVersion.v15:
-            return get_normalizer(
-                version,
-                model_settings_builder=ModelSettingsBuilder(
-                    reasoning_effort=EnumBuilder[ReasoningEffort](
-                        values=list(ReasoningEffort), accepts_none=False, default=None
-                    )
-                ),
-            )
-        return get_normalizer(version)
-
-    @staticmethod
-    def _make_request(
-        normalizer: InstructRequestNormalizer, messages: list[ChatMessage]
-    ) -> ChatCompletionRequest[ChatMessage]:
-        r"""Build a ChatCompletionRequest, adding reasoning_effort for V15."""
-        if isinstance(normalizer, InstructRequestNormalizerV15):
-            return ChatCompletionRequest(messages=messages, reasoning_effort=ReasoningEffort.high)
-        return mock_chat_completion(messages=messages)
-
-    def test_accepts_text_and_think_chunks(self, normalizer: InstructRequestNormalizer) -> None:
-        r"""Normalizer accepts TextChunk and ThinkChunk in assistant messages."""
-        request = self._make_request(
-            normalizer,
+    def test_accepts_text_and_think_chunks(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
+        r"""V15 normalizer accepts TextChunk and ThinkChunk in assistant messages."""
+        request = ChatCompletionRequest[ChatMessage](
             messages=[
                 UserMessage(content="query"),
                 AssistantMessage(content=[ThinkChunk(thinking="reasoning"), TextChunk(text="answer")]),
             ],
+            reasoning_effort=ReasoningEffort.high,
         )
-        parsed: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(request)
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
         assistant_msg = parsed.messages[1]
         assert isinstance(assistant_msg, AssistantMessage)
         assert isinstance(assistant_msg.content, list)
         assert len(assistant_msg.content) == 2
 
-    def test_accepts_string_content(self, normalizer: InstructRequestNormalizer) -> None:
-        r"""Normalizer accepts string content in assistant messages."""
-        request = self._make_request(
-            normalizer,
+    def test_accepts_string_content(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
+        r"""V15 normalizer accepts string content in assistant messages."""
+        request = ChatCompletionRequest[ChatMessage](
             messages=[
                 UserMessage(content="query"),
                 AssistantMessage(content="plain text"),
             ],
+            reasoning_effort=ReasoningEffort.high,
         )
-        parsed: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(request)
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
         assistant_msg = parsed.messages[1]
         assert isinstance(assistant_msg, AssistantMessage)
         assert assistant_msg.content == "plain text"
 
-    def test_pydantic_rejects_image_in_assistant(self) -> None:
-        with pytest.raises(ValidationError):
-            AssistantMessage(
-                content=[TextChunk(text="answer"), ImageURLChunk(image_url="https://example.com/img.png")]  # type: ignore[list-item]
-            )
-
-    def test_pydantic_rejects_audio_in_assistant(self) -> None:
-        with pytest.raises(ValidationError):
-            AssistantMessage(
-                content=[TextChunk(text="answer"), AudioChunk(input_audio=b"fake_audio_data")]  # type: ignore[list-item]
-            )
-
-
-class TestToolMessageContentChunk:
-    @pytest.fixture()
-    def normalizer_v15(self) -> InstructRequestNormalizerV15:
-        return InstructRequestNormalizerV15(
-            UserMessage,
-            AssistantMessage,
-            ToolMessage,
-            SystemMessage,
-            InstructRequest,
-            ModelSettingsBuilder(
-                reasoning_effort=EnumBuilder[ReasoningEffort](
-                    values=list(ReasoningEffort), accepts_none=False, default=None
-                )
-            ),
-        )
-
-    @pytest.fixture()
-    def normalizer_v13(self) -> InstructRequestNormalizerV13:
-        return InstructRequestNormalizerV13(
-            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
-        )
-
-    def test_v15_preserves_non_text_tool_content(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
+    def test_preserves_non_text_tool_content(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
+        r"""V15 normalizer preserves non-text chunks in tool messages."""
         image_chunk = ImageURLChunk(image_url="https://example.com/image.png")
         request = ChatCompletionRequest(  # type: ignore[type-var]
             messages=[
@@ -1231,7 +1342,8 @@ class TestToolMessageContentChunk:
         assert isinstance(tool_msg.content, list)
         assert tool_msg.content == [image_chunk]
 
-    def test_v15_sorts_multimodal_tool_messages(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
+    def test_sorts_multimodal_tool_messages(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
+        r"""V15 normalizer sorts multimodal tool messages by tool call order."""
         image_chunk_1 = ImageURLChunk(image_url="https://example.com/img1.png")
         image_chunk_2 = ImageURLChunk(image_url="https://example.com/img2.png")
         request = ChatCompletionRequest(  # type: ignore[type-var]
@@ -1260,114 +1372,8 @@ class TestToolMessageContentChunk:
         assert tool_msg_2.tool_call_id == "c2"
         assert tool_msg_2.content == [image_chunk_2]
 
-    def test_pre_v15_rejects_non_text_tool_content(self) -> None:
-        r"""Pre-V15 normalizer raises InvalidRequestException for non-text tool content."""
-        normalizer = get_normalizer(TokenizerVersion.v13)
-        request = mock_chat_completion(
-            messages=[
-                UserMessage(content="hi"),
-                AssistantMessage(
-                    tool_calls=[ToolCall(function=FunctionCall(name="fn", arguments="{}"), id="test12345")],
-                ),
-                ToolMessage(
-                    content=[ImageURLChunk(image_url="data:image/png;base64,iVBORw0")],
-                    tool_call_id="test12345",
-                ),
-            ]
-        )
-        with pytest.raises(InvalidRequestException, match="Unexpected content chunk types in tool message"):
-            normalizer.from_chat_completion_request(request)
-
-    def test_pre_v15_aggregates_text_tool_content(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
-        request = mock_chat_completion(
-            messages=[
-                UserMessage(content="query"),
-                AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="fn", arguments="{}"), id="c1")]),
-                ToolMessage(content=[TextChunk(text="hello"), TextChunk(text="world")], tool_call_id="c1"),
-            ],
-        )
-        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(request)
-        tool_msg = parsed.messages[2]
-        assert isinstance(tool_msg, ToolMessage)
-        assert isinstance(tool_msg.content, str)
-        assert tool_msg.content == "hello\n\nworld"
-
-    def test_pre_v15_rejects_audio_in_tool_content(self) -> None:
-        r"""Pre-V15 normalizer raises InvalidRequestException for audio tool content."""
-        normalizer = get_normalizer(TokenizerVersion.v13)
-        request = mock_chat_completion(
-            messages=[
-                UserMessage(content="hi"),
-                AssistantMessage(
-                    tool_calls=[ToolCall(function=FunctionCall(name="fn", arguments="{}"), id="test12345")],
-                ),
-                ToolMessage(
-                    content=[AudioChunk(input_audio=b"fake_audio_data")],
-                    tool_call_id="test12345",
-                ),
-            ]
-        )
-        with pytest.raises(InvalidRequestException, match="Unexpected content chunk types in tool message"):
-            normalizer.from_chat_completion_request(request)
-
-    def test_base_normalizer_json_normalizes_tool_content(self) -> None:
-        r"""Base normalizer (v1-v3) JSON-normalizes tool message content."""
-        normalizer = InstructRequestNormalizer(
-            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
-        )
-        messy_json = '{"key" :  "value" ,  "num": 1}'
-        request = mock_chat_completion(
-            messages=[
-                UserMessage(content="query"),
-                AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="fn", arguments="{}"), id="c1")]),
-                ToolMessage(content=messy_json, tool_call_id="c1"),
-            ],
-        )
-        parsed: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(request)
-        tool_msg = parsed.messages[2]
-        assert isinstance(tool_msg, ToolMessage)
-        assert tool_msg.content == '{"key": "value", "num": 1}'
-
-    def test_v7_skips_json_normalization_on_tool_content(self) -> None:
-        r"""V7+ normalizers do not JSON-normalize tool message content."""
-        normalizer = InstructRequestNormalizerV7(
-            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
-        )
-        messy_json = '{"key" :  "value" ,  "num": 1}'
-        request = mock_chat_completion(
-            messages=[
-                UserMessage(content="query"),
-                AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="fn", arguments="{}"), id="c1")]),
-                ToolMessage(content=messy_json, tool_call_id="c1"),
-            ],
-        )
-        parsed: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(request)
-        tool_msg = parsed.messages[2]
-        assert isinstance(tool_msg, ToolMessage)
-        assert tool_msg.content == messy_json
-
-
-class TestSystemMessageContentChunk:
-    def test_system_message_accepts_audio_chunk(self) -> None:
-        msg = SystemMessage(content=[AudioChunk(input_audio="dGVzdA==")])
-        assert isinstance(msg.content, list)
-        assert len(msg.content) == 1
-        assert isinstance(msg.content[0], AudioChunk)
-
-    def test_system_message_rejects_image_chunk(self) -> None:
-        with pytest.raises(ValidationError):
-            SystemMessage(content=[ImageURLChunk(image_url="https://example.com/image.png")])  # type: ignore[list-item]
-
-    def test_v15_rejects_think_in_system_message(self) -> None:
+    def test_rejects_think_in_system_message(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
         r"""V15 normalizer rejects ThinkChunk in system messages."""
-        normalizer = get_normalizer(
-            TokenizerVersion.v15,
-            model_settings_builder=ModelSettingsBuilder(
-                reasoning_effort=EnumBuilder[ReasoningEffort](
-                    values=list(ReasoningEffort), accepts_none=False, default=None
-                )
-            ),
-        )
         request = mock_chat_completion(
             messages=[
                 SystemMessage(content=[TextChunk(text="hello"), ThinkChunk(thinking="thinking", closed=True)]),
@@ -1375,57 +1381,10 @@ class TestSystemMessageContentChunk:
             ]
         )
         with pytest.raises(InvalidRequestException, match="ThinkChunk"):
-            normalizer.from_chat_completion_request(request)
+            normalizer_v15.from_chat_completion_request(request)
 
-    def test_v7_preserves_audio_in_system_message(self) -> None:
-        r"""V7 normalizer preserves AudioChunk in system messages."""
-        normalizer = InstructRequestNormalizerV7.normalizer()
-        request = mock_chat_completion(
-            messages=[
-                SystemMessage(content=[TextChunk(text="hello"), AudioChunk(input_audio=b"fake_audio_data")]),
-                UserMessage(content="test"),
-            ]
-        )
-        parsed: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(request)
-        system_msg = parsed.messages[0]
-        assert isinstance(system_msg, SystemMessage)
-        assert isinstance(system_msg.content, list)
-        assert len(system_msg.content) == 2
-        assert isinstance(system_msg.content[0], TextChunk)
-        assert isinstance(system_msg.content[1], AudioChunk)
-
-    @pytest.mark.parametrize(
-        "chunk",
-        [
-            pytest.param(AudioChunk(input_audio=b"fake_audio_data"), id="audio"),
-            pytest.param(ThinkChunk(thinking="thinking", closed=True), id="think"),
-        ],
-    )
-    def test_pre_v7_rejects_non_text_in_system_message(self, chunk: AudioChunk | ThinkChunk) -> None:
-        r"""Pre-V7 normalizer rejects non-text chunks in system messages."""
-        normalizer = InstructRequestNormalizer(
-            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
-        )
-        request = mock_chat_completion(
-            messages=[
-                SystemMessage(content=[TextChunk(text="hello"), chunk]),
-                UserMessage(content="query"),
-                AssistantMessage(content="answer"),
-            ]
-        )
-        with pytest.raises(AssertionError):
-            normalizer.from_chat_completion_request(request)
-
-    def test_v15_preserves_audio_in_system_message(self) -> None:
+    def test_preserves_audio_in_system_message(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
         r"""V15 normalizer preserves AudioChunk in system messages."""
-        normalizer = get_normalizer(
-            TokenizerVersion.v15,
-            model_settings_builder=ModelSettingsBuilder(
-                reasoning_effort=EnumBuilder[ReasoningEffort](
-                    values=list(ReasoningEffort), accepts_none=False, default=None
-                )
-            ),
-        )
         request = ChatCompletionRequest[ChatMessage](
             messages=[
                 SystemMessage(content=[TextChunk(text="hello"), AudioChunk(input_audio=b"fake_audio_data")]),
@@ -1433,10 +1392,38 @@ class TestSystemMessageContentChunk:
             ],
             reasoning_effort=ReasoningEffort.high,
         )
-        parsed: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(request)
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
         system_msg = parsed.messages[0]
         assert isinstance(system_msg, SystemMessage)
         assert isinstance(system_msg.content, list)
         assert len(system_msg.content) == 2
         assert isinstance(system_msg.content[0], TextChunk)
         assert isinstance(system_msg.content[1], AudioChunk)
+
+
+@pytest.mark.parametrize(
+    "version,expected_class,model_settings_builder",
+    [
+        (TokenizerVersion.v1, InstructRequestNormalizer, None),
+        (TokenizerVersion.v2, InstructRequestNormalizer, None),
+        (TokenizerVersion.v3, InstructRequestNormalizer, None),
+        (TokenizerVersion.v7, InstructRequestNormalizerV7, None),
+        (TokenizerVersion.v11, InstructRequestNormalizerV7, None),
+        (TokenizerVersion.v13, InstructRequestNormalizerV13, None),
+        (
+            TokenizerVersion.v15,
+            InstructRequestNormalizerV15,
+            ModelSettingsBuilder(
+                reasoning_effort=EnumBuilder[ReasoningEffort](
+                    values=list(ReasoningEffort), accepts_none=False, default=None
+                )
+            ),
+        ),
+    ],
+)
+def test_get_normalizer_version_mapping(
+    version: TokenizerVersion, expected_class: type, model_settings_builder: ModelSettingsBuilder
+) -> None:
+    normalizer = get_normalizer(version, model_settings_builder)
+    assert isinstance(normalizer, expected_class)
+    assert normalizer._model_settings_builder == model_settings_builder
