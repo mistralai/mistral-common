@@ -1349,8 +1349,8 @@ class TestSystemMessageContentChunk:
         with pytest.raises(InvalidRequestException, match="ThinkChunk"):
             normalizer.from_chat_completion_request(request)
 
-    def test_v7_rejects_audio_in_system_content(self) -> None:
-        r"""V7 normalizer rejects AudioChunk in system messages."""
+    def test_v7_preserves_audio_in_system_message(self) -> None:
+        r"""V7 normalizer preserves AudioChunk in system messages."""
         normalizer = InstructRequestNormalizerV7.normalizer()
         request = mock_chat_completion(
             messages=[
@@ -1358,10 +1358,13 @@ class TestSystemMessageContentChunk:
                 UserMessage(content="test"),
             ]
         )
-        with pytest.raises(
-            InvalidRequestException, match="Audio chunks in system messages are only supported from V15"
-        ):
-            normalizer.from_chat_completion_request(request)
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(request)
+        system_msg = parsed.messages[0]
+        assert isinstance(system_msg, SystemMessage)
+        assert isinstance(system_msg.content, list)
+        assert len(system_msg.content) == 2
+        assert isinstance(system_msg.content[0], TextChunk)
+        assert isinstance(system_msg.content[1], AudioChunk)
 
     def test_v15_preserves_audio_in_system_message(self) -> None:
         r"""V15 normalizer preserves AudioChunk in system messages."""
