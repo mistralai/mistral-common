@@ -32,6 +32,11 @@ def _are_think_chunks(chunks: Sequence[TextChunk | ThinkChunk]) -> TypeGuard[lis
     return all(isinstance(c, ThinkChunk) for c in chunks)
 
 
+def _are_text_chunks(chunks: Sequence[TextChunk | ThinkChunk]) -> TypeGuard[list[TextChunk]]:
+    r"""Narrow a chunk list to TextChunk list."""
+    return all(isinstance(c, TextChunk) for c in chunks)
+
+
 class ReasoningFieldFormat(str, Enum):
     r"""How to serialize leading `ThinkChunk` in `AssistantMessage.to_openai()`.
 
@@ -242,8 +247,8 @@ class AssistantMessage(BaseMessage):
                 out_dict["content"] = self._content_to_openai(self.content)
             case ReasoningFieldFormat.reasoning | ReasoningFieldFormat.reasoning_content:
                 think_chunks, content_chunks = self.content[: last_think_idx + 1], self.content[last_think_idx + 1 :]
-                if not _are_think_chunks(think_chunks):
-                    raise RuntimeError("Expected only ThinkChunks in the leading portion.")
+                if not _are_think_chunks(think_chunks) or not _are_text_chunks(content_chunks):
+                    raise RuntimeError("Impossible, only think or content chunks should have been present.")
                 if len(think_chunks) > 0:
                     out_dict[reasoning_field_format.value] = "\n".join(tc.thinking for tc in think_chunks)
 

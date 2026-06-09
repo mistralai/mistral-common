@@ -1203,6 +1203,35 @@ class TestToolMessageContentChunk:
         assert isinstance(tool_msg.content, list)
         assert tool_msg.content == [image_chunk]
 
+    def test_v15_sorts_multimodal_tool_messages(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
+        image_chunk_1 = ImageURLChunk(image_url="https://example.com/img1.png")
+        image_chunk_2 = ImageURLChunk(image_url="https://example.com/img2.png")
+        request = ChatCompletionRequest(  # type: ignore[type-var]
+            messages=[
+                UserMessage(content="query"),
+                AssistantMessage(
+                    tool_calls=[
+                        ToolCall(function=FunctionCall(name="fn1", arguments="{}"), id="c1"),
+                        ToolCall(function=FunctionCall(name="fn2", arguments="{}"), id="c2"),
+                    ]
+                ),
+                ToolMessage(content=[image_chunk_2], tool_call_id="c2"),
+                ToolMessage(content=[image_chunk_1], tool_call_id="c1"),
+            ],
+            reasoning_effort=ReasoningEffort.high,
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
+
+        tool_msg_1 = parsed.messages[2]
+        assert isinstance(tool_msg_1, ToolMessage)
+        assert tool_msg_1.tool_call_id == "c1"
+        assert tool_msg_1.content == [image_chunk_1]
+
+        tool_msg_2 = parsed.messages[3]
+        assert isinstance(tool_msg_2, ToolMessage)
+        assert tool_msg_2.tool_call_id == "c2"
+        assert tool_msg_2.content == [image_chunk_2]
+
     def test_pre_v15_rejects_non_text_tool_content(self) -> None:
         r"""Pre-V15 normalizer raises InvalidRequestException for non-text tool content."""
         normalizer = get_normalizer(TokenizerVersion.v13)

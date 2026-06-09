@@ -588,17 +588,21 @@ class InstructRequestNormalizerV13(InstructRequestNormalizerV7):
             UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest[UATS, Tool], None
         )
 
-    def _aggregate_tool_messages(self, messages: list[UATS], latest_call_ids: list[str]) -> list[ToolMessageType]:
-        tool_messages: list[ToolMessageType] = super()._aggregate_tool_messages(messages, latest_call_ids)
+    @staticmethod
+    def _inplace_sort_tool_messages(tool_messages: list[ToolMessageType], latest_call_ids: list[str]) -> None:
         id_to_tool_call_idx = {call_id: idx for idx, call_id in enumerate(latest_call_ids)}
         id_to_tool_result_idx = {message.tool_call_id: idx for idx, message in enumerate(tool_messages)}
         # First order by tool call idx and then by tool result idx
-        tool_messages.sort(
+        return tool_messages.sort(
             key=lambda msg: (
                 id_to_tool_call_idx.get(msg.tool_call_id or "null", float("inf")),
                 id_to_tool_result_idx[msg.tool_call_id],
             ),
         )
+
+    def _aggregate_tool_messages(self, messages: list[UATS], latest_call_ids: list[str]) -> list[ToolMessageType]:
+        tool_messages: list[ToolMessageType] = super()._aggregate_tool_messages(messages, latest_call_ids)
+        self._inplace_sort_tool_messages(tool_messages=tool_messages, latest_call_ids=latest_call_ids)
         return tool_messages
 
 
@@ -622,15 +626,7 @@ class InstructRequestNormalizerV15(InstructRequestNormalizerV13):
             tool_messages.append(
                 self._tool_message_class(content=content, tool_call_id=message.tool_call_id, name=message.name)
             )
-        # Reorder tool messages based on the tool call order (from V13).
-        id_to_tool_call_idx = {call_id: idx for idx, call_id in enumerate(latest_call_ids)}
-        id_to_tool_result_idx = {message.tool_call_id: idx for idx, message in enumerate(tool_messages)}
-        tool_messages.sort(
-            key=lambda msg: (
-                id_to_tool_call_idx.get(msg.tool_call_id or "null", float("inf")),
-                id_to_tool_result_idx[msg.tool_call_id],
-            ),
-        )
+        self._inplace_sort_tool_messages(tool_messages=tool_messages, latest_call_ids=latest_call_ids)
         return tool_messages
 
     def _narrow_system_content(self, content: list[ContentChunk] | str) -> str | list[ContentChunk]:

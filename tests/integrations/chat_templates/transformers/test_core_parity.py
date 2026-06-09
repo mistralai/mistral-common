@@ -227,10 +227,6 @@ class TestTransformersMistralCommonParity:
                 desc_parts = ["text"]
                 if config.think:
                     desc_parts.append("thinking")
-                if is_v15_plus and config.image:
-                    desc_parts.append("image")
-                if is_v15_plus and config.audio:
-                    desc_parts.append("audio")
                 if len(desc_parts) == 1:
                     chunks = "text"
                 else:
