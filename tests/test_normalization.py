@@ -100,9 +100,7 @@ class TestChatCompletionRequestNormalization:
 
         parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
 
-        first_message = parsed_request.messages[0]
-        assert isinstance(first_message, UserMessage)
-        assert first_message.content == ""
+        assert parsed_request.messages[0] == UserMessage(content="")
         assert parsed_request.system_prompt == "S"
 
     def test_assistant_content_with_tool_calls(self, normalizer: InstructRequestNormalizer) -> None:
@@ -132,9 +130,7 @@ class TestChatCompletionRequestNormalization:
 
         assert len(parsed_request.messages) == 3  # 1 user message added, system message removed
 
-        first_message = parsed_request.messages[0]
-        assert isinstance(first_message, UserMessage)
-        assert first_message.content == ""
+        assert parsed_request.messages[0] == UserMessage(content="")
         assert parsed_request.system_prompt == "S"
 
     def check_merge(
@@ -219,9 +215,7 @@ class TestChatCompletionRequestNormalization:
 
         parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
 
-        first_message = parsed_request.messages[0]
-        assert isinstance(first_message, UserMessage)
-        assert first_message.content == "foo\n\nchunk\n\nfoo\n\nchunk"
+        assert parsed_request.messages[0] == UserMessage(content="foo\n\nchunk\n\nfoo\n\nchunk")
 
     def test_many_chunks_in_user_message(self, normalizer: InstructRequestNormalizer) -> None:
         chat_completion_request = mock_chat_completion(
@@ -237,9 +231,7 @@ class TestChatCompletionRequestNormalization:
             ],
         )
         parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
-        first_message = parsed_request.messages[0]
-        assert isinstance(first_message, UserMessage)
-        assert first_message.content == "foo\n\nchunk1\n\nchunk2\n\nchunk3"
+        assert parsed_request.messages[0] == UserMessage(content="foo\n\nchunk1\n\nchunk2\n\nchunk3")
 
     def test_ignore_middle_empty_text_chunks(self, normalizer: InstructRequestNormalizer) -> None:
         chat_completion_request = mock_chat_completion(
@@ -261,12 +253,8 @@ class TestChatCompletionRequestNormalization:
             ]
         )
         parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
-        first_message = parsed_request.messages[0]
-        assert isinstance(first_message, UserMessage)
-        assert first_message.content == "U\n\nV"
-        second_message = parsed_request.messages[1]
-        assert isinstance(second_message, AssistantMessage)
-        assert second_message.content == "A\n\nB"
+        assert parsed_request.messages[0] == UserMessage(content="U\n\nV")
+        assert parsed_request.messages[1] == AssistantMessage(content="A\n\nB")
 
     def test_safety_prompt_aggregated(self, normalizer: InstructRequestNormalizer) -> None:
         chat_completion_request = ChatCompletionRequest[ChatMessage](
@@ -280,9 +268,7 @@ class TestChatCompletionRequestNormalization:
         )
 
         parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
-        first_message = parsed_request.messages[0]
-        assert isinstance(first_message, UserMessage)
-        assert first_message.content == "user"
+        assert parsed_request.messages[0] == UserMessage(content="user")
         assert parsed_request.system_prompt == "system"
 
     def test_normalize_tools(self, normalizer: InstructRequestNormalizer) -> None:
@@ -410,9 +396,7 @@ class TestChatCompletionRequestNormalization:
             ],
         )
         parsed: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(request)
-        tool_msg = parsed.messages[2]
-        assert isinstance(tool_msg, ToolMessage)
-        assert tool_msg.content == '{"key": "value", "num": 1}'
+        assert parsed.messages[2] == ToolMessage(content='{"key": "value", "num": 1}', tool_call_id="c1")
 
     def test_rejects_think_in_assistant(self, normalizer: InstructRequestNormalizer) -> None:
         r"""Pre-v11 normalizer rejects ThinkChunk in assistant messages."""
@@ -444,14 +428,8 @@ class TestChatCompletionRequestNormalizationV7:
 
         parsed_request: InstructRequest = normalizer_v7.from_chat_completion_request(chat_completion_request)
 
-        first_message = parsed_request.messages[0]
-        assert isinstance(first_message, SystemMessage)
-        assert first_message.content == "S"
-
-        second_message = parsed_request.messages[1]
-        assert isinstance(second_message, AssistantMessage)
-        assert second_message.content == "A"
-
+        assert parsed_request.messages[0] == SystemMessage(content="S")
+        assert parsed_request.messages[1] == AssistantMessage(content="A")
         assert parsed_request.system_prompt is None
 
     def test_assistant_assistant_system_v7(self, normalizer_v7: InstructRequestNormalizer) -> None:
@@ -468,13 +446,8 @@ class TestChatCompletionRequestNormalizationV7:
 
         assert len(parsed_request.messages) == 2
 
-        first_message = parsed_request.messages[0]
-        assert isinstance(first_message, AssistantMessage)
-        assert first_message.content == "A"
-
-        second_message = parsed_request.messages[1]
-        assert isinstance(second_message, SystemMessage)
-        assert second_message.content == "S"
+        assert parsed_request.messages[0] == AssistantMessage(content="A")
+        assert parsed_request.messages[1] == SystemMessage(content="S")
 
     def test_assistant_content_with_tool_calls(self, normalizer_v7: InstructRequestNormalizer) -> None:
         chat_completion_request = mock_chat_completion(
@@ -487,10 +460,9 @@ class TestChatCompletionRequestNormalizationV7:
         )
         normalized_chat_req = normalizer_v7.from_chat_completion_request(chat_completion_request)
 
-        assert normalized_chat_req.messages[0].content == "A", normalized_chat_req.messages[0].content
-        assert len(normalized_chat_req.messages[0].tool_calls) == 1, normalized_chat_req.messages[0].tool_calls
-        assert normalized_chat_req.messages[0].tool_calls[0].function.name == "tool1", (
-            normalized_chat_req.messages[0].tool_calls[0].function.name
+        assert normalized_chat_req.messages[0] == AssistantMessage(
+            content="A",
+            tool_calls=[ToolCall(function=FunctionCall(name="tool1", arguments='{"input": "11"}'))],
         )
 
     def test_assistant_content_with_more_tool_calls(self, normalizer_v7: InstructRequestNormalizer) -> None:
@@ -563,13 +535,8 @@ class TestChatCompletionRequestNormalizationV7:
         parsed_request: InstructRequest[ChatMessage, Tool] = normalizer_v7.from_chat_completion_request(
             chat_completion_request
         )
-        first_message = parsed_request.messages[0]
-        assert isinstance(first_message, UserMessage)
-        assert first_message.content == ""
-        second_message = parsed_request.messages[1]
-        assert isinstance(second_message, AssistantMessage)
-        # Empty string content is passed through directly
-        assert second_message.content == ""
+        assert parsed_request.messages[0] == UserMessage(content="")
+        assert parsed_request.messages[1] == AssistantMessage(content="")
 
     def test_complex_user_aggregation(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
         """Complex multi-user-message aggregation with mixed str, chunks, empty, and non-text chunks."""
@@ -596,13 +563,13 @@ class TestChatCompletionRequestNormalizationV7:
         parsed_request: InstructRequest[ChatMessage, Tool] = normalizer_v7.from_chat_completion_request(
             chat_completion_request
         )
-        first_message = parsed_request.messages[0]
-        assert isinstance(first_message, UserMessage)
-        assert first_message.content == [
-            TextChunk(text="A\n\nB\n\nC\n\nD"),
-            ImageURLChunk(image_url="E"),
-            TextChunk(text="G\n\nH"),
-        ]
+        assert parsed_request.messages[0] == UserMessage(
+            content=[
+                TextChunk(text="A\n\nB\n\nC\n\nD"),
+                ImageURLChunk(image_url="E"),
+                TextChunk(text="G\n\nH"),
+            ]
+        )
 
     def test_complex_assistant_aggregation(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
         """Complex multi-assistant-message aggregation with mixed str, chunks, and empty content."""
@@ -624,9 +591,7 @@ class TestChatCompletionRequestNormalizationV7:
         parsed_request: InstructRequest[ChatMessage, Tool] = normalizer_v7.from_chat_completion_request(
             chat_completion_request
         )
-        first_message = parsed_request.messages[0]
-        assert isinstance(first_message, AssistantMessage)
-        assert first_message.content == "A\n\nB\n\nC\n\nD"
+        assert parsed_request.messages[0] == AssistantMessage(content="A\n\nB\n\nC\n\nD")
 
     def test_rejects_think_in_assistant(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
         r"""V7 normalizer rejects ThinkChunk in assistant messages (pre-v11)."""
@@ -648,9 +613,7 @@ class TestChatCompletionRequestNormalizationV7:
             ],
         )
         parsed: InstructRequest[ChatMessage, Tool] = normalizer_v7.from_chat_completion_request(request)
-        assistant_msg = parsed.messages[1]
-        assert isinstance(assistant_msg, AssistantMessage)
-        assert assistant_msg.content == "plain text"
+        assert parsed.messages[1] == AssistantMessage(content="plain text")
 
     def test_skips_json_normalization_on_tool_content(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
         r"""V7+ normalizers do not JSON-normalize tool message content."""
@@ -663,9 +626,7 @@ class TestChatCompletionRequestNormalizationV7:
             ],
         )
         parsed: InstructRequest[ChatMessage, Tool] = normalizer_v7.from_chat_completion_request(request)
-        tool_msg = parsed.messages[2]
-        assert isinstance(tool_msg, ToolMessage)
-        assert tool_msg.content == messy_json
+        assert parsed.messages[2] == ToolMessage(content=messy_json, tool_call_id="c1")
 
     def test_preserves_audio_in_system_message(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
         r"""V7 normalizer preserves AudioChunk in system messages."""
@@ -676,12 +637,12 @@ class TestChatCompletionRequestNormalizationV7:
             ]
         )
         parsed: InstructRequest[ChatMessage, Tool] = normalizer_v7.from_chat_completion_request(request)
-        system_msg = parsed.messages[0]
-        assert isinstance(system_msg, SystemMessage)
-        assert isinstance(system_msg.content, list)
-        assert len(system_msg.content) == 2
-        assert isinstance(system_msg.content[0], TextChunk)
-        assert isinstance(system_msg.content[1], AudioChunk)
+        assert parsed.messages[0] == SystemMessage(
+            content=[
+                TextChunk(text="hello"),
+                AudioChunk(input_audio=b"fake_audio_data"),
+            ]
+        )
 
 
 class TestFineTuningNormalizer:
@@ -1036,10 +997,9 @@ class TestChatCompletionRequestNormalizationV13:
             ],
         )
         parsed: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(request)
-        assistant_msg = parsed.messages[1]
-        assert isinstance(assistant_msg, AssistantMessage)
-        assert isinstance(assistant_msg.content, list)
-        assert len(assistant_msg.content) == 2
+        assert parsed.messages[1] == AssistantMessage(
+            content=[ThinkChunk(thinking="reasoning"), TextChunk(text="answer")]
+        )
 
     def test_accepts_string_content(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
         r"""V13 normalizer accepts string content in assistant messages."""
@@ -1050,9 +1010,7 @@ class TestChatCompletionRequestNormalizationV13:
             ],
         )
         parsed: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(request)
-        assistant_msg = parsed.messages[1]
-        assert isinstance(assistant_msg, AssistantMessage)
-        assert assistant_msg.content == "plain text"
+        assert parsed.messages[1] == AssistantMessage(content="plain text")
 
     def test_assistant_think_chunk_aggregation(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
         r"""V13 normalizer preserves ThinkChunks in assistant message aggregation."""
@@ -1072,13 +1030,13 @@ class TestChatCompletionRequestNormalizationV13:
         parsed: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(
             chat_completion_request
         )
-        first_message = parsed.messages[0]
-        assert isinstance(first_message, AssistantMessage)
-        assert first_message.content == [
-            TextChunk(text="A\n\nB"),
-            ThinkChunk(thinking="T"),
-            TextChunk(text="C\n\nD"),
-        ]
+        assert parsed.messages[0] == AssistantMessage(
+            content=[
+                TextChunk(text="A\n\nB"),
+                ThinkChunk(thinking="T"),
+                TextChunk(text="C\n\nD"),
+            ]
+        )
 
     def test_rejects_non_text_tool_content(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
         r"""V13 normalizer raises InvalidRequestException for non-text tool content."""
@@ -1107,10 +1065,7 @@ class TestChatCompletionRequestNormalizationV13:
             ],
         )
         parsed: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(request)
-        tool_msg = parsed.messages[2]
-        assert isinstance(tool_msg, ToolMessage)
-        assert isinstance(tool_msg.content, str)
-        assert tool_msg.content == "hello\n\nworld"
+        assert parsed.messages[2] == ToolMessage(content="hello\n\nworld", tool_call_id="c1")
 
     def test_rejects_audio_in_tool_content(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
         r"""V13 normalizer raises InvalidRequestException for audio tool content."""
@@ -1179,12 +1134,8 @@ class TestChatCompletionRequestNormalizationV15:
             reasoning_effort=ReasoningEffort.high,
         )
         parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
-        user_msg = parsed.messages[0]
-        assert isinstance(user_msg, UserMessage)
-        assert user_msg.content == "AB"
-        assistant_msg = parsed.messages[1]
-        assert isinstance(assistant_msg, AssistantMessage)
-        assert assistant_msg.content == "CD"
+        assert parsed.messages[0] == UserMessage(content="AB")
+        assert parsed.messages[1] == AssistantMessage(content="CD")
 
     def test_v15_inter_message_join_still_uses_separator(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
         r"""V15 still joins text across different messages with '\n\n'."""
@@ -1197,9 +1148,7 @@ class TestChatCompletionRequestNormalizationV15:
             reasoning_effort=ReasoningEffort.high,
         )
         parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
-        user_msg = parsed.messages[0]
-        assert isinstance(user_msg, UserMessage)
-        assert user_msg.content == "First\n\nSecond"
+        assert parsed.messages[0] == UserMessage(content="First\n\nSecond")
 
     def test_v15_mixed_intra_and_inter_message(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
         r"""V15 combines intra-message ('') and inter-message ('\n\n') joining."""
@@ -1212,9 +1161,7 @@ class TestChatCompletionRequestNormalizationV15:
             reasoning_effort=ReasoningEffort.high,
         )
         parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
-        user_msg = parsed.messages[0]
-        assert isinstance(user_msg, UserMessage)
-        assert user_msg.content == "AB\n\nCD"
+        assert parsed.messages[0] == UserMessage(content="AB\n\nCD")
 
     def test_v15_mixed_intra_and_inter_assistant_messages(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
         r"""V15 combines intra-message ('') and inter-message ('\n\n') joining for assistant messages."""
@@ -1227,9 +1174,7 @@ class TestChatCompletionRequestNormalizationV15:
             reasoning_effort=ReasoningEffort.high,
         )
         parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
-        assistant_msg = parsed.messages[1]
-        assert isinstance(assistant_msg, AssistantMessage)
-        assert assistant_msg.content == "AB\n\nCD"
+        assert parsed.messages[1] == AssistantMessage(content="AB\n\nCD")
 
     def test_v15_tool_message_text_chunks_joined_without_separator(
         self, normalizer_v15: InstructRequestNormalizerV15
@@ -1244,9 +1189,7 @@ class TestChatCompletionRequestNormalizationV15:
             reasoning_effort=ReasoningEffort.high,
         )
         parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
-        tool_msg = parsed.messages[2]
-        assert isinstance(tool_msg, ToolMessage)
-        assert tool_msg.content == "XY"
+        assert parsed.messages[2] == ToolMessage(content="XY", tool_call_id="c1")
 
     def test_accepts_text_and_think_chunks(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
         r"""V15 normalizer accepts TextChunk and ThinkChunk in assistant messages."""
@@ -1258,10 +1201,9 @@ class TestChatCompletionRequestNormalizationV15:
             reasoning_effort=ReasoningEffort.high,
         )
         parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
-        assistant_msg = parsed.messages[1]
-        assert isinstance(assistant_msg, AssistantMessage)
-        assert isinstance(assistant_msg.content, list)
-        assert len(assistant_msg.content) == 2
+        assert parsed.messages[1] == AssistantMessage(
+            content=[ThinkChunk(thinking="reasoning"), TextChunk(text="answer")]
+        )
 
     def test_accepts_string_content(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
         r"""V15 normalizer accepts string content in assistant messages."""
@@ -1273,9 +1215,7 @@ class TestChatCompletionRequestNormalizationV15:
             reasoning_effort=ReasoningEffort.high,
         )
         parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
-        assistant_msg = parsed.messages[1]
-        assert isinstance(assistant_msg, AssistantMessage)
-        assert assistant_msg.content == "plain text"
+        assert parsed.messages[1] == AssistantMessage(content="plain text")
 
     def test_preserves_non_text_tool_content(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
         r"""V15 normalizer preserves non-text chunks in tool messages."""
@@ -1289,10 +1229,7 @@ class TestChatCompletionRequestNormalizationV15:
             reasoning_effort=ReasoningEffort.high,
         )
         parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
-        tool_msg = parsed.messages[2]
-        assert isinstance(tool_msg, ToolMessage)
-        assert isinstance(tool_msg.content, list)
-        assert tool_msg.content == [image_chunk]
+        assert parsed.messages[2] == ToolMessage(content=[image_chunk], tool_call_id="c1")
 
     def test_sorts_multimodal_tool_messages(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
         r"""V15 normalizer sorts multimodal tool messages by tool call order."""
@@ -1314,15 +1251,8 @@ class TestChatCompletionRequestNormalizationV15:
         )
         parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
 
-        tool_msg_1 = parsed.messages[2]
-        assert isinstance(tool_msg_1, ToolMessage)
-        assert tool_msg_1.tool_call_id == "c1"
-        assert tool_msg_1.content == [image_chunk_1]
-
-        tool_msg_2 = parsed.messages[3]
-        assert isinstance(tool_msg_2, ToolMessage)
-        assert tool_msg_2.tool_call_id == "c2"
-        assert tool_msg_2.content == [image_chunk_2]
+        assert parsed.messages[2] == ToolMessage(content=[image_chunk_1], tool_call_id="c1")
+        assert parsed.messages[3] == ToolMessage(content=[image_chunk_2], tool_call_id="c2")
 
     def test_rejects_think_in_system_message(self, normalizer_v15: InstructRequestNormalizerV15) -> None:
         r"""V15 normalizer rejects ThinkChunk in system messages."""
@@ -1345,12 +1275,12 @@ class TestChatCompletionRequestNormalizationV15:
             reasoning_effort=ReasoningEffort.high,
         )
         parsed: InstructRequest[ChatMessage, Tool] = normalizer_v15.from_chat_completion_request(request)
-        system_msg = parsed.messages[0]
-        assert isinstance(system_msg, SystemMessage)
-        assert isinstance(system_msg.content, list)
-        assert len(system_msg.content) == 2
-        assert isinstance(system_msg.content[0], TextChunk)
-        assert isinstance(system_msg.content[1], AudioChunk)
+        assert parsed.messages[0] == SystemMessage(
+            content=[
+                TextChunk(text="hello"),
+                AudioChunk(input_audio=b"fake_audio_data"),
+            ]
+        )
 
 
 @pytest.mark.parametrize(
