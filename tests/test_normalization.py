@@ -1012,8 +1012,10 @@ class TestChatCompletionRequestNormalizationV13:
         parsed: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(request)
         assert parsed.messages[1] == AssistantMessage(content="plain text")
 
-    def test_assistant_think_chunk_aggregation(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
-        r"""V13 normalizer preserves ThinkChunks in assistant message aggregation."""
+    def test_assistant_think_chunk_inter_message_aggregation(
+        self, normalizer_v13: InstructRequestNormalizerV13
+    ) -> None:
+        r"""V13 normalizer preserves ThinkChunks across multiple assistant messages."""
         chat_completion_request = mock_chat_completion(
             messages=[
                 AssistantMessage(content="A"),
@@ -1035,6 +1037,36 @@ class TestChatCompletionRequestNormalizationV13:
                 TextChunk(text="A\n\nB"),
                 ThinkChunk(thinking="T"),
                 TextChunk(text="C\n\nD"),
+            ]
+        )
+
+    def test_assistant_think_chunk_intra_message_aggregation(
+        self, normalizer_v13: InstructRequestNormalizerV13
+    ) -> None:
+        r"""V13 normalizer coalesces TextChunks and preserves multiple ThinkChunks within a single message."""
+        chat_completion_request = mock_chat_completion(
+            messages=[
+                UserMessage(content="u"),
+                AssistantMessage(
+                    content=[
+                        ThinkChunk(thinking="t1"),
+                        ThinkChunk(thinking="t2"),
+                        TextChunk(text="a1"),
+                        TextChunk(text="a2"),
+                        TextChunk(text="a3"),
+                    ]
+                ),
+                UserMessage(content="u"),
+            ]
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(
+            chat_completion_request
+        )
+        assert parsed.messages[1] == AssistantMessage(
+            content=[
+                ThinkChunk(thinking="t1"),
+                ThinkChunk(thinking="t2"),
+                TextChunk(text="a1\n\na2\n\na3"),
             ]
         )
 
