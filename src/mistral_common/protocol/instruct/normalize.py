@@ -284,20 +284,21 @@ class InstructRequestNormalizer(
         )
 
     def _narrow_assistant_content(self, content: list[ContentChunk] | str) -> str | list[AssistantContentChunk]:
-        r"""Validate and narrow content chunks for assistant messages.
+        r"""Validate content chunks for assistant messages.
 
-        Only TextChunk and ThinkChunk are allowed.
+        Pre-v11 only allows text content in assistant messages.
+        V11+ overrides to also accept ThinkChunk.
 
         Args:
             content: The aggregated content chunks.
 
         Returns:
-            The validated and narrowed content.
+            The validated content.
 
         Raises:
             InvalidRequestException: If unsupported chunk types are found.
         """
-        if isinstance(content, str) or _is_assistant_content(content):
+        if isinstance(content, str):
             return content
         raise InvalidRequestException(
             f"Unexpected content chunk types in assistant message: {[type(c).__name__ for c in content]}"
@@ -613,6 +614,14 @@ class InstructRequestNormalizerV13(InstructRequestNormalizerV7):
                 id_to_tool_call_idx.get(msg.tool_call_id or "null", float("inf")),
                 id_to_tool_result_idx[msg.tool_call_id],
             ),
+        )
+
+    def _narrow_assistant_content(self, content: list[ContentChunk] | str) -> str | list[AssistantContentChunk]:
+        r"""V11+ accepts TextChunk and ThinkChunk in assistant messages."""
+        if isinstance(content, str) or _is_assistant_content(content):
+            return content
+        raise InvalidRequestException(
+            f"Unexpected content chunk types in assistant message: {[type(c).__name__ for c in content]}"
         )
 
     def _aggregate_tool_messages(self, messages: list[UATS], latest_call_ids: list[str]) -> list[ToolMessageType]:

@@ -1,7 +1,6 @@
 import json
 
 import pytest
-from pydantic import ValidationError
 
 from mistral_common.exceptions import InvalidRequestException
 from mistral_common.protocol.instruct.chunk import (
@@ -165,41 +164,6 @@ class TestChatCompletionRequestNormalization:
             assert isinstance(x, (UserMessage, AssistantMessage))
             assert x.content == expected
 
-    def check_merge_chunks(
-        self,
-        roles: list[str],
-        expected_roles: list[str],
-        expected_content: list[list[ContentChunk] | str],
-        normalizer: InstructRequestNormalizer,
-    ) -> None:
-        letter_to_cls: dict[str, ChatMessage] = {
-            "s": SystemMessage(content="s"),
-            "u": UserMessage(content="u"),
-            "a": AssistantMessage(content="a"),
-            "a2": AssistantMessage(
-                content=[
-                    ThinkChunk(thinking="t1"),
-                    ThinkChunk(thinking="t2"),
-                    TextChunk(text="a1"),
-                    TextChunk(text="a2"),
-                    TextChunk(text="a3"),
-                ]
-            ),
-        }
-
-        chat_completion_request = mock_chat_completion(
-            messages=[letter_to_cls[r] for r in roles],
-        )
-        parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
-        assert len(parsed_request.messages) == len(expected_roles)
-        assert [message.role for message in parsed_request.messages] == [
-            letter_to_cls[role].role for role in expected_roles
-        ]
-        assert len(expected_content) == len(parsed_request.messages)
-        for x, expected in zip(parsed_request.messages, expected_content):
-            assert isinstance(x, (UserMessage, AssistantMessage))
-            assert x.content == expected
-
     def test_message_aggregation(self, normalizer: InstructRequestNormalizer) -> None:
         self.check_merge(["s", "s", "s", "u"], ["u"], ["u"], normalizer)
         self.check_merge(["s", "s", "s", "u", "u"], ["u"], ["u\n\nu"], normalizer)
@@ -216,21 +180,6 @@ class TestChatCompletionRequestNormalization:
             ["s", "a", "u"],
             ["u", "a", "u"],
             ["", "a", "u"],
-            normalizer,
-        )
-
-        self.check_merge_chunks(
-            ["u", "a2", "u"],
-            ["u", "a", "u"],
-            [
-                "u",
-                [
-                    ThinkChunk(thinking="t1"),
-                    ThinkChunk(thinking="t2"),
-                    TextChunk(text="a1\n\na2\n\na3"),
-                ],
-                "u",
-            ],
             normalizer,
         )
 
@@ -426,32 +375,6 @@ class TestChatCompletionRequestNormalization:
         result: InstructRequest[ChatMessage, Tool] = normalizer.from_chat_completion_request(request)
         assert result.continue_final_message is True
 
-    def test_pydantic_rejects_image_in_assistant(self) -> None:
-        r"""Pydantic rejects ImageURLChunk in assistant message content."""
-        with pytest.raises(ValidationError, match="union_tag_invalid"):
-            AssistantMessage(
-                content=[TextChunk(text="answer"), ImageURLChunk(image_url="https://example.com/img.png")]  # type: ignore[list-item]
-            )
-
-    def test_pydantic_rejects_audio_in_assistant(self) -> None:
-        r"""Pydantic rejects AudioChunk in assistant message content."""
-        with pytest.raises(ValidationError, match="union_tag_invalid"):
-            AssistantMessage(
-                content=[TextChunk(text="answer"), AudioChunk(input_audio=b"fake_audio_data")]  # type: ignore[list-item]
-            )
-
-    def test_system_message_accepts_audio_chunk(self) -> None:
-        r"""SystemMessage Pydantic model accepts AudioChunk in content."""
-        msg = SystemMessage(content=[AudioChunk(input_audio="dGVzdA==")])
-        assert isinstance(msg.content, list)
-        assert len(msg.content) == 1
-        assert isinstance(msg.content[0], AudioChunk)
-
-    def test_system_message_rejects_image_chunk(self) -> None:
-        r"""SystemMessage Pydantic model rejects ImageURLChunk in content."""
-        with pytest.raises(ValidationError, match="union_tag_invalid"):
-            SystemMessage(content=[ImageURLChunk(image_url="https://example.com/image.png")])  # type: ignore[list-item]
-
     def test_rejects_audio_in_system_message(self, normalizer: InstructRequestNormalizer) -> None:
         r"""Pre-V7 normalizer rejects AudioChunk in system messages."""
         request = mock_chat_completion(
@@ -490,6 +413,17 @@ class TestChatCompletionRequestNormalization:
         tool_msg = parsed.messages[2]
         assert isinstance(tool_msg, ToolMessage)
         assert tool_msg.content == '{"key": "value", "num": 1}'
+
+    def test_rejects_think_in_assistant(self, normalizer: InstructRequestNormalizer) -> None:
+        r"""Pre-v11 normalizer rejects ThinkChunk in assistant messages."""
+        request = mock_chat_completion(
+            messages=[
+                UserMessage(content="query"),
+                AssistantMessage(content=[ThinkChunk(thinking="reasoning"), TextChunk(text="answer")]),
+            ]
+        )
+        with pytest.raises(InvalidRequestException, match="Unexpected content chunk types in assistant message"):
+            normalizer.from_chat_completion_request(request)
 
 
 class TestChatCompletionRequestNormalizationV7:
@@ -681,7 +615,6 @@ class TestChatCompletionRequestNormalizationV7:
                 AssistantMessage(content=[TextChunk(text="")]),
                 AssistantMessage(
                     content=[
-                        ThinkChunk(thinking="T"),
                         TextChunk(text="C"),
                         TextChunk(text="D"),
                     ]
@@ -693,25 +626,18 @@ class TestChatCompletionRequestNormalizationV7:
         )
         first_message = parsed_request.messages[0]
         assert isinstance(first_message, AssistantMessage)
-        assert first_message.content == [
-            TextChunk(text="A\n\nB"),
-            ThinkChunk(thinking="T"),
-            TextChunk(text="C\n\nD"),
-        ]
+        assert first_message.content == "A\n\nB\n\nC\n\nD"
 
-    def test_accepts_text_and_think_chunks(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
-        r"""V7 normalizer accepts TextChunk and ThinkChunk in assistant messages."""
+    def test_rejects_think_in_assistant(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
+        r"""V7 normalizer rejects ThinkChunk in assistant messages (pre-v11)."""
         request = mock_chat_completion(
             messages=[
                 UserMessage(content="query"),
                 AssistantMessage(content=[ThinkChunk(thinking="reasoning"), TextChunk(text="answer")]),
             ],
         )
-        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v7.from_chat_completion_request(request)
-        assistant_msg = parsed.messages[1]
-        assert isinstance(assistant_msg, AssistantMessage)
-        assert isinstance(assistant_msg.content, list)
-        assert len(assistant_msg.content) == 2
+        with pytest.raises(InvalidRequestException, match="Unexpected content chunk types in assistant message"):
+            normalizer_v7.from_chat_completion_request(request)
 
     def test_accepts_string_content(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
         r"""V7 normalizer accepts string content in assistant messages."""
@@ -1127,6 +1053,32 @@ class TestChatCompletionRequestNormalizationV13:
         assistant_msg = parsed.messages[1]
         assert isinstance(assistant_msg, AssistantMessage)
         assert assistant_msg.content == "plain text"
+
+    def test_assistant_think_chunk_aggregation(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
+        r"""V13 normalizer preserves ThinkChunks in assistant message aggregation."""
+        chat_completion_request = mock_chat_completion(
+            messages=[
+                AssistantMessage(content="A"),
+                AssistantMessage(content=[TextChunk(text="B")]),
+                AssistantMessage(
+                    content=[
+                        ThinkChunk(thinking="T"),
+                        TextChunk(text="C"),
+                        TextChunk(text="D"),
+                    ]
+                ),
+            ]
+        )
+        parsed: InstructRequest[ChatMessage, Tool] = normalizer_v13.from_chat_completion_request(
+            chat_completion_request
+        )
+        first_message = parsed.messages[0]
+        assert isinstance(first_message, AssistantMessage)
+        assert first_message.content == [
+            TextChunk(text="A\n\nB"),
+            ThinkChunk(thinking="T"),
+            TextChunk(text="C\n\nD"),
+        ]
 
     def test_rejects_non_text_tool_content(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
         r"""V13 normalizer raises InvalidRequestException for non-text tool content."""
