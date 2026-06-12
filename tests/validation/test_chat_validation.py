@@ -11,6 +11,7 @@ from mistral_common.exceptions import (
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURLChunk,
+    ImageURLChunk,
     TextChunk,
     ThinkChunk,
 )
@@ -656,8 +657,6 @@ class TestBaseValidatorContentChunks:
             base_validator.validate_messages(messages, continue_final_message=False)
 
     def test_rejects_image_in_tool(self, base_validator: MistralRequestValidator) -> None:
-        from mistral_common.protocol.instruct.chunk import ImageURLChunk
-
         messages = [
             UserMessage(content="hi"),
             AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="fn", arguments="{}"), id="test12345")]),
@@ -670,8 +669,6 @@ class TestBaseValidatorContentChunks:
             base_validator.validate_messages(messages, continue_final_message=False)
 
     def test_rejects_image_in_user(self, base_validator: MistralRequestValidator) -> None:
-        from mistral_common.protocol.instruct.chunk import ImageURLChunk
-
         messages = [UserMessage(content=[ImageURLChunk(image_url="data:image/png;base64,iVBORw0")])]
         with pytest.raises(InvalidUserMessageException, match="Unexpected content chunk types in user message"):
             base_validator.validate_messages(messages, continue_final_message=False)
@@ -679,6 +676,21 @@ class TestBaseValidatorContentChunks:
     def test_rejects_audio_in_user(self, base_validator: MistralRequestValidator) -> None:
         messages = [UserMessage(content=[AudioChunk(input_audio=b"fake")])]
         with pytest.raises(InvalidUserMessageException, match="Unexpected content chunk types in user message"):
+            base_validator.validate_messages(messages, continue_final_message=False)
+
+    def test_reports_sorted_unique_invalid_types(self, base_validator: MistralRequestValidator) -> None:
+        messages = [
+            UserMessage(
+                content=[
+                    AudioChunk(input_audio=b"fake"),
+                    ImageURLChunk(image_url="data:image/png;base64,iVBORw0"),
+                ]
+            )
+        ]
+        with pytest.raises(
+            InvalidUserMessageException,
+            match=r"Unexpected content chunk types in user message: \['AudioChunk', 'ImageURLChunk'\]",
+        ):
             base_validator.validate_messages(messages, continue_final_message=False)
 
     def test_accepts_multiple_text_chunks(self, base_validator: MistralRequestValidator) -> None:
@@ -693,8 +705,6 @@ class TestBaseValidatorContentChunks:
 
 class TestVersionedValidatorContentChunks:
     def test_v3_allows_image_rejects_audio_in_user(self) -> None:
-        from mistral_common.protocol.instruct.chunk import ImageURLChunk
-
         validator = MistralRequestValidatorV3(ValidationMode.serving)
         ok = [UserMessage(content=[ImageURLChunk(image_url="data:image/png;base64,iVBORw0")])]
         validator.validate_messages(ok, continue_final_message=False)
@@ -703,8 +713,6 @@ class TestVersionedValidatorContentChunks:
             validator.validate_messages(bad, continue_final_message=False)
 
     def test_v5_allows_image_and_audio_in_user(self) -> None:
-        from mistral_common.protocol.instruct.chunk import ImageURLChunk
-
         validator = MistralRequestValidatorV5(ValidationMode.serving)
         messages = [
             UserMessage(
@@ -731,7 +739,9 @@ class TestVersionedValidatorContentChunks:
             AssistantMessage(content=[ThinkChunk(thinking="r"), TextChunk(text="a")]),
             UserMessage(content="next"),
         ]
-        with pytest.raises(InvalidAssistantMessageException, match="Unexpected content chunk types"):
+        with pytest.raises(
+            InvalidAssistantMessageException, match="Unexpected content chunk types in assistant message"
+        ):
             validator.validate_messages(messages, continue_final_message=False)
 
     def test_v13_allows_think_in_assistant(self) -> None:
@@ -744,8 +754,6 @@ class TestVersionedValidatorContentChunks:
         validator.validate_messages(messages, continue_final_message=False)
 
     def test_v13_still_rejects_image_in_tool(self) -> None:
-        from mistral_common.protocol.instruct.chunk import ImageURLChunk
-
         validator = MistralRequestValidatorV13(ValidationMode.serving)
         messages = [
             UserMessage(content="hi"),
@@ -773,8 +781,6 @@ class TestVersionedValidatorContentChunks:
         validator.validate_messages(messages, continue_final_message=False)
 
     def test_v15_allows_image_in_tool(self) -> None:
-        from mistral_common.protocol.instruct.chunk import ImageURLChunk
-
         validator = MistralRequestValidatorV15(ValidationMode.serving)
         messages = [
             UserMessage(content="hi"),
