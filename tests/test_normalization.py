@@ -461,8 +461,11 @@ class TestChatCompletionRequestNormalization:
             ]
         )
         parsed = normalizer.from_chat_completion_request(request)
-        assert parsed.messages[-1] == AssistantMessage(
-            content=[ThinkChunk(thinking="reasoning"), TextChunk(text="answer")]
+        assert parsed == InstructRequest[ChatMessage, Tool](
+            messages=[
+                UserMessage(content="query"),
+                AssistantMessage(content=[ThinkChunk(thinking="reasoning"), TextChunk(text="answer")]),
+            ],
         )
 
 
@@ -671,8 +674,11 @@ class TestChatCompletionRequestNormalizationV7:
             ]
         )
         parsed = normalizer_v7.from_chat_completion_request(request)
-        assert parsed.messages[-1] == AssistantMessage(
-            content=[ThinkChunk(thinking="reasoning"), TextChunk(text="answer")]
+        assert parsed == InstructRequest[ChatMessage, Tool](
+            messages=[
+                UserMessage(content="query"),
+                AssistantMessage(content=[ThinkChunk(thinking="reasoning"), TextChunk(text="answer")]),
+            ],
         )
 
     def test_accepts_string_content(self, normalizer_v7: InstructRequestNormalizerV7) -> None:

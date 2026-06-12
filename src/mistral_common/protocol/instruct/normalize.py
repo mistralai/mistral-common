@@ -230,13 +230,15 @@ class InstructRequestNormalizer(
     def _aggregate_tool_messages(self, messages: list[UATS], latest_call_ids: list[str]) -> list[ToolMessageType]:
         """Normalize tool messages without aggregation across messages.
 
-        Each tool message's content is validated and JSON-normalized.
+        Each tool message's content is JSON-normalized; chunk types are guaranteed by the validator.
         """
         tool_messages: list[ToolMessageType] = []
         for message in messages:
             assert isinstance(message, self._tool_message_class), "Expected tool message"
             content = self._aggregate_content_chunks([message])
-            assert isinstance(content, str), f"Unexpected content chunk types in tool message: {content}"
+            assert isinstance(content, str), (
+                f"Unexpected content chunk types in tool message: {[type(c).__name__ for c in content]}"
+            )
             normalized_content = self._normalize_json_content(content)
 
             tool_messages.append(
@@ -423,14 +425,16 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
     def _aggregate_tool_messages(self, messages: list[UATS], latest_call_ids: list[str]) -> list[ToolMessageType]:
         """Normalize tool messages without JSON normalization.
 
-        V7+ normalizers skip JSON content normalization for tool messages but still
-        reject non-text content chunks.
+        V7+ normalizers skip JSON content normalization for tool messages (chunk-type validation is
+        handled by the validator).
         """
         tool_messages: list[ToolMessageType] = []
         for message in messages:
             assert isinstance(message, self._tool_message_class), "Expected tool message"
             content = self._aggregate_content_chunks([message])
-            assert isinstance(content, str), f"Unexpected content chunk types in tool message: {content}"
+            assert isinstance(content, str), (
+                f"Unexpected content chunk types in tool message: {[type(c).__name__ for c in content]}"
+            )
             tool_messages.append(
                 self._tool_message_class(content=content, tool_call_id=message.tool_call_id, name=message.name)
             )

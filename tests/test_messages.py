@@ -10,6 +10,7 @@ from mistral_common.protocol.instruct.chunk import (
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     SystemMessage,
+    ToolMessage,
     UserMessage,
 )
 
@@ -39,3 +40,6 @@ class TestMessageContentChunkUnions:
 
     def test_user_accepts_image(self) -> None:
         UserMessage(content=[ImageURLChunk(image_url="data:image/png;base64,iVBORw0")])
+
+    def test_tool_accepts_arbitrary_chunks(self) -> None:
+        ToolMessage(content=[ImageURLChunk(image_url="data:image/png;base64,iVBORw0")], tool_call_id="c1")
