@@ -406,30 +406,6 @@ class TestChatCompletionRequestNormalization:
             continue_final_message=True,
         )
 
-    def test_rejects_audio_in_system_message(self, normalizer: InstructRequestNormalizer) -> None:
-        r"""Pre-V7 normalizer rejects AudioChunk in system messages."""
-        request = mock_chat_completion(
-            messages=[
-                SystemMessage(content=[TextChunk(text="hello"), AudioChunk(input_audio=b"fake_audio_data")]),
-                UserMessage(content="query"),
-                AssistantMessage(content="answer"),
-            ]
-        )
-        with pytest.raises(AssertionError, match="AudioChunk"):
-            normalizer.from_chat_completion_request(request)
-
-    def test_rejects_think_in_system_message(self, normalizer: InstructRequestNormalizer) -> None:
-        r"""Pre-V7 normalizer rejects ThinkChunk in system messages."""
-        request = mock_chat_completion(
-            messages=[
-                SystemMessage(content=[TextChunk(text="hello"), ThinkChunk(thinking="thinking", closed=True)]),
-                UserMessage(content="query"),
-                AssistantMessage(content="answer"),
-            ]
-        )
-        with pytest.raises(AssertionError, match="ThinkChunk"):
-            normalizer.from_chat_completion_request(request)
-
     def test_json_normalizes_tool_content(self, normalizer: InstructRequestNormalizer) -> None:
         r"""Base normalizer (v1-v3) JSON-normalizes tool message content."""
         messy_json = '{"key" :  "value" ,  "num": 1}'
@@ -449,22 +425,6 @@ class TestChatCompletionRequestNormalization:
                     tool_calls=[ToolCall(function=FunctionCall(name="fn", arguments="{}"), id="c1")],
                 ),
                 ToolMessage(content='{"key": "value", "num": 1}', tool_call_id="c1"),
-            ],
-        )
-
-    def test_passes_think_in_assistant_through(self, normalizer: InstructRequestNormalizer) -> None:
-        r"""Normalizer no longer gates version rules; the validator rejects pre-v11 think."""
-        request = mock_chat_completion(
-            messages=[
-                UserMessage(content="query"),
-                AssistantMessage(content=[ThinkChunk(thinking="reasoning"), TextChunk(text="answer")]),
-            ]
-        )
-        parsed = normalizer.from_chat_completion_request(request)
-        assert parsed == InstructRequest[ChatMessage, Tool](
-            messages=[
-                UserMessage(content="query"),
-                AssistantMessage(content=[ThinkChunk(thinking="reasoning"), TextChunk(text="answer")]),
             ],
         )
 
@@ -663,22 +623,6 @@ class TestChatCompletionRequestNormalizationV7:
         )
         assert parsed_request == InstructRequest[ChatMessage, Tool](
             messages=[AssistantMessage(content="A\n\nB\n\nC\n\nD")],
-        )
-
-    def test_passes_think_in_assistant_through(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
-        r"""Normalizer no longer gates version rules; the validator rejects pre-v11 think."""
-        request = mock_chat_completion(
-            messages=[
-                UserMessage(content="query"),
-                AssistantMessage(content=[ThinkChunk(thinking="reasoning"), TextChunk(text="answer")]),
-            ]
-        )
-        parsed = normalizer_v7.from_chat_completion_request(request)
-        assert parsed == InstructRequest[ChatMessage, Tool](
-            messages=[
-                UserMessage(content="query"),
-                AssistantMessage(content=[ThinkChunk(thinking="reasoning"), TextChunk(text="answer")]),
-            ],
         )
 
     def test_accepts_string_content(self, normalizer_v7: InstructRequestNormalizerV7) -> None:
