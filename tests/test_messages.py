@@ -1,45 +1,44 @@
 import pytest
 from pydantic import ValidationError
 
-from mistral_common.protocol.instruct.chunk import (
-    AudioChunk,
-    ImageURLChunk,
-    TextChunk,
-    ThinkChunk,
-)
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     SystemMessage,
     ToolMessage,
     UserMessage,
 )
+from tests.fixtures.chunks import get_content_chunks as _chunks
 
 
 class TestMessageContentChunkUnions:
-    def test_assistant_rejects_image(self) -> None:
-        with pytest.raises(ValidationError):
-            AssistantMessage(content=[ImageURLChunk(image_url="data:image/png;base64,iVBORw0")])
+    r"""Pydantic-level (version-independent) content-chunk unions for each message role."""
 
-    def test_assistant_rejects_audio(self) -> None:
-        with pytest.raises(ValidationError):
-            AssistantMessage(content=[AudioChunk(input_audio=b"fake")])
-
-    def test_assistant_accepts_text_and_think(self) -> None:
-        AssistantMessage(content=[ThinkChunk(thinking="r"), TextChunk(text="a")])
-
-    def test_system_rejects_image(self) -> None:
-        with pytest.raises(ValidationError):
-            SystemMessage(content=[ImageURLChunk(image_url="data:image/png;base64,iVBORw0")])
-
-    def test_system_accepts_audio(self) -> None:
-        SystemMessage(content=[TextChunk(text="x"), AudioChunk(input_audio=b"fake")])
+    def test_user_allows_text_image_audio(self) -> None:
+        UserMessage(content=_chunks(("text", "image", "image_url", "audio", "audio_url")))
 
     def test_user_rejects_think(self) -> None:
-        with pytest.raises(ValidationError):
-            UserMessage(content=[ThinkChunk(thinking="r")])
+        for name in ("think",):
+            with pytest.raises(ValidationError):
+                UserMessage(content=_chunks((name,)))
 
-    def test_user_accepts_image(self) -> None:
-        UserMessage(content=[ImageURLChunk(image_url="data:image/png;base64,iVBORw0")])
+    def test_assistant_allows_text_and_think(self) -> None:
+        AssistantMessage(content=_chunks(("text", "think")))
 
-    def test_tool_accepts_arbitrary_chunks(self) -> None:
-        ToolMessage(content=[ImageURLChunk(image_url="data:image/png;base64,iVBORw0")], tool_call_id="c1")
+    def test_assistant_rejects_image_and_audio(self) -> None:
+        for name in ("image", "image_url", "audio", "audio_url"):
+            with pytest.raises(ValidationError):
+                AssistantMessage(content=_chunks((name,)))
+
+    def test_system_allows_text_audio_think(self) -> None:
+        SystemMessage(content=_chunks(("text", "audio", "think")))
+
+    def test_system_rejects_image_and_audio_url(self) -> None:
+        for name in ("image", "image_url", "audio_url"):
+            with pytest.raises(ValidationError):
+                SystemMessage(content=_chunks((name,)))
+
+    def test_tool_allows_all_chunk_types(self) -> None:
+        ToolMessage(
+            content=_chunks(("text", "image", "image_url", "audio", "audio_url", "think")),
+            tool_call_id="c1",
+        )
