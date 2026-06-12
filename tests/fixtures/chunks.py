@@ -1,3 +1,5 @@
+from typing import Any
+
 from PIL import Image
 
 from mistral_common.protocol.instruct.chunk import (
@@ -30,6 +32,11 @@ def get_content_chunk(name: str) -> ContentChunk:
     return chunks[name]
 
 
-def get_content_chunks(names: tuple[str, ...]) -> list[ContentChunk]:
-    r"""Return a list of content chunks for the requested type names."""
+def get_content_chunks(names: tuple[str, ...]) -> list[Any]:
+    r"""Return a list of content chunks for the requested type names.
+
+    The element type is intentionally `Any` so the chunks can be fed to any message role
+    constructor (including deliberately invalid combinations) in tests, leaving the runtime
+    Pydantic validation to enforce the actual rules.
+    """
     return [get_content_chunk(name) for name in names]

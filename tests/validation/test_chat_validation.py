@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from mistral_common.exceptions import (
@@ -11,7 +13,6 @@ from mistral_common.exceptions import (
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURLChunk,
-    ContentChunk,
 )
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
@@ -38,19 +39,19 @@ from tests.fixtures.chunks import get_content_chunks
 _Messages = list[UserMessage | AssistantMessage | SystemMessage | ToolMessage]
 
 
-def _user_convo(content: "str | list[ContentChunk]") -> _Messages:
+def _user_convo(content: "str | list[Any]") -> _Messages:
     return [UserMessage(content=content)]
 
 
-def _assistant_convo(content: "str | list[ContentChunk]") -> _Messages:
+def _assistant_convo(content: "str | list[Any]") -> _Messages:
     return [UserMessage(content="hi"), AssistantMessage(content=content), UserMessage(content="next")]
 
 
-def _system_convo(content: "str | list[ContentChunk]") -> _Messages:
+def _system_convo(content: "str | list[Any]") -> _Messages:
     return [SystemMessage(content=content), UserMessage(content="hi")]
 
 
-def _tool_convo(content: "str | list[ContentChunk]") -> _Messages:
+def _tool_convo(content: "str | list[Any]") -> _Messages:
     return [
         UserMessage(content="hi"),
         AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="fn", arguments="{}"), id="test12345")]),
