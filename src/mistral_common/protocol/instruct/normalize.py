@@ -1,20 +1,15 @@
 import json
 import warnings
-from typing import Generic, Sequence
+from typing import Generic, Sequence, cast
 
-from typing_extensions import TypeGuard, assert_never
+from typing_extensions import assert_never
 
 from mistral_common.exceptions import InvalidRequestException
 from mistral_common.protocol.instruct.chunk import (
     AssistantContentChunk,
-    AudioChunk,
-    AudioURLChunk,
     ContentChunk,
-    ImageChunk,
-    ImageURLChunk,
     SystemContentChunk,
     TextChunk,
-    ThinkChunk,
     UserContentChunk,
 )
 from mistral_common.protocol.instruct.messages import (
@@ -36,27 +31,6 @@ from mistral_common.tokens.tokenizers.base import InstructRequestType, Tokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
 
 _DEFAULT_JOIN_STR = "\n\n"
-
-
-def _is_user_content(
-    chunks: list[ContentChunk],
-) -> TypeGuard[list[UserContentChunk]]:
-    r"""Narrow ContentChunk list to user-compatible types."""
-    return all(isinstance(c, (TextChunk, ImageChunk, ImageURLChunk, AudioChunk, AudioURLChunk)) for c in chunks)
-
-
-def _is_assistant_content(
-    chunks: list[ContentChunk],
-) -> TypeGuard[list[AssistantContentChunk]]:
-    r"""Narrow ContentChunk list to assistant-compatible types."""
-    return all(isinstance(c, (TextChunk, ThinkChunk)) for c in chunks)
-
-
-def _is_system_content(
-    chunks: list[ContentChunk],
-) -> TypeGuard[list[SystemContentChunk]]:
-    r"""Narrow ContentChunk list to system-compatible types."""
-    return all(isinstance(c, (TextChunk, AudioChunk, ThinkChunk)) for c in chunks)
 
 
 def _aggregate_content_chunks_impl(
@@ -262,10 +236,7 @@ class InstructRequestNormalizer(
         for message in messages:
             assert isinstance(message, self._tool_message_class), "Expected tool message"
             content = self._aggregate_content_chunks([message])
-            if not isinstance(content, str):
-                raise InvalidRequestException(
-                    f"Unexpected content chunk types in tool message: {[type(c).__name__ for c in content]}"
-                )
+            assert isinstance(content, str), f"Unexpected content chunk types in tool message: {content}"
             normalized_content = self._normalize_json_content(content)
 
             tool_messages.append(
@@ -281,27 +252,6 @@ class InstructRequestNormalizer(
         return ToolCall(
             function=FunctionCall(name=tool_call.function.name, arguments=normalized_function_aruments),
             id=tool_call.id,
-        )
-
-    def _narrow_assistant_content(self, content: list[ContentChunk] | str) -> str | list[AssistantContentChunk]:
-        r"""Validate content chunks for assistant messages.
-
-        Pre-v11 only allows text content in assistant messages.
-        V11+ overrides to also accept ThinkChunk.
-
-        Args:
-            content: The aggregated content chunks.
-
-        Returns:
-            The validated content.
-
-        Raises:
-            InvalidRequestException: If unsupported chunk types are found.
-        """
-        if isinstance(content, str):
-            return content
-        raise InvalidRequestException(
-            f"Unexpected content chunk types in assistant message: {[type(c).__name__ for c in content]}"
         )
 
     def _aggregate_system_messages(self, messages: list[UATS]) -> list[SystemMessageType]:
@@ -334,10 +284,8 @@ class InstructRequestNormalizer(
                     )
                 weight = message.weight
 
-        validated_content = self._narrow_assistant_content(content)
-
         aggregated_message = self._assistant_message_class(
-            content=validated_content,
+            content=cast("str | list[AssistantContentChunk]", content),
             tool_calls=tool_calls or None,
             prefix=prefix,
         )
@@ -349,11 +297,7 @@ class InstructRequestNormalizer(
     def _aggregate_user_messages(self, messages: list[UATS]) -> UserMessageType:
         """Coalesce neighboring blocks of ContentChunks in user messages."""
         content = self._aggregate_content_chunks(messages)
-        if isinstance(content, str) or _is_user_content(content):
-            return self._user_message_class(content=content)
-        raise InvalidRequestException(
-            f"Unexpected content chunk types in user message: {[type(c).__name__ for c in content]}"
-        )
+        return self._user_message_class(content=cast("str | list[UserContentChunk]", content))
 
     def _aggregate_role(self, messages: list[UATS], role: Roles | None, latest_call_ids: list[str]) -> Sequence[UATS]:
         if role == Roles.tool:
@@ -476,27 +420,6 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
             UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest[UATS, Tool], None
         )
 
-    def _narrow_system_content(self, content: list[ContentChunk] | str) -> str | list[SystemContentChunk]:
-        r"""Validate content chunks for system messages.
-
-        V7+ accepts all SystemContentChunk types (text, audio, thinking).
-        V15 overrides to reject ThinkChunk.
-
-        Args:
-            content: The aggregated content chunks.
-
-        Returns:
-            The validated content.
-
-        Raises:
-            InvalidRequestException: If unsupported chunk types are found.
-        """
-        if isinstance(content, str) or _is_system_content(content):
-            return content
-        raise InvalidRequestException(
-            f"Unexpected content chunk types in system message: {[type(c).__name__ for c in content]}"
-        )
-
     def _aggregate_tool_messages(self, messages: list[UATS], latest_call_ids: list[str]) -> list[ToolMessageType]:
         """Normalize tool messages without JSON normalization.
 
@@ -507,10 +430,7 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
         for message in messages:
             assert isinstance(message, self._tool_message_class), "Expected tool message"
             content = self._aggregate_content_chunks([message])
-            if not isinstance(content, str):
-                raise InvalidRequestException(
-                    f"Unexpected content chunk types in tool message: {[type(c).__name__ for c in content]}"
-                )
+            assert isinstance(content, str), f"Unexpected content chunk types in tool message: {content}"
             tool_messages.append(
                 self._tool_message_class(content=content, tool_call_id=message.tool_call_id, name=message.name)
             )
@@ -521,8 +441,7 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
         for message in messages:
             if isinstance(message, self._system_message_class):
                 content = self._aggregate_content_chunks([message])
-                validated = self._narrow_system_content(content)
-                aggregated.append(self._system_message_class(content=validated))
+                aggregated.append(self._system_message_class(content=cast("str | list[SystemContentChunk]", content)))
         return aggregated
 
     def _aggregate_role(self, messages: list[UATS], role: Roles | None, latest_call_ids: list[str]) -> Sequence[UATS]:
@@ -616,14 +535,6 @@ class InstructRequestNormalizerV13(InstructRequestNormalizerV7):
             ),
         )
 
-    def _narrow_assistant_content(self, content: list[ContentChunk] | str) -> str | list[AssistantContentChunk]:
-        r"""V11+ accepts TextChunk and ThinkChunk in assistant messages."""
-        if isinstance(content, str) or _is_assistant_content(content):
-            return content
-        raise InvalidRequestException(
-            f"Unexpected content chunk types in assistant message: {[type(c).__name__ for c in content]}"
-        )
-
     def _aggregate_tool_messages(self, messages: list[UATS], latest_call_ids: list[str]) -> list[ToolMessageType]:
         tool_messages: list[ToolMessageType] = super()._aggregate_tool_messages(messages, latest_call_ids)
         self._inplace_sort_tool_messages(tool_messages=tool_messages, latest_call_ids=latest_call_ids)
@@ -642,7 +553,7 @@ class InstructRequestNormalizerV15(InstructRequestNormalizerV13):
     _chunk_join_str: str = ""
 
     def _aggregate_tool_messages(self, messages: list[UATS], latest_call_ids: list[str]) -> list[ToolMessageType]:
-        r"""V15 accepts all ContentChunk types in tool messages."""
+        r"""V15 keeps all aggregated tool content (validation handled by the validator)."""
         tool_messages: list[ToolMessageType] = []
         for message in messages:
             assert isinstance(message, self._tool_message_class), "Expected tool message"
@@ -652,15 +563,6 @@ class InstructRequestNormalizerV15(InstructRequestNormalizerV13):
             )
         self._inplace_sort_tool_messages(tool_messages=tool_messages, latest_call_ids=latest_call_ids)
         return tool_messages
-
-    def _narrow_system_content(self, content: list[ContentChunk] | str) -> str | list[SystemContentChunk]:
-        r"""V15 system messages allow TextChunk and AudioChunk but reject ThinkChunk."""
-        validated = super()._narrow_system_content(content)
-        if isinstance(validated, str):
-            return validated
-        if any(isinstance(c, ThinkChunk) for c in validated):
-            raise InvalidRequestException("ThinkChunk in system message is not supported for V15")
-        return validated
 
     @staticmethod
     def normalizer(model_settings_builder: ModelSettingsBuilder | None = None) -> "InstructRequestNormalizerV15":
