@@ -152,10 +152,6 @@ def _build_model_settings_builder(
     """
     if allowed_reasoning_effort is None:
         return ModelSettingsBuilder.none()
-    if not allowed_reasoning_effort:
-        return ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder[ReasoningEffort](values=[], accepts_none=True, default=None)
-        )
     return ModelSettingsBuilder(
         reasoning_effort=EnumBuilder[ReasoningEffort](
             values=[ReasoningEffort(v) for v in allowed_reasoning_effort],
