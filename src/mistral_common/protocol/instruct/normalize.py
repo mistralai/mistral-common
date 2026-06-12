@@ -286,7 +286,9 @@ class InstructRequestNormalizer(
                     )
                 weight = message.weight
 
-        assert is_assistant_content(content)
+        assert is_assistant_content(content), (
+            f"Unexpected content chunk types in assistant message: {[type(c).__name__ for c in content]}"
+        )
         aggregated_message = self._assistant_message_class(
             content=content,
             tool_calls=tool_calls or None,
@@ -300,7 +302,9 @@ class InstructRequestNormalizer(
     def _aggregate_user_messages(self, messages: list[UATS]) -> UserMessageType:
         """Coalesce neighboring blocks of ContentChunks in user messages."""
         content = self._aggregate_content_chunks(messages)
-        assert is_user_content(content)
+        assert is_user_content(content), (
+            f"Unexpected content chunk types in user message: {[type(c).__name__ for c in content]}"
+        )
         return self._user_message_class(content=content)
 
     def _aggregate_role(self, messages: list[UATS], role: Roles | None, latest_call_ids: list[str]) -> Sequence[UATS]:
@@ -447,7 +451,9 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
         for message in messages:
             if isinstance(message, self._system_message_class):
                 content = self._aggregate_content_chunks([message])
-                assert is_system_content(content)
+                assert is_system_content(content), (
+                    f"Unexpected content chunk types in system message: {[type(c).__name__ for c in content]}"
+                )
                 aggregated.append(self._system_message_class(content=content))
         return aggregated
 
