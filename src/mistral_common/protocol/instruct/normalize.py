@@ -1,16 +1,16 @@
 import json
 import warnings
-from typing import Generic, Sequence, cast
+from typing import Generic, Sequence
 
 from typing_extensions import assert_never
 
 from mistral_common.exceptions import InvalidRequestException
 from mistral_common.protocol.instruct.chunk import (
-    AssistantContentChunk,
     ContentChunk,
-    SystemContentChunk,
     TextChunk,
-    UserContentChunk,
+    is_assistant_content,
+    is_system_content,
+    is_user_content,
 )
 from mistral_common.protocol.instruct.messages import (
     UATS,
@@ -286,8 +286,9 @@ class InstructRequestNormalizer(
                     )
                 weight = message.weight
 
+        assert is_assistant_content(content)
         aggregated_message = self._assistant_message_class(
-            content=cast("str | list[AssistantContentChunk]", content),
+            content=content,
             tool_calls=tool_calls or None,
             prefix=prefix,
         )
@@ -299,7 +300,8 @@ class InstructRequestNormalizer(
     def _aggregate_user_messages(self, messages: list[UATS]) -> UserMessageType:
         """Coalesce neighboring blocks of ContentChunks in user messages."""
         content = self._aggregate_content_chunks(messages)
-        return self._user_message_class(content=cast("str | list[UserContentChunk]", content))
+        assert is_user_content(content)
+        return self._user_message_class(content=content)
 
     def _aggregate_role(self, messages: list[UATS], role: Roles | None, latest_call_ids: list[str]) -> Sequence[UATS]:
         if role == Roles.tool:
@@ -445,7 +447,8 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
         for message in messages:
             if isinstance(message, self._system_message_class):
                 content = self._aggregate_content_chunks([message])
-                aggregated.append(self._system_message_class(content=cast("str | list[SystemContentChunk]", content)))
+                assert is_system_content(content)
+                aggregated.append(self._system_message_class(content=content))
         return aggregated
 
     def _aggregate_role(self, messages: list[UATS], role: Roles | None, latest_call_ids: list[str]) -> Sequence[UATS]:
