@@ -1,7 +1,18 @@
+import base64
+from collections.abc import Callable
+from io import BytesIO
+
 import pytest
+from PIL import Image
 
 from mistral_common.exceptions import InvalidRequestException, TokenizerException
-from mistral_common.protocol.instruct.chunk import ThinkChunk
+from mistral_common.protocol.instruct.chunk import (
+    AudioChunk,
+    AudioURLChunk,
+    ImageURLChunk,
+    TextChunk,
+    ThinkChunk,
+)
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
@@ -18,11 +29,14 @@ from mistral_common.protocol.instruct.request import (
 )
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.protocol.instruct.validator import ValidationMode, get_validator
-from mistral_common.tokens.tokenizers.base import TokenizerVersion
+from mistral_common.tokens.tokenizers.audio import AudioConfig, AudioEncoder, AudioSpectrogramConfig, SpecialAudioIDs
+from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
+from mistral_common.tokens.tokenizers.image import ImageConfig, ImageEncoder, SpecialImageIDs
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV15
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
+from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
 from tests.test_tekken import get_special_tokens, quick_vocab
 
 EXPECTED_TEXT_V15: str = (
@@ -47,6 +61,44 @@ EXPECTED_TEXT_V15_NO_TOOLS: str = (
     r"[TOOL_RESULTS]R1[/TOOL_RESULTS]"
     r"[TOOL_RESULTS]R2[/TOOL_RESULTS]A2</s>"
     r"[INST]U2[/INST]"
+)
+
+EXPECTED_TEXT_TOOL_AUDIO: str = (
+    r"<s>"
+    r'[AVAILABLE_TOOLS][{"type": "function", "function": {"name": "fn",'
+    r' "description": "test", "parameters": {}}}]'
+    r'[/AVAILABLE_TOOLS][MODEL_SETTINGS]{"reasoning_effort": "none"}[/MODEL_SETTINGS]'
+    r"[INST]Use the tool[/INST]"
+    r"[TOOL_CALLS]fn[ARGS]{}</s>"
+    r"[TOOL_RESULTS]result[BEGIN_AUDIO][AUDIO][AUDIO][/TOOL_RESULTS]"
+)
+
+EXPECTED_TEXT_TOOL_IMAGE: str = (
+    r"<s>"
+    r'[AVAILABLE_TOOLS][{"type": "function", "function": {"name": "fn",'
+    r' "description": "test", "parameters": {}}}]'
+    r'[/AVAILABLE_TOOLS][MODEL_SETTINGS]{"reasoning_effort": "none"}[/MODEL_SETTINGS]'
+    r"[INST]Use the tool[/INST]"
+    r"[TOOL_CALLS]fn[ARGS]{}</s>"
+    r"[TOOL_RESULTS]result[IMG][IMG_END][/TOOL_RESULTS]"
+)
+
+EXPECTED_TEXT_SYSTEM_AUDIO: str = (
+    r"<s>[SYSTEM_PROMPT]System with content[BEGIN_AUDIO][AUDIO][AUDIO][/SYSTEM_PROMPT]"
+    r'[MODEL_SETTINGS]{"reasoning_effort": "none"}[/MODEL_SETTINGS]'
+    r"[INST]Hello[/INST]"
+)
+
+EXPECTED_TEXT_USER_AUDIO: str = (
+    r"<s>"
+    r'[MODEL_SETTINGS]{"reasoning_effort": "none"}[/MODEL_SETTINGS]'
+    r"[INST]Here is content[BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
+)
+
+EXPECTED_TEXT_USER_IMAGE: str = (
+    r"<s>"
+    r'[MODEL_SETTINGS]{"reasoning_effort": "none"}[/MODEL_SETTINGS]'
+    r"[INST][IMG][IMG_END]Here is content[/INST]"
 )
 
 
@@ -84,6 +136,103 @@ def get_v15_mistral_tokenizer(
     validator = get_validator(TokenizerVersion.v15, mode=ValidationMode.test)
     return MistralTokenizer(
         InstructTokenizerV15(tekkenizer),
+        validator=validator,
+        request_normalizer=request_normalizer,
+    )
+
+
+def _build_model_settings_builder(
+    allowed_reasoning_effort: tuple[str, ...] | None,
+) -> ModelSettingsBuilder:
+    """Build a ModelSettingsBuilder from allowed reasoning effort values.
+
+    When `allowed_reasoning_effort` is `None`, returns `ModelSettingsBuilder.none()`
+    (all fields ignored). This matches the behavior of `Tekkenizer.from_file` when no
+    `model_settings_builder` key is present in the JSON.
+    """
+    if allowed_reasoning_effort is None:
+        return ModelSettingsBuilder.none()
+    return ModelSettingsBuilder(
+        reasoning_effort=EnumBuilder[ReasoningEffort](
+            values=[ReasoningEffort(v) for v in allowed_reasoning_effort],
+            accepts_none=True,
+            default=ReasoningEffort(allowed_reasoning_effort[0]) if allowed_reasoning_effort else None,
+        )
+    )
+
+
+def _get_dummy_image_url_chunk() -> ImageURLChunk:
+    r"""Build a small base64-encoded image URL chunk for testing."""
+    img = Image.new("RGB", (4, 4), "red")
+    buf = BytesIO()
+    img.save(buf, "PNG")
+    data_url = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"
+    return ImageURLChunk(image_url=data_url)
+
+
+def get_v15_mistral_tokenizer_with_audio() -> MistralTokenizer:
+    r"""Build a V15 MistralTokenizer with audio encoder."""
+    builder = _build_model_settings_builder(tuple(ReasoningEffort))
+    tekkenizer = Tekkenizer(
+        quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
+        special_tokens=get_special_tokens(TokenizerVersion.v15, add_audio=True),
+        pattern=r".+",
+        vocab_size=256 + 100,
+        num_special_tokens=100,
+        version=TokenizerVersion.v15,
+        model_settings_builder=builder,
+    )
+    audio_config = AudioConfig(
+        sampling_rate=24_000,
+        frame_rate=12.5,
+        encoding_config=AudioSpectrogramConfig(
+            num_mel_bins=128,
+            hop_length=160,
+            window_size=400,
+        ),
+    )
+    special_audio_ids = SpecialAudioIDs(
+        audio=tekkenizer.get_special_token(SpecialTokens.audio.value),
+        begin_audio=tekkenizer.get_special_token(SpecialTokens.begin_audio.value),
+        streaming_pad=None,
+        text_to_audio=None,
+        audio_to_text=None,
+    )
+    audio_encoder = AudioEncoder(audio_config, special_audio_ids)
+    instruct_tokenizer = InstructTokenizerV15(tekkenizer, audio_encoder=audio_encoder)
+    request_normalizer = get_normalizer(TokenizerVersion.v15, tekkenizer.model_settings_builder)
+    validator = get_validator(TokenizerVersion.v15, mode=ValidationMode.test)
+    return MistralTokenizer(
+        instruct_tokenizer=instruct_tokenizer,
+        validator=validator,
+        request_normalizer=request_normalizer,
+    )
+
+
+def get_v15_mistral_tokenizer_with_image() -> MistralTokenizer:
+    r"""Build a V15 MistralTokenizer with image encoder."""
+    builder = _build_model_settings_builder(tuple(ReasoningEffort))
+    tekkenizer = Tekkenizer(
+        quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
+        special_tokens=get_special_tokens(TokenizerVersion.v15, add_think=True),
+        pattern=r".+",
+        vocab_size=256 + 100,
+        num_special_tokens=100,
+        version=TokenizerVersion.v15,
+        model_settings_builder=builder,
+    )
+    image_config = ImageConfig(image_patch_size=16, max_image_size=1024)
+    special_image_ids = SpecialImageIDs(
+        img=tekkenizer.get_special_token(SpecialTokens.img.value),
+        img_break=tekkenizer.get_special_token(SpecialTokens.img_break.value),
+        img_end=tekkenizer.get_special_token(SpecialTokens.img_end.value),
+    )
+    image_encoder = ImageEncoder(image_config, special_image_ids)
+    instruct_tokenizer = InstructTokenizerV15(tekkenizer, image_encoder=image_encoder)
+    request_normalizer = get_normalizer(TokenizerVersion.v15, tekkenizer.model_settings_builder)
+    validator = get_validator(TokenizerVersion.v15, mode=ValidationMode.test)
+    return MistralTokenizer(
+        instruct_tokenizer=instruct_tokenizer,
         validator=validator,
         request_normalizer=request_normalizer,
     )
@@ -139,6 +288,61 @@ def messages() -> list[ChatMessage]:
     ]
 
 
+@pytest.fixture(scope="session")
+def audio_chunk() -> AudioChunk:
+    return get_dummy_audio_chunk()
+
+
+# Multimodal content chunks and their corresponding tokenizer factories for parametrized tests.
+_TOOL_MULTIMODAL_PARAMS = [
+    pytest.param(
+        get_dummy_audio_chunk(), 1, 0, get_v15_mistral_tokenizer_with_audio, EXPECTED_TEXT_TOOL_AUDIO, id="audio"
+    ),
+    pytest.param(
+        get_dummy_audio_url_chunk(),
+        1,
+        0,
+        get_v15_mistral_tokenizer_with_audio,
+        EXPECTED_TEXT_TOOL_AUDIO,
+        id="audio_url",
+    ),
+    pytest.param(
+        _get_dummy_image_url_chunk(),
+        0,
+        1,
+        get_v15_mistral_tokenizer_with_image,
+        EXPECTED_TEXT_TOOL_IMAGE,
+        id="image_url",
+    ),
+]
+_SYSTEM_MULTIMODAL_PARAMS = [
+    pytest.param(
+        get_dummy_audio_chunk(), 1, 0, get_v15_mistral_tokenizer_with_audio, EXPECTED_TEXT_SYSTEM_AUDIO, id="audio"
+    ),
+]
+_USER_MULTIMODAL_PARAMS = [
+    pytest.param(
+        get_dummy_audio_chunk(), 1, 0, get_v15_mistral_tokenizer_with_audio, EXPECTED_TEXT_USER_AUDIO, id="audio"
+    ),
+    pytest.param(
+        get_dummy_audio_url_chunk(),
+        1,
+        0,
+        get_v15_mistral_tokenizer_with_audio,
+        EXPECTED_TEXT_USER_AUDIO,
+        id="audio_url",
+    ),
+    pytest.param(
+        _get_dummy_image_url_chunk(),
+        0,
+        1,
+        get_v15_mistral_tokenizer_with_image,
+        EXPECTED_TEXT_USER_IMAGE,
+        id="image_url",
+    ),
+]
+
+
 def test_tools_and_reasoning_effort(
     v15_tekkenizer: InstructTokenizerV15, available_tools: list[Tool], messages: list[ChatMessage]
 ) -> None:
@@ -175,30 +379,6 @@ def test_system_think_chunk_raises_v15(v15_tekkenizer: InstructTokenizerV15) -> 
     )
     with pytest.raises(TokenizerException, match="ThinkChunk in system message is not supported for this model"):
         v15_tekkenizer.encode_instruct(request)
-
-
-def _build_model_settings_builder(
-    allowed_reasoning_effort: tuple[str, ...] | None,
-) -> ModelSettingsBuilder:
-    """Build a ModelSettingsBuilder from allowed reasoning effort values.
-
-    When `allowed_reasoning_effort` is `None`, returns `ModelSettingsBuilder.none()`
-    (all fields ignored). This matches the behavior of `Tekkenizer.from_file` when no
-    `model_settings_builder` key is present in the JSON.
-    """
-    if allowed_reasoning_effort is None:
-        return ModelSettingsBuilder.none()
-    if not allowed_reasoning_effort:
-        return ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder[ReasoningEffort](values=[], accepts_none=True, default=None)
-        )
-    return ModelSettingsBuilder(
-        reasoning_effort=EnumBuilder[ReasoningEffort](
-            values=[ReasoningEffort(v) for v in allowed_reasoning_effort],
-            accepts_none=True,
-            default=ReasoningEffort(allowed_reasoning_effort[0]) if allowed_reasoning_effort else None,
-        )
-    )
 
 
 @pytest.mark.parametrize(
@@ -294,3 +474,79 @@ def test_encode_chat_completion_continue_final_message() -> None:
 
     eos_id = tokenizer_v15.instruct_tokenizer.tokenizer.eos_id
     assert encoded.tokens[-1] != eos_id
+
+
+@pytest.mark.parametrize(
+    ("content_chunk", "expected_audios", "expected_images", "tokenizer_factory", "expected_text"),
+    _TOOL_MULTIMODAL_PARAMS,
+)
+def test_encode_chat_completion_with_multimodal_tool(
+    content_chunk: AudioChunk | AudioURLChunk | ImageURLChunk,
+    expected_audios: int,
+    expected_images: int,
+    tokenizer_factory: Callable[[], MistralTokenizer],
+    expected_text: str,
+) -> None:
+    mistral_tokenizer = tokenizer_factory()
+    chat_request = ChatCompletionRequest(  # type: ignore[type-var]
+        messages=[
+            UserMessage(content="Use the tool"),
+            AssistantMessage(tool_calls=[ToolCall(id="test12345", function=FunctionCall(name="fn", arguments="{}"))]),
+            ToolMessage(
+                content=[TextChunk(text="result"), content_chunk],
+                tool_call_id="test12345",
+            ),
+        ],
+        tools=[Tool(function=Function(name="fn", description="test", parameters={}))],
+    )
+    encoded = mistral_tokenizer.encode_chat_completion(chat_request)
+    assert encoded.text == expected_text, encoded.text
+    assert len(encoded.audios) == expected_audios
+    assert len(encoded.images) == expected_images
+
+
+@pytest.mark.parametrize(
+    ("content_chunk", "expected_audios", "expected_images", "tokenizer_factory", "expected_text"),
+    _SYSTEM_MULTIMODAL_PARAMS,
+)
+def test_encode_chat_completion_with_multimodal_system(
+    content_chunk: AudioChunk,
+    expected_audios: int,
+    expected_images: int,
+    tokenizer_factory: Callable[[], MistralTokenizer],
+    expected_text: str,
+) -> None:
+    mistral_tokenizer = tokenizer_factory()
+    chat_request = ChatCompletionRequest(  # type: ignore[type-var]
+        messages=[
+            SystemMessage(content=[TextChunk(text="System with content"), content_chunk]),
+            UserMessage(content="Hello"),
+        ],
+    )
+    encoded = mistral_tokenizer.encode_chat_completion(chat_request)
+    assert encoded.text == expected_text, encoded.text
+    assert len(encoded.audios) == expected_audios
+    assert len(encoded.images) == expected_images
+
+
+@pytest.mark.parametrize(
+    ("content_chunk", "expected_audios", "expected_images", "tokenizer_factory", "expected_text"),
+    _USER_MULTIMODAL_PARAMS,
+)
+def test_encode_chat_completion_with_multimodal_user(
+    content_chunk: AudioChunk | AudioURLChunk | ImageURLChunk,
+    expected_audios: int,
+    expected_images: int,
+    tokenizer_factory: Callable[[], MistralTokenizer],
+    expected_text: str,
+) -> None:
+    mistral_tokenizer = tokenizer_factory()
+    chat_request = ChatCompletionRequest(
+        messages=[
+            UserMessage(content=[TextChunk(text="Here is content"), content_chunk]),
+        ],
+    )
+    encoded = mistral_tokenizer.encode_chat_completion(chat_request)
+    assert encoded.text == expected_text, encoded.text
+    assert len(encoded.audios) == expected_audios
+    assert len(encoded.images) == expected_images

@@ -1,7 +1,7 @@
 r"""HuggingFace transformers/tokenizers utilities for chat template tests.
 
-This module contains helpers that depend on ``transformers`` and
-``tokenizers``.  General-purpose helpers live in ``helpers.py``.
+This module contains helpers that depend on `transformers` and
+`tokenizers`.  General-purpose helpers live in `helpers.py`.
 """
 
 import json

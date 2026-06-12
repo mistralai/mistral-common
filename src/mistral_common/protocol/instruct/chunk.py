@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlparse
 
 from pydantic import ConfigDict, Field, ValidationError, field_validator, model_validator
-from typing_extensions import Annotated
+from typing_extensions import Annotated, TypeAlias, TypeGuard
 
 from mistral_common.base import MistralBase
 from mistral_common.deprecation import warn_once
@@ -454,6 +454,65 @@ ContentChunk = Annotated[
 UserContentChunk = Annotated[
     TextChunk | ImageChunk | ImageURLChunk | AudioChunk | AudioURLChunk, Field(discriminator="type")
 ]
+
+AssistantContentChunk = Annotated[TextChunk | ThinkChunk, Field(discriminator="type")]
+
+SystemContentChunk = Annotated[TextChunk | AudioChunk | ThinkChunk, Field(discriminator="type")]
+
+ToolContentChunk: TypeAlias = ContentChunk  # Accepts all content chunk types (no restriction on tool messages).
+
+
+def is_user_content(content: str | list[ContentChunk]) -> TypeGuard[str | list[UserContentChunk]]:
+    r"""Narrow aggregated content to the types allowed in a user message.
+
+    String content is always accepted. List content is accepted only when every chunk is a
+    `TextChunk`, `ImageChunk`, `ImageURLChunk`, `AudioChunk` or `AudioURLChunk`.
+
+    Args:
+        content: The content to narrow.
+
+    Returns:
+        Whether the content only contains user-compatible chunk types.
+    """
+    if isinstance(content, str):
+        return True
+    return all(
+        isinstance(chunk, (TextChunk, ImageChunk, ImageURLChunk, AudioChunk, AudioURLChunk)) for chunk in content
+    )
+
+
+def is_assistant_content(content: str | list[ContentChunk]) -> TypeGuard[str | list[AssistantContentChunk]]:
+    r"""Narrow aggregated content to the types allowed in an assistant message.
+
+    String content is always accepted. List content is accepted only when every chunk is a
+    `TextChunk` or `ThinkChunk`.
+
+    Args:
+        content: The content to narrow.
+
+    Returns:
+        Whether the content only contains assistant-compatible chunk types.
+    """
+    if isinstance(content, str):
+        return True
+    return all(isinstance(chunk, (TextChunk, ThinkChunk)) for chunk in content)
+
+
+def is_system_content(content: str | list[ContentChunk]) -> TypeGuard[str | list[SystemContentChunk]]:
+    r"""Narrow aggregated content to the types allowed in a system message.
+
+    String content is always accepted. List content is accepted only when every chunk is a
+    `TextChunk`, `AudioChunk` or `ThinkChunk`.
+
+    Args:
+        content: The content to narrow.
+
+    Returns:
+        Whether the content only contains system-compatible chunk types.
+    """
+    if isinstance(content, str):
+        return True
+    return all(isinstance(chunk, (TextChunk, AudioChunk, ThinkChunk)) for chunk in content)
 
 
 def _convert_openai_content_chunks(openai_content_chunks: dict[str, Any]) -> ContentChunk:
