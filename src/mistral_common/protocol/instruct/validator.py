@@ -1,4 +1,5 @@
 import re
+from collections.abc import Sequence
 from enum import Enum
 from typing import Generic
 
@@ -14,8 +15,15 @@ from mistral_common.exceptions import (
     InvalidToolException,
     InvalidToolMessageException,
     InvalidToolSchemaException,
+    InvalidUserMessageException,
+    MistralCommonException,
 )
-from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk
+from mistral_common.protocol.instruct.chunk import (
+    AudioChunk,
+    AudioURLChunk,
+    ContentChunk,
+    TextChunk,
+)
 from mistral_common.protocol.instruct.messages import (
     UATS,
     AssistantMessage,
@@ -36,6 +44,23 @@ from mistral_common.protocol.instruct.tool_calls import (
     ToolCall,
 )
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
+
+
+def _validate_content_chunk_types(
+    content: "str | Sequence[ContentChunk] | None",
+    allowed: tuple[type, ...],
+    role: str,
+    exception_cls: type[MistralCommonException],
+) -> None:
+    r"""Raise if any chunk in a list content is not an instance of `allowed`.
+
+    String or None content is always accepted (covered elsewhere).
+    """
+    if not isinstance(content, list):
+        return
+    invalid = sorted({type(chunk).__name__ for chunk in content if not isinstance(chunk, allowed)})
+    if invalid:
+        raise exception_cls(f"Unexpected content chunk types in {role} message: {invalid}")
 
 
 class ValidationMode(str, Enum):
@@ -153,13 +178,30 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
             self._validate_function(tool.function)
 
     def _validate_user_message(self, message: UserMessageType) -> None:
-        pass
+        self._validate_user_content_chunks(message.content)
+
+    def _validate_user_content_chunks(self, content: "str | Sequence[ContentChunk] | None") -> None:
+        r"""v1/v2 user messages accept text content only (image >= v3, audio >= v7)."""
+        _validate_content_chunk_types(content, (TextChunk,), "user", InvalidUserMessageException)
+
+    def _validate_assistant_content_chunks(self, content: "str | Sequence[ContentChunk] | None") -> None:
+        r"""Pre-v11 assistant messages accept text content only."""
+        _validate_content_chunk_types(content, (TextChunk,), "assistant", InvalidAssistantMessageException)
+
+    def _validate_system_content_chunks(self, content: "str | Sequence[ContentChunk] | None") -> None:
+        r"""v1-v3 system messages accept text content only."""
+        _validate_content_chunk_types(content, (TextChunk,), "system", InvalidSystemPromptException)
+
+    def _validate_tool_content_chunks(self, content: "str | Sequence[ContentChunk] | None") -> None:
+        r"""Pre-v15 tool messages accept text content only."""
+        _validate_content_chunk_types(content, (TextChunk,), "tool", InvalidToolMessageException)
 
     def _validate_tool_message(self, message: ToolMessageType) -> None:
         """
         Checks:
         - The tool name is valid
         """
+        self._validate_tool_content_chunks(message.content)
         if message.name is not None:
             if not re.match(r"^[a-zA-Z0-9_-]{1,64}$", message.name):
                 raise InvalidToolMessageException(
@@ -174,6 +216,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
         """
         if message.content is None:
             raise InvalidSystemPromptException("System prompt must have content")
+        self._validate_system_content_chunks(message.content)
 
     def _validate_function_call(self, function_call: FunctionCall) -> None:
         """
@@ -200,6 +243,8 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
         - That the assistant message has either text or tool_calls, but not both
         - That the tool calls are valid
         """
+
+        self._validate_assistant_content_chunks(message.content)
 
         # Validate that the message has either text or tool_calls
         # but not both and not neither.
