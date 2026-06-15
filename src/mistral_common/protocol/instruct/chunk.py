@@ -1,4 +1,5 @@
 import base64
+import binascii
 import io
 import re
 from enum import Enum
@@ -20,6 +21,20 @@ if TYPE_CHECKING:
     from mistral_common.tokens.tokenizers.audio import Audio
 
 
+def _strip_audio_data_url_prefix(data: str) -> str:
+    r"""Remove the optional base64 audio data URL prefix."""
+    if re.match(r"^data:audio/\w+;base64,", data):
+        return data.split(",", 1)[1]
+    return data
+
+
+def _audio_input_to_base64(data: str | bytes) -> str:
+    r"""Convert raw audio bytes or base64 audio text to base64 audio text."""
+    if isinstance(data, bytes):
+        return base64.b64encode(data).decode("utf-8")
+    return _strip_audio_data_url_prefix(data)
+
+
 def _detect_audio_format(data: str | bytes) -> str:
     r"""Detect audio format from base64-encoded string or raw bytes.
 
@@ -37,7 +52,10 @@ def _detect_audio_format(data: str | bytes) -> str:
     assert_soundfile_installed()
 
     if isinstance(data, str):
-        audio_bytes = base64.b64decode(data)
+        try:
+            audio_bytes = base64.b64decode(_strip_audio_data_url_prefix(data))
+        except (binascii.Error, ValueError) as e:
+            raise ValueError("Failed to detect audio format. Verify that the given file is valid wav or mp3.") from e
     else:
         audio_bytes = data
 
@@ -379,7 +397,7 @@ class AudioChunk(BaseContentChunk):
         Returns:
             A dictionary representing the audio chunk in the OpenAI format.
         """
-        content = self.input_audio.decode("utf-8") if isinstance(self.input_audio, bytes) else self.input_audio
+        content = _audio_input_to_base64(self.input_audio)
         fmt = _detect_audio_format(self.input_audio)
         return {
             "type": self.type,
