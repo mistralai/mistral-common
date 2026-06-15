@@ -9,7 +9,7 @@ from pydantic import ConfigDict, Field
 
 from mistral_common.base import MistralBase
 from mistral_common.protocol.fim.request import FIMRequest
-from mistral_common.protocol.instruct.chunk import UserContentChunk
+from mistral_common.protocol.instruct.chunk import ContentChunk
 from mistral_common.protocol.instruct.messages import (
     AssistantMessageType,
     UserMessage,
@@ -428,7 +428,7 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
     @abstractmethod
     def encode_user_content(
         self,
-        content: str | list[UserContentChunk],
+        content: str | list[ContentChunk],
         is_last: bool,
         system_prompt: str | None = None,
         force_img_first: bool = False,

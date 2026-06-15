@@ -1,21 +1,22 @@
 import warnings
 from collections.abc import Sequence
 from enum import Enum
-from typing import Any, Literal, TypeVar
+from typing import Any, ClassVar, Literal, TypeVar
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from typing_extensions import Annotated, TypeAlias, TypeGuard
 
 from mistral_common.base import MistralBase
 from mistral_common.exceptions import InvalidAssistantMessageException
 from mistral_common.protocol.instruct.chunk import (
-    AssistantContentChunk,
+    AudioChunk,
+    AudioURLChunk,
+    BaseContentChunk,
     ContentChunk,
-    SystemContentChunk,
+    ImageChunk,
+    ImageURLChunk,
     TextChunk,
     ThinkChunk,
-    ToolContentChunk,
-    UserContentChunk,
     _convert_openai_content_chunks,
 )
 from mistral_common.protocol.instruct.tool_calls import ToolCall
@@ -27,12 +28,12 @@ warnings.filterwarnings(
 )
 
 
-def _are_think_chunks(chunks: Sequence[AssistantContentChunk]) -> TypeGuard[list[ThinkChunk]]:
+def _are_think_chunks(chunks: Sequence[ContentChunk]) -> TypeGuard[list[ThinkChunk]]:
     r"""Narrow a chunk list to ThinkChunk list."""
     return all(isinstance(c, ThinkChunk) for c in chunks)
 
 
-def _are_text_chunks(chunks: Sequence[AssistantContentChunk]) -> TypeGuard[list[TextChunk]]:
+def _are_text_chunks(chunks: Sequence[ContentChunk]) -> TypeGuard[list[TextChunk]]:
     r"""Narrow a chunk list to TextChunk list."""
     return all(isinstance(c, TextChunk) for c in chunks)
 
@@ -78,6 +79,19 @@ class BaseMessage(MistralBase):
     """
 
     role: Literal[Roles.system, Roles.user, Roles.assistant, Roles.tool]
+
+    # Allow-list of content chunk types accepted by this message. Must be set by each subclass.
+    _allowed_content_chunks: ClassVar[tuple[type[BaseContentChunk], ...]]
+
+    @model_validator(mode="after")
+    def _validate_allowed_content_chunks(self) -> "BaseMessage":
+        r"""Enforce the per-message content chunk allow-list."""
+        content = getattr(self, "content", None)
+        if isinstance(content, list):
+            for chunk in content:
+                if not isinstance(chunk, self._allowed_content_chunks):
+                    raise ValueError(f"{type(chunk).__name__} cannot be used in {self.role} message.")
+        return self
 
     @staticmethod
     def _content_to_openai(
@@ -144,7 +158,14 @@ class UserMessage(BaseMessage):
     """
 
     role: Literal[Roles.user] = Roles.user
-    content: str | list[UserContentChunk]
+    content: str | list[ContentChunk]
+    _allowed_content_chunks: ClassVar[tuple[type[BaseContentChunk], ...]] = (
+        TextChunk,
+        ImageChunk,
+        ImageURLChunk,
+        AudioChunk,
+        AudioURLChunk,
+    )
 
     def to_openai(self) -> dict[str, Any]:
         r"""Converts the message to the OpenAI format."""
@@ -169,7 +190,8 @@ class SystemMessage(BaseMessage):
     """
 
     role: Literal[Roles.system] = Roles.system
-    content: str | list[SystemContentChunk]
+    content: str | list[ContentChunk]
+    _allowed_content_chunks: ClassVar[tuple[type[BaseContentChunk], ...]] = (TextChunk, AudioChunk, ThinkChunk)
 
     def to_openai(self) -> dict[str, Any]:
         r"""Converts the message to the OpenAI format."""
@@ -197,7 +219,8 @@ class AssistantMessage(BaseMessage):
     """
 
     role: Literal[Roles.assistant] = Roles.assistant
-    content: str | list[AssistantContentChunk] | None = None
+    content: str | list[ContentChunk] | None = None
+    _allowed_content_chunks: ClassVar[tuple[type[BaseContentChunk], ...]] = (TextChunk, ThinkChunk)
     tool_calls: list[ToolCall] | None = None
     prefix: bool = False
 
@@ -340,12 +363,22 @@ class ToolMessage(BaseMessage):
        >>> message = ToolMessage(content="Hello, how can I help you?", tool_call_id="123")
     """
 
-    content: str | list[ToolContentChunk]
+    content: str | list[ContentChunk]
     role: Literal[Roles.tool] = Roles.tool
     tool_call_id: str | None = None
 
     # Deprecated in V3 tokenization
     name: str | None = None
+
+    # Tool messages accept all content chunk types.
+    _allowed_content_chunks: ClassVar[tuple[type[BaseContentChunk], ...]] = (
+        TextChunk,
+        ImageChunk,
+        ImageURLChunk,
+        AudioChunk,
+        AudioURLChunk,
+        ThinkChunk,
+    )
 
     def to_openai(self) -> dict[str, Any]:
         r"""Converts the message to the OpenAI format."""

@@ -488,7 +488,7 @@ def test_encode_chat_completion_with_multimodal_tool(
     expected_text: str,
 ) -> None:
     mistral_tokenizer = tokenizer_factory()
-    chat_request = ChatCompletionRequest(  # type: ignore[type-var]
+    chat_request: ChatCompletionRequest = ChatCompletionRequest(
         messages=[
             UserMessage(content="Use the tool"),
             AssistantMessage(tool_calls=[ToolCall(id="test12345", function=FunctionCall(name="fn", arguments="{}"))]),
@@ -517,7 +517,7 @@ def test_encode_chat_completion_with_multimodal_system(
     expected_text: str,
 ) -> None:
     mistral_tokenizer = tokenizer_factory()
-    chat_request = ChatCompletionRequest(  # type: ignore[type-var]
+    chat_request: ChatCompletionRequest = ChatCompletionRequest(
         messages=[
             SystemMessage(content=[TextChunk(text="System with content"), content_chunk]),
             UserMessage(content="Hello"),

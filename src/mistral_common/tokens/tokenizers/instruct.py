@@ -20,8 +20,6 @@ from mistral_common.protocol.instruct.chunk import (
     ImageURLChunk,
     TextChunk,
     ThinkChunk,
-    ToolContentChunk,
-    UserContentChunk,
 )
 from mistral_common.protocol.instruct.messages import (
     UATS,
@@ -300,7 +298,7 @@ class InstructTokenizerV1(
 
     def encode_user_content(
         self,
-        content: str | list[UserContentChunk],
+        content: str | list[ContentChunk],
         is_last: bool,
         system_prompt: str | None = None,
         force_img_first: bool = False,
@@ -488,9 +486,15 @@ class InstructTokenizerV2(
         except json.JSONDecodeError:
             return content
 
-    def _parse_tool_content(self, content: str | list[ToolContentChunk]) -> Any:
+    def _parse_tool_content(self, content: str | list[ContentChunk]) -> Any:
         if isinstance(content, list):
-            content = "".join(chunk.text for chunk in content if isinstance(chunk, TextChunk))
+            text_parts: list[str] = []
+            for chunk in content:
+                assert isinstance(chunk, TextChunk), (
+                    f"Tool content only supports text chunks, got {type(chunk).__name__}."
+                )
+                text_parts.append(chunk.text)
+            content = "".join(text_parts)
         return self._parse_json_content(content)
 
     def _prepare_tool_result(self, tool_message: ToolMessage) -> dict[str, Any]:
@@ -753,7 +757,7 @@ class InstructTokenizerV3(
 
     def encode_user_content(
         self,
-        content: str | list[UserContentChunk],
+        content: str | list[ContentChunk],
         is_last: bool,
         system_prompt: str | None = None,
         force_img_first: bool = False,
@@ -793,13 +797,18 @@ class InstructTokenizerV3(
                 assert not content_str, (
                     f"It is not possible that `content` is non-empty when chunk is of type {type(chunk)}."
                 )
-                chunk_tokens, _, chunk_audio = self._encode_content_chunk(chunk)
+                chunk_tokens, maybe_image, chunk_audio = self._encode_content_chunk(chunk)
+                assert maybe_image is None, f"Unexpected image for audio chunk {type(chunk).__name__}."
                 audio.append(chunk_audio)
             elif isinstance(chunk, (ImageChunk, ImageURLChunk)):
-                chunk_tokens, chunk_image, _ = self._encode_content_chunk(chunk)
+                chunk_tokens, chunk_image, maybe_audio = self._encode_content_chunk(chunk)
+                assert maybe_audio is None, f"Unexpected audio for image chunk {type(chunk).__name__}."
                 images.append(chunk_image)
             else:
-                chunk_tokens = self._encode_content_chunk(chunk)[0]
+                chunk_tokens, maybe_image, maybe_audio = self._encode_content_chunk(chunk)
+                assert maybe_image is None and maybe_audio is None, (
+                    f"Unexpected image/audio for chunk {type(chunk).__name__}."
+                )
             tokens.extend(chunk_tokens)
 
         return tokens, images, audio
@@ -891,14 +900,15 @@ class InstructTokenizerV7(InstructTokenizerV3):
         tokens = [self.BEGIN_SYSTEM]
         if isinstance(content := message.content, str):
             content = [TextChunk(text=content)]
-        content_tokens, _images, audios = self._encode_content_chunks(content)
+        content_tokens, images, audios = self._encode_content_chunks(content)
+        assert not images, f"System messages cannot contain images, got {len(images)}."
         tokens += content_tokens
         tokens.append(self.END_SYSTEM)
         return tokens, audios
 
     def encode_user_content(
         self,
-        content: str | list[UserContentChunk],
+        content: str | list[ContentChunk],
         is_last: bool,
         system_prompt: str | None = None,
         force_img_first: bool = False,
@@ -995,7 +1005,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
         )
         assert self.TRANSCRIBE is not None, f"{self.__class__.__name__} needs to have a TRANSCRIBE token"
         prefix = self.start()
-        tokens, _, audio = self.encode_user_message(
+        tokens, images, audio = self.encode_user_message(
             UserMessage(content=[AudioChunk(input_audio=request.audio)]),
             available_tools=[],
             is_last=True,
@@ -1003,6 +1013,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
             system_prompt=None,
             settings=ModelSettings.none(),
         )
+        assert not images, f"Transcription input cannot contain images, got {len(images)}."
 
         tokens = [*prefix, *tokens]
         if request.language is not None:
@@ -1152,7 +1163,12 @@ class InstructTokenizerV7(InstructTokenizerV3):
             if isinstance(message.content, str):
                 curr_tokens = self._encode_normal_content_assistant_message(message)
             elif isinstance(message.content, list):
-                curr_tokens += self._encode_content_chunks(message.content)[0]
+                content_tokens, images, audios = self._encode_content_chunks(message.content)
+                assert not images and not audios, (
+                    f"Assistant messages cannot contain images or audios, got {len(images)} images "
+                    f"and {len(audios)} audios."
+                )
+                curr_tokens += content_tokens
         if message.tool_calls:
             curr_tokens += self._encode_tool_calls_in_assistant_message(message)
         if not message.prefix and not continue_message:
