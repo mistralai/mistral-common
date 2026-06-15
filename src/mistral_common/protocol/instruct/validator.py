@@ -293,9 +293,16 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
             if continue_final_message:
                 raise InvalidMessageStructureException("Cannot continue final message in finetuning mode")
         else:
-            bad_assistant = isinstance(message, AssistantMessage) and not message.prefix and not continue_final_message
             bad_role = message.role not in {Roles.user, Roles.tool}
-            if bad_assistant and bad_role:
+            # A non-user/tool trailing message is only valid when it is an
+            # assistant message to be continued (prefix) or
+            # ``continue_final_message`` is set. The previous condition ANDed
+            # ``bad_role`` with an assistant-only flag, so a trailing message of
+            # another role (e.g. system) was never rejected here.
+            valid_trailing_assistant = isinstance(message, AssistantMessage) and (
+                message.prefix or continue_final_message
+            )
+            if bad_role and not valid_trailing_assistant:
                 raise InvalidMessageStructureException(
                     f"Expected last role User or Tool (or Assistant with prefix or continue_final_message set to True) "
                     f"for serving but got {last_message_role}"
