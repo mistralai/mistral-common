@@ -37,6 +37,7 @@ from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURL,
     AudioURLChunk,
+    ContentChunk,
     ImageChunk,
     ImageURL,
     ImageURLChunk,
@@ -586,7 +587,7 @@ def test_non_leading_think_chunks_construction_ok() -> None:
         [TextChunk(text="A"), TextChunk(text="B"), ThinkChunk(thinking="End", closed=True)],
     ],
 )
-def test_non_leading_think_chunks_to_openai_raises(content: list[TextChunk | ThinkChunk]) -> None:
+def test_non_leading_think_chunks_to_openai_raises(content: list[ContentChunk]) -> None:
     """to_openai raises when ThinkChunks are not leading."""
     msg = AssistantMessage(content=content)
     with pytest.raises(InvalidAssistantMessageException, match="ThinkChunks must be leading"):
