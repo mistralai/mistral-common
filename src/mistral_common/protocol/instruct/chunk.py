@@ -27,13 +27,6 @@ def _strip_audio_data_url_prefix(data: str) -> str:
     return data
 
 
-def _audio_input_to_base64(data: str | bytes) -> str:
-    r"""Convert raw audio bytes or base64 audio text to base64 audio text."""
-    if isinstance(data, bytes):
-        return base64.b64encode(data).decode("utf-8")
-    return _strip_audio_data_url_prefix(data)
-
-
 def _detect_audio_format(data: str | bytes) -> str:
     r"""Detect audio format from base64-encoded string or raw bytes.
 
@@ -393,7 +386,10 @@ class AudioChunk(BaseContentChunk):
         Returns:
             A dictionary representing the audio chunk in the OpenAI format.
         """
-        content = _audio_input_to_base64(self.input_audio)
+        if isinstance(self.input_audio, bytes):
+            content = base64.b64encode(self.input_audio).decode("utf-8")
+        else:
+            content = _strip_audio_data_url_prefix(self.input_audio)
         fmt = _detect_audio_format(self.input_audio)
         return {
             "type": self.type,
