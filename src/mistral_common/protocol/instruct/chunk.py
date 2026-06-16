@@ -1,5 +1,4 @@
 import base64
-import binascii
 import io
 import re
 from enum import Enum
@@ -52,10 +51,7 @@ def _detect_audio_format(data: str | bytes) -> str:
     assert_soundfile_installed()
 
     if isinstance(data, str):
-        try:
-            audio_bytes = base64.b64decode(_strip_audio_data_url_prefix(data))
-        except (binascii.Error, ValueError) as e:
-            raise ValueError("Failed to detect audio format. Verify that the given file is valid wav or mp3.") from e
+        audio_bytes = base64.b64decode(_strip_audio_data_url_prefix(data))
     else:
         audio_bytes = data
 
