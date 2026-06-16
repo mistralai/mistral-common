@@ -20,6 +20,13 @@ if TYPE_CHECKING:
     from mistral_common.tokens.tokenizers.audio import Audio
 
 
+def _strip_audio_data_url_prefix(data: str) -> str:
+    r"""Remove the optional base64 audio data URL prefix."""
+    if re.match(r"^data:audio/\w+;base64,", data):
+        return data.split(",", 1)[1]
+    return data
+
+
 def _detect_audio_format(data: str | bytes) -> str:
     r"""Detect audio format from base64-encoded string or raw bytes.
 
@@ -37,7 +44,7 @@ def _detect_audio_format(data: str | bytes) -> str:
     assert_soundfile_installed()
 
     if isinstance(data, str):
-        audio_bytes = base64.b64decode(data)
+        audio_bytes = base64.b64decode(_strip_audio_data_url_prefix(data))
     else:
         audio_bytes = data
 
@@ -379,7 +386,10 @@ class AudioChunk(BaseContentChunk):
         Returns:
             A dictionary representing the audio chunk in the OpenAI format.
         """
-        content = self.input_audio.decode("utf-8") if isinstance(self.input_audio, bytes) else self.input_audio
+        if isinstance(self.input_audio, bytes):
+            content = base64.b64encode(self.input_audio).decode("utf-8")
+        else:
+            content = _strip_audio_data_url_prefix(self.input_audio)
         fmt = _detect_audio_format(self.input_audio)
         return {
             "type": self.type,
