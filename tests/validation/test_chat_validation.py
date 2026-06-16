@@ -1,11 +1,19 @@
+from typing import Any
+
 import pytest
 
 from mistral_common.exceptions import (
     InvalidAssistantMessageException,
     InvalidMessageStructureException,
     InvalidRequestException,
+    InvalidSystemPromptException,
+    InvalidToolMessageException,
+    InvalidUserMessageException,
 )
-from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk
+from mistral_common.protocol.instruct.chunk import (
+    AudioChunk,
+    AudioURLChunk,
+)
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     SystemMessage,
@@ -26,6 +34,29 @@ from mistral_common.protocol.instruct.validator import (
     ValidationMode,
 )
 from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
+from tests.fixtures.chunks import get_content_chunks
+
+_Messages = list[UserMessage | AssistantMessage | SystemMessage | ToolMessage]
+
+
+def _user_convo(content: "str | list[Any]") -> _Messages:
+    return [UserMessage(content=content)]
+
+
+def _assistant_convo(content: "str | list[Any]") -> _Messages:
+    return [UserMessage(content="hi"), AssistantMessage(content=content), UserMessage(content="next")]
+
+
+def _system_convo(content: "str | list[Any]") -> _Messages:
+    return [SystemMessage(content=content), UserMessage(content="hi")]
+
+
+def _tool_convo(content: "str | list[Any]") -> _Messages:
+    return [
+        UserMessage(content="hi"),
+        AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="fn", arguments="{}"), id="test12345")]),
+        ToolMessage(content=content, tool_call_id="test12345"),
+    ]
 
 
 @pytest.fixture(scope="module")
@@ -47,6 +78,16 @@ def audio_url_chunk() -> AudioURLChunk:
 )
 def validator(request: pytest.FixtureRequest) -> MistralRequestValidator:
     return request.param  # type: ignore
+
+
+@pytest.fixture
+def validator_base() -> MistralRequestValidator:
+    return MistralRequestValidator(ValidationMode.serving)
+
+
+@pytest.fixture
+def validator_v3() -> MistralRequestValidatorV3:
+    return MistralRequestValidatorV3(ValidationMode.serving)
 
 
 @pytest.fixture
@@ -353,6 +394,57 @@ class TestChatValidation:
         with pytest.raises(InvalidRequestException, match="reasoning_effort='none' is not supported for this model"):
             validator._validate_model_settings(request)
 
+    def test_allows_text_content_chunks(self, validator_base: MistralRequestValidator) -> None:
+        validator_base.validate_messages(_user_convo(get_content_chunks(("text",))), continue_final_message=False)
+        validator_base.validate_messages(_assistant_convo(get_content_chunks(("text",))), continue_final_message=False)
+        validator_base.validate_messages(_system_convo(get_content_chunks(("text",))), continue_final_message=False)
+        validator_base.validate_messages(_tool_convo(get_content_chunks(("text",))), continue_final_message=False)
+
+    def test_rejects_non_text_in_user(self, validator_base: MistralRequestValidator) -> None:
+        for name in ("image", "image_url", "audio", "audio_url"):
+            with pytest.raises(InvalidUserMessageException, match="Unexpected content chunk types in user message"):
+                validator_base.validate_messages(_user_convo(get_content_chunks((name,))), continue_final_message=False)
+
+    def test_rejects_non_text_in_assistant(self, validator_base: MistralRequestValidator) -> None:
+        for name in ("think",):
+            with pytest.raises(
+                InvalidAssistantMessageException, match="Unexpected content chunk types in assistant message"
+            ):
+                validator_base.validate_messages(
+                    _assistant_convo(get_content_chunks((name,))), continue_final_message=False
+                )
+
+    def test_rejects_non_text_in_system(self, validator_base: MistralRequestValidator) -> None:
+        for name in ("audio", "think"):
+            with pytest.raises(InvalidSystemPromptException, match="Unexpected content chunk types in system message"):
+                validator_base.validate_messages(
+                    _system_convo(get_content_chunks((name,))), continue_final_message=False
+                )
+
+    def test_rejects_non_text_in_tool(self, validator_base: MistralRequestValidator) -> None:
+        for name in ("image", "image_url", "audio", "audio_url", "think"):
+            with pytest.raises(InvalidToolMessageException, match="Unexpected content chunk types in tool message"):
+                validator_base.validate_messages(_tool_convo(get_content_chunks((name,))), continue_final_message=False)
+
+    def test_reports_sorted_unique_invalid_chunk_types(self, validator_base: MistralRequestValidator) -> None:
+        content = get_content_chunks(("audio", "image_url"))
+        with pytest.raises(
+            InvalidUserMessageException,
+            match=r"Unexpected content chunk types in user message: \['AudioChunk', 'ImageURLChunk'\]",
+        ):
+            validator_base.validate_messages(_user_convo(content), continue_final_message=False)
+
+
+class TestChatValidationV3:
+    def test_allows_text_and_image_in_user(self, validator_v3: MistralRequestValidatorV3) -> None:
+        content = get_content_chunks(("text", "image", "image_url"))
+        validator_v3.validate_messages(_user_convo(content), continue_final_message=False)
+
+    def test_rejects_audio_in_user(self, validator_v3: MistralRequestValidatorV3) -> None:
+        for name in ("audio", "audio_url"):
+            with pytest.raises(InvalidUserMessageException, match="Unexpected content chunk types in user message"):
+                validator_v3.validate_messages(_user_convo(get_content_chunks((name,))), continue_final_message=False)
+
 
 class TestChatValidationV5:
     @pytest.mark.parametrize("audio_fixture", ["audio_chunk", "audio_url_chunk"])
@@ -402,6 +494,23 @@ class TestChatValidationV5:
 
         with pytest.raises(InvalidRequestException, match="reasoning_effort='none' is not supported for this model"):
             validator._validate_model_settings(request)
+
+    def test_allows_text_image_audio_in_user(self, validator_v5: MistralRequestValidatorV5) -> None:
+        content = get_content_chunks(("text", "image", "image_url", "audio", "audio_url"))
+        validator_v5.validate_messages(_user_convo(content), continue_final_message=False)
+
+    def test_allows_text_audio_think_in_system(self, validator_v5: MistralRequestValidatorV5) -> None:
+        content = get_content_chunks(("text", "audio", "think"))
+        validator_v5.validate_messages(_system_convo(content), continue_final_message=False)
+
+    def test_rejects_think_in_assistant(self, validator_v5: MistralRequestValidatorV5) -> None:
+        for name in ("think",):
+            with pytest.raises(
+                InvalidAssistantMessageException, match="Unexpected content chunk types in assistant message"
+            ):
+                validator_v5.validate_messages(
+                    _assistant_convo(get_content_chunks((name,))), continue_final_message=False
+                )
 
 
 class TestChatValidationV13:
@@ -613,6 +722,15 @@ class TestChatValidationV13:
             continue_final_message=False,
         )
 
+    def test_allows_text_and_think_in_assistant(self, validator_v13: MistralRequestValidatorV13) -> None:
+        content = get_content_chunks(("text", "think"))
+        validator_v13.validate_messages(_assistant_convo(content), continue_final_message=False)
+
+    def test_rejects_non_text_in_tool(self, validator_v13: MistralRequestValidatorV13) -> None:
+        for name in ("image", "image_url", "audio", "audio_url", "think"):
+            with pytest.raises(InvalidToolMessageException, match="Unexpected content chunk types in tool message"):
+                validator_v13.validate_messages(_tool_convo(get_content_chunks((name,))), continue_final_message=False)
+
 
 class TestChatValidationV15:
     @pytest.mark.parametrize("reasoning_effort", [*list(ReasoningEffort), None])
@@ -621,3 +739,18 @@ class TestChatValidationV15:
     ) -> None:
         request = ChatCompletionRequest(messages=[UserMessage(content="Hello")], reasoning_effort=reasoning_effort)
         validator_v15._validate_model_settings(request)
+
+    def test_allows_text_and_audio_in_system(self, validator_v15: MistralRequestValidatorV15) -> None:
+        content = get_content_chunks(("text", "audio"))
+        validator_v15.validate_messages(_system_convo(content), continue_final_message=False)
+
+    def test_rejects_think_in_system(self, validator_v15: MistralRequestValidatorV15) -> None:
+        for name in ("think",):
+            with pytest.raises(InvalidSystemPromptException, match="Unexpected content chunk types in system message"):
+                validator_v15.validate_messages(
+                    _system_convo(get_content_chunks((name,))), continue_final_message=False
+                )
+
+    def test_allows_all_chunk_types_in_tool(self, validator_v15: MistralRequestValidatorV15) -> None:
+        content = get_content_chunks(("text", "image", "image_url", "audio", "audio_url", "think"))
+        validator_v15.validate_messages(_tool_convo(content), continue_final_message=False)

@@ -14,7 +14,7 @@ from mistral_common.experimental.app.models import (
 )
 from mistral_common.experimental.think import _split_content_and_think_chunks
 from mistral_common.experimental.tools import _decode_tool_calls, _split_content_and_tool_calls
-from mistral_common.protocol.instruct.chunk import TextChunk, ThinkChunk
+from mistral_common.protocol.instruct.chunk import ContentChunk, TextChunk, ThinkChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenized, TokenizerVersion
@@ -100,7 +100,7 @@ async def detokenize_to_assistant_message(
     else:
         content_tokens, tool_calls_tokens = tokens, ()
 
-    content: str | list[TextChunk | ThinkChunk] | None = None
+    content: str | list[ContentChunk] | None = None
 
     if settings.tokenizer.instruct_tokenizer.tokenizer.version >= TokenizerVersion.v13:
         assert isinstance(settings.tokenizer.instruct_tokenizer, InstructTokenizerV13)

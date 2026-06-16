@@ -11,8 +11,8 @@ from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURL,
     AudioURLChunk,
+    ContentChunk,
     TextChunk,
-    UserContentChunk,
 )
 from mistral_common.protocol.instruct.messages import (
     UATS,
@@ -215,7 +215,7 @@ def test_tokenize_user_message(tekkenizer: InstructTokenizerV7, audio_first: boo
     text_chunk = TextChunk(text="a")
 
     num_expected_frames = int(np.ceil(duration * frame_rate))
-    chunks: list[UserContentChunk] = [audio_chunk, text_chunk] if audio_first else [text_chunk, audio_chunk]
+    chunks: list[ContentChunk] = [audio_chunk, text_chunk] if audio_first else [text_chunk, audio_chunk]
 
     tokenized = tekkenizer.encode_instruct(
         InstructRequest(
@@ -261,7 +261,7 @@ def test_tokenize_multi_turn(tekkenizer: InstructTokenizerV7) -> None:
     text_chunk = TextChunk(text="a")
 
     num_expected_frames = int(np.ceil(duration * frame_rate))
-    chunks: list[UserContentChunk] = [audio_chunk, text_chunk]
+    chunks: list[ContentChunk] = [audio_chunk, text_chunk]
 
     tokenized = tekkenizer.encode_instruct(
         InstructRequest(

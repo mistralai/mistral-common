@@ -451,9 +451,6 @@ class ThinkChunk(BaseContentChunk):
 ContentChunk = Annotated[
     TextChunk | ImageChunk | ImageURLChunk | AudioChunk | AudioURLChunk | ThinkChunk, Field(discriminator="type")
 ]
-UserContentChunk = Annotated[
-    TextChunk | ImageChunk | ImageURLChunk | AudioChunk | AudioURLChunk, Field(discriminator="type")
-]
 
 
 def _convert_openai_content_chunks(openai_content_chunks: dict[str, Any]) -> ContentChunk:
