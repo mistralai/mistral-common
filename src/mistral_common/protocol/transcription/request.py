@@ -96,8 +96,7 @@ class TranscriptionRequest(BaseCompletionRequest):
         format consumed by OpenAI-compatible servers. It handles the conversion of audio data and
         additional parameters into the required format.
 
-        Note that "OpenAI" here refers to the de facto request format rather than OpenAI's hosted API:
-        the payload may include extension fields (e.g. ``seed`` and ``top_p``) that are supported by
+        The payload may include extension fields (e.g. ``seed`` and ``top_p``) that are supported by
         OpenAI-compatible servers such as vLLM but are not part of OpenAI's hosted transcription API.
         Pass them via ``exclude`` if you need a strictly OpenAI-valid payload.
 
