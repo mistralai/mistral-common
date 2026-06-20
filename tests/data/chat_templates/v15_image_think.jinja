@@ -215,9 +215,11 @@
 
         {{- eos_token }}
 
-    {#- Tool messages only supports text content. #}
+    {#- Tool messages (multimodal). #}
     {%- elif message['role'] == 'tool' %}
-        {{- '[TOOL_RESULTS]' + message['content']|string + '[/TOOL_RESULTS]' }}
+        {{- '[TOOL_RESULTS]' -}}
+        {{- render_content(message['content'], 'tool message contents', supported_types_desc='text and image', support_images=true) -}}
+        {{- '[/TOOL_RESULTS]' }}
 
     {#- System messages. #}
     {%- elif message['role'] == 'system' %}

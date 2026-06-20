@@ -1,3 +1,4 @@
+import base64
 import copy
 import io
 import warnings
@@ -38,6 +39,7 @@ from mistral_common.protocol.instruct.chunk import (
     AudioURL,
     AudioURLChunk,
     ChunkTypes,
+    ContentChunk,
     ImageChunk,
     ImageURL,
     ImageURLChunk,
@@ -610,7 +612,7 @@ def test_non_leading_think_chunks_construction_ok() -> None:
         [TextChunk(text="A"), TextChunk(text="B"), ThinkChunk(thinking="End", closed=True)],
     ],
 )
-def test_non_leading_think_chunks_to_openai_raises(content: list[TextChunk | ThinkChunk]) -> None:
+def test_non_leading_think_chunks_to_openai_raises(content: list[ContentChunk]) -> None:
     """to_openai raises when ThinkChunks are not leading."""
     msg = AssistantMessage(content=content)
     with pytest.raises(InvalidAssistantMessageException, match="ThinkChunks must be leading"):
@@ -1214,6 +1216,33 @@ def test_audio_chunk_to_openai_format_detection(fmt: str) -> None:
     audio = _make_fake_audio(0.5)
     b64 = audio.to_base64(fmt)
     chunk = AudioChunk(input_audio=b64)
+    result = chunk.to_openai()
+
+    assert result["input_audio"]["format"] == fmt
+    assert result["input_audio"]["data"] == b64
+    assert AudioChunk.from_openai(result).input_audio == b64
+
+
+@pytest.mark.parametrize("fmt", ["wav", "flac"])
+def test_audio_chunk_to_openai_raw_bytes_format_detection(fmt: str) -> None:
+    audio = _make_fake_audio(0.5)
+    buffer = io.BytesIO()
+    sf.write(buffer, audio.audio_array, audio.sampling_rate, format=fmt)
+    raw_bytes = buffer.getvalue()
+
+    result = AudioChunk(input_audio=raw_bytes).to_openai()
+
+    assert result["input_audio"]["format"] == fmt
+    assert result["input_audio"]["data"] == base64.b64encode(raw_bytes).decode("utf-8")
+    assert AudioChunk.from_openai(result).input_audio == result["input_audio"]["data"]
+
+
+@pytest.mark.parametrize("fmt", ["wav", "flac"])
+def test_audio_chunk_to_openai_strips_base64_data_url_prefix(fmt: str) -> None:
+    audio = _make_fake_audio(0.5)
+    b64 = audio.to_base64(fmt)
+    chunk = AudioChunk(input_audio=f"data:audio/{fmt};base64,{b64}")
+
     result = chunk.to_openai()
 
     assert result["input_audio"]["format"] == fmt

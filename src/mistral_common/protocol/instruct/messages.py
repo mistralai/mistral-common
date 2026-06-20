@@ -1,17 +1,22 @@
 import warnings
+from collections.abc import Sequence
 from enum import Enum
-from typing import Any, Literal, TypeGuard, TypeVar
+from typing import Any, ClassVar, Literal, TypeVar
 
-from pydantic import Field
-from typing_extensions import Annotated, TypeAlias
+from pydantic import Field, model_validator
+from typing_extensions import Annotated, TypeAlias, TypeGuard
 
 from mistral_common.base import MistralBase
 from mistral_common.exceptions import InvalidAssistantMessageException
 from mistral_common.protocol.instruct.chunk import (
+    AudioChunk,
+    AudioURLChunk,
+    BaseContentChunk,
     ContentChunk,
+    ImageChunk,
+    ImageURLChunk,
     TextChunk,
     ThinkChunk,
-    UserContentChunk,
     _convert_openai_content_chunks,
 )
 from mistral_common.protocol.instruct.tool_calls import ToolCall
@@ -23,12 +28,14 @@ warnings.filterwarnings(
 )
 
 
-def _are_think_chunks(think_chunks: list[ThinkChunk | TextChunk]) -> TypeGuard[list[ThinkChunk]]:
-    return all(isinstance(c, ThinkChunk) for c in think_chunks)
+def _are_think_chunks(chunks: Sequence[ContentChunk]) -> TypeGuard[list[ThinkChunk]]:
+    r"""Narrow a chunk list to ThinkChunk list."""
+    return all(isinstance(c, ThinkChunk) for c in chunks)
 
 
-def _are_text_chunks(think_chunks: list[ThinkChunk | TextChunk]) -> TypeGuard[list[TextChunk]]:
-    return all(isinstance(c, TextChunk) for c in think_chunks)
+def _are_text_chunks(chunks: Sequence[ContentChunk]) -> TypeGuard[list[TextChunk]]:
+    r"""Narrow a chunk list to TextChunk list."""
+    return all(isinstance(c, TextChunk) for c in chunks)
 
 
 class ReasoningFieldFormat(str, Enum):
@@ -73,6 +80,57 @@ class BaseMessage(MistralBase):
 
     role: Literal[Roles.system, Roles.user, Roles.assistant, Roles.tool]
 
+    # Allow-list of content chunk types accepted by this message. Must be set by each subclass.
+    _allowed_content_chunks: ClassVar[tuple[type[BaseContentChunk], ...]]
+
+    @model_validator(mode="after")
+    def _validate_allowed_content_chunks(self) -> "BaseMessage":
+        r"""Enforce the per-message content chunk allow-list."""
+        content = getattr(self, "content", None)
+        if isinstance(content, list):
+            for chunk in content:
+                if not isinstance(chunk, self._allowed_content_chunks):
+                    raise ValueError(f"{type(chunk).__name__} cannot be used in {self.role} message.")
+        return self
+
+    @staticmethod
+    def _content_to_openai(
+        content: str | Sequence[ContentChunk] | None,
+    ) -> str | list[dict[str, Any]] | None:
+        r"""Serialize message content to OpenAI format.
+
+        Args:
+            content: String, list of content chunks, or None.
+
+        Returns:
+            String content as-is, list of chunks serialized via each chunk's
+            to_openai(), or None.
+        """
+        if content is None or isinstance(content, str):
+            return content
+        return [chunk.to_openai() for chunk in content]
+
+    @staticmethod
+    def _content_from_openai(
+        raw: str | list[dict[str, Any]] | None,
+    ) -> str | list[ContentChunk] | None:
+        r"""Deserialize content from OpenAI format.
+
+        Args:
+            raw: Raw content from OpenAI message dict.
+
+        Returns:
+            String content as-is, list of deserialized content chunks, or None.
+
+        Raises:
+            ValueError: If content type is unrecognized.
+        """
+        if raw is None or isinstance(raw, str):
+            return raw
+        if isinstance(raw, list):
+            return [_convert_openai_content_chunks(chunk) for chunk in raw]
+        raise ValueError(f"Unknown content type: {type(raw)}")
+
     def to_openai(self) -> dict[str, Any]:
         r"""Converts the message to the OpenAI format.
 
@@ -100,24 +158,24 @@ class UserMessage(BaseMessage):
     """
 
     role: Literal[Roles.user] = Roles.user
-    content: str | list[UserContentChunk]
+    content: str | list[ContentChunk]
+    _allowed_content_chunks: ClassVar[tuple[type[BaseContentChunk], ...]] = (
+        TextChunk,
+        ImageChunk,
+        ImageURLChunk,
+        AudioChunk,
+        AudioURLChunk,
+    )
 
     def to_openai(self) -> dict[str, Any]:
         r"""Converts the message to the OpenAI format."""
-        if isinstance(self.content, str):
-            return {"role": self.role, "content": self.content}
-        return {"role": self.role, "content": [chunk.to_openai() for chunk in self.content]}
+        return {"role": self.role, "content": self._content_to_openai(self.content)}
 
     @classmethod
     def from_openai(cls, openai_message: dict[str, Any]) -> "UserMessage":
         r"""Converts the OpenAI message to the Mistral format."""
-        if isinstance(openai_message["content"], str):
-            return cls.model_validate_ignore_extra(openai_message)
         return cls.model_validate(
-            {
-                "role": openai_message["role"],
-                "content": [_convert_openai_content_chunks(chunk) for chunk in openai_message["content"]],
-            },
+            {"role": openai_message["role"], "content": cls._content_from_openai(openai_message["content"])}
         )
 
 
@@ -132,16 +190,19 @@ class SystemMessage(BaseMessage):
     """
 
     role: Literal[Roles.system] = Roles.system
-    content: str | list[TextChunk | ThinkChunk]
+    content: str | list[ContentChunk]
+    _allowed_content_chunks: ClassVar[tuple[type[BaseContentChunk], ...]] = (TextChunk, AudioChunk, ThinkChunk)
 
     def to_openai(self) -> dict[str, Any]:
         r"""Converts the message to the OpenAI format."""
-        return self.model_dump()
+        return {"role": self.role, "content": self._content_to_openai(self.content)}
 
     @classmethod
     def from_openai(cls, openai_message: dict[str, Any]) -> "SystemMessage":
         r"""Converts the OpenAI message to the Mistral format."""
-        return cls.model_validate_ignore_extra(openai_message)
+        return cls.model_validate(
+            {"role": openai_message["role"], "content": cls._content_from_openai(openai_message["content"])}
+        )
 
 
 class AssistantMessage(BaseMessage):
@@ -158,7 +219,8 @@ class AssistantMessage(BaseMessage):
     """
 
     role: Literal[Roles.assistant] = Roles.assistant
-    content: str | list[TextChunk | ThinkChunk] | None = None
+    content: str | list[ContentChunk] | None = None
+    _allowed_content_chunks: ClassVar[tuple[type[BaseContentChunk], ...]] = (TextChunk, ThinkChunk)
     tool_calls: list[ToolCall] | None = None
     prefix: bool = False
 
@@ -205,7 +267,7 @@ class AssistantMessage(BaseMessage):
 
         match reasoning_field_format:
             case None | ReasoningFieldFormat.thinking_chunks:
-                out_dict["content"] = [chunk.to_openai() for chunk in self.content]
+                out_dict["content"] = self._content_to_openai(self.content)
             case ReasoningFieldFormat.reasoning | ReasoningFieldFormat.reasoning_content:
                 think_chunks, content_chunks = self.content[: last_think_idx + 1], self.content[last_think_idx + 1 :]
                 if not _are_think_chunks(think_chunks) or not _are_text_chunks(content_chunks):
@@ -216,7 +278,7 @@ class AssistantMessage(BaseMessage):
                 if len(content_chunks) == 1:
                     out_dict["content"] = content_chunks[0].text
                 elif content_chunks:
-                    out_dict["content"] = [chunk.to_openai() for chunk in content_chunks]
+                    out_dict["content"] = self._content_to_openai(content_chunks)
             case _:
                 raise ValueError(f"{reasoning_field_format=} is not supported.")
 
@@ -234,14 +296,7 @@ class AssistantMessage(BaseMessage):
                 tools_calls.append(ToolCall.from_openai(openai_tool_call))
         else:
             raise ValueError(f"tool_calls must be a list, got {type(openai_tool_calls)}")
-        openai_content = openai_message.get("content", None)
-        content: str | list[ContentChunk] | None = None
-        if openai_content is None or isinstance(openai_content, str):
-            content = openai_content
-        elif isinstance(openai_content, list):
-            content = [_convert_openai_content_chunks(chunk) for chunk in openai_content]
-        else:
-            raise ValueError(f"Unknown content type: {type(openai_content)}")
+        content = cls._content_from_openai(openai_message.get("content"))
 
         reasoning_content: str | None = openai_message.get("reasoning_content")
         reasoning: str | None = openai_message.get("reasoning")
@@ -308,23 +363,44 @@ class ToolMessage(BaseMessage):
        >>> message = ToolMessage(content="Hello, how can I help you?", tool_call_id="123")
     """
 
-    content: str | list[TextChunk]
+    content: str | list[ContentChunk]
     role: Literal[Roles.tool] = Roles.tool
     tool_call_id: str | None = None
 
     # Deprecated in V3 tokenization
     name: str | None = None
 
+    # Tool messages accept all content chunk types.
+    _allowed_content_chunks: ClassVar[tuple[type[BaseContentChunk], ...]] = (
+        TextChunk,
+        ImageChunk,
+        ImageURLChunk,
+        AudioChunk,
+        AudioURLChunk,
+        ThinkChunk,
+    )
+
     def to_openai(self) -> dict[str, Any]:
         r"""Converts the message to the OpenAI format."""
         assert self.tool_call_id is not None, "tool_call_id must be provided for tool messages."
-        return self.model_dump(exclude={"name"})
+        return {
+            "role": self.role,
+            "tool_call_id": self.tool_call_id,
+            "content": self._content_to_openai(self.content),
+        }
 
     @classmethod
-    def from_openai(cls, messages: dict[str, str | list[dict[str, str | dict[str, Any]]]]) -> "ToolMessage":
+    def from_openai(cls, openai_message: dict[str, Any]) -> "ToolMessage":
         r"""Converts the OpenAI message to the Mistral format."""
-        tool_message = cls.model_validate_ignore_extra(messages)
-        assert tool_message.tool_call_id is not None, "tool_call_id must be provided for tool messages."
+        content = cls._content_from_openai(openai_message["content"])
+        tool_message = cls.model_validate(
+            {
+                "role": openai_message["role"],
+                "tool_call_id": openai_message["tool_call_id"],
+                "content": content,
+                "name": openai_message.get("name"),
+            }
+        )
         return tool_message
 
 

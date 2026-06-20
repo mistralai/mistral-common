@@ -3,14 +3,53 @@ from typing import Any
 import pytest
 
 from mistral_common.integrations.chat_templates.template_generator import build_chat_template
+from mistral_common.protocol.instruct.request import ChatCompletionRequest
+from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from tests.integrations.chat_templates.conftest import ALL_CONFIGS, _config_id
+from tests.integrations.chat_templates.fixtures_data import _get_conversations
 from tests.integrations.chat_templates.helpers import (
     TestConfig,
     _load_golden_template,
     _make_config,
     render_template,
 )
+
+
+def _request_to_render_args(request: ChatCompletionRequest) -> dict[str, Any]:
+    r"""Convert a ChatCompletionRequest to render_template kwargs.
+
+    Enriches tool messages with the `name` field resolved from the preceding
+    assistant's `tool_calls`, which the v2 Jinja template requires but
+    `ToolMessage.to_openai()` omits.
+    """
+    openai = request.to_openai()
+    messages = openai["messages"]
+
+    # Build a mapping from tool_call_id -> function name so tool messages
+    # can carry the `name` field expected by v2 templates.
+    tool_call_names: dict[str, str] = {}
+    for msg in messages:
+        for tc in msg.get("tool_calls", []):
+            tc_id = tc.get("id")
+            fn_name = tc.get("function", {}).get("name")
+            if tc_id and fn_name:
+                tool_call_names[tc_id] = fn_name
+
+    for msg in messages:
+        if msg.get("role") == "tool" and "name" not in msg:
+            tc_id = msg.get("tool_call_id")
+            if tc_id and tc_id in tool_call_names:
+                msg["name"] = tool_call_names[tc_id]
+
+    kwargs: dict[str, Any] = {
+        "messages": messages,
+    }
+    if "tools" in openai and openai["tools"]:
+        kwargs["tools"] = openai["tools"]
+    if (reasoning := openai.get("reasoning_effort")) is not None:
+        kwargs["reasoning_effort"] = reasoning
+    return kwargs
 
 
 @pytest.mark.parametrize(
@@ -64,399 +103,14 @@ def test_dynamic_template_comprehensive(config: TestConfig) -> None:
     static_template = _load_golden_template(template_config)
     dynamic_template = build_chat_template(template_config)
 
-    # Test cases
-    test_cases = [
-        # Simple one-turn
-        {
-            "name": "one_turn",
-            "messages": [
-                {"role": "user", "content": "Hello"},
-                {"role": "assistant", "content": "Hi there!"},
-            ],
-        },
-        # With system message
-        {
-            "name": "with_system",
-            "messages": [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": "Hello"},
-                {"role": "assistant", "content": "Hi there!"},
-            ],
-        },
-        # Multi-turn
-        {
-            "name": "multi_turn",
-            "messages": [
-                {"role": "user", "content": "Hello"},
-                {"role": "assistant", "content": "Hi there!"},
-                {"role": "user", "content": "How are you?"},
-                {"role": "assistant", "content": "I'm doing well!"},
-            ],
-        },
-        # Content as list of chunks
-        {
-            "name": "content_chunks",
-            "messages": [
-                {"role": "user", "content": [{"type": "text", "text": "Hello"}]},
-                {"role": "assistant", "content": [{"type": "text", "text": "Hi there!"}]},
-            ],
-        },
-    ]
-
-    # Tool call scenarios (v2+ only)
-    if config.version > TokenizerVersion.v1:
-        test_cases.extend(
-            [
-                {
-                    "name": "with_tools_definition",
-                    "messages": [
-                        {"role": "user", "content": "What's the weather?"},
-                        {"role": "assistant", "content": "It's sunny."},
-                    ],
-                    "tools": [
-                        {
-                            "type": "function",
-                            "function": {
-                                "name": "get_weather",
-                                "description": "Get weather",
-                                "parameters": {"type": "object", "properties": {"city": {"type": "string"}}},
-                            },
-                        }
-                    ],
-                },
-                {
-                    "name": "with_tool_call_and_result",
-                    "messages": [
-                        {"role": "user", "content": "What's the weather in Paris?"},
-                        {
-                            "role": "assistant",
-                            "content": "",
-                            "tool_calls": [
-                                {
-                                    "id": "abc123def",
-                                    "type": "function",
-                                    "function": {"name": "get_weather", "arguments": '{"city": "Paris"}'},
-                                }
-                            ],
-                        },
-                        {"role": "tool", "content": '{"temp": 20}', "tool_call_id": "abc123def", "name": "get_weather"},
-                        {"role": "assistant", "content": "It's 20 degrees in Paris."},
-                    ],
-                    "tools": [
-                        {
-                            "type": "function",
-                            "function": {
-                                "name": "get_weather",
-                                "description": "Get weather",
-                                "parameters": {"type": "object", "properties": {"city": {"type": "string"}}},
-                            },
-                        }
-                    ],
-                },
-            ]
-        )
-
-    # Add image test case if image support
-    if config.image:
-        test_cases.append(
-            {
-                "name": "with_image",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "What is this?"},
-                            {"type": "image_url", "image_url": "http://example.com/image.png"},
-                        ],
-                    },
-                    {"role": "assistant", "content": "It's an image."},
-                ],
-            }
-        )
-
-    # Add audio test case if audio support
-    if config.audio:
-        test_cases.append(
-            {
-                "name": "with_audio",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "What is this?"},
-                            {"type": "audio_url", "audio_url": "http://example.com/audio.mp3"},
-                        ],
-                    },
-                    {"role": "assistant", "content": "It's an audio file."},
-                ],
-            }
-        )
-
-    # Add thinking test case if thinking support
-    if config.think:
-        test_cases.append(
-            {
-                "name": "with_thinking",
-                "messages": [
-                    {"role": "user", "content": "Solve this problem"},
-                    {
-                        "role": "assistant",
-                        "content": [
-                            {"type": "thinking", "thinking": "Let me think..."},
-                            {"type": "text", "text": "The answer is 42."},
-                        ],
-                    },
-                ],
-            }
-        )
-
-    # Add message aggregation test cases
-    test_cases.extend(
-        [
-            {
-                "name": "consecutive_users",
-                "messages": [
-                    {"role": "user", "content": "Hello"},
-                    {"role": "user", "content": "World"},
-                    {"role": "assistant", "content": "Hi there"},
-                ],
-            },
-            {
-                "name": "consecutive_users_with_system",
-                "messages": [
-                    {"role": "system", "content": "You are helpful."},
-                    {"role": "user", "content": "Hello"},
-                    {"role": "user", "content": "World"},
-                    {"role": "assistant", "content": "Hi there"},
-                ],
-            },
-            {
-                "name": "consecutive_assistants",
-                "messages": [
-                    {"role": "user", "content": "Hello"},
-                    {"role": "assistant", "content": "Hi"},
-                    {"role": "assistant", "content": "How can I help?"},
-                    {"role": "user", "content": "Thanks"},
-                    {"role": "assistant", "content": "Welcome"},
-                ],
-            },
-            {
-                "name": "multiple_systems",
-                "messages": [
-                    {"role": "system", "content": "System 1."},
-                    {"role": "system", "content": "System 2."},
-                    {"role": "user", "content": "Hello"},
-                    {"role": "assistant", "content": "Hi"},
-                ],
-            },
-            {
-                "name": "mid_conv_system",
-                "messages": [
-                    {"role": "user", "content": "Hello"},
-                    {"role": "system", "content": "New instruction."},
-                    {"role": "assistant", "content": "Got it"},
-                ],
-            },
-            {
-                "name": "mid_conv_system_with_consecutive_users",
-                "messages": [
-                    {"role": "system", "content": "Be helpful."},
-                    {"role": "user", "content": "Hello"},
-                    {"role": "user", "content": "World"},
-                    {"role": "system", "content": "Now be concise."},
-                    {"role": "assistant", "content": "Got it"},
-                ],
-            },
-        ]
-    )
-
-    # Multi-chunk aggregation test cases
-    test_cases.extend(
-        [
-            {
-                "name": "consecutive_users_text_chunks",
-                "messages": [
-                    {"role": "user", "content": "First as string"},
-                    {"role": "user", "content": [{"type": "text", "text": "Second as chunk"}]},
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "Third part A"},
-                            {"type": "text", "text": "Third part B"},
-                        ],
-                    },
-                    {"role": "assistant", "content": "Response"},
-                ],
-            },
-            {
-                "name": "system_text_chunks",
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": [
-                            {"type": "text", "text": "You are helpful."},
-                            {"type": "text", "text": "Be concise."},
-                        ],
-                    },
-                    {"role": "user", "content": "Hello"},
-                    {"role": "assistant", "content": "Hi"},
-                ],
-            },
-        ]
-    )
-
-    if config.image:
-        test_cases.extend(
-            [
-                {
-                    "name": "consecutive_users_with_image",
-                    "messages": [
-                        {"role": "user", "content": "What is this?"},
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "image_url", "image_url": "http://example.com/image.png"},
-                                {"type": "text", "text": "Describe it"},
-                            ],
-                        },
-                        {"role": "assistant", "content": "It's an image."},
-                    ],
-                },
-                {
-                    "name": "consecutive_users_multi_image",
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": "Describe this"},
-                                {"type": "image_url", "image_url": "http://example.com/a.png"},
-                                {"type": "text", "text": "What color?"},
-                            ],
-                        },
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": "Also this"},
-                                {"type": "image_url", "image_url": "http://example.com/b.png"},
-                                {"type": "text", "text": "What shape?"},
-                            ],
-                        },
-                        {"role": "assistant", "content": "Both are red squares."},
-                    ],
-                },
-            ]
-        )
-
-    if config.audio:
-        test_cases.append(
-            {
-                "name": "consecutive_users_multi_audio",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "Listen"},
-                            {"type": "audio_url", "audio_url": "http://example.com/a.wav"},
-                            {"type": "text", "text": "What language?"},
-                        ],
-                    },
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "And this"},
-                            {"type": "audio_url", "audio_url": "http://example.com/b.wav"},
-                            {"type": "text", "text": "Transcribe it"},
-                        ],
-                    },
-                    {"role": "assistant", "content": "Both are in English."},
-                ],
-            }
-        )
-
-    if config.think:
-        test_cases.extend(
-            [
-                {
-                    "name": "consecutive_assistants_think",
-                    "messages": [
-                        {"role": "user", "content": "Solve this"},
-                        {
-                            "role": "assistant",
-                            "content": [
-                                {"type": "text", "text": "Hmm."},
-                                {"type": "thinking", "thinking": "Let me think..."},
-                                {"type": "text", "text": "I need more context."},
-                            ],
-                        },
-                        {
-                            "role": "assistant",
-                            "content": [
-                                {"type": "text", "text": "OK."},
-                                {"type": "thinking", "thinking": "Now I understand."},
-                                {"type": "text", "text": "The answer is 42."},
-                            ],
-                        },
-                        {"role": "user", "content": "Thanks"},
-                        {"role": "assistant", "content": "You're welcome"},
-                    ],
-                },
-                {
-                    "name": "consecutive_systems_think",
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": [
-                                {"type": "text", "text": "Rule A"},
-                                {"type": "text", "text": "Rule B"},
-                                {"type": "thinking", "thinking": "Think 1"},
-                            ],
-                        },
-                        {
-                            "role": "system",
-                            "content": [
-                                {"type": "thinking", "thinking": "Think 2"},
-                                {"type": "text", "text": "Rule C"},
-                                {"type": "text", "text": "Rule D"},
-                            ],
-                        },
-                        {"role": "user", "content": "Hello"},
-                        {"role": "assistant", "content": "Hi"},
-                    ],
-                },
-            ]
-        )
-
-    skip_names_image = {"with_image", "consecutive_users_with_image", "consecutive_users_multi_image"}
-    skip_names_audio = {"with_audio", "consecutive_users_multi_audio"}
-    skip_names_think = {"with_thinking", "consecutive_assistants_think", "consecutive_systems_think"}
-    # ThinkChunks in system messages are only supported in v13 (not v15+)
-    skip_names_think_system = {"consecutive_systems_think"}
-    skip_names_tools = {"with_tools_definition", "with_tool_call_and_result"}
-
-    # Not using parametrize here because test_cases are built dynamically based on the
-    # config (version/image/audio/think) from the outer parametrize. Each sub-case is
-    # identifiable via test_name in the assertion failure message.
-    for test_case in test_cases:
-        test_name = test_case["name"]
-        messages = test_case["messages"]
-        tools = test_case.get("tools")
-
-        if test_name in skip_names_image and not config.image:
-            continue
-        if test_name in skip_names_audio and not config.audio:
-            continue
-        if test_name in skip_names_think and not config.think:
-            continue
-        if test_name in skip_names_think_system and config.version >= TokenizerVersion.v15:
-            continue
-        if test_name in skip_names_tools and config.version <= TokenizerVersion.v1:
-            continue
-
-        static_output = render_template(static_template, messages, tools=tools)  # type: ignore
-        dynamic_output = render_template(dynamic_template, messages, tools=tools)  # type: ignore
-
-        assert static_output == dynamic_output, (
-            f"Output mismatch for {config}, case={test_name}\n\n"
-            f"Static output: {static_output}\n"
-            f"Dynamic output: {dynamic_output}"
-        )
+    for mode in (ValidationMode.finetuning, ValidationMode.test):
+        conversations = _get_conversations(config.version, mode, config.image, config.audio, config.think)
+        for idx, request in enumerate(conversations):
+            render_args = _request_to_render_args(request)
+            static_output = render_template(static_template, **render_args)
+            dynamic_output = render_template(dynamic_template, **render_args)
+            assert static_output == dynamic_output, (
+                f"Output mismatch for {config}, mode={mode}, conversation={idx}\n\n"
+                f"Static output: {static_output}\n"
+                f"Dynamic output: {dynamic_output}"
+            )
