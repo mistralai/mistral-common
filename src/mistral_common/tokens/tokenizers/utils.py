@@ -61,19 +61,20 @@ def list_local_hf_repo_files(repo_id: str, revision: str | None) -> list[str]:
 
     if revision is None:
         revision = huggingface_hub.constants.DEFAULT_REVISION
+    if not revision:
+        return []
 
-    if revision:
-        # Snapshots are keyed by commit hash, so a branch/tag revision (e.g. "main") must first be
-        # resolved to its commit hash via the corresponding `refs/<revision>` file. Otherwise it is
-        # looked up as a literal `snapshots/<revision>` directory, which does not exist -> no files.
-        revision_file = repo_cache / "refs" / revision
-        if revision_file.is_file():
-            with revision_file.open("r") as file:
-                revision = file.read().strip()
+    # Snapshots are keyed by commit hash, so resolve a branch/tag revision (e.g. "main") to its
+    # commit hash via the corresponding `refs/<revision>` file before reading the snapshot
+    # directory. Otherwise it is looked up as a literal `snapshots/<revision>` directory, which
+    # does not exist -> no files.
+    revision_file = repo_cache / "refs" / revision
+    if revision_file.is_file():
+        revision = revision_file.read_text().strip()
 
-        revision_dir = repo_cache / "snapshots" / revision
-        if revision_dir.is_dir():
-            return os.listdir(revision_dir)
+    revision_dir = repo_cache / "snapshots" / revision
+    if revision_dir.is_dir():
+        return os.listdir(revision_dir)
 
     return []
 
