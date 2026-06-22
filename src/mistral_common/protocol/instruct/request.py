@@ -235,7 +235,9 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
 
         # Handle messages and tools separately.
         openai_request: dict[str, Any] = self.model_dump(
-            exclude={"messages", "tools", "truncate_for_context_length", "tool_choice"}, exclude_none=True
+            exclude={"messages", "tools", "truncate_for_context_length", "tool_choice"},
+            exclude_none=True,
+            by_alias=True,
         )
 
         # Rename random_seed to seed.
@@ -275,11 +277,6 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         openai_request["tool_choice"] = openai_tool_choice
 
         openai_request.update(kwargs)
-
-        # Rename custom_schema back to schema for OpenAI compatibility.
-        response_format = openai_request.get("response_format")
-        if response_format and response_format.get("json_schema") and "custom_schema" in response_format["json_schema"]:
-            response_format["json_schema"]["schema"] = response_format["json_schema"].pop("custom_schema")
 
         return openai_request
 
