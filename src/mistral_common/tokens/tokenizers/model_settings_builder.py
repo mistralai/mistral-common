@@ -1,11 +1,18 @@
 from enum import Enum
-from typing import Any, Generic, TypeVar, final
+from typing import Any, ClassVar, Generic, Literal, TypeAlias, TypeVar, final
 
 from pydantic import model_validator
 
 from mistral_common.base import MistralBase
 from mistral_common.exceptions import InvalidRequestException
-from mistral_common.protocol.instruct.request import ChatCompletionRequest, ModelSettings, ReasoningEffort
+from mistral_common.protocol.instruct.request import (
+    ChatCompletionRequest,
+    ModelSettings,
+    ReasoningEffort,
+    ResponseFormat,
+    SchemaRenderingMode,
+)
+from mistral_common.utils.json_utils import validate_json_schema_by_draft7
 
 
 class ValidatorType(str, Enum):
@@ -13,20 +20,22 @@ class ValidatorType(str, Enum):
 
     Attributes:
         ENUM: Indicates that the validator is for enum values.
+        JSON_SCHEMA: Indicates that the validator is for JSON schema values.
     """
 
     ENUM = "enum"
+    JSON_SCHEMA = "json_schema"
 
 
-T = TypeVar("T")
+InputT = TypeVar("InputT")
+OutputT = TypeVar("OutputT")
+JSONSchemaDict: TypeAlias = dict[str, Any] | None
 
 
-class FieldBuilder(MistralBase, Generic[T]):
+class FieldBuilder(MistralBase, Generic[InputT, OutputT]):
     r"""Base class for field builders.
 
-    This class serves as the base for all field builders in the validation framework.
-    It ensures that all builders have a type attribute that specifies the kind of
-    validation being performed.
+    `InputT` is the request field type, `OutputT` is the converted `ModelSettings` field type.
 
     Attributes:
         type: The type of validator (e.g., ENUM).
@@ -36,7 +45,7 @@ class FieldBuilder(MistralBase, Generic[T]):
 
     type: ValidatorType
     accepts_none: bool
-    default: T | None
+    default: OutputT | None
 
     @model_validator(mode="after")
     def validate_default_accept_none(self) -> "FieldBuilder":
@@ -47,51 +56,42 @@ class FieldBuilder(MistralBase, Generic[T]):
             )
         return self
 
-    def _validate_built_value(self, field_name: str, value: Any) -> None:
-        r"""Validate a non-None built value. Must be implemented by subclasses."""
-        raise NotImplementedError(f"{field_name} is not supported")
+    def _convert(self, input_value: InputT) -> OutputT:
+        r"""Convert a request value to the model-settings value."""
+        raise NotImplementedError
 
-    def _build_from_optional(self, field_name: str, value: T | None) -> T | None:
-        r"""Resolve an optional value, substituting the default if value is None.
+    def _build_from_optional(self, field_name: str, input_value: InputT | None) -> OutputT | None:
+        r"""Resolve an optional value, substituting the default if input is None.
 
         Raises:
-            InvalidRequestException: If value is None and the field does not accept None.
+            InvalidRequestException: If input is None and the field does not accept None.
         """
-        if value is None:
+        if input_value is None:
             if not self.accepts_none:
                 raise InvalidRequestException(f"{field_name} should be set for this model.")
             return self.default
-        return value
+        return self._convert(input_value=input_value)
+
+    def validate_built_value(self, field_name: str, built_value: OutputT | None) -> None:
+        r"""Validate a fully built value. Must be implemented by subclasses."""
+        raise NotImplementedError
 
     @final
-    def validate_built_value(self, field_name: str, value: Any) -> None:
-        r"""Validate a fully built value, including None checks.
-
-        Raises:
-            InvalidRequestException: If value is None when not permitted, or fails subclass validation.
-        """
-        if value is None:
-            if not (self.accepts_none and self.default is None):
-                raise InvalidRequestException(f"{field_name} should be set for this model.")
-        else:
-            self._validate_built_value(field_name, value)
-
-    @final
-    def build_value(self, field_name: str, value: T | None) -> T | None:
+    def build_value(self, field_name: str, input_value: InputT | None) -> OutputT | None:
         r"""Resolve and validate a field value, returning the final built result.
 
         Raises:
             InvalidRequestException: If the value is invalid or missing when required.
         """
-        value = self._build_from_optional(field_name, value)
-        self.validate_built_value(field_name, value)
-        return value
+        built_value = self._build_from_optional(field_name, input_value)
+        self.validate_built_value(field_name, built_value)
+        return built_value
 
 
 E = TypeVar("E", bound=Enum)
 
 
-class EnumBuilder(FieldBuilder[E]):
+class EnumBuilder(FieldBuilder[E, E]):
     r"""Builder for enum fields.
 
     This class validates that enum fields contain only authorized values.
@@ -105,6 +105,10 @@ class EnumBuilder(FieldBuilder[E]):
 
     type: ValidatorType = ValidatorType.ENUM
     values: list[E]
+
+    def _convert(self, input_value: E) -> E:
+        r"""Enum builders pass values through unchanged."""
+        return input_value
 
     @model_validator(mode="after")
     def validate_unique_values(self) -> "EnumBuilder":
@@ -127,16 +131,42 @@ class EnumBuilder(FieldBuilder[E]):
             raise ValueError(f"Default value {self.default=} is not in {self.values=}.")
         return self
 
-    def _validate_built_value(self, field_name: str, value: Any) -> None:
-        r"""Check that value is one of the allowed enum values.
+    def validate_built_value(self, field_name: str, built_value: E | None) -> None:
+        r"""Check that the built value is one of the allowed enum values.
 
         Raises:
-            InvalidRequestException: If no values are allowed, or value is not in the allowed list.
+            InvalidRequestException: If unset when required, unsupported, or not allowed.
         """
-        if len(self.values) == 0:
+        if built_value is None:
+            if not (self.accepts_none and self.default is None):
+                raise InvalidRequestException(f"{field_name} should be set for this model.")
+        elif len(self.values) == 0:
             raise InvalidRequestException(f"{field_name} not supported for this model.")
-        if value not in self.values:
-            raise InvalidRequestException(f"{field_name} should be one of {self.values}, got {value}.")
+        elif built_value not in self.values:
+            raise InvalidRequestException(f"{field_name} should be one of {self.values}, got {built_value}.")
+
+
+class JSONSchemaBuilder(FieldBuilder[ResponseFormat, JSONSchemaDict]):
+    r"""Converts a `ResponseFormat` into a JSON-schema dict for model settings.
+
+    Attributes:
+        type: The type of validator (always JSON_SCHEMA for this class).
+        accepts_none: Always False, as a response format is always present on the request.
+        default: Always None, no default schema is supported.
+    """
+
+    type: ValidatorType = ValidatorType.JSON_SCHEMA
+    accepts_none: Literal[False]
+    default: None
+
+    def _convert(self, input_value: ResponseFormat) -> JSONSchemaDict:
+        r"""Render the response format's schema for model-settings encoding."""
+        return input_value.get_schema(purpose=SchemaRenderingMode.model_settings)
+
+    def validate_built_value(self, field_name: str, built_value: JSONSchemaDict) -> None:
+        r"""Validate the built schema against Draft 7 when present."""
+        if built_value is not None:
+            validate_json_schema_by_draft7(built_value)
 
 
 class ModelSettingsBuilder(MistralBase):
@@ -151,9 +181,16 @@ class ModelSettingsBuilder(MistralBase):
 
     Attributes:
         reasoning_effort: Builder for the allowed ReasoningEffort values, or None if unsupported.
+        json_schema: Builder for the response-format JSON schema, or None if unsupported.
     """
 
+    _SETTINGS_TO_CONV_FIELDS_MAP: ClassVar[dict[str, str]] = {
+        "reasoning_effort": "reasoning_effort",
+        "json_schema": "response_format",
+    }
+
     reasoning_effort: EnumBuilder[ReasoningEffort] | None = None
+    json_schema: JSONSchemaBuilder | None = None
 
     @staticmethod
     def none() -> "ModelSettingsBuilder":
@@ -178,7 +215,7 @@ class ModelSettingsBuilder(MistralBase):
         dict_settings = {}
         for field_name in ModelSettingsBuilder.model_fields:
             # We have a CI test to ensure all fields match between ModelSettings and ModelSettingsEncoder.
-            value = getattr(request, field_name)
+            value = getattr(request, self._SETTINGS_TO_CONV_FIELDS_MAP[field_name])
             field_builder: FieldBuilder | None = getattr(self, field_name)
             if field_builder is not None:
                 dict_settings[field_name] = field_builder.build_value(field_name, value)

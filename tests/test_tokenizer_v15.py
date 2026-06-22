@@ -13,15 +13,22 @@ from mistral_common.protocol.instruct.normalize import get_normalizer
 from mistral_common.protocol.instruct.request import (
     ChatCompletionRequest,
     InstructRequest,
+    JsonSchema,
     ModelSettings,
     ReasoningEffort,
+    ResponseFormat,
+    ResponseFormats,
 )
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.protocol.instruct.validator import ValidationMode, get_validator
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV15
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
+from mistral_common.tokens.tokenizers.model_settings_builder import (
+    EnumBuilder,
+    JSONSchemaBuilder,
+    ModelSettingsBuilder,
+)
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import get_special_tokens, quick_vocab
 
@@ -281,6 +288,24 @@ def test_end_to_end_no_default(messages: list[ChatMessage], reasoning_effort: Re
     else:
         # None with no default -> no model settings encoded
         assert "[MODEL_SETTINGS]" not in text
+
+
+@pytest.fixture
+def v15_json_schema_mistral_tokenizer() -> MistralTokenizer:
+    builder = ModelSettingsBuilder(json_schema=JSONSchemaBuilder(accepts_none=False, default=None))
+    return get_v15_mistral_tokenizer(builder)
+
+
+def test_v15_encodes_json_schema_into_model_settings(
+    v15_json_schema_mistral_tokenizer: MistralTokenizer,
+) -> None:
+    tok = v15_json_schema_mistral_tokenizer
+    rf = ResponseFormat(type=ResponseFormats.json_schema, json_schema=JsonSchema(name="x", schema={"type": "object"}))
+    request = ChatCompletionRequest(messages=[UserMessage(content="hi")], response_format=rf)
+    tokenized = tok.encode_chat_completion(request)
+    text = tokenized.text or ""
+    assert '"json_schema"' in text
+    assert '"object"' in text
 
 
 def test_encode_chat_completion_continue_final_message() -> None:
