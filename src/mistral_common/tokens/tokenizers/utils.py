@@ -64,10 +64,7 @@ def list_local_hf_repo_files(repo_id: str, revision: str | None) -> list[str]:
     if not revision:
         return []
 
-    # Snapshots are keyed by commit hash, so resolve a branch/tag revision (e.g. "main") to its
-    # commit hash via the corresponding `refs/<revision>` file before reading the snapshot
-    # directory. Otherwise it is looked up as a literal `snapshots/<revision>` directory, which
-    # does not exist -> no files.
+    # Snapshots are keyed by commit hash, so resolve a branch/tag revision (e.g. "main") via `refs`.
     revision_file = repo_cache / "refs" / revision
     if revision_file.is_file():
         revision = revision_file.read_text().strip()
@@ -172,8 +169,6 @@ def download_tokenizer_from_hf_hub(
             hf_api = huggingface_hub.HfApi()
             repo_files = hf_api.list_repo_files(repo_id, revision=revision, token=token)
             local_files_only = False
-        # `OfflineModeIsEnabled` (raised when `HF_HUB_OFFLINE` is set) is a builtin `ConnectionError`
-        # subclass, not a `requests.*` error, so it must be caught explicitly to reach the local fallback.
         except (
             requests.ConnectionError,
             requests.HTTPError,

@@ -191,8 +191,6 @@ def test_download_tokenizer_from_hf_hub_without_connection(mock_list_repo_files:
 
 @patch("huggingface_hub.HfApi.list_repo_files")
 def test_download_tokenizer_from_hf_hub_offline_mode(mock_list_repo_files: MagicMock) -> None:
-    # In offline mode, huggingface_hub raises OfflineModeIsEnabled (a builtin ConnectionError subclass, not a
-    # requests.* error) before any network call, so the tokenizer must still be resolved from the local cache.
     mock_list_repo_files.side_effect = huggingface_hub.errors.OfflineModeIsEnabled("offline mode is enabled")
 
     hf_cache = _create_temporary_hf_model_cache("mistralai/Mistral-7B-v0.1")
