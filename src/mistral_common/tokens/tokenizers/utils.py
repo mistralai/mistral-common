@@ -12,6 +12,7 @@ _hub_installed: bool
 try:
     import huggingface_hub
     import huggingface_hub.constants
+    import huggingface_hub.errors
 
     _hub_installed = True
 except ImportError:
@@ -59,15 +60,18 @@ def list_local_hf_repo_files(repo_id: str, revision: str | None) -> list[str]:
     )
 
     if revision is None:
-        revision_file = repo_cache / "refs" / huggingface_hub.constants.DEFAULT_REVISION
-        if revision_file.is_file():
-            with revision_file.open("r") as file:
-                revision = file.read()
+        revision = huggingface_hub.constants.DEFAULT_REVISION
+    if not revision:
+        return []
 
-    if revision:
-        revision_dir = repo_cache / "snapshots" / revision
-        if revision_dir.is_dir():
-            return os.listdir(revision_dir)
+    # Snapshots are keyed by commit hash, so resolve a branch/tag revision (e.g. "main") via `refs`.
+    revision_file = repo_cache / "refs" / revision
+    if revision_file.is_file():
+        revision = revision_file.read_text().strip()
+
+    revision_dir = repo_cache / "snapshots" / revision
+    if revision_dir.is_dir():
+        return os.listdir(revision_dir)
 
     return []
 
@@ -165,7 +169,12 @@ def download_tokenizer_from_hf_hub(
             hf_api = huggingface_hub.HfApi()
             repo_files = hf_api.list_repo_files(repo_id, revision=revision, token=token)
             local_files_only = False
-        except (requests.ConnectionError, requests.HTTPError, requests.Timeout) as e:
+        except (
+            requests.ConnectionError,
+            requests.HTTPError,
+            requests.Timeout,
+            huggingface_hub.errors.OfflineModeIsEnabled,
+        ) as e:
             if force_download:
                 raise e
 
