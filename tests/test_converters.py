@@ -55,7 +55,12 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.request import (
     ChatCompletionRequest,
+    InstructRequest,
+    JsonSchema,
+    ModelSettings,
     ReasoningEffort,
+    ResponseFormat,
+    ResponseFormats,
 )
 from mistral_common.protocol.instruct.tool_calls import (
     Function,
@@ -743,6 +748,23 @@ def test_request_to_openai_forwards_reasoning_field_format() -> None:
     openai_request = request.to_openai(reasoning_field_format=ReasoningFieldFormat.reasoning)
     assistant_msg = [m for m in openai_request["messages"] if m["role"] == "assistant"][0]
     assert assistant_msg == {"role": "assistant", "reasoning": "Let me think", "content": "Done"}
+
+
+def test_to_openai_renames_custom_schema_to_schema() -> None:
+    schema = {"type": "object"}
+    rf = ResponseFormat(type=ResponseFormats.json_schema, json_schema=JsonSchema(name="x", schema=schema))
+    out = ChatCompletionRequest(messages=[UserMessage(content="hi")], response_format=rf).to_openai()
+    assert out["response_format"]["json_schema"]["schema"] == schema
+    assert "custom_schema" not in out["response_format"]["json_schema"]
+
+
+def test_from_openai_accepts_schema_key() -> None:
+    schema = {"type": "object"}
+    req = ChatCompletionRequest.from_openai(
+        messages=[{"role": "user", "content": "hi"}],
+        response_format={"type": "json_schema", "json_schema": {"name": "x", "schema": schema}},
+    )
+    assert req.response_format.json_schema.custom_schema == schema
 
 
 @pytest.mark.parametrize(
