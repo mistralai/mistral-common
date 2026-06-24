@@ -248,6 +248,10 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
 class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
     r"""A valid Instruct request to be tokenized.
 
+    Note:
+        This class is intended for internal use only. External users should use `ChatCompletionRequest` to build
+        requests and to convert to and from the OpenAI format.
+
     Attributes:
         messages: The history of the conversation.
         system_prompt: The system prompt to be used for the conversation.
@@ -269,132 +273,3 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
     truncate_at_max_tokens: int | None = None
     continue_final_message: bool = False
     settings: ModelSettings = Field(default_factory=ModelSettings.none)
-
-    def to_openai(
-        self,
-        reasoning_field_format: ReasoningFieldFormat | None = None,
-        **kwargs: Any,
-    ) -> dict[str, list[dict[str, Any]]]:
-        r"""Convert the request messages and tools into the OpenAI format.
-
-        Args:
-            reasoning_field_format: Format for converting thinking chunks in assistant messages.
-                See `AssistantMessage.to_openai` for details.
-            kwargs: Additional parameters to be added to the request.
-
-        Returns:
-            The request in the OpenAI format.
-
-        Examples:
-            >>> from mistral_common.protocol.instruct.messages import UserMessage
-            >>> from mistral_common.protocol.instruct.tool_calls import Tool, Function
-            >>> request = InstructRequest(messages=[UserMessage(content="Hello, how are you?")])
-            >>> request.to_openai(temperature=0.15, stream=True)
-            {'continue_final_message': False, 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'temperature': 0.15, 'stream': True}
-            >>> request = InstructRequest(
-            ...     messages=[UserMessage(content="Hello, how are you?")],
-            ...     available_tools=[
-            ...     Tool(function=Function(
-            ...         name="get_current_weather",
-            ...         description="Get the current weather in a given location",
-            ...         parameters={
-            ...             "type": "object",
-            ...             "properties": {
-            ...                 "location": {
-            ...                     "type": "string",
-            ...                     "description": "The city and state, e.g. San Francisco, CA",
-            ...                 },
-            ...                 "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]},
-            ...             },
-            ...             "required": ["location"],
-            ...         },
-            ...     ),
-            ... )])
-            >>> request.to_openai()
-            {'continue_final_message': False, 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'tools': [{'type': 'function', 'function': {'name': 'get_current_weather', 'description': 'Get the current weather in a given location', 'parameters': {'type': 'object', 'properties': {'location': {'type': 'string', 'description': 'The city and state, e.g. San Francisco, CA'}, 'unit': {'type': 'string', 'enum': ['celsius', 'fahrenheit']}}, 'required': ['location']}, 'strict': False}}]}
-        """  # noqa: E501
-
-        # Handle messages, tools, and truncate_at_max_tokens separately.
-        openai_request: dict[str, Any] = self.model_dump(
-            exclude={"messages", "available_tools", "truncate_at_max_tokens", "settings"}, exclude_none=True
-        )
-
-        for kwarg in kwargs:
-            if kwarg in openai_request:
-                raise ValueError(f"Duplicate keyword argument: {kwarg}")
-            elif kwarg in InstructRequest.model_fields:
-                raise ValueError(f"Keyword argument {kwarg} is already set in the request.")
-
-        openai_messages: list[dict[str, Any]] = []
-        if self.system_prompt is not None:
-            openai_messages.append({"role": "system", "content": self.system_prompt})
-
-        for message in self.messages:
-            if isinstance(message, AssistantMessage):
-                openai_messages.append(message.to_openai(reasoning_field_format=reasoning_field_format))
-            else:
-                openai_messages.append(message.to_openai())
-
-        openai_request["messages"] = openai_messages
-        if self.available_tools is not None:
-            # Rename available_tools to tools
-            openai_request["tools"] = [tool.to_openai() for tool in self.available_tools]
-
-        if self.truncate_at_max_tokens is not None:
-            raise NotImplementedError("Truncating at max tokens is not implemented for OpenAI requests.")
-
-        openai_request.update(kwargs)
-        openai_request.update(**self.settings.model_dump(exclude_none=True))
-
-        return openai_request
-
-    @classmethod
-    def from_openai(
-        cls,
-        messages: list[dict[str, str | list[dict[str, str | dict[str, Any]]]]],
-        tools: list[dict[str, Any]] | None = None,
-        continue_final_message: bool = False,
-        **kwargs: Any,
-    ) -> "InstructRequest":
-        r"""Create an instruct request from the OpenAI format.
-
-        Args:
-            messages: The messages in the OpenAI format.
-            tools: The tools in the OpenAI format.
-            continue_final_message: Whether to continue the final message.
-            **kwargs: Additional keyword arguments to pass to the constructor. These should be the same as the fields
-                of the request class or the OpenAI API equivalent.
-
-        Returns:
-            The instruct request.
-        """
-        # Handle the case where the tools are passed as `available_tools`.
-        # This is to maintain compatibility with the OpenAI API.
-        if "available_tools" in kwargs:
-            if tools is None:
-                tools = kwargs.pop("available_tools")
-            else:
-                raise ValueError("Cannot specify both `tools` and `available_tools`.")
-
-        model_settings_fields = ModelSettings.model_fields.keys()
-        instruct_request_fields = cls.model_fields.keys()
-        assert instruct_request_fields.isdisjoint(model_settings_fields), (
-            "ModelSettings fields should not overlap with InstructRequest fields."
-        )
-        valid_fields = instruct_request_fields | model_settings_fields
-        filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_fields}
-
-        converted_messages: list[ChatMessage] = convert_openai_messages(messages)
-
-        converted_tools = convert_openai_tools(tools) if tools is not None else None
-
-        model_settings = ModelSettings(**{k: v for k, v in filtered_kwargs.items() if k in model_settings_fields})
-        other_kwargs = {k: v for k, v in filtered_kwargs.items() if k not in model_settings_fields}
-
-        return cls(
-            messages=converted_messages,  # type: ignore[arg-type]
-            available_tools=converted_tools,  # type: ignore[arg-type]
-            continue_final_message=continue_final_message,
-            settings=model_settings,
-            **other_kwargs,
-        )
