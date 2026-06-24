@@ -100,18 +100,6 @@ class JsonSchema(MistralBase):
         return value
 
 
-class SchemaRenderingMode(str, Enum):
-    r"""Purpose for which a response-format schema is rendered.
-
-    Attributes:
-        grammar: Render for guided-decoding grammars.
-        model_settings: Render for encoding into model settings.
-    """
-
-    grammar = "grammar"
-    model_settings = "model_settings"
-
-
 class ResponseFormat(MistralBase):
     r"""The format of the response.
 
@@ -126,11 +114,8 @@ class ResponseFormat(MistralBase):
     type: ResponseFormats = ResponseFormats.text
     json_schema: JsonSchema | None = None
 
-    def get_schema(self, purpose: SchemaRenderingMode) -> dict[str, Any] | None:
+    def get_schema(self) -> dict[str, Any] | None:
         r"""Return the JSON schema to enforce for this response format.
-
-        Args:
-            purpose: Why the schema is being rendered.
 
         Returns:
             The schema dict, or None when no constraint applies.
@@ -142,11 +127,7 @@ class ResponseFormat(MistralBase):
         if self.type == ResponseFormats.json_schema:
             if self.json_schema is None:
                 raise InvalidRequestException("Response format `json_schema` must define the schema")
-            schema = (
-                self.json_schema.custom_schema
-                if (self.json_schema.strict or purpose == SchemaRenderingMode.model_settings)
-                else {"type": "object"}
-            )
+            schema = self.json_schema.custom_schema
         elif self.type == ResponseFormats.json:
             schema = {"anyOf": [{"type": "object"}, {"type": "array"}]}
         else:

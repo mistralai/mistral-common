@@ -10,7 +10,6 @@ from mistral_common.protocol.instruct.request import (
     ModelSettings,
     ReasoningEffort,
     ResponseFormat,
-    SchemaRenderingMode,
 )
 from mistral_common.utils.json_utils import validate_json_schema_by_draft7
 
@@ -161,7 +160,7 @@ class JSONSchemaBuilder(FieldBuilder[ResponseFormat, JSONSchemaDict]):
 
     def _convert(self, input_value: ResponseFormat) -> JSONSchemaDict:
         r"""Render the response format's schema for model-settings encoding."""
-        return input_value.get_schema(purpose=SchemaRenderingMode.model_settings)
+        return input_value.get_schema()
 
     def validate_built_value(self, field_name: str, built_value: JSONSchemaDict) -> None:
         r"""Validate the built schema against Draft 7 when present."""
