@@ -89,12 +89,12 @@ class JsonSchema(MistralBase):
 
     name: str
     description: str | None = None
-    custom_schema: dict = Field(..., alias="schema")
+    custom_schema: dict[str, Any] = Field(..., alias="schema")
     strict: bool = False
 
     @field_validator("custom_schema")
     @classmethod
-    def validate_custom_schema(cls, value: dict) -> dict:
+    def validate_custom_schema(cls, value: dict[str, Any]) -> dict[str, Any]:
         r"""Validate the schema against JSON Schema Draft 7."""
         validate_json_schema_by_draft7(value=value)
         return value
