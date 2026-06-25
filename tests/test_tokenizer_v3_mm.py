@@ -15,7 +15,7 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.base import Tokenized
-from mistral_common.tokens.tokenizers.image import ImageEncoder
+from mistral_common.tokens.tokenizers.image import ImageEncoder, SpecialImageIDs
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 text_alignment_requests: list[ChatCompletionRequest] = [
@@ -123,6 +123,32 @@ text_requests: list[ChatCompletionRequest] = [
 ]
 
 
+def _image_tokens(width: int, height: int, special_ids: SpecialImageIDs) -> list[int]:
+    image_tokens = ([special_ids.img] * width + [special_ids.img_break]) * height
+    image_tokens[-1] = special_ids.img_end
+    return image_tokens
+
+
+def _set_test_image_patch_size(tokenizer: MistralTokenizer) -> ImageEncoder:
+    image_encoder = tokenizer.instruct_tokenizer.image_encoder
+    assert isinstance(image_encoder, ImageEncoder)
+    image_encoder.image_config.image_patch_size = 2
+    return image_encoder
+
+
+def _image_tokenizer_spans(tokens: list[int], special_ids: SpecialImageIDs) -> list[list[int]]:
+    spans: list[list[int]] = []
+    start_idx: int | None = None
+    for idx, token in enumerate(tokens):
+        if start_idx is None:
+            if token == special_ids.img:
+                start_idx = idx
+        elif token == special_ids.img_end:
+            spans.append(tokens[start_idx : idx + 1])
+            start_idx = None
+    return spans
+
+
 @pytest.fixture
 def mm_tokenizer() -> MistralTokenizer:
     path = str(MistralTokenizer._data_path() / "tekken_240911.json")
@@ -135,6 +161,11 @@ def text_tokenizer() -> MistralTokenizer:
     path = str(MistralTokenizer._data_path() / "tekken_240718.json")
     tokenizer = MistralTokenizer.from_file(path)
     return tokenizer
+
+
+@pytest.fixture
+def spm_tokenizer() -> MistralTokenizer:
+    return MistralTokenizer.v7(is_mm=True)
 
 
 @pytest.mark.parametrize("r", text_alignment_requests)
@@ -258,3 +289,92 @@ def test_image_tokenization_integration(mm_tokenizer: MistralTokenizer) -> None:
     for r, expected_tokens in zip(requests, expected, **kw_args):
         output: Tokenized = mm_tokenizer.encode_chat_completion(r)
         assert output.tokens == expected_tokens, f"Incorrect tokens for request {r}"
+
+
+@pytest.mark.parametrize("tokenizer_fixture_name", ["mm_tokenizer", "spm_tokenizer"])
+@pytest.mark.parametrize(
+    "content",
+    [
+        pytest.param(
+            [
+                TextChunk(text=""),
+                ImageChunk(image=Image.new("RGB", (4, 4), "red")),
+                ImageChunk(image=Image.new("RGB", (6, 4), "blue")),
+            ],
+            id="empty-text-then-two-images",
+        ),
+        pytest.param(
+            [
+                TextChunk(text="x"),
+                ImageChunk(image=Image.new("RGB", (4, 4), "red")),
+                ImageChunk(image=Image.new("RGB", (6, 4), "blue")),
+            ],
+            id="text-then-two-images",
+        ),
+        pytest.param(
+            [
+                ImageChunk(image=Image.new("RGB", (4, 4), "red")),
+                ImageChunk(image=Image.new("RGB", (6, 4), "blue")),
+            ],
+            id="two-images",
+        ),
+    ],
+)
+def test_multi_image_order_is_preserved(
+    request: pytest.FixtureRequest,
+    tokenizer_fixture_name: str,
+    content: list[ContentChunk],
+) -> None:
+    tokenizer = request.getfixturevalue(tokenizer_fixture_name)
+    image_encoder = _set_test_image_patch_size(tokenizer)
+    tokenized = tokenizer.encode_chat_completion(ChatCompletionRequest(messages=[UserMessage(content=content)]))
+    assert _image_tokenizer_spans(tokenized.tokens, image_encoder.special_ids) == [
+        _image_tokens(2, 2, image_encoder.special_ids),
+        _image_tokens(3, 2, image_encoder.special_ids),
+    ]
+
+
+@pytest.mark.parametrize("tokenizer_fixture_name", ["mm_tokenizer", "spm_tokenizer"])
+def test_single_trailing_image_moves_first(request: pytest.FixtureRequest, tokenizer_fixture_name: str) -> None:
+    tokenizer = request.getfixturevalue(tokenizer_fixture_name)
+    image_encoder = _set_test_image_patch_size(tokenizer)
+    tokenized = tokenizer.encode_chat_completion(
+        ChatCompletionRequest(
+            messages=[
+                UserMessage(
+                    content=[
+                        TextChunk(text="x"),
+                        ImageChunk(image=Image.new("RGB", (4, 4), "red")),
+                    ]
+                )
+            ]
+        )
+    )
+    assert _image_tokenizer_spans(tokenized.tokens, image_encoder.special_ids) == [
+        _image_tokens(2, 2, image_encoder.special_ids)
+    ]
+    x_token = tokenizer.instruct_tokenizer.tokenizer.encode("x", bos=False, eos=False)[0]
+    assert tokenized.tokens.index(image_encoder.special_ids.img) < tokenized.tokens.index(x_token)
+
+
+@pytest.mark.parametrize("tokenizer_fixture_name", ["mm_tokenizer", "spm_tokenizer"])
+def test_single_leading_image_remains_first(request: pytest.FixtureRequest, tokenizer_fixture_name: str) -> None:
+    tokenizer = request.getfixturevalue(tokenizer_fixture_name)
+    image_encoder = _set_test_image_patch_size(tokenizer)
+    tokenized = tokenizer.encode_chat_completion(
+        ChatCompletionRequest(
+            messages=[
+                UserMessage(
+                    content=[
+                        ImageChunk(image=Image.new("RGB", (4, 4), "red")),
+                        TextChunk(text="x"),
+                    ]
+                )
+            ]
+        )
+    )
+    assert _image_tokenizer_spans(tokenized.tokens, image_encoder.special_ids) == [
+        _image_tokens(2, 2, image_encoder.special_ids)
+    ]
+    x_token = tokenizer.instruct_tokenizer.tokenizer.encode("x", bos=False, eos=False)[0]
+    assert tokenized.tokens.index(image_encoder.special_ids.img) < tokenized.tokens.index(x_token)

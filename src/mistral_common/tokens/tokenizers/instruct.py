@@ -739,6 +739,19 @@ class InstructTokenizerV3(
         else:
             raise ValueError(f"Unknown chunk type: {chunk}")
 
+    @staticmethod
+    def _maybe_put_image_first(content: list[ContentChunk]) -> list[ContentChunk]:
+        image_types = (ImageChunk, ImageURLChunk)
+        if sum(isinstance(chunk, image_types) for chunk in content) != 1:
+            return content
+        if not all(isinstance(chunk, (TextChunk, *image_types)) for chunk in content):
+            return content
+        if isinstance(content[0], image_types):
+            return content
+        if isinstance(content[-1], image_types):
+            return [content[-1], *content[:-1]]
+        return content
+
     def _encode_content_chunks(
         self, content: Sequence[ContentChunk]
     ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
@@ -780,10 +793,8 @@ class InstructTokenizerV3(
         images: list[np.ndarray] = []
         audio: list[Audio] = []
 
-        has_one_img_one_text_first = len(content) == 2 and isinstance(content[1], (ImageChunk, ImageURLChunk))
-        if force_img_first and has_one_img_one_text_first:
-            # make sure that if exactly one image and text chunk are passed we force the image chunk to be first
-            content = [content[1], content[0]]
+        if force_img_first:
+            content = self._maybe_put_image_first(content)
 
         first_chunk = True
         for chunk in content:
@@ -929,10 +940,8 @@ class InstructTokenizerV7(InstructTokenizerV3):
         if isinstance(content, str):
             return super().encode_user_content(content, is_last, system_prompt)
 
-        has_one_img_one_text_first = len(content) == 2 and isinstance(content[1], (ImageChunk, ImageURLChunk))
-        if force_img_first and has_one_img_one_text_first:
-            # make sure that if exactly one image and text chunk are passed we force the image chunk to be first
-            content = [content[1], content[0]]
+        if force_img_first:
+            content = self._maybe_put_image_first(content)
 
         tokens, images, audio = self._encode_content_chunks(content)
         return tokens, images, audio
