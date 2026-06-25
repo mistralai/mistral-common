@@ -55,8 +55,6 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.request import (
     ChatCompletionRequest,
-    InstructRequest,
-    ModelSettings,
     ReasoningEffort,
 )
 from mistral_common.protocol.instruct.tool_calls import (
@@ -735,22 +733,12 @@ def test_assistant_message_to_openai_none_no_warning_with_none_content() -> None
     assert result == {"role": "assistant"}
 
 
-@pytest.mark.parametrize(
-    "request_cls",
-    [ChatCompletionRequest, InstructRequest],
-)
-def test_request_to_openai_forwards_reasoning_field_format(
-    request_cls: type[ChatCompletionRequest | InstructRequest],
-) -> None:
+def test_request_to_openai_forwards_reasoning_field_format() -> None:
     messages: list[ChatMessage] = [
         UserMessage(content="Hi"),
         AssistantMessage(content=[ThinkChunk(thinking="Let me think", closed=True), TextChunk(text="Done")]),
     ]
-    request: ChatCompletionRequest | InstructRequest
-    if request_cls == ChatCompletionRequest:
-        request = ChatCompletionRequest(messages=messages)
-    else:
-        request = InstructRequest(messages=messages)
+    request = ChatCompletionRequest(messages=messages)
 
     openai_request = request.to_openai(reasoning_field_format=ReasoningFieldFormat.reasoning)
     assistant_msg = [m for m in openai_request["messages"] if m["role"] == "assistant"][0]
@@ -760,13 +748,6 @@ def test_request_to_openai_forwards_reasoning_field_format(
 @pytest.mark.parametrize(
     "reasoning_effort",
     [None, ReasoningEffort.none, ReasoningEffort.high],
-)
-@pytest.mark.parametrize(
-    ["request_cls"],
-    [
-        (ChatCompletionRequest,),
-        (InstructRequest,),
-    ],
 )
 @pytest.mark.parametrize(
     ["openai_messages", "messages", "openai_tools", "tools"],
@@ -1033,22 +1014,13 @@ def test_convert_requests(
     messages: list[ChatMessage],
     openai_tools: list[dict[str, Any]] | None,
     tools: list[Tool] | None,
-    request_cls: type[ChatCompletionRequest | InstructRequest],
     reasoning_effort: ReasoningEffort | None,
 ) -> None:
-    request: ChatCompletionRequest | InstructRequest
-    if request_cls == ChatCompletionRequest:
-        request = ChatCompletionRequest(
-            messages=messages,
-            tools=tools,
-            reasoning_effort=reasoning_effort,
-        )
-    else:
-        request = InstructRequest(
-            messages=messages,
-            available_tools=tools,
-            settings=ModelSettings(reasoning_effort=reasoning_effort),
-        )
+    request = ChatCompletionRequest(
+        messages=messages,
+        tools=tools,
+        reasoning_effort=reasoning_effort,
+    )
 
     openai_request = request.to_openai(stream=True)
 
@@ -1063,13 +1035,12 @@ def test_convert_requests(
     else:
         assert "reasoning_effort" not in openai_request
 
-    if isinstance(request, ChatCompletionRequest):
-        assert openai_request["temperature"] == 0.7
+    assert openai_request["temperature"] == 0.7
 
     stream = openai_request.pop("stream")
     assert stream is True
 
-    reconstructed_request: ChatCompletionRequest | InstructRequest = type(request).from_openai(**openai_request)
+    reconstructed_request = ChatCompletionRequest.from_openai(**openai_request)
 
     for i, reconstructed_message in enumerate(reconstructed_request.messages):
         if isinstance(reconstructed_message, (SystemMessage, UserMessage, AssistantMessage)):
@@ -1078,11 +1049,7 @@ def test_convert_requests(
             assert reconstructed_message.model_dump(exclude={"name"}) == messages[i].model_dump(exclude={"name"})
 
     if tools is not None:
-        reconstructed_tools = (
-            reconstructed_request.tools
-            if isinstance(reconstructed_request, ChatCompletionRequest)
-            else reconstructed_request.available_tools
-        )
+        reconstructed_tools = reconstructed_request.tools
         assert isinstance(tools, list)
         assert isinstance(reconstructed_tools, list)
 
@@ -1091,10 +1058,7 @@ def test_convert_requests(
         for i in range(len(tools)):
             assert reconstructed_tools[i] == tools[i]
 
-    if isinstance(reconstructed_request, ChatCompletionRequest):
-        assert reconstructed_request.reasoning_effort == reasoning_effort
-    else:
-        assert reconstructed_request.settings.reasoning_effort == reasoning_effort
+    assert reconstructed_request.reasoning_effort == reasoning_effort
 
 
 @pytest.mark.parametrize(
@@ -1428,15 +1392,6 @@ class TestToolChoice:
                 unknown_field="value",
             ),
             ChatCompletionRequest(messages=[UserMessage(content="Hello")], temperature=0.5),
-        ),
-        (
-            lambda: InstructRequest.from_openai(
-                messages=[{"role": "user", "content": "Hello"}],
-                stream=True,
-                n=5,
-                logprobs=False,
-            ),
-            InstructRequest(messages=[UserMessage(content="Hello")]),
         ),
     ],
 )
