@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlparse
 
-from pydantic import ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 from typing_extensions import Annotated
 
 from mistral_common.base import MistralBase
@@ -232,7 +232,7 @@ class RawAudio(MistralBase):
     @field_validator("format")
     def should_not_be_empty(cls, v: str) -> str:
         if not v.strip():
-            raise ValidationError("`format` should not be empty")
+            raise ValueError("`format` should not be empty")
 
         return v
 
@@ -363,9 +363,9 @@ class AudioChunk(BaseContentChunk):
     def should_not_be_empty(cls, v: str | bytes) -> str | bytes:
         r"""Validate that the audio data is not empty."""
         if isinstance(v, str) and not v.strip():
-            raise ValidationError("`input_audio` should not be empty.")
+            raise ValueError("`input_audio` should not be empty.")
         if isinstance(v, bytes) and not v:
-            raise ValidationError("`input_audio` should not be empty.")
+            raise ValueError("`input_audio` should not be empty.")
         return v
 
     @classmethod
