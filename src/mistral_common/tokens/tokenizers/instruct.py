@@ -741,14 +741,13 @@ class InstructTokenizerV3(
 
     @staticmethod
     def _maybe_put_image_first(content: list[ContentChunk]) -> list[ContentChunk]:
+        # Compatibility hack: this belongs in normalization and will be removed in an upcoming version.
         image_types = (ImageChunk, ImageURLChunk)
-        if sum(isinstance(chunk, image_types) for chunk in content) != 1:
-            return content
-        if not all(isinstance(chunk, (TextChunk, *image_types)) for chunk in content):
-            return content
-        if isinstance(content[0], image_types):
-            return content
-        if isinstance(content[-1], image_types):
+        if (
+            len(content) >= 2
+            and isinstance(content[-1], image_types)
+            and all(isinstance(chunk, TextChunk) for chunk in content[:-1])
+        ):
             return [content[-1], *content[:-1]]
         return content
 
