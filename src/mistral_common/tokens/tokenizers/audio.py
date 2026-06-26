@@ -348,7 +348,7 @@ class AudioConfig:
     def __post_init__(self) -> None:
         assert self.frame_rate > 0, self.frame_rate
         assert self.sampling_rate > 0, self.sampling_rate
-        assert self.raw_audio_length_per_tok > 0, (
+        assert self.sampling_rate >= self.frame_rate, (
             f"sampling_rate must be >= frame_rate so that each token spans at least one sample, "
             f"got sampling_rate={self.sampling_rate} and frame_rate={self.frame_rate}"
         )

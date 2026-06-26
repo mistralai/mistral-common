@@ -28,8 +28,6 @@ def sin_wave(sampling_rate: int, duration: float) -> np.ndarray:
 
 
 def test_audio_config_rejects_sampling_rate_below_frame_rate() -> None:
-    # sampling_rate < frame_rate makes raw_audio_length_per_tok == int(sampling_rate // frame_rate) == 0,
-    # which later raises a ZeroDivisionError in the streaming pad path; reject it at construction instead.
     encoding_config = AudioSpectrogramConfig(num_mel_bins=80, hop_length=160, window_size=400)
     with pytest.raises(AssertionError):
         AudioConfig(sampling_rate=1, frame_rate=2.0, encoding_config=encoding_config)
