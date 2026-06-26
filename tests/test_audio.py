@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from mistral_common.audio import hertz_to_mel, mel_filter_bank
 from mistral_common.protocol.instruct.chunk import AudioChunk, RawAudio
 from mistral_common.protocol.transcription.request import TranscriptionRequest
-from mistral_common.tokens.tokenizers.audio import Audio
+from mistral_common.tokens.tokenizers.audio import Audio, AudioConfig, AudioSpectrogramConfig
 
 
 def _make_dummy_base64() -> str:
@@ -26,6 +26,12 @@ def _make_dummy_base64() -> str:
 
 def sin_wave(sampling_rate: int, duration: float) -> np.ndarray:
     return np.sin(np.ones([int(duration * sampling_rate)]))
+
+
+def test_audio_config_rejects_sampling_rate_below_frame_rate() -> None:
+    encoding_config = AudioSpectrogramConfig(num_mel_bins=80, hop_length=160, window_size=400)
+    with pytest.raises(AssertionError):
+        AudioConfig(sampling_rate=1, frame_rate=2.0, encoding_config=encoding_config)
 
 
 def test_audio_resample() -> None:
