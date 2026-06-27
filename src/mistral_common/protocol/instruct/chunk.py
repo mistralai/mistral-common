@@ -463,11 +463,32 @@ ContentChunk = Annotated[
 ]
 
 
+# The OpenAI Responses API spells text/image content types differently from the
+# Chat Completions API that ``ChunkTypes`` mirrors. Map the Responses spellings
+# onto their Chat Completions equivalents so structured Responses input/output
+# is accepted instead of raising e.g. "'input_text' is not a valid ChunkTypes".
+# (``input_image`` carries ``image_url`` as a bare string, which
+# ``ImageURLChunk`` already accepts.)
+_RESPONSES_CONTENT_TYPE_ALIASES: dict[str, ChunkTypes] = {
+    "input_text": ChunkTypes.text,
+    "output_text": ChunkTypes.text,
+    "input_image": ChunkTypes.image_url,
+}
+
+
 def _convert_openai_content_chunks(openai_content_chunks: dict[str, Any]) -> ContentChunk:
     content_type_str = openai_content_chunks.get("type")
 
     if content_type_str is None:
         raise ValueError("Content chunk must have a type field.")
+
+    # Normalize OpenAI Responses content types to the Chat Completions spellings.
+    # The discriminated chunk models require the canonical ``type``, so rewrite
+    # the field too.
+    aliased_type = _RESPONSES_CONTENT_TYPE_ALIASES.get(content_type_str)
+    if aliased_type is not None:
+        openai_content_chunks = {**openai_content_chunks, "type": aliased_type.value}
+        content_type_str = aliased_type.value
 
     content_type = ChunkTypes(content_type_str)
 
