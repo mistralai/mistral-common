@@ -218,29 +218,27 @@ class SentencePieceTokenizer(Tokenizer):
                 f"Expected `special_token_policy` to be a SpecialTokenPolicy, got {type(special_token_policy)}."
             )
 
-        if special_token_policy == SpecialTokenPolicy.RAISE:
-            if any(self.is_special(tok) for tok in tokens):
-                raise ValueError("Decoding `tokens` that contain special tokens with special_token_policy=RAISE.")
+        if special_token_policy == SpecialTokenPolicy.IGNORE:
             return self._model.decode(tokens)  # type: ignore[no-any-return]
 
-        if special_token_policy == SpecialTokenPolicy.KEEP:
-            return self._decode_with_special_tokens(tokens)
-
-        return self._model.decode(tokens)  # type: ignore[no-any-return]
+        return self._decode_with_special_tokens(tokens, special_token_policy)
 
     def id_to_piece(self, token_id: int) -> str:
         r"""Convert the given token id to a token piece."""
         return self._model.id_to_piece(token_id)  # type: ignore
 
-    def _decode_with_special_tokens(self, tokens: list[int]) -> str:
-        # KEEP policy: special tokens are rendered as their piece string and normal tokens are kept
-        # as SentencePiece pieces (see the note in `decode`).
+    def _decode_with_special_tokens(self, tokens: list[int], special_token_policy: SpecialTokenPolicy) -> str:
+        # KEEP renders special tokens (and the normal tokens around them) as their SentencePiece
+        # pieces; RAISE rejects any special token in a single pass and otherwise decodes the
+        # (all-normal) sequence normally.
         text_list = []
         curr_tokens: list[int] = []
         for tok in tokens:
             if self.is_special(tok):
+                if special_token_policy == SpecialTokenPolicy.RAISE:
+                    raise ValueError("Decoding `tokens` that contain special tokens with special_token_policy=RAISE.")
                 if curr_tokens:
-                    text_list.extend([self.id_to_piece(tok) for tok in curr_tokens])
+                    text_list.extend([self.id_to_piece(t) for t in curr_tokens])
                     curr_tokens = []
 
                 text_list.append(self.id_to_piece(tok))
@@ -249,7 +247,11 @@ class SentencePieceTokenizer(Tokenizer):
                 curr_tokens.append(tok)
 
         if curr_tokens:
-            text_list.extend([self.id_to_piece(tok) for tok in curr_tokens])
+            if special_token_policy == SpecialTokenPolicy.RAISE:
+                # Reached only when no special token was present, so decode the whole run.
+                text_list.append(self._model.decode(curr_tokens))
+            else:
+                text_list.extend([self.id_to_piece(t) for t in curr_tokens])
 
         return "".join(text_list)
 
