@@ -52,8 +52,6 @@ def test_sentencepiece_tokenizer_num_specials_property(tokenizer_v7: SentencePie
 
 
 def test_decode_raise_policy_decodes_normal_tokens(tokenizer_v7: SentencePieceTokenizer) -> None:
-    # With no special tokens present, RAISE should decode normal tokens to text just like IGNORE,
-    # not return raw SentencePiece pieces (which is the documented behavior of KEEP only).
     text = "Hello world, how are you?"
     ids = tokenizer_v7.encode(text, bos=False, eos=False)
     assert tokenizer_v7.decode(ids, SpecialTokenPolicy.RAISE) == text

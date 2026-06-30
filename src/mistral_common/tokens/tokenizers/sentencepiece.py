@@ -228,9 +228,6 @@ class SentencePieceTokenizer(Tokenizer):
         return self._model.id_to_piece(token_id)  # type: ignore
 
     def _decode_with_special_tokens(self, tokens: list[int], special_token_policy: SpecialTokenPolicy) -> str:
-        # KEEP renders special tokens (and the normal tokens around them) as their SentencePiece
-        # pieces; RAISE rejects any special token in a single pass and otherwise decodes the
-        # (all-normal) sequence normally.
         text_list = []
         curr_tokens: list[int] = []
         for tok in tokens:
@@ -248,7 +245,6 @@ class SentencePieceTokenizer(Tokenizer):
 
         if curr_tokens:
             if special_token_policy == SpecialTokenPolicy.RAISE:
-                # Reached only when no special token was present, so decode the whole run.
                 text_list.append(self._model.decode(curr_tokens))
             else:
                 text_list.extend([self.id_to_piece(t) for t in curr_tokens])
