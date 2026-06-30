@@ -38,12 +38,14 @@ from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURL,
     AudioURLChunk,
+    ChunkTypes,
     ContentChunk,
     ImageChunk,
     ImageURL,
     ImageURLChunk,
     TextChunk,
     ThinkChunk,
+    _convert_openai_content_chunks,
 )
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
@@ -213,6 +215,28 @@ def test_convert_image_url_chunk(openai_image_url_chunk: dict, image_url_chunk: 
         image_url_chunk.image_url = ImageURL(url=image_url_chunk.image_url, detail=None)
 
     assert ImageURLChunk.from_openai(typeddict_openai) == image_url_chunk
+
+
+@pytest.mark.parametrize("content_type", ["input_text", "output_text"])
+def test_convert_responses_text_chunk(content_type: str) -> None:
+    # The OpenAI Responses API uses "input_text"/"output_text" for text content
+    # (Chat Completions uses "text"); both must parse to a TextChunk rather than
+    # raising "'input_text' is not a valid ChunkTypes".
+    chunk = _convert_openai_content_chunks({"type": content_type, "text": "Hello"})
+    assert isinstance(chunk, TextChunk)
+    assert chunk.type == ChunkTypes.text
+    assert chunk.text == "Hello"
+
+
+def test_convert_responses_image_chunk() -> None:
+    # The OpenAI Responses API uses "input_image" (with image_url as a bare
+    # string) for image content; it must parse to an ImageURLChunk rather than
+    # raising "'input_image' is not a valid ChunkTypes".
+    url = "data:image/png;base64,iVBORw0"
+    chunk = _convert_openai_content_chunks({"type": "input_image", "image_url": url, "detail": "auto"})
+    assert isinstance(chunk, ImageURLChunk)
+    assert chunk.type == ChunkTypes.image_url
+    assert chunk.get_url() == url
 
 
 @pytest.mark.parametrize(
