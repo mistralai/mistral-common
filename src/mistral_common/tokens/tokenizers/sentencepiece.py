@@ -220,7 +220,7 @@ class SentencePieceTokenizer(Tokenizer):
 
         if special_token_policy == SpecialTokenPolicy.IGNORE:
             decoded = self._model.decode(tokens)
-            assert isinstance(decoded, str), f"Mode decoded a {type(decoded)}, not a string."
+            assert isinstance(decoded, str), f"Sentencepiece model decoded a {type(decoded)}, not a string."
             return decoded
 
         return self._decode_with_special_tokens(tokens, special_token_policy)
