@@ -476,16 +476,94 @@ def v15_json_schema_mistral_tokenizer() -> MistralTokenizer:
     return get_v15_mistral_tokenizer(builder)
 
 
+@pytest.mark.parametrize(
+    ("response_format", "expected_text"),
+    [
+        pytest.param(
+            ResponseFormat(type=ResponseFormats.text),
+            "<s>[INST]hi[/INST]",
+            id="text",
+        ),
+        pytest.param(
+            ResponseFormat(type=ResponseFormats.json),
+            '<s>[MODEL_SETTINGS]{"json_schema": {"anyOf": [{"type": "object"}, {"type": "array"}]}}'
+            "[/MODEL_SETTINGS][INST]hi[/INST]",
+            id="json",
+        ),
+        pytest.param(
+            ResponseFormat(
+                type=ResponseFormats.json_schema,
+                json_schema=JsonSchema(name="x", schema={"type": "object"}),
+            ),
+            '<s>[MODEL_SETTINGS]{"json_schema": {"type": "object"}}[/MODEL_SETTINGS][INST]hi[/INST]',
+            id="json_schema",
+        ),
+    ],
+)
 def test_v15_encodes_json_schema_into_model_settings(
     v15_json_schema_mistral_tokenizer: MistralTokenizer,
+    response_format: ResponseFormat,
+    expected_text: str,
 ) -> None:
     tok = v15_json_schema_mistral_tokenizer
-    rf = ResponseFormat(type=ResponseFormats.json_schema, json_schema=JsonSchema(name="x", schema={"type": "object"}))
-    request = ChatCompletionRequest(messages=[UserMessage(content="hi")], response_format=rf)
+    request = ChatCompletionRequest(messages=[UserMessage(content="hi")], response_format=response_format)
     tokenized = tok.encode_chat_completion(request)
-    text = tokenized.text or ""
-    assert '"json_schema"' in text
-    assert '"object"' in text
+    assert tokenized.text == expected_text, tokenized.text
+
+
+@pytest.fixture
+def v15_reasoning_and_json_schema_mistral_tokenizer() -> MistralTokenizer:
+    builder = ModelSettingsBuilder(
+        reasoning_effort=EnumBuilder[ReasoningEffort](values=list(ReasoningEffort), accepts_none=True, default=None),
+        json_schema=JSONSchemaBuilder(accepts_none=False, default=None),
+    )
+    return get_v15_mistral_tokenizer(builder)
+
+
+# Settings JSON is serialized with sort_keys=True, so keys appear alphabetically:
+# "json_schema" comes before "reasoning_effort" regardless of class-definition order.
+@pytest.mark.parametrize(
+    ("response_format", "reasoning_effort", "expected_text"),
+    [
+        pytest.param(
+            ResponseFormat(type=ResponseFormats.text),
+            ReasoningEffort.high,
+            '<s>[MODEL_SETTINGS]{"reasoning_effort": "high"}[/MODEL_SETTINGS][INST]hi[/INST]',
+            id="text",
+        ),
+        pytest.param(
+            ResponseFormat(type=ResponseFormats.json),
+            ReasoningEffort.high,
+            '<s>[MODEL_SETTINGS]{"json_schema": {"anyOf": [{"type": "object"}, {"type": "array"}]}, '
+            '"reasoning_effort": "high"}[/MODEL_SETTINGS][INST]hi[/INST]',
+            id="json",
+        ),
+        pytest.param(
+            ResponseFormat(
+                type=ResponseFormats.json_schema,
+                json_schema=JsonSchema(name="x", schema={"type": "object"}),
+            ),
+            ReasoningEffort.none,
+            '<s>[MODEL_SETTINGS]{"json_schema": {"type": "object"}, "reasoning_effort": "none"}'
+            "[/MODEL_SETTINGS][INST]hi[/INST]",
+            id="json_schema",
+        ),
+    ],
+)
+def test_v15_encodes_reasoning_effort_and_json_schema_into_model_settings(
+    v15_reasoning_and_json_schema_mistral_tokenizer: MistralTokenizer,
+    response_format: ResponseFormat,
+    reasoning_effort: ReasoningEffort,
+    expected_text: str,
+) -> None:
+    tok = v15_reasoning_and_json_schema_mistral_tokenizer
+    request = ChatCompletionRequest(
+        messages=[UserMessage(content="hi")],
+        response_format=response_format,
+        reasoning_effort=reasoning_effort,
+    )
+    tokenized = tok.encode_chat_completion(request)
+    assert tokenized.text == expected_text, tokenized.text
 
 
 def test_encode_chat_completion_continue_final_message() -> None:
