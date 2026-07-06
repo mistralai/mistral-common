@@ -44,6 +44,7 @@ from mistral_common.protocol.instruct.chunk import (
     ImageURLChunk,
     TextChunk,
     ThinkChunk,
+    _strip_audio_data_url_prefix,
 )
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
@@ -165,6 +166,30 @@ def test_convert_input_audio_chunk() -> None:
 
     typeddict_openai = OpenAIInputAudioChunk(**openai_dict)  # type: ignore[typeddict-item]
     assert AudioChunk.from_openai(typeddict_openai) == chunk
+
+
+@pytest.mark.parametrize("mime_type", ["audio/x-wav", "audio/vnd.wave", "audio/wav;codec=pcm"])
+def test_convert_input_audio_chunk_with_data_url_mime_variants(mime_type: str) -> None:
+    input_audio = DUMMY_AUDIO_CHUNK.input_audio
+    assert isinstance(input_audio, str)
+    chunk = AudioChunk(input_audio=f"data:{mime_type};base64,{input_audio}")
+
+    openai_dict = chunk.to_openai()
+
+    assert openai_dict["input_audio"]["data"] == input_audio
+    assert openai_dict["input_audio"]["format"] == "wav"
+
+
+@pytest.mark.parametrize(
+    "malformed",
+    [
+        f"data:audio/wav{';' * 30}x",  # repeated parameter separators, no `;base64,` terminator
+        "data:audio/wav;codec=pcm",  # media-type parameter but no `;base64,` terminator
+        "cmF3IGJhc2U2NCBwYXlsb2Fk",  # raw base64 without any data URL prefix
+    ],
+)
+def test_audio_data_url_prefix_left_untouched_without_base64_terminator(malformed: str) -> None:
+    assert _strip_audio_data_url_prefix(malformed) == malformed
 
 
 @pytest.mark.parametrize(
