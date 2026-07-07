@@ -1401,7 +1401,9 @@ class InstructTokenizerV15(InstructTokenizerV13):
         self._validate_settings(settings)
         if settings == ModelSettings.none():
             return []
-        dumped_settings = json.dumps(settings.model_dump(exclude_none=True), ensure_ascii=False, sort_keys=True)
+        dumped = settings.model_dump(exclude_none=True)
+        ordered = {k: dumped[k] for k in sorted(dumped)}
+        dumped_settings = json.dumps(ordered, ensure_ascii=False)
         setting_json_tokens = self.tokenizer.encode(dumped_settings, bos=False, eos=False)
         settings_tokens = [
             self.BEGIN_MODEL_SETTINGS,

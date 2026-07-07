@@ -2,13 +2,20 @@ import pytest
 from pydantic import ValidationError
 
 from mistral_common.exceptions import InvalidRequestException
-from mistral_common.protocol.instruct.messages import UATS
+from mistral_common.protocol.instruct.messages import UATS, UserMessage
 from mistral_common.protocol.instruct.request import (
     ChatCompletionRequest,
+    JsonSchema,
     ModelSettings,
     ReasoningEffort,
+    ResponseFormat,
+    ResponseFormats,
 )
-from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
+from mistral_common.tokens.tokenizers.model_settings_builder import (
+    EnumBuilder,
+    JSONSchemaBuilder,
+    ModelSettingsBuilder,
+)
 
 
 class TestModelSettings:
@@ -204,6 +211,50 @@ class TestModelSettingsBuilder:
         else:
             with pytest.raises(InvalidRequestException, match=r"reasoning_effort should be set for this model"):
                 builder.validate_settings(settings)
+
+
+JSON_SCHEMA_DICT = {"type": "object", "properties": {"a": {"type": "string"}}}
+
+
+def _req(rf: ResponseFormat) -> ChatCompletionRequest:
+    return ChatCompletionRequest(messages=[UserMessage(content="hi")], response_format=rf)
+
+
+def test_builder_text_yields_none() -> None:
+    b = ModelSettingsBuilder(json_schema=JSONSchemaBuilder(accepts_none=False, default=None))
+    assert b.build_settings(_req(ResponseFormat(type=ResponseFormats.text))).json_schema is None
+
+
+def test_builder_json_yields_anyof() -> None:
+    b = ModelSettingsBuilder(json_schema=JSONSchemaBuilder(accepts_none=False, default=None))
+    assert b.build_settings(_req(ResponseFormat(type=ResponseFormats.json))).json_schema == {
+        "anyOf": [{"type": "object"}, {"type": "array"}]
+    }
+
+
+def test_builder_json_schema_yields_custom_schema() -> None:
+    b = ModelSettingsBuilder(json_schema=JSONSchemaBuilder(accepts_none=False, default=None))
+    rf = ResponseFormat(type=ResponseFormats.json_schema, json_schema=JsonSchema(name="x", schema=JSON_SCHEMA_DICT))
+    assert b.build_settings(_req(rf)).json_schema == JSON_SCHEMA_DICT
+
+
+def test_json_schema_missing_schema_raises() -> None:
+    with pytest.raises(InvalidRequestException, match="must define the schema"):
+        ResponseFormat(type=ResponseFormats.json_schema).get_schema()
+
+
+def test_builder_without_json_schema_ignores_response_format() -> None:
+    assert ModelSettingsBuilder().build_settings(_req(ResponseFormat(type=ResponseFormats.json))).json_schema is None
+
+
+def test_model_settings_json_schema_field() -> None:
+    s = ModelSettings(json_schema={"type": "object"})
+    assert s.json_schema == {"type": "object"}
+    assert s.model_dump(exclude_none=True) == {"json_schema": {"type": "object"}}
+
+
+def test_model_settings_none_excludes_json_schema() -> None:
+    assert ModelSettings.none().model_dump(exclude_none=True) == {}
 
 
 def test_all_model_settings_and_builder_fields_match() -> None:
