@@ -35,14 +35,11 @@ def _validate_mode_and_tools(mode: ToolChoice, tools: list[Tool] | None) -> None
 
 
 @lru_cache()
-def _cached_get_jinja_template(tokenizer_version: TokenizerVersion, reasoning: bool) -> str:
-    if not reasoning:
-        jinja_key = _GrammarVariant.base
-    elif tokenizer_version < TokenizerVersion.v13:
-        jinja_key = _GrammarVariant.plain_think
-    else:
+def _cached_get_jinja_template(tokenizer_version: TokenizerVersion, has_think_tokens: bool) -> str:
+    if tokenizer_version >= TokenizerVersion.v13 and has_think_tokens:
         jinja_key = _GrammarVariant.think
-
+    else:
+        jinja_key = _GrammarVariant.base
     return JINJA_PATHS[jinja_key].read_text(encoding="utf-8")
 
 
@@ -206,16 +203,22 @@ class GrammarFactory:
     def llg_tokenizer(self) -> "llg.LLTokenizer":
         return self._llg_tokenizer
 
-    def select_jinja_template(self, reasoning: bool) -> str:
-        r"""Selects and returns the appropriate jinja template content based on tokenizer version and reasoning mode.
+    def select_jinja_template(self) -> str:
+        r"""Selects and returns the appropriate jinja template content.
 
-        Args:
-            reasoning: Whether reasoning/thinking mode is enabled.
+        Selection derives from the tokenizer version and presence of think tokens:
+        - Returns the `think` template when the tokenizer version is >= v13 and both
+          `[THINK]` and `[/THINK]` special tokens are registered.
+        - Returns the `base` template in all other cases.
 
         Returns:
             The jinja template content as a string.
         """
-        return _cached_get_jinja_template(tokenizer_version=self._tokenizer.version, reasoning=reasoning)
+        has_think_tokens = (
+            SpecialTokens.begin_think.value in self._special_token_map
+            and SpecialTokens.end_think.value in self._special_token_map
+        )
+        return _cached_get_jinja_template(tokenizer_version=self._tokenizer.version, has_think_tokens=has_think_tokens)
 
     def get_lark_from_jinja(
         self,
