@@ -762,6 +762,8 @@ def test_from_openai_accepts_schema_key() -> None:
         messages=[{"role": "user", "content": "hi"}],
         response_format={"type": "json_schema", "json_schema": {"name": "x", "schema": schema}},
     )
+    assert req.response_format is not None
+    assert req.response_format.json_schema is not None
     assert req.response_format.json_schema.custom_schema == schema
 
 
