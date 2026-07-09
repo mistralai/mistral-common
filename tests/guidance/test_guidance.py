@@ -1501,17 +1501,13 @@ class TestSelectJinjaTemplate:
     def test_select_jinja_template_raises_on_only_begin_think(self, v13_no_think_tekken: MistralTokenizer) -> None:
         factory = GrammarFactory(v13_no_think_tekken)
         factory._special_token_map[SpecialTokens.begin_think.value] = "<[99]>"
-        with pytest.raises(
-            AssertionError, match=r"'both \[THINK\]' and '\[/THINK\]'should be defined or none of them."
-        ):
+        with pytest.raises(AssertionError, match=r"both \[THINK\] and \[/THINK\] should be defined or none of them\."):
             factory.select_jinja_template()
 
     def test_select_jinja_template_raises_on_only_end_think(self, v13_no_think_tekken: MistralTokenizer) -> None:
         factory = GrammarFactory(v13_no_think_tekken)
         factory._special_token_map[SpecialTokens.end_think.value] = "<[99]>"
-        with pytest.raises(
-            AssertionError, match=r"'both \[THINK\]' and '\[/THINK\]'should be defined or none of them."
-        ):
+        with pytest.raises(AssertionError, match=r"both \[THINK\] and \[/THINK\] should be defined or none of them\."):
             factory.select_jinja_template()
 
     def test_select_jinja_template_rejects_reasoning_kwarg(self, v11_tekken: MistralTokenizer) -> None:

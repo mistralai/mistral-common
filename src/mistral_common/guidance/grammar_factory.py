@@ -217,7 +217,8 @@ class GrammarFactory:
         has_begin_think = SpecialTokens.begin_think.value in self._special_token_map
         has_end_think = SpecialTokens.end_think.value in self._special_token_map
         assert has_begin_think == has_end_think, (
-            f"both {SpecialTokens.begin_think} and {SpecialTokens.end_think} should be defined or none of them."
+            f"both {SpecialTokens.begin_think.value} and {SpecialTokens.end_think.value} "
+            "should be defined or none of them."
         )
         return _cached_get_jinja_template(tokenizer_version=self._tokenizer.version, has_think_tokens=has_begin_think)
 
