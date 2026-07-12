@@ -218,10 +218,12 @@ class SentencePieceTokenizer(Tokenizer):
                 f"Expected `special_token_policy` to be a SpecialTokenPolicy, got {type(special_token_policy)}."
             )
 
-        if special_token_policy in [SpecialTokenPolicy.KEEP, SpecialTokenPolicy.RAISE]:
-            return self._decode_with_special_tokens(tokens, special_token_policy)
+        if special_token_policy == SpecialTokenPolicy.IGNORE:
+            decoded = self._model.decode(tokens)
+            assert isinstance(decoded, str), f"Sentencepiece model decoded a {type(decoded)}, not a string."
+            return decoded
 
-        return self._model.decode(tokens)  # type: ignore[no-any-return]
+        return self._decode_with_special_tokens(tokens, special_token_policy)
 
     def id_to_piece(self, token_id: int) -> str:
         r"""Convert the given token id to a token piece."""
@@ -235,7 +237,7 @@ class SentencePieceTokenizer(Tokenizer):
                 if special_token_policy == SpecialTokenPolicy.RAISE:
                     raise ValueError("Decoding `tokens` that contain special tokens with special_token_policy=RAISE.")
                 if curr_tokens:
-                    text_list.extend([self.id_to_piece(tok) for tok in curr_tokens])
+                    text_list.extend([self.id_to_piece(t) for t in curr_tokens])
                     curr_tokens = []
 
                 text_list.append(self.id_to_piece(tok))
@@ -244,7 +246,10 @@ class SentencePieceTokenizer(Tokenizer):
                 curr_tokens.append(tok)
 
         if curr_tokens:
-            text_list.extend([self.id_to_piece(tok) for tok in curr_tokens])
+            if special_token_policy == SpecialTokenPolicy.RAISE:
+                text_list.append(self._model.decode(curr_tokens))
+            else:
+                text_list.extend([self.id_to_piece(t) for t in curr_tokens])
 
         return "".join(text_list)
 

@@ -5,7 +5,7 @@ import llguidance as llg
 import pytest
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from mistral_common.guidance.grammar_factory import GrammarFactory, _convert_tool_calls
+from mistral_common.guidance.grammar_factory import JINJA_PATHS, GrammarFactory, _convert_tool_calls, _GrammarVariant
 from mistral_common.protocol.instruct.chunk import TextChunk, ThinkChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage
 from mistral_common.protocol.instruct.normalize import get_normalizer
@@ -22,7 +22,7 @@ from mistral_common.protocol.instruct.tool_calls import (
     ToolTypes,
 )
 from mistral_common.protocol.instruct.validator import ValidationMode, get_validator
-from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenizer, TokenizerVersion
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTokens, Tokenizer, TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerBase,
     InstructTokenizerV11,
@@ -123,6 +123,11 @@ def v13_tekken() -> MistralTokenizer:
     return _build_tekken_mistral_tokenizer(TokenizerVersion.v13, add_think=True)
 
 
+@pytest.fixture(scope="module")
+def v13_no_think_tekken() -> MistralTokenizer:
+    return _build_tekken_mistral_tokenizer(TokenizerVersion.v13, add_think=False)
+
+
 _V15_MODEL_SETTINGS_BUILDER = ModelSettingsBuilder(
     reasoning_effort=EnumBuilder[ReasoningEffort](
         values=list(ReasoningEffort),
@@ -198,7 +203,6 @@ class TestCase(BaseModel):
     tokens: list[int]
     should_fail_on: int | None
     case_name: str
-    reasoning: bool = False
     parallel_tool_calls: bool = True
     tools: list[Tool] | None = None
     json_schema: dict[str, Any] | None = None
@@ -279,7 +283,7 @@ def _find_first_rejection(
     Raises:
         ValueError: If all tokens are accepted.
     """
-    template = factory.select_jinja_template(reasoning=False)
+    template = factory.select_jinja_template()
     grammar = factory.get_lark_from_jinja(
         template=template, mode=mode, tools=tools, json_schema=None, parallel_tool_calls=True
     )
@@ -319,31 +323,6 @@ def _generate_general_cases(mistral_tokenizer: MistralTokenizer) -> list[TestCas
                 case_name=case_name,
                 should_fail_on=None,
                 mode="auto",
-                reasoning=False,
-            )
-        )
-        if tokenizer.version < TokenizerVersion.v13:
-            # Count how many leading whitespace-only tokens the SAFE_WS? rule will consume
-            # before the grammar rejects (expecting <think>).
-            content_tokens = tokenizer.encode(content, bos=False, eos=False)
-            ws_prefix_len = 0
-            for t in content_tokens:
-                piece = tokenizer.id_to_byte_piece(t, SpecialTokenPolicy.IGNORE)
-                if piece.strip(b" \t\r\n") == b"":
-                    ws_prefix_len += 1
-                else:
-                    break
-            reasoning_fail = ws_prefix_len
-        else:
-            reasoning_fail = None
-        cases.append(
-            TestCase(
-                tokenizer=tokenizer,
-                tokens=tokens,
-                case_name=f"{case_name}_reasoning",
-                should_fail_on=reasoning_fail,
-                mode="auto",
-                reasoning=True,
             )
         )
     return cases
@@ -463,10 +442,7 @@ def _generate_cases_tool_calls(mistral_tokenizer: MistralTokenizer) -> list[Test
                 )
             )
 
-        if tokenizer.version < TokenizerVersion.v13:
-            reasoning_valid_for: dict[Mode, int | None] = {"auto": 0, "none": 0}
-        else:
-            reasoning_valid_for = {"auto": None, "none": 0}
+        reasoning_valid_for: dict[Mode, int | None] = {"auto": None, "none": 0}
         for mode, should_fail_on in reasoning_valid_for.items():
             cases.append(
                 TestCase(
@@ -475,7 +451,6 @@ def _generate_cases_tool_calls(mistral_tokenizer: MistralTokenizer) -> list[Test
                     should_fail_on=should_fail_on,
                     case_name=f"{case_name}_reasoning",
                     mode=mode,
-                    reasoning=True,
                 )
             )
 
@@ -544,10 +519,7 @@ def _generate_cases_text_and_tool_calls(mistral_tokenizer: MistralTokenizer) -> 
             )
         )
 
-    if tokenizer.version < TokenizerVersion.v13:
-        reasoning_valid_for: dict[Mode, int | None] = {"auto": 0, "none": 0}
-    else:
-        reasoning_valid_for = {"auto": None, "none": text_len}
+    reasoning_valid_for: dict[Mode, int | None] = {"auto": None, "none": text_len}
     for mode, should_fail_on in reasoning_valid_for.items():
         cases.append(
             TestCase(
@@ -556,7 +528,6 @@ def _generate_cases_text_and_tool_calls(mistral_tokenizer: MistralTokenizer) -> 
                 should_fail_on=should_fail_on,
                 case_name="text_fcall_reasoning",
                 mode=mode,
-                reasoning=True,
             )
         )
 
@@ -564,28 +535,29 @@ def _generate_cases_text_and_tool_calls(mistral_tokenizer: MistralTokenizer) -> 
 
 
 def _generate_cases_thinking_v11(mistral_tokenizer: MistralTokenizer) -> list[TestCase]:
-    r"""Generate thinking test cases for v11 (plain text think grammar)."""
+    r"""Generate thinking test cases for v11 (base grammar — accepts literal <think> as free text)."""
     instruct_tokenizer = mistral_tokenizer.instruct_tokenizer
     tokenizer = instruct_tokenizer.tokenizer
     assert isinstance(instruct_tokenizer, InstructTokenizerBase)
 
     cases: list[TestCase] = []
     # Note: "any"/"required" modes require tools, so only "auto"/"none" are used here (tools=None).
+    # v11 uses base grammar (auto-selected): literal <think>...</think> is free-form text content.
     thinks: list[tuple[str, list[Any], dict[Mode, int | None]]] = [
         (
             "force_think",
             [TextChunk(text="Hello world!")],
-            {"auto": 0, "none": 0},
+            {"auto": None, "none": None},
         ),
         (
             "think_without_response",
             [TextChunk(text="<think>Hello!</think>")],
-            {"auto": -1, "none": -1},
+            {"auto": None, "none": None},
         ),
         (
             "unclosed_think",
             [TextChunk(text="<think>Hello!")],
-            {"auto": -1, "none": -1},
+            {"auto": None, "none": None},
         ),
         (
             "plain_think_with_response",
@@ -602,6 +574,7 @@ def _generate_cases_thinking_v11(mistral_tokenizer: MistralTokenizer) -> list[Te
                 ToolCall(function=FunctionCall(name="hello", arguments='{"arg1": "val1", "arg2": "val2"}')),
             ],
             {
+                # auto: content? fcalls path — text is content, [TOOL_CALLS] starts fcalls
                 "auto": None,
                 "none": len(tokenizer.encode("<think>Hello!</think>", bos=False, eos=False)),
             },
@@ -613,8 +586,8 @@ def _generate_cases_thinking_v11(mistral_tokenizer: MistralTokenizer) -> list[Te
                 ToolCall(function=FunctionCall(name="hello", arguments='{"arg1": "val1", "arg2": "val2"}')),
             ],
             {
-                # auto: think (content | fcalls) — picks content for "Ho!", then tool call rejected
-                "auto": len(tokenizer.encode("<think>Hello!</think>Ho!", bos=False, eos=False)),
+                # auto: content? fcalls path — all text is content?, then [TOOL_CALLS] starts fcalls
+                "auto": None,
                 "none": len(tokenizer.encode("<think>Hello!</think>Ho!", bos=False, eos=False)),
             },
         ),
@@ -629,7 +602,6 @@ def _generate_cases_thinking_v11(mistral_tokenizer: MistralTokenizer) -> list[Te
                     should_fail_on=should_fail_on,
                     case_name=case_name,
                     mode=mode,
-                    reasoning=True,
                 )
             )
     return cases
@@ -699,7 +671,6 @@ def _generate_cases_thinking(mistral_tokenizer: MistralTokenizer) -> list[TestCa
                     should_fail_on=should_fail_on,
                     case_name=case_name,
                     mode=mode,
-                    reasoning=True,
                 )
             )
     return cases
@@ -735,10 +706,7 @@ def _generate_single_tool_call(mistral_tokenizer: MistralTokenizer) -> list[Test
         )
     )
 
-    if tokenizer.version < TokenizerVersion.v13:
-        reasoning_valid_for: dict[Mode, int | None] = {"auto": 0, "none": 0}
-    else:
-        reasoning_valid_for = {"auto": None, "none": 0}
+    reasoning_valid_for: dict[Mode, int | None] = {"auto": None, "none": 0}
     for mode, should_fail_on in reasoning_valid_for.items():
         cases.append(
             TestCase(
@@ -748,7 +716,6 @@ def _generate_single_tool_call(mistral_tokenizer: MistralTokenizer) -> list[Test
                 case_name="single_tool_call_reasoning",
                 mode=mode,
                 parallel_tool_calls=False,
-                reasoning=True,
             )
         )
 
@@ -868,48 +835,32 @@ def _generate_strict_tool_calls(mistral_tokenizer: MistralTokenizer, factory: Gr
             )
         )
 
-    # 6. reasoning=True variants
-    if tokenizer.version < TokenizerVersion.v13:
-        for mode in _AUTO_ANY_REQUIRED:
-            cases.append(
-                TestCase(
-                    tokenizer=tokenizer,
-                    tokens=strict_tokens,
-                    should_fail_on=0,
-                    case_name="strict_tool_call_reasoning",
-                    mode=mode,
-                    tools=tools_strict,
-                    reasoning=True,
-                )
+    # 6. Reasoning variants — base (v11) and think (v13+) grammars both accept strict tool calls
+    for mode in _AUTO_ANY_REQUIRED:
+        cases.append(
+            TestCase(
+                tokenizer=tokenizer,
+                tokens=strict_tokens,
+                should_fail_on=None,
+                case_name="strict_tool_call_reasoning",
+                mode=mode,
+                tools=tools_strict,
             )
-    else:
-        for mode in _AUTO_ANY_REQUIRED:
-            cases.append(
-                TestCase(
-                    tokenizer=tokenizer,
-                    tokens=strict_tokens,
-                    should_fail_on=None,
-                    case_name="strict_tool_call_reasoning",
-                    mode=mode,
-                    tools=tools_strict,
-                    reasoning=True,
-                )
+        )
+    for mode in _AUTO_ANY_REQUIRED:
+        cases.append(
+            TestCase(
+                tokenizer=tokenizer,
+                tokens=multi_strict_tokens,
+                should_fail_on=None,
+                case_name="multiple_strict_tool_calls_reasoning",
+                mode=mode,
+                tools=[
+                    ToolProvider.retrieve_payment_date(strict=True),
+                    ToolProvider.retrieve_payment_status(strict=True),
+                ],
             )
-        for mode in _AUTO_ANY_REQUIRED:
-            cases.append(
-                TestCase(
-                    tokenizer=tokenizer,
-                    tokens=multi_strict_tokens,
-                    should_fail_on=None,
-                    case_name="multiple_strict_tool_calls_reasoning",
-                    mode=mode,
-                    tools=[
-                        ToolProvider.retrieve_payment_date(strict=True),
-                        ToolProvider.retrieve_payment_status(strict=True),
-                    ],
-                    reasoning=True,
-                )
-            )
+        )
 
     return cases
 
@@ -1016,31 +967,17 @@ def _generate_named_tool_choice(mistral_tokenizer: MistralTokenizer, factory: Gr
         )
     )
 
-    # 4. NamedToolChoice with reasoning mode
-    if tokenizer.version < TokenizerVersion.v13:
-        cases.append(
-            TestCase(
-                tokenizer=tokenizer,
-                tokens=correct_date_tokens,
-                should_fail_on=0,
-                case_name="named_tool_choice_reasoning",
-                mode=named_tool_date,
-                tools=tools,
-                reasoning=True,
-            )
+    # 4. NamedToolChoice — base (v11) and think (v13+) grammars both accept named tool calls
+    cases.append(
+        TestCase(
+            tokenizer=tokenizer,
+            tokens=correct_date_tokens,
+            should_fail_on=None,
+            case_name="named_tool_choice_reasoning",
+            mode=named_tool_date,
+            tools=tools,
         )
-    else:
-        cases.append(
-            TestCase(
-                tokenizer=tokenizer,
-                tokens=correct_date_tokens,
-                should_fail_on=None,
-                case_name="named_tool_choice_reasoning",
-                mode=named_tool_date,
-                tools=tools,
-                reasoning=True,
-            )
-        )
+    )
 
     # 5. NamedToolChoice with strict tool should validate arguments
     strict_tools = [ToolProvider.retrieve_payment_date(strict=True)]
@@ -1107,7 +1044,7 @@ def _find_first_json_schema_rejection(
     Raises:
         ValueError: If all tokens are accepted.
     """
-    template = factory.select_jinja_template(reasoning=False)
+    template = factory.select_jinja_template()
     grammar = factory.get_lark_for_json_schema(template=template, json_schema=json_schema)
     matcher = llg.LLMatcher(factory.llg_tokenizer, grammar)
     for i, token in enumerate(tokens):
@@ -1230,7 +1167,6 @@ def _generate_json_schema_reasoning(mistral_tokenizer: MistralTokenizer, factory
                 case_name=case_name,
                 mode="auto",
                 json_schema=json_schema,
-                reasoning=True,
             )
         )
 
@@ -1254,7 +1190,6 @@ def _generate_json_only_negative(mistral_tokenizer: MistralTokenizer, factory: G
             case_name="json_only_rejects_text",
             mode="auto",
             json_schema={"type": "object"},
-            reasoning=False,
         )
     )
 
@@ -1271,11 +1206,10 @@ def _generate_json_only_negative(mistral_tokenizer: MistralTokenizer, factory: G
             case_name="json_only_rejects_tool_call",
             mode="auto",
             json_schema={"type": "object"},
-            reasoning=False,
         )
     )
 
-    # Plain text should also be rejected with reasoning=True
+    # Plain text is also rejected by json_only grammar regardless of grammar variant
     cases.append(
         TestCase(
             tokenizer=tokenizer,
@@ -1284,7 +1218,6 @@ def _generate_json_only_negative(mistral_tokenizer: MistralTokenizer, factory: G
             case_name="json_only_reasoning_rejects_text",
             mode="auto",
             json_schema={"type": "object"},
-            reasoning=True,
         )
     )
 
@@ -1321,7 +1254,6 @@ def _generate_json_schema_think_with_json(
             case_name="think_with_json_valid",
             mode="auto",
             json_schema=json_schema,
-            reasoning=True,
         )
     )
 
@@ -1334,7 +1266,6 @@ def _generate_json_schema_think_with_json(
             case_name="think_with_json_no_think_valid",
             mode="auto",
             json_schema=json_schema,
-            reasoning=True,
         )
     )
 
@@ -1353,7 +1284,6 @@ def _generate_json_schema_think_with_json(
             case_name="think_with_json_rejects_text_after_think",
             mode="auto",
             json_schema=json_schema,
-            reasoning=True,
         )
     )
 
@@ -1424,10 +1354,10 @@ class TestGrammarFactory:
         if test_case.raw_lark is not None:
             grammar = test_case.raw_lark
         elif test_case.json_schema is not None and test_case.tools is None:
-            template = factory.select_jinja_template(reasoning=test_case.reasoning)
+            template = factory.select_jinja_template()
             grammar = factory.get_lark_for_json_schema(template=template, json_schema=test_case.json_schema)
         else:
-            template = factory.select_jinja_template(reasoning=test_case.reasoning)
+            template = factory.select_jinja_template()
             resolved_mode: ToolChoice
             if isinstance(test_case.mode, NamedToolChoice):
                 resolved_mode = test_case.mode
@@ -1506,7 +1436,7 @@ class TestGrammarFactory:
         self, v11_tekken: MistralTokenizer, mode: ToolChoiceEnum
     ) -> None:
         factory = GrammarFactory(v11_tekken)
-        template = factory.select_jinja_template(reasoning=False)
+        template = factory.select_jinja_template()
         with pytest.raises(ValueError, match="please ensure to pass tools"):
             factory.get_lark_from_jinja(
                 template=template, mode=mode, tools=None, json_schema=None, parallel_tool_calls=True
@@ -1514,7 +1444,7 @@ class TestGrammarFactory:
 
     def test_get_lark_rejects_named_tool_not_in_tools(self, v11_tekken: MistralTokenizer) -> None:
         factory = GrammarFactory(v11_tekken)
-        template = factory.select_jinja_template(reasoning=False)
+        template = factory.select_jinja_template()
         named = NamedToolChoice(function=FunctionName(name="non_existent"))
         tools = [ToolProvider.retrieve_payment_date(strict=True)]
         with pytest.raises(ValueError, match="no tools with this name"):
@@ -1528,7 +1458,7 @@ class TestGrammarFactory:
         self, v11_tekken: MistralTokenizer, mode: ToolChoiceEnum, tools: list[Tool] | None
     ) -> None:
         factory = GrammarFactory(v11_tekken)
-        template = factory.select_jinja_template(reasoning=False)
+        template = factory.select_jinja_template()
         with pytest.raises(ValueError, match="please ensure to pass tools"):
             factory.get_lark_from_jinja(
                 template=template, tools=tools, mode=mode, json_schema=None, parallel_tool_calls=True
@@ -1537,7 +1467,7 @@ class TestGrammarFactory:
     @pytest.mark.parametrize("tools", [None, [], [Tool(function=Function(name="existing_tool", parameters={}))]])
     def test_named_wrong_tools_raises(self, v11_tekken: MistralTokenizer, tools: list[Tool] | None) -> None:
         factory = GrammarFactory(v11_tekken)
-        template = factory.select_jinja_template(reasoning=False)
+        template = factory.select_jinja_template()
         with pytest.raises(ValueError, match="no tools with this name"):
             factory.get_lark_from_jinja(
                 template=template,
@@ -1546,6 +1476,73 @@ class TestGrammarFactory:
                 json_schema=None,
                 parallel_tool_calls=True,
             )
+
+
+class TestSelectJinjaTemplate:
+    @pytest.mark.parametrize(
+        ("fixture_name", "expected_variant"),
+        [
+            ("v13_tekken", _GrammarVariant.think),
+            ("v13_no_think_tekken", _GrammarVariant.base),
+            ("v11_tekken", _GrammarVariant.base),
+            ("v15_tekken", _GrammarVariant.think),
+        ],
+        ids=["v13_think", "v13_no_think", "v11", "v15_think"],
+    )
+    def test_select_jinja_template(
+        self, request: pytest.FixtureRequest, fixture_name: str, expected_variant: _GrammarVariant
+    ) -> None:
+        tokenizer: MistralTokenizer = request.getfixturevalue(fixture_name)
+        factory = GrammarFactory(tokenizer)
+        result = factory.select_jinja_template()
+        expected = JINJA_PATHS[expected_variant].read_text(encoding="utf-8")
+        assert result == expected
+
+    def test_select_jinja_template_raises_on_only_begin_think(self, v13_no_think_tekken: MistralTokenizer) -> None:
+        factory = GrammarFactory(v13_no_think_tekken)
+        factory._special_token_map[SpecialTokens.begin_think.value] = "<[99]>"
+        with pytest.raises(AssertionError, match=r"both \[THINK\] and \[/THINK\] should be defined or none of them\."):
+            factory.select_jinja_template()
+
+    def test_select_jinja_template_raises_on_only_end_think(self, v13_no_think_tekken: MistralTokenizer) -> None:
+        factory = GrammarFactory(v13_no_think_tekken)
+        factory._special_token_map[SpecialTokens.end_think.value] = "<[99]>"
+        with pytest.raises(AssertionError, match=r"both \[THINK\] and \[/THINK\] should be defined or none of them\."):
+            factory.select_jinja_template()
+
+    def test_select_jinja_template_rejects_reasoning_kwarg(self, v11_tekken: MistralTokenizer) -> None:
+        factory = GrammarFactory(v11_tekken)
+        with pytest.raises(TypeError, match="reasoning"):
+            factory.select_jinja_template(**{"reasoning": True})
+
+    @pytest.mark.parametrize(
+        ("fixture_name", "content"),
+        [
+            ("v13_no_think_tekken", "hello world"),
+            ("v11_tekken", "<think>reasoning</think>answer"),
+        ],
+        ids=["v13_no_think_plain_content", "v11_literal_think"],
+    )
+    def test_base_grammar_accepts_content(
+        self, request: pytest.FixtureRequest, fixture_name: str, content: str
+    ) -> None:
+        """Checks base-selected grammars accept the content."""
+        tokenizer: MistralTokenizer = request.getfixturevalue(fixture_name)
+        factory = GrammarFactory(tokenizer)
+        template = factory.select_jinja_template()
+        grammar = factory.get_lark_from_jinja(
+            template=template,
+            mode=ToolChoiceEnum.auto,
+            tools=None,
+            json_schema=None,
+            parallel_tool_calls=True,
+        )
+        tekkenizer = tokenizer.instruct_tokenizer.tokenizer
+        tokens = [*tekkenizer.encode(content, bos=False, eos=False), tekkenizer.eos_id]
+        matcher = llg.LLMatcher(factory.llg_tokenizer, grammar)
+        for token in tokens:
+            assert matcher.consume_token(token)
+        assert matcher.is_stopped()
 
 
 def _stub_get_special_token_id(token_name: str) -> str:

@@ -10,11 +10,12 @@ import numpy as np
 import pytest
 import requests
 import soundfile as sf
+from pydantic import ValidationError
 
 from mistral_common.audio import hertz_to_mel, mel_filter_bank
 from mistral_common.protocol.instruct.chunk import AudioChunk, RawAudio
 from mistral_common.protocol.transcription.request import TranscriptionRequest
-from mistral_common.tokens.tokenizers.audio import Audio
+from mistral_common.tokens.tokenizers.audio import Audio, AudioConfig, AudioSpectrogramConfig
 
 
 def _make_dummy_base64() -> str:
@@ -25,6 +26,12 @@ def _make_dummy_base64() -> str:
 
 def sin_wave(sampling_rate: int, duration: float) -> np.ndarray:
     return np.sin(np.ones([int(duration * sampling_rate)]))
+
+
+def test_audio_config_rejects_sampling_rate_below_frame_rate() -> None:
+    encoding_config = AudioSpectrogramConfig(num_mel_bins=80, hop_length=160, window_size=400)
+    with pytest.raises(AssertionError):
+        AudioConfig(sampling_rate=1, frame_rate=2.0, encoding_config=encoding_config)
 
 
 def test_audio_resample() -> None:
@@ -343,6 +350,11 @@ class TestRawAudioBackwardCompat:
     def test_audiochunk_with_bytes_new_api(self) -> None:
         chunk = AudioChunk(input_audio=b"raw_bytes")
         assert chunk.input_audio == b"raw_bytes"
+
+    @pytest.mark.parametrize("empty_audio", ["", "   ", b""])
+    def test_audiochunk_empty_input_raises_validation_error(self, empty_audio: str | bytes) -> None:
+        with pytest.raises(ValidationError, match="should not be empty"):
+            AudioChunk(input_audio=empty_audio)
 
 
 def test_transcription_request_with_rawaudio_backward_compat() -> None:

@@ -9,6 +9,7 @@ from mistral_common.exceptions import (
     TokenizerException,
 )
 from mistral_common.protocol.instruct.chunk import (
+    ContentChunk,
     ImageChunk,
     TextChunk,
 )
@@ -533,3 +534,96 @@ def test_encode_chat_completion_continue_final_message() -> None:
     assert encoded.tokens == [1, 3, 1032, 4, 1055]
     assert encoded.tokens[-1] != eos_id
     assert eos_id not in encoded.prefix_ids
+
+
+def _image_tokens(width: int, height: int) -> list[int]:
+    _im = 10
+    _im_break = 14
+    _im_end = 15
+    image_tokens = ([_im] * width + [_im_break]) * height
+    image_tokens[-1] = _im_end
+    return image_tokens
+
+
+def _image_tokenizer_spans(tokens: list[int]) -> list[list[int]]:
+    _im = 10
+    _im_end = 15
+    spans: list[list[int]] = []
+    start_idx: int | None = None
+    for idx, token in enumerate(tokens):
+        if start_idx is None:
+            if token == _im:
+                start_idx = idx
+        elif token == _im_end:
+            spans.append(tokens[start_idx : idx + 1])
+            start_idx = None
+    return spans
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        pytest.param(
+            [
+                TextChunk(text=""),
+                ImageChunk(image=Image.new("RGB", (4, 4), "red")),
+                ImageChunk(image=Image.new("RGB", (6, 4), "blue")),
+            ],
+            id="empty-text-then-two-images",
+        ),
+        pytest.param(
+            [
+                TextChunk(text="x"),
+                ImageChunk(image=Image.new("RGB", (4, 4), "red")),
+                ImageChunk(image=Image.new("RGB", (6, 4), "blue")),
+            ],
+            id="text-then-two-images",
+        ),
+        pytest.param(
+            [
+                ImageChunk(image=Image.new("RGB", (4, 4), "red")),
+                ImageChunk(image=Image.new("RGB", (6, 4), "blue")),
+            ],
+            id="two-images",
+        ),
+    ],
+)
+def test_multi_image_order_is_preserved(spm_tokenizer: InstructTokenizerV7, content: list[ContentChunk]) -> None:
+    tokenized = spm_tokenizer.encode_instruct(InstructRequest(messages=[UserMessage(content=content)]))
+    assert _image_tokenizer_spans(tokenized.tokens) == [_image_tokens(2, 2), _image_tokens(3, 2)]
+
+
+def test_single_trailing_image_moves_first(spm_tokenizer: InstructTokenizerV7) -> None:
+    tokenized = spm_tokenizer.encode_instruct(
+        InstructRequest(
+            messages=[
+                UserMessage(
+                    content=[
+                        TextChunk(text="x"),
+                        ImageChunk(image=Image.new("RGB", (4, 4), "red")),
+                    ]
+                )
+            ]
+        )
+    )
+    assert _image_tokenizer_spans(tokenized.tokens) == [_image_tokens(2, 2)]
+    x_token = spm_tokenizer.tokenizer.encode("x", bos=False, eos=False)[0]
+    assert tokenized.tokens.index(10) < tokenized.tokens.index(x_token)
+
+
+def test_single_leading_image_remains_first(spm_tokenizer: InstructTokenizerV7) -> None:
+    tokenized = spm_tokenizer.encode_instruct(
+        InstructRequest(
+            messages=[
+                UserMessage(
+                    content=[
+                        ImageChunk(image=Image.new("RGB", (4, 4), "red")),
+                        TextChunk(text="x"),
+                    ]
+                )
+            ]
+        )
+    )
+    assert _image_tokenizer_spans(tokenized.tokens) == [_image_tokens(2, 2)]
+    x_token = spm_tokenizer.tokenizer.encode("x", bos=False, eos=False)[0]
+    assert tokenized.tokens.index(10) < tokenized.tokens.index(x_token)

@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy
 from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
 
 
@@ -48,3 +49,17 @@ def test_sentencepiece_tokenizer_num_specials_property(tokenizer_v7: SentencePie
 
     # Test that num_special_tokens matches the length of special_ids
     assert num_special == len(tokenizer_v7.special_ids)
+
+
+def test_decode_raise_policy_decodes_normal_tokens(tokenizer_v7: SentencePieceTokenizer) -> None:
+    text = "Hello world, how are you?"
+    ids = tokenizer_v7.encode(text, bos=False, eos=False)
+    assert tokenizer_v7.decode(ids, SpecialTokenPolicy.RAISE) == text
+    assert tokenizer_v7.decode(ids, SpecialTokenPolicy.RAISE) == tokenizer_v7.decode(ids, SpecialTokenPolicy.IGNORE)
+
+
+def test_decode_raise_policy_raises_on_special_tokens(tokenizer_v7: SentencePieceTokenizer) -> None:
+    ids = tokenizer_v7.encode("Hello world", bos=True, eos=True)
+    assert any(tokenizer_v7.is_special(tok) for tok in ids)
+    with pytest.raises(ValueError):
+        tokenizer_v7.decode(ids, SpecialTokenPolicy.RAISE)

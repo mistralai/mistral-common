@@ -41,6 +41,10 @@ def test_list_local_hf_repo_files() -> None:
         files = sorted(list_local_hf_repo_files("mistralai/Mistral-7B-v0.1", "RANDOM_REVISION"))
         assert files == ["file2.txt", "tekken.json"]
 
+        # Test with a branch/tag revision that must be resolved via refs (e.g. "main")
+        files = sorted(list_local_hf_repo_files("mistralai/Mistral-7B-v0.1", "main"))
+        assert files == ["file2.txt", "tekken.json"]
+
         # Test with non-existent revision
         assert list_local_hf_repo_files("mistralai/Mistral-7B-v0.1", "non_existent_revision") == []
 
@@ -183,3 +187,14 @@ def test_download_tokenizer_from_hf_hub_without_connection(mock_list_repo_files:
             download_tokenizer_from_hf_hub(
                 repo_id="mistralai/Mistral-7B-v0.1", token=None, revision=None, local_files_only=True
             )
+
+
+@patch("huggingface_hub.HfApi.list_repo_files")
+def test_download_tokenizer_from_hf_hub_offline_mode(mock_list_repo_files: MagicMock) -> None:
+    mock_list_repo_files.side_effect = huggingface_hub.errors.OfflineModeIsEnabled("offline mode is enabled")
+
+    hf_cache = _create_temporary_hf_model_cache("mistralai/Mistral-7B-v0.1")
+
+    with patch("huggingface_hub.constants.HF_HUB_CACHE", hf_cache):
+        tokenizer = download_tokenizer_from_hf_hub(repo_id="mistralai/Mistral-7B-v0.1", token=None, revision="main")
+        assert tokenizer == str(hf_cache / "models--mistralai--Mistral-7B-v0.1/snapshots/RANDOM_REVISION/tekken.json")
