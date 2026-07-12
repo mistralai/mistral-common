@@ -1279,6 +1279,17 @@ def test_convert_speech_request_round_trip() -> None:
     assert voice_only_dict["voice"] == "female"
 
 
+def test_convert_speech_request_seed() -> None:
+    # OpenAI uses "seed" while mistral-common uses "random_seed"; both conversion
+    # directions must bridge the two, matching TranscriptionRequest.
+    openai_dict = SpeechRequest(input="Hello", voice="female", random_seed=1234).to_openai()
+    assert openai_dict["seed"] == 1234
+    assert "random_seed" not in openai_dict
+
+    request = SpeechRequest.from_openai({"input": "Hello", "voice": "female", "seed": 1234})
+    assert request.random_seed == 1234
+
+
 class TestToolChoice:
     @pytest.mark.parametrize(
         ["tool_choice", "expected_openai", "expected_reconstructed"],
