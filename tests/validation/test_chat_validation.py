@@ -297,6 +297,23 @@ class TestChatValidation:
             continue_final_message=False,
         )
 
+    def test_tool_calls_first_message_assistant_OK(self, validator: MistralRequestValidator) -> None:
+        # A conversation that begins with an assistant tool-call turn (no leading user or
+        # system message) is structurally valid: the tool call is answered by the tool
+        # message that follows. The tool-call/tool-response matching used to skip the very
+        # first message, so these tool calls went uncounted and the responses were wrongly
+        # rejected as unbalanced.
+        validator.validate_messages(
+            messages=[
+                AssistantMessage(
+                    tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]
+                ),
+                ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
+                UserMessage(content="thanks"),
+            ],
+            continue_final_message=False,
+        )
+
     def test_not_enough_tool_messages(self, validator: MistralRequestValidator) -> None:
         with pytest.raises(
             InvalidMessageStructureException, match=r"Not the same number of function calls and responses"

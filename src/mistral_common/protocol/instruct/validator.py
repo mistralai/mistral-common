@@ -277,13 +277,8 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
         - That the number of tool calls and tool messages are the same
         - That the tool calls are followed by tool messages
         """
-        prev_role = None
         expected_tool_messages = 0
         for message in messages:
-            if prev_role is None:
-                prev_role = message.role
-                continue
-
             if message.role == Roles.tool:
                 expected_tool_messages -= 1
             elif message.role == Roles.assistant:
@@ -295,8 +290,6 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
                 if message.tool_calls is not None:
                     # Validate that the number of function calls and responses are the same
                     expected_tool_messages = len(message.tool_calls)
-
-            prev_role = message.role
 
         if expected_tool_messages != 0 and self._mode == ValidationMode.serving:
             raise InvalidMessageStructureException("Not the same number of function calls and responses")
@@ -531,14 +524,9 @@ class MistralRequestValidatorV13(MistralRequestValidatorV5):
         - That the tool calls are followed by tool messages
         - That tool calls have distinct ids for a given assistant message
         """
-        prev_role = None
         expected_tool_ids: set[str] = set()
         observed_tool_ids: set[str] = set()
         for message in messages:
-            if prev_role is None:
-                prev_role = message.role
-                continue
-
             if message.role == Roles.tool:
                 tool_call_id = message.tool_call_id
                 if tool_call_id in observed_tool_ids:
@@ -563,8 +551,6 @@ class MistralRequestValidatorV13(MistralRequestValidatorV5):
                                 f"Duplicate tool call id {tool_call.id} in assistant message"
                             )
                         expected_tool_ids.add(tool_call.id)
-
-            prev_role = message.role
 
         if len(expected_tool_ids) != len(observed_tool_ids) and self._mode == ValidationMode.serving:
             raise InvalidMessageStructureException("Not the same number of function calls and responses")
