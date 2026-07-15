@@ -1248,46 +1248,47 @@ def test_convert_speech_request_from_openai() -> None:
     assert request_voice.voice == "custom-voice-123"
 
 
-def test_convert_speech_request_round_trip() -> None:
+@pytest.mark.parametrize(
+    ["voice", "with_ref_audio", "random_seed"],
+    [
+        ("female", True, None),
+        ("female", False, 1234),
+        (None, True, 0),
+    ],
+)
+def test_convert_speech_request_round_trip(voice: str | None, with_ref_audio: bool, random_seed: int | None) -> None:
     audio = _make_fake_audio(0.5)
     original = SpeechRequest(
         input="Round trip test",
-        ref_audio=audio.to_base64("wav"),
-        voice="female",
+        ref_audio=audio.to_base64("wav") if with_ref_audio else None,
+        voice=voice,
         model="tts-1",
+        random_seed=random_seed,
     )
 
     openai_dict = original.to_openai()
-    assert isinstance(openai_dict["ref_audio"], io.BytesIO)
+
+    # OpenAI uses "seed"; mistral-common uses "random_seed" (parity with TranscriptionRequest).
+    assert "random_seed" not in openai_dict
+    assert openai_dict["seed"] == random_seed
+
+    if with_ref_audio:
+        assert isinstance(openai_dict["ref_audio"], io.BytesIO)
+    else:
+        assert "ref_audio" not in openai_dict
 
     restored = SpeechRequest.from_openai(openai_dict)
+    # ref_audio is re-encoded through the OpenAI buffer, so it is not byte-identical; compare it separately.
+    assert original.model_dump(exclude={"ref_audio"}) == restored.model_dump(exclude={"ref_audio"})
 
-    assert restored.input == original.input
-    assert restored.voice == original.voice
-    assert restored.model == original.model
-    assert isinstance(restored.ref_audio, str)
-    assert isinstance(original.ref_audio, str)
-    original_audio = Audio.from_base64(original.ref_audio)
-    restored_audio = Audio.from_base64(restored.ref_audio)
-    assert np.allclose(restored_audio.audio_array, original_audio.audio_array, atol=1e-3)
-
-    # Voice-only request (no ref_audio) should not crash
-    voice_only = SpeechRequest(input="Hello", voice="female")
-    voice_only_dict = voice_only.to_openai()
-    assert "ref_audio" not in voice_only_dict
-    assert voice_only_dict["input"] == "Hello"
-    assert voice_only_dict["voice"] == "female"
-
-
-def test_convert_speech_request_seed() -> None:
-    # OpenAI uses "seed" while mistral-common uses "random_seed"; both conversion
-    # directions must bridge the two, matching TranscriptionRequest.
-    openai_dict = SpeechRequest(input="Hello", voice="female", random_seed=1234).to_openai()
-    assert openai_dict["seed"] == 1234
-    assert "random_seed" not in openai_dict
-
-    request = SpeechRequest.from_openai({"input": "Hello", "voice": "female", "seed": 1234})
-    assert request.random_seed == 1234
+    if with_ref_audio:
+        assert isinstance(original.ref_audio, str)
+        assert isinstance(restored.ref_audio, str)
+        original_audio = Audio.from_base64(original.ref_audio)
+        restored_audio = Audio.from_base64(restored.ref_audio)
+        assert np.allclose(restored_audio.audio_array, original_audio.audio_array, atol=1e-3)
+    else:
+        assert restored.ref_audio is None
 
 
 class TestToolChoice:

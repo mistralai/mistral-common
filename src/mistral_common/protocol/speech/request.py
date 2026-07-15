@@ -54,7 +54,6 @@ class SpeechRequest(BaseCompletionRequest):
 
             openai_request["ref_audio"] = buffer
 
-        # OpenAI uses "seed"; mistral-common uses "random_seed".
         openai_request["seed"] = openai_request.pop("random_seed")
         openai_request.update(kwargs)
 
@@ -95,7 +94,6 @@ class SpeechRequest(BaseCompletionRequest):
         if isinstance(voice, dict):
             converted_dict["voice"] = voice["id"]
 
-        # OpenAI uses "seed"; mistral-common uses "random_seed".
         converted_dict["random_seed"] = seed
 
         return cls(**converted_dict)
