@@ -54,6 +54,7 @@ class SpeechRequest(BaseCompletionRequest):
 
             openai_request["ref_audio"] = buffer
 
+        openai_request["seed"] = openai_request.pop("random_seed")
         openai_request.update(kwargs)
 
         return openai_request
@@ -69,6 +70,7 @@ class SpeechRequest(BaseCompletionRequest):
         Returns:
             An instance of SpeechRequest.
         """
+        seed = openai_request.get("seed")
         converted_dict: dict[str, Any] = {k: v for k, v in openai_request.items() if k in cls.model_fields}
 
         if (ref_audio := openai_request.get("ref_audio")) is not None:
@@ -91,5 +93,7 @@ class SpeechRequest(BaseCompletionRequest):
         voice = openai_request.get("voice")
         if isinstance(voice, dict):
             converted_dict["voice"] = voice["id"]
+
+        converted_dict["random_seed"] = seed
 
         return cls(**converted_dict)
