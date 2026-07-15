@@ -1,9 +1,10 @@
 from enum import Enum
 from typing import Any, Generic
 
-from pydantic import Field
+from pydantic import ConfigDict, Field, field_validator
 
 from mistral_common.base import MistralBase
+from mistral_common.exceptions import InvalidRequestException
 from mistral_common.protocol.base import BaseCompletionRequest
 from mistral_common.protocol.instruct.converters import (
     convert_openai_messages,
@@ -16,6 +17,7 @@ from mistral_common.protocol.instruct.messages import (
     ReasoningFieldFormat,
 )
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolChoice, ToolChoiceEnum, ToolType
+from mistral_common.utils.json_utils import validate_json_schema_by_draft7
 
 
 class ResponseFormats(str, Enum):
@@ -24,6 +26,7 @@ class ResponseFormats(str, Enum):
     Attributes:
         text: The response is a plain text.
         json: The response is a JSON object.
+        json_schema: The response follows a custom JSON schema.
 
     Examples:
         >>> response_format = ResponseFormats.text
@@ -31,6 +34,7 @@ class ResponseFormats(str, Enum):
 
     text = "text"
     json = "json_object"
+    json_schema = "json_schema"
 
 
 class ReasoningEffort(str, Enum):
@@ -55,9 +59,12 @@ class ModelSettings(MistralBase):
     Attributes:
         reasoning_effort: Controls how much reasoning effort the model should apply when
             generating responses. Supported for tokenizer >= v15 and not supported for earlier versions.
+        json_schema: The JSON schema to enforce on the response, derived from the request's
+            response format. Supported for tokenizer >= v15 and not supported for earlier versions.
     """
 
     reasoning_effort: ReasoningEffort | None = None
+    json_schema: dict[str, Any] | None = None
 
     @staticmethod
     def none() -> "ModelSettings":
@@ -65,17 +72,67 @@ class ModelSettings(MistralBase):
         return ModelSettings()
 
 
+class JsonSchema(MistralBase):
+    r"""A named JSON schema for structured responses.
+
+    Attributes:
+        name: The schema name.
+        description: An optional description of the schema.
+        custom_schema: The JSON schema (aliased ``schema``).
+        strict: Whether the model must strictly adhere to the schema.
+
+    Examples:
+        >>> schema = JsonSchema(name="obj", schema={"type": "object"})
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str
+    description: str | None = None
+    custom_schema: dict[str, Any] = Field(..., alias="schema")
+    strict: bool = False
+
+    @field_validator("custom_schema")
+    @classmethod
+    def validate_custom_schema(cls, value: dict[str, Any]) -> dict[str, Any]:
+        r"""Validate the schema against JSON Schema Draft 7."""
+        validate_json_schema_by_draft7(value=value)
+        return value
+
+
 class ResponseFormat(MistralBase):
     r"""The format of the response.
 
     Attributes:
         type: The type of the response.
+        json_schema: The JSON schema when ``type`` is ``json_schema``.
 
     Examples:
         >>> response_format = ResponseFormat(type=ResponseFormats.text)
     """
 
     type: ResponseFormats = ResponseFormats.text
+    json_schema: JsonSchema | None = None
+
+    def get_schema(self) -> dict[str, Any] | None:
+        r"""Return the JSON schema to enforce for this response format.
+
+        Returns:
+            The schema dict, or None when no constraint applies.
+
+        Raises:
+            InvalidRequestException: If ``type`` is ``json_schema`` but no schema is set.
+        """
+        schema: dict[str, Any] | None
+        if self.type == ResponseFormats.json_schema:
+            if self.json_schema is None:
+                raise InvalidRequestException("Response format `json_schema` must define the schema")
+            schema = self.json_schema.custom_schema
+        elif self.type == ResponseFormats.json:
+            schema = {"anyOf": [{"type": "object"}, {"type": "array"}]}
+        else:
+            schema = None
+        return schema
 
 
 class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
@@ -159,7 +216,9 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
 
         # Handle messages and tools separately.
         openai_request: dict[str, Any] = self.model_dump(
-            exclude={"messages", "tools", "truncate_for_context_length", "tool_choice"}, exclude_none=True
+            exclude={"messages", "tools", "truncate_for_context_length", "tool_choice"},
+            exclude_none=True,
+            by_alias=True,
         )
 
         # Rename random_seed to seed.
