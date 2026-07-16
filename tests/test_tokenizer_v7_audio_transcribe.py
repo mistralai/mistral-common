@@ -2,7 +2,10 @@ import numpy as np
 import pytest
 from pydantic_extra_types.language_code import LanguageAlpha2
 
-from mistral_common.protocol.transcription.request import TranscriptionRequest
+from mistral_common.protocol.transcription.request import (
+    StreamingMode,
+    TranscriptionRequest,
+)
 from mistral_common.tokens.tokenizers.audio import (
     Audio,
 )
@@ -54,6 +57,47 @@ def test_tokenize_transcribe(tekkenizer: InstructTokenizerV7) -> None:
     assert isinstance(base64_audio, str)
     audio_array = Audio.from_base64(base64_audio).audio_array
     assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)
+
+
+def test_to_openai_drops_mistral_specific_fields() -> None:
+    audio_chunk = _get_audio_chunk(1.0)
+    request = TranscriptionRequest(
+        id="some-id",
+        model="dummy",
+        audio=audio_chunk.input_audio,
+        language=LanguageAlpha2("en"),
+        temperature=0.5,
+        max_tokens=128,
+        streaming=StreamingMode.OFFLINE,
+        target_streaming_delay_ms=480,
+    )
+
+    openai_request = request.to_openai()
+
+    # mistral-common / Mistral-specific fields must not leak into the OpenAI payload.
+    for field in ("id", "max_tokens", "strict_audio_validation", "streaming", "target_streaming_delay_ms", "audio"):
+        assert field not in openai_request, field
+
+    # OpenAI-valid fields are preserved and audio is exposed as a file buffer.
+    assert openai_request["model"] == "dummy"
+    assert openai_request["language"] == "en"
+    assert openai_request["temperature"] == 0.5
+    assert "file" in openai_request
+
+
+def test_to_openai_exclude_strips_compatible_extension_fields() -> None:
+    audio_chunk = _get_audio_chunk(1.0)
+    request = TranscriptionRequest(model="dummy", audio=audio_chunk.input_audio, target_streaming_delay_ms=None)
+
+    # `seed` and `top_p` are OpenAI-compatible extension fields (e.g. accepted by vLLM) but not part
+    # of OpenAI's hosted transcription API. `exclude` can drop them to get a strictly OpenAI-valid payload.
+    openai_request = request.to_openai(exclude=("seed", "top_p"))
+
+    assert "seed" not in openai_request
+    assert "top_p" not in openai_request
+    # Unrelated OpenAI-valid fields are still present.
+    assert openai_request["model"] == "dummy"
+    assert "file" in openai_request
 
 
 def test_tokenize_transcribe_with_lang(tekkenizer: InstructTokenizerV7) -> None:
