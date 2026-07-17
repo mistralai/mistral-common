@@ -1,3 +1,4 @@
+import warnings
 from pathlib import Path
 from typing import Any, Literal
 
@@ -5,6 +6,7 @@ import llguidance as llg
 import pytest
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+import mistral_common.deprecation
 from mistral_common.guidance.grammar_factory import JINJA_PATHS, GrammarFactory, _convert_tool_calls, _GrammarVariant
 from mistral_common.protocol.instruct.chunk import TextChunk, ThinkChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage
@@ -1510,10 +1512,25 @@ class TestSelectJinjaTemplate:
         with pytest.raises(AssertionError, match=r"both \[THINK\] and \[/THINK\] should be defined or none of them\."):
             factory.select_jinja_template()
 
-    def test_select_jinja_template_rejects_reasoning_kwarg(self, v11_tekken: MistralTokenizer) -> None:
+    def test_select_jinja_template_reasoning_accepted_and_ignored(self, v11_tekken: MistralTokenizer) -> None:
         factory = GrammarFactory(v11_tekken)
-        with pytest.raises(TypeError, match="reasoning"):
-            factory.select_jinja_template(**{"reasoning": True})
+        expected = factory.select_jinja_template()
+        mistral_common.deprecation._warned_keys.discard("select_jinja_template.reasoning")
+        assert factory.select_jinja_template(reasoning=True) == expected
+        mistral_common.deprecation._warned_keys.discard("select_jinja_template.reasoning")
+        assert factory.select_jinja_template(reasoning=False) == expected
+
+    def test_select_jinja_template_reasoning_true_warns_deprecation(self, v11_tekken: MistralTokenizer) -> None:
+        factory = GrammarFactory(v11_tekken)
+        mistral_common.deprecation._warned_keys.discard("select_jinja_template.reasoning")
+        with pytest.warns(DeprecationWarning):
+            factory.select_jinja_template(reasoning=True)
+
+    def test_select_jinja_template_reasoning_none_no_warn(self, v11_tekken: MistralTokenizer) -> None:
+        factory = GrammarFactory(v11_tekken)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
+            factory.select_jinja_template()
 
     @pytest.mark.parametrize(
         ("fixture_name", "content"),
