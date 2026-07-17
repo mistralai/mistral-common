@@ -9,6 +9,7 @@ We have a few examples of how to use the library with our models:
   - [Audio](#audio)
 - [Fill-in-the-middle (FIM) Completion](#fim)
 - [Audio Transcription](#audio-transcription)
+- [MLX (Apple Silicon)](#mlx-apple-silicon)
 
 ## Chat Completion
 
@@ -227,4 +228,32 @@ print(tokenized.text)
 ```
 
 
+## MLX (Apple Silicon)
 
+To run a model locally on Apple Silicon, install [mlx-lm](https://github.com/ml-explore/mlx-lm) (`pip install mlx-lm`) and drive the model at token level with the tokens from `encode_chat_completion`:
+
+```python
+import mlx.core as mx
+from mistral_common.protocol.instruct.messages import UserMessage
+from mistral_common.protocol.instruct.request import ChatCompletionRequest
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from mlx_lm import load
+from mlx_lm.generate import generate_step
+
+repo_id = "mistralai/Ministral-3-3B-Instruct-2512"
+tokenizer = MistralTokenizer.from_hf_hub(repo_id)
+model, _ = load("mlx-community/Ministral-3-3B-Instruct-2512-4bit")
+eos_id = tokenizer.instruct_tokenizer.tokenizer.eos_id
+
+request = ChatCompletionRequest(messages=[UserMessage(content="What is the capital of France?")])
+tokenized = tokenizer.encode_chat_completion(request)
+
+generated = []
+for token, _ in generate_step(mx.array(tokenized.tokens), model, max_tokens=128):
+    if int(token) == eos_id:
+        break
+    generated.append(int(token))
+
+# decode the generated tokens with the same tokenizer
+print(tokenizer.decode(generated))
+```
