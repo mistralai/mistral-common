@@ -879,6 +879,9 @@ class InstructTokenizerV7(InstructTokenizerV3):
             if idx == last_user_message_index:
                 # never drop the last user message
                 return
+            if idx == len(messages) - 1:
+                # never drop the last message
+                return
             tok = tokenized_messages[idx]
             assert tok is not None
             to_drop -= len(tok)
