@@ -124,6 +124,24 @@ class TestConvertTokenizerToChatTemplate:
         assert "'<s>'" in result
         assert "bos_token" not in result
 
+    def test_tekken_v11_audio_no_plain_thinking(self, tmp_path: Path) -> None:
+        config = TestConfig(version=TokenizerVersion.v11, audio=True)
+        path = _build_tekken_json(config=config, output_dir=tmp_path)
+        result = convert_tokenizer_to_chat_template(tokenizer_file=path)
+        expected = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v11,
+            image_support=False,
+            audio_support=True,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+        assert result == expected
+        assert "[AUDIO]" in result
+        assert "<think>" not in result
+
     def test_unrecognized_file_raises_tokenizer_exception(self, tmp_path: Path) -> None:
         invalid_path = tmp_path / "tokenizer.txt"
         invalid_path.write_text("not a tokenizer")

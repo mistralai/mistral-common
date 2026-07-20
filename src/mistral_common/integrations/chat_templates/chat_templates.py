@@ -78,11 +78,13 @@ def convert_tokenizer_to_chat_template(
     and supported modalities, then delegates to `generate_chat_template` with the
     detected flags.
 
-    The `plain_thinking_support` flag is set heuristically: any v11 tokenizer uses
-    plain `<think>`/`</think>` text tags instead of special `[THINK]`/`[/THINK]`
-    tokens. `thinking_support` (special-token thinking) is detected by checking
-    whether the instruct tokenizer exposes a non-`None` `BEGIN_THINK` attribute,
-    which is only set on v13+ tokenizers that include think special tokens.
+    The `plain_thinking_support` flag is set heuristically: a v11 tokenizer without
+    an audio encoder uses plain `<think>`/`</think>` text tags instead of special
+    `[THINK]`/`[/THINK]` tokens. When audio is present on a v11 tokenizer,
+    `plain_thinking_support` is set to `False` because the two are mutually exclusive.
+    `thinking_support` (special-token thinking) is detected by checking whether the
+    instruct tokenizer exposes a non-`None` `BEGIN_THINK` attribute, which is only
+    set on v13+ tokenizers that include think special tokens.
 
     Args:
         tokenizer_file: Path to the tokenizer file (tekken JSON or SentencePiece `.model.vX`).
@@ -97,16 +99,16 @@ def convert_tokenizer_to_chat_template(
     Raises:
         TokenizerException: If the tokenizer file is not recognized or invalid.
     """
-    mt = MistralTokenizer.from_file(tokenizer_file)
-    it = mt.instruct_tokenizer
-    tok = it.tokenizer
+    mistral_tokenizer = MistralTokenizer.from_file(tokenizer_file)
+    instruct_tokenizer = mistral_tokenizer.instruct_tokenizer
+    tokenizer = instruct_tokenizer.tokenizer
 
-    version = tok.version
-    spm = isinstance(tok, SentencePieceTokenizer)
-    image_support = it.image_encoder is not None
-    audio_support = it.audio_encoder is not None
-    thinking_support = getattr(it, "BEGIN_THINK", None) is not None
-    plain_thinking_support = version == TokenizerVersion.v11
+    version = mistral_tokenizer.version
+    spm = isinstance(tokenizer, SentencePieceTokenizer)
+    image_support = instruct_tokenizer.image_encoder is not None
+    audio_support = instruct_tokenizer.audio_encoder is not None
+    thinking_support = getattr(instruct_tokenizer, "BEGIN_THINK", None) is not None
+    plain_thinking_support = version == TokenizerVersion.v11 and not audio_support
 
     return generate_chat_template(
         spm=spm,
