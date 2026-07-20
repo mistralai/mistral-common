@@ -4,7 +4,12 @@ import pytest
 
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.helpers import TestConfig, _load_golden_template, _make_config, render_template
+from tests.integrations.chat_templates.helpers import (
+    TestConfig,
+    _load_golden_template,
+    _make_config,
+    render_template,
+)
 
 
 class TestV15ModelSettings:
@@ -471,3 +476,135 @@ class TestV15MultimodalContent:
         # rather than rendering through render_content — no [IMG] token produced
         output = render_template(template, messages, tools=tools)
         assert "[IMG]" not in output
+
+    def test_v15_think_tool_message_renders_thinking(self) -> None:
+        r"""V15 think template renders tool message with thinking chunk wrapped in [THINK] tokens."""
+        template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v15,
+            image_support=False,
+            audio_support=False,
+            thinking_support=True,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+
+        messages: list[dict[str, Any]] = [
+            {"role": "user", "content": "Hello"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"id": "abcdefghi", "function": {"name": "f", "arguments": "{}"}}],
+            },
+            {
+                "role": "tool",
+                "content": [
+                    {"type": "thinking", "thinking": "secret reasoning"},
+                    {"type": "text", "text": "result"},
+                ],
+                "tool_call_id": "abcdefghi",
+            },
+            {"role": "assistant", "content": "Done"},
+        ]
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "f",
+                    "description": "d",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+        output = render_template(template, messages, tools=tools, reasoning_effort="none")
+        assert "[TOOL_RESULTS][THINK]secret reasoning[/THINK]result[/TOOL_RESULTS]" in output
+
+    def test_v15_think_tool_message_string_content_ok(self) -> None:
+        r"""V15 think template renders tool message with string content without error."""
+        template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v15,
+            image_support=False,
+            audio_support=False,
+            thinking_support=True,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+
+        messages: list[dict[str, Any]] = [
+            {"role": "user", "content": "Hello"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"id": "abcdefghi", "function": {"name": "f", "arguments": "{}"}}],
+            },
+            {
+                "role": "tool",
+                "content": "plain text result",
+                "tool_call_id": "abcdefghi",
+            },
+            {"role": "assistant", "content": "Done"},
+        ]
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "f",
+                    "description": "d",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+        output = render_template(template, messages, tools=tools, reasoning_effort="none")
+        assert "[TOOL_RESULTS]" in output
+        assert "[/TOOL_RESULTS]" in output
+        assert "plain text result" in output
+
+    def test_v15_image_think_tool_message_accepts_thinking(self) -> None:
+        r"""V15 image+think template renders tool message with leading thinking chunk without error."""
+        template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v15,
+            image_support=True,
+            audio_support=False,
+            thinking_support=True,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+
+        messages: list[dict[str, Any]] = [
+            {"role": "user", "content": "Hello"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"id": "abcdefghi", "function": {"name": "f", "arguments": "{}"}}],
+            },
+            {
+                "role": "tool",
+                "content": [
+                    {"type": "thinking", "thinking": "secret reasoning"},
+                    {"type": "text", "text": "result"},
+                ],
+                "tool_call_id": "abcdefghi",
+            },
+            {"role": "assistant", "content": "Done"},
+        ]
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "f",
+                    "description": "d",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+        output = render_template(template, messages, tools=tools, reasoning_effort="none")
+        assert "[THINK]secret reasoning[/THINK]" in output
+        assert "[TOOL_RESULTS]" in output

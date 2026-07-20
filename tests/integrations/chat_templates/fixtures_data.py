@@ -1008,6 +1008,33 @@ REQUEST_TOOL_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
     tools=_TOOLS,
 )
 
+REQUEST_TOOL_THINKING_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="What's the weather in Paris?"),
+        AssistantMessage(
+            content=None,
+            tool_calls=[
+                ToolCall(
+                    id="tl1mg2345",
+                    function=FunctionCall(
+                        name="tool1",
+                        arguments={"location": "Paris"},  # type: ignore[arg-type]
+                    ),
+                ),
+            ],
+        ),
+        ToolMessage(
+            content=[
+                ThinkChunk(thinking="The tool result needs reasoning before the answer."),
+                TextChunk(text="Sunny, 25C."),
+            ],
+            tool_call_id="tl1mg2345",
+        ),
+        AssistantMessage(content="It is sunny and 25C in Paris."),
+    ],
+    tools=_TOOLS,
+)
+
 REQUEST_SYSTEM_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         SystemMessage(
@@ -1182,6 +1209,8 @@ def _get_conversations(
         if audio:
             conversations.append(REQUEST_SYSTEM_AUDIO_TRAIN)
             conversations.append(REQUEST_TOOL_AUDIO_TRAIN)
+        if think:
+            conversations.append(REQUEST_TOOL_THINKING_TRAIN)
 
     conversations = [c.model_copy(deep=True) for c in conversations]
 
