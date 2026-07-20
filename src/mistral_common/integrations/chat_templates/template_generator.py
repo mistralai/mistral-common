@@ -1522,6 +1522,8 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
                 if config.audio_support:
                     desc_parts.append("audio")
                 tool_rc_args += f", supported_types_desc='{_join_types_desc(desc_parts)}'"
+            if config.any_thinking_support:
+                tool_rc_args += ", support_thinking=false"
             if config.image_support:
                 tool_rc_args += ", support_images=true"
             if config.audio_support:

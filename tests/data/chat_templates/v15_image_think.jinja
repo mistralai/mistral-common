@@ -218,7 +218,7 @@
     {#- Tool messages (multimodal). #}
     {%- elif message['role'] == 'tool' %}
         {{- '[TOOL_RESULTS]' -}}
-        {{- render_content(message['content'], 'tool message contents', supported_types_desc='text and image', support_images=true) -}}
+        {{- render_content(message['content'], 'tool message contents', supported_types_desc='text and image', support_thinking=false, support_images=true) -}}
         {{- '[/TOOL_RESULTS]' }}
 
     {#- System messages. #}

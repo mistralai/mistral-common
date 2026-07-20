@@ -145,6 +145,43 @@ class TestV15ModelSettings:
         assert "[AVAILABLE_TOOLS]" in output
         assert "get_weather" in output
 
+    @pytest.mark.parametrize("image_support", [False, True])
+    def test_v15_tool_result_with_thinking_support(self, image_support: bool) -> None:
+        template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v15,
+            image_support=image_support,
+            audio_support=False,
+            thinking_support=True,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+
+        messages = [
+            {"role": "user", "content": "Use the tool"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "test12345",
+                        "type": "function",
+                        "function": {"name": "preflight_echo", "arguments": '{"value":"ok"}'},
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "test12345",
+                "name": "preflight_echo",
+                "content": "ok",
+            },
+        ]
+
+        output = render_template(template, messages, reasoning_effort="high")
+        assert "[TOOL_RESULTS]ok[/TOOL_RESULTS]" in output
+
     @pytest.mark.parametrize(
         ("has_system", "has_tools", "reasoning_effort"),
         [

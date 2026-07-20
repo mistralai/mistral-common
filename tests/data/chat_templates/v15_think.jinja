@@ -210,7 +210,7 @@
     {#- Tool messages (multimodal). #}
     {%- elif message['role'] == 'tool' %}
         {{- '[TOOL_RESULTS]' -}}
-        {{- render_content(message['content'], 'tool message contents') -}}
+        {{- render_content(message['content'], 'tool message contents', support_thinking=false) -}}
         {{- '[/TOOL_RESULTS]' }}
 
     {#- System messages. #}
