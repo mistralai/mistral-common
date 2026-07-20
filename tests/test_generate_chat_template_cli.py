@@ -2,7 +2,20 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+from mistral_common.tokens.tokenizers.base import TokenizerVersion
+from tests.integrations.chat_templates.helpers import TestConfig, _build_tekken_json
+
 SCRIPT_PATH = Path(__file__).parent.parent / "scripts" / "generate_chat_template.py"
+
+
+@pytest.fixture(scope="session")
+def tekken_think_v13_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Path to a v13 think tekken.json used for auto-detect CLI tests."""
+    build_dir = tmp_path_factory.mktemp("tokenizer")
+    config = TestConfig(version=TokenizerVersion.v13, think=True)
+    return _build_tekken_json(config=config, output_dir=build_dir)
 
 
 def test_cli_generates_template(tmp_path: Path) -> None:
@@ -185,3 +198,107 @@ def test_cli_no_special_token_variables_flag(tmp_path: Path) -> None:
     assert "'</s>'" in content
     assert "bos_token" not in content
     assert "eos_token" not in content
+
+
+def test_autodetect_happy_path(tmp_path: Path, tekken_think_v13_path: Path) -> None:
+    """Auto-detect mode with v13 think tokenizer generates template containing [THINK]."""
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--tokenizer_file",
+            str(tekken_think_v13_path),
+            "--saving_path",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert output_path.exists()
+    content = output_path.read_text()
+    assert "[THINK]" in content
+
+
+def test_autodetect_conflict_version(tmp_path: Path, tekken_think_v13_path: Path) -> None:
+    """Auto-detect + --version exits non-zero."""
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--tokenizer_file",
+            str(tekken_think_v13_path),
+            "--version",
+            "v13",
+            "--saving_path",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+
+
+def test_autodetect_conflict_capability_flag(tmp_path: Path, tekken_think_v13_path: Path) -> None:
+    """Auto-detect + --image exits non-zero."""
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--tokenizer_file",
+            str(tekken_think_v13_path),
+            "--image",
+            "--saving_path",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+
+
+def test_autodetect_with_system_prompt(tmp_path: Path, tekken_think_v13_path: Path) -> None:
+    """Auto-detect mode with --default_system_prompt embeds the prompt."""
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--tokenizer_file",
+            str(tekken_think_v13_path),
+            "--default_system_prompt",
+            "You are helpful.",
+            "--saving_path",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    content = output_path.read_text()
+    assert "You are helpful." in content
+
+
+def test_autodetect_no_special_token_variables(tmp_path: Path, tekken_think_v13_path: Path) -> None:
+    """Auto-detect + --no_special_token_variables embeds literal BOS/EOS values."""
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--tokenizer_file",
+            str(tekken_think_v13_path),
+            "--no_special_token_variables",
+            "--saving_path",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    content = output_path.read_text()
+    assert "'<s>'" in content
+    assert "bos_token" not in content

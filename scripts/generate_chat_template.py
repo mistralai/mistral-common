@@ -1,13 +1,22 @@
 import argparse
 
-from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
+from mistral_common.integrations.chat_templates.chat_templates import (
+    convert_tokenizer_to_chat_template,
+    generate_chat_template,
+)
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 
 
 def main() -> None:
     r"""Generate a chat template and save it to a file."""
     parser = argparse.ArgumentParser(description="Generate a Mistral chat template")
-    parser.add_argument("--version", type=str, required=True, help="Tokenizer version (e.g., v1, v3, v7, v15)")
+    parser.add_argument(
+        "--tokenizer_file",
+        type=str,
+        default=None,
+        help="Path to a tokenizer file for auto-detect mode",
+    )
+    parser.add_argument("--version", type=str, default=None, help="Tokenizer version (e.g., v1, v3, v7, v15)")
     parser.add_argument("--spm", action="store_true", help="Use SentencePiece tokenizer")
     parser.add_argument("--image", action="store_true", help="Enable image support")
     parser.add_argument("--audio", action="store_true", help="Enable audio support")
@@ -22,16 +31,43 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    template = generate_chat_template(
-        spm=args.spm,
-        tokenizer_version=TokenizerVersion(args.version),
-        image_support=args.image,
-        audio_support=args.audio,
-        thinking_support=args.thinking,
-        default_system_prompt=args.default_system_prompt,
-        plain_thinking_support=args.plain_thinking,
-        use_special_token_variables=not args.no_special_token_variables,
-    )
+    if args.tokenizer_file is not None:
+        conflicting: list[str] = []
+        if args.version is not None:
+            conflicting.append("--version")
+        if args.spm:
+            conflicting.append("--spm")
+        if args.image:
+            conflicting.append("--image")
+        if args.audio:
+            conflicting.append("--audio")
+        if args.thinking:
+            conflicting.append("--thinking")
+        if args.plain_thinking:
+            conflicting.append("--plain_thinking")
+
+        if conflicting:
+            parser.error(f"--tokenizer_file cannot be combined with manual capability flags: {', '.join(conflicting)}")
+
+        template = convert_tokenizer_to_chat_template(
+            tokenizer_file=args.tokenizer_file,
+            system_prompt=args.default_system_prompt,
+            use_special_token_variables=not args.no_special_token_variables,
+        )
+    else:
+        if args.version is None:
+            parser.error("--version is required when --tokenizer_file is not provided")
+
+        template = generate_chat_template(
+            spm=args.spm,
+            tokenizer_version=TokenizerVersion(args.version),
+            image_support=args.image,
+            audio_support=args.audio,
+            thinking_support=args.thinking,
+            default_system_prompt=args.default_system_prompt,
+            plain_thinking_support=args.plain_thinking,
+            use_special_token_variables=not args.no_special_token_variables,
+        )
 
     with open(args.saving_path, "w", encoding="utf-8") as f:
         f.write(template)
