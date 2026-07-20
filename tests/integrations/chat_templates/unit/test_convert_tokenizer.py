@@ -145,5 +145,5 @@ class TestConvertTokenizerToChatTemplate:
     def test_unrecognized_file_raises_tokenizer_exception(self, tmp_path: Path) -> None:
         invalid_path = tmp_path / "tokenizer.txt"
         invalid_path.write_text("not a tokenizer")
-        with pytest.raises(TokenizerException):
+        with pytest.raises(TokenizerException, match="Unrecognized tokenizer file:"):
             convert_tokenizer_to_chat_template(tokenizer_file=invalid_path)
