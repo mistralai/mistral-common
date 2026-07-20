@@ -186,7 +186,7 @@
             {%- set user_content = message['content'] %}
         {%- endif %}
         {{- '[INST]' -}}
-        {{- render_content(user_content, 'user message content', supported_types_desc='text, image and image_url', support_thinking=false, support_images=true) -}}
+        {{- render_content(content=user_content, context_name='user message content', supported_types_desc='text, image and image_url', support_thinking=false, support_images=true) -}}
         {{- '[/INST]' }}
 
     {#- Assistant messages supports text and thinking content. #}
@@ -196,7 +196,7 @@
         {%- endif %}
 
         {%- if message['content'] %}
-            {{- render_content(message['content'], 'assistant message contents', supported_types_desc='text and thinking', support_thinking=true, support_images=false) -}}
+            {{- render_content(content=message['content'], context_name='assistant message contents', supported_types_desc='text and thinking', support_thinking=true, support_images=false) -}}
         {%- endif %}
 
         {%- if message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}
@@ -218,13 +218,13 @@
     {#- Tool messages (multimodal). #}
     {%- elif message['role'] == 'tool' %}
         {{- '[TOOL_RESULTS]' -}}
-        {{- render_content(message['content'], 'tool message contents', supported_types_desc='text and image', support_images=true) -}}
+        {{- render_content(content=message['content'], context_name='tool message contents', supported_types_desc='text, thinking and image', support_thinking=true, support_images=true) -}}
         {{- '[/TOOL_RESULTS]' }}
 
     {#- System messages. #}
     {%- elif message['role'] == 'system' %}
         {{- '[SYSTEM_PROMPT]' -}}
-        {{- render_content(message['content'], 'system message contents', supported_types_desc='text', support_thinking=false, support_images=false) -}}
+        {{- render_content(content=message['content'], context_name='system message contents', supported_types_desc='text', support_thinking=false, support_images=false) -}}
         {{- '[/SYSTEM_PROMPT]' -}}
 
     {#- Raise exception for unsupported roles. #}
