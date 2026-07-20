@@ -32,19 +32,15 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.tokenizer_file is not None:
-        conflicting: list[str] = []
-        if args.version is not None:
-            conflicting.append("--version")
-        if args.spm:
-            conflicting.append("--spm")
-        if args.image:
-            conflicting.append("--image")
-        if args.audio:
-            conflicting.append("--audio")
-        if args.thinking:
-            conflicting.append("--thinking")
-        if args.plain_thinking:
-            conflicting.append("--plain_thinking")
+        manual_flag_checks: list[tuple[bool, str]] = [
+            (args.version is not None, "--version"),
+            (args.spm, "--spm"),
+            (args.image, "--image"),
+            (args.audio, "--audio"),
+            (args.thinking, "--thinking"),
+            (args.plain_thinking, "--plain_thinking"),
+        ]
+        conflicting = [flag for is_set, flag in manual_flag_checks if is_set]
 
         if conflicting:
             parser.error(f"--tokenizer_file cannot be combined with manual capability flags: {', '.join(conflicting)}")

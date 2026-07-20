@@ -104,7 +104,7 @@ def test_cli_invalid_config(tmp_path: Path) -> None:
 
 
 def test_cli_missing_version(tmp_path: Path) -> None:
-    """CLI requires --version."""
+    """CLI requires --version in manual mode and emits the specific error message."""
     output_path = tmp_path / "template.jinja"
     result = subprocess.run(
         [sys.executable, str(SCRIPT_PATH), "--saving_path", str(output_path)],
@@ -112,6 +112,7 @@ def test_cli_missing_version(tmp_path: Path) -> None:
         text=True,
     )
     assert result.returncode != 0
+    assert "--version is required when --tokenizer_file is not provided" in result.stderr
 
 
 def test_cli_with_audio_flag(tmp_path: Path) -> None:
@@ -222,7 +223,7 @@ def test_autodetect_happy_path(tmp_path: Path, tekken_think_v13_path: Path) -> N
 
 
 def test_autodetect_conflict_version(tmp_path: Path, tekken_think_v13_path: Path) -> None:
-    """Auto-detect + --version exits non-zero."""
+    """Auto-detect + --version exits non-zero with mutual-exclusion error."""
     output_path = tmp_path / "template.jinja"
     result = subprocess.run(
         [
@@ -239,10 +240,11 @@ def test_autodetect_conflict_version(tmp_path: Path, tekken_think_v13_path: Path
         text=True,
     )
     assert result.returncode != 0
+    assert "--tokenizer_file cannot be combined with manual capability flags" in result.stderr
 
 
 def test_autodetect_conflict_capability_flag(tmp_path: Path, tekken_think_v13_path: Path) -> None:
-    """Auto-detect + --image exits non-zero."""
+    """Auto-detect + --image exits non-zero with mutual-exclusion error."""
     output_path = tmp_path / "template.jinja"
     result = subprocess.run(
         [
@@ -258,6 +260,7 @@ def test_autodetect_conflict_capability_flag(tmp_path: Path, tekken_think_v13_pa
         text=True,
     )
     assert result.returncode != 0
+    assert "--tokenizer_file cannot be combined with manual capability flags" in result.stderr
 
 
 def test_autodetect_with_system_prompt(tmp_path: Path, tekken_think_v13_path: Path) -> None:
