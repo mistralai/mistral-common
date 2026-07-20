@@ -54,6 +54,8 @@ mistral-common/
     - `request.py`: Definition of `FIMRequest`. This is the entry point of user queries for FIM requests
   - `transcription/`: Transcription protocol
     - `request.py`: Definition of `TranscriptionRequest`. This is the entry point of user queries for Transcription requests
+  - `speech/`: Speech protocol
+    - `request.py`: Definition of `SpeechRequest`. This is the entry point of user queries for Speech requests
   - `base.py`: Definition of `BaseCompletionRequest` subclassed by FIM and Instruct requests
   - `utils.py`: Utility functions
 
@@ -65,6 +67,7 @@ mistral-common/
     - `image.py`: Image processing
     - `instruct.py`: Instruct Tokenizer that encodes requests via Tekken tokenizer
     - `mistral.py`: Mistral Tokenizer that normalizes and validates requests to pass them to an instruct tokenizer
+    - `model_settings_builder.py`: Builders (`FieldBuilder`, `EnumBuilder`, `ModelSettingsBuilder`) for validating and constructing model settings
     - `multimodal.py`: deprecated in favor of `image.py`
     - `sentencepiece.py`: Sentence Piece tokenizer (deprecated)
     - `tekken.py`: Tekken tokenizer used by all recent models
@@ -112,6 +115,7 @@ mistral-common/
 - Respect ruff and mypy rules
 - Naming: snake_case for functions/variables, PascalCase for classes
 - Use Python functionalities supported by Python 3.10
+- Call function arguments explicitly by keyword, not implicitly by position (e.g. `fn(x=1, y=2)`, not `fn(1, 2)`)
 
 ### Imports
 - Use absolute imports for modules within the project
