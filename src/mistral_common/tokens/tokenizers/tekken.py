@@ -481,11 +481,13 @@ class Tekkenizer(Tokenizer):
         Returns:
             The decoded string.
         """
-        if not isinstance(special_token_policy, (str, SpecialTokenPolicy)):
+        try:
+            special_token_policy = SpecialTokenPolicy(special_token_policy)
+        except ValueError as e:
+            valid = ", ".join(repr(p.value) for p in SpecialTokenPolicy)
             raise ValueError(
-                f"Expected `special_token_policy` to be SpecialTokenPolicy, got {type(special_token_policy)}."
-            )
-        special_token_policy = SpecialTokenPolicy(special_token_policy)
+                f"Invalid `special_token_policy` {special_token_policy!r}. Expected one of: {valid}."
+            ) from e
 
         return "".join(self._decode_all(tokens, special_token_policy=special_token_policy))
 

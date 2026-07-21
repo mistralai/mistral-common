@@ -73,5 +73,5 @@ def test_decode_string_special_token_policy_matches_enum(tokenizer_v7: SentenceP
 
 def test_decode_invalid_special_token_policy_string_raises(tokenizer_v7: SentencePieceTokenizer) -> None:
     ids = tokenizer_v7.encode("Hello world", bos=True, eos=True)
-    with pytest.raises(ValueError, match="not a valid SpecialTokenPolicy"):
+    with pytest.raises(ValueError, match=r"Invalid \`special_token_policy\`"):
         tokenizer_v7.decode(ids, "keeep")  # type: ignore[arg-type]

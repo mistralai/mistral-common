@@ -175,7 +175,7 @@ def test_decode_string_special_token_policy_matches_enum(dummy_v3: Tekkenizer) -
 
 def test_decode_invalid_special_token_policy_string_raises(dummy_v3: Tekkenizer) -> None:
     ids = dummy_v3.encode("hello", bos=True, eos=True)
-    with pytest.raises(ValueError, match="not a valid SpecialTokenPolicy"):
+    with pytest.raises(ValueError, match=r"Invalid \`special_token_policy\`"):
         dummy_v3.decode(ids, "keeep")  # type: ignore[arg-type]
 
 
