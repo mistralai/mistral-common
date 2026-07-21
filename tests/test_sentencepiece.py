@@ -71,7 +71,7 @@ def test_decode_string_special_token_policy_matches_enum(
 ) -> None:
     include_special = policy is not SpecialTokenPolicy.RAISE
     ids = tokenizer_v7.encode("Hello world", bos=include_special, eos=include_special)
-    assert tokenizer_v7.decode(ids, policy.value) == tokenizer_v7.decode(ids, policy)
+    assert tokenizer_v7.decode(ids, policy.value) == tokenizer_v7.decode(ids, policy)  # type: ignore[arg-type]
 
 
 def test_decode_invalid_special_token_policy_string_raises(tokenizer_v7: SentencePieceTokenizer) -> None:

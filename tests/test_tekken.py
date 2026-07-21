@@ -171,7 +171,7 @@ def test_roundtrip() -> None:
 def test_decode_string_special_token_policy_matches_enum(dummy_v3: Tekkenizer, policy: SpecialTokenPolicy) -> None:
     include_special = policy is not SpecialTokenPolicy.RAISE
     ids = dummy_v3.encode("hello", bos=include_special, eos=include_special)
-    assert dummy_v3.decode(ids, policy.value) == dummy_v3.decode(ids, policy)
+    assert dummy_v3.decode(ids, policy.value) == dummy_v3.decode(ids, policy)  # type: ignore[arg-type]
 
 
 def test_decode_invalid_special_token_policy_string_raises(dummy_v3: Tekkenizer) -> None:
