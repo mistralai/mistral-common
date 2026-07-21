@@ -217,6 +217,7 @@ class SentencePieceTokenizer(Tokenizer):
             raise ValueError(
                 f"Expected `special_token_policy` to be a SpecialTokenPolicy, got {type(special_token_policy)}."
             )
+        special_token_policy = SpecialTokenPolicy(special_token_policy)
 
         if special_token_policy == SpecialTokenPolicy.IGNORE:
             decoded = self._model.decode(tokens)

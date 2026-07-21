@@ -63,3 +63,15 @@ def test_decode_raise_policy_raises_on_special_tokens(tokenizer_v7: SentencePiec
     assert any(tokenizer_v7.is_special(tok) for tok in ids)
     with pytest.raises(ValueError):
         tokenizer_v7.decode(ids, SpecialTokenPolicy.RAISE)
+
+
+def test_decode_string_special_token_policy_matches_enum(tokenizer_v7: SentencePieceTokenizer) -> None:
+    ids = tokenizer_v7.encode("Hello world", bos=True, eos=True)
+    for policy in (SpecialTokenPolicy.IGNORE, SpecialTokenPolicy.KEEP):
+        assert tokenizer_v7.decode(ids, policy.value) == tokenizer_v7.decode(ids, policy)
+
+
+def test_decode_invalid_special_token_policy_string_raises(tokenizer_v7: SentencePieceTokenizer) -> None:
+    ids = tokenizer_v7.encode("Hello world", bos=True, eos=True)
+    with pytest.raises(ValueError, match="not a valid SpecialTokenPolicy"):
+        tokenizer_v7.decode(ids, "keeep")  # type: ignore[arg-type]

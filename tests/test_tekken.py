@@ -167,6 +167,18 @@ def test_roundtrip() -> None:
     assert inputs == decoded
 
 
+def test_decode_string_special_token_policy_matches_enum(dummy_v3: Tekkenizer) -> None:
+    ids = dummy_v3.encode("hello", bos=True, eos=True)
+    for policy in (SpecialTokenPolicy.IGNORE, SpecialTokenPolicy.KEEP):
+        assert dummy_v3.decode(ids, policy.value) == dummy_v3.decode(ids, policy)
+
+
+def test_decode_invalid_special_token_policy_string_raises(dummy_v3: Tekkenizer) -> None:
+    ids = dummy_v3.encode("hello", bos=True, eos=True)
+    with pytest.raises(ValueError, match="not a valid SpecialTokenPolicy"):
+        dummy_v3.decode(ids, "keeep")  # type: ignore[arg-type]
+
+
 def test_version(tmp_path: Path) -> None:
     tokpath = tmp_path / "tekken.json"
 

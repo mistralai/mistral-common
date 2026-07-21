@@ -485,6 +485,7 @@ class Tekkenizer(Tokenizer):
             raise ValueError(
                 f"Expected `special_token_policy` to be SpecialTokenPolicy, got {type(special_token_policy)}."
             )
+        special_token_policy = SpecialTokenPolicy(special_token_policy)
 
         return "".join(self._decode_all(tokens, special_token_policy=special_token_policy))
 
