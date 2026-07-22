@@ -370,14 +370,13 @@ class ToolMessage(BaseMessage):
     # Deprecated in V3 tokenization
     name: str | None = None
 
-    # Tool messages accept all content chunk types.
+    # Tool messages do not accept thinking chunks.
     _allowed_content_chunks: ClassVar[tuple[type[BaseContentChunk], ...]] = (
         TextChunk,
         ImageChunk,
         ImageURLChunk,
         AudioChunk,
         AudioURLChunk,
-        ThinkChunk,
     )
 
     def to_openai(self) -> dict[str, Any]:

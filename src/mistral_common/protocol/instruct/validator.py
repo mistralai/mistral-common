@@ -586,7 +586,7 @@ class MistralRequestValidatorV15(MistralRequestValidatorV13):
         _validate_content_chunk_types(content, (TextChunk, AudioChunk), "system", InvalidSystemPromptException)
 
     def _validate_tool_content_chunks(self, content: str | Sequence[ContentChunk] | None) -> None:
-        r"""v15 tool messages accept all content chunk types."""
+        r"""v15 tool messages accept all content chunk types except thinking (rejected at ToolMessage model level)."""
         return
 
     def _validate_model_settings(self, request: ChatCompletionRequest) -> None:
