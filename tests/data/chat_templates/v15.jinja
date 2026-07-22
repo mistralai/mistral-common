@@ -151,7 +151,7 @@
             {%- set user_content = message['content'] %}
         {%- endif %}
         {{- '[INST]' -}}
-        {{- render_content(user_content, 'user message content') -}}
+        {{- render_content(content=user_content, context_name='user message content') -}}
         {{- '[/INST]' }}
 
     {#- Assistant messages supports text content. #}
@@ -161,7 +161,7 @@
         {%- endif %}
 
         {%- if message['content'] %}
-            {{- render_content(message['content'], 'assistant message contents') -}}
+            {{- render_content(content=message['content'], context_name='assistant message contents') -}}
         {%- endif %}
 
         {%- if message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}
@@ -183,13 +183,13 @@
     {#- Tool messages (multimodal). #}
     {%- elif message['role'] == 'tool' %}
         {{- '[TOOL_RESULTS]' -}}
-        {{- render_content(message['content'], 'tool message contents') -}}
+        {{- render_content(content=message['content'], context_name='tool message contents') -}}
         {{- '[/TOOL_RESULTS]' }}
 
     {#- System messages. #}
     {%- elif message['role'] == 'system' %}
         {{- '[SYSTEM_PROMPT]' -}}
-        {{- render_content(message['content'], 'system message contents') -}}
+        {{- render_content(content=message['content'], context_name='system message contents') -}}
         {{- '[/SYSTEM_PROMPT]' -}}
 
     {#- Raise exception for unsupported roles. #}

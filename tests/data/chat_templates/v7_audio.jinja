@@ -144,7 +144,7 @@
             {{- available_tools }}
         {%- endif %}
         {{- '[INST]' -}}
-        {{- render_content(message['content'], 'user message content', supported_types_desc='text, input_audio and audio_url', support_audio=true) -}}
+        {{- render_content(content=message['content'], context_name='user message content', supported_types_desc='text, input_audio and audio_url', support_audio=true) -}}
         {{- '[/INST]' }}
 
     {#- Assistant messages supports text content. #}
@@ -154,7 +154,7 @@
         {%- endif %}
 
         {%- if message['content'] %}
-            {{- render_content(message['content'], 'assistant message contents', supported_types_desc='text', support_audio=false) -}}
+            {{- render_content(content=message['content'], context_name='assistant message contents', supported_types_desc='text', support_audio=false) -}}
         {%- endif %}
 
         {%- if message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}
@@ -195,7 +195,7 @@
     {#- System messages. #}
     {%- elif message['role'] == 'system' %}
         {{- '[SYSTEM_PROMPT]' -}}
-        {{- render_content(message['content'], 'system message contents', supported_types_desc='text', support_audio=false) -}}
+        {{- render_content(content=message['content'], context_name='system message contents', supported_types_desc='text', support_audio=false) -}}
         {{- '[/SYSTEM_PROMPT]' -}}
 
     {#- Raise exception for unsupported roles. #}
