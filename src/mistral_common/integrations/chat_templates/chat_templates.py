@@ -6,7 +6,7 @@ from mistral_common.integrations.chat_templates.template_generator import (
 from mistral_common.integrations.chat_templates.template_generator import (
     build_chat_template as _build_chat_template,
 )
-from mistral_common.tokens.tokenizers.base import TokenizerVersion
+from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
 
@@ -82,9 +82,9 @@ def convert_tokenizer_to_chat_template(
     an audio encoder uses plain `<think>`/`</think>` text tags instead of special
     `[THINK]`/`[/THINK]` tokens. When audio is present on a v11 tokenizer,
     `plain_thinking_support` is set to `False` because the two are mutually exclusive.
-    `thinking_support` (special-token thinking) is detected by checking whether the
-    instruct tokenizer exposes a non-`None` `BEGIN_THINK` attribute, which is only
-    set on v13+ tokenizers that include think special tokens.
+    `thinking_support` (special-token thinking) is detected by checking whether both
+    `begin_think` and `end_think` special tokens are registered in the underlying
+    tokenizer via its public `is_special` method.
 
     Args:
         tokenizer_file: Path to the tokenizer file (tekken JSON or SentencePiece `.model.vX`).
@@ -107,7 +107,9 @@ def convert_tokenizer_to_chat_template(
     spm = isinstance(tokenizer, SentencePieceTokenizer)
     image_support = instruct_tokenizer.image_encoder is not None
     audio_support = instruct_tokenizer.audio_encoder is not None
-    thinking_support = getattr(instruct_tokenizer, "BEGIN_THINK", None) is not None
+    thinking_support = tokenizer.is_special(SpecialTokens.begin_think.value) and tokenizer.is_special(
+        SpecialTokens.end_think.value
+    )
     plain_thinking_support = version == TokenizerVersion.v11 and not audio_support
 
     return generate_chat_template(
