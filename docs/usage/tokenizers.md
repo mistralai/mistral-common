@@ -32,7 +32,7 @@ tokenizer.encode_chat_completion(chat_completion).tokens
 We provide three layer of abstraction for our tokenizers:
 
 - [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer] or [SentencePieceTokenizer][mistral_common.tokens.tokenizers.sentencepiece.SentencePieceTokenizer]: raw tokenizers to handle raw data to convert them into ids and vice versa.
-- [InstructTokenizer][mistral_common.tokens.tokenizers.instruct.InstructTokenizer]: instruct tokenizers that wrap the raw tokenizers to add several helper methods for the different tasks (chat completion or FIM). They are versioned.
+- [InstructTokenizer][mistral_common.tokens.tokenizers.base.InstructTokenizer]: instruct tokenizers that wrap the raw tokenizers to add several helper methods for the different tasks (chat completion or FIM). They are versioned.
 - [MistralTokenizer][mistral_common.tokens.tokenizers.mistral.MistralTokenizer]: mistral tokenizers that validate the requests, see [requests section](./requests.md), and call the instruct tokenizers.
 
 For instance, you can directly load the [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer]:

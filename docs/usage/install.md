@@ -12,6 +12,7 @@ We propose different dependencies to install depending on your needs:
 - `audio`: to use the audio tokenizers.
 - `hf-hub`: to download the tokenizers from the Hugging Face Hub.
 - `sentencepiece`: to allow the use of SentencePiece tokenizers. This is now optional as we only release `Tekken` tokenizers for recent models.
+- `guidance`: to use the grammar-based guided generation feature.
 - \[Experimental\] `server`: to use our tokenizers in a server mode.
 
 Each dependency is optional and can be installed separately or all together using the following commands:
@@ -20,8 +21,9 @@ pip install "mistral-common[image]"
 pip install "mistral-common[audio]"
 pip install "mistral-common[hf-hub]"
 pip install "mistral-common[sentencepiece]"
+pip install "mistral-common[guidance]"
 pip install "mistral-common[server]"
-pip install "mistral-common[image,audio,hf-hub,sentencepiece,server]"
+pip install "mistral-common[image,audio,hf-hub,sentencepiece,guidance,server]"
 ```
 
 ## From source
