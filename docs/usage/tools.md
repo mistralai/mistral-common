@@ -102,6 +102,7 @@ from mistral_common.protocol.instruct.tool_calls import (
     Tool,
     ToolCall,
 )
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 request = ChatCompletionRequest(
     messages=[

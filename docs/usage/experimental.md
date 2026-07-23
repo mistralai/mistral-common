@@ -72,7 +72,7 @@ The Swagger UI provides interactive documentation for all available endpoints.
 
 #### Tokenize Request
 
-- **Route**: `/tokenize/request`
+- **Route**: `/v1/tokenize/`
 - **Method**: POST
 - **Description**: Tokenizes a chat completion request
 - **Request Body**: 
@@ -93,7 +93,7 @@ from mistral_common.protocol.instruct.messages import SystemMessage, UserMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 
 # Simple request
-response = requests.post("http://localhost:8000/v1/tokenize/request", json={
+response = requests.post("http://localhost:8000/v1/tokenize/", json={
     "messages": [
         {"role": "user", "content": "Hello, how are you?"}
     ]
@@ -126,7 +126,7 @@ system_message = SystemMessage(
 
 
 response = requests.post(
-    "http://localhost:8000/v1/tokenize/request",
+    "http://localhost:8000/v1/tokenize/",
     json=jsonable_encoder(
         ChatCompletionRequest(messages=[
             system_message,
@@ -142,7 +142,7 @@ print(response.json())
 
 #### Detokenize to Assistant Message
 
-- **Route**: `/detokenize/`
+- **Route**: `/v1/detokenize/`
 - **Method**: POST
 - **Description**: Converts tokens to an assistant message with tool call parsing
 - **Request Body**: 
@@ -180,7 +180,7 @@ print(response.json())
 
 #### Detokenize to String
 
-- **Route**: `/detokenize/string`
+- **Route**: `/v1/detokenize/string`
 - **Method**: POST
 - **Description**: Converts tokens to a raw string
 - **Request Body**:
