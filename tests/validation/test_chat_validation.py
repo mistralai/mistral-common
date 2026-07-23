@@ -422,7 +422,8 @@ class TestChatValidation:
                 )
 
     def test_rejects_non_text_in_tool(self, validator_base: MistralRequestValidator) -> None:
-        for name in ("image", "image_url", "audio", "audio_url", "think"):
+        # "think" is rejected at the Pydantic model level (ToolMessage construction), not by the validator.
+        for name in ("image", "image_url", "audio", "audio_url"):
             with pytest.raises(InvalidToolMessageException, match="Unexpected content chunk types in tool message"):
                 validator_base.validate_messages(_tool_convo(get_content_chunks((name,))), continue_final_message=False)
 
@@ -727,7 +728,8 @@ class TestChatValidationV13:
         validator_v13.validate_messages(_assistant_convo(content), continue_final_message=False)
 
     def test_rejects_non_text_in_tool(self, validator_v13: MistralRequestValidatorV13) -> None:
-        for name in ("image", "image_url", "audio", "audio_url", "think"):
+        # "think" is rejected at the Pydantic model level (ToolMessage construction), not by the validator.
+        for name in ("image", "image_url", "audio", "audio_url"):
             with pytest.raises(InvalidToolMessageException, match="Unexpected content chunk types in tool message"):
                 validator_v13.validate_messages(_tool_convo(get_content_chunks((name,))), continue_final_message=False)
 
@@ -751,6 +753,7 @@ class TestChatValidationV15:
                     _system_convo(get_content_chunks((name,))), continue_final_message=False
                 )
 
-    def test_allows_all_chunk_types_in_tool(self, validator_v15: MistralRequestValidatorV15) -> None:
-        content = get_content_chunks(("text", "image", "image_url", "audio", "audio_url", "think"))
+    def test_allows_non_thinking_chunk_types_in_tool(self, validator_v15: MistralRequestValidatorV15) -> None:
+        # ThinkChunk is rejected at the Pydantic model level before reaching the validator.
+        content = get_content_chunks(("text", "image", "image_url", "audio", "audio_url"))
         validator_v15.validate_messages(_tool_convo(content), continue_final_message=False)

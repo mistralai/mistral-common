@@ -37,8 +37,12 @@ class TestMessageContentChunkUnions:
             with pytest.raises(ValidationError):
                 SystemMessage(content=_chunks((name,)))
 
-    def test_tool_allows_all_chunk_types(self) -> None:
+    def test_tool_allows_non_thinking_chunk_types(self) -> None:
         ToolMessage(
-            content=_chunks(("text", "image", "image_url", "audio", "audio_url", "think")),
+            content=_chunks(("text", "image", "image_url", "audio", "audio_url")),
             tool_call_id="c1",
         )
+
+    def test_tool_rejects_think(self) -> None:
+        with pytest.raises(ValidationError):
+            ToolMessage(content=_chunks(("think",)), tool_call_id="c1")
