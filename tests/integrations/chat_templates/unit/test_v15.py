@@ -435,6 +435,62 @@ class TestV15MultimodalContent:
         with pytest.raises(ValueError, match="Only text chunks are supported in system message contents"):
             render_template(template, messages)
 
+    def test_v15_image_think_template_rejects_think_in_tool(self) -> None:
+        r"""V15 image+think template raises when a thinking chunk appears in tool message content."""
+        template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v15,
+            image_support=True,
+            audio_support=False,
+            thinking_support=True,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+
+        tools = [{"type": "function", "function": {"name": "fn", "description": "test", "parameters": {}}}]
+
+        messages_with_think: list[dict[str, Any]] = [
+            {"role": "user", "content": "Use tool"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"id": "test12345", "function": {"name": "fn", "arguments": "{}"}}],
+            },
+            {
+                "role": "tool",
+                "content": [
+                    {"type": "thinking", "thinking": "secret reasoning"},
+                    {"type": "text", "text": "result"},
+                ],
+                "tool_call_id": "test12345",
+            },
+        ]
+
+        with pytest.raises(ValueError, match="tool message contents") as excinfo:
+            render_template(template, messages_with_think, tools=tools)
+        assert "secret reasoning" not in str(excinfo.value)
+
+        messages_text_only: list[dict[str, Any]] = [
+            {"role": "user", "content": "Use tool"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"id": "test12345", "function": {"name": "fn", "arguments": "{}"}}],
+            },
+            {
+                "role": "tool",
+                "content": [
+                    {"type": "text", "text": "result"},
+                    {"type": "image_url", "image_url": "http://example.com/img.png"},
+                ],
+                "tool_call_id": "test12345",
+            },
+        ]
+
+        output = render_template(template, messages_text_only, tools=tools)
+        assert "result" in output
+
     def test_pre_v15_image_template_rejects_image_in_tool(self) -> None:
         r"""Pre-V15 image template rejects image chunks in tool message content."""
         template = generate_chat_template(

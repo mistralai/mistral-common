@@ -241,6 +241,85 @@ def _join_types_desc(parts: list[str]) -> str:
     return ", ".join(parts[:-1]) + " and " + parts[-1]
 
 
+def _render_content_call(
+    config: TemplateConfig,
+    content_expr: str,
+    context_name: str,
+    *,
+    supported_types_desc: str,
+    support_thinking: bool,
+    support_images: bool,
+    support_audio: bool,
+    initial_prev_img: str = "false",
+) -> str:
+    r"""Build a `render_content(...)` Jinja call string with all args emitted explicitly.
+
+    Every argument that the `render_content` macro declares for `config` is included
+    as a keyword argument in macro-declared order, so no call site relies on Jinja
+    implicit `undefined`. Arguments for features absent from `config` are omitted
+    because the macro does not declare them.
+
+    Args:
+        config: Template configuration controlling which macro parameters exist.
+        content_expr: Raw Jinja expression for the `content` argument
+            (e.g. `message['content']`).
+        context_name: Human-readable name for the calling context
+            (used in macro error messages).
+        supported_types_desc: Description of supported chunk types for error messages.
+            Only emitted when the macro declares this parameter
+            (i.e. when `config` has any extra-type support enabled).
+        support_thinking: Whether thinking chunks are allowed at this call site.
+            Only emitted when `config.any_thinking_support` is True.
+        support_images: Whether image/image_url chunks are allowed at this call site.
+            Only emitted when `config.image_support` is True.
+        support_audio: Whether audio/audio_url chunks are allowed at this call site.
+            Only emitted when `config.audio_support` is True.
+        initial_prev_img: Initial value for SPM prev-image tracking namespace.
+            Only emitted when `config.uses_spm_prev_img_tracking` is True.
+
+    Returns:
+        A Jinja call string of the form `render_content(<args>)` with all
+        macro-declared arguments emitted as keyword arguments in declaration order.
+        No surrounding `{{- -}}` tags are included.
+
+    Examples:
+        >>> from mistral_common.tokens.tokenizers.base import TokenizerVersion
+        >>> config = TemplateConfig(version=TokenizerVersion.v7)
+        >>> _render_content_call(
+        ...     config=config,
+        ...     content_expr="message['content']",
+        ...     context_name="user message content",
+        ...     supported_types_desc="text",
+        ...     support_thinking=False,
+        ...     support_images=False,
+        ...     support_audio=False,
+        ... )
+        "render_content(content=message['content'], context_name='user message content')"
+    """
+    args = [f"content={content_expr}", f"context_name='{context_name}'"]
+
+    # IMPORTANT: argument emission order below must stay in sync with the
+    # `render_content` macro parameter build order in `_generate_macros`
+    # (the `params` list starting with ["content", "context_name"]).
+    # Any reorder here must be mirrored there, and vice-versa.
+    if config.any_thinking_support or config.image_support or config.audio_support:
+        args.append(f"supported_types_desc='{supported_types_desc}'")
+
+    if config.any_thinking_support:
+        args.append(f"support_thinking={'true' if support_thinking else 'false'}")
+
+    if config.image_support:
+        args.append(f"support_images={'true' if support_images else 'false'}")
+
+    if config.audio_support:
+        args.append(f"support_audio={'true' if support_audio else 'false'}")
+
+    if config.uses_spm_prev_img_tracking:
+        args.append(f"initial_prev_img={initial_prev_img}")
+
+    return "render_content(" + ", ".join(args) + ")"
+
+
 def _generate_header(config: TemplateConfig) -> str:
     r"""Generate template header with default system message.
 
@@ -891,25 +970,24 @@ def _generate_system_message_handling(config: TemplateConfig) -> str:
     else:
         lines.append("        {{- '" + _BEGIN_SYSTEM + "' -}}")
 
-    has_extra_types = config.any_thinking_support or config.image_support or config.audio_support
-    rc_args = "message['content'], 'system message contents'"
-    if has_extra_types:
-        if config.system_supports_thinking:
-            rc_args += ", supported_types_desc='text and thinking'"
-        elif config.system_supports_audio:
-            rc_args += ", supported_types_desc='text and audio'"
-        else:
-            rc_args += ", supported_types_desc='text'"
-    if config.any_thinking_support:
-        if config.system_supports_thinking:
-            rc_args += ", support_thinking=true"
-        else:
-            rc_args += ", support_thinking=false"
-    if config.image_support:
-        rc_args += ", support_images=false"
-    if config.audio_support:
-        rc_args += f", support_audio={'true' if config.system_supports_audio else 'false'}"
-    lines.append("        {{- render_content(" + rc_args + ") -}}")
+    if config.system_supports_thinking:
+        sys_types_desc = "text and thinking"
+    elif config.system_supports_audio:
+        sys_types_desc = "text and audio"
+    else:
+        sys_types_desc = "text"
+
+    rc = _render_content_call(
+        config=config,
+        content_expr="message['content']",
+        context_name="system message contents",
+        supported_types_desc=sys_types_desc,
+        support_thinking=config.system_supports_thinking,
+        support_images=False,
+        support_audio=config.system_supports_audio,
+        initial_prev_img="false",
+    )
+    lines.append("        {{- " + rc + " -}}")
 
     lines.append("        {{- '" + _END_SYSTEM + "' -}}")
 
@@ -1065,7 +1143,12 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
         inst_open = _BEGIN_INST
         inst_close = _END_INST
 
-    has_extra_types = config.any_thinking_support or config.image_support or config.audio_support
+    if config.image_support:
+        user_types_desc = "text, image and image_url"
+    elif config.audio_support:
+        user_types_desc = "text, input_audio and audio_url"
+    else:
+        user_types_desc = "text"
 
     if config.uses_system_prompt_tokens:
         # =================================================================
@@ -1116,27 +1199,21 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
         else:
             lines.append("        {{- '" + _BEGIN_INST + "' -}}")
 
-        # --- Build unified render_content args ---
+        # --- Build unified render_content call (v7+ call site) ---
         content_var = "user_content" if needs_content_prep else "message['content']"
-        rc_args = content_var + ", 'user message content'"
-        if has_extra_types:
-            if config.image_support:
-                rc_args += ", supported_types_desc='text, image and image_url'"
-            elif config.audio_support:
-                rc_args += ", supported_types_desc='text, input_audio and audio_url'"
-            else:
-                rc_args += ", supported_types_desc='text'"
-        if config.any_thinking_support:
-            rc_args += ", support_thinking=false"
-        if config.image_support:
-            rc_args += ", support_images=true"
-        if config.audio_support:
-            rc_args += ", support_audio=true"
-        if config.uses_spm_prev_img_tracking:
-            rc_args += ", initial_prev_img=not added_sp"
+        rc = _render_content_call(
+            config=config,
+            content_expr=content_var,
+            context_name="user message content",
+            supported_types_desc=user_types_desc,
+            support_thinking=False,
+            support_images=config.image_support,
+            support_audio=config.audio_support,
+            initial_prev_img="not added_sp",
+        )
 
         # --- Emit render_content + [/INST] (once each) ---
-        lines.append("        {{- render_content(" + rc_args + ") -}}")
+        lines.append("        {{- " + rc + " -}}")
         lines.append("        {{- '" + inst_close + "' }}")
 
     else:
@@ -1156,7 +1233,19 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
             lines.append("")
             lines.append("")
             lines.append("        {%- if message['content'] is string %}")
-            lines.append("            {{- render_content(message['content'], 'user message content') -}}")
+            # Pre-v7 SPM+image string branch (call site 2): initial_prev_img irrelevant
+            # for string content but added_sp is in scope so use "not added_sp" consistently.
+            rc_str = _render_content_call(
+                config=config,
+                content_expr="message['content']",
+                context_name="user message content",
+                supported_types_desc=user_types_desc,
+                support_thinking=False,
+                support_images=config.image_support,
+                support_audio=config.audio_support,
+                initial_prev_img="not added_sp",
+            )
+            lines.append("            {{- " + rc_str + " -}}")
             lines.append("        {%- elif message['content'] | length > 0 %}")
         else:
             lines.append(f"        {{{{- '{inst_open}' }}}}")
@@ -1167,10 +1256,20 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
             lines.append("            {{- system_message + '\\n\\n' }}")
             lines.append("        {%- endif %}")
             lines.append("        {%- if message['content'] is string %}")
-            lines.append("            {{- render_content(message['content'], 'user message content') -}}")
+            # Pre-v7 plain string branch (call site 2 for non-SPM): simple text-only
+            rc_str = _render_content_call(
+                config=config,
+                content_expr="message['content']",
+                context_name="user message content",
+                supported_types_desc=user_types_desc,
+                support_thinking=False,
+                support_images=config.image_support,
+                support_audio=config.audio_support,
+            )
+            lines.append("            {{- " + rc_str + " -}}")
             lines.append("        {%- elif message['content'] | length > 0 %}")
 
-        # Shared: image sorting + render_content for list case (pre-v7 only)
+        # Shared: image sorting + render_content for list case (pre-v7 only, call site 3)
         if config.image_support:
             lines.append("            {#- When content has exactly one image and one text block, put image first. #}")
             lines.append(
@@ -1184,23 +1283,17 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
         else:
             block_var = "message['content']"
 
-        rc_call_args = block_var + ", 'user message content'"
-        if has_extra_types:
-            if config.image_support:
-                rc_call_args += ", supported_types_desc='text, image and image_url'"
-            elif config.audio_support:
-                rc_call_args += ", supported_types_desc='text, input_audio and audio_url'"
-            else:
-                rc_call_args += ", supported_types_desc='text'"
-        if config.any_thinking_support:
-            rc_call_args += ", support_thinking=false"
-        if config.image_support:
-            rc_call_args += ", support_images=true"
-        if config.audio_support:
-            rc_call_args += ", support_audio=true"
-        if config.uses_spm_prev_img_tracking:
-            rc_call_args += ", initial_prev_img=not added_sp"
-        lines.append("            {{- render_content(" + rc_call_args + ") -}}")
+        rc_list = _render_content_call(
+            config=config,
+            content_expr=block_var,
+            context_name="user message content",
+            supported_types_desc=user_types_desc,
+            support_thinking=False,
+            support_images=config.image_support,
+            support_audio=config.audio_support,
+            initial_prev_img="not added_sp",
+        )
+        lines.append("            {{- " + rc_list + " -}}")
 
         # Closing
         lines.append("        {%- else %}")
@@ -1258,19 +1351,21 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
         lines.append("        {%- endif %}")
         lines.append("")
 
-    has_extra_types = config.any_thinking_support or config.image_support or config.audio_support
-    rc_call_args = "message['content'], 'assistant message contents'"
-    if has_extra_types:
-        desc_parts = ["text"]
-        if config.any_thinking_support:
-            desc_parts.append("thinking")
-        rc_call_args += f", supported_types_desc='{_join_types_desc(desc_parts)}'"
+    asst_desc_parts: list[str] = ["text"]
     if config.any_thinking_support:
-        rc_call_args += ", support_thinking=true"
-    if config.image_support:
-        rc_call_args += ", support_images=false"
-    if config.audio_support:
-        rc_call_args += ", support_audio=false"
+        asst_desc_parts.append("thinking")
+    asst_types_desc = _join_types_desc(asst_desc_parts)
+
+    rc = _render_content_call(
+        config=config,
+        content_expr="message['content']",
+        context_name="assistant message contents",
+        supported_types_desc=asst_types_desc,
+        support_thinking=True,
+        support_images=False,
+        support_audio=False,
+        initial_prev_img="false",
+    )
 
     lines.append("        {%- if message['content'] %}")
 
@@ -1280,7 +1375,7 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
         lines.append("                {%- set ns.add_space=false %}")
         lines.append("            {%- endif %}")
 
-    lines.append("            {{- render_content(" + rc_call_args + ") -}}")
+    lines.append("            {{- " + rc + " -}}")
 
     if config.uses_v2_tool_format:
         lines.append("            {{- " + config.eos_expr + " }}")
@@ -1514,20 +1609,24 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
             )
     elif config.uses_simple_tool_results:
         if config.tool_supports_multimodal:
-            tool_rc_args = "message['content'], 'tool message contents'"
-            if config.image_support or config.audio_support:
-                desc_parts = ["text"]
-                if config.image_support:
-                    desc_parts.append("image")
-                if config.audio_support:
-                    desc_parts.append("audio")
-                tool_rc_args += f", supported_types_desc='{_join_types_desc(desc_parts)}'"
+            tool_desc_parts: list[str] = ["text"]
             if config.image_support:
-                tool_rc_args += ", support_images=true"
+                tool_desc_parts.append("image")
             if config.audio_support:
-                tool_rc_args += ", support_audio=true"
+                tool_desc_parts.append("audio")
+            tool_types_desc = _join_types_desc(tool_desc_parts)
+            tool_rc = _render_content_call(
+                config=config,
+                content_expr="message['content']",
+                context_name="tool message contents",
+                supported_types_desc=tool_types_desc,
+                support_thinking=False,
+                support_images=config.image_support,
+                support_audio=config.audio_support,
+                initial_prev_img="false",
+            )
             lines.append("        {{- '" + _BEGIN_TOOL_RESULTS + "' -}}")
-            lines.append("        {{- render_content(" + tool_rc_args + ") -}}")
+            lines.append("        {{- " + tool_rc + " -}}")
             lines.append("        {{- '" + _END_TOOL_RESULTS + "' }}")
         else:
             lines.append(
