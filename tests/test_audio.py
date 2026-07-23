@@ -144,6 +144,15 @@ def test_audio_base64(prefix: bool) -> None:
             raise ValueError(f"Unknown format {format}")
 
 
+@pytest.mark.parametrize("mime_type", ["audio/x-wav", "audio/vnd.wave", "audio/wav;codec=pcm"])
+def test_audio_from_audio_chunk_accepts_data_url_mime_variants(mime_type: str) -> None:
+    b64 = _make_dummy_base64()
+    audio = Audio.from_audio_chunk(AudioChunk(input_audio=f"data:{mime_type};base64,{b64}"))
+
+    assert audio.sampling_rate == 16000
+    assert audio.format == "wav"
+
+
 @pytest.mark.parametrize(
     "freq, expected_mel",
     [
