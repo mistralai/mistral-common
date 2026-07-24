@@ -34,13 +34,14 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import quick_vocab
 from tests.test_tokenizer_v7_audio import get_tekkenizer_with_audio
+from tests.utils.tokenizers import deprecated_special_tokens
 
 
 @pytest.fixture
 def no_audio_tekkenizer() -> InstructTokenizerV7:
     tokenizer = Tekkenizer(
         quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
-        list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS),
+        deprecated_special_tokens(),
         pattern=r".+",  # single token, whole string
         vocab_size=256 + 100,
         num_special_tokens=100,

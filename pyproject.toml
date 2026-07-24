@@ -108,10 +108,15 @@ ignore_missing_imports = true
 testpaths = ["./tests"]
 
 [tool.coverage.run]
+source = ["src/mistral_common"]
 omit = ["tests", "*src/mistral_common/data*"]
+branch = true
 
 [tool.coverage.report]
 skip_covered = true
+# Gated CI excludes tests/integrations, so this floor covers unit tests only;
+# whole-suite branch coverage is ~93.8%.
+fail_under = 88
 
 [tool.setuptools]
 include-package-data = true

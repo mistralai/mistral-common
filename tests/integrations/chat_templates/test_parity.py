@@ -6,14 +6,15 @@ from mistral_common.integrations.chat_templates.template_generator import build_
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.conftest import ALL_CONFIGS, _config_id
-from tests.integrations.chat_templates.fixtures_data import _get_conversations
+from tests.integrations.chat_templates.conftest import ALL_CONFIGS
+from tests.integrations.chat_templates.fixtures_data import get_conversations
 from tests.integrations.chat_templates.helpers import (
     TestConfig,
-    _load_golden_template,
-    _make_config,
+    load_golden_template,
+    make_config,
     render_template,
 )
+from tests.utils.versions import config_id
 
 
 def _request_to_render_args(request: ChatCompletionRequest) -> dict[str, Any]:
@@ -55,23 +56,23 @@ def _request_to_render_args(request: ChatCompletionRequest) -> dict[str, Any]:
 @pytest.mark.parametrize(
     "config",
     [c for c in ALL_CONFIGS if not c.plain_think],
-    ids=[_config_id(c) for c in ALL_CONFIGS if not c.plain_think],
+    ids=[config_id(c) for c in ALL_CONFIGS if not c.plain_think],
 )
 def test_dynamic_matches_static(config: TestConfig) -> None:
-    template_config = _make_config(config)
+    template_config = make_config(config)
     dynamic = build_chat_template(template_config)
-    static = _load_golden_template(template_config)
+    static = load_golden_template(template_config)
     assert dynamic == static
 
 
 @pytest.mark.parametrize(
     "config",
     [c for c in ALL_CONFIGS if not c.plain_think],
-    ids=[_config_id(c) for c in ALL_CONFIGS if not c.plain_think],
+    ids=[config_id(c) for c in ALL_CONFIGS if not c.plain_think],
 )
 def test_dynamic_template_produces_same_output(config: TestConfig) -> None:
-    template_config = _make_config(config)
-    static_template = _load_golden_template(template_config)
+    template_config = make_config(config)
+    static_template = load_golden_template(template_config)
     dynamic_template = build_chat_template(template_config)
 
     # Test with a simple conversation
@@ -96,15 +97,15 @@ def test_dynamic_template_produces_same_output(config: TestConfig) -> None:
 @pytest.mark.parametrize(
     "config",
     [c for c in ALL_CONFIGS if not c.plain_think],
-    ids=[_config_id(c) for c in ALL_CONFIGS if not c.plain_think],
+    ids=[config_id(c) for c in ALL_CONFIGS if not c.plain_think],
 )
 def test_dynamic_template_comprehensive(config: TestConfig) -> None:
-    template_config = _make_config(config)
-    static_template = _load_golden_template(template_config)
+    template_config = make_config(config)
+    static_template = load_golden_template(template_config)
     dynamic_template = build_chat_template(template_config)
 
     for mode in (ValidationMode.finetuning, ValidationMode.test):
-        conversations = _get_conversations(config.version, mode, config.image, config.audio, config.think)
+        conversations = get_conversations(config.version, mode, config.image, config.audio, config.think)
         for idx, request in enumerate(conversations):
             render_args = _request_to_render_args(request)
             static_output = render_template(static_template, **render_args)

@@ -10,39 +10,37 @@ from mistral_common.protocol.instruct.messages import AssistantMessage, UserMess
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from tests.integrations.chat_templates.conftest import (
-    ALL_TRANSFORMERS_CONFIGS,
-    _config_id,
-)
-from tests.integrations.chat_templates.fixtures_data import _get_conversations
+from tests.integrations.chat_templates.conftest import ALL_TRANSFORMERS_CONFIGS
+from tests.integrations.chat_templates.fixtures_data import get_conversations
 from tests.integrations.chat_templates.helpers import (
     TestConfig,
-    _build_spm_path,
-    _build_tekken_json,
+    build_spm_path,
+    build_tekken_json,
     encode_mistral_common,
 )
 from tests.integrations.chat_templates.hf_utils import (
-    _build_hf_tokenizer,
+    build_hf_tokenizer,
     encode_hf_tokens,
     encode_transformers,
     encode_transformers_from_openai,
 )
+from tests.utils.versions import config_id
 
 
 class TestTransformersMistralCommonParity:
     @pytest.mark.parametrize(
         "config",
         ALL_TRANSFORMERS_CONFIGS,
-        ids=[_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
+        ids=[config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
     )
     @pytest.mark.parametrize("mode", [ValidationMode.test, ValidationMode.finetuning])
     def test_chat_template(self, config: TestConfig, mode: ValidationMode, tmp_path: Path) -> None:
-        conversations = _get_conversations(config.version, mode, config.image, config.audio, config.think)
+        conversations = get_conversations(config.version, mode, config.image, config.audio, config.think)
 
         if config.spm:
-            tokenizer_path = _build_spm_path(config, tmp_path)
+            tokenizer_path = build_spm_path(config, tmp_path)
         else:
-            tokenizer_path = _build_tekken_json(config, tmp_path)
+            tokenizer_path = build_tekken_json(config, tmp_path)
 
         mistral_tokenizer = MistralTokenizer.from_file(str(tokenizer_path), mode=mode)
 
@@ -60,7 +58,7 @@ class TestTransformersMistralCommonParity:
         # Build HF tokenizer for Tekken-based token ID comparison
         hf_tokenizer = None
         if not config.spm:
-            hf_tokenizer = _build_hf_tokenizer(tokenizer_path, chat_template)
+            hf_tokenizer = build_hf_tokenizer(tokenizer_path, chat_template)
 
         if config.version <= TokenizerVersion.v2:
             for conv in conversations:
@@ -84,10 +82,7 @@ class TestTransformersMistralCommonParity:
             # Skipped for image/audio configs because multimodal tokens are generated
             # by encoders (not from text), so token IDs won't match.
             # Skipped for SPM because building an HF tokenizer from SPM is a separate concern.
-            # Skipped for V1 because V1 emits control markers (e.g. [INST]) as literal
-            # text, but the HF tokenizer treats them as special tokens and encodes
-            # them as single IDs, making token-level parity impossible.
-            if not config.image and not config.audio and not config.spm and config.version > TokenizerVersion.v1:
+            if not config.image and not config.audio and not config.spm:
                 assert hf_tokenizer is not None
                 hf_tokens = encode_hf_tokens(hf_tokenizer, conversation.model_copy(deep=True), keep_name_for_tools=True)
                 mc_tokens = mistral_tokenizer.encode_chat_completion(conversation.model_copy(deep=True)).tokens
@@ -99,7 +94,7 @@ class TestTransformersMistralCommonParity:
     @pytest.mark.parametrize(
         "config",
         ALL_TRANSFORMERS_CONFIGS,
-        ids=[_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
+        ids=[config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
     )
     def test_role_error(self, config: TestConfig) -> None:
         chat_template = generate_chat_template(
@@ -167,7 +162,7 @@ class TestTransformersMistralCommonParity:
     @pytest.mark.parametrize(
         "config",
         ALL_TRANSFORMERS_CONFIGS,
-        ids=[_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
+        ids=[config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
     )
     def test_invalid_chunks(
         self,

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.helpers import TestConfig, _build_tekken_json
+from tests.integrations.chat_templates.helpers import TestConfig, build_tekken_json
 
 SCRIPT_PATH = Path(__file__).parent.parent / "scripts" / "generate_chat_template.py"
 
@@ -15,7 +15,7 @@ def tekken_think_v13_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """Path to a v13 think tekken.json used for auto-detect CLI tests."""
     build_dir = tmp_path_factory.mktemp("tokenizer")
     config = TestConfig(version=TokenizerVersion.v13, think=True)
-    return _build_tekken_json(config=config, output_dir=build_dir)
+    return build_tekken_json(config=config, output_dir=build_dir)
 
 
 def test_cli_generates_template(tmp_path: Path) -> None:

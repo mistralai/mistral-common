@@ -9,7 +9,6 @@ HuggingFace-specific helpers live in `hf_utils.py`.
 
 import json
 import shutil
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +24,8 @@ from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
-from tests.test_tekken import get_special_tokens
+from tests.utils.tokenizers import get_special_tokens
+from tests.utils.versions import TestConfig
 
 # Golden template files live in the data/ tree (outside src/).
 _GOLDEN_DIR = Path(__file__).parent.parent.parent / "data" / "chat_templates"
@@ -33,21 +33,7 @@ _GOLDEN_DIR = Path(__file__).parent.parent.parent / "data" / "chat_templates"
 SPM_WHITESPACE = "▁"
 
 
-@dataclass(frozen=True)
-class TestConfig:
-    r"""Test configuration for chat template parametrization."""
-
-    __test__ = False
-
-    version: TokenizerVersion
-    spm: bool = False
-    image: bool = False
-    audio: bool = False
-    think: bool = False
-    plain_think: bool = False
-
-
-def _make_config(c: TestConfig) -> TemplateConfig:
+def make_config(c: TestConfig) -> TemplateConfig:
     r"""Create a `TemplateConfig` from a test config."""
     return TemplateConfig(
         version=c.version,
@@ -60,7 +46,7 @@ def _make_config(c: TestConfig) -> TemplateConfig:
     )
 
 
-def _load_golden_template(config: TemplateConfig) -> str:
+def load_golden_template(config: TemplateConfig) -> str:
     r"""Load the static golden template for a config."""
     parts = [config.version.value]
     if config.image_support and config.any_thinking_support:
@@ -152,13 +138,13 @@ def _sample_audio() -> Audio:
     )
 
 
-_IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/7/78/Red_Square_%282x2_Pixel%29.png"
-_IMAGE = _create_dummy_image()
-_AUDIO_URL = _sample_audio().to_base64("wav")
-_AUDIO = _AUDIO_URL
+DUMMY_IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/7/78/Red_Square_%282x2_Pixel%29.png"
+DUMMY_IMAGE = _create_dummy_image()
+DUMMY_AUDIO_URL = _sample_audio().to_base64("wav")
+DUMMY_AUDIO = DUMMY_AUDIO_URL
 
 
-def _build_tekken_json(config: TestConfig, output_dir: Path) -> Path:
+def build_tekken_json(config: TestConfig, output_dir: Path) -> Path:
     r"""Build a tekken.json file for the given test config.
 
     Constructs a complete Tekken tokenizer JSON file by combining the base
@@ -227,7 +213,7 @@ def _build_tekken_json(config: TestConfig, output_dir: Path) -> Path:
     return tekken_path
 
 
-def _build_spm_path(config: TestConfig, output_dir: Path) -> Path:
+def build_spm_path(config: TestConfig, output_dir: Path) -> Path:
     r"""Copy the SPM model file with the correct version suffix.
 
     The SPM tokenizer version is determined by the filename suffix (e.g.,
@@ -255,7 +241,7 @@ def _get_mistral_tekkenizer(config: TestConfig, output_dir: Path, validation_mod
     r"""Build a `MistralTokenizer` with Tekken backend via `from_file`.
 
     Writes a tekken.json with the desired version and features via
-    `_build_tekken_json`, then loads it through the production
+    `build_tekken_json`, then loads it through the production
     `MistralTokenizer.from_file` path.
 
     Args:
@@ -266,7 +252,7 @@ def _get_mistral_tekkenizer(config: TestConfig, output_dir: Path, validation_mod
     Returns:
         A configured `MistralTokenizer` instance.
     """
-    tekken_path = _build_tekken_json(config, output_dir)
+    tekken_path = build_tekken_json(config, output_dir)
     return MistralTokenizer.from_file(str(tekken_path), mode=validation_mode)
 
 
@@ -276,7 +262,7 @@ def _get_mistral_sentencepiece(
     r"""Build a `MistralTokenizer` with SentencePiece backend via `from_file`.
 
     Copies the shipped SPM model with the correct version suffix via
-    `_build_spm_path`, then loads it through the production
+    `build_spm_path`, then loads it through the production
     `MistralTokenizer.from_file` path.
 
     Args:
@@ -287,11 +273,11 @@ def _get_mistral_sentencepiece(
     Returns:
         A configured `MistralTokenizer` instance.
     """
-    spm_path = _build_spm_path(config, output_dir)
+    spm_path = build_spm_path(config, output_dir)
     return MistralTokenizer.from_file(str(spm_path), mode=validation_mode)
 
 
-def _get_mistral_tokenizer(
+def get_mistral_tokenizer(
     spm: bool,
     tokenizer_version: TokenizerVersion,
     validation_mode: ValidationMode,

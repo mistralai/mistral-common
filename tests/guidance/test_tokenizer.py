@@ -12,6 +12,7 @@ from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import SpecialTokenInfo, Tekkenizer
 from tests.test_tekken import get_special_tokens, quick_vocab
+from tests.utils.tokenizers import deprecated_special_tokens
 
 _NUM_SPECIAL_TOKENS = 100
 _EXTRA_TOKENS = [b"a", b"b", b"c", b"f", b"de", b"he", b"llo"]
@@ -114,7 +115,7 @@ class TestMistralLLGTokenizer:
         assert llg_tokenizer(test_string) == tekkenizer.encode(test_string, bos=False, eos=False)
 
     def test_init_rejects_invalid_special_token_format(self) -> None:
-        base = list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS)
+        base = deprecated_special_tokens()
         next_rank = len(base)
         special_tokens: list[SpecialTokenInfo] = [
             *base,
@@ -134,7 +135,7 @@ class TestMistralLLGTokenizer:
             MistralLLGTokenizer(tekkenizer)
 
     def test_init_rejects_duplicate_special_tokens(self) -> None:
-        base = list(Tekkenizer.DEPRECATED_SPECIAL_TOKENS)
+        base = deprecated_special_tokens()
         next_rank = len(base)
         # Both [CUSTOM] and <CUSTOM> map to <CUSTOM> after bracket conversion
         special_tokens: list[SpecialTokenInfo] = [

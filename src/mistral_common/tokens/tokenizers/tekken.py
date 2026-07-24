@@ -424,23 +424,29 @@ class Tekkenizer(Tokenizer):
         decoded: list[str] = []
         for is_special, group in groupby(tokens, lambda t: t < self.num_special_tokens):
             if is_special:
-                if special_token_policy == SpecialTokenPolicy.RAISE:
-                    raise ValueError(
-                        f"Decoding `tokens` that contain special tokens ({list(group)}) is not allowed. \n"
-                        "Either make sure `tokens` do not include any special tokens or, "
-                        "if you want to decode `tokens` that includes special tokens, "
-                        "change the tokenizer's special token policy to IGNORE or KEEP: \n"
-                        "```\nfrom mistral_common.tokens.tokenizers.mistral import MistralTokenizer"
-                        "\nfrom mistral_common.tokens.tokenizers.tekken import SpecialTokenPolicy"
-                        "\n\ntokenizer = MistralTokenizer.v3(is_tekken=True)"
-                        "\ntekken = tokenizer.instruct_tokenizer.tokenizer"
-                        "\ntekken.special_token_policy = SpecialTokenPolicy.IGNORE  # or SpecialTokenPolicy.KEEP"
-                        "\n```"
-                    )
-                elif special_token_policy == SpecialTokenPolicy.KEEP:
-                    decoded.extend(self._all_special_tokens[t]["token_str"] for t in group)
-                elif special_token_policy == SpecialTokenPolicy.IGNORE:
-                    continue
+                match special_token_policy:
+                    case SpecialTokenPolicy.RAISE:
+                        raise ValueError(
+                            f"Decoding `tokens` that contain special tokens ({list(group)}) is not allowed. \n"
+                            "Either make sure `tokens` do not include any special tokens or, "
+                            "if you want to decode `tokens` that includes special tokens, "
+                            "change the tokenizer's special token policy to IGNORE or KEEP: \n"
+                            "```\nfrom mistral_common.tokens.tokenizers.mistral import MistralTokenizer"
+                            "\nfrom mistral_common.tokens.tokenizers.tekken import SpecialTokenPolicy"
+                            "\n\ntokenizer = MistralTokenizer.v3(is_tekken=True)"
+                            "\ntekken = tokenizer.instruct_tokenizer.tokenizer"
+                            "\ntekken.special_token_policy = SpecialTokenPolicy.IGNORE  # or SpecialTokenPolicy.KEEP"
+                            "\n```"
+                        )
+                    case SpecialTokenPolicy.KEEP:
+                        decoded.extend(self._all_special_tokens[t]["token_str"] for t in group)
+                    case SpecialTokenPolicy.IGNORE:
+                        continue
+                    case _:
+                        raise ValueError(
+                            f"Invalid `special_token_policy`: {special_token_policy}. "
+                            f"Expected one of {[policy.value for policy in SpecialTokenPolicy]}."
+                        )
                 # TODO: Could use "tokens_str" from vocab.json
                 # but need to handle null cases.
             else:
@@ -511,14 +517,15 @@ class Tekkenizer(Tokenizer):
             The byte representation of the token.
         """
         if token_id < self.num_special_tokens:
-            if special_token_policy == SpecialTokenPolicy.KEEP:
-                return self._all_special_tokens[token_id]["token_str"].encode("utf-8")
-            elif special_token_policy == SpecialTokenPolicy.RAISE:
-                raise ValueError(f"{token_id} is a special token")
-            elif special_token_policy == SpecialTokenPolicy.IGNORE:
-                return b""
-            else:
-                raise ValueError(f"Unknown special token policy {special_token_policy}")
+            match special_token_policy:
+                case SpecialTokenPolicy.KEEP:
+                    return self._all_special_tokens[token_id]["token_str"].encode("utf-8")
+                case SpecialTokenPolicy.RAISE:
+                    raise ValueError(f"{token_id} is a special token")
+                case SpecialTokenPolicy.IGNORE:
+                    return b""
+                case _:
+                    raise ValueError(f"Unknown special token policy {special_token_policy}")
 
         return self._model.decode_single_token_bytes(token_id - self.num_special_tokens)
 
