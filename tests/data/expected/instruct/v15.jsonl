@@ -1,0 +1,1 @@
+{"name": "continue_final_message", "request": {"messages": [{"role": "assistant", "content": "\"blabla\"", "prefix": false}], "continue_final_message": true, "settings": {}}, "text": "<s>\"blabla\"", "token_ids": [1, 134, 198, 208, 197, 198, 208, 197, 134]}

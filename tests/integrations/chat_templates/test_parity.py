@@ -7,13 +7,13 @@ from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from tests.integrations.chat_templates.conftest import ALL_CONFIGS
-from tests.integrations.chat_templates.fixtures_data import get_conversations
 from tests.integrations.chat_templates.helpers import (
     TestConfig,
     load_golden_template,
     make_config,
     render_template,
 )
+from tests.utils.requests.instruct import get_conversations
 from tests.utils.versions import config_id
 
 

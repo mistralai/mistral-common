@@ -11,7 +11,6 @@ from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.integrations.chat_templates.conftest import ALL_TRANSFORMERS_CONFIGS
-from tests.integrations.chat_templates.fixtures_data import get_conversations
 from tests.integrations.chat_templates.helpers import (
     TestConfig,
     build_spm_path,
@@ -24,6 +23,7 @@ from tests.integrations.chat_templates.hf_utils import (
     encode_transformers,
     encode_transformers_from_openai,
 )
+from tests.utils.requests.instruct import get_conversations
 from tests.utils.versions import config_id
 
 

@@ -18,6 +18,7 @@ import pytest
 
 from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
+from tests.utils.registry import golden_keys, load_decoded, load_requests, load_token_ids
 from tests.utils.tokenizers import build_tekkenizer_from_config, load_sentencepiece
 from tests.utils.versions import SPM_CONFIGS, TEKKEN_CONFIGS, TestConfig, config_id
 
@@ -43,3 +44,63 @@ def spm(request: pytest.FixtureRequest) -> SentencePieceTokenizer:
     """
     config: TestConfig = request.param
     return load_sentencepiece(version=config.version.value)
+
+
+@pytest.fixture(scope="session")
+def instruct_token_id_goldens() -> dict[str, dict[str, list[int]]]:
+    r"""Session-scoped golden token ids for every instruct tokenizer key.
+
+    Returns:
+        Mapping from tokenizer key to its request-name -> token-ids mapping.
+    """
+    return {key: load_token_ids("instruct", key) for key in golden_keys("instruct")}
+
+
+@pytest.fixture(scope="session")
+def instruct_decoded_goldens() -> dict[str, dict[str, str]]:
+    r"""Session-scoped golden decoded text for every instruct tokenizer key.
+
+    Returns:
+        Mapping from tokenizer key to its request-name -> decoded-text mapping.
+    """
+    return {key: load_decoded("instruct", key) for key in golden_keys("instruct")}
+
+
+@pytest.fixture(scope="session")
+def fim_token_id_goldens() -> dict[str, dict[str, list[int]]]:
+    r"""Session-scoped golden token ids for every FIM tokenizer key.
+
+    Returns:
+        Mapping from tokenizer key to its request-name -> token-ids mapping.
+    """
+    return {key: load_token_ids("fim", key) for key in golden_keys("fim")}
+
+
+@pytest.fixture(scope="session")
+def fim_decoded_goldens() -> dict[str, dict[str, str]]:
+    r"""Session-scoped golden decoded text for every FIM tokenizer key.
+
+    Returns:
+        Mapping from tokenizer key to its request-name -> decoded-text mapping.
+    """
+    return {key: load_decoded("fim", key) for key in golden_keys("fim")}
+
+
+@pytest.fixture(scope="session")
+def instruct_request_goldens() -> dict[str, dict[str, dict[str, object]]]:
+    r"""Session-scoped golden serialized requests for every instruct tokenizer key.
+
+    Returns:
+        Mapping from tokenizer key to its request-name -> serialized-request mapping.
+    """
+    return {key: load_requests("instruct", key) for key in golden_keys("instruct")}
+
+
+@pytest.fixture(scope="session")
+def fim_request_goldens() -> dict[str, dict[str, dict[str, object]]]:
+    r"""Session-scoped golden serialized requests for every FIM tokenizer key.
+
+    Returns:
+        Mapping from tokenizer key to its request-name -> serialized-request mapping.
+    """
+    return {key: load_requests("fim", key) for key in golden_keys("fim")}

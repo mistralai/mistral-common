@@ -12,20 +12,20 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 from jinja2 import BaseLoader
 from jinja2.sandbox import ImmutableSandboxedEnvironment
-from PIL import Image
 
 from mistral_common.integrations.chat_templates.template_generator import TemplateConfig
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, ReasoningEffort
 from mistral_common.protocol.instruct.validator import ValidationMode
-from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
+from tests.utils.requests.instruct import DUMMY_AUDIO, DUMMY_AUDIO_URL, DUMMY_IMAGE, DUMMY_IMAGE_URL
 from tests.utils.tokenizers import get_special_tokens
 from tests.utils.versions import TestConfig
+
+__all__ = ["DUMMY_AUDIO", "DUMMY_AUDIO_URL", "DUMMY_IMAGE", "DUMMY_IMAGE_URL"]
 
 # Golden template files live in the data/ tree (outside src/).
 _GOLDEN_DIR = Path(__file__).parent.parent.parent / "data" / "chat_templates"
@@ -115,33 +115,6 @@ def encode_mistral_common(mistral_tokenizer: MistralTokenizer, chat_request: Cha
     if spm:
         mistral_encoded = mistral_encoded.replace(SPM_WHITESPACE, " ").replace("<0x0A>", "\n")
     return mistral_encoded
-
-
-def _create_dummy_image() -> Image.Image:
-    r"""Create a simple dummy 2x2 red square image for testing."""
-    return Image.new("RGB", (2, 2), color="red")
-
-
-def _sin_wave(sampling_rate: int, duration: float) -> np.ndarray:
-    r"""Generate a sine wave numpy array."""
-    return np.sin(np.ones([int(duration * sampling_rate)]))
-
-
-def _sample_audio() -> Audio:
-    r"""Create a sample `Audio` instance for testing."""
-    sampling_rate = 44100
-    original_array = _sin_wave(sampling_rate, 1)
-    return Audio(
-        audio_array=original_array,
-        sampling_rate=sampling_rate,
-        format="wav",
-    )
-
-
-DUMMY_IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/7/78/Red_Square_%282x2_Pixel%29.png"
-DUMMY_IMAGE = _create_dummy_image()
-DUMMY_AUDIO_URL = _sample_audio().to_base64("wav")
-DUMMY_AUDIO = DUMMY_AUDIO_URL
 
 
 def build_tekken_json(config: TestConfig, output_dir: Path) -> Path:

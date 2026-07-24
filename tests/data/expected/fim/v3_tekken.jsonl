@@ -1,0 +1,7 @@
+{"name": "empty_prompt", "request": {"temperature": 0.7, "top_p": 1.0, "prompt": ""}, "text": "<s>[SUFFIX][PREFIX]", "token_ids": [1, 16, 14]}
+{"name": "empty_suffix", "request": {"temperature": 0.7, "top_p": 1.0, "prompt": "def f(", "suffix": ""}, "text": "<s>[SUFFIX][PREFIX]def f(", "token_ids": [1, 16, 14, 3149, 1284, 1040]}
+{"name": "leading_space_suffix", "request": {"temperature": 0.7, "top_p": 1.0, "prompt": "def f(", "suffix": " return a + b"}, "text": "<s>[SUFFIX] return a + b[PREFIX]def f(", "token_ids": [1, 16, 1850, 1261, 1867, 1289, 14, 3149, 1284, 1040]}
+{"name": "newline_suffix", "request": {"temperature": 0.7, "top_p": 1.0, "prompt": "def f(", "suffix": "\n    return a + b"}, "text": "<s>[SUFFIX]\n    return a + b[PREFIX]def f(", "token_ids": [1, 16, 1010, 1293, 1850, 1261, 1867, 1289, 14, 3149, 1284, 1040]}
+{"name": "prompt_only", "request": {"temperature": 0.7, "top_p": 1.0, "prompt": "def f("}, "text": "<s>[SUFFIX][PREFIX]def f(", "token_ids": [1, 16, 14, 3149, 1284, 1040]}
+{"name": "prompt_suffix", "request": {"temperature": 0.7, "top_p": 1.0, "prompt": "def f(", "suffix": "return a + b"}, "text": "<s>[SUFFIX]return a + b[PREFIX]def f(", "token_ids": [1, 16, 3004, 1261, 1867, 1289, 14, 3149, 1284, 1040]}
+{"name": "unicode_suffix", "request": {"temperature": 0.7, "top_p": 1.0, "prompt": "def f(", "suffix": "return café"}, "text": "<s>[SUFFIX]return café[PREFIX]def f(", "token_ids": [1, 16, 3004, 35858, 14, 3149, 1284, 1040]}
