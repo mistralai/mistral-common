@@ -147,9 +147,18 @@ mistral-common/
 - Include examples where appropriate that can be tested via `doctest`
 
 ### Coverage
-- Aim for high, meaningful coverage. Prioritise tests that verify behaviour over hitting a line-count target.
+- Test behaviour, not line count. Prefer making a branch reachable over excluding it.
 - New and changed code should be covered by tests.
-- Avoid coverage-only comments. Prefer restructuring so branches are genuinely reachable and tested (e.g. validate inputs and test the error path) over excluding lines.
+- Avoid coverage-only exclusions; prefer restructuring so branches are genuinely reachable (e.g. validate inputs and test the error path).
+
+### Test organization
+- One `Test<Subject>` class per class/function under test; keep a method's tests adjacent, named
+  `test_<method>_<scenario>`.
+- Prefer `pytest.mark.parametrize` over duplicated tests, including over `ALL_VERSIONS` and friends.
+- Test files contain only tests: shared objects come from `conftest.py`, inputs from
+  `tests/utils/requests/`, expected outputs from `tests/data/expected/`.
+- Anything shared between test modules gets a public name. Only `conftest.py` may define
+  `scope="session"` fixtures.
 
 ## Development Workflow
 

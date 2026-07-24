@@ -66,16 +66,16 @@ jobs:
         run: |
           uv run mypy .
 
-      # PyTest
+      # PyTest — fails when total coverage is below `fail_under` in pyproject.
       - name: Tests
         run: |
           uv run pytest --cov=mistral_common tests/ --ignore=tests/integrations --cov-report "xml:coverage.xml"
-      
+
       # Doctests
       - name: Doctests
         run: |
           uv run pytest --doctest-modules ./src
-  
+
   build_docs:
     if: ${{ github.event.pull_request.draft != true }}
     runs-on: ubuntu-latest

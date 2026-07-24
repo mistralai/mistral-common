@@ -61,7 +61,7 @@ def encode_transformers_from_openai(chat_template: str, openai_request: dict[str
     return _render_via_transformers(chat_template, openai_request)
 
 
-def _build_hf_tokenizer(tekken_path: Path, chat_template: str) -> "PreTrainedTokenizerFast":
+def build_hf_tokenizer(tekken_path: Path, chat_template: str) -> "PreTrainedTokenizerFast":
     r"""Build a `PreTrainedTokenizerFast` from a tekken.json file.
 
     Converts the Tekken BPE vocabulary to a HuggingFace tokenizers format,
@@ -72,8 +72,7 @@ def _build_hf_tokenizer(tekken_path: Path, chat_template: str) -> "PreTrainedTok
     `AddedToken` objects, matching Tekkenizer behavior where every token
     in the special range is treated as special.
 
-    .. note::
-
+    Note:
         TODO: The ID-offset conversion done here should be fixed upstream
         in transformers' `MistralConverter` so that it produces IDs matching
         the Tekkenizer natively. Until then, we apply the offset manually to
