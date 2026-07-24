@@ -117,6 +117,10 @@ mistral-common/
 - Use Python functionalities supported by Python 3.10
 - Call function arguments explicitly by keyword, not implicitly by position (e.g. `fn(x=1, y=2)`, not `fn(1, 2)`)
 
+### Comments
+- Do NOT write comments that paraphrase or restate what the code already says.
+- Comments should explain the "why" (intent, rationale, non-obvious constraints), not the "what".
+
 ### Imports
 - Use absolute imports for modules within the project
 - Do NOT use wildcard imports
@@ -141,6 +145,11 @@ mistral-common/
   - Do NOT put types in the docstring for parameters and return values.
   - For the returns sections, only describe the returned value and do not write its name
 - Include examples where appropriate that can be tested via `doctest`
+
+### Coverage
+- Aim for high, meaningful coverage. Prioritise tests that verify behaviour over hitting a line-count target.
+- New and changed code should be covered by tests.
+- Avoid coverage-only comments. Prefer restructuring so branches are genuinely reachable and tested (e.g. validate inputs and test the error path) over excluding lines.
 
 ## Development Workflow
 
