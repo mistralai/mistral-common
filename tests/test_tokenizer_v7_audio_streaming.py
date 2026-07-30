@@ -153,7 +153,8 @@ def test_tokenize_streaming_request(
     BOS = tokenizer.tokenizer.get_special_token(SpecialTokens.bos.value)
     STREAMING_PAD = tokenizer.tokenizer.get_special_token(SpecialTokens.streaming_pad.value)
     assert tokenized.tokens == ([BOS] + delay_n_tokens * [STREAMING_PAD]), f"{tokenized.tokens}"
-    assert tokenized.text == "<s>" + delay_n_tokens * "[STREAMING_PAD]"
+    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    assert text == "<s>" + delay_n_tokens * "[STREAMING_PAD]"
 
     if mode == StreamingMode.OFFLINE:
         rounded_duration = math.ceil(duration / (config.frame_duration_ms / 1000)) * (config.frame_duration_ms / 1000)

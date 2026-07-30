@@ -1,6 +1,6 @@
 import pytest
 
-from mistral_common.tokens.tokenizers.base import FIMRequest
+from mistral_common.tokens.tokenizers.base import FIMRequest, SpecialTokenPolicy
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 
@@ -11,4 +11,5 @@ def tokenizer() -> MistralTokenizer:
 
 def test_encode_fim(tokenizer: MistralTokenizer) -> None:
     tokenized = tokenizer.encode_fim(FIMRequest(prompt="def f(", suffix="return a + b"))
-    assert tokenized.text == "<s>[SUFFIX]return▁a▁+▁b[PREFIX]▁def▁f("
+    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    assert text == "<s>[SUFFIX]return▁a▁+▁b[PREFIX]▁def▁f("

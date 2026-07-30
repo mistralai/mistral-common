@@ -22,7 +22,7 @@ from mistral_common.integrations.chat_templates.template_generator import Templa
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, ReasoningEffort
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.audio import Audio
-from mistral_common.tokens.tokenizers.base import TokenizerVersion
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
 from tests.test_tekken import get_special_tokens
@@ -119,7 +119,8 @@ def encode_mistral_common(mistral_tokenizer: MistralTokenizer, chat_request: Cha
     with the Jinja template rendering. Token ID comparison is handled
     separately via `encode_hf_tokens`.
     """
-    mistral_encoded = str(mistral_tokenizer.encode_chat_completion(chat_request).text)
+    encoded = mistral_tokenizer.encode_chat_completion(chat_request)
+    mistral_encoded = mistral_tokenizer.decode(tokens=encoded.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
     # Collapse each image token sequence ([IMG]...[IMG_BREAK]...[IMG_END]) into a single [IMG].
     # Each sequence has exactly one [IMG_END], so replacing inner tokens and converting [IMG_END]
     # preserves one [IMG] per image (important for multi-image inputs).

@@ -3,7 +3,7 @@ import pytest
 from mistral_common.exceptions import InvalidAssistantMessageException, InvalidMessageStructureException
 from mistral_common.protocol.instruct.messages import AssistantMessage, UserMessage
 from mistral_common.protocol.instruct.request import InstructRequest
-from mistral_common.tokens.tokenizers.base import InstructTokenizer
+from mistral_common.tokens.tokenizers.base import InstructTokenizer, SpecialTokenPolicy
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 
@@ -23,7 +23,8 @@ def test_normal(tokenizer: InstructTokenizer) -> None:
             ]
         )
     )
-    tokens, text = tokenized.tokens, tokenized.text
+    tokens = tokenized.tokens
+    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
     assert text == "<s>▁[INST]▁a▁[/INST]▁b</s>▁[INST]▁c▁[/INST]▁d</s>"
     assert tokens == [
         1,
@@ -52,7 +53,8 @@ def test_normal(tokenizer: InstructTokenizer) -> None:
 
 def test_system_singleturn(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(InstructRequest(messages=[UserMessage(content="a")], system_prompt="SYSTEM"))
-    tokens, text = tokenized.tokens, tokenized.text
+    tokens = tokenized.tokens
+    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
     assert text == "<s>▁[INST]▁SYSTEM<0x0A><0x0A>a▁[/INST]"
     assert tokens == [1, 733, 16289, 28793, 17121, 22526, 13, 13, 28708, 733, 28748, 16289, 28793]
     assert tokenizer.tokenizer.decode(tokens) == "[INST] SYSTEM\n\na [/INST]"
@@ -70,7 +72,8 @@ def test_system_multiturn(tokenizer: InstructTokenizer) -> None:
             system_prompt="SYSTEM",
         )
     )
-    tokens, text = tokenized.tokens, tokenized.text
+    tokens = tokenized.tokens
+    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
     assert text == "<s>▁[INST]▁SYSTEM<0x0A><0x0A>a▁[/INST]▁b</s>▁[INST]▁c▁[/INST]▁d</s>"
     assert tokens == [
         1,
@@ -116,7 +119,8 @@ def test_continue_final_message(tokenizer: InstructTokenizer) -> None:
             continue_final_message=True,
         )
     )
-    tokens, text = tokenized.tokens, tokenized.text
+    tokens = tokenized.tokens
+    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
     assert text == "<s>▁[INST]▁SYSTEM<0x0A><0x0A>a▁[/INST]▁b</s>▁[INST]▁c▁[/INST]▁d"
     assert tokens == [
         1,

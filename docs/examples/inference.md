@@ -21,6 +21,7 @@ from mistral_common.protocol.instruct.messages import (
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 repo_id = "mistralai/Mistral-Large-Instruct-2411"
@@ -40,7 +41,7 @@ tokenized = tokenizer.encode_chat_completion(request)
 print(tokenized.tokens)
 
 # print text to visually see tokens
-print(tokenized.text)
+print(tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP))
 ```
 
 
@@ -57,6 +58,7 @@ from mistral_common.protocol.instruct.messages import (
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 repo_id = "mistralai/Mistral-Small-3.2-24B-Instruct-2506"
@@ -88,7 +90,7 @@ print(tokenized.tokens)
 print(tokenized.images)
 
 # print text to visually see tokens
-print(tokenized.text)
+print(tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP))
 ```
 
 ### Function calling
@@ -100,6 +102,7 @@ from mistral_common.protocol.instruct.messages import (
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.protocol.instruct.tool_calls import Function, Tool
 
@@ -138,7 +141,7 @@ tokenized = tokenizer.encode_chat_completion(request)
 print(tokenized.tokens)
 
 # print text to visually see tokens
-print(tokenized.text)
+print(tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP))
 ```
 
 ### Audio
@@ -147,6 +150,7 @@ print(tokenized.text)
 from mistral_common.protocol.instruct.chunk import TextChunk, AudioChunk
 from mistral_common.protocol.instruct.messages import UserMessage, AssistantMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.audio import Audio
 from huggingface_hub import hf_hub_download
@@ -173,12 +177,13 @@ print(tokenized.tokens)
 print(tokenized.audios)
 
 # print text to visually see tokens
-print(tokenized.text)
+print(tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP))
 ```
 
 ## FIM
 
 ```python
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.protocol.fim.request import FIMRequest
 
@@ -195,7 +200,7 @@ tokenized = tokenizer.encode_fim(request)
 print(tokenized.tokens)
 
 # print text to visually see tokens
-print(tokenized.text)
+print(tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP))
 ```
 
 
@@ -204,6 +209,7 @@ print(tokenized.text)
 ```python
 from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import Audio
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 from huggingface_hub import hf_hub_download
@@ -223,7 +229,7 @@ print(tokenized.tokens)
 print(tokenized.audios)
 
 # print text to visually see tokens
-print(tokenized.text)
+print(tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP))
 ```
 
 

@@ -5,9 +5,10 @@ from pathlib import Path
 from typing import Any, Generic, TypeVar
 
 import numpy as np
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, PrivateAttr
 
 from mistral_common.base import MistralBase
+from mistral_common.deprecation import warn_once
 from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.instruct.chunk import ContentChunk
 from mistral_common.protocol.instruct.messages import (
@@ -198,20 +199,61 @@ class Tokenized(MistralBase):
 
     Attributes:
         tokens: The token ids.
-        text: The text representation of the tokens.
         prefix_ids: The prefix ids for FIM.
         images: The loaded images associated with the tokens.
+        audios: The loaded audio associated with the tokens.
 
     Examples:
-        >>> tokenized = Tokenized(tokens=[1, 2, 3], text="Hello world", prefix_ids=[1], images=[])
+        >>> tokenized = Tokenized(tokens=[1, 2, 3], prefix_ids=[1], images=[], audios=[])
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
     tokens: list[int]
-    text: str | None = None
     prefix_ids: list[int] | None = None
     images: list[np.ndarray] = Field(default_factory=list)
     audios: list[Audio] = Field(default_factory=list)
+    _tokenizer: "InstructTokenizer | None" = PrivateAttr(default=None)
+
+    def __eq__(self, other: object) -> bool:
+        r"""Compares only the public fields, matching pydantic's default equality.
+
+        The private `_tokenizer` back-reference used by the deprecated `text` property is not
+        part of the value and must not affect equality.
+        """
+        if other.__class__ is not self.__class__:
+            return NotImplemented
+        return self.__dict__ == other.__dict__
+
+    def __getstate__(self) -> dict[str, Any]:
+        r"""Strips `_tokenizer` so pickling a `Tokenized` never serializes the tokenizer that produced it."""
+        state = super().__getstate__()
+        private = state.get("__pydantic_private__")
+        if private:
+            state["__pydantic_private__"] = {**private, "_tokenizer": None}
+        return state
+
+    @property
+    def text(self) -> str | None:
+        r"""Decodes the token ids into a string using the tokenizer that produced them.
+
+        Deprecated: Use `tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)`
+        instead. Will be removed in 1.13.0.
+
+        Returns:
+            The decoded string, or `None` if this `Tokenized` was not produced by a tokenizer.
+        """
+        warn_once(
+            key="Tokenized.text",
+            message=(
+                "`text` property of `Tokenized` will be removed in 1.13.0. To decode the token ids, use "
+                "`tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)`."
+            ),
+            category=DeprecationWarning,
+            stacklevel=2,
+        )
+        if self._tokenizer is None:
+            return None
+        return self._tokenizer.decode(tokens=self.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
 
 
 class Tokenizer(ABC):

@@ -7,7 +7,7 @@ from mistral_common.protocol.instruct.chunk import TextChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage, ToolMessage, UserMessage
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
-from mistral_common.tokens.tokenizers.base import InstructTokenizer
+from mistral_common.tokens.tokenizers.base import InstructTokenizer, SpecialTokenPolicy
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 
@@ -27,7 +27,8 @@ def test_normal(tokenizer: InstructTokenizer) -> None:
             ]
         )
     )
-    tokens, text = tokenized.tokens, tokenized.text
+    tokens = tokenized.tokens
+    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
     assert text == "<s>[INST]▁a[/INST]▁b</s>[INST]▁c[/INST]▁d</s>"
     assert tokens == [1, 3, 1032, 4, 1055, 2, 3, 1045, 4, 1049, 2]
 
@@ -39,7 +40,8 @@ def test_tools_singleturn(tokenizer: InstructTokenizer) -> None:
             available_tools=[Tool(function=Function(name="tool1", description="1", parameters={}))],
         )
     )
-    tokens, text = tokenized.tokens, tokenized.text
+    tokens = tokenized.tokens
+    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
     assert text == (
         '<s>[AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"tool1",▁"description":▁"1",▁"parameters":▁{}}}][/AVAILABLE_TOOLS][INST]▁a[/INST]'
     )  # NOTE THE SPACE
@@ -63,7 +65,8 @@ def test_tools_multiturn(tokenizer: InstructTokenizer) -> None:
             ],
         )
     )
-    tokens, text = tokenized.tokens, tokenized.text
+    tokens = tokenized.tokens
+    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
     assert text == (
         "<s>[INST]▁a[/INST]▁b</s>"
         '[AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"tool1",▁"description":▁"1",▁"parameters":▁{}}}'
@@ -89,7 +92,8 @@ def test_tools_multiturn(tokenizer: InstructTokenizer) -> None:
 
 def test_system_singleturn(tokenizer: InstructTokenizer) -> None:
     tokenized = tokenizer.encode_instruct(InstructRequest(messages=[UserMessage(content="a")], system_prompt="SYSTEM"))
-    tokens, text = tokenized.tokens, tokenized.text
+    tokens = tokenized.tokens
+    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
     assert text == "<s>[INST]▁SYSTEM<0x0A><0x0A>a[/INST]"  # NOTE THE SPACE
     assert tokens == [1, 3, 17889, 23294, 781, 781, 29476, 4]
     assert tokenizer.tokenizer.decode(tokens) == "SYSTEM\n\na"
@@ -107,7 +111,8 @@ def test_system_multiturn(tokenizer: InstructTokenizer) -> None:
             system_prompt="SYSTEM",
         )
     )
-    tokens, text = tokenized.tokens, tokenized.text
+    tokens = tokenized.tokens
+    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
     assert text == "<s>[INST]▁a[/INST]▁b</s>[INST]▁SYSTEM<0x0A><0x0A>c[/INST]▁d</s>"
     assert tokens == [
         1,
@@ -143,7 +148,8 @@ def test_continue_final_message(tokenizer: InstructTokenizer) -> None:
             continue_final_message=True,
         )
     )
-    tokens, text = tokenized.tokens, tokenized.text
+    tokens = tokenized.tokens
+    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
     assert text == "<s>[INST]▁a[/INST]▁b</s>[INST]▁SYSTEM<0x0A><0x0A>c[/INST]▁d"
     assert tokens == [
         1,
@@ -204,7 +210,8 @@ def test_system_tools_multiturn(tokenizer: InstructTokenizer) -> None:
             system_prompt="SYSTEM",
         )
     )
-    tokens, text = tokenized.tokens, tokenized.text
+    tokens = tokenized.tokens
+    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
     assert text == (
         '<s>[INST]▁a[/INST]▁b</s>[AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"tool1",▁"description":▁"1",▁"parameters":▁{}}}][/AVAILABLE_TOOLS][INST]▁SYSTEM<0x0A><0x0A>c[/INST]▁d</s>'
     )
@@ -225,7 +232,7 @@ def test_tool_response(tokenizer: InstructTokenizer) -> None:
             ],
         )
     )
-    _, text = tokenized.tokens, tokenized.text
+    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
     assert text == (
         '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>[TOOL_RESULTS]▁[{"name":▁"b",▁"content":▁"d"}][/TOOL_RESULTS]'
     )
@@ -239,7 +246,7 @@ def test_tool_response(tokenizer: InstructTokenizer) -> None:
             ],
         )
     )
-    _, text = tokenized.tokens, tokenized.text
+    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
     assert text == (
         '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>[TOOL_RESULTS]▁[{"name":▁"b",▁"content":▁{"a":▁1}}][/TOOL_RESULTS]'
     )
@@ -253,7 +260,7 @@ def test_tool_response(tokenizer: InstructTokenizer) -> None:
             ],
         )
     )
-    _, text = tokenized.tokens, tokenized.text
+    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
     assert text == (
         '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>[TOOL_RESULTS]▁[{"name":▁"b",▁"content":▁"d{\\"a\\":▁1}"}][/TOOL_RESULTS]'
     )
@@ -273,7 +280,7 @@ def test_tool_message_multiple_shots_without_history(tokenizer: InstructTokenize
             ],
         )
     )
-    _, text = tokenized.tokens, tokenized.text
+    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
     assert text == (
         '<s>[INST]▁a[/INST]▁e</s>[INST]▁f[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>[TOOL_RESULTS]▁[{"name":▁"b",▁"content":▁"d"}][/TOOL_RESULTS]'
     )

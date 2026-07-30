@@ -30,7 +30,7 @@ from mistral_common.protocol.instruct.request import (
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.protocol.instruct.validator import ValidationMode, get_validator
 from mistral_common.tokens.tokenizers.audio import AudioConfig, AudioEncoder, AudioSpectrogramConfig, SpecialAudioIDs
-from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTokens, TokenizerVersion
 from mistral_common.tokens.tokenizers.image import ImageConfig, ImageEncoder, SpecialImageIDs
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV15
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
@@ -352,7 +352,8 @@ def test_tools_and_reasoning_effort(
         settings=ModelSettings(reasoning_effort=ReasoningEffort.high),
     )
     tokenized = v15_tekkenizer.encode_instruct(request)
-    assert tokenized.text == EXPECTED_TEXT_V15, tokenized.text
+    text = v15_tekkenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    assert text == EXPECTED_TEXT_V15, text
 
 
 def test_no_tools_and_reasoning_effort(v15_tekkenizer: InstructTokenizerV15, messages: list[ChatMessage]) -> None:
@@ -361,7 +362,8 @@ def test_no_tools_and_reasoning_effort(v15_tekkenizer: InstructTokenizerV15, mes
     )
     tokenized = v15_tekkenizer.encode_instruct(request)
     expected_text_no_tools = EXPECTED_TEXT_V15_NO_TOOLS.replace("high", "none")
-    assert tokenized.text == expected_text_no_tools, tokenized.text
+    text = v15_tekkenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    assert text == expected_text_no_tools, text
 
 
 def test_no_settings_does_not_encode_model_settings(
@@ -369,7 +371,8 @@ def test_no_settings_does_not_encode_model_settings(
 ) -> None:
     request: InstructRequest = InstructRequest(messages=messages, available_tools=None, settings=ModelSettings.none())
     tokenized = v15_tekkenizer_no_reasoning.encode_instruct(request)
-    assert "[MODEL_SETTINGS]" not in (tokenized.text or "")
+    text = v15_tekkenizer_no_reasoning.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    assert "[MODEL_SETTINGS]" not in text
 
 
 def test_system_think_chunk_raises_v15(v15_tekkenizer: InstructTokenizerV15) -> None:
@@ -426,7 +429,8 @@ def test_encode_ignore_one_model_settings(
     tokenizer_v15 = get_v15_mistral_tokenizer(builder)
     request = ChatCompletionRequest(messages=messages, reasoning_effort=reasoning_effort)  # type: ignore[arg-type]
     tokenized = tokenizer_v15.encode_chat_completion(request)
-    assert "[MODEL_SETTINGS]" not in (tokenized.text or "")
+    text = tokenizer_v15.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    assert "[MODEL_SETTINGS]" not in text
 
 
 @pytest.mark.parametrize("reasoning_effort", [None, *list(ReasoningEffort)])
@@ -436,7 +440,7 @@ def test_end_to_end_with_default(messages: list[ChatMessage], reasoning_effort: 
     tokenizer_v15 = get_v15_mistral_tokenizer(builder)
     request = ChatCompletionRequest(messages=messages, reasoning_effort=reasoning_effort)
     tokenized = tokenizer_v15.encode_chat_completion(request)
-    text = tokenized.text or ""
+    text = tokenizer_v15.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
     if reasoning_effort == ReasoningEffort.high:
         assert '[MODEL_SETTINGS]{"reasoning_effort": "high"}[/MODEL_SETTINGS]' in text
     else:
@@ -453,7 +457,7 @@ def test_end_to_end_no_default(messages: list[ChatMessage], reasoning_effort: Re
     tokenizer_v15 = get_v15_mistral_tokenizer(builder)
     request = ChatCompletionRequest(messages=messages, reasoning_effort=reasoning_effort)
     tokenized = tokenizer_v15.encode_chat_completion(request)
-    text = tokenized.text or ""
+    text = tokenizer_v15.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
     if reasoning_effort == ReasoningEffort.high:
         assert '[MODEL_SETTINGS]{"reasoning_effort": "high"}[/MODEL_SETTINGS]' in text
     elif reasoning_effort == ReasoningEffort.none:
@@ -500,7 +504,8 @@ def test_encode_chat_completion_with_multimodal_tool(
         tools=[Tool(function=Function(name="fn", description="test", parameters={}))],
     )
     encoded = mistral_tokenizer.encode_chat_completion(chat_request)
-    assert encoded.text == expected_text, encoded.text
+    text = mistral_tokenizer.decode(tokens=encoded.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    assert text == expected_text, text
     assert len(encoded.audios) == expected_audios
     assert len(encoded.images) == expected_images
 
@@ -524,7 +529,8 @@ def test_encode_chat_completion_with_multimodal_system(
         ],
     )
     encoded = mistral_tokenizer.encode_chat_completion(chat_request)
-    assert encoded.text == expected_text, encoded.text
+    text = mistral_tokenizer.decode(tokens=encoded.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    assert text == expected_text, text
     assert len(encoded.audios) == expected_audios
     assert len(encoded.images) == expected_images
 
@@ -547,6 +553,7 @@ def test_encode_chat_completion_with_multimodal_user(
         ],
     )
     encoded = mistral_tokenizer.encode_chat_completion(chat_request)
-    assert encoded.text == expected_text, encoded.text
+    text = mistral_tokenizer.decode(tokens=encoded.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    assert text == expected_text, text
     assert len(encoded.audios) == expected_audios
     assert len(encoded.images) == expected_images
