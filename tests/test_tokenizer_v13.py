@@ -25,6 +25,7 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import SpecialTokenPolicy, Tekkenizer
 from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
 from tests.test_tekken import get_special_tokens, quick_vocab
+from tests.utils import decode_keep
 
 
 @pytest.fixture(scope="module")
@@ -206,7 +207,7 @@ def test_end_to_end_v13(
     # This does validation, normalization and encoding
     tokenized_v13 = mistral_tokenizer_v13.encode_chat_completion(chat_completion_request)
     assert isinstance(tokenized_v13, Tokenized)
-    text = mistral_tokenizer_v13.decode(tokens=tokenized_v13.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    text = decode_keep(mistral_tokenizer_v13, tokenized_v13)
     assert text == EXPECTED_TEXT_V13, text
 
 
@@ -232,7 +233,7 @@ def test_end_to_end_v13_wrong_order(
     # This does validation, normalization and encoding
     tokenized_v13 = mistral_tokenizer_v13.encode_chat_completion(chat_completion_request)
     assert isinstance(tokenized_v13, Tokenized)
-    text = mistral_tokenizer_v13.decode(tokens=tokenized_v13.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    text = decode_keep(mistral_tokenizer_v13, tokenized_v13)
     assert text == EXPECTED_TEXT_V13_FROM_WRONG_ORDER, text
 
 
@@ -397,7 +398,7 @@ def test_encode_chat_completion_request_with_sp_and_audio(
         instruct_tokenizer=v13_tekkenizer_audio, validator=validator, request_normalizer=request_normalizer
     )
     encoded = mistral_tokenizer_v13.encode_chat_completion(ChatCompletionRequest(messages=messages))
-    text = mistral_tokenizer_v13.decode(tokens=encoded.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    text = decode_keep(mistral_tokenizer_v13, encoded)
     assert text == "<s>[SYSTEM_PROMPT]hello[/SYSTEM_PROMPT][INST][BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
     assert len(encoded.audios) == 1
 

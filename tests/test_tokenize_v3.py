@@ -16,6 +16,7 @@ from mistral_common.tokens.tokenizers.sentencepiece import (
     is_sentencepiece,
 )
 from mistral_common.tokens.tokenizers.tekken import SpecialTokenPolicy, Tekkenizer
+from tests.utils import decode_keep
 
 TEKKEN_SPECIAL_WHITESPACE = ""
 TEKKEN_WHITESPACE = " "
@@ -101,7 +102,7 @@ def test_tools_singleturn(
         )
     )
     tokens = tokenized.tokens
-    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    text = decode_keep(tokenizer, tokenized)
     assert text == (
         f"<s>[AVAILABLE_TOOLS]{special_ws}["
         f'{{"type":{ws}"function",{ws}"function":{ws}{{"name":{ws}"tool1",{ws}"description":{ws}"1",{ws}"parameters":{ws}{{}}}}}}]'
@@ -161,7 +162,7 @@ def test_tools_multiturn(
         )
     )
     tokens = tokenized.tokens
-    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    text = decode_keep(tokenizer, tokenized)
     assert text == (
         f"<s>[INST]{special_ws}a[/INST]{special_ws}b</s>[AVAILABLE_TOOLS]{special_ws}["
         f'{{"type":{ws}"function",{ws}"function":{ws}{{"name":{ws}"tool1",{ws}"description":{ws}"1",{ws}"parameters":{ws}{{}}}}}},'
@@ -222,7 +223,7 @@ def test_system_tools_multiturn(
         )
     )
     tokens = tokenized.tokens
-    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    text = decode_keep(tokenizer, tokenized)
     assert text == (
         f"<s>[INST]{special_ws}a[/INST]{special_ws}b</s>[AVAILABLE_TOOLS]{special_ws}["
         f'{{"type":{ws}"function",{ws}"function":{ws}{{"name":{ws}"tool1",{ws}"description":{ws}"1",{ws}"parameters":{ws}{{}}}}}}]'
@@ -268,7 +269,7 @@ def test_continue_final_message(
         )
     )
     tokens = tokenized.tokens
-    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    text = decode_keep(tokenizer, tokenized)
     assert text == (
         f"<s>[INST]{special_ws}a[/INST]{special_ws}b</s>[INST]{special_ws}SYSTEM{new_line}c[/INST]{special_ws}d"
     )
@@ -333,7 +334,7 @@ def test_tool_message(tokenizer: InstructTokenizer, special_ws: str, ws: str) ->
             ],
         )
     )
-    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    text = decode_keep(tokenizer, tokenized)
     assert text == (
         f'<s>[INST]{special_ws}a[/INST][TOOL_CALLS]{special_ws}[{{"name":{ws}"b",{ws}'
         f'"arguments":{ws}{{}},{ws}"id":{ws}"123456789"}}]</s>[TOOL_RESULTS]{special_ws}'
@@ -355,7 +356,7 @@ def test_tool_message(tokenizer: InstructTokenizer, special_ws: str, ws: str) ->
             ],
         )
     )
-    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    text = decode_keep(tokenizer, tokenized)
     assert text == (
         f"<s>[INST]{special_ws}a[/INST][TOOL_CALLS]{special_ws}["
         f'{{"name":{ws}"b",{ws}"arguments":{ws}{{}},{ws}"id":{ws}"123456789"}}]</s>[TOOL_RESULTS]{special_ws}'
@@ -377,7 +378,7 @@ def test_tool_message(tokenizer: InstructTokenizer, special_ws: str, ws: str) ->
             ],
         )
     )
-    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    text = decode_keep(tokenizer, tokenized)
     assert text == (
         f"<s>[INST]{special_ws}a[/INST][TOOL_CALLS]{special_ws}["
         f'{{"name":{ws}"b",{ws}"arguments":{ws}{{}},{ws}"id":{ws}"123456789"}}]</s>[TOOL_RESULTS]{special_ws}'
@@ -411,7 +412,7 @@ def test_tool_message_no_id_fine_tuning_ok(tokenizer: InstructTokenizer, special
                 ],
             )
         )
-        text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+        text = decode_keep(tokenizer, tokenized)
         assert (
             text
             == f'<s>[INST]{special_ws}a[/INST][TOOL_CALLS]{special_ws}[{{"name":{ws}"b",{ws}"arguments":{ws}{{}}}}]</s>'
@@ -447,7 +448,7 @@ def test_tool_message_multiple_shots_with_history(tokenizer: InstructTokenizer, 
             ],
         )
     )
-    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    text = decode_keep(tokenizer, tokenized)
     assert text == (
         f"<s>[INST]{special_ws}a[/INST]"
         f'[TOOL_CALLS]{special_ws}[{{"name":{ws}"b",{ws}"arguments":{ws}{{}},{ws}"id":{ws}"0"}}]</s>[TOOL_RESULTS]{special_ws}{{"content":{ws}"d",{ws}"call_id":{ws}"0"}}[/TOOL_RESULTS]'  # noqa: E501
@@ -489,7 +490,7 @@ def test_tool_message_multiple_calls(tokenizer: InstructTokenizer, special_ws: s
             ],
         )
     )
-    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    text = decode_keep(tokenizer, tokenized)
     assert text == (
         f"<s>[INST]{special_ws}a[/INST]"
         f'[TOOL_CALLS]{special_ws}[{{"name":{ws}"b",{ws}"arguments":{ws}{{}},{ws}"id":{ws}"0"}},{ws}{{"name":{ws}"q",{ws}"arguments":{ws}{{}},{ws}"id":{ws}"1"}}]</s>'

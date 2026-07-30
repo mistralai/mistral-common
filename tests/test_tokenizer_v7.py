@@ -30,7 +30,6 @@ from mistral_common.protocol.instruct.validator import (
 from mistral_common.tokens.tokenizers.base import (
     InstructRequest,
     InstructTokenizer,
-    SpecialTokenPolicy,
     Tokenized,
     TokenizerVersion,
 )
@@ -40,6 +39,7 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import quick_vocab
 from tests.test_tokenizer_v7_audio import get_tekkenizer_with_audio
+from tests.utils import decode_keep
 
 
 @pytest.fixture
@@ -106,7 +106,7 @@ def test_tokenize_assistant_message(spm_tokenizer: InstructTokenizerV7) -> None:
         9,  # [/TOOL_RESULTS]
     ]
     assert (
-        spm_tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+        decode_keep(spm_tokenizer, tokenized)
         == "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁a[/INST]▁b</s>[TOOL_RESULTS]▁b[TOOL_CONTENT]▁f[/TOOL_RESULTS]"  # noqa
     )
 
@@ -162,10 +162,7 @@ def test_tokenize_empty_content_assistant_message(spm_tokenizer: InstructTokeniz
                         29561,
                     ],
                 )
-                assert (
-                    spm_tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
-                    == '<s>[TOOL_CALLS]▁[{"name":▁"test_fn",▁"arguments":▁{}}]'
-                )
+                assert decode_keep(spm_tokenizer, tokenized) == '<s>[TOOL_CALLS]▁[{"name":▁"test_fn",▁"arguments":▁{}}]'
 
 
 def test_tokenize_assistant_message_continue_final_message(spm_tokenizer: InstructTokenizerV7) -> None:
@@ -197,10 +194,7 @@ def test_tokenize_assistant_message_continue_final_message(spm_tokenizer: Instru
         4,  # end_inst
         1055,  # b
     ]
-    assert (
-        spm_tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
-        == "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁a[/INST]▁b"
-    )
+    assert decode_keep(spm_tokenizer, tokenized) == "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁a[/INST]▁b"
 
     with pytest.raises(
         InvalidMessageStructureException, match="Cannot continue final message if it is not an assistant message"
@@ -309,7 +303,7 @@ def test_encode_spm(spm_tokenizer: InstructTokenizerV7, messages: list[ChatMessa
         )
     )
 
-    text = spm_tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    text = decode_keep(spm_tokenizer, tokenized)
     assert text == expected_text, f"{text} != {expected_text}"
 
 
@@ -351,7 +345,7 @@ def test_encode_chat_completion() -> None:
     assert len(encoded.images) == 1
     assert encoded.images[0].shape == (3, 16, 16)
     assert (
-        tokenizer.decode(tokens=encoded.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+        decode_keep(tokenizer, encoded)
         == '<s>[SYSTEM_PROMPT]▁a[/SYSTEM_PROMPT][AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"t",▁"description":▁"",▁"parameters":▁{"type":▁"object",▁"properties":▁{"g":▁{"type":▁"string"},▁"h":▁{"type":▁"string"}}}}}][/AVAILABLE_TOOLS][INST][IMG][IMG_END]▁a[/INST]▁b</s>[TOOL_RESULTS]▁123456789[TOOL_CONTENT]▁f[/TOOL_RESULTS]'  # noqa
     )
 
@@ -437,7 +431,7 @@ def test_truncation(
     tokenizer: InstructTokenizer = request.getfixturevalue(tekkenizer)
 
     tokenized = tokenizer.encode_instruct(InstructRequest(messages=messages, truncate_at_max_tokens=15))
-    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    text = decode_keep(tokenizer, tokenized)
     assert text == truncated_text, f"{text} != {truncated_text}"
 
 
@@ -512,7 +506,7 @@ def test_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkeni
     )
     tokenized = tokenizer.encode_instruct(instruct_request)
     tokens = tokenized.tokens
-    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    text = decode_keep(tokenizer, tokenized)
 
     assert text == (
         '<s>[AVAILABLE_TOOLS][{"type": "function", "function": '

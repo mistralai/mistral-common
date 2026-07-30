@@ -24,6 +24,7 @@ from mistral_common.tokens.tokenizers.mistral import (
 )
 from mistral_common.tokens.tokenizers.tekken import SpecialTokenInfo, Tekkenizer
 from tests.test_tekken import get_special_tokens, quick_vocab
+from tests.utils import decode_keep
 
 _audio_spectrogram_config = {
     "num_mel_bins": 128,
@@ -153,7 +154,7 @@ def test_tokenize_streaming_request(
     BOS = tokenizer.tokenizer.get_special_token(SpecialTokens.bos.value)
     STREAMING_PAD = tokenizer.tokenizer.get_special_token(SpecialTokens.streaming_pad.value)
     assert tokenized.tokens == ([BOS] + delay_n_tokens * [STREAMING_PAD]), f"{tokenized.tokens}"
-    text = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    text = decode_keep(tokenizer, tokenized)
     assert text == "<s>" + delay_n_tokens * "[STREAMING_PAD]"
 
     if mode == StreamingMode.OFFLINE:

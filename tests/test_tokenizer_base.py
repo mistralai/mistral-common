@@ -8,6 +8,7 @@ from mistral_common.protocol.instruct.messages import UserMessage
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, SpecialTokenPolicy, Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from tests.utils import decode_keep
 
 
 def test_special_token_policy_backward_compatibility() -> None:
@@ -35,7 +36,7 @@ def _make_tokenized() -> tuple[InstructTokenizer, Tokenized]:
 
 def test_tokenized_text_property_returns_decoded_text() -> None:
     tokenizer, tokenized = _make_tokenized()
-    expected = tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    expected = decode_keep(tokenizer, tokenized)
 
     with pytest.warns(DeprecationWarning, match="`text` property of `Tokenized`"):
         text = tokenized.text

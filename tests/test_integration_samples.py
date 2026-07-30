@@ -6,8 +6,8 @@ import pytest
 
 from mistral_common.protocol.instruct.messages import ChatMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
-from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from tests.utils import decode_keep
 
 
 @pytest.fixture()
@@ -70,6 +70,6 @@ def test_samples(sample: dict[str, Any], version: int, samples_dir: Path) -> Non
     )
     chat_completion_request = ChatCompletionRequest[ChatMessage].model_validate_json(chat_completion_string)
     tokenized = mistral_tokenizer.encode_chat_completion(chat_completion_request)
-    decoded_text = mistral_tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+    decoded_text = decode_keep(mistral_tokenizer, tokenized)
     assert decoded_text == text
     assert tokenized.tokens == tokens
