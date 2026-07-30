@@ -232,7 +232,7 @@ class InstructTokenizerBase(
             audios=audios,
         )
         # TODO: remove once 1.13.0 lands.
-        tokenized._tokenizer = self
+        tokenized._text = self.decode(tokens=tokens, special_token_policy=SpecialTokenPolicy.KEEP)
         return tokenized
 
     def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy = SpecialTokenPolicy.IGNORE) -> str:
@@ -625,7 +625,7 @@ class InstructTokenizerV2(
         ]
         tokenized = Tokenized(tokens=tokens)
         # TODO: remove once 1.13.0 lands.
-        tokenized._tokenizer = self
+        tokenized._text = self.decode(tokens=tokens, special_token_policy=SpecialTokenPolicy.KEEP)
         return tokenized
 
 
@@ -1036,7 +1036,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
         tokens.append(self.TRANSCRIBE)
         tokenized = Tokenized(tokens=tokens, audios=audio)
         # TODO: remove once 1.13.0 lands.
-        tokenized._tokenizer = self
+        tokenized._text = self.decode(tokens=tokens, special_token_policy=SpecialTokenPolicy.KEEP)
         return tokenized
 
     def _encode_audio(self, audio: str | bytes, transcription_delay_ms: float | None = None) -> Tokenized:
@@ -1103,7 +1103,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
             audios=audios,
         )
         # TODO: remove once 1.13.0 lands.
-        tokenized._tokenizer = self
+        tokenized._text = self.decode(tokens=tokens, special_token_policy=SpecialTokenPolicy.KEEP)
         return tokenized
 
     @classmethod

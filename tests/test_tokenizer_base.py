@@ -44,7 +44,7 @@ def test_tokenized_text_property_returns_decoded_text() -> None:
     assert text == expected
 
 
-def test_tokenized_text_property_returns_none_without_tokenizer() -> None:
+def test_tokenized_text_property_returns_none_when_not_produced_by_a_tokenizer() -> None:
     tokenized = Tokenized(tokens=[1, 2, 3])
 
     with pytest.warns(DeprecationWarning, match="`text` property of `Tokenized`"):
@@ -69,39 +69,20 @@ def test_tokenized_text_property_warns_only_once() -> None:
     assert dep_warnings == []
 
 
-def test_tokenized_equality_ignores_tokenizer_backref() -> None:
-    _, tokenized = _make_tokenized()
+def test_tokenized_equality_includes_cached_text() -> None:
+    with_text = Tokenized(tokens=[1, 2, 3])
+    with_text._text = "cached"
+    without_text = Tokenized(tokens=[1, 2, 3])
 
-    assert tokenized == Tokenized(tokens=tokenized.tokens, prefix_ids=tokenized.prefix_ids)
-
-
-def test_tokenized_equality_rejects_subclasses() -> None:
-    class TokenizedSubclass(Tokenized):
-        extra: int = 0
-
-    subclass_instance = TokenizedSubclass(tokens=[1], extra=1)
-    base_instance = Tokenized(tokens=[1])
-
-    assert subclass_instance != base_instance
-    assert base_instance != subclass_instance
+    assert with_text != without_text
 
 
-def test_tokenized_equality_compares_public_fields() -> None:
-    tokenized = Tokenized(tokens=[1, 2], prefix_ids=[1])
-
-    assert tokenized == Tokenized(tokens=[1, 2], prefix_ids=[1])
-    assert tokenized != Tokenized(tokens=[9, 9], prefix_ids=[1])
-    assert tokenized != Tokenized(tokens=[1, 2], prefix_ids=[9])
-    assert tokenized.__eq__("not a Tokenized") is NotImplemented
-    assert tokenized != "not a Tokenized"
-
-
-def test_tokenized_pickle_excludes_tokenizer() -> None:
-    _, tokenized = _make_tokenized()
+def test_tokenized_pickle_roundtrip_preserves_text() -> None:
+    tokenizer, tokenized = _make_tokenized()
+    expected_text = decode_keep(tokenizer, tokenized)
 
     restored = pickle.loads(pickle.dumps(tokenized))
 
-    assert restored._tokenizer is None
     assert restored == tokenized
     with pytest.warns(DeprecationWarning):
-        assert restored.text is None
+        assert restored.text == expected_text

@@ -123,7 +123,7 @@ def test_tokenize_empty_content_assistant_message(spm_tokenizer: InstructTokeniz
                     spm_tokenizer.encode_instruct(instruct_request)
             else:
                 tokenized = spm_tokenizer.encode_instruct(instruct_request)
-                assert tokenized == Tokenized(
+                expected = Tokenized(
                     tokens=[
                         1,
                         5,
@@ -162,7 +162,8 @@ def test_tokenize_empty_content_assistant_message(spm_tokenizer: InstructTokeniz
                         29561,
                     ],
                 )
-                assert decode_keep(spm_tokenizer, tokenized) == '<s>[TOOL_CALLS]▁[{"name":▁"test_fn",▁"arguments":▁{}}]'
+                expected._text = '<s>[TOOL_CALLS]▁[{"name":▁"test_fn",▁"arguments":▁{}}]'
+                assert tokenized == expected
 
 
 def test_tokenize_assistant_message_continue_final_message(spm_tokenizer: InstructTokenizerV7) -> None:

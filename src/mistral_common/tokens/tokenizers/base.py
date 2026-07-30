@@ -212,35 +212,17 @@ class Tokenized(MistralBase):
     prefix_ids: list[int] | None = None
     images: list[np.ndarray] = Field(default_factory=list)
     audios: list[Audio] = Field(default_factory=list)
-    _tokenizer: "InstructTokenizer | None" = PrivateAttr(default=None)
-
-    def __eq__(self, other: object) -> bool:
-        r"""Compares only the public fields, matching pydantic's default equality.
-
-        The private `_tokenizer` back-reference used by the deprecated `text` property is not
-        part of the value and must not affect equality.
-        """
-        if other.__class__ is not self.__class__:
-            return NotImplemented
-        return self.__dict__ == other.__dict__
-
-    def __getstate__(self) -> dict[str, Any]:
-        r"""Strips `_tokenizer` so pickling a `Tokenized` never serializes the tokenizer that produced it."""
-        state = super().__getstate__()
-        private = state.get("__pydantic_private__")
-        if private:
-            state["__pydantic_private__"] = {**private, "_tokenizer": None}
-        return state
+    _text: str | None = PrivateAttr(default=None)
 
     @property
     def text(self) -> str | None:
-        r"""Decodes the token ids into a string using the tokenizer that produced them.
+        r"""The text representation of the tokens, decoded with special tokens kept.
 
         Deprecated: Use `tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)`
         instead. Will be removed in 1.13.0.
 
         Returns:
-            The decoded string, or `None` if this `Tokenized` was not produced by a tokenizer.
+            The decoded string, or `None` if it was not set by the tokenizer that produced this `Tokenized`.
         """
         warn_once(
             key="Tokenized.text",
@@ -251,9 +233,7 @@ class Tokenized(MistralBase):
             category=DeprecationWarning,
             stacklevel=2,
         )
-        if self._tokenizer is None:
-            return None
-        return self._tokenizer.decode(tokens=self.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+        return self._text
 
 
 class Tokenizer(ABC):
