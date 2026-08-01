@@ -1248,6 +1248,30 @@ def test_convert_speech_request_from_openai() -> None:
     assert request_voice.voice == "custom-voice-123"
 
 
+@pytest.mark.parametrize("fmt", ["wav", "flac"])
+def test_speech_to_openai_base64_ref_audio_filename(fmt: str) -> None:
+    audio = _make_fake_audio(0.5)
+    request = SpeechRequest(input="Hello world", ref_audio=audio.to_base64(fmt))
+
+    buffer = request.to_openai()["ref_audio"]
+
+    assert isinstance(buffer, io.BytesIO)
+    assert buffer.name == f"audio.{fmt}"
+
+
+@pytest.mark.parametrize("fmt", ["wav", "flac"])
+def test_speech_to_openai_bytes_ref_audio_filename(fmt: str) -> None:
+    audio = _make_fake_audio(0.5)
+    source = io.BytesIO()
+    sf.write(source, audio.audio_array, audio.sampling_rate, format=fmt)
+    request = SpeechRequest(input="Hello world", ref_audio=source.getvalue())
+
+    buffer = request.to_openai()["ref_audio"]
+
+    assert isinstance(buffer, io.BytesIO)
+    assert buffer.name == f"audio.{fmt}"
+
+
 @pytest.mark.parametrize(
     ["voice", "with_ref_audio", "random_seed"],
     [
