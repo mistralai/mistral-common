@@ -1258,6 +1258,9 @@ def test_speech_to_openai_base64_ref_audio_filename(fmt: str) -> None:
     assert isinstance(buffer, io.BytesIO)
     assert buffer.name == f"audio.{fmt}"
 
+    recovered = Audio.from_bytes(buffer.getvalue())
+    assert np.allclose(recovered.audio_array, audio.audio_array, atol=1e-3)
+
 
 @pytest.mark.parametrize("fmt", ["wav", "flac"])
 def test_speech_to_openai_bytes_ref_audio_filename(fmt: str) -> None:
@@ -1270,6 +1273,14 @@ def test_speech_to_openai_bytes_ref_audio_filename(fmt: str) -> None:
 
     assert isinstance(buffer, io.BytesIO)
     assert buffer.name == f"audio.{fmt}"
+
+
+def test_speech_to_openai_bytes_invalid_format() -> None:
+    """Verify that invalid reference audio bytes raise a ValueError."""
+    request = SpeechRequest(input="Hello world", ref_audio=b"not valid audio data")
+
+    with pytest.raises(ValueError, match="Failed to detect audio format"):
+        request.to_openai()
 
 
 @pytest.mark.parametrize(

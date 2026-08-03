@@ -55,6 +55,7 @@ class SpeechRequest(BaseCompletionRequest):
                 sf.write(buffer, audio.audio_array, audio.sampling_rate, format=audio.format)
                 buffer.seek(0)
 
+            # OpenAI's client uses the filename extension from .name to set the Content-Type.
             buffer.name = f"audio.{fmt}"
             openai_request["ref_audio"] = buffer
 
