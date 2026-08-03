@@ -11,7 +11,7 @@
 [![Tests](https://img.shields.io/github/actions/workflow/status/mistralai/mistral-common/lint_build_test.yaml?label=tests&branch=main)](https://github.com/mistralai/mistral-common/actions/workflows/lint_build_test.yaml)
 [![Documentation](https://img.shields.io/website?url=https%3A%2F%2Fmistralai.github.io%2Fmistral-common%2F&up_message=online&down_message=offline&label=docs)](https://mistralai.github.io/mistral-common/)
 [![Python version](https://img.shields.io/badge/dynamic/json?query=info.requires_python&label=python&url=https%3A%2F%2Fpypi.org%2Fpypi%2Fmistral-common%2Fjson)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENCE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 
 </div>
 
@@ -83,6 +83,6 @@ uv run pre-commit install
 
 ## License
 
-This library is licensed under the Apache 2.0 License. See the [LICENCE](./LICENCE) file for more information.
+This library is licensed under the Apache 2.0 License. See the [LICENSE](./LICENSE) file for more information.
 
 *You must not use this library or our models in a manner that infringes, misappropriates, or otherwise violates any third party’s rights, including intellectual property rights.*
