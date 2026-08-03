@@ -18,6 +18,14 @@ def tekken_think_v13_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return _build_tekken_json(config=config, output_dir=build_dir)
 
 
+@pytest.fixture(scope="session")
+def tekken_v11_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Path to a plain v11 tekken.json used for auto-detect CLI plain thinking tests."""
+    build_dir = tmp_path_factory.mktemp("tokenizer")
+    config = TestConfig(version=TokenizerVersion.v11)
+    return _build_tekken_json(config=config, output_dir=build_dir)
+
+
 def test_cli_generates_template(tmp_path: Path) -> None:
     """CLI generates a template file with expected content."""
     output_path = tmp_path / "template.jinja"
@@ -305,3 +313,106 @@ def test_autodetect_no_special_token_variables(tmp_path: Path, tekken_think_v13_
     content = output_path.read_text()
     assert "'<s>'" in content
     assert "bos_token" not in content
+
+
+def test_autodetect_with_plain_thinking_flag(tmp_path: Path, tekken_v11_path: Path) -> None:
+    """Auto-detect accepts --plain_thinking, which restates what the heuristic already detects."""
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--tokenizer_file",
+            str(tekken_v11_path),
+            "--plain_thinking",
+            "--saving_path",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    content = output_path.read_text()
+    assert "<think>" in content
+    assert "[THINK]" not in content
+
+
+def test_autodetect_with_no_plain_thinking_flag(tmp_path: Path, tekken_v11_path: Path) -> None:
+    """Auto-detect + --no_plain_thinking forces plain thinking off, overriding the heuristic."""
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--tokenizer_file",
+            str(tekken_v11_path),
+            "--no_plain_thinking",
+            "--saving_path",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    content = output_path.read_text()
+    assert "<think>" not in content
+
+
+def test_plain_thinking_and_no_plain_thinking_conflict(tmp_path: Path, tekken_v11_path: Path) -> None:
+    """--plain_thinking and --no_plain_thinking together exit non-zero with a mutual-exclusion error."""
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--tokenizer_file",
+            str(tekken_v11_path),
+            "--plain_thinking",
+            "--no_plain_thinking",
+            "--saving_path",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "--plain_thinking and --no_plain_thinking are mutually exclusive" in result.stderr
+
+
+def test_manual_mode_no_plain_thinking_is_a_no_op(tmp_path: Path) -> None:
+    """--no_plain_thinking is accepted but inert in manual mode, where plain thinking is off anyway."""
+    with_flag = tmp_path / "with_flag.jinja"
+    without_flag = tmp_path / "without_flag.jinja"
+    for output_path, extra_args in ((with_flag, ["--no_plain_thinking"]), (without_flag, [])):
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT_PATH), "--version", "v11", *extra_args, "--saving_path", str(output_path)],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+
+    assert with_flag.read_text() == without_flag.read_text()
+    assert "<think>" not in with_flag.read_text()
+
+
+def test_autodetect_plain_thinking_incompatible_tokenizer_errors_cleanly(
+    tmp_path: Path, tekken_think_v13_path: Path
+) -> None:
+    """Forcing --plain_thinking on a special-token thinking tokenizer reports a CLI error, not a traceback."""
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--tokenizer_file",
+            str(tekken_think_v13_path),
+            "--plain_thinking",
+            "--saving_path",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "Plain thinking support and thinking support are mutually exclusive" in result.stderr
+    assert "Traceback" not in result.stderr
