@@ -79,6 +79,39 @@ class TestConvertTokenizerToChatTemplate:
         assert "<think>" in result
         assert "[THINK]" not in result
 
+    def test_tekken_v11_plain_thinking_override_false(self, tmp_path: Path) -> None:
+        config = TestConfig(version=TokenizerVersion.v11)
+        path = _build_tekken_json(config=config, output_dir=tmp_path)
+        result = convert_tokenizer_to_chat_template(tokenizer_file=path, plain_thinking_support=False)
+        expected = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v11,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+        assert result == expected
+        assert "<think>" not in result
+        assert "[THINK]" not in result
+
+    def test_tekken_v11_plain_thinking_override_true_matches_autodetect(self, tmp_path: Path) -> None:
+        # Forcing `True` cannot widen what is producible: `TemplateConfig` only accepts plain
+        # thinking where the heuristic already returns `True`, so it restates the default.
+        config = TestConfig(version=TokenizerVersion.v11)
+        path = _build_tekken_json(config=config, output_dir=tmp_path)
+        forced = convert_tokenizer_to_chat_template(tokenizer_file=path, plain_thinking_support=True)
+        autodetected = convert_tokenizer_to_chat_template(tokenizer_file=path)
+        assert forced == autodetected
+
+    def test_tekken_v11_plain_thinking_override_true_with_audio_raises(self, tmp_path: Path) -> None:
+        config = TestConfig(version=TokenizerVersion.v11, audio=True)
+        path = _build_tekken_json(config=config, output_dir=tmp_path)
+        with pytest.raises(ValueError, match="Audio and plain thinking support are mutually exclusive"):
+            convert_tokenizer_to_chat_template(tokenizer_file=path, plain_thinking_support=True)
+
     def test_spm_v7(self, tmp_path: Path) -> None:
         config = TestConfig(version=TokenizerVersion.v7, spm=True)
         path = _build_spm_path(config=config, output_dir=tmp_path)

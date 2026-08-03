@@ -70,6 +70,7 @@ def convert_tokenizer_to_chat_template(
     tokenizer_file: str | Path,
     system_prompt: str | None = None,
     use_special_token_variables: bool = True,
+    plain_thinking_support: bool | None = None,
 ) -> str:
     r"""Load a tokenizer file and auto-detect its capabilities to generate a matching chat template.
 
@@ -78,13 +79,26 @@ def convert_tokenizer_to_chat_template(
     and supported modalities, then delegates to `generate_chat_template` with the
     detected flags.
 
-    The `plain_thinking_support` flag is set heuristically: a v11 tokenizer without
-    an audio encoder uses plain `<think>`/`</think>` text tags instead of special
-    `[THINK]`/`[/THINK]` tokens. When audio is present on a v11 tokenizer,
-    `plain_thinking_support` is set to `False` because the two are mutually exclusive.
-    `thinking_support` (special-token thinking) is detected by checking whether both
-    `begin_think` and `end_think` special tokens are registered in the underlying
+    `thinking_support` (special-token thinking) is auto-detected by checking whether
+    both `begin_think` and `end_think` special tokens are registered in the underlying
     tokenizer via its public `is_special` method.
+
+    `plain_thinking_support` cannot be reliably auto-detected: the tokenizer file
+    carries no signal that distinguishes a reasoning v11 model from a non-reasoning
+    one. For example, `mistralai/Magistral-Small-2506` (reasoning, plain
+    `<think>`/`</think>` tags) and `mistralai/Mistral-Small-3.2-24B-Instruct-2506`
+    (non-reasoning) ship `tekken.json` files with identical `config`, `vocab`,
+    `special_tokens` and `multimodal` sections. When left as
+    `None` (the default), the heuristic `version == TokenizerVersion.v11 and not
+    audio_support` is used, which over-triggers on non-reasoning v11 models. Pass
+    `plain_thinking_support=False` to suppress the guess for such a model.
+
+    Passing `plain_thinking_support=True` cannot widen the set of templates that
+    can be produced: `TemplateConfig` only accepts plain thinking on a v11
+    tokenizer without audio, which is exactly the condition under which the
+    heuristic already returns `True`. The value is accepted so callers can state
+    the intent explicitly, but on any other tokenizer it raises rather than
+    forcing the feature on.
 
     Args:
         tokenizer_file: Path to the tokenizer file (tekken JSON or SentencePiece `.model.vX`).
@@ -92,12 +106,17 @@ def convert_tokenizer_to_chat_template(
             When not `None`, maps to `generate_chat_template`'s `default_system_prompt`.
         use_special_token_variables: Whether to emit BOS/EOS as Jinja variable
             references (`bos_token`/`eos_token`) or as literal string values.
+        plain_thinking_support: Override for plain-text thinking chunk support.
+            `None` keeps the auto-detected heuristic, `False` suppresses it, and
+            `True` asserts it for a tokenizer that already qualifies.
 
     Returns:
         The generated Jinja2 chat template string matching the tokenizer's capabilities.
 
     Raises:
         TokenizerException: If the tokenizer file is not recognized or invalid.
+        ValueError: If `plain_thinking_support` is forced to a value incompatible
+            with the detected version, audio support, or thinking support.
     """
     mistral_tokenizer = MistralTokenizer.from_file(tokenizer_file)
     instruct_tokenizer = mistral_tokenizer.instruct_tokenizer
@@ -110,7 +129,8 @@ def convert_tokenizer_to_chat_template(
     thinking_support = tokenizer.is_special(SpecialTokens.begin_think.value) and tokenizer.is_special(
         SpecialTokens.end_think.value
     )
-    plain_thinking_support = version == TokenizerVersion.v11 and not audio_support
+    if plain_thinking_support is None:
+        plain_thinking_support = version == TokenizerVersion.v11 and not audio_support
 
     return generate_chat_template(
         spm=spm,

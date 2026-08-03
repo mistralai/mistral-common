@@ -21,7 +21,24 @@ def main() -> None:
     parser.add_argument("--image", action="store_true", help="Enable image support")
     parser.add_argument("--audio", action="store_true", help="Enable audio support")
     parser.add_argument("--thinking", action="store_true", help="Enable thinking support (special tokens)")
-    parser.add_argument("--plain_thinking", action="store_true", help="Enable plain text thinking (<think> tags)")
+    parser.add_argument(
+        "--plain_thinking",
+        action="store_true",
+        help=(
+            "Manual mode: enable plain text thinking (<think> tags). "
+            "Auto-detect mode: force plain text thinking on, overriding the auto-detected heuristic. "
+            "Mutually exclusive with --no_plain_thinking."
+        ),
+    )
+    parser.add_argument(
+        "--no_plain_thinking",
+        action="store_true",
+        help=(
+            "Auto-detect mode: force plain text thinking off, overriding the auto-detected heuristic. "
+            "No effect in manual mode, where plain thinking is already off by default. "
+            "Mutually exclusive with --plain_thinking."
+        ),
+    )
     parser.add_argument("--default_system_prompt", type=str, default=None, help="Default system prompt to embed")
     parser.add_argument("--saving_path", type=str, default="./chat_template.jinja", help="Output path for the template")
     parser.add_argument(
@@ -31,6 +48,9 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    if args.plain_thinking and args.no_plain_thinking:
+        parser.error("--plain_thinking and --no_plain_thinking are mutually exclusive")
+
     if args.tokenizer_file is not None:
         manual_flag_checks: list[tuple[bool, str]] = [
             (args.version is not None, "--version"),
@@ -38,32 +58,45 @@ def main() -> None:
             (args.image, "--image"),
             (args.audio, "--audio"),
             (args.thinking, "--thinking"),
-            (args.plain_thinking, "--plain_thinking"),
         ]
         conflicting = [flag for is_set, flag in manual_flag_checks if is_set]
 
         if conflicting:
             parser.error(f"--tokenizer_file cannot be combined with manual capability flags: {', '.join(conflicting)}")
 
-        template = convert_tokenizer_to_chat_template(
-            tokenizer_file=args.tokenizer_file,
-            system_prompt=args.default_system_prompt,
-            use_special_token_variables=not args.no_special_token_variables,
-        )
+        if args.plain_thinking:
+            plain_thinking_support = True
+        elif args.no_plain_thinking:
+            plain_thinking_support = False
+        else:
+            plain_thinking_support = None
+
+        try:
+            template = convert_tokenizer_to_chat_template(
+                tokenizer_file=args.tokenizer_file,
+                system_prompt=args.default_system_prompt,
+                use_special_token_variables=not args.no_special_token_variables,
+                plain_thinking_support=plain_thinking_support,
+            )
+        except ValueError as e:
+            parser.error(str(e))
     else:
         if args.version is None:
             parser.error("--version is required when --tokenizer_file is not provided")
 
-        template = generate_chat_template(
-            spm=args.spm,
-            tokenizer_version=TokenizerVersion(args.version),
-            image_support=args.image,
-            audio_support=args.audio,
-            thinking_support=args.thinking,
-            default_system_prompt=args.default_system_prompt,
-            plain_thinking_support=args.plain_thinking,
-            use_special_token_variables=not args.no_special_token_variables,
-        )
+        try:
+            template = generate_chat_template(
+                spm=args.spm,
+                tokenizer_version=TokenizerVersion(args.version),
+                image_support=args.image,
+                audio_support=args.audio,
+                thinking_support=args.thinking,
+                default_system_prompt=args.default_system_prompt,
+                plain_thinking_support=args.plain_thinking,
+                use_special_token_variables=not args.no_special_token_variables,
+            )
+        except ValueError as e:
+            parser.error(str(e))
 
     with open(args.saving_path, "w", encoding="utf-8") as f:
         f.write(template)
