@@ -3,6 +3,7 @@ from typing import Any
 
 from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
 from mistral_common.protocol.base import BaseCompletionRequest
+from mistral_common.protocol.instruct.chunk import _detect_audio_format
 from mistral_common.tokens.tokenizers.audio import Audio
 
 if is_soundfile_installed():
@@ -45,13 +46,17 @@ class SpeechRequest(BaseCompletionRequest):
         if self.ref_audio is not None:
             if isinstance(self.ref_audio, bytes):
                 buffer = io.BytesIO(self.ref_audio)
+                fmt = _detect_audio_format(self.ref_audio)
             else:
                 audio = Audio.from_base64(self.ref_audio)
+                fmt = audio.format.lower()
 
                 buffer = io.BytesIO()
                 sf.write(buffer, audio.audio_array, audio.sampling_rate, format=audio.format)
                 buffer.seek(0)
 
+            # OpenAI's client uses the filename extension from .name to set the Content-Type.
+            buffer.name = f"audio.{fmt}"
             openai_request["ref_audio"] = buffer
 
         openai_request["seed"] = openai_request.pop("random_seed")
