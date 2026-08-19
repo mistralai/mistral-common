@@ -185,8 +185,10 @@ class ImageEncoder:
         w, h = img.size
         ratio = max(h / self.image_config.max_image_size, w / self.image_config.max_image_size)
         if ratio > 1:
-            w = round(w / ratio)
-            h = round(h / ratio)
+            # Keep at least one pixel per axis: for extreme aspect ratios the shorter
+            # side would otherwise round down to 0 and produce a 0-token axis.
+            w = max(round(w / ratio), 1)
+            h = max(round(h / ratio), 1)
 
         width_tokens = (w - 1) // (self.image_config.image_patch_size * self.image_config.spatial_merge_size) + 1
         height_tokens = (h - 1) // (self.image_config.image_patch_size * self.image_config.spatial_merge_size) + 1
