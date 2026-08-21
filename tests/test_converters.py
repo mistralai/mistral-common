@@ -1283,6 +1283,24 @@ def test_speech_to_openai_bytes_invalid_format() -> None:
         request.to_openai()
 
 
+def test_speech_to_openai_excludes_mistral_specific_fields() -> None:
+    """SpeechRequest.to_openai must strip mistral-internal fields, mirroring
+    TranscriptionRequest.to_openai, rather than leaking e.g. `id`/`max_tokens`
+    into the OpenAI-compatible payload."""
+    request = SpeechRequest(id="req-123", input="Hello world", voice="female", model="tts-1")
+
+    openai_dict = request.to_openai()
+
+    assert "id" not in openai_dict
+    assert "max_tokens" not in openai_dict
+    # OpenAI-relevant fields are preserved.
+    assert openai_dict["input"] == "Hello world"
+    assert openai_dict["voice"] == "female"
+    assert openai_dict["model"] == "tts-1"
+    # The caller-supplied `exclude` is applied on top of the defaults.
+    assert "voice" not in request.to_openai(exclude=("voice",))
+
+
 @pytest.mark.parametrize(
     ["voice", "with_ref_audio", "random_seed"],
     [
