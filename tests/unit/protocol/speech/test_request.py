@@ -68,8 +68,6 @@ def test_speech_request_to_openai_exports_reference_audio_and_from_openai_canoni
     assert {key: value for key, value in exported.items() if key != "ref_audio"} == {
         "temperature": 0.7,
         "top_p": 1.0,
-        "max_tokens": None,
-        "id": None,
         "model": None,
         "input": "Hello world",
         "voice": None,
@@ -84,6 +82,18 @@ def test_speech_request_to_openai_rejects_invalid_reference_audio_bytes() -> Non
 
     with pytest.raises(ValueError, match="Failed to detect audio format"):
         request.to_openai()
+
+
+def test_speech_request_to_openai_excludes_mistral_specific_fields() -> None:
+    request = SpeechRequest(id="req-123", input="Hello world", voice="female", model="tts-1", max_tokens=128)
+
+    openai_dict = request.to_openai()
+
+    assert "id" not in openai_dict
+    assert "max_tokens" not in openai_dict
+    assert openai_dict["input"] == "Hello world"
+    assert openai_dict["voice"] == "female"
+    assert openai_dict["model"] == "tts-1"
 
 
 @pytest.mark.parametrize(
@@ -108,8 +118,6 @@ def test_speech_request_openai_round_trip(
     assert {key: value for key, value in exported.items() if key != "ref_audio"} == {
         "temperature": 0.7,
         "top_p": 1.0,
-        "max_tokens": None,
-        "id": None,
         "model": "tts-1",
         "input": "Round trip test",
         "voice": voice,
