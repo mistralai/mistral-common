@@ -51,11 +51,6 @@ _ASSERT_TO_TESTS = {
         "`llguidance` is not installed. Please install it with `pip install mistral-common[guidance]`",
     ),
     (
-        is_opencv_installed,
-        assert_opencv_installed,
-        "`opencv` is not installed. Please install it with `pip install mistral-common[opencv]`",
-    ),
-    (
         is_sentencepiece_installed,
         assert_sentencepiece_installed,
         "`sentencepiece` is not installed. Please install it with `pip install mistral-common[sentencepiece]`",
@@ -112,6 +107,19 @@ def test_is_opencv_installed() -> None:
         assert is_opencv_installed() is False
 
     is_opencv_installed.cache_clear()
+
+
+def test_assert_opencv_installed_checks_import() -> None:
+    assert_opencv_installed.cache_clear()
+
+    with (
+        patch("mistral_common.imports.is_package_installed", return_value=True),
+        patch("mistral_common.imports.is_opencv_installed", return_value=False) as mock_is_opencv_installed,
+        pytest.raises(ImportError, match=r"`opencv` is not installed"),
+    ):
+        assert_opencv_installed()
+
+    mock_is_opencv_installed.assert_called_once_with()
 
 
 @patch("mistral_common.imports.is_package_installed")

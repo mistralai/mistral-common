@@ -86,7 +86,8 @@ def assert_llguidance_installed() -> None:
 
 @lru_cache()
 def assert_opencv_installed() -> None:
-    assert_package_installed("cv2", _get_dependency_error_message("opencv", "opencv"))
+    if not is_opencv_installed():
+        raise ImportError(_get_dependency_error_message("opencv", "opencv"))
 
 
 @lru_cache()
