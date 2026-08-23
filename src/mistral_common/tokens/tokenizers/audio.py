@@ -352,6 +352,11 @@ class AudioConfig:
             f"sampling_rate must be >= frame_rate so that each token spans at least one sample, "
             f"got sampling_rate={self.sampling_rate} and frame_rate={self.frame_rate}"
         )
+        assert self.audio_length_per_tok > 0, (
+            f"sampling_rate / frame_rate must be >= hop_length so that each token spans at least one "
+            f"spectrogram frame, got sampling_rate={self.sampling_rate}, frame_rate={self.frame_rate} "
+            f"and hop_length={self.encoding_config.hop_length}"
+        )
 
         if self.chunk_length_s is not None:
             assert self.chunk_length_s > 0, self.chunk_length_s

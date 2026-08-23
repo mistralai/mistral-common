@@ -34,6 +34,14 @@ def test_audio_config_rejects_sampling_rate_below_frame_rate() -> None:
         AudioConfig(sampling_rate=1, frame_rate=2.0, encoding_config=encoding_config)
 
 
+def test_audio_config_rejects_audio_length_per_tok_of_zero() -> None:
+    encoding_config = AudioSpectrogramConfig(num_mel_bins=80, hop_length=160, window_size=400)
+    # sampling_rate >= frame_rate holds, but sampling_rate / frame_rate < hop_length floors
+    # audio_length_per_tok to 0, which previously made num_audio_tokens raise ZeroDivisionError.
+    with pytest.raises(AssertionError):
+        AudioConfig(sampling_rate=200, frame_rate=2.0, encoding_config=encoding_config)
+
+
 def test_audio_resample() -> None:
     sampling_rate = 44_000
     original_array = sin_wave(sampling_rate, 1)
