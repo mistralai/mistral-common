@@ -543,9 +543,11 @@ class MistralRequestValidatorV11(MistralRequestValidatorV5):
     - Allowing system prompts with audio chunks
     """
 
+    _require_concrete_tool_call_id: bool = True
+
     def _validate_tool_call(self, tool_call: ToolCall, is_last_message: bool) -> None:
         r"""Validate that v13 and newer tool calls have a concrete ID."""
-        if tool_call.id == "null":
+        if self._require_concrete_tool_call_id and tool_call.id == "null":
             raise InvalidFunctionCallException(
                 "Tool call id must be a 9-character alphanumeric string for tokenizer version 13 or newer; "
                 "'null' is not supported."
