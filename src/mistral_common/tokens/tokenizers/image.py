@@ -185,8 +185,7 @@ class ImageEncoder:
         w, h = img.size
         ratio = max(h / self.image_config.max_image_size, w / self.image_config.max_image_size)
         if ratio > 1:
-            # Keep at least one pixel per axis: for extreme aspect ratios the shorter
-            # side would otherwise round down to 0 and produce a 0-token axis.
+            # an extreme aspect ratio would otherwise round the shorter side to 0 pixels
             w = max(round(w / ratio), 1)
             h = max(round(h / ratio), 1)
 
