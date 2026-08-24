@@ -17,6 +17,7 @@ from mistral_common.protocol.instruct.chunk import (
 )
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
+    ChatMessage,
     SystemMessage,
     ToolMessage,
     UserMessage,
@@ -519,7 +520,7 @@ class TestChatValidationV5:
 
 class TestChatValidationV11:
     def test_allows_null_tool_call_id(self) -> None:
-        request = ChatCompletionRequest(
+        request = ChatCompletionRequest[ChatMessage](
             messages=[
                 UserMessage(content="foo"),
                 AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="foo", arguments="{}"))]),
