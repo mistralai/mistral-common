@@ -524,9 +524,11 @@ class MistralRequestValidatorV13(MistralRequestValidatorV5):
     - Allowing system prompts with audio chunks
     """
 
+    _require_concrete_tool_call_id: bool = True
+
     def _validate_tool_call(self, tool_call: ToolCall, is_last_message: bool) -> None:
         r"""Validate that v13 and newer tool calls have a concrete ID."""
-        if tool_call.id == "null":
+        if self._require_concrete_tool_call_id and tool_call.id == "null":
             raise InvalidFunctionCallException(
                 "Tool call id must be a 9-character alphanumeric string for tokenizer version 13 or newer; "
                 "'null' is not supported."
@@ -590,6 +592,12 @@ class MistralRequestValidatorV13(MistralRequestValidatorV5):
         return
 
 
+class MistralRequestValidatorV11(MistralRequestValidatorV13):
+    r"""Validator preserving v11 support for null tool call IDs."""
+
+    _require_concrete_tool_call_id: bool = False
+
+
 class MistralRequestValidatorV15(MistralRequestValidatorV13):
     def _validate_system_content_chunks(self, content: str | Sequence[ContentChunk] | None) -> None:
         r"""v15 system messages accept text and audio but reject thinking chunks."""
@@ -621,7 +629,9 @@ def get_validator(version: TokenizerVersion, mode: ValidationMode) -> MistralReq
             validator = MistralRequestValidatorV3(mode=mode)
         case TokenizerVersion.v7:
             validator = MistralRequestValidatorV5(mode=mode)
-        case TokenizerVersion.v11 | TokenizerVersion.v13:
+        case TokenizerVersion.v11:
+            validator = MistralRequestValidatorV11(mode=mode)
+        case TokenizerVersion.v13:
             validator = MistralRequestValidatorV13(mode=mode)
         case TokenizerVersion.v15:
             validator = MistralRequestValidatorV15(mode=mode)

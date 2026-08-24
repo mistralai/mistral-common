@@ -517,6 +517,20 @@ class TestChatValidationV5:
                 )
 
 
+class TestChatValidationV11:
+    def test_allows_null_tool_call_id(self) -> None:
+        request = ChatCompletionRequest(
+            messages=[
+                UserMessage(content="foo"),
+                AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="foo", arguments="{}"))]),
+                UserMessage(content="continue"),
+            ]
+        )
+        validator = get_validator(version=TokenizerVersion.v11, mode=ValidationMode.test)
+
+        assert validator.validate_request(request) == request
+
+
 class TestChatValidationV13:
     @pytest.mark.parametrize("version", [TokenizerVersion.v13, TokenizerVersion.v15])
     @pytest.mark.parametrize("mode", list(ValidationMode))
