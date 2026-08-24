@@ -531,15 +531,38 @@ class TestChatValidationV11:
 
         assert validator.validate_request(request) == request
 
+    @pytest.mark.parametrize("tool_call_id", ["x", "call/id-1"])
+    def test_rejects_non_nine_character_alphanumeric_tool_call_id(self, tool_call_id: str) -> None:
+        request = ChatCompletionRequest[ChatMessage](
+            messages=[
+                UserMessage(content="foo"),
+                AssistantMessage(
+                    tool_calls=[ToolCall(id=tool_call_id, function=FunctionCall(name="foo", arguments="{}"))]
+                ),
+                UserMessage(content="continue"),
+            ]
+        )
+        validator = get_validator(version=TokenizerVersion.v11, mode=ValidationMode.test)
+
+        with pytest.raises(InvalidFunctionCallException, match=r"must be a-z, A-Z, 0-9, with a length of 9"):
+            validator.validate_request(request)
+
 
 class TestChatValidationV13:
     @pytest.mark.parametrize("version", [TokenizerVersion.v13, TokenizerVersion.v15])
     @pytest.mark.parametrize("mode", list(ValidationMode))
-    def test_rejects_null_tool_call_id_in_all_modes(self, version: TokenizerVersion, mode: ValidationMode) -> None:
-        assistant_message = AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="foo", arguments="{}"))])
+    @pytest.mark.parametrize("tool_call_id", [None, "", "null"], ids=["missing", "empty", "null"])
+    def test_rejects_invalid_tool_call_id_in_all_modes(
+        self, version: TokenizerVersion, mode: ValidationMode, tool_call_id: str | None
+    ) -> None:
+        function = FunctionCall(name="foo", arguments="{}")
+        tool_call = (
+            ToolCall(function=function) if tool_call_id is None else ToolCall(id=tool_call_id, function=function)
+        )
+        assistant_message = AssistantMessage(tool_calls=[tool_call])
         messages: _Messages = [UserMessage(content="foo"), assistant_message]
         if mode == ValidationMode.serving:
-            messages.append(ToolMessage(content="result", tool_call_id="null"))
+            messages.append(ToolMessage(content="result", tool_call_id=tool_call.id))
         elif mode == ValidationMode.test:
             messages.append(UserMessage(content="continue"))
 
@@ -547,10 +570,7 @@ class TestChatValidationV13:
 
         with pytest.raises(
             InvalidFunctionCallException,
-            match=(
-                r"Tool call id must be a 9-character alphanumeric string for tokenizer version 13 or newer; "
-                r"'null' is not supported\."
-            ),
+            match=(r"Tool call id must be a non-empty string other than 'null' for tokenizer version 13 or newer\."),
         ):
             validator.validate_request(ChatCompletionRequest(messages=messages, model="test"))
 

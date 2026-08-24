@@ -376,6 +376,22 @@ def test_no_settings_does_not_encode_model_settings(
     assert "[MODEL_SETTINGS]" not in text
 
 
+@pytest.mark.parametrize("tool_call_id", ["x", "call/id-1"])
+def test_encode_chat_completion_with_arbitrary_tool_call_id(tool_call_id: str) -> None:
+    tokenizer = get_v15_mistral_tokenizer(model_settings_builder=_build_model_settings_builder(None))
+    request = ChatCompletionRequest[ChatMessage](
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(tool_calls=[ToolCall(id=tool_call_id, function=FunctionCall(name="f", arguments="{}"))]),
+            ToolMessage(content="b", tool_call_id=tool_call_id),
+        ]
+    )
+
+    tokenized = tokenizer.encode_chat_completion(request)
+
+    assert tokenized.text == "<s>[INST]a[/INST][TOOL_CALLS]f[ARGS]{}</s>[TOOL_RESULTS]b[/TOOL_RESULTS]"
+
+
 def test_system_think_chunk_raises_v15(v15_tekkenizer: InstructTokenizerV15) -> None:
     messages = [SystemMessage(content=[ThinkChunk(thinking="Hi")])]
     request: InstructRequest = InstructRequest(
