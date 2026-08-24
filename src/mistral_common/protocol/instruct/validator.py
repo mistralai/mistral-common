@@ -417,6 +417,9 @@ class MistralRequestValidatorV3(MistralRequestValidator):
         >>> validator = MistralRequestValidatorV3()
     """
 
+    _force_tool_call_id_format: bool = True
+    _allow_null_tool_call_id: bool = True
+
     def _validate_user_content_chunks(self, content: str | Sequence[ContentChunk] | None) -> None:
         r"""v3 user messages accept text and image chunks (audio >= v7)."""
         _validate_content_chunk_types(
@@ -542,33 +545,6 @@ class MistralRequestValidatorV11(MistralRequestValidatorV5):
     - Allowing thinking chunks in assistant messages.
     - Allowing system prompts with audio chunks
     """
-
-    _use_v13_tool_call_id_validation: bool = True
-
-    def _validate_tool_message(self, message: ToolMessageType) -> None:
-        r"""Validate v13 and newer tool result IDs without wire-format restrictions."""
-        if not self._use_v13_tool_call_id_validation:
-            super()._validate_tool_message(message=message)
-            return
-
-        MistralRequestValidator._validate_tool_message(self, message=message)
-        if message.tool_call_id is None or message.tool_call_id in {"", "null"}:
-            raise InvalidToolMessageException(
-                "Tool call id must be a non-empty string other than 'null' for tokenizer version 13 or newer."
-            )
-
-    def _validate_tool_call(self, tool_call: ToolCall, is_last_message: bool) -> None:
-        r"""Validate v13 and newer tool call IDs without wire-format restrictions."""
-        if not self._use_v13_tool_call_id_validation:
-            super()._validate_tool_call(tool_call=tool_call, is_last_message=is_last_message)
-            return
-
-        if not tool_call.id or tool_call.id == "null":
-            raise InvalidFunctionCallException(
-                "Tool call id must be a non-empty string other than 'null' for tokenizer version 13 or newer."
-            )
-
-        self._validate_function_call(tool_call.function)
 
     def _validate_tool_calls_followed_by_tool_messages(self, messages: list[UATS]) -> None:
         """
