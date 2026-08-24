@@ -543,6 +543,16 @@ class MistralRequestValidatorV11(MistralRequestValidatorV5):
     - Allowing system prompts with audio chunks
     """
 
+    def _validate_tool_call(self, tool_call: ToolCall, is_last_message: bool) -> None:
+        r"""Validate that v13 and newer tool calls have a concrete ID."""
+        if tool_call.id == "null":
+            raise InvalidFunctionCallException(
+                "Tool call id must be a 9-character alphanumeric string for tokenizer version 13 or newer; "
+                "'null' is not supported."
+            )
+
+        super()._validate_tool_call(tool_call=tool_call, is_last_message=is_last_message)
+
     def _validate_tool_calls_followed_by_tool_messages(self, messages: list[UATS]) -> None:
         """
         Checks:
