@@ -4,6 +4,7 @@ import pytest
 
 from mistral_common.exceptions import (
     InvalidAssistantMessageException,
+    InvalidFunctionCallException,
     InvalidMessageStructureException,
     InvalidRequestException,
     InvalidSystemPromptException,
@@ -32,7 +33,9 @@ from mistral_common.protocol.instruct.validator import (
     MistralRequestValidatorV13,
     MistralRequestValidatorV15,
     ValidationMode,
+    get_validator,
 )
+from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
 from tests.fixtures.chunks import get_content_chunks
 
@@ -515,6 +518,27 @@ class TestChatValidationV5:
 
 
 class TestChatValidationV13:
+    @pytest.mark.parametrize("version", [TokenizerVersion.v13, TokenizerVersion.v15])
+    @pytest.mark.parametrize("mode", list(ValidationMode))
+    def test_rejects_null_tool_call_id_in_all_modes(self, version: TokenizerVersion, mode: ValidationMode) -> None:
+        assistant_message = AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="foo", arguments="{}"))])
+        messages: _Messages = [UserMessage(content="foo"), assistant_message]
+        if mode == ValidationMode.serving:
+            messages.append(ToolMessage(content="result", tool_call_id="null"))
+        elif mode == ValidationMode.test:
+            messages.append(UserMessage(content="continue"))
+
+        validator = get_validator(version=version, mode=mode)
+
+        with pytest.raises(
+            InvalidFunctionCallException,
+            match=(
+                r"Tool call id must be a 9-character alphanumeric string for tokenizer version 13 or newer; "
+                r"'null' is not supported\."
+            ),
+        ):
+            validator.validate_request(ChatCompletionRequest(messages=messages, model="test"))
+
     def test_right_number_results_invalid_id(self, validator_v13: MistralRequestValidatorV13) -> None:
         with pytest.raises(
             InvalidMessageStructureException,
