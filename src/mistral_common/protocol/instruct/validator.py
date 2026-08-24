@@ -407,6 +407,9 @@ class MistralRequestValidatorV3(MistralRequestValidator):
         >>> validator = MistralRequestValidatorV3()
     """
 
+    _force_tool_call_id_format: bool = True
+    _allow_null_tool_call_id: bool = True
+
     def _validate_user_content_chunks(self, content: str | Sequence[ContentChunk] | None) -> None:
         r"""v3 user messages accept text and image chunks (audio >= v7)."""
         _validate_content_chunk_types(
@@ -421,10 +424,15 @@ class MistralRequestValidatorV3(MistralRequestValidator):
         """
         super()._validate_tool_message(message)
 
+        if not self._allow_null_tool_call_id and (message.tool_call_id is None or message.tool_call_id in {"", "null"}):
+            raise InvalidToolMessageException(
+                "Tool call id must be a non-empty string other than 'null' for tokenizer version 13 or newer."
+            )
+
         if message.tool_call_id is None:
             raise InvalidRequestException("Tool call id has to be defined.")
 
-        if not re.match(r"^[a-zA-Z0-9]{9}$", message.tool_call_id):
+        if self._force_tool_call_id_format and not re.match(r"^[a-zA-Z0-9]{9}$", message.tool_call_id):
             raise InvalidToolMessageException(
                 f"Tool call id was {message.tool_call_id} but must be a-z, A-Z, 0-9, with a length of 9."
             )
@@ -433,8 +441,13 @@ class MistralRequestValidatorV3(MistralRequestValidator):
         """
         Validate that the tool call has a valid ID
         """
+        if not self._allow_null_tool_call_id and (not tool_call.id or tool_call.id == "null"):
+            raise InvalidFunctionCallException(
+                "Tool call id must be a non-empty string other than 'null' for tokenizer version 13 or newer."
+            )
+
         if tool_call.id != "null":
-            if not re.match(r"^[a-zA-Z0-9]{9}$", tool_call.id):
+            if self._force_tool_call_id_format and not re.match(r"^[a-zA-Z0-9]{9}$", tool_call.id):
                 raise InvalidFunctionCallException(
                     f"Tool call id was {tool_call.id} but must be a-z, A-Z, 0-9, with a length of 9."
                 )
@@ -516,40 +529,14 @@ class MistralRequestValidatorV5(MistralRequestValidatorV3):
         self._validate_system_prompt_and_audio(messages)
 
 
-class MistralRequestValidatorV13(MistralRequestValidatorV5):
-    r"""Validator for v13 Mistral requests.
+class MistralRequestValidatorV11(MistralRequestValidatorV5):
+    r"""Validator for v11 and newer Mistral requests.
 
     This validator extends v5 functionality by:
-    - Adding stricter tool call ID validation: they should be distinct and called.
+    - Adding stricter tool call/result pairing validation.
+    - Allowing thinking chunks in assistant messages.
     - Allowing system prompts with audio chunks
     """
-
-    _use_v13_tool_call_id_validation: bool = True
-
-    def _validate_tool_message(self, message: ToolMessageType) -> None:
-        r"""Validate v13 and newer tool result IDs without wire-format restrictions."""
-        if not self._use_v13_tool_call_id_validation:
-            super()._validate_tool_message(message=message)
-            return
-
-        MistralRequestValidator._validate_tool_message(self, message=message)
-        if message.tool_call_id is None or message.tool_call_id in {"", "null"}:
-            raise InvalidToolMessageException(
-                "Tool call id must be a non-empty string other than 'null' for tokenizer version 13 or newer."
-            )
-
-    def _validate_tool_call(self, tool_call: ToolCall, is_last_message: bool) -> None:
-        r"""Validate v13 and newer tool call IDs without wire-format restrictions."""
-        if not self._use_v13_tool_call_id_validation:
-            super()._validate_tool_call(tool_call=tool_call, is_last_message=is_last_message)
-            return
-
-        if not tool_call.id or tool_call.id == "null":
-            raise InvalidFunctionCallException(
-                "Tool call id must be a non-empty string other than 'null' for tokenizer version 13 or newer."
-            )
-
-        self._validate_function_call(tool_call.function)
 
     def _validate_tool_calls_followed_by_tool_messages(self, messages: list[UATS]) -> None:
         """
@@ -603,14 +590,15 @@ class MistralRequestValidatorV13(MistralRequestValidatorV5):
         _validate_content_chunk_types(content, (TextChunk, ThinkChunk), "assistant", InvalidAssistantMessageException)
 
     def _validate_system_prompt_and_audio(self, messages: list[UATS]) -> None:
-        r"""Allows system prompts and audio chunks to coexist in v13."""
+        r"""Allow system prompts and audio chunks to coexist."""
         return
 
 
-class MistralRequestValidatorV11(MistralRequestValidatorV13):
-    r"""Validator preserving v11 tool call ID requirements."""
+class MistralRequestValidatorV13(MistralRequestValidatorV11):
+    r"""Validator specializing v11 behavior for v13 tool call IDs."""
 
-    _use_v13_tool_call_id_validation: bool = False
+    _force_tool_call_id_format: bool = False
+    _allow_null_tool_call_id: bool = False
 
 
 class MistralRequestValidatorV15(MistralRequestValidatorV13):
