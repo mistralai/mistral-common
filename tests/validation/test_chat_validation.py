@@ -567,6 +567,22 @@ class TestChatValidationV11:
         with pytest.raises(InvalidFunctionCallException, match=r"must be a-z, A-Z, 0-9, with a length of 9"):
             validator.validate_request(request)
 
+    @pytest.mark.parametrize("tool_call_id", ["x", "call/id-1"])
+    def test_rejects_non_nine_character_alphanumeric_tool_call_id(self, tool_call_id: str) -> None:
+        request = ChatCompletionRequest[ChatMessage](
+            messages=[
+                UserMessage(content="foo"),
+                AssistantMessage(
+                    tool_calls=[ToolCall(id=tool_call_id, function=FunctionCall(name="foo", arguments="{}"))]
+                ),
+                UserMessage(content="continue"),
+            ]
+        )
+        validator = get_validator(version=TokenizerVersion.v11, mode=ValidationMode.test)
+
+        with pytest.raises(InvalidFunctionCallException, match=r"must be a-z, A-Z, 0-9, with a length of 9"):
+            validator.validate_request(request)
+
 
 class TestChatValidationV13:
     @pytest.mark.parametrize("version", [TokenizerVersion.v13, TokenizerVersion.v15])

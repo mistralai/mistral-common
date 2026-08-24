@@ -543,17 +543,32 @@ class MistralRequestValidatorV11(MistralRequestValidatorV5):
     - Allowing system prompts with audio chunks
     """
 
-    _require_concrete_tool_call_id: bool = True
+    _use_v13_tool_call_id_validation: bool = True
 
-    def _validate_tool_call(self, tool_call: ToolCall, is_last_message: bool) -> None:
-        r"""Validate that v13 and newer tool calls have a concrete ID."""
-        if self._require_concrete_tool_call_id and tool_call.id == "null":
-            raise InvalidFunctionCallException(
-                "Tool call id must be a 9-character alphanumeric string for tokenizer version 13 or newer; "
-                "'null' is not supported."
+    def _validate_tool_message(self, message: ToolMessageType) -> None:
+        r"""Validate v13 and newer tool result IDs without wire-format restrictions."""
+        if not self._use_v13_tool_call_id_validation:
+            super()._validate_tool_message(message=message)
+            return
+
+        MistralRequestValidator._validate_tool_message(self, message=message)
+        if message.tool_call_id is None or message.tool_call_id in {"", "null"}:
+            raise InvalidToolMessageException(
+                "Tool call id must be a non-empty string other than 'null' for tokenizer version 13 or newer."
             )
 
-        super()._validate_tool_call(tool_call=tool_call, is_last_message=is_last_message)
+    def _validate_tool_call(self, tool_call: ToolCall, is_last_message: bool) -> None:
+        r"""Validate v13 and newer tool call IDs without wire-format restrictions."""
+        if not self._use_v13_tool_call_id_validation:
+            super()._validate_tool_call(tool_call=tool_call, is_last_message=is_last_message)
+            return
+
+        if not tool_call.id or tool_call.id == "null":
+            raise InvalidFunctionCallException(
+                "Tool call id must be a non-empty string other than 'null' for tokenizer version 13 or newer."
+            )
+
+        self._validate_function_call(tool_call.function)
 
     def _validate_tool_calls_followed_by_tool_messages(self, messages: list[UATS]) -> None:
         """
