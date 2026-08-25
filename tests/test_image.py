@@ -42,6 +42,23 @@ def test_image_to_num_tokens(spatial_merge_size: int, special_token_ids: Special
 
 
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
+@pytest.mark.parametrize("size", [(1, 512), (4, 10000), (10000, 4), (2, 4096)])
+def test_image_to_num_tokens_extreme_aspect_ratio(
+    special_token_ids: SpecialImageIDs, size: tuple[int, int], spatial_merge_size: int
+) -> None:
+    image_config = ImageConfig(
+        image_patch_size=16 // spatial_merge_size, max_image_size=128, spatial_merge_size=spatial_merge_size
+    )
+    image_encoder = ImageEncoder(image_config, special_token_ids)
+
+    img = Image.new("RGB", size, "red")
+    w_tokens, h_tokens = image_encoder._image_to_num_tokens(img)
+    assert w_tokens >= 1 and h_tokens >= 1
+    encoding = image_encoder(ImageChunk(image=img))
+    assert len(encoding.tokens) == (w_tokens + 1) * h_tokens
+
+
+@pytest.mark.parametrize("spatial_merge_size", [1, 2])
 def test_download_image(spatial_merge_size: int, special_token_ids: SpecialImageIDs) -> None:
     image_config = ImageConfig(
         image_patch_size=16 // spatial_merge_size, max_image_size=128, spatial_merge_size=spatial_merge_size
