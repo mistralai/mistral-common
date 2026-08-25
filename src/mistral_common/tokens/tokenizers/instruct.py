@@ -1107,7 +1107,6 @@ class InstructTokenizerV7(InstructTokenizerV3):
             _text=self.decode(tokens=tokens, special_token_policy=SpecialTokenPolicy.KEEP),
         )
 
-
     @classmethod
     def validate_messages(cls, messages: list[UATS]) -> None:
         r"""Validates that system prompts and audio chunks are not used together in v7."""
