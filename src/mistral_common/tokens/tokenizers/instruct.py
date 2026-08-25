@@ -225,14 +225,15 @@ class InstructTokenizerBase(
             if tok is not None:
                 tokens.extend(tok)
 
-        return Tokenized(
+        tokenized = Tokenized(
             tokens=tokens,
             prefix_ids=prefix_ids,
             images=images,
             audios=audios,
-            # TODO: remove once 1.13.0 lands.
-            _text=self.decode(tokens=tokens, special_token_policy=SpecialTokenPolicy.KEEP),
         )
+        # TODO: remove once 1.13.0 lands.
+        tokenized._text = self.decode(tokens=tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+        return tokenized
 
     def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy = SpecialTokenPolicy.IGNORE) -> str:
         r"""Decode tokens to a string.
@@ -622,11 +623,10 @@ class InstructTokenizerV2(
             self.PREFIX,
             *prefix_tokens,
         ]
-        return Tokenized(
-            tokens=tokens
-            # TODO: remove once 1.13.0 lands.
-            _text=self.decode(tokens=tokens, special_token_policy=SpecialTokenPolicy.KEEP),
-        )
+        tokenized = Tokenized(tokens=tokens)
+        # TODO: remove once 1.13.0 lands.
+        tokenized._text = self.decode(tokens=tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+        return tokenized
 
 
 class InstructTokenizerV3(
@@ -1034,12 +1034,13 @@ class InstructTokenizerV7(InstructTokenizerV3):
             tokens += self.tokenizer.encode(language_string, bos=False, eos=False)
 
         tokens.append(self.TRANSCRIBE)
-        return Tokenized(
+        tokenized = Tokenized(
             tokens=tokens,
             audios=audio,
-            # TODO: remove once 1.13.0 lands.
-            _text=self.decode(tokens=tokens, special_token_policy=SpecialTokenPolicy.KEEP),
         )
+        # TODO: remove once 1.13.0 lands.
+        tokenized._text = self.decode(tokens=tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+        return tokenized
 
     def _encode_audio(self, audio: str | bytes, transcription_delay_ms: float | None = None) -> Tokenized:
         assert self.audio_encoder is not None, (
@@ -1100,12 +1101,13 @@ class InstructTokenizerV7(InstructTokenizerV3):
         else:
             raise ValueError(f"Request must be in streaming mode, got {request.streaming=}")
 
-        return Tokenized(
+        tokenized = Tokenized(
             tokens=tokens,
             audios=audios,
-            # TODO: remove once 1.13.0 lands.
-            _text=self.decode(tokens=tokens, special_token_policy=SpecialTokenPolicy.KEEP),
         )
+        # TODO: remove once 1.13.0 lands.
+        tokenized._text = self.decode(tokens=tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+        return tokenized
 
     @classmethod
     def validate_messages(cls, messages: list[UATS]) -> None:
