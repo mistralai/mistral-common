@@ -102,6 +102,11 @@ class ImageConfig:
     max_image_size: int
     spatial_merge_size: int = 1
 
+    def __post_init__(self) -> None:
+        assert self.image_patch_size > 0, f"image_patch_size must be > 0, got {self.image_patch_size}"
+        assert self.max_image_size > 0, f"max_image_size must be > 0, got {self.max_image_size}"
+        assert self.spatial_merge_size > 0, f"spatial_merge_size must be > 0, got {self.spatial_merge_size}"
+
 
 def _convert_to_rgb(image: Image.Image) -> Image.Image:
     r"""Convert a PIL image to RGB.
