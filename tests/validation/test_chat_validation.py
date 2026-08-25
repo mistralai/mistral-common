@@ -118,6 +118,51 @@ def validator_v15(request: pytest.FixtureRequest) -> MistralRequestValidator:
 
 
 class TestChatValidation:
+    def test_general_accepts_unprefixed_final_assistant(self) -> None:
+        validator: MistralRequestValidator = MistralRequestValidator(mode=ValidationMode.general)
+
+        validator.validate_messages(
+            messages=[UserMessage(content="foo"), AssistantMessage(content="bar", prefix=False)],
+        )
+
+    def test_general_accepts_non_assistant_final(self) -> None:
+        validator: MistralRequestValidator = MistralRequestValidator(mode=ValidationMode.general)
+
+        validator.validate_messages(
+            messages=[UserMessage(content="foo"), UserMessage(content="bar")],
+        )
+
+    def test_general_accepts_prefixed_final_assistant(self) -> None:
+        validator: MistralRequestValidator = MistralRequestValidator(mode=ValidationMode.general)
+
+        validator.validate_messages(
+            messages=[UserMessage(content="foo"), AssistantMessage(content="bar", prefix=True)],
+        )
+
+    def test_general_does_not_require_model(self) -> None:
+        validator: MistralRequestValidator = MistralRequestValidator(mode=ValidationMode.general)
+        request = ChatCompletionRequest(messages=[UserMessage(content="foo")])
+
+        assert validator.validate_request(request=request) is request
+
+    def test_general_validates_message_structure(self) -> None:
+        validator: MistralRequestValidator = MistralRequestValidator(mode=ValidationMode.general)
+
+        with pytest.raises(
+            InvalidMessageStructureException,
+            match=r"Conversation must start with a user message or system message",
+        ):
+            validator.validate_messages(
+                messages=[AssistantMessage(content="foo")],
+            )
+
+    def test_general_retains_model_setting_validation(self) -> None:
+        validator = MistralRequestValidator(mode=ValidationMode.general)
+        request = ChatCompletionRequest(messages=[UserMessage(content="foo")], reasoning_effort=ReasoningEffort.none)
+
+        with pytest.raises(InvalidRequestException, match=r"reasoning_effort='none' is not supported for this model"):
+            validator.validate_request(request=request)
+
     def test_multiple_system_messages_OK(self, validator: MistralRequestValidator) -> None:
         validator.validate_messages(
             messages=[
