@@ -38,6 +38,7 @@ from mistral_common.tokens.tokenizers.instruct import (
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import get_special_tokens, quick_vocab
+from tests.utils import decode_keep
 
 
 def get_tekkenizer_with_audio() -> InstructTokenizerV7:
@@ -199,7 +200,8 @@ def test_tokenize_user_assistant_message(tekkenizer: InstructTokenizerV7) -> Non
         200,  # "d"
         EOS,
     ]
-    assert tokenized.text == ("<s>[INST]a[BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]c b d</s>")
+    text = decode_keep(tekkenizer, tokenized)
+    assert text == ("<s>[INST]a[BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]c b d</s>")
     assert len(tokenized.audios) == 1
     base64_str = audio_chunk.input_audio
     assert isinstance(base64_str, str)
@@ -237,7 +239,8 @@ def test_tokenize_user_message(tekkenizer: InstructTokenizerV7, audio_first: boo
             197,  # "a"
             END_INST,
         ]
-        assert tokenized.text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "a[/INST]")
+        text = decode_keep(tekkenizer, tokenized)
+        assert text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "a[/INST]")
     else:
         assert tokenized.tokens == [
             BOS,
@@ -246,7 +249,8 @@ def test_tokenize_user_message(tekkenizer: InstructTokenizerV7, audio_first: boo
             *audio_toks,
             END_INST,
         ]
-        assert tokenized.text == ("<s>[INST]a[BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]")
+        text = decode_keep(tekkenizer, tokenized)
+        assert text == ("<s>[INST]a[BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]")
     assert len(tokenized.audios) == 1
     base64_str = audio_chunk.input_audio
     assert isinstance(base64_str, str)
@@ -394,7 +398,8 @@ def test_tokenize_audio_url_chunk(
     assert tokenized.audios[0].sampling_rate == 24000
     assert tokenized.audios[0].format == "wav"
     assert tokenized.audios[0].audio_array.shape == (24000,)
-    assert tokenized.text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * (len(audio_toks) - 1) + "[/INST]c b d</s>")
+    text = decode_keep(tekkenizer, tokenized)
+    assert text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * (len(audio_toks) - 1) + "[/INST]c b d</s>")
     assert tokenized.tokens == [
         BOS,
         BEGIN_INST,

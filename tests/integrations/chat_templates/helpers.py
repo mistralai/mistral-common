@@ -26,6 +26,7 @@ from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
 from tests.test_tekken import get_special_tokens
+from tests.utils import decode_keep
 
 # Golden template files live in the data/ tree (outside src/).
 _GOLDEN_DIR = Path(__file__).parent.parent.parent / "data" / "chat_templates"
@@ -119,7 +120,8 @@ def encode_mistral_common(mistral_tokenizer: MistralTokenizer, chat_request: Cha
     with the Jinja template rendering. Token ID comparison is handled
     separately via `encode_hf_tokens`.
     """
-    mistral_encoded = str(mistral_tokenizer.encode_chat_completion(chat_request).text)
+    encoded = mistral_tokenizer.encode_chat_completion(chat_request)
+    mistral_encoded = decode_keep(mistral_tokenizer, encoded)
     # Collapse each image token sequence ([IMG]...[IMG_BREAK]...[IMG_END]) into a single [IMG].
     # Each sequence has exactly one [IMG_END], so replacing inner tokens and converting [IMG_END]
     # preserves one [IMG] per image (important for multi-image inputs).

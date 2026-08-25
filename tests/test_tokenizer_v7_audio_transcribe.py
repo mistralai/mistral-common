@@ -14,6 +14,7 @@ from tests.test_tokenizer_v7_audio import (
     _get_specials,
     get_tekkenizer_with_audio,
 )
+from tests.utils import decode_keep
 
 
 @pytest.fixture(scope="session")
@@ -48,7 +49,8 @@ def test_tokenize_transcribe(tekkenizer: InstructTokenizerV7) -> None:
         END_INST,
         TRANSCRIBE,
     ]
-    assert tokenized.text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST][TRANSCRIBE]")
+    text = decode_keep(tekkenizer, tokenized)
+    assert text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST][TRANSCRIBE]")
     assert len(tokenized.audios) == 1
     base64_audio = request.audio
     assert isinstance(base64_audio, str)
@@ -82,7 +84,8 @@ def test_tokenize_transcribe_with_lang(tekkenizer: InstructTokenizerV7) -> None:
         210,
         TRANSCRIBE,
     ]
-    assert tokenized.text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]lang:en[TRANSCRIBE]")
+    text = decode_keep(tekkenizer, tokenized)
+    assert text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]lang:en[TRANSCRIBE]")
     assert len(tokenized.audios) == 1
     base64_audio = request.audio
     assert isinstance(base64_audio, str)

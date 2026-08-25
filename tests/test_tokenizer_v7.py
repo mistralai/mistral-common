@@ -27,13 +27,19 @@ from mistral_common.protocol.instruct.validator import (
     MistralRequestValidatorV5,
     ValidationMode,
 )
-from mistral_common.tokens.tokenizers.base import InstructRequest, InstructTokenizer, Tokenized, TokenizerVersion
+from mistral_common.tokens.tokenizers.base import (
+    InstructRequest,
+    InstructTokenizer,
+    Tokenized,
+    TokenizerVersion,
+)
 from mistral_common.tokens.tokenizers.image import ImageEncoder
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import quick_vocab
 from tests.test_tokenizer_v7_audio import get_tekkenizer_with_audio
+from tests.utils import decode_keep
 
 
 @pytest.fixture
@@ -100,7 +106,7 @@ def test_tokenize_assistant_message(spm_tokenizer: InstructTokenizerV7) -> None:
         9,  # [/TOOL_RESULTS]
     ]
     assert (
-        tokenized.text
+        decode_keep(spm_tokenizer, tokenized)
         == "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁a[/INST]▁b</s>[TOOL_RESULTS]▁b[TOOL_CONTENT]▁f[/TOOL_RESULTS]"  # noqa
     )
 
@@ -116,7 +122,8 @@ def test_tokenize_empty_content_assistant_message(spm_tokenizer: InstructTokeniz
                 with pytest.raises(TokenizerException, match="Invalid assistant message:"):
                     spm_tokenizer.encode_instruct(instruct_request)
             else:
-                assert spm_tokenizer.encode_instruct(instruct_request) == Tokenized(
+                tokenized = spm_tokenizer.encode_instruct(instruct_request)
+                expected = Tokenized(
                     tokens=[
                         1,
                         5,
@@ -136,7 +143,6 @@ def test_tokenize_empty_content_assistant_message(spm_tokenizer: InstructTokeniz
                         1743,
                         29561,
                     ],
-                    text='<s>[TOOL_CALLS]▁[{"name":▁"test_fn",▁"arguments":▁{}}]',
                     prefix_ids=[
                         5,
                         1501,
@@ -156,6 +162,8 @@ def test_tokenize_empty_content_assistant_message(spm_tokenizer: InstructTokeniz
                         29561,
                     ],
                 )
+                expected._text = '<s>[TOOL_CALLS]▁[{"name":▁"test_fn",▁"arguments":▁{}}]'
+                assert tokenized == expected
 
 
 def test_tokenize_assistant_message_continue_final_message(spm_tokenizer: InstructTokenizerV7) -> None:
@@ -187,7 +195,7 @@ def test_tokenize_assistant_message_continue_final_message(spm_tokenizer: Instru
         4,  # end_inst
         1055,  # b
     ]
-    assert tokenized.text == "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁a[/INST]▁b"
+    assert decode_keep(spm_tokenizer, tokenized) == "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁a[/INST]▁b"
 
     with pytest.raises(
         InvalidMessageStructureException, match="Cannot continue final message if it is not an assistant message"
@@ -296,7 +304,8 @@ def test_encode_spm(spm_tokenizer: InstructTokenizerV7, messages: list[ChatMessa
         )
     )
 
-    assert tokenized.text == expected_text, f"{tokenized.text} != {expected_text}"
+    text = decode_keep(spm_tokenizer, tokenized)
+    assert text == expected_text, f"{text} != {expected_text}"
 
 
 def test_encode_chat_completion() -> None:
@@ -337,7 +346,7 @@ def test_encode_chat_completion() -> None:
     assert len(encoded.images) == 1
     assert encoded.images[0].shape == (3, 16, 16)
     assert (
-        encoded.text
+        decode_keep(tokenizer, encoded)
         == '<s>[SYSTEM_PROMPT]▁a[/SYSTEM_PROMPT][AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"t",▁"description":▁"",▁"parameters":▁{"type":▁"object",▁"properties":▁{"g":▁{"type":▁"string"},▁"h":▁{"type":▁"string"}}}}}][/AVAILABLE_TOOLS][INST][IMG][IMG_END]▁a[/INST]▁b</s>[TOOL_RESULTS]▁123456789[TOOL_CONTENT]▁f[/TOOL_RESULTS]'  # noqa
     )
 
@@ -423,7 +432,8 @@ def test_truncation(
     tokenizer: InstructTokenizer = request.getfixturevalue(tekkenizer)
 
     tokenized = tokenizer.encode_instruct(InstructRequest(messages=messages, truncate_at_max_tokens=15))
-    assert tokenized.text == truncated_text, f"{tokenized.text} != {truncated_text}"
+    text = decode_keep(tokenizer, tokenized)
+    assert text == truncated_text, f"{text} != {truncated_text}"
 
 
 @pytest.mark.parametrize(
@@ -497,7 +507,7 @@ def test_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkeni
     )
     tokenized = tokenizer.encode_instruct(instruct_request)
     tokens = tokenized.tokens
-    text = tokenized.text
+    text = decode_keep(tokenizer, tokenized)
 
     assert text == (
         '<s>[AVAILABLE_TOOLS][{"type": "function", "function": '

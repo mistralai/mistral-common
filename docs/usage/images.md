@@ -63,13 +63,15 @@ tokenizer.encode_chat_completion(
         ],
     )
 )
-# Tokenized(tokens=[1, 3, 10, 10, ...], text='<s>[INST][IMG][IMG][IMG][IMG]...', prefix_ids=None, images=[array[[(0.95238595, 0.95238795, 0.95224484, ...,)]]])
+# Tokenized(tokens=[1, 3, 10, 10, ...], prefix_ids=None, images=[array[[(0.95238595, 0.95238795, 0.95224484, ...,)]]], audios=[])
 ```
 
 The output contains:
 
-- the **text**: the string equivalent of the tokens. The image is represented into a sequence of special `[IMG]` tokens with `[IMG_BREAK]` at regular intervals and `[IMG_END]` at the end. An image is a grid and each `[IMG]` represent a patch, the `IMG_BREAK` tokens the end of a row. The `IMG_END` token is used to mark the end of the image.
-- the **tokens**: identifier used by the model for the text. The special tokens of images are not directly used by the model, but replaced by the features of an image encoder.
+- the **tokens**: identifier used by the model for the text. The image is represented into a sequence of special `[IMG]` tokens with `[IMG_BREAK]` at regular intervals and `[IMG_END]` at the end. An image is a grid and each `[IMG]` represent a patch, the `IMG_BREAK` tokens the end of a row. The `IMG_END` token is used to mark the end of the image. The special tokens of images are not directly used by the model, but replaced by the features of an image encoder.
 - the **prefix_ids**: Used for FIM (Fill-In-the-Middle) tasks, here it is `None`.
 - the **images**: the images normalized as a numpy array.
+- the **audios**: the audios associated with the tokens, here it is empty since there is no audio in the request.
+
+To visualize the tokens as text, decode them with `tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)`.
 
