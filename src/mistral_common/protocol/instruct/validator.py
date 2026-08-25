@@ -530,7 +530,7 @@ class MistralRequestValidatorV5(MistralRequestValidatorV3):
 
 
 class MistralRequestValidatorV11(MistralRequestValidatorV5):
-    r"""Validator for v11 and newer Mistral requests.
+    r"""Validator for v11 Mistral requests.
 
     This validator extends v5 functionality by:
     - Adding stricter tool call/result pairing validation.
@@ -595,13 +595,15 @@ class MistralRequestValidatorV11(MistralRequestValidatorV5):
 
 
 class MistralRequestValidatorV13(MistralRequestValidatorV11):
-    r"""Validator specializing v11 behavior for v13 tool call IDs."""
+    r"""Validator for v13 Mistral requests."""
 
     _force_tool_call_id_format: bool = False
     _allow_null_tool_call_id: bool = False
 
 
 class MistralRequestValidatorV15(MistralRequestValidatorV13):
+    r"""Validator for v15 Mistral requests."""
+
     def _validate_system_content_chunks(self, content: str | Sequence[ContentChunk] | None) -> None:
         r"""v15 system messages accept text and audio but reject thinking chunks."""
         _validate_content_chunk_types(content, (TextChunk, AudioChunk), "system", InvalidSystemPromptException)
