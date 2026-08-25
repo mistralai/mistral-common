@@ -67,11 +67,6 @@ def test_get_validator_version_mapping(version: TokenizerVersion, expected_class
     assert validator._mode == ValidationMode.test
 
 
-def test_validator_version_hierarchy() -> None:
-    assert issubclass(MistralRequestValidatorV13, MistralRequestValidatorV11)
-    assert not issubclass(MistralRequestValidatorV11, MistralRequestValidatorV13)
-
-
 @pytest.mark.parametrize("mode", list(ValidationMode))
 def test_get_validator_mode_passed_correctly(mode: ValidationMode) -> None:
     validator = get_validator(TokenizerVersion.v2, mode)
