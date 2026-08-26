@@ -57,6 +57,7 @@ dev = [
     "ruff>=0.2.2",
     "mypy>=1.8.0",
     "pytest-cov>=4.1.0",
+    "pytest-xdist>=3.8.0",
     "diff-cover>=8.0.3",
     "types-Pillow>=10.2.0",
     "types-requests>=2.32",

@@ -34,7 +34,7 @@ _IS_INSTALLED_TO_TESTS = [
     is_soxr_installed,
 ]
 
-_ASSERT_TO_TESTS = {
+_ASSERT_TO_TESTS = [
     (
         is_hf_hub_installed,
         assert_hf_hub_installed,
@@ -70,7 +70,7 @@ _ASSERT_TO_TESTS = {
         assert_soxr_installed,
         "`soxr` is not installed. Please install it with `pip install mistral-common[soxr]`",
     ),
-}
+]
 
 
 @patch("importlib.util.find_spec")

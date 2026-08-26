@@ -151,6 +151,12 @@ mistral-common/
 - New and changed code should be covered by tests.
 - Avoid coverage-only comments. Prefer restructuring so branches are genuinely reachable and tested (e.g. validate inputs and test the error path) over excluding lines.
 
+### Test organization
+
+- New unit tests belong under `tests/unit/` and mirror the source package structure.
+- New integration tests belong under `tests/integration/` and exercise public workflows.
+- Existing tests elsewhere are legacy during the ongoing migration and are removed as their replacements land.
+
 ## Development Workflow
 
 1. Set up using uv
