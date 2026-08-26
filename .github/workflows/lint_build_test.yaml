@@ -69,7 +69,7 @@ jobs:
       # PyTest
       - name: Tests
         run: |
-          uv run pytest --cov=mistral_common tests/ --ignore=tests/integrations --cov-report "xml:coverage.xml"
+          uv run pytest --cov=mistral_common tests/ --ignore=tests/integrations --ignore=tests/integration -n auto --dist load --cov-report "xml:coverage.xml"
       
       # Doctests
       - name: Doctests
@@ -123,4 +123,10 @@ jobs:
 
       - name: Integration Tests
         run: |
-          uv run --no-sync pytest tests/integrations/ -v
+          integration_roots=()
+          for root in tests/integrations tests/integration; do
+            if [[ -d "$root" ]]; then
+              integration_roots+=("$root")
+            fi
+          done
+          uv run --no-sync pytest "${integration_roots[@]}" -n auto --dist load -v
