@@ -1,11 +1,33 @@
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy
 from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
+
+if TYPE_CHECKING:
+    from mistral_common.tokens.tokenizers.sentencepiece import _SentencePieceModel
+
+
+def _exercise_sentencepiece_model(
+    model: "_SentencePieceModel",
+) -> tuple[int, int, str, bool, list[int], str, int, int, int, int, int]:
+    return (
+        model.piece_to_id(piece="<s>"),
+        model.vocab_size(),
+        model.id_to_piece(piece_id=0),
+        model.IsControl(token=0),
+        model.encode(input="text"),
+        model.decode(tokens=[0]),
+        model.get_piece_size(),
+        model.bos_id(),
+        model.eos_id(),
+        model.pad_id(),
+        model.unk_id(),
+    )
 
 
 @pytest.fixture(scope="module")

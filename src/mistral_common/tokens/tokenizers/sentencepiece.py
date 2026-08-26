@@ -3,7 +3,7 @@ import os
 import warnings
 from functools import cached_property
 from pathlib import Path
-from typing import TypeGuard
+from typing import Protocol, TypeGuard, cast
 
 import numpy as np
 
@@ -31,6 +31,32 @@ warnings.filterwarnings(
 
 if is_sentencepiece_installed():
     from sentencepiece import SentencePieceProcessor
+
+
+class _SentencePieceModel(Protocol):
+    """Typed surface of the optional SentencePiece model used by this module."""
+
+    def piece_to_id(self, piece: str) -> int: ...
+
+    def vocab_size(self) -> int: ...
+
+    def get_piece_size(self) -> int: ...
+
+    def id_to_piece(self, piece_id: int) -> str: ...
+
+    def IsControl(self, token: int) -> bool: ...
+
+    def encode(self, input: str) -> list[int]: ...
+
+    def decode(self, tokens: list[int]) -> str: ...
+
+    def bos_id(self) -> int: ...
+
+    def eos_id(self) -> int: ...
+
+    def pad_id(self) -> int: ...
+
+    def unk_id(self) -> int: ...
 
 
 def is_sentencepiece(path: str | Path) -> bool:
@@ -97,8 +123,9 @@ class SentencePieceTokenizer(Tokenizer):
         self._logger = logging.getLogger(self.__class__.__name__)
         # reload tokenizer
         assert os.path.isfile(model_path), model_path
-        self._model = SentencePieceProcessor(
-            model_file=model_path if isinstance(model_path, str) else model_path.as_posix()
+        self._model: _SentencePieceModel = cast(
+            _SentencePieceModel,
+            SentencePieceProcessor(model_file=model_path if isinstance(model_path, str) else model_path.as_posix()),
         )
 
         assert self._model.vocab_size() == self._model.get_piece_size()
@@ -128,7 +155,7 @@ class SentencePieceTokenizer(Tokenizer):
 
     def get_special_token(self, s: str) -> int:
         r"""Get the special token for the given string."""
-        return self._model.piece_to_id(s)  # type: ignore
+        return self._model.piece_to_id(s)
 
     def get_control_token(self, s: str) -> int:
         warnings.warn("`get_control_token` is deprecated. Use `get_special_token` instead.", FutureWarning)
@@ -137,7 +164,7 @@ class SentencePieceTokenizer(Tokenizer):
     @property
     def n_words(self) -> int:
         r"""Vocabulary size of the tokenizer."""
-        return self._model.vocab_size()  # type: ignore
+        return self._model.vocab_size()
 
     @property
     def num_special_tokens(self) -> int:
@@ -151,20 +178,20 @@ class SentencePieceTokenizer(Tokenizer):
     @cached_property
     def bos_id(self) -> int:
         r"""The beginning of sentence token id."""
-        return self._model.bos_id()  # type: ignore
+        return self._model.bos_id()
 
     @cached_property
     def eos_id(self) -> int:
         r"""The end of sentence token id."""
-        return self._model.eos_id()  # type: ignore
+        return self._model.eos_id()
 
     def is_special(self, token: int | np.integer | str) -> bool:
         """Return `True` if the passed `token` is a special token."""
         if isinstance(token, (int, np.integer)):
-            return self._model.IsControl(int(token))  # type: ignore
+            return self._model.IsControl(int(token))
         elif isinstance(token, str):
             token_int = self._model.piece_to_id(token)
-            return self._model.IsControl(token_int)  # type: ignore
+            return self._model.IsControl(token_int)
         else:
             raise TypeError(f"Expected int or str, got {type(token).__name__}")
 
@@ -230,7 +257,7 @@ class SentencePieceTokenizer(Tokenizer):
 
     def id_to_piece(self, token_id: int) -> str:
         r"""Convert the given token id to a token piece."""
-        return self._model.id_to_piece(token_id)  # type: ignore
+        return self._model.id_to_piece(token_id)
 
     def _decode_with_special_tokens(self, tokens: list[int], special_token_policy: SpecialTokenPolicy) -> str:
         text_list = []
@@ -262,12 +289,12 @@ class SentencePieceTokenizer(Tokenizer):
     @property
     def pad_id(self) -> int:
         r"""The padding token id."""
-        return self._model.pad_id()  # type: ignore
+        return self._model.pad_id()
 
     @property
     def unk_id(self) -> int:
         r"""The unknown token id."""
-        return self._model.unk_id()  # type: ignore
+        return self._model.unk_id()
 
 
 def is_sentencepiece_tokenizer(tokenizer: Tokenizer) -> TypeGuard[SentencePieceTokenizer]:
