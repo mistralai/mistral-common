@@ -150,30 +150,17 @@ mistral-common/
 - Aim for high, meaningful coverage. Prioritise tests that verify behaviour over hitting a line-count target.
 - New and changed code should be covered by tests.
 - Avoid coverage-only comments. Prefer restructuring so branches are genuinely reachable and tested (e.g. validate inputs and test the error path) over excluding lines.
-- Retain existing local `pytest-cov`, coverage.py, and diff-cover workflows and the unit-only CI coverage output unchanged. The unit-only percentage is not an authoritative whole-suite signal.
-- Defer combined coverage measurement, thresholds, baselines, historical comparisons, and the 90% aspiration until the test architecture stabilises. Do not distort production design or behavior to improve a coverage number.
 
 ### Test Suite Modernization
 
-#### Layout and classification
-- New tests belong under `tests/unit/`, `tests/integration/`, `tests/utils/`, or `tests/utils_tests/`. Unit tests mirror the source package structure; integration tests follow public workflows rather than private implementation boundaries.
-- During migration, `tests/integrations/` and `tests/integration/` are both integration roots. Legacy tests outside those roots remain in the unit lane until they move to a target path. A test move must preserve its existing coverage atomically; no test ID may disappear or be collected by both lanes.
-- Unit tests are hermetic and exercise one module or a narrowly bounded unit with controlled inputs. Integration tests exercise public multi-module workflows with real artifacts and resources appropriate to that workflow.
-- Split test packages by behavior and ownership, not by arbitrary file size. Group related tests by class or function, and use source-mirroring paths for unit tests. There is no numeric file-size limit; split a file when its behavior or ownership becomes unclear.
-
-#### Test cases, fixtures, and compatibility
-- Parametrization IDs describe the semantic feature, input, or version under test. Use complete compatible feature and version matrices; do not omit supported combinations merely to shorten a run.
-- Error tests assert the exact exception type and stable message or error details that form part of the contract.
-- Fixtures own data at the nearest scope that uses it. Return fresh mutable values for each test. Use session-scoped fixtures only for expensive immutable resources, and promote a fixture to a broader scope after real reuse justifies it.
-
-#### Parallel execution
-- Both unit and integration lanes are required for every supported Python version and must run with `pytest-xdist` using its default `load` distribution. Keep xdist activation explicit for those suites rather than making every pytest invocation parallel by default.
-- Serial and parallel collection must be deterministic and produce identical test IDs. A collection mismatch or timeout blocks the lane and must be diagnosed and fixed; do not mask it with ordering, sleeps, or broad serialization.
-- Add a serial or grouped exception only after reproducing and documenting a process-safety failure. Do not add ordering constraints, sleeps, serial markers, or shared global state to make parallel tests pass.
-
-#### Migration and production behavior
-- Replace legacy test behavior atomically while retaining coverage and observable behavior. Do not combine test-path migration with an unrelated production defect fix.
-- Production defects found during migration require a separate PR with a characterized test that records the existing behavior before the production change.
+- Unit tests belong under `tests/unit/` and mirror the source package structure. Integration tests belong under `tests/integration/` and exercise public multi-module workflows with real artifacts; the current `tests/integrations/` path remains an integration lane during migration. Other existing test paths are legacy and are removed as migration completes.
+- Unit tests are hermetic; integration tests use realistic public workflows. Split test packages by behavior or ownership, not by an arbitrary line count.
+- Group related tests by production class or function. Use semantic IDs only for parametrized cases; clear test and class names are sufficient otherwise.
+- Use fresh mutable fixtures at the narrowest useful scope. Broader scopes are reserved for expensive immutable resources with real reuse.
+- Error tests assert the exact exception type and stable message or error details.
+- Unit and integration lanes run with `pytest-xdist` using default `load` distribution. Serial and grouped exceptions require a reproduced process-safety failure.
+- Serial and parallel collection must produce identical test IDs. Diagnose collection mismatches and timeouts; do not mask them with sleeps or broad serialization.
+- Replace legacy tests atomically. Keep production fixes in separate PRs with characterization tests.
 
 ## Development Workflow
 
