@@ -1,33 +1,11 @@
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
-from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenizer
 from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
-
-if TYPE_CHECKING:
-    from mistral_common.tokens.tokenizers.sentencepiece import _SentencePieceModel
-
-
-def _exercise_sentencepiece_model(
-    model: "_SentencePieceModel",
-) -> tuple[int, int, str, bool, list[int], str, int, int, int, int, int]:
-    return (
-        model.piece_to_id(piece="<s>"),
-        model.vocab_size(),
-        model.id_to_piece(piece_id=0),
-        model.IsControl(token=0),
-        model.encode(input="text"),
-        model.decode(tokens=[0]),
-        model.get_piece_size(),
-        model.bos_id(),
-        model.eos_id(),
-        model.pad_id(),
-        model.unk_id(),
-    )
 
 
 @pytest.fixture(scope="module")
@@ -40,6 +18,19 @@ def tokenizer_v7() -> SentencePieceTokenizer:
         / "mistral_instruct_tokenizer_241114.model.v7"
     )
     return SentencePieceTokenizer(model_path=_model_path)
+
+
+def test_sentencepiece_tokenizer_matches_tokenizer_contract(tokenizer_v7: SentencePieceTokenizer) -> None:
+    tokenizer: Tokenizer = tokenizer_v7
+    vocab = tokenizer.vocab()
+
+    assert tokenizer.n_words == len(vocab)
+    assert vocab[tokenizer.bos_id] == "<s>"
+    assert vocab[tokenizer.eos_id] == "</s>"
+    assert tokenizer.get_special_token("<s>") == tokenizer.bos_id
+    assert tokenizer.get_special_token("</s>") == tokenizer.eos_id
+    assert tokenizer.id_to_piece(tokenizer.unk_id) == "<unk>"
+    assert tokenizer.pad_id == -1
 
 
 @pytest.mark.parametrize(
