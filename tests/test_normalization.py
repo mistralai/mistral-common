@@ -778,6 +778,28 @@ class TestFineTuningNormalizer:
         assert isinstance(result, CustomInstructRequest)
         assert result.system_prompt == "set by custom init"
 
+    def test_configured_request_constructor_preserves_static_type(self) -> None:
+        normalizer: InstructRequestNormalizer[
+            UserMessage,
+            AssistantMessage,
+            ToolMessage,
+            SystemMessage,
+            CustomInstructRequest,
+        ] = InstructRequestNormalizer(
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, CustomInstructRequest, None
+        )
+
+        result = normalizer._instruct_request_class(
+            messages=[UserMessage(content="a")],
+            system_prompt=None,
+            available_tools=None,
+            continue_final_message=False,
+            settings=ModelSettings.none(),
+        )
+
+        assert_type(result, CustomInstructRequest)
+        assert result.system_prompt == "set by custom init"
+
 
 class TestChatCompletionRequestNormalizationV13:
     @pytest.fixture(autouse=True)

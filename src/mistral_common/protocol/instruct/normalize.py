@@ -1,6 +1,6 @@
 import json
 import warnings
-from typing import Generic, Sequence, cast
+from typing import Generic, Sequence
 
 from typing_extensions import assert_never
 
@@ -201,14 +201,11 @@ class InstructRequestNormalizer(
         Returns:
             The configured instruct request.
         """
-        return cast(
-            InstructRequestType,
-            self._instruct_request_class(
-                messages=messages,
-                system_prompt=system_prompt,
-                available_tools=request.tools,
-                settings=settings,
-            ),
+        return self._instruct_request_class(
+            messages=messages,
+            system_prompt=system_prompt,
+            available_tools=request.tools,
+            settings=settings,
         )
 
     def _normalize_json_content(self, content: str | None) -> str:
