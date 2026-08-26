@@ -70,29 +70,6 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
 
     if TYPE_CHECKING:
 
-        @overload
-        def encode_user_message(
-            self,
-            message: UserMessage,
-            available_tools: list[Tool] | None,
-            is_last: bool,
-            is_first: bool,
-            system_prompt: str | None = None,
-            force_img_first: bool = False,
-        ) -> tuple[list[int], list[np.ndarray], list[Audio]]: ...
-
-        @overload
-        def encode_user_message(
-            self,
-            message: UserMessage,
-            available_tools: list[Tool] | None,
-            is_last: bool,
-            is_first: bool,
-            system_prompt: str | None = None,
-            force_img_first: bool = False,
-            settings: ModelSettings = ModelSettings.none(),
-        ) -> tuple[list[int], list[np.ndarray], list[Audio]]: ...
-
         def encode_user_message(
             self,
             message: UserMessage,

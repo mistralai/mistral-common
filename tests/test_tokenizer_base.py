@@ -1,3 +1,4 @@
+import inspect
 import pickle
 import warnings
 from typing import Any
@@ -46,6 +47,13 @@ def test_special_token_policy_backward_compatibility() -> None:
 @pytest.mark.parametrize("tokenizer_type", GENERIC_TOKENIZER_TYPES)
 def test_generic_tokenizer_types_have_three_parameters(tokenizer_type: type[Any]) -> None:
     assert len(getattr(tokenizer_type, "__parameters__", ())) == 3
+
+
+def test_instruct_tokenizer_runtime_contract_has_no_extended_methods() -> None:
+    parameters = inspect.signature(InstructTokenizer.encode_user_message).parameters
+
+    assert "settings" not in parameters
+    assert not hasattr(InstructTokenizer, "encode_system_message")
 
 
 def _get_mistral_instruct_tokenizer(
