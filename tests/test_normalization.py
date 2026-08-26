@@ -1,7 +1,10 @@
 import json
+from pathlib import Path
+from typing import assert_type
 
 import pytest
 
+from mistral_common.protocol.instruct import normalize as normalize_module
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     ChunkTypes,
@@ -426,6 +429,12 @@ class TestChatCompletionRequestNormalization:
             ],
         )
 
+    def test_normalizer_does_not_use_broad_mypy_suppressions(self) -> None:
+        source = Path(normalize_module.__file__).read_text()
+
+        assert "type: ignore[type-var, misc]" not in source
+        assert "type: ignore[no-any-return]" not in source
+
 
 class TestChatCompletionRequestNormalizationV7:
     @pytest.fixture(autouse=True)
@@ -730,6 +739,23 @@ class TestFineTuningNormalizer:
         )
         normalized = normalizer.from_chat_completion_request(request)
         assert normalized == expected
+
+    def test_return_type_matches_configured_request_class(self) -> None:
+        normalizer: InstructRequestNormalizer[
+            UserMessage,
+            FinetuningAssistantMessage,
+            ToolMessage,
+            SystemMessage,
+            InstructRequest[FinetuningMessage, Tool],
+        ] = InstructRequestNormalizer(
+            UserMessage, FinetuningAssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
+        )
+        request = ChatCompletionRequest[FinetuningMessage](messages=[UserMessage(content="a")])
+
+        result = normalizer.from_chat_completion_request(request)
+
+        assert_type(result, InstructRequest[FinetuningMessage, Tool])
+        assert result == InstructRequest[FinetuningMessage, Tool](messages=[UserMessage(content="a")])
 
 
 class TestChatCompletionRequestNormalizationV13:

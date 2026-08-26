@@ -384,7 +384,11 @@ class InstructRequestNormalizer(
         )
 
 
-class InstructRequestNormalizerV7(InstructRequestNormalizer):
+class InstructRequestNormalizerV7(
+    InstructRequestNormalizer[
+        UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType, InstructRequestType
+    ]
+):
     r"""Normalizer for the v7 tokenizer.
 
     Examples:
@@ -460,7 +464,7 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
     def _aggregate_system_prompts(self, messages: list[UATS]) -> str | None:
         raise NotImplementedError("We should not aggregate system prompts")
 
-    def from_chat_completion_request(self, request: ChatCompletionRequest[UATS]) -> InstructRequestType:  # type: ignore[type-var, misc]
+    def from_chat_completion_request(self, request: ChatCompletionRequest[UATS]) -> InstructRequestType:
         r"""Converts a chat completion request to an instruct request.
 
         Args:
@@ -484,15 +488,30 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
         settings = self.build_settings(request)
         if settings != ModelSettings.none():
             raise InvalidRequestException(f"Model settings are not supported for {type(self).__name__}, got {settings}")
+<<<<<<< HEAD
         return self._instruct_request_class(  # type: ignore[no-any-return]
             messages=messages,
             system_prompt=None,
             available_tools=request.tools,
             settings=settings,
+=======
+        return self._instruct_request_class.model_validate(
+            {
+                "messages": messages,
+                "system_prompt": None,
+                "available_tools": request.tools,
+                "continue_final_message": request.continue_final_message,
+                "settings": settings,
+            }
+>>>>>>> a2d85a1 (refactor: tighten normalizer typing)
         )
 
 
-class InstructRequestNormalizerV13(InstructRequestNormalizerV7):
+class InstructRequestNormalizerV13(
+    InstructRequestNormalizerV7[
+        UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType, InstructRequestType
+    ]
+):
     r"""Normalizer for the v13 tokenizer.
 
     It reorders tool messages based on the tool call order.
@@ -540,7 +559,11 @@ class InstructRequestNormalizerV13(InstructRequestNormalizerV7):
         return tool_messages
 
 
-class InstructRequestNormalizerV15(InstructRequestNormalizerV13):
+class InstructRequestNormalizerV15(
+    InstructRequestNormalizerV13[
+        UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType, InstructRequestType
+    ]
+):
     r"""Normalizer for the v15 tokenizer.
 
     It reorders tool messages based on the tool call order and builds model settings.
@@ -598,7 +621,7 @@ class InstructRequestNormalizerV15(InstructRequestNormalizerV13):
             raise InvalidRequestException(f"model_settings_builder must not be None for {type(self).__name__}")
         return self._model_settings_builder.build_settings(request)
 
-    def from_chat_completion_request(self, request: ChatCompletionRequest[UATS]) -> InstructRequestType:  # type: ignore[type-var, misc]
+    def from_chat_completion_request(self, request: ChatCompletionRequest[UATS]) -> InstructRequestType:
         r"""Converts a chat completion request to an instruct request.
 
         Args:
@@ -609,11 +632,22 @@ class InstructRequestNormalizerV15(InstructRequestNormalizerV13):
         """
         messages = self._aggregate_messages(request.messages)
         settings = self.build_settings(request)
+<<<<<<< HEAD
         return self._instruct_request_class(  # type: ignore[no-any-return]
             messages=messages,
             system_prompt=None,
             available_tools=request.tools,
             settings=settings,
+=======
+        return self._instruct_request_class.model_validate(
+            {
+                "messages": messages,
+                "system_prompt": None,
+                "available_tools": request.tools,
+                "continue_final_message": request.continue_final_message,
+                "settings": settings,
+            }
+>>>>>>> a2d85a1 (refactor: tighten normalizer typing)
         )
 
 
