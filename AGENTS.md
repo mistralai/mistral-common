@@ -156,11 +156,10 @@ mistral-common/
 - Unit tests belong under `tests/unit/` and mirror the source package structure. Integration tests belong under `tests/integration/` and exercise public multi-module workflows with real artifacts; the current `tests/integrations/` path remains an integration lane during migration. Other existing test paths are legacy and are removed as migration completes.
 - Unit tests are hermetic; integration tests use realistic public workflows. Split test packages by behavior or ownership, not by an arbitrary line count.
 - Group related tests by production class or function. Use semantic IDs only for parametrized cases; clear test and class names are sufficient otherwise.
-- Use fresh mutable fixtures at the narrowest useful scope. Broader scopes are reserved for expensive immutable resources with real reuse.
+- Use the broadest safe fixture scope. Share immutable reusable resources broadly; keep mutable or stateful fixtures narrower when mutation could leak between tests.
 - Error tests assert the exact exception type and stable message or error details.
 - Unit and integration lanes run with `pytest-xdist` using default `load` distribution. Serial and grouped exceptions require a reproduced process-safety failure.
 - Serial and parallel collection must produce identical test IDs. Diagnose collection mismatches and timeouts; do not mask them with sleeps or broad serialization.
-- Replace legacy tests atomically. Keep production fixes in separate PRs with characterization tests.
 
 ## Development Workflow
 
