@@ -168,6 +168,7 @@ mistral-common/
 
 #### Parallel execution
 - Both unit and integration lanes are required for every supported Python version and must run with `pytest-xdist` using its default `load` distribution. Keep xdist activation explicit for those suites rather than making every pytest invocation parallel by default.
+- Serial and parallel collection must be deterministic and produce identical test IDs. A collection mismatch or timeout blocks the lane and must be diagnosed and fixed; do not mask it with ordering, sleeps, or broad serialization.
 - Add a serial or grouped exception only after reproducing and documenting a process-safety failure. Do not add ordering constraints, sleeps, serial markers, or shared global state to make parallel tests pass.
 
 #### Migration and production behavior
