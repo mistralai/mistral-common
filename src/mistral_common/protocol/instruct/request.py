@@ -304,6 +304,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         converted_tools = convert_openai_tools(tools) if tools is not None else None
 
         return cls(
+            # Pydantic cannot express the runtime-selected request class's message generic here.
             messages=converted_messages,  # type: ignore[arg-type]
             tools=converted_tools,
             random_seed=random_seed,
