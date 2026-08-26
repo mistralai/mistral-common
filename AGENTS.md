@@ -153,7 +153,7 @@ mistral-common/
 
 ### Test Suite Modernization
 
-- Unit tests belong under `tests/unit/` and mirror the source package structure. Integration tests belong under `tests/integration/` and exercise public multi-module workflows with real artifacts; the current `tests/integrations/` path remains an integration lane during migration. Other existing test paths are legacy and are removed as migration completes.
+- Unit tests belong under `tests/unit/` and mirror the source package structure. Integration tests belong under `tests/integration/` and exercise public multi-module workflows with real artifacts. Other existing test paths, including the current `tests/integrations/` path, are legacy and are removed as migration completes; update CI in the same PR when moving that path.
 - Unit tests are hermetic; integration tests use realistic public workflows. Split test packages by behavior or ownership, not by an arbitrary line count.
 - Group related tests by production class or function. Use semantic IDs only for parametrized cases; clear test and class names are sufficient otherwise.
 - Use the broadest safe fixture scope. Share immutable reusable resources broadly; keep mutable or stateful fixtures narrower when mutation could leak between tests.

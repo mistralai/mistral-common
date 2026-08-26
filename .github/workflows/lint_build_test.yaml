@@ -123,14 +123,4 @@ jobs:
 
       - name: Integration Tests
         run: |
-          integration_roots=()
-          for root in tests/integrations tests/integration; do
-            if [[ -d "$root" ]]; then
-              integration_roots+=("$root")
-            fi
-          done
-          if ((${#integration_roots[@]} == 0)); then
-            echo "No integration test root found: expected tests/integrations or tests/integration." >&2
-            exit 1
-          fi
-          uv run --no-sync pytest "${integration_roots[@]}" -n auto --dist load -v
+          uv run --no-sync pytest tests/integrations/ -n auto --dist load -v
