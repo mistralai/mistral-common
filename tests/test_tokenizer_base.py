@@ -1,4 +1,3 @@
-import inspect
 import pickle
 import warnings
 from typing import Any
@@ -13,7 +12,7 @@ from mistral_common.protocol.instruct.messages import (
     ToolMessage,
     UserMessage,
 )
-from mistral_common.protocol.instruct.request import InstructRequest
+from mistral_common.protocol.instruct.request import InstructRequest, ModelSettings
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, SpecialTokenPolicy, Tokenized
 from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerBase,
@@ -49,17 +48,23 @@ def test_generic_tokenizer_types_have_three_parameters(tokenizer_type: type[Any]
     assert len(getattr(tokenizer_type, "__parameters__", ())) == 3
 
 
-def test_instruct_tokenizer_abstract_contract_has_no_extra_methods_or_parameters() -> None:
-    parameters = inspect.signature(InstructTokenizer.encode_user_message).parameters
-
-    assert "settings" not in parameters
-    assert not hasattr(InstructTokenizer, "encode_system_message")
-
-
 def _get_mistral_instruct_tokenizer(
     tokenizer: MistralTokenizer[UserMessage, AssistantMessage, ToolMessage, SystemMessage, Tokenized],
 ) -> InstructTokenizer[InstructRequest, FIMRequest, Tokenized]:
     return tokenizer.instruct_tokenizer
+
+
+def _check_instruct_tokenizer_extended_static_contract(tokenizer: InstructTokenizerBase) -> None:
+    tokenizer.encode_user_message(
+        message=UserMessage(content=""),
+        available_tools=None,
+        is_last=True,
+        is_first=True,
+        system_prompt=None,
+        force_img_first=False,
+        settings=ModelSettings.none(),
+    )
+    tokenizer.encode_system_message(SystemMessage(content=""))
 
 
 def test_mistral_tokenizer_wires_three_parameter_instruct_tokenizer() -> None:
