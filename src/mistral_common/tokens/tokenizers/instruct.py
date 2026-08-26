@@ -1,7 +1,7 @@
 import json
 import warnings
 from abc import abstractmethod
-from typing import Any, Generic, Sequence, overload
+from typing import Any, Generic, Protocol, Sequence, cast, overload
 
 import numpy as np
 
@@ -45,6 +45,21 @@ from mistral_common.tokens.tokenizers.base import (
 )
 from mistral_common.tokens.tokenizers.image import ImageEncoder
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
+
+
+class _InstructTokenizerRuntime(Protocol):
+    def encode_user_message(
+        self,
+        message: UserMessage,
+        available_tools: list[Tool] | None,
+        is_last: bool,
+        is_first: bool,
+        system_prompt: str | None,
+        force_img_first: bool,
+        settings: ModelSettings,
+    ) -> tuple[list[int], list[np.ndarray], list[Audio]]: ...
+
+    def encode_system_message(self, message: SystemMessage) -> tuple[list[int], list[Audio]]: ...
 
 
 class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMRequestType, TokenizedType]):
@@ -165,9 +180,10 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
 
         # find last user message
         first_user_idx, last_user_idx = self.find_first_last_user(request)
+        runtime = cast(_InstructTokenizerRuntime, self)
         for msg_idx, msg in enumerate(request.messages):
             if isinstance(msg, UserMessage):
-                new_tokens, new_images, new_audios = self.encode_user_message(
+                new_tokens, new_images, new_audios = runtime.encode_user_message(
                     msg,
                     request.available_tools,
                     msg_idx == last_user_idx,
@@ -190,7 +206,7 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
                     assert msg_idx == len(request.messages) - 1
                     prefix_ids = new_tokens
             elif isinstance(msg, SystemMessage):
-                new_tokens, new_audios = self.encode_system_message(msg)
+                new_tokens, new_audios = runtime.encode_system_message(msg)
                 audios.extend(new_audios)
             else:
                 raise TokenizerException(f"Unknown message type {type(msg)}")

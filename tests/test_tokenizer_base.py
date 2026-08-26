@@ -1,14 +1,36 @@
+import inspect
 import pickle
 import warnings
+from typing import Any
 
 import pytest
 
 import mistral_common.deprecation
-from mistral_common.protocol.instruct.messages import UserMessage
+from mistral_common.protocol.fim.request import FIMRequest
+from mistral_common.protocol.instruct.messages import (
+    AssistantMessage,
+    SystemMessage,
+    ToolMessage,
+    UserMessage,
+)
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, SpecialTokenPolicy, Tokenized
+from mistral_common.tokens.tokenizers.instruct import (
+    InstructTokenizerBase,
+    InstructTokenizerV1,
+    InstructTokenizerV2,
+    InstructTokenizerV3,
+)
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.utils import decode_keep
+
+GENERIC_TOKENIZER_TYPES: tuple[type[Any], ...] = (
+    InstructTokenizer,
+    InstructTokenizerBase,
+    InstructTokenizerV1,
+    InstructTokenizerV2,
+    InstructTokenizerV3,
+)
 
 
 def test_special_token_policy_backward_compatibility() -> None:
@@ -22,8 +44,28 @@ def test_special_token_policy_backward_compatibility() -> None:
         SpecialTokenPolicy("invalid")
 
 
-def test_instruct_tokenizer_has_three_generic_parameters() -> None:
-    assert len(getattr(InstructTokenizer, "__parameters__", ())) == 3
+@pytest.mark.parametrize("tokenizer_type", GENERIC_TOKENIZER_TYPES)
+def test_generic_tokenizer_types_have_three_parameters(tokenizer_type: type[Any]) -> None:
+    assert len(getattr(tokenizer_type, "__parameters__", ())) == 3
+
+
+def test_instruct_tokenizer_abstract_contract_has_no_extra_methods_or_parameters() -> None:
+    parameters = inspect.signature(InstructTokenizer.encode_user_message).parameters
+
+    assert "settings" not in parameters
+    assert not hasattr(InstructTokenizer, "encode_system_message")
+
+
+def _get_mistral_instruct_tokenizer(
+    tokenizer: MistralTokenizer[UserMessage, AssistantMessage, ToolMessage, SystemMessage, Tokenized],
+) -> InstructTokenizer[InstructRequest, FIMRequest, Tokenized]:
+    return tokenizer.instruct_tokenizer
+
+
+def test_mistral_tokenizer_wires_three_parameter_instruct_tokenizer() -> None:
+    instruct_tokenizer = _get_mistral_instruct_tokenizer(MistralTokenizer.v3())
+
+    assert isinstance(instruct_tokenizer, InstructTokenizer)
 
 
 @pytest.fixture(autouse=True)
