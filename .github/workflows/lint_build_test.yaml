@@ -69,7 +69,7 @@ jobs:
       # PyTest
       - name: Tests
         run: |
-          uv run pytest --cov=mistral_common tests/ --ignore=tests/integrations --ignore=tests/integration -n auto --dist load --cov-report "xml:coverage.xml"
+          uv run pytest --cov=mistral_common tests/ --ignore=tests/integrations --ignore=tests/integration -n auto --dist loadfile --cov-report "xml:coverage.xml"
       
       # Doctests
       - name: Doctests
@@ -123,4 +123,4 @@ jobs:
 
       - name: Integration Tests
         run: |
-          uv run --no-sync pytest tests/integrations/ -n auto --dist load -v
+          uv run --no-sync pytest tests/integrations/ -n auto --dist loadfile -v

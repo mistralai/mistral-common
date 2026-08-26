@@ -158,7 +158,7 @@ mistral-common/
 - Group related tests by production class or function. Use semantic IDs only for parametrized cases; clear test and class names are sufficient otherwise.
 - Use the broadest safe fixture scope. Share immutable reusable resources broadly; keep mutable or stateful fixtures narrower when mutation could leak between tests.
 - Error tests assert the exact exception type and stable message or error details.
-- Unit and integration lanes run with `pytest-xdist` using default `load` distribution. Serial and grouped exceptions require a reproduced process-safety failure.
+- Unit and integration lanes run with `pytest-xdist` using `loadfile` distribution so each test file stays on one worker. Serial and grouped exceptions require a reproduced process-safety failure.
 - Serial and parallel collection must produce identical test IDs. Diagnose collection mismatches and timeouts; do not mask them with sleeps or broad serialization.
 
 ## Development Workflow
