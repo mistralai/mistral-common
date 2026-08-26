@@ -118,7 +118,7 @@ class MistralTokenizer(
 
     def __init__(
         self,
-        instruct_tokenizer: InstructTokenizer[InstructRequest, FIMRequest, TokenizedType, AssistantMessageType],
+        instruct_tokenizer: InstructTokenizer[InstructRequest, FIMRequest, TokenizedType],
         validator: MistralRequestValidator[UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType],
         request_normalizer: InstructRequestNormalizer[
             UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType, InstructRequestType
@@ -133,9 +133,7 @@ class MistralTokenizer(
         """
         self._chat_completion_request_validator = validator
         self._instruct_request_normalizer = request_normalizer
-        self.instruct_tokenizer: InstructTokenizer[InstructRequest, FIMRequest, TokenizedType, AssistantMessageType] = (
-            instruct_tokenizer
-        )
+        self.instruct_tokenizer: InstructTokenizer[InstructRequest, FIMRequest, TokenizedType] = instruct_tokenizer
 
     def __reduce__(self) -> tuple[Callable, tuple[Any, ...]]:
         """

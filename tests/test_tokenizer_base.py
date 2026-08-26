@@ -22,6 +22,10 @@ def test_special_token_policy_backward_compatibility() -> None:
         SpecialTokenPolicy("invalid")
 
 
+def test_instruct_tokenizer_has_three_generic_parameters() -> None:
+    assert len(getattr(InstructTokenizer, "__parameters__", ())) == 3
+
+
 @pytest.fixture(autouse=True)
 def _clear_text_tokenized_warning() -> None:
     mistral_common.deprecation._warned_keys.discard("Tokenized.text")
