@@ -1,6 +1,6 @@
 import json
 import warnings
-from typing import Generic, Sequence
+from typing import Generic, Sequence, cast
 
 from typing_extensions import assert_never
 
@@ -181,6 +181,35 @@ class InstructRequestNormalizer(
                 f"model_settings_builder should be None for {type(self).__name__}, got {self._model_settings_builder}"
             )
         return ModelSettings.none()
+
+    def _build_instruct_request(
+        self,
+        *,
+        messages: list[UATS],
+        system_prompt: str | None,
+        request: ChatCompletionRequest[UATS],
+        settings: ModelSettings,
+    ) -> InstructRequestType:
+        r"""Construct the configured instruct request class.
+
+        Args:
+            messages: The normalized messages.
+            system_prompt: The normalized system prompt.
+            request: The source chat completion request.
+            settings: The model settings.
+
+        Returns:
+            The configured instruct request.
+        """
+        return cast(
+            InstructRequestType,
+            self._instruct_request_class(
+                messages=messages,
+                system_prompt=system_prompt,
+                available_tools=request.tools,
+                settings=settings,
+            ),
+        )
 
     def _normalize_json_content(self, content: str | None) -> str:
         if content is None or len(content) == 0:
@@ -376,10 +405,10 @@ class InstructRequestNormalizer(
         if settings != ModelSettings.none():
             raise InvalidRequestException(f"Model settings are not supported for {type(self).__name__}, got {settings}")
 
-        return self._instruct_request_class(
+        return self._build_instruct_request(
             messages=messages,
             system_prompt=system_prompt,
-            available_tools=request.tools,
+            request=request,
             settings=settings,
         )
 
@@ -488,22 +517,11 @@ class InstructRequestNormalizerV7(
         settings = self.build_settings(request)
         if settings != ModelSettings.none():
             raise InvalidRequestException(f"Model settings are not supported for {type(self).__name__}, got {settings}")
-<<<<<<< HEAD
-        return self._instruct_request_class(  # type: ignore[no-any-return]
+        return self._build_instruct_request(
             messages=messages,
             system_prompt=None,
-            available_tools=request.tools,
+            request=request,
             settings=settings,
-=======
-        return self._instruct_request_class.model_validate(
-            {
-                "messages": messages,
-                "system_prompt": None,
-                "available_tools": request.tools,
-                "continue_final_message": request.continue_final_message,
-                "settings": settings,
-            }
->>>>>>> a2d85a1 (refactor: tighten normalizer typing)
         )
 
 
@@ -632,22 +650,11 @@ class InstructRequestNormalizerV15(
         """
         messages = self._aggregate_messages(request.messages)
         settings = self.build_settings(request)
-<<<<<<< HEAD
-        return self._instruct_request_class(  # type: ignore[no-any-return]
+        return self._build_instruct_request(
             messages=messages,
             system_prompt=None,
-            available_tools=request.tools,
+            request=request,
             settings=settings,
-=======
-        return self._instruct_request_class.model_validate(
-            {
-                "messages": messages,
-                "system_prompt": None,
-                "available_tools": request.tools,
-                "continue_final_message": request.continue_final_message,
-                "settings": settings,
-            }
->>>>>>> a2d85a1 (refactor: tighten normalizer typing)
         )
 
 
