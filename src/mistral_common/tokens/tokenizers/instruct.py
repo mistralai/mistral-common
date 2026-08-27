@@ -1,7 +1,7 @@
 import json
 import warnings
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, Generic, Sequence, overload
+from typing import Any, Generic, Sequence, overload
 
 import numpy as np
 
@@ -67,21 +67,6 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
         self.image_encoder = image_encoder
         self.audio_encoder = audio_encoder
         super().__init__(tokenizer, image_encoder, audio_encoder)
-
-    if TYPE_CHECKING:
-
-        def encode_user_message(
-            self,
-            message: UserMessage,
-            available_tools: list[Tool] | None,
-            is_last: bool,
-            is_first: bool,
-            system_prompt: str | None = None,
-            force_img_first: bool = False,
-            settings: ModelSettings = ModelSettings.none(),
-        ) -> tuple[list[int], list[np.ndarray], list[Audio]]: ...
-
-        def encode_system_message(self, message: SystemMessage) -> tuple[list[int], list[Audio]]: ...
 
     @property
     def mm_encoder(self) -> ImageEncoder | None:
