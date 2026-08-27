@@ -1,3 +1,5 @@
+from typing import get_type_hints
+
 import pytest
 from pydantic import ValidationError
 
@@ -8,7 +10,17 @@ from mistral_common.protocol.instruct.request import (
     ModelSettings,
     ReasoningEffort,
 )
-from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
+from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, FieldBuilder, ModelSettingsBuilder
+
+
+def test_field_builder_distinguishes_input_and_output_types() -> None:
+    input_type, output_type = getattr(FieldBuilder, "__parameters__")
+    annotations = get_type_hints(FieldBuilder.build_value)
+
+    assert input_type != output_type
+    assert get_type_hints(FieldBuilder)["default"] == output_type | None
+    assert annotations["value"] == input_type | None
+    assert annotations["return"] == output_type | None
 
 
 class TestModelSettings:
