@@ -28,16 +28,19 @@ def get_special_tokens(
     if tokenizer_version <= TokenizerVersion.v7 and not add_audio:
         return special_tokens
 
+    # fill special tokens until 24
     special_tokens += [
         SpecialTokenInfo(rank=i, token_str=f"<SPECIAL_{i}>", is_control=True) for i in range(len(special_tokens), 24)
     ]
 
     if add_audio:
+        # add audio tokes
         special_tokens += [
             SpecialTokenInfo(rank=24, token_str=SpecialTokens.audio, is_control=True),
             SpecialTokenInfo(rank=25, token_str=SpecialTokens.begin_audio, is_control=True),
         ]
 
+    # fill special tokens until 32
     special_tokens += [
         SpecialTokenInfo(rank=i, token_str=f"<SPCECIAL_{i}>", is_control=True) for i in range(len(special_tokens), 32)
     ]
@@ -48,6 +51,7 @@ def get_special_tokens(
             SpecialTokenInfo(rank=33, token_str=SpecialTokens.call_id, is_control=True),
         ]
 
+    # fill special tokens until 34
     special_tokens += [
         SpecialTokenInfo(rank=i, token_str=f"<SPCECIAL_{i}>", is_control=True) for i in range(len(special_tokens), 34)
     ]
@@ -73,6 +77,7 @@ def get_special_tokens(
         ]
 
     if tokenizer_version >= TokenizerVersion.v15:
+        # fill until rank 37
         special_tokens += [
             SpecialTokenInfo(rank=i, token_str=f"<SPCECIAL_{i}>", is_control=True)
             for i in range(len(special_tokens), 37)
