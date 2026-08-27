@@ -1,5 +1,3 @@
-from typing import get_type_hints
-
 import pytest
 from pydantic import ValidationError
 
@@ -10,17 +8,36 @@ from mistral_common.protocol.instruct.request import (
     ModelSettings,
     ReasoningEffort,
 )
-from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, FieldBuilder, ModelSettingsBuilder
+from mistral_common.tokens.tokenizers.model_settings_builder import (
+    EnumBuilder,
+    FieldBuilder,
+    ModelSettingsBuilder,
+    ValidatorType,
+)
 
 
-def test_field_builder_distinguishes_input_and_output_types() -> None:
-    input_type, output_type = getattr(FieldBuilder, "__parameters__")
-    annotations = get_type_hints(FieldBuilder.build_value)
+class StringToIntBuilder(FieldBuilder[str, int]):
+    type: ValidatorType = ValidatorType.ENUM
+    accepts_none: bool = False
+    default: int | None = None
 
-    assert input_type != output_type
-    assert get_type_hints(FieldBuilder)["default"] == output_type | None
-    assert annotations["value"] == input_type | None
-    assert annotations["return"] == output_type | None
+    def _convert(self, input_value: str) -> int:
+        return int(input_value)
+
+    def _validate_built_value(self, field_name: str, value: int) -> None:
+        if value < 0:
+            raise InvalidRequestException(f"{field_name} should be non-negative.")
+
+
+def test_field_builder_converts_and_validates_output() -> None:
+    builder = StringToIntBuilder(accepts_none=False, default=None)
+
+    converted = builder.build_value(field_name="count", value="7")
+    assert converted is not None
+    assert converted + 1 == 8
+
+    with pytest.raises(InvalidRequestException, match="count should be non-negative"):
+        builder.build_value(field_name="count", value="-1")
 
 
 class TestModelSettings:

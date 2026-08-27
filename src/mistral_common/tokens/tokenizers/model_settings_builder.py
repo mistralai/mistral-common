@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Generic, TypeVar, cast, final
+from typing import Generic, TypeVar, final
 
 from pydantic import model_validator
 
@@ -52,6 +52,10 @@ class FieldBuilder(MistralBase, Generic[InputT, OutputT]):
         r"""Validate a non-None built value. Must be implemented by subclasses."""
         raise NotImplementedError(f"{field_name} is not supported")
 
+    def _convert(self, input_value: InputT) -> OutputT:
+        r"""Convert an input value into its built value."""
+        raise NotImplementedError
+
     def _build_from_optional(self, field_name: str, value: InputT | None) -> OutputT | None:
         r"""Resolve an optional value, substituting the default if value is None.
 
@@ -62,7 +66,7 @@ class FieldBuilder(MistralBase, Generic[InputT, OutputT]):
             if not self.accepts_none:
                 raise InvalidRequestException(f"{field_name} should be set for this model.")
             return self.default
-        return cast(OutputT, value)
+        return self._convert(input_value=value)
 
     @final
     def validate_built_value(self, field_name: str, value: OutputT | None) -> None:
@@ -106,6 +110,9 @@ class EnumBuilder(FieldBuilder[E, E]):
 
     type: ValidatorType = ValidatorType.ENUM
     values: list[E]
+
+    def _convert(self, input_value: E) -> E:
+        return input_value
 
     @model_validator(mode="after")
     def validate_unique_values(self) -> "EnumBuilder":
