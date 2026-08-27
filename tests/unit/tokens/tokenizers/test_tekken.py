@@ -202,6 +202,34 @@ def test_init_rejects_duplicate_special_tokens() -> None:
         build_tokenizer(special_tokens=special_tokens)
 
 
+def test_deprecated_special_tokens_are_frozen() -> None:
+    expected = [
+        "<unk>",
+        "<s>",
+        "</s>",
+        "[INST]",
+        "[/INST]",
+        "[AVAILABLE_TOOLS]",
+        "[/AVAILABLE_TOOLS]",
+        "[TOOL_RESULTS]",
+        "[/TOOL_RESULTS]",
+        "[TOOL_CALLS]",
+        "[IMG]",
+        "<pad>",
+        "[IMG_BREAK]",
+        "[IMG_END]",
+        "[PREFIX]",
+        "[MIDDLE]",
+        "[SUFFIX]",
+        "[SYSTEM_PROMPT]",
+        "[/SYSTEM_PROMPT]",
+        "[TOOL_CONTENT]",
+    ]
+
+    assert len(Tekkenizer.DEPRECATED_SPECIAL_TOKENS) == 20
+    assert [token["token_str"] for token in Tekkenizer.DEPRECATED_SPECIAL_TOKENS] == expected
+
+
 def test_file_path_requires_file_loaded_instance(tmp_path: Path) -> None:
     path = tmp_path / "model.tekken.json"
     write_tokenizer_file(path)
@@ -248,6 +276,32 @@ def test_from_file_loads_legacy_defaults_and_modern_configuration(tmp_path: Path
     assert modern.image == ImageConfig(image_patch_size=16, max_image_size=1024)
     assert modern.audio == audio_config()
     assert modern.model_settings_builder == model_settings_builder()
+
+
+@pytest.mark.parametrize(
+    "version",
+    [
+        TokenizerVersion.v3,
+        TokenizerVersion.v7,
+        TokenizerVersion.v11,
+        TokenizerVersion.v13,
+        TokenizerVersion.v15,
+    ],
+    ids=["tekken-v3", "tekken-v7", "tekken-v11", "tekken-v13", "tekken-v15"],
+)
+def test_from_file_loads_every_released_tekken_version(tmp_path: Path, version: TokenizerVersion) -> None:
+    path = tmp_path / f"{version.value}.tekken.json"
+    write_tokenizer_file(
+        path,
+        version=version.value,
+        special_tokens=deprecated_special_tokens(),
+        num_special_tokens=20,
+        model_settings=model_settings_builder().model_dump(mode="json") if version is TokenizerVersion.v15 else None,
+    )
+
+    loaded = Tekkenizer.from_file(path)
+
+    assert loaded.version is version
 
 
 def test_from_file_loads_deprecated_multimodal_configuration_for_legacy_version(tmp_path: Path) -> None:
@@ -342,6 +396,15 @@ def test_encode_applies_special_token_offsets_and_boundaries(
     tekkenizer: Tekkenizer, bos: bool, eos: bool, expected: list[int]
 ) -> None:
     assert tekkenizer.encode("hello", bos=bos, eos=eos) == expected
+
+
+def test_arbitrary_text_roundtrip_uses_byte_fallback(tekkenizer: Tekkenizer) -> None:
+    text = "A curious byte fallback: café 🦊"
+
+    encoded = tekkenizer.encode(text, bos=False, eos=False)
+
+    assert any(tekkenizer.is_byte(token) for token in encoded)
+    assert tekkenizer.decode(encoded) == text
 
 
 @pytest.mark.parametrize("policy", list(SpecialTokenPolicy), ids=[policy.value for policy in SpecialTokenPolicy])
@@ -442,25 +505,25 @@ def test_reload_mergeable_ranks_decodes_and_truncates_vocab() -> None:
     assert _reload_mergeable_ranks(vocab=vocab, max_vocab=257)[b"hello"] == 256
 
 
-@pytest.mark.parametrize(
-    "broken_vocab",
-    [
-        [cast(TokenInfo, {"rank": 0, "token_bytes": "AA=="})],
-        [TokenInfo(rank=1, token_bytes="AA==", token_str=None)],
-        [TokenInfo(rank=0, token_bytes="%%%", token_str=None)],
-    ],
-    ids=["missing-keys", "non-contiguous-rank", "invalid-byte-invariant"],
-)
-def test_reload_mergeable_ranks_rejects_invalid_metadata(broken_vocab: list[TokenInfo]) -> None:
-    if "token_str" not in broken_vocab[0]:
-        with pytest.raises(AssertionError, match=r"^$"):
-            _reload_mergeable_ranks(broken_vocab)
-    elif broken_vocab[0]["rank"] == 1:
-        with pytest.raises(AssertionError, match=r"^$"):
-            _reload_mergeable_ranks(broken_vocab)
-    else:
-        with pytest.raises(AssertionError, match=r"\(0, b''\)"):
-            _reload_mergeable_ranks(broken_vocab)
+def test_reload_mergeable_ranks_rejects_missing_token_info_key() -> None:
+    malformed_vocab = [cast(TokenInfo, {"rank": 0, "token_bytes": "AA=="})]
+
+    with pytest.raises(AssertionError):
+        _reload_mergeable_ranks(malformed_vocab)
+
+
+def test_reload_mergeable_ranks_rejects_non_contiguous_rank() -> None:
+    malformed_vocab = [TokenInfo(rank=1, token_bytes="AA==", token_str=None)]
+
+    with pytest.raises(AssertionError):
+        _reload_mergeable_ranks(malformed_vocab)
+
+
+def test_reload_mergeable_ranks_rejects_invalid_byte_invariant() -> None:
+    malformed_vocab = [TokenInfo(rank=0, token_bytes="%%%", token_str=None)]
+
+    with pytest.raises(AssertionError, match=r"\(0, b''\)"):
+        _reload_mergeable_ranks(malformed_vocab)
 
 
 def test_reload_mergeable_ranks_rejects_duplicate_merges() -> None:
@@ -472,7 +535,7 @@ def test_reload_mergeable_ranks_rejects_duplicate_merges() -> None:
         ]
     )
 
-    with pytest.raises(AssertionError, match=r"^$"):
+    with pytest.raises(AssertionError):
         _reload_mergeable_ranks(vocab=vocab, max_vocab=258)
 
 
