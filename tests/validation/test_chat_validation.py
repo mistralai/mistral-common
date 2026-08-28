@@ -188,6 +188,22 @@ class TestChatValidation:
                 continue_final_message=False,
             )
 
+    def test_ends_with_system(self, validator: MistralRequestValidator) -> None:
+        with pytest.raises(
+            InvalidMessageStructureException,
+            match=(
+                r"Expected last role User or Tool \(or Assistant with prefix or continue_final_message set to "
+                r"True\) for serving but got system"
+            ),
+        ):
+            validator.validate_messages(
+                messages=[
+                    UserMessage(content="foo"),
+                    SystemMessage(content="foo"),
+                ],
+                continue_final_message=False,
+            )
+
     def test_assistant_prefix(self, validator: MistralRequestValidator) -> None:
         validator.validate_messages(
             messages=[
