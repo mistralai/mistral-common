@@ -100,10 +100,13 @@ class TestValidateRequest:
                     continue_final_message=False,
                 )
 
-    def test_instruct_request_retains_continuation_until_migration(self) -> None:
-        request = InstructRequest(messages=[UserMessage(content="foo")], continue_final_message=True)
+    def test_instruct_request_rejects_removed_continuation_field(self) -> None:
+        request = InstructRequest(messages=[UserMessage(content="foo")])
 
-        assert request.continue_final_message is True
+        assert "continue_final_message" not in InstructRequest.model_fields
+        assert "continue_final_message" not in request.model_dump()
+        with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+            InstructRequest(messages=[UserMessage(content="foo")], continue_final_message=True)
 
     def test_legacy_invalid_value_validates_before_warning(self, clear_continue_warning: None) -> None:
         with warnings.catch_warnings():
