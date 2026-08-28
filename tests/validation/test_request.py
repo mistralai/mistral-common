@@ -1,11 +1,22 @@
+import warnings
+from collections.abc import Iterator
+
 import pytest
 from pydantic import ValidationError
 
+import mistral_common.deprecation
 from mistral_common.protocol.instruct.messages import AssistantMessage, SystemMessage, UserMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
 
 
 class TestValidateRequest:
+    @pytest.fixture
+    def clear_continue_warning(self) -> Iterator[None]:
+        key = "ChatCompletionRequest.continue_final_message"
+        mistral_common.deprecation._warned_keys.discard(key)
+        yield
+        mistral_common.deprecation._warned_keys.discard(key)
+
     @pytest.fixture
     def chat_request_raw(self) -> dict:
         return {"model": "test-model", "message": [UserMessage(content="foo")]}
@@ -22,7 +33,7 @@ class TestValidateRequest:
 
         assert request.random_seed == 0
 
-    def test_legacy_continuation_sets_final_assistant_prefix_and_warns_once(self) -> None:
+    def test_legacy_continuation_sets_final_assistant_prefix_and_warns_once(self, clear_continue_warning: None) -> None:
         raw_assistant = {"role": "assistant", "content": "bar", "prefix": False}
         raw_request = {
             "messages": [{"role": "user", "content": "foo"}, raw_assistant],
@@ -40,7 +51,6 @@ class TestValidateRequest:
         assert "continue_final_message" not in request.model_dump()
         assert raw_assistant["prefix"] is False
         assert raw_request["continue_final_message"] is True
-        assert "continue_final_message" not in InstructRequest.model_fields
 
     def test_legacy_false_preserves_existing_assistant_prefix(self) -> None:
         assistant = AssistantMessage(content="bar", prefix=True)
@@ -85,3 +95,17 @@ class TestValidateRequest:
                 messages=[{"role": "assistant", "content": "bar", "prefix": "invalid"}],
                 continue_final_message=False,
             )
+
+    def test_instruct_request_retains_continuation_until_migration(self) -> None:
+        request = InstructRequest(messages=[UserMessage(content="foo")], continue_final_message=True)
+
+        assert request.continue_final_message is True
+
+    def test_legacy_invalid_value_validates_before_warning(self, clear_continue_warning: None) -> None:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            with pytest.raises(ValidationError, match="valid boolean"):
+                ChatCompletionRequest(
+                    messages=[UserMessage(content="foo")],
+                    continue_final_message="not-a-bool",
+                )

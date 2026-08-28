@@ -157,6 +157,8 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         if not isinstance(values, dict) or _CONTINUE_FINAL_MESSAGE_KEY not in values:
             return values
 
+        copied_values = dict(values)
+        continue_final_message = _coerce_continue_final_message(copied_values.pop(_CONTINUE_FINAL_MESSAGE_KEY))
         warn_once(
             key=_CONTINUE_FINAL_MESSAGE_WARNING_KEY,
             message=(
@@ -166,8 +168,6 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             category=DeprecationWarning,
             stacklevel=4,
         )
-        copied_values = dict(values)
-        continue_final_message = _coerce_continue_final_message(copied_values.pop(_CONTINUE_FINAL_MESSAGE_KEY))
         messages = copied_values.get("messages")
         if isinstance(messages, list):
             copied_values["messages"] = _map_continue_final_message(
@@ -330,6 +330,7 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         system_prompt: The system prompt to be used for the conversation.
         available_tools: The tools available to the assistant.
         truncate_at_max_tokens: The maximum number of tokens to truncate the conversation at.
+        continue_final_message: Whether to continue the final message.
         settings: Model configuration settings for the request.
 
     Examples:
@@ -343,4 +344,5 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
     system_prompt: str | None = None
     available_tools: list[ToolType] | None = None
     truncate_at_max_tokens: int | None = None
+    continue_final_message: bool = False
     settings: ModelSettings = Field(default_factory=ModelSettings.none)
