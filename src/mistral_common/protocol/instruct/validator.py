@@ -417,9 +417,6 @@ class MistralRequestValidatorV3(MistralRequestValidator):
         >>> validator = MistralRequestValidatorV3()
     """
 
-    _force_tool_call_id_format: bool = True
-    _allow_null_tool_call_id: bool = True
-
     def _validate_user_content_chunks(self, content: str | Sequence[ContentChunk] | None) -> None:
         r"""v3 user messages accept text and image chunks (audio >= v7)."""
         _validate_content_chunk_types(
