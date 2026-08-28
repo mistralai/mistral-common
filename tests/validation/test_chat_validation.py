@@ -519,17 +519,37 @@ class TestChatValidationV5:
 
 
 class TestChatValidationV11:
-    def test_allows_null_tool_call_id(self) -> None:
+    @pytest.mark.parametrize("version", [TokenizerVersion.v3, TokenizerVersion.v7, TokenizerVersion.v11])
+    def test_allows_null_tool_call_id_for_last_finetuning_assistant(self, version: TokenizerVersion) -> None:
         request = ChatCompletionRequest[ChatMessage](
             messages=[
                 UserMessage(content="foo"),
                 AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="foo", arguments="{}"))]),
-                UserMessage(content="continue"),
             ]
         )
-        validator = get_validator(version=TokenizerVersion.v11, mode=ValidationMode.test)
+        validator = get_validator(version=version, mode=ValidationMode.finetuning)
 
         assert validator.validate_request(request) == request
+
+    @pytest.mark.parametrize("version", [TokenizerVersion.v3, TokenizerVersion.v7, TokenizerVersion.v11])
+    @pytest.mark.parametrize("mode", [ValidationMode.serving, ValidationMode.test])
+    def test_rejects_null_tool_call_id_outside_finetuning(
+        self, version: TokenizerVersion, mode: ValidationMode
+    ) -> None:
+        request = ChatCompletionRequest[ChatMessage](
+            messages=[
+                UserMessage(content="foo"),
+                AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="foo", arguments="{}"))]),
+                UserMessage(content="continue")
+                if mode == ValidationMode.test
+                else ToolMessage(content="result", tool_call_id="null"),
+            ],
+            model="test",
+        )
+        validator = get_validator(version=version, mode=mode)
+
+        with pytest.raises(InvalidFunctionCallException, match="Tool call id"):
+            validator.validate_request(request)
 
     @pytest.mark.parametrize("tool_call_id", ["x", "call/id-1"])
     def test_rejects_non_nine_character_alphanumeric_tool_call_id(self, tool_call_id: str) -> None:
