@@ -1,9 +1,10 @@
 from enum import Enum
 from typing import Any, Generic
 
-from pydantic import Field
+from pydantic import Field, TypeAdapter, model_validator
 
 from mistral_common.base import MistralBase
+from mistral_common.deprecation import warn_once
 from mistral_common.protocol.base import BaseCompletionRequest
 from mistral_common.protocol.instruct.converters import (
     convert_openai_messages,
@@ -16,6 +17,42 @@ from mistral_common.protocol.instruct.messages import (
     ReasoningFieldFormat,
 )
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolChoice, ToolChoiceEnum, ToolType
+
+_CONTINUE_FINAL_MESSAGE_KEY = "continue_final_message"
+_CONTINUE_FINAL_MESSAGE_WARNING_KEY = "ChatCompletionRequest.continue_final_message"
+_CONTINUE_FINAL_MESSAGE_ERROR = "continue_final_message=True requires final message to be an assistant."
+_CONTINUE_FINAL_MESSAGE_ADAPTER = TypeAdapter(bool)
+
+
+def _map_continue_final_message(messages: list[Any], continue_final_message: bool) -> list[Any]:
+    r"""Copy messages and apply continuation to the final assistant message."""
+    copied_messages = list(messages)
+    if not continue_final_message:
+        return copied_messages
+
+    if not copied_messages:
+        raise ValueError(_CONTINUE_FINAL_MESSAGE_ERROR)
+
+    final_message = copied_messages[-1]
+    if isinstance(final_message, dict):
+        if final_message.get("role") != "assistant":
+            raise ValueError(_CONTINUE_FINAL_MESSAGE_ERROR)
+        if "prefix" in final_message:
+            _CONTINUE_FINAL_MESSAGE_ADAPTER.validate_python(final_message["prefix"])
+        copied_final_message = dict(final_message)
+        copied_final_message["prefix"] = True
+        copied_messages[-1] = copied_final_message
+    elif isinstance(final_message, AssistantMessage):
+        copied_messages[-1] = final_message.model_copy(update={"prefix": True})
+    else:
+        raise ValueError(_CONTINUE_FINAL_MESSAGE_ERROR)
+
+    return copied_messages
+
+
+def _coerce_continue_final_message(value: Any) -> bool:
+    r"""Validate and coerce a legacy continuation value as a Pydantic boolean."""
+    return _CONTINUE_FINAL_MESSAGE_ADAPTER.validate_python(value)
 
 
 class ResponseFormats(str, Enum):
@@ -88,7 +125,6 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         tools: The tools to use for the chat completion.
         tool_choice: The tool choice to use for the chat completion.
         truncate_for_context_length: Whether to truncate the messages for the context length.
-        continue_final_message: Whether to continue the final message.
         reasoning_effort: Controls how much reasoning effort the model should apply.
 
     Examples:
@@ -112,8 +148,35 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     tools: list[Tool] | None = None
     tool_choice: ToolChoice = ToolChoiceEnum.auto
     truncate_for_context_length: bool = False
-    continue_final_message: bool = False
     reasoning_effort: ReasoningEffort | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _handle_legacy_continue_final_message(cls, values: Any) -> Any:
+        r"""Translate direct legacy continuation input into an assistant prefix."""
+        if not isinstance(values, dict) or _CONTINUE_FINAL_MESSAGE_KEY not in values:
+            return values
+
+        warn_once(
+            key=_CONTINUE_FINAL_MESSAGE_WARNING_KEY,
+            message=(
+                "`continue_final_message` passed directly to ChatCompletionRequest is deprecated. "
+                "Set `AssistantMessage.prefix` instead. Will be removed in 1.13.0."
+            ),
+            category=DeprecationWarning,
+            stacklevel=4,
+        )
+        copied_values = dict(values)
+        continue_final_message = _coerce_continue_final_message(copied_values.pop(_CONTINUE_FINAL_MESSAGE_KEY))
+        messages = copied_values.get("messages")
+        if isinstance(messages, list):
+            copied_values["messages"] = _map_continue_final_message(
+                messages=messages,
+                continue_final_message=continue_final_message,
+            )
+        elif continue_final_message:
+            raise ValueError(_CONTINUE_FINAL_MESSAGE_ERROR)
+        return copied_values
 
     def to_openai(
         self,
@@ -166,6 +229,13 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         seed = openai_request.pop("random_seed", None)
         if seed is not None:
             openai_request["seed"] = seed
+
+        reasoning_effort = openai_request.pop("reasoning_effort", None)
+        openai_request["continue_final_message"] = bool(
+            self.messages and isinstance(self.messages[-1], AssistantMessage) and self.messages[-1].prefix
+        )
+        if reasoning_effort is not None:
+            openai_request["reasoning_effort"] = reasoning_effort
 
         if self.truncate_for_context_length:
             raise NotImplementedError("Truncating for context length is not implemented for OpenAI requests.")
@@ -233,6 +303,10 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         filtered_kwargs = cls._filter_cls_fields(kwargs)
 
         converted_messages: list[ChatMessage] = convert_openai_messages(messages)
+        converted_messages = _map_continue_final_message(
+            messages=converted_messages,
+            continue_final_message=_coerce_continue_final_message(continue_final_message),
+        )
 
         converted_tools = convert_openai_tools(tools) if tools is not None else None
 
@@ -240,7 +314,6 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             messages=converted_messages,  # type: ignore[arg-type]
             tools=converted_tools,
             random_seed=random_seed,
-            continue_final_message=continue_final_message,
             **filtered_kwargs,
         )
 
@@ -257,7 +330,6 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         system_prompt: The system prompt to be used for the conversation.
         available_tools: The tools available to the assistant.
         truncate_at_max_tokens: The maximum number of tokens to truncate the conversation at.
-        continue_final_message: Whether to continue the final message.
         settings: Model configuration settings for the request.
 
     Examples:
@@ -271,5 +343,4 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
     system_prompt: str | None = None
     available_tools: list[ToolType] | None = None
     truncate_at_max_tokens: int | None = None
-    continue_final_message: bool = False
     settings: ModelSettings = Field(default_factory=ModelSettings.none)

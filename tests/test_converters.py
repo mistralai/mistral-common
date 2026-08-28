@@ -745,6 +745,38 @@ def test_request_to_openai_forwards_reasoning_field_format() -> None:
     assert assistant_msg == {"role": "assistant", "reasoning": "Let me think", "content": "Done"}
 
 
+def test_request_from_openai_maps_continuation_without_warning() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        request = ChatCompletionRequest.from_openai(
+            messages=[
+                {"role": "user", "content": "foo"},
+                {"role": "assistant", "content": "bar"},
+            ],
+            continue_final_message=True,
+        )
+
+    assert isinstance(request.messages[-1], AssistantMessage)
+    assert request.messages[-1].prefix is True
+
+
+@pytest.mark.parametrize(
+    ["messages", "expected"],
+    [
+        (
+            [UserMessage(content="foo"), AssistantMessage(content="bar", prefix=True)],
+            True,
+        ),
+        ([UserMessage(content="foo"), AssistantMessage(content="bar")], False),
+        ([UserMessage(content="foo")], False),
+    ],
+)
+def test_request_to_openai_derives_continuation_flag(messages: list[ChatMessage], expected: bool) -> None:
+    request = ChatCompletionRequest(messages=messages)
+
+    assert request.to_openai()["continue_final_message"] is expected
+
+
 @pytest.mark.parametrize(
     "reasoning_effort",
     [None, ReasoningEffort.none, ReasoningEffort.high],
