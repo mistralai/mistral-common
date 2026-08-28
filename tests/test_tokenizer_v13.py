@@ -1,6 +1,6 @@
 import pytest
 
-from mistral_common.exceptions import InvalidAssistantMessageException, TokenizerException
+from mistral_common.exceptions import TokenizerException
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURLChunk,
@@ -320,46 +320,19 @@ def test_encode_think_chunk(v13_tekkenizer_think: InstructTokenizerV13) -> None:
         ),
     ],
 )
-@pytest.mark.parametrize("continue_final_message", [True, False])
 def test_tokenize_assistant_message(
-    v13_tekkenizer_think: InstructTokenizerV13, message: AssistantMessage, expected: str, continue_final_message: bool
+    v13_tekkenizer_think: InstructTokenizerV13, message: AssistantMessage, expected: str
 ) -> None:
-    if not continue_final_message:
-        tokens = v13_tekkenizer_think.encode_assistant_message(
-            message, is_before_last_user_message=False, continue_message=continue_final_message
-        )
-        if not message.prefix:
-            expected += "</s>"
-    else:
-        if message.prefix:
-            with pytest.raises(
-                InvalidAssistantMessageException,
-                match="`continue_message` is only supported for assistant messages that have `prefix=False`.",
-            ):
-                v13_tekkenizer_think.encode_assistant_message(
-                    message, is_before_last_user_message=False, continue_message=continue_final_message
-                )
-            return
-        tokens = v13_tekkenizer_think.encode_assistant_message(
-            message, is_before_last_user_message=False, continue_message=continue_final_message
-        )
+    tokens = v13_tekkenizer_think.encode_assistant_message(message, is_before_last_user_message=False)
+    if not message.prefix:
+        expected += "</s>"
     assert v13_tekkenizer_think.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP) == expected
 
 
 def test_tokenize_assistant_message_error(v13_tekkenizer: InstructTokenizerV13) -> None:
     with pytest.raises(TokenizerException, match=r"Invalid assistant message"):
         v13_tekkenizer.encode_assistant_message(
-            AssistantMessage(content="", tool_calls=[]), is_before_last_user_message=False, continue_message=False
-        )
-
-    with pytest.raises(
-        InvalidAssistantMessageException,
-        match="`continue_message` is only supported for assistant messages that have `prefix=False`.",
-    ):
-        v13_tekkenizer.encode_assistant_message(
-            AssistantMessage(content="z", tool_calls=[], prefix=True),
-            is_before_last_user_message=False,
-            continue_message=True,
+            AssistantMessage(content="", tool_calls=[]), is_before_last_user_message=False
         )
 
 
@@ -426,15 +399,14 @@ def test_encode_chat_completion_request_with_sp_and_audio(
     assert len(encoded.audios) == 1
 
 
-def test_encode_chat_completion_continue_final_message(v13_tekkenizer: InstructTokenizerV13) -> None:
+def test_encode_chat_completion_prefixed_final_message(v13_tekkenizer: InstructTokenizerV13) -> None:
     request_normalizer = InstructRequestNormalizerV13.normalizer()
     validator = MistralRequestValidatorV13()
     mistral_tokenizer = MistralTokenizer(
         instruct_tokenizer=v13_tekkenizer, validator=validator, request_normalizer=request_normalizer
     )
     request: ChatCompletionRequest = ChatCompletionRequest(
-        messages=[UserMessage(content="a"), AssistantMessage(content="b")],
-        continue_final_message=True,
+        messages=[UserMessage(content="a"), AssistantMessage(content="b", prefix=True)],
     )
     encoded = mistral_tokenizer.encode_chat_completion(request)
 

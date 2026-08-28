@@ -3,11 +3,7 @@ import json
 import pytest
 from PIL import Image
 
-from mistral_common.exceptions import (
-    InvalidAssistantMessageException,
-    InvalidMessageStructureException,
-    TokenizerException,
-)
+from mistral_common.exceptions import TokenizerException
 from mistral_common.protocol.instruct.chunk import (
     ContentChunk,
     ImageChunk,
@@ -166,7 +162,7 @@ def test_tokenize_empty_content_assistant_message(spm_tokenizer: InstructTokeniz
                 assert tokenized == expected
 
 
-def test_tokenize_assistant_message_continue_final_message(spm_tokenizer: InstructTokenizerV7) -> None:
+def test_tokenize_prefixed_assistant_message(spm_tokenizer: InstructTokenizerV7) -> None:
     tokenized = spm_tokenizer.encode_instruct(
         InstructRequest(
             messages=[
@@ -178,9 +174,8 @@ def test_tokenize_assistant_message_continue_final_message(spm_tokenizer: Instru
                         ImageChunk(image=Image.new("RGB", (4, 4), "red")),
                     ]
                 ),
-                AssistantMessage(content="b"),
+                AssistantMessage(content="b", prefix=True),
             ],
-            continue_final_message=True,
         )
     )
     _im = 10
@@ -196,38 +191,6 @@ def test_tokenize_assistant_message_continue_final_message(spm_tokenizer: Instru
         1055,  # b
     ]
     assert decode_keep(spm_tokenizer, tokenized) == "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁a[/INST]▁b"
-
-    with pytest.raises(
-        InvalidMessageStructureException, match="Cannot continue final message if it is not an assistant message"
-    ):
-        spm_tokenizer.encode_instruct(
-            InstructRequest(
-                messages=[
-                    UserMessage(
-                        content=[
-                            TextChunk(
-                                text="a",
-                            ),
-                            ImageChunk(image=Image.new("RGB", (4, 4), "red")),
-                        ]
-                    ),
-                ],
-                continue_final_message=True,
-            )
-        )
-
-    with pytest.raises(
-        InvalidAssistantMessageException,
-        match="`continue_message` is only supported for assistant messages that have `prefix=False`.",
-    ):
-        spm_tokenizer.encode_assistant_message(
-            AssistantMessage(
-                content='"blabla"',
-                prefix=True,
-            ),
-            is_before_last_user_message=False,
-            continue_message=True,
-        )
 
 
 @pytest.mark.parametrize(
@@ -531,13 +494,12 @@ def test_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkeni
     assert tokens == tokens_2.tokens
 
 
-def test_encode_chat_completion_continue_final_message() -> None:
+def test_encode_chat_completion_prefixed_final_message() -> None:
     tokenizer = MistralTokenizer.v7(is_mm=True)
     eos_id = tokenizer.instruct_tokenizer.tokenizer.eos_id
 
     request: ChatCompletionRequest = ChatCompletionRequest(
-        messages=[UserMessage(content="a"), AssistantMessage(content="b")],
-        continue_final_message=True,
+        messages=[UserMessage(content="a"), AssistantMessage(content="b", prefix=True)],
     )
     encoded = tokenizer.encode_chat_completion(request)
 

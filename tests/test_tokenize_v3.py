@@ -4,7 +4,6 @@ from tempfile import NamedTemporaryFile
 
 import pytest
 
-from mistral_common.exceptions import InvalidAssistantMessageException, InvalidMessageStructureException
 from mistral_common.protocol.instruct.chunk import TextChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage, ToolMessage, UserMessage
 from mistral_common.protocol.instruct.request import InstructRequest
@@ -251,7 +250,7 @@ def test_system_tools_multiturn(
         ),
     ],
 )
-def test_continue_final_message(
+def test_prefixed_final_message(
     tokenizer: InstructTokenizer,
     special_ws: str,
     new_line: str,
@@ -262,10 +261,9 @@ def test_continue_final_message(
                 UserMessage(content="a"),
                 AssistantMessage(content="b"),
                 UserMessage(content="c"),
-                AssistantMessage(content="d"),
+                AssistantMessage(content="d", prefix=True),
             ],
             system_prompt="SYSTEM",
-            continue_final_message=True,
         )
     )
     tokens = tokenized.tokens
@@ -277,34 +275,6 @@ def test_continue_final_message(
         assert tokens == [1, 3, 1032, 4, 1055, 2, 3, 17889, 23294, 781, 781, 29485, 4, 1049]
     else:
         assert tokens == [1, 3, 1097, 4, 1098, 2, 3, 101289, 58343, 1267, 1099, 4, 1100]
-
-    with pytest.raises(
-        InvalidMessageStructureException, match="Cannot continue final message if it is not an assistant message"
-    ):
-        tokenized = tokenizer.encode_instruct(
-            InstructRequest(
-                messages=[
-                    UserMessage(content="a"),
-                    AssistantMessage(content="b"),
-                    UserMessage(content="c"),
-                ],
-                system_prompt="SYSTEM",
-                continue_final_message=True,
-            )
-        )
-
-    with pytest.raises(
-        InvalidAssistantMessageException,
-        match="`continue_message` is only supported for assistant messages that have `prefix=False`.",
-    ):
-        tokenizer.encode_assistant_message(  # type: ignore[attr-defined]
-            AssistantMessage(
-                content='"blabla"',
-                prefix=True,
-            ),
-            is_before_last_user_message=False,
-            continue_message=True,
-        )
 
 
 @pytest.mark.parametrize(
