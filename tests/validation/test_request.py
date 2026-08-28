@@ -8,6 +8,7 @@ from pydantic import ValidationError
 import mistral_common.deprecation
 from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, SystemMessage, UserMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
+from mistral_common.protocol.instruct.tool_calls import Tool
 
 
 class TestValidateRequest:
@@ -42,7 +43,7 @@ class TestValidateRequest:
         }
 
         with pytest.warns(DeprecationWarning, match="continue_final_message") as caught:
-            request: ChatCompletionRequest[Any] = ChatCompletionRequest(**raw_request)
+            request: ChatCompletionRequest[ChatMessage] = ChatCompletionRequest(**raw_request)
             ChatCompletionRequest(**raw_request)
 
         assert len(caught) == 1
@@ -108,12 +109,12 @@ class TestValidateRequest:
                 )
 
     def test_instruct_request_rejects_removed_continuation_field(self) -> None:
-        request: InstructRequest[ChatMessage, Any] = InstructRequest(messages=[UserMessage(content="foo")])
+        request: InstructRequest[ChatMessage, Tool] = InstructRequest(messages=[UserMessage(content="foo")])
 
         assert "continue_final_message" not in InstructRequest.model_fields
         assert "continue_final_message" not in request.model_dump()
         with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
-            InstructRequest[ChatMessage, Any](  # type: ignore[call-arg]
+            InstructRequest[ChatMessage, Tool](  # type: ignore[call-arg]
                 messages=[UserMessage(content="foo")], continue_final_message=True
             )
 
