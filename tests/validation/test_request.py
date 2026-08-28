@@ -83,6 +83,38 @@ class TestValidateRequest:
         assert assistant.prefix is False
 
     @pytest.mark.parametrize(
+        ["legacy_value", "expected_prefix"],
+        [(1, True), ("true", True), (0, False), ("false", False)],
+    )
+    def test_legacy_boolean_coercion_is_preserved(
+        self,
+        legacy_value: bool | int | str,
+        expected_prefix: bool,
+        clear_continue_warning: None,
+    ) -> None:
+        with pytest.warns(DeprecationWarning, match="continue_final_message"):
+            request = ChatCompletionRequest[ChatMessage](  # type: ignore[call-arg]
+                messages=[UserMessage(content="foo"), AssistantMessage(content="bar")],
+                continue_final_message=legacy_value,
+            )
+
+        assert isinstance(request.messages[-1], AssistantMessage)
+        assert request.messages[-1].prefix is expected_prefix
+
+    def test_legacy_true_is_idempotent_for_prefixed_assistant(self, clear_continue_warning: None) -> None:
+        assistant = AssistantMessage(content="bar", prefix=True)
+
+        with pytest.warns(DeprecationWarning, match="continue_final_message"):
+            request = ChatCompletionRequest[ChatMessage](  # type: ignore[call-arg]
+                messages=[UserMessage(content="foo"), assistant],
+                continue_final_message=True,
+            )
+
+        assert isinstance(request.messages[-1], AssistantMessage)
+        assert request.messages[-1].prefix is True
+        assert assistant.prefix is True
+
+    @pytest.mark.parametrize(
         "messages",
         [
             [UserMessage(content="foo"), SystemMessage(content="bar")],
@@ -106,6 +138,16 @@ class TestValidateRequest:
                 ChatCompletionRequest[ChatMessage](  # type: ignore[call-arg]
                     messages=legacy_messages,  # type: ignore[arg-type]
                     continue_final_message=False,
+                )
+
+    def test_legacy_true_preserves_invalid_prefix_validation(self, clear_continue_warning: None) -> None:
+        legacy_messages: list[dict[str, Any]] = [{"role": "assistant", "content": "bar", "prefix": "invalid"}]
+
+        with pytest.warns(DeprecationWarning, match="continue_final_message"):
+            with pytest.raises(ValidationError, match="valid boolean"):
+                ChatCompletionRequest[ChatMessage](  # type: ignore[call-arg]
+                    messages=legacy_messages,  # type: ignore[arg-type]
+                    continue_final_message=True,
                 )
 
     def test_instruct_request_rejects_removed_continuation_field(self) -> None:
