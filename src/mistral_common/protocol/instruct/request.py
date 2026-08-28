@@ -330,7 +330,6 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         system_prompt: The system prompt to be used for the conversation.
         available_tools: The tools available to the assistant.
         truncate_at_max_tokens: The maximum number of tokens to truncate the conversation at.
-        continue_final_message: Whether to continue the final message.
         settings: Model configuration settings for the request.
 
     Examples:
@@ -344,5 +343,4 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
     system_prompt: str | None = None
     available_tools: list[ToolType] | None = None
     truncate_at_max_tokens: int | None = None
-    continue_final_message: bool = False
     settings: ModelSettings = Field(default_factory=ModelSettings.none)

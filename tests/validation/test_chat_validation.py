@@ -126,7 +126,6 @@ class TestChatValidation:
                 SystemMessage(content="foo"),
                 UserMessage(content="foo"),  # so we don't get an error for ending with a system message
             ],
-            continue_final_message=False,
         )
 
     def test_system_user_messages_OK(self, validator: MistralRequestValidator) -> None:
@@ -135,7 +134,6 @@ class TestChatValidation:
                 SystemMessage(content="foo"),
                 UserMessage(content="foo"),
             ],
-            continue_final_message=False,
         )
 
     def test_user_system_messages_OK(self, validator: MistralRequestValidator) -> None:
@@ -145,7 +143,6 @@ class TestChatValidation:
                 SystemMessage(content="foo"),
                 UserMessage(content="foo"),  # so we don't get an error for ending with a system message
             ],
-            continue_final_message=False,
         )
 
     def test_user_user_messages_OK(self, validator: MistralRequestValidator) -> None:
@@ -154,14 +151,12 @@ class TestChatValidation:
                 UserMessage(content="foo"),
                 UserMessage(content="foo"),  # so we don't get an error for ending with a system message
             ],
-            continue_final_message=False,
         )
 
     def test_empty_messages(self, validator: MistralRequestValidator) -> None:
         with pytest.raises(InvalidMessageStructureException, match=r"Conversation must have at least one message"):
             validator.validate_messages(
                 messages=[],
-                continue_final_message=False,
             )
 
     def test_starts_with_system_or_user(self, validator: MistralRequestValidator) -> None:
@@ -173,23 +168,18 @@ class TestChatValidation:
                 AssistantMessage(content="foo"),
                 UserMessage(content="foo"),  # so we don't get an error for ending with a system message
             ],
-            continue_final_message=False,
         )
 
     def test_ends_with_assistant(self, validator: MistralRequestValidator) -> None:
         with pytest.raises(
             InvalidMessageStructureException,
-            match=(
-                r"Expected last role User or Tool \(or Assistant with prefix or continue_final_message set to "
-                r"True\) for serving but got assistant"
-            ),
+            match=(r"Expected last role User or Tool \(or Assistant with prefix\) for serving but got assistant"),
         ):
             validator.validate_messages(
                 messages=[
                     UserMessage(content="foo"),
                     AssistantMessage(content="foo"),
                 ],
-                continue_final_message=False,
             )
 
     def test_assistant_prefix(self, validator: MistralRequestValidator) -> None:
@@ -198,7 +188,6 @@ class TestChatValidation:
                 UserMessage(content="foo"),
                 AssistantMessage(content="foo", prefix=True),
             ],
-            continue_final_message=False,
         )
         with pytest.raises(
             InvalidAssistantMessageException,
@@ -210,59 +199,26 @@ class TestChatValidation:
                     AssistantMessage(content="foo", prefix=True),
                     UserMessage(content="foo"),
                 ],
-                continue_final_message=False,
             )
 
-    def test_continue_final_message(self, validator: MistralRequestValidator) -> None:
+    def test_assistant_prefix_without_continuation_argument(self, validator: MistralRequestValidator) -> None:
         validator.validate_messages(
             messages=[
                 UserMessage(content="foo"),
-                AssistantMessage(content="foo"),
-            ],
-            continue_final_message=True,
+                AssistantMessage(content="foo", prefix=True),
+            ]
         )
+
+    def test_unprefixed_assistant_remains_invalid(self, validator: MistralRequestValidator) -> None:
         with pytest.raises(
             InvalidMessageStructureException,
-            match=(
-                r"Expected last role Assistant with prefix False for serving with continue_final_message set to True "
-                r"but got user"
-            ),
-        ):
-            validator.validate_messages(
-                messages=[
-                    UserMessage(content="foo"),
-                    AssistantMessage(content="foo", prefix=True),
-                    UserMessage(content="foo"),
-                ],
-                continue_final_message=True,
-            )
-        with pytest.raises(
-            InvalidMessageStructureException,
-            match=(
-                r"Expected last role User or Tool \(or Assistant with prefix or continue_final_message set to True\)"
-                r" for serving but got assistant"
-            ),
+            match=(r"Expected last role User or Tool \(or Assistant with prefix\) for serving but got assistant"),
         ):
             validator.validate_messages(
                 messages=[
                     UserMessage(content="foo"),
                     AssistantMessage(content="foo"),
                 ],
-                continue_final_message=False,
-            )
-        with pytest.raises(
-            InvalidMessageStructureException,
-            match=(
-                r"Expected last role Assistant with prefix False for serving with continue_final_message set to True "
-                r"but got assistant"
-            ),
-        ):
-            validator.validate_messages(
-                messages=[
-                    UserMessage(content="foo"),
-                    AssistantMessage(content="foo", prefix=True),
-                ],
-                continue_final_message=True,
             )
 
     def test_user_tool_user(self, validator: MistralRequestValidator) -> None:
@@ -273,7 +229,6 @@ class TestChatValidation:
                     ToolMessage(content="foo"),
                     UserMessage(content="foo"),
                 ],
-                continue_final_message=False,
             )
 
     def test_model_none_serving_mode(self) -> None:
@@ -298,7 +253,6 @@ class TestChatValidation:
                 ),
                 ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
             ],
-            continue_final_message=False,
         )
 
     def test_not_enough_tool_messages(self, validator: MistralRequestValidator) -> None:
@@ -317,7 +271,6 @@ class TestChatValidation:
                     ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
                     # missing ToolMessage
                 ],
-                continue_final_message=False,
             )
 
     def test_too_many_tool_messages(self, validator: MistralRequestValidator) -> None:
@@ -334,7 +287,6 @@ class TestChatValidation:
                     ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
                     ToolMessage(name="foo", content="bar", tool_call_id="999999999"),  # too many tool messages
                 ],
-                continue_final_message=False,
             )
 
     def test_tool_then_user_ok(self, validator: MistralRequestValidator) -> None:
@@ -347,7 +299,6 @@ class TestChatValidation:
                 ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
                 UserMessage(content="continue with this context"),
             ],
-            continue_final_message=False,
         )
 
     def test_tool_then_user_full_loop(self, validator: MistralRequestValidator) -> None:
@@ -370,7 +321,6 @@ class TestChatValidation:
                 AssistantMessage(content="here is the final answer"),
                 UserMessage(content="thanks"),
             ],
-            continue_final_message=False,
         )
 
     def test_partial_tool_results_then_user_fails(self, validator: MistralRequestValidator) -> None:
@@ -389,7 +339,6 @@ class TestChatValidation:
                     ToolMessage(name="foo", content="result1", tool_call_id="123456789"),
                     UserMessage(content="stop, only need the first result"),
                 ],
-                continue_final_message=False,
             )
 
     def test_build_settings_raises_error(self, validator: MistralRequestValidator) -> None:
@@ -399,37 +348,33 @@ class TestChatValidation:
             validator._validate_model_settings(request)
 
     def test_allows_text_content_chunks(self, validator_base: MistralRequestValidator) -> None:
-        validator_base.validate_messages(_user_convo(get_content_chunks(("text",))), continue_final_message=False)
-        validator_base.validate_messages(_assistant_convo(get_content_chunks(("text",))), continue_final_message=False)
-        validator_base.validate_messages(_system_convo(get_content_chunks(("text",))), continue_final_message=False)
-        validator_base.validate_messages(_tool_convo(get_content_chunks(("text",))), continue_final_message=False)
+        validator_base.validate_messages(_user_convo(get_content_chunks(("text",))))
+        validator_base.validate_messages(_assistant_convo(get_content_chunks(("text",))))
+        validator_base.validate_messages(_system_convo(get_content_chunks(("text",))))
+        validator_base.validate_messages(_tool_convo(get_content_chunks(("text",))))
 
     def test_rejects_non_text_in_user(self, validator_base: MistralRequestValidator) -> None:
         for name in ("image", "image_url", "audio", "audio_url"):
             with pytest.raises(InvalidUserMessageException, match="Unexpected content chunk types in user message"):
-                validator_base.validate_messages(_user_convo(get_content_chunks((name,))), continue_final_message=False)
+                validator_base.validate_messages(_user_convo(get_content_chunks((name,))))
 
     def test_rejects_non_text_in_assistant(self, validator_base: MistralRequestValidator) -> None:
         for name in ("think",):
             with pytest.raises(
                 InvalidAssistantMessageException, match="Unexpected content chunk types in assistant message"
             ):
-                validator_base.validate_messages(
-                    _assistant_convo(get_content_chunks((name,))), continue_final_message=False
-                )
+                validator_base.validate_messages(_assistant_convo(get_content_chunks((name,))))
 
     def test_rejects_non_text_in_system(self, validator_base: MistralRequestValidator) -> None:
         for name in ("audio", "think"):
             with pytest.raises(InvalidSystemPromptException, match="Unexpected content chunk types in system message"):
-                validator_base.validate_messages(
-                    _system_convo(get_content_chunks((name,))), continue_final_message=False
-                )
+                validator_base.validate_messages(_system_convo(get_content_chunks((name,))))
 
     def test_rejects_non_text_in_tool(self, validator_base: MistralRequestValidator) -> None:
         # "think" is rejected at the Pydantic model level (ToolMessage construction), not by the validator.
         for name in ("image", "image_url", "audio", "audio_url"):
             with pytest.raises(InvalidToolMessageException, match="Unexpected content chunk types in tool message"):
-                validator_base.validate_messages(_tool_convo(get_content_chunks((name,))), continue_final_message=False)
+                validator_base.validate_messages(_tool_convo(get_content_chunks((name,))))
 
     def test_reports_sorted_unique_invalid_chunk_types(self, validator_base: MistralRequestValidator) -> None:
         content = get_content_chunks(("audio", "image_url"))
@@ -437,18 +382,18 @@ class TestChatValidation:
             InvalidUserMessageException,
             match=r"Unexpected content chunk types in user message: \['AudioChunk', 'ImageURLChunk'\]",
         ):
-            validator_base.validate_messages(_user_convo(content), continue_final_message=False)
+            validator_base.validate_messages(_user_convo(content))
 
 
 class TestChatValidationV3:
     def test_allows_text_and_image_in_user(self, validator_v3: MistralRequestValidatorV3) -> None:
         content = get_content_chunks(("text", "image", "image_url"))
-        validator_v3.validate_messages(_user_convo(content), continue_final_message=False)
+        validator_v3.validate_messages(_user_convo(content))
 
     def test_rejects_audio_in_user(self, validator_v3: MistralRequestValidatorV3) -> None:
         for name in ("audio", "audio_url"):
             with pytest.raises(InvalidUserMessageException, match="Unexpected content chunk types in user message"):
-                validator_v3.validate_messages(_user_convo(get_content_chunks((name,))), continue_final_message=False)
+                validator_v3.validate_messages(_user_convo(get_content_chunks((name,))))
 
 
 class TestChatValidationV5:
@@ -469,7 +414,6 @@ class TestChatValidationV5:
                     SystemMessage(content="This is a system prompt"),
                     UserMessage(content=[audio_chunk]),
                 ],
-                continue_final_message=False,
             )
 
     @pytest.mark.parametrize("audio_fixture", ["audio_chunk", "audio_url_chunk"])
@@ -482,7 +426,6 @@ class TestChatValidationV5:
                 UserMessage(content=[audio_chunk]),
                 UserMessage(content="User message after audio"),
             ],
-            continue_final_message=False,
         )
 
     def test_system_prompt_without_audio_ok(self, validator_v5: MistralRequestValidatorV5) -> None:
@@ -491,7 +434,6 @@ class TestChatValidationV5:
                 SystemMessage(content="This is a system prompt"),
                 UserMessage(content="User message after system"),
             ],
-            continue_final_message=False,
         )
 
     def test_build_settings_raises_error(self, validator: MistralRequestValidator) -> None:
@@ -502,20 +444,18 @@ class TestChatValidationV5:
 
     def test_allows_text_image_audio_in_user(self, validator_v5: MistralRequestValidatorV5) -> None:
         content = get_content_chunks(("text", "image", "image_url", "audio", "audio_url"))
-        validator_v5.validate_messages(_user_convo(content), continue_final_message=False)
+        validator_v5.validate_messages(_user_convo(content))
 
     def test_allows_text_audio_think_in_system(self, validator_v5: MistralRequestValidatorV5) -> None:
         content = get_content_chunks(("text", "audio", "think"))
-        validator_v5.validate_messages(_system_convo(content), continue_final_message=False)
+        validator_v5.validate_messages(_system_convo(content))
 
     def test_rejects_think_in_assistant(self, validator_v5: MistralRequestValidatorV5) -> None:
         for name in ("think",):
             with pytest.raises(
                 InvalidAssistantMessageException, match="Unexpected content chunk types in assistant message"
             ):
-                validator_v5.validate_messages(
-                    _assistant_convo(get_content_chunks((name,))), continue_final_message=False
-                )
+                validator_v5.validate_messages(_assistant_convo(get_content_chunks((name,))))
 
 
 class TestChatValidationV11:
@@ -623,7 +563,6 @@ class TestChatValidationV13:
                     ),
                     ToolMessage(name="foo", content="bar", tool_call_id="999999999"),  # invalid id
                 ],
-                continue_final_message=False,
             )
 
     def test_extra_results(self, validator_v13: MistralRequestValidatorV13) -> None:
@@ -640,7 +579,6 @@ class TestChatValidationV13:
                     ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
                     ToolMessage(name="foo", content="bar", tool_call_id="999999999"),  # extra results
                 ],
-                continue_final_message=False,
             )
 
     def test_build_settings_raises_error(self, validator: MistralRequestValidator) -> None:
@@ -665,7 +603,6 @@ class TestChatValidationV13:
                     ),
                     ToolMessage(name="foo", content="bar", tool_call_id="123456789"),  # missing ToolMessage
                 ],
-                continue_final_message=False,
             )
 
     def allow_tool_results_wrong_order(self, validator_v13: MistralRequestValidatorV13) -> None:
@@ -681,7 +618,6 @@ class TestChatValidationV13:
                 ToolMessage(name="foo", content="bar", tool_call_id="999999999"),  # invalid order
                 ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
             ],
-            continue_final_message=False,
         )
 
     def test_tool_call_duplicate_ids_same_assistant_messages(self, validator_v13: MistralRequestValidatorV13) -> None:
@@ -700,7 +636,6 @@ class TestChatValidationV13:
                     ),
                     ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
                 ],
-                continue_final_message=False,
             )
 
     def test_tool_call_duplicate_ids_different_assistant_messages(
@@ -722,7 +657,6 @@ class TestChatValidationV13:
                 ),
                 ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
             ],
-            continue_final_message=False,
         )
 
     def test_multiple_assistant_messages_some_with_tool_calls(self, validator_v13: MistralRequestValidatorV13) -> None:
@@ -746,7 +680,6 @@ class TestChatValidationV13:
                 AssistantMessage(content="h"),
                 UserMessage(content="foo"),
             ],
-            continue_final_message=False,
         )
 
     def test_tool_then_user_ok_v13(self, validator_v13: MistralRequestValidatorV13) -> None:
@@ -759,7 +692,6 @@ class TestChatValidationV13:
                 ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
                 UserMessage(content="continue with this context"),
             ],
-            continue_final_message=False,
         )
 
     def test_partial_tool_results_then_user_fails_v13(self, validator_v13: MistralRequestValidatorV13) -> None:
@@ -779,7 +711,6 @@ class TestChatValidationV13:
                     ToolMessage(name="foo", content="result1", tool_call_id="aaaaaaaaa"),
                     UserMessage(content="stop, only need the first result"),
                 ],
-                continue_final_message=False,
             )
 
     def test_full_loop_with_user_after_tools_v13(self, validator_v13: MistralRequestValidatorV13) -> None:
@@ -802,7 +733,6 @@ class TestChatValidationV13:
                 AssistantMessage(content="final answer"),
                 UserMessage(content="done"),
             ],
-            continue_final_message=False,
         )
 
     @pytest.mark.parametrize("audio_fixture", ["audio_chunk", "audio_url_chunk"])
@@ -815,18 +745,17 @@ class TestChatValidationV13:
                 SystemMessage(content="This is a system prompt"),
                 UserMessage(content=[audio_chunk]),
             ],
-            continue_final_message=False,
         )
 
     def test_allows_text_and_think_in_assistant(self, validator_v13: MistralRequestValidatorV13) -> None:
         content = get_content_chunks(("text", "think"))
-        validator_v13.validate_messages(_assistant_convo(content), continue_final_message=False)
+        validator_v13.validate_messages(_assistant_convo(content))
 
     def test_rejects_non_text_in_tool(self, validator_v13: MistralRequestValidatorV13) -> None:
         # "think" is rejected at the Pydantic model level (ToolMessage construction), not by the validator.
         for name in ("image", "image_url", "audio", "audio_url"):
             with pytest.raises(InvalidToolMessageException, match="Unexpected content chunk types in tool message"):
-                validator_v13.validate_messages(_tool_convo(get_content_chunks((name,))), continue_final_message=False)
+                validator_v13.validate_messages(_tool_convo(get_content_chunks((name,))))
 
 
 class TestChatValidationV15:
@@ -839,16 +768,14 @@ class TestChatValidationV15:
 
     def test_allows_text_and_audio_in_system(self, validator_v15: MistralRequestValidatorV15) -> None:
         content = get_content_chunks(("text", "audio"))
-        validator_v15.validate_messages(_system_convo(content), continue_final_message=False)
+        validator_v15.validate_messages(_system_convo(content))
 
     def test_rejects_think_in_system(self, validator_v15: MistralRequestValidatorV15) -> None:
         for name in ("think",):
             with pytest.raises(InvalidSystemPromptException, match="Unexpected content chunk types in system message"):
-                validator_v15.validate_messages(
-                    _system_convo(get_content_chunks((name,))), continue_final_message=False
-                )
+                validator_v15.validate_messages(_system_convo(get_content_chunks((name,))))
 
     def test_allows_non_thinking_chunk_types_in_tool(self, validator_v15: MistralRequestValidatorV15) -> None:
         # ThinkChunk is rejected at the Pydantic model level before reaching the validator.
         content = get_content_chunks(("text", "image", "image_url", "audio", "audio_url"))
-        validator_v15.validate_messages(_tool_convo(content), continue_final_message=False)
+        validator_v15.validate_messages(_tool_convo(content))

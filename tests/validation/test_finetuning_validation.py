@@ -33,8 +33,16 @@ class TestFineTuningValidation:
                 UserMessage(content="foo"),
                 FinetuningAssistantMessage(content="foo"),
             ],
-            continue_final_message=False,
         )
+
+    def test_rejects_prefixed_final_assistant(self, validator: MistralRequestValidator) -> None:
+        with pytest.raises(InvalidMessageStructureException, match=r"Cannot continue final message in finetuning mode"):
+            validator.validate_messages(
+                messages=[
+                    UserMessage(content="foo"),
+                    FinetuningAssistantMessage(content="foo", prefix=True),
+                ]
+            )
 
     def test_has_weight_in_message_assistant(self, validator: MistralRequestValidator) -> None:
         validator.validate_messages(
@@ -42,7 +50,6 @@ class TestFineTuningValidation:
                 UserMessage(content="foo"),
                 FinetuningAssistantMessage(content="foo", weight=1),
             ],
-            continue_final_message=False,
         )
 
     def test_has_invalid_weight_in_message_assistant(self, validator: MistralRequestValidator) -> None:
@@ -52,7 +59,6 @@ class TestFineTuningValidation:
                     UserMessage(content="foo"),
                     FinetuningAssistantMessage(content="foo", weight=0.5),
                 ],
-                continue_final_message=False,
             )
 
     def test_should_allow_multiple_weights(self, validator: MistralRequestValidator) -> None:
@@ -63,7 +69,6 @@ class TestFineTuningValidation:
                 FinetuningAssistantMessage(content="foo", weight=1),
                 FinetuningAssistantMessage(content="foo", weight=1),
             ],
-            continue_final_message=False,
         )
 
     def test_ends_with_tool_call_null(self, validator: MistralRequestValidator) -> None:
@@ -79,7 +84,6 @@ class TestFineTuningValidation:
                 # tool_call id left "null" as final message => OK!
                 FinetuningAssistantMessage(tool_calls=[ToolCall(function=function)]),
             ],
-            continue_final_message=False,
         )
 
     def test_ends_with_no_tool_call(self, validator: MistralRequestValidator) -> None:
@@ -94,7 +98,6 @@ class TestFineTuningValidation:
                 ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
                 FinetuningAssistantMessage(content="foo"),
             ],
-            continue_final_message=False,
         )
 
     def test_middle_with_tool_call_null_raises(self, validator: MistralRequestValidator) -> None:
@@ -112,7 +115,6 @@ class TestFineTuningValidation:
                     ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
                     FinetuningAssistantMessage(tool_calls=[ToolCall(function=function)]),
                 ],
-                continue_final_message=False,
             )
 
     def test_one_message_with_user_is_not_valid(self, validator: MistralRequestValidator) -> None:
@@ -121,7 +123,6 @@ class TestFineTuningValidation:
                 messages=[
                     UserMessage(content="foo"),
                 ],
-                continue_final_message=False,
             )
         assert str(exc.value) == "Expected last role Assistant for finetuning but got user"
 
@@ -137,7 +138,6 @@ class TestFineTuningValidation:
                     ]
                 ),
             ],
-            continue_final_message=False,
         )
 
         validator.validate_messages(
@@ -153,7 +153,6 @@ class TestFineTuningValidation:
                 ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
                 FinetuningAssistantMessage(content="foo"),
             ],
-            continue_final_message=False,
         )
 
         with pytest.raises(InvalidMessageStructureException):
@@ -171,5 +170,4 @@ class TestFineTuningValidation:
                     ToolMessage(name="foo", content="bar", tool_call_id="891234567"),
                     FinetuningAssistantMessage(content="foo"),
                 ],
-                continue_final_message=False,
             )
