@@ -1,11 +1,12 @@
 import warnings
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
 import mistral_common.deprecation
-from mistral_common.protocol.instruct.messages import AssistantMessage, SystemMessage, UserMessage
+from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, SystemMessage, UserMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
 
 
@@ -18,10 +19,10 @@ class TestValidateRequest:
         mistral_common.deprecation._warned_keys.discard(key)
 
     @pytest.fixture
-    def chat_request_raw(self) -> dict:
+    def chat_request_raw(self) -> dict[str, Any]:
         return {"model": "test-model", "message": [UserMessage(content="foo")]}
 
-    def test_request_random_seed_negative(self, chat_request_raw: dict) -> None:
+    def test_request_random_seed_negative(self, chat_request_raw: dict[str, Any]) -> None:
         with pytest.raises(ValidationError):
             ChatCompletionRequest(**chat_request_raw, random_seed=-1)
 
@@ -34,14 +35,14 @@ class TestValidateRequest:
         assert request.random_seed == 0
 
     def test_legacy_continuation_sets_final_assistant_prefix_and_warns_once(self, clear_continue_warning: None) -> None:
-        raw_assistant = {"role": "assistant", "content": "bar", "prefix": False}
-        raw_request = {
+        raw_assistant: dict[str, Any] = {"role": "assistant", "content": "bar", "prefix": False}
+        raw_request: dict[str, Any] = {
             "messages": [{"role": "user", "content": "foo"}, raw_assistant],
             "continue_final_message": True,
         }
 
         with pytest.warns(DeprecationWarning, match="continue_final_message") as caught:
-            request = ChatCompletionRequest(**raw_request)
+            request: ChatCompletionRequest[Any] = ChatCompletionRequest(**raw_request)
             ChatCompletionRequest(**raw_request)
 
         assert len(caught) == 1
@@ -56,7 +57,7 @@ class TestValidateRequest:
         assistant = AssistantMessage(content="bar", prefix=True)
 
         with pytest.warns(DeprecationWarning, match="continue_final_message"):
-            request = ChatCompletionRequest(
+            request = ChatCompletionRequest[ChatMessage](  # type: ignore[call-arg]
                 messages=[UserMessage(content="foo"), assistant],
                 continue_final_message=False,
             )
@@ -71,7 +72,7 @@ class TestValidateRequest:
         assistant = AssistantMessage(content="bar", prefix=False)
 
         with pytest.warns(DeprecationWarning, match="continue_final_message"):
-            request = ChatCompletionRequest(
+            request = ChatCompletionRequest[ChatMessage](  # type: ignore[call-arg]
                 messages=[UserMessage(content="foo"), assistant],
                 continue_final_message=True,
             )
@@ -87,32 +88,40 @@ class TestValidateRequest:
             [],
         ],
     )
-    def test_legacy_true_requires_final_assistant(self, messages: list[object], clear_continue_warning: None) -> None:
+    def test_legacy_true_requires_final_assistant(
+        self, messages: list[ChatMessage], clear_continue_warning: None
+    ) -> None:
         with pytest.warns(DeprecationWarning, match="continue_final_message"):
             with pytest.raises(ValidationError, match="requires final message to be an assistant"):
-                ChatCompletionRequest(messages=messages, continue_final_message=True)
+                ChatCompletionRequest[ChatMessage](  # type: ignore[call-arg]
+                    messages=messages, continue_final_message=True
+                )
 
     def test_legacy_prefix_validation_is_preserved(self, clear_continue_warning: None) -> None:
+        legacy_messages: list[Any] = [{"role": "assistant", "content": "bar", "prefix": "invalid"}]
+
         with pytest.warns(DeprecationWarning, match="continue_final_message"):
             with pytest.raises(ValidationError, match="prefix"):
-                ChatCompletionRequest(
-                    messages=[{"role": "assistant", "content": "bar", "prefix": "invalid"}],
+                ChatCompletionRequest[ChatMessage](  # type: ignore[call-arg]
+                    messages=legacy_messages,
                     continue_final_message=False,
                 )
 
     def test_instruct_request_rejects_removed_continuation_field(self) -> None:
-        request = InstructRequest(messages=[UserMessage(content="foo")])
+        request: InstructRequest[ChatMessage, Any] = InstructRequest(messages=[UserMessage(content="foo")])
 
         assert "continue_final_message" not in InstructRequest.model_fields
         assert "continue_final_message" not in request.model_dump()
         with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
-            InstructRequest(messages=[UserMessage(content="foo")], continue_final_message=True)
+            InstructRequest[ChatMessage, Any](  # type: ignore[call-arg]
+                messages=[UserMessage(content="foo")], continue_final_message=True
+            )
 
     def test_legacy_invalid_value_validates_before_warning(self, clear_continue_warning: None) -> None:
         with warnings.catch_warnings():
             warnings.simplefilter("error")
             with pytest.raises(ValidationError, match="valid boolean"):
-                ChatCompletionRequest(
+                ChatCompletionRequest[UserMessage](  # type: ignore[call-arg]
                     messages=[UserMessage(content="foo")],
                     continue_final_message="not-a-bool",
                 )
