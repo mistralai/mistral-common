@@ -98,12 +98,12 @@ class TestValidateRequest:
                 )
 
     def test_legacy_prefix_validation_is_preserved(self, clear_continue_warning: None) -> None:
-        legacy_messages: list[Any] = [{"role": "assistant", "content": "bar", "prefix": "invalid"}]
+        legacy_messages: list[dict[str, Any]] = [{"role": "assistant", "content": "bar", "prefix": "invalid"}]
 
         with pytest.warns(DeprecationWarning, match="continue_final_message"):
             with pytest.raises(ValidationError, match="prefix"):
                 ChatCompletionRequest[ChatMessage](  # type: ignore[call-arg]
-                    messages=legacy_messages,
+                    messages=legacy_messages,  # type: ignore[arg-type]
                     continue_final_message=False,
                 )
 
