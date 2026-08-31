@@ -1,3 +1,4 @@
+from collections.abc import Iterable, Mapping
 from enum import Enum
 from typing import Any, Generic
 
@@ -24,7 +25,9 @@ _CONTINUE_FINAL_MESSAGE_ERROR = "continue_final_message=True requires final mess
 _CONTINUE_FINAL_MESSAGE_ADAPTER = TypeAdapter(bool)
 
 
-def _map_continue_final_message(messages: list[Any], continue_final_message: bool) -> list[Any]:
+def _map_continue_final_message(
+    messages: Iterable[dict[str, Any] | ChatMessageType], continue_final_message: bool
+) -> list[Any]:
     r"""Copy messages and apply continuation to the final assistant message."""
     copied_messages = list(messages)
     if not continue_final_message:
@@ -33,17 +36,14 @@ def _map_continue_final_message(messages: list[Any], continue_final_message: boo
     if not copied_messages:
         raise ValueError(_CONTINUE_FINAL_MESSAGE_ERROR)
 
-    final_message = copied_messages[-1]
-    if isinstance(final_message, dict):
-        if final_message.get("role") != "assistant":
+    if isinstance(copied_messages[-1], dict):
+        if copied_messages[-1].get("role") != "assistant":
             raise ValueError(_CONTINUE_FINAL_MESSAGE_ERROR)
-        if "prefix" in final_message:
-            _CONTINUE_FINAL_MESSAGE_ADAPTER.validate_python(final_message["prefix"])
-        copied_final_message = dict(final_message)
-        copied_final_message["prefix"] = True
-        copied_messages[-1] = copied_final_message
-    elif isinstance(final_message, AssistantMessage):
-        copied_messages[-1] = final_message.model_copy(update={"prefix": True})
+        if "prefix" in copied_messages[-1]:
+            _CONTINUE_FINAL_MESSAGE_ADAPTER.validate_python(copied_messages[-1]["prefix"])
+        copied_messages[-1] = {**copied_messages[-1], "prefix": True}
+    elif isinstance(copied_messages[-1], AssistantMessage):
+        copied_messages[-1] = copied_messages[-1].model_copy(update={"prefix": True})
     else:
         raise ValueError(_CONTINUE_FINAL_MESSAGE_ERROR)
 
@@ -169,7 +169,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             stacklevel=4,
         )
         messages = copied_values.get("messages")
-        if isinstance(messages, list):
+        if isinstance(messages, Iterable) and not isinstance(messages, (str, bytes, Mapping)):
             copied_values["messages"] = _map_continue_final_message(
                 messages=messages,
                 continue_final_message=continue_final_message,

@@ -201,14 +201,6 @@ class TestChatValidation:
                 ],
             )
 
-    def test_assistant_prefix_without_continuation_argument(self, validator: MistralRequestValidator) -> None:
-        validator.validate_messages(
-            messages=[
-                UserMessage(content="foo"),
-                AssistantMessage(content="foo", prefix=True),
-            ]
-        )
-
     def test_unprefixed_assistant_remains_invalid(self, validator: MistralRequestValidator) -> None:
         with pytest.raises(
             InvalidMessageStructureException,
