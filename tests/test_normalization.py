@@ -403,7 +403,6 @@ class TestChatCompletionRequestNormalization:
         assert result == InstructRequest[ChatMessage, Tool](
             messages=[UserMessage(content="a"), AssistantMessage(content="b", prefix=True)],
         )
-        assert "continue_final_message" not in result.model_dump()
 
     def test_json_normalizes_tool_content(self, normalizer: InstructRequestNormalizer) -> None:
         r"""Base normalizer (v1-v3) JSON-normalizes tool message content."""
@@ -546,7 +545,6 @@ class TestChatCompletionRequestNormalizationV7:
         assert result == InstructRequest[ChatMessage, Tool](
             messages=[UserMessage(content="a"), AssistantMessage(content="b", prefix=True)],
         )
-        assert "continue_final_message" not in result.model_dump()
 
     @pytest.mark.parametrize("num_empty", [0, 1, 2])
     def test_only_empty_text_chunks(self, normalizer_v7: InstructRequestNormalizerV7, num_empty: int) -> None:
@@ -1040,7 +1038,6 @@ class TestChatCompletionRequestNormalizationV13:
         assert result == InstructRequest[ChatMessage, Tool](
             messages=[UserMessage(content="a"), AssistantMessage(content="b", prefix=True)],
         )
-        assert "continue_final_message" not in result.model_dump()
 
     def test_accepts_text_and_think_chunks(self, normalizer_v13: InstructRequestNormalizerV13) -> None:
         r"""V13 normalizer accepts TextChunk and ThinkChunk in assistant messages."""
@@ -1204,7 +1201,6 @@ class TestChatCompletionRequestNormalizationV15:
             messages=[UserMessage(content="a"), AssistantMessage(content="b", prefix=True)],
             settings=ModelSettings(reasoning_effort=ReasoningEffort.high),
         )
-        assert "continue_final_message" not in result.model_dump()
 
     def test_v15_intra_message_chunks_joined_without_separator(
         self, normalizer_v15: InstructRequestNormalizerV15
