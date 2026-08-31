@@ -311,7 +311,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
 
             prev_role = message.role
 
-        if expected_tool_messages != 0 and self._mode == ValidationMode.serving:
+        if expected_tool_messages != 0 and self._mode in {ValidationMode.serving, ValidationMode.general}:
             raise InvalidMessageStructureException("Not the same number of function calls and responses")
         elif expected_tool_messages < 0 and self._mode == ValidationMode.finetuning:
             raise InvalidMessageStructureException("More tool responses than tool calls")
@@ -585,7 +585,10 @@ class MistralRequestValidatorV11(MistralRequestValidatorV5):
 
             prev_role = message.role
 
-        if len(expected_tool_ids) != len(observed_tool_ids) and self._mode == ValidationMode.serving:
+        if len(expected_tool_ids) != len(observed_tool_ids) and self._mode in {
+            ValidationMode.serving,
+            ValidationMode.general,
+        }:
             raise InvalidMessageStructureException("Not the same number of function calls and responses")
         elif len(expected_tool_ids) < len(observed_tool_ids) and self._mode == ValidationMode.finetuning:
             raise InvalidMessageStructureException("More tool responses than tool calls")

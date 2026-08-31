@@ -163,6 +163,42 @@ class TestChatValidation:
         with pytest.raises(InvalidRequestException, match=r"reasoning_effort='none' is not supported for this model"):
             validator.validate_request(request=request)
 
+    def test_general_rejects_incomplete_tool_responses(self) -> None:
+        validator: MistralRequestValidator = MistralRequestValidator(mode=ValidationMode.general)
+
+        with pytest.raises(
+            InvalidMessageStructureException, match=r"Not the same number of function calls and responses"
+        ):
+            validator.validate_messages(
+                messages=[
+                    UserMessage(content="foo"),
+                    AssistantMessage(
+                        tool_calls=[
+                            ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}")),
+                            ToolCall(id="987654321", function=FunctionCall(name="bar", arguments="{}")),
+                        ]
+                    ),
+                    ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
+                ],
+            )
+
+    def test_general_rejects_extra_tool_responses(self) -> None:
+        validator: MistralRequestValidator = MistralRequestValidator(mode=ValidationMode.general)
+
+        with pytest.raises(
+            InvalidMessageStructureException, match=r"Not the same number of function calls and responses"
+        ):
+            validator.validate_messages(
+                messages=[
+                    UserMessage(content="foo"),
+                    AssistantMessage(
+                        tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]
+                    ),
+                    ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
+                    ToolMessage(name="bar", content="extra", tool_call_id="987654321"),
+                ],
+            )
+
     def test_multiple_system_messages_OK(self, validator: MistralRequestValidator) -> None:
         validator.validate_messages(
             messages=[
@@ -558,7 +594,7 @@ class TestChatValidationV13:
         )
         assistant_message = AssistantMessage(tool_calls=[tool_call])
         messages: _Messages = [UserMessage(content="foo"), assistant_message]
-        if mode == ValidationMode.serving:
+        if mode in {ValidationMode.serving, ValidationMode.general}:
             messages.append(ToolMessage(content="result", tool_call_id=tool_call.id))
         elif mode == ValidationMode.test:
             messages.append(UserMessage(content="continue"))
