@@ -51,7 +51,7 @@ mistral_common serve mistralai/Magistral-Small-2507 [validation_mode] \
 #### Command Line Options
 
 - `tokenizer_path`: Path to the tokenizer. Can be a HuggingFace model ID or a local path.
-- `validation_mode`: Validation mode to use, choices in: "test", "finetuning", "serving", "general" (Optional, defaults to `"test"`)
+- `validation_mode`: Validation mode to use, choices in: "test", "finetuning", "serving", "structural" (Optional, defaults to `"test"`)
 - `--host`: API host (default: `127.0.0.1`)
 - `--port`: API port (default: `0` - auto-selects available port)
 - `--engine-url`: URL of the engine (default: `http://127.0.0.1:8080`)
