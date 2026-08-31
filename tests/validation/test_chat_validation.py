@@ -157,7 +157,7 @@ class TestChatValidation:
             )
 
     def test_general_retains_model_setting_validation(self) -> None:
-        validator = MistralRequestValidator(mode=ValidationMode.general)
+        validator: MistralRequestValidator = MistralRequestValidator(mode=ValidationMode.general)
         request = ChatCompletionRequest(messages=[UserMessage(content="foo")], reasoning_effort=ReasoningEffort.none)
 
         with pytest.raises(InvalidRequestException, match=r"reasoning_effort='none' is not supported for this model"):
