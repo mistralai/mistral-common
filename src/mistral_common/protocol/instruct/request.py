@@ -2,7 +2,7 @@ from collections.abc import Iterable, Mapping
 from enum import Enum
 from typing import Any, Generic
 
-from pydantic import Field, TypeAdapter, model_validator
+from pydantic import Field, model_validator
 
 from mistral_common.base import MistralBase
 from mistral_common.deprecation import warn_once
@@ -20,9 +20,7 @@ from mistral_common.protocol.instruct.messages import (
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolChoice, ToolChoiceEnum, ToolType
 
 _CONTINUE_FINAL_MESSAGE_KEY = "continue_final_message"
-_CONTINUE_FINAL_MESSAGE_WARNING_KEY = "ChatCompletionRequest.continue_final_message"
 _CONTINUE_FINAL_MESSAGE_ERROR = "continue_final_message=True requires final message to be an assistant."
-_CONTINUE_FINAL_MESSAGE_ADAPTER = TypeAdapter(bool)
 
 
 def _map_continue_final_message(
@@ -40,7 +38,7 @@ def _map_continue_final_message(
         if copied_messages[-1].get("role") != "assistant":
             raise ValueError(_CONTINUE_FINAL_MESSAGE_ERROR)
         if "prefix" in copied_messages[-1]:
-            _CONTINUE_FINAL_MESSAGE_ADAPTER.validate_python(copied_messages[-1]["prefix"])
+            copied_messages[-1]["prefix"] = True
         copied_messages[-1] = {**copied_messages[-1], "prefix": True}
     elif isinstance(copied_messages[-1], AssistantMessage):
         copied_messages[-1] = copied_messages[-1].model_copy(update={"prefix": True})
@@ -48,11 +46,6 @@ def _map_continue_final_message(
         raise ValueError(_CONTINUE_FINAL_MESSAGE_ERROR)
 
     return copied_messages
-
-
-def _coerce_continue_final_message(value: Any) -> bool:
-    r"""Validate and coerce a legacy continuation value as a Pydantic boolean."""
-    return _CONTINUE_FINAL_MESSAGE_ADAPTER.validate_python(value)
 
 
 class ResponseFormats(str, Enum):
@@ -158,9 +151,9 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             return values
 
         copied_values = dict(values)
-        continue_final_message = _coerce_continue_final_message(copied_values.pop(_CONTINUE_FINAL_MESSAGE_KEY))
+        continue_final_message = bool(copied_values.pop(_CONTINUE_FINAL_MESSAGE_KEY))
         warn_once(
-            key=_CONTINUE_FINAL_MESSAGE_WARNING_KEY,
+            key="ChatCompletionRequest.continue_final_message",
             message=(
                 "`continue_final_message` passed directly to ChatCompletionRequest is deprecated. "
                 "Set `AssistantMessage.prefix` instead. Will be removed in 1.13.0."
@@ -305,7 +298,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         converted_messages: list[ChatMessage] = convert_openai_messages(messages)
         converted_messages = _map_continue_final_message(
             messages=converted_messages,
-            continue_final_message=_coerce_continue_final_message(continue_final_message),
+            continue_final_message=bool(continue_final_message),
         )
 
         converted_tools = convert_openai_tools(tools) if tools is not None else None
