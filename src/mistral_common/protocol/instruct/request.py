@@ -2,7 +2,7 @@ from collections.abc import Iterable, Mapping
 from enum import Enum
 from typing import Any, Generic
 
-from pydantic import Field, model_validator
+from pydantic import Field, TypeAdapter, model_validator
 
 from mistral_common.base import MistralBase
 from mistral_common.deprecation import warn_once
@@ -38,7 +38,7 @@ def _map_continue_final_message(
         if copied_messages[-1].get("role") != "assistant":
             raise ValueError(_CONTINUE_FINAL_MESSAGE_ERROR)
         if "prefix" in copied_messages[-1]:
-            copied_messages[-1]["prefix"] = True
+            TypeAdapter(bool).validate_python(copied_messages[-1]["prefix"])
         copied_messages[-1] = {**copied_messages[-1], "prefix": True}
     elif isinstance(copied_messages[-1], AssistantMessage):
         copied_messages[-1] = copied_messages[-1].model_copy(update={"prefix": True})
@@ -151,7 +151,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             return values
 
         copied_values = dict(values)
-        continue_final_message = bool(copied_values.pop(_CONTINUE_FINAL_MESSAGE_KEY))
+        continue_final_message = TypeAdapter(bool).validate_python(copied_values.pop(_CONTINUE_FINAL_MESSAGE_KEY))
         warn_once(
             key="ChatCompletionRequest.continue_final_message",
             message=(
@@ -298,7 +298,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         converted_messages: list[ChatMessage] = convert_openai_messages(messages)
         converted_messages = _map_continue_final_message(
             messages=converted_messages,
-            continue_final_message=bool(continue_final_message),
+            continue_final_message=TypeAdapter(bool).validate_python(continue_final_message),
         )
 
         converted_tools = convert_openai_tools(tools) if tools is not None else None

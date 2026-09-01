@@ -136,11 +136,15 @@ class TestValidateRequest:
                     continue_final_message=legacy_value,
                 )
 
+        assert legacy_messages[-1]["prefix"] == "invalid"
+
     def test_legacy_invalid_value_validates_before_warning(self, clear_continue_warning: None) -> None:
-        with warnings.catch_warnings():
+        with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("error")
             with pytest.raises(ValidationError, match="valid boolean"):
                 ChatCompletionRequest[UserMessage](  # type: ignore[call-arg]
                     messages=[UserMessage(content="foo")],
                     continue_final_message="not-a-bool",
                 )
+
+        assert caught == []
