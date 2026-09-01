@@ -19,13 +19,13 @@ def test_normal(tokenizer: InstructTokenizer) -> None:
                 UserMessage(content="a"),
                 AssistantMessage(content="b"),
                 UserMessage(content="c"),
-                AssistantMessage(content="d"),
+                AssistantMessage(content="d", prefix=True),
             ]
         )
     )
     tokens = tokenized.tokens
     text = decode_keep(tokenizer, tokenized)
-    assert text == "<s>▁[INST]▁a▁[/INST]▁b</s>▁[INST]▁c▁[/INST]▁d</s>"
+    assert text == "<s>▁[INST]▁a▁[/INST]▁b</s>▁[INST]▁c▁[/INST]▁d"
     assert tokens == [
         1,
         733,
@@ -47,7 +47,6 @@ def test_normal(tokenizer: InstructTokenizer) -> None:
         16289,
         28793,
         281,
-        2,
     ]
 
 
@@ -67,14 +66,14 @@ def test_system_multiturn(tokenizer: InstructTokenizer) -> None:
                 UserMessage(content="a"),
                 AssistantMessage(content="b"),
                 UserMessage(content="c"),
-                AssistantMessage(content="d"),
+                AssistantMessage(content="d", prefix=True),
             ],
             system_prompt="SYSTEM",
         )
     )
     tokens = tokenized.tokens
     text = decode_keep(tokenizer, tokenized)
-    assert text == "<s>▁[INST]▁SYSTEM<0x0A><0x0A>a▁[/INST]▁b</s>▁[INST]▁c▁[/INST]▁d</s>"
+    assert text == "<s>▁[INST]▁SYSTEM<0x0A><0x0A>a▁[/INST]▁b</s>▁[INST]▁c▁[/INST]▁d"
     assert tokens == [
         1,
         733,
@@ -100,7 +99,6 @@ def test_system_multiturn(tokenizer: InstructTokenizer) -> None:
         16289,
         28793,
         281,
-        2,
     ]
     first_eos = tokens.index(2)
     assert tokenizer.tokenizer.decode(tokens[first_eos:]) == "[INST] c [/INST] d"

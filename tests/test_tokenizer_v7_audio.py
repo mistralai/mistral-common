@@ -178,12 +178,12 @@ def test_tokenize_user_assistant_message(tekkenizer: InstructTokenizerV7) -> Non
                         audio_chunk,
                     ]
                 ),
-                AssistantMessage(content="c b d"),
+                AssistantMessage(content="c b d", prefix=True),
             ],
         )
     )
 
-    BOS, EOS, BEGIN_INST, END_INST, AUDIO, BEGIN_AUDIO, _ = _get_specials(tekkenizer)
+    BOS, _, BEGIN_INST, END_INST, AUDIO, BEGIN_AUDIO, _ = _get_specials(tekkenizer)
 
     audio_toks = [BEGIN_AUDIO] + [AUDIO] * num_expected_frames
 
@@ -198,10 +198,9 @@ def test_tokenize_user_assistant_message(tekkenizer: InstructTokenizerV7) -> Non
         198,  # "b"
         132,  # " "
         200,  # "d"
-        EOS,
     ]
     text = decode_keep(tekkenizer, tokenized)
-    assert text == ("<s>[INST]a[BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]c b d</s>")
+    assert text == ("<s>[INST]a[BEGIN_AUDIO]" + "[AUDIO]" * num_expected_frames + "[/INST]c b d")
     assert len(tokenized.audios) == 1
     base64_str = audio_chunk.input_audio
     assert isinstance(base64_str, str)
@@ -227,7 +226,7 @@ def test_tokenize_user_message(tekkenizer: InstructTokenizerV7, audio_first: boo
         )
     )
 
-    BOS, EOS, BEGIN_INST, END_INST, AUDIO, BEGIN_AUDIO, _ = _get_specials(tekkenizer)
+    BOS, _, BEGIN_INST, END_INST, AUDIO, BEGIN_AUDIO, _ = _get_specials(tekkenizer)
 
     audio_toks = [BEGIN_AUDIO] + [AUDIO] * num_expected_frames
 
@@ -382,7 +381,7 @@ def test_tokenize_audio_url_chunk(
             InstructRequest(
                 messages=[
                     UserMessage(content=[audio_url_chunk_fixture]),
-                    AssistantMessage(content="c b d"),
+                    AssistantMessage(content="c b d", prefix=True),
                 ],
             )
         )
@@ -399,7 +398,7 @@ def test_tokenize_audio_url_chunk(
     assert tokenized.audios[0].format == "wav"
     assert tokenized.audios[0].audio_array.shape == (24000,)
     text = decode_keep(tekkenizer, tokenized)
-    assert text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * (len(audio_toks) - 1) + "[/INST]c b d</s>")
+    assert text == ("<s>[INST][BEGIN_AUDIO]" + "[AUDIO]" * (len(audio_toks) - 1) + "[/INST]c b d")
     assert tokenized.tokens == [
         BOS,
         BEGIN_INST,
@@ -410,7 +409,6 @@ def test_tokenize_audio_url_chunk(
         198,  # "b"
         132,  # " "
         200,  # "d"
-        EOS,
     ]
 
 

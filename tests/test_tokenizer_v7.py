@@ -202,6 +202,7 @@ def test_tokenize_prefixed_assistant_message(spm_tokenizer: InstructTokenizerV7)
                 UserMessage(content="a"),
                 AssistantMessage(
                     content="b",
+                    prefix=True,
                     tool_calls=[
                         ToolCall(
                             function=FunctionCall(
@@ -217,7 +218,7 @@ def test_tokenize_prefixed_assistant_message(spm_tokenizer: InstructTokenizerV7)
                     ],
                 ),
             ],
-            '<s>[SYSTEM_PROMPT]▁a[/SYSTEM_PROMPT][AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"t",▁"description":▁"",▁"parameters":▁{"type":▁"object",▁"properties":▁{"g":▁{"type":▁"string"},▁"h":▁{"type":▁"string"}}}}}][/AVAILABLE_TOOLS][INST]▁a[/INST]▁b[TOOL_CALLS]▁[{"name":▁"t",▁"arguments":▁{"g":▁"h"}}]</s>',  # noqa
+            '<s>[SYSTEM_PROMPT]▁a[/SYSTEM_PROMPT][AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"t",▁"description":▁"",▁"parameters":▁{"type":▁"object",▁"properties":▁{"g":▁{"type":▁"string"},▁"h":▁{"type":▁"string"}}}}}][/AVAILABLE_TOOLS][INST]▁a[/INST]▁b[TOOL_CALLS]▁[{"name":▁"t",▁"arguments":▁{"g":▁"h"}}]',  # noqa
         ),
         (
             [
@@ -357,9 +358,9 @@ def test_encode_chat_completion() -> None:
                 UserMessage(content="c"),
                 ToolMessage(content="c", tool_call_id="1234"),
                 UserMessage(content="a"),
-                AssistantMessage(content="bbbbbbb"),
+                AssistantMessage(content="bbbbbbb", prefix=True),
             ],
-            "<s>[INST]a[/INST]bbbbbbb</s>",
+            "<s>[INST]a[/INST]bbbbbbb",
             id="drop_by_chunk_1",
         ),
         pytest.param(
@@ -466,6 +467,8 @@ def test_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkeni
                     ToolCall(id="111111111", function=FunctionCall(name="t2", arguments="{}")),
                 ],
             ),
+            ToolMessage(content="r1", tool_call_id="000000000"),
+            ToolMessage(content="r2", tool_call_id="111111111"),
         ],
     )
     tokenized = tokenizer.encode_instruct(instruct_request)
@@ -478,14 +481,17 @@ def test_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkeni
         '{"type": "function", "function": {"name": "t2", "description"'
         ': "", "parameters": {}}}][/AVAILABLE_TOOLS][INST]a[/INST]b1b2[TOOL_CALLS]'
         '[{"name": "t1", "arguments": {}, "id": "000000000"}, {"name": "t2", "arguments": {}'
-        ', "id": "111111111"}]</s>'
+        ', "id": "111111111"}]</s>[TOOL_RESULTS]000000000[TOOL_CONTENT]r1[/TOOL_RESULTS]'
+        "[TOOL_RESULTS]111111111[TOOL_CONTENT]r2[/TOOL_RESULTS]"
     )
 
     # make sure it also works end to end
     tools = instruct_request.available_tools
     exclude = {"system_prompt", "truncate_at_max_tokens", "available_tools", "settings"}
-    chat_completion_request = ChatCompletionRequest(**instruct_request.model_dump(exclude=exclude), tools=tools)
-    validator = MistralRequestValidatorV5(mode=ValidationMode.finetuning)
+    chat_completion_request = ChatCompletionRequest(
+        **instruct_request.model_dump(exclude=exclude), model="test-model", tools=tools
+    )
+    validator = MistralRequestValidatorV5(mode=ValidationMode.serving)
     normalizer = InstructRequestNormalizerV7.normalizer()
 
     mistral_tokenizer = MistralTokenizer(tokenizer, validator, normalizer)
