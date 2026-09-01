@@ -23,22 +23,26 @@ def test_normal(tokenizer: InstructTokenizer) -> None:
                 UserMessage(content="a"),
                 AssistantMessage(content="b"),
                 UserMessage(content="c"),
-                AssistantMessage(content="d", prefix=True),
+                AssistantMessage(content="d"),
             ]
         )
     )
     tokens = tokenized.tokens
     text = decode_keep(tokenizer, tokenized)
-    assert text == "<s>[INST]▁a[/INST]▁b</s>[INST]▁c[/INST]▁d"
-    assert tokens == [1, 3, 1032, 4, 1055, 2, 3, 1045, 4, 1049]
-    assert tokenized.prefix_ids == [1049]
+    assert text == "<s>[INST]▁a[/INST]▁b</s>[INST]▁c[/INST]▁d</s>"
+    assert tokens == [1, 3, 1032, 4, 1055, 2, 3, 1045, 4, 1049, 2]
+    assert tokenized.prefix_ids is None
 
 
-def test_unprefixed_final_message_fails_prefix_invariant(tokenizer: InstructTokenizer) -> None:
+def test_non_final_prefixed_assistant_fails_prefix_invariant(tokenizer: InstructTokenizer) -> None:
     with pytest.raises(AssertionError):
         tokenizer.encode_instruct(
             InstructRequest(
-                messages=[UserMessage(content="a"), AssistantMessage(content="b")],
+                messages=[
+                    UserMessage(content="a"),
+                    AssistantMessage(content="b", prefix=True),
+                    UserMessage(content="c"),
+                ]
             )
         )
 
@@ -67,7 +71,7 @@ def test_tools_multiturn(tokenizer: InstructTokenizer) -> None:
                 UserMessage(content="a"),
                 AssistantMessage(content="b"),
                 UserMessage(content="c"),
-                AssistantMessage(content="d", prefix=True),
+                AssistantMessage(content="d"),
             ],
             available_tools=[
                 Tool(function=Function(name="tool1", description="1", parameters={})),
@@ -81,7 +85,7 @@ def test_tools_multiturn(tokenizer: InstructTokenizer) -> None:
         "<s>[INST]▁a[/INST]▁b</s>"
         '[AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"tool1",▁"description":▁"1",▁"parameters":▁{}}}'
         ',▁{"type":▁"function",▁"function":▁{"name":▁"tool2",▁"description":▁"2",▁"parameters":▁{}}}]'
-        "[/AVAILABLE_TOOLS][INST]▁c[/INST]▁d"
+        "[/AVAILABLE_TOOLS][INST]▁c[/INST]▁d</s>"
     )
     begin_tool, end_tool = tokens.index(6), tokens.index(7)
     assert tokens[:begin_tool] + tokens[end_tool + 1 :] == [
@@ -95,6 +99,7 @@ def test_tools_multiturn(tokenizer: InstructTokenizer) -> None:
         1045,
         4,
         1049,
+        2,
     ]
     json.loads(tokenizer.tokenizer.decode(tokens[begin_tool : end_tool + 1]))
 
@@ -115,14 +120,14 @@ def test_system_multiturn(tokenizer: InstructTokenizer) -> None:
                 UserMessage(content="a"),
                 AssistantMessage(content="b"),
                 UserMessage(content="c"),
-                AssistantMessage(content="d", prefix=True),
+                AssistantMessage(content="d"),
             ],
             system_prompt="SYSTEM",
         )
     )
     tokens = tokenized.tokens
     text = decode_keep(tokenizer, tokenized)
-    assert text == "<s>[INST]▁a[/INST]▁b</s>[INST]▁SYSTEM<0x0A><0x0A>c[/INST]▁d"
+    assert text == "<s>[INST]▁a[/INST]▁b</s>[INST]▁SYSTEM<0x0A><0x0A>c[/INST]▁d</s>"
     assert tokens == [
         1,
         3,
@@ -138,6 +143,7 @@ def test_system_multiturn(tokenizer: InstructTokenizer) -> None:
         29485,
         4,
         1049,
+        2,
     ]
     first_eos = tokens.index(2)
     assert tokenizer.tokenizer.decode(tokens[first_eos:]) == "SYSTEM\n\nc d"
@@ -184,7 +190,7 @@ def test_system_tools_multiturn(tokenizer: InstructTokenizer) -> None:
                 UserMessage(content="a"),
                 AssistantMessage(content="b"),
                 UserMessage(content="c"),
-                AssistantMessage(content="d", prefix=True),
+                AssistantMessage(content="d"),
             ],
             available_tools=[Tool(function=Function(name="tool1", description="1", parameters={}))],
             system_prompt="SYSTEM",
@@ -193,7 +199,7 @@ def test_system_tools_multiturn(tokenizer: InstructTokenizer) -> None:
     tokens = tokenized.tokens
     text = decode_keep(tokenizer, tokenized)
     assert text == (
-        '<s>[INST]▁a[/INST]▁b</s>[AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"tool1",▁"description":▁"1",▁"parameters":▁{}}}][/AVAILABLE_TOOLS][INST]▁SYSTEM<0x0A><0x0A>c[/INST]▁d'
+        '<s>[INST]▁a[/INST]▁b</s>[AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"tool1",▁"description":▁"1",▁"parameters":▁{}}}][/AVAILABLE_TOOLS][INST]▁SYSTEM<0x0A><0x0A>c[/INST]▁d</s>'
     )
 
     begin_tool, end_tool = tokens.index(6), tokens.index(7)

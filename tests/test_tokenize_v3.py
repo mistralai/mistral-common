@@ -124,7 +124,7 @@ def test_tools_singleturn(
             SPM_BEGIN_TOOL_ID,
             SPM_END_TOOL_ID,
             [1, 3, 1032, 4, 1055],
-            [2, 3, 1045, 4, 1049],
+            [2, 3, 1045, 4, 1049, 2],
         ),
         (
             tekken_tokenizer(),
@@ -133,7 +133,7 @@ def test_tools_singleturn(
             TEKKEN_BEGIN_TOOL_ID,
             TEKKEN_END_TOOL_ID,
             [1, 3, 1097, 4, 1098],
-            [2, 3, 1099, 4, 1100],
+            [2, 3, 1099, 4, 1100, 2],
         ),
     ],
 )
@@ -152,7 +152,7 @@ def test_tools_multiturn(
                 UserMessage(content="a"),
                 AssistantMessage(content="b"),
                 UserMessage(content="c"),
-                AssistantMessage(content="d", prefix=True),
+                AssistantMessage(content="d"),
             ],
             available_tools=[
                 Tool(function=Function(name="tool1", description="1", parameters={})),
@@ -166,7 +166,7 @@ def test_tools_multiturn(
         f"<s>[INST]{special_ws}a[/INST]{special_ws}b</s>[AVAILABLE_TOOLS]{special_ws}["
         f'{{"type":{ws}"function",{ws}"function":{ws}{{"name":{ws}"tool1",{ws}"description":{ws}"1",{ws}"parameters":{ws}{{}}}}}},'
         f'{ws}{{"type":{ws}"function",{ws}"function":{ws}{{"name":{ws}"tool2",{ws}"description":{ws}"2",{ws}"parameters":{ws}{{}}}}}}]'
-        f"[/AVAILABLE_TOOLS][INST]{special_ws}c[/INST]{special_ws}d"
+        f"[/AVAILABLE_TOOLS][INST]{special_ws}c[/INST]{special_ws}d</s>"
     )
 
     begin_tool, end_tool = tokens.index(begin_tool_index), tokens.index(end_tool_index)
@@ -215,7 +215,7 @@ def test_system_tools_multiturn(
                 UserMessage(content="a"),
                 AssistantMessage(content="b"),
                 UserMessage(content="c"),
-                AssistantMessage(content="d", prefix=True),
+                AssistantMessage(content="d"),
             ],
             available_tools=[Tool(function=Function(name="tool1", description="1", parameters={}))],
             system_prompt="SYSTEM",
@@ -226,7 +226,7 @@ def test_system_tools_multiturn(
     assert text == (
         f"<s>[INST]{special_ws}a[/INST]{special_ws}b</s>[AVAILABLE_TOOLS]{special_ws}["
         f'{{"type":{ws}"function",{ws}"function":{ws}{{"name":{ws}"tool1",{ws}"description":{ws}"1",{ws}"parameters":{ws}{{}}}}}}]'
-        f"[/AVAILABLE_TOOLS][INST]{special_ws}SYSTEM{new_line}c[/INST]{special_ws}d"
+        f"[/AVAILABLE_TOOLS][INST]{special_ws}SYSTEM{new_line}c[/INST]{special_ws}d</s>"
     )
 
     begin_tool, end_tool = tokens.index(begin_tool_index), tokens.index(end_tool_index)
@@ -378,14 +378,14 @@ def test_tool_message_no_id_fine_tuning_ok(tokenizer: InstructTokenizer, special
             InstructRequest(
                 messages=[
                     UserMessage(content="a"),
-                    AssistantMessage(tool_calls=[tool_call], prefix=True),
+                    AssistantMessage(tool_calls=[tool_call]),
                 ],
             )
         )
         text = decode_keep(tokenizer, tokenized)
         assert (
             text
-            == f'<s>[INST]{special_ws}a[/INST][TOOL_CALLS]{special_ws}[{{"name":{ws}"b",{ws}"arguments":{ws}{{}}}}]'
+            == f'<s>[INST]{special_ws}a[/INST][TOOL_CALLS]{special_ws}[{{"name":{ws}"b",{ws}"arguments":{ws}{{}}}}]</s>'
         )
 
 
