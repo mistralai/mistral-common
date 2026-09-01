@@ -462,6 +462,39 @@ def test_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkeni
             UserMessage(content="a"),
             AssistantMessage(
                 content="b1b2",
+                prefix=True,
+                tool_calls=[
+                    ToolCall(id="000000000", function=FunctionCall(name="t1", arguments="{}")),
+                    ToolCall(id="111111111", function=FunctionCall(name="t2", arguments="{}")),
+                ],
+            ),
+        ],
+    )
+    tokenized = tokenizer.encode_instruct(instruct_request)
+    text = decode_keep(tokenizer, tokenized)
+
+    assert text == (
+        '<s>[AVAILABLE_TOOLS][{"type": "function", "function": '
+        '{"name": "t1", "description": "", "parameters": {}}}, '
+        '{"type": "function", "function": {"name": "t2", "description"'
+        ': "", "parameters": {}}}][/AVAILABLE_TOOLS][INST]a[/INST]b1b2[TOOL_CALLS]'
+        '[{"name": "t1", "arguments": {}, "id": "000000000"}, {"name": "t2", "arguments": {}'
+        ', "id": "111111111"}]'
+    )
+
+
+@pytest.mark.parametrize("tekkenizer", ["no_audio_tekkenizer", "with_audio_tekkenizer"])
+def test_assistant_tool_call_and_content_end_to_end(request: pytest.FixtureRequest, tekkenizer: str) -> None:
+    tokenizer = request.getfixturevalue(tekkenizer)
+    instruct_request: InstructRequest = InstructRequest(
+        available_tools=[
+            Tool(function=Function(name="t1", parameters={})),
+            Tool(function=Function(name="t2", parameters={})),
+        ],
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(
+                content="b1b2",
                 tool_calls=[
                     ToolCall(id="000000000", function=FunctionCall(name="t1", arguments="{}")),
                     ToolCall(id="111111111", function=FunctionCall(name="t2", arguments="{}")),
@@ -471,19 +504,7 @@ def test_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkeni
             ToolMessage(content="r2", tool_call_id="111111111"),
         ],
     )
-    tokenized = tokenizer.encode_instruct(instruct_request)
-    tokens = tokenized.tokens
-    text = decode_keep(tokenizer, tokenized)
-
-    assert text == (
-        '<s>[AVAILABLE_TOOLS][{"type": "function", "function": '
-        '{"name": "t1", "description": "", "parameters": {}}}, '
-        '{"type": "function", "function": {"name": "t2", "description"'
-        ': "", "parameters": {}}}][/AVAILABLE_TOOLS][INST]a[/INST]b1b2[TOOL_CALLS]'
-        '[{"name": "t1", "arguments": {}, "id": "000000000"}, {"name": "t2", "arguments": {}'
-        ', "id": "111111111"}]</s>[TOOL_RESULTS]000000000[TOOL_CONTENT]r1[/TOOL_RESULTS]'
-        "[TOOL_RESULTS]111111111[TOOL_CONTENT]r2[/TOOL_RESULTS]"
-    )
+    tokens = tokenizer.encode_instruct(instruct_request).tokens
 
     # make sure it also works end to end
     tools = instruct_request.available_tools
