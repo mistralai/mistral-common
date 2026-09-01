@@ -31,6 +31,7 @@ def test_normal(tokenizer: InstructTokenizer) -> None:
     text = decode_keep(tokenizer, tokenized)
     assert text == "<s>[INST]▁a[/INST]▁b</s>[INST]▁c[/INST]▁d</s>"
     assert tokens == [1, 3, 1032, 4, 1055, 2, 3, 1045, 4, 1049, 2]
+    assert tokenized.prefix_ids is None
 
 
 def test_tools_singleturn(tokenizer: InstructTokenizer) -> None:
@@ -166,6 +167,7 @@ def test_prefixed_final_message(tokenizer: InstructTokenizer) -> None:
         4,
         1049,
     ]
+    assert tokenized.prefix_ids == [1049]
 
 
 def test_system_tools_multiturn(tokenizer: InstructTokenizer) -> None:

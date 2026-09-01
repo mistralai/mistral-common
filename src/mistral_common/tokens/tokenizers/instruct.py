@@ -188,7 +188,8 @@ class InstructTokenizerBase(
                 new_tokens = self.encode_assistant_message(
                     message=msg, is_before_last_user_message=msg_idx < last_user_idx
                 )
-                if msg_idx == len(request.messages) - 1:
+                if msg_idx == len(request.messages) - 1 and msg.prefix:
+                    assert msg.prefix
                     prefix_ids = new_tokens
             elif isinstance(msg, SystemMessage):
                 new_tokens, new_audios = self.encode_system_message(msg)
