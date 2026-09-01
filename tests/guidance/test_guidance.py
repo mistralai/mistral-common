@@ -235,7 +235,7 @@ def _encode_content(
 
     if isinstance(content, str):
         return instruct_tokenizer.encode_assistant_message(
-            AssistantMessage(content=content), is_before_last_user_message=False, continue_message=False
+            AssistantMessage(content=content), is_before_last_user_message=False
         )
 
     tool_calls = [x for x in content if isinstance(x, ToolCall)]
@@ -246,7 +246,6 @@ def _encode_content(
         tokens = instruct_tokenizer.encode_assistant_message(
             AssistantMessage(content=content_chunks),
             is_before_last_user_message=False,
-            continue_message=False,
         )
     # The instruct tokenizer appends EOS after content, but when tool calls follow,
     # the EOS should come after the last tool call, not after the content. Strip it

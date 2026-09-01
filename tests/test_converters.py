@@ -31,6 +31,7 @@ from openai.types.chat.chat_completion_tool_message_param import ChatCompletionT
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam as OpenAITool
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam as OpenAIUserMessage
 from PIL import Image
+from pydantic import ValidationError
 from pydantic_extra_types.language_code import LanguageAlpha2
 
 from mistral_common.exceptions import InvalidAssistantMessageException
@@ -743,6 +744,87 @@ def test_request_to_openai_forwards_reasoning_field_format() -> None:
     openai_request = request.to_openai(reasoning_field_format=ReasoningFieldFormat.reasoning)
     assistant_msg = [m for m in openai_request["messages"] if m["role"] == "assistant"][0]
     assert assistant_msg == {"role": "assistant", "reasoning": "Let me think", "content": "Done"}
+
+
+def test_request_from_openai_maps_continuation_without_warning() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        request = ChatCompletionRequest.from_openai(
+            messages=[
+                {"role": "user", "content": "foo"},
+                {"role": "assistant", "content": "bar"},
+            ],
+            continue_final_message=True,
+        )
+
+    assert isinstance(request.messages[-1], AssistantMessage)
+    assert request.messages[-1].prefix is True
+
+
+@pytest.mark.parametrize(
+    ["legacy_value", "expected_prefix"],
+    [(1, True), ("true", True), (0, False), ("false", False)],
+)
+def test_request_from_openai_preserves_legacy_boolean_coercion(
+    legacy_value: bool | int | str, expected_prefix: bool
+) -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        request = ChatCompletionRequest.from_openai(
+            messages=[
+                {"role": "user", "content": "foo"},
+                {"role": "assistant", "content": "bar"},
+            ],
+            continue_final_message=legacy_value,  # type: ignore[arg-type]
+        )
+
+    assert caught == []
+    assert isinstance(request.messages[-1], AssistantMessage)
+    assert request.messages[-1].prefix is expected_prefix
+
+
+def test_request_from_openai_rejects_invalid_continuation_without_warning() -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(ValidationError, match="valid boolean"):
+            ChatCompletionRequest.from_openai(
+                messages=[{"role": "user", "content": "foo"}],
+                continue_final_message="not-a-bool",  # type: ignore[arg-type]
+            )
+
+    assert caught == []
+
+
+def test_request_from_openai_rejects_true_continuation_for_non_assistant_final() -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(ValueError, match="requires final message to be an assistant"):
+            ChatCompletionRequest.from_openai(
+                messages=[
+                    {"role": "user", "content": "foo"},
+                    {"role": "user", "content": "bar"},
+                ],
+                continue_final_message=True,
+            )
+
+    assert caught == []
+
+
+@pytest.mark.parametrize(
+    ["messages", "expected"],
+    [
+        (
+            [UserMessage(content="foo"), AssistantMessage(content="bar", prefix=True)],
+            True,
+        ),
+        ([UserMessage(content="foo"), AssistantMessage(content="bar")], False),
+        ([UserMessage(content="foo")], False),
+    ],
+)
+def test_request_to_openai_derives_continuation_flag(messages: list[ChatMessage], expected: bool) -> None:
+    request = ChatCompletionRequest(messages=messages)
+
+    assert request.to_openai()["continue_final_message"] is expected
 
 
 @pytest.mark.parametrize(

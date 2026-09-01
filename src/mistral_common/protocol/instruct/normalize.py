@@ -380,7 +380,6 @@ class InstructRequestNormalizer(
             messages=messages,
             system_prompt=system_prompt,
             available_tools=request.tools,
-            continue_final_message=request.continue_final_message,
             settings=settings,
         )
 
@@ -489,7 +488,6 @@ class InstructRequestNormalizerV7(InstructRequestNormalizer):
             messages=messages,
             system_prompt=None,
             available_tools=request.tools,
-            continue_final_message=request.continue_final_message,
             settings=settings,
         )
 
@@ -615,7 +613,6 @@ class InstructRequestNormalizerV15(InstructRequestNormalizerV13):
             messages=messages,
             system_prompt=None,
             available_tools=request.tools,
-            continue_final_message=request.continue_final_message,
             settings=settings,
         )
 
