@@ -4,6 +4,7 @@ import pytest
 
 from mistral_common.exceptions import (
     InvalidAssistantMessageException,
+    InvalidFunctionCallException,
     InvalidMessageStructureException,
     InvalidRequestException,
     InvalidSystemPromptException,
@@ -16,6 +17,7 @@ from mistral_common.protocol.instruct.chunk import (
 )
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
+    ChatMessage,
     SystemMessage,
     ToolMessage,
     UserMessage,
@@ -32,7 +34,9 @@ from mistral_common.protocol.instruct.validator import (
     MistralRequestValidatorV13,
     MistralRequestValidatorV15,
     ValidationMode,
+    get_validator,
 )
+from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
 from tests.fixtures.chunks import get_content_chunks
 
@@ -514,7 +518,82 @@ class TestChatValidationV5:
                 )
 
 
+class TestChatValidationV11:
+    @pytest.mark.parametrize("version", [TokenizerVersion.v3, TokenizerVersion.v7, TokenizerVersion.v11])
+    def test_allows_null_tool_call_id_for_last_finetuning_assistant(self, version: TokenizerVersion) -> None:
+        request = ChatCompletionRequest[ChatMessage](
+            messages=[
+                UserMessage(content="foo"),
+                AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="foo", arguments="{}"))]),
+            ]
+        )
+        validator = get_validator(version=version, mode=ValidationMode.finetuning)
+
+        assert validator.validate_request(request) == request
+
+    @pytest.mark.parametrize("version", [TokenizerVersion.v3, TokenizerVersion.v7, TokenizerVersion.v11])
+    @pytest.mark.parametrize("mode", [ValidationMode.serving, ValidationMode.test])
+    def test_rejects_null_tool_call_id_outside_finetuning(
+        self, version: TokenizerVersion, mode: ValidationMode
+    ) -> None:
+        request = ChatCompletionRequest[ChatMessage](
+            messages=[
+                UserMessage(content="foo"),
+                AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="foo", arguments="{}"))]),
+                UserMessage(content="continue")
+                if mode == ValidationMode.test
+                else ToolMessage(content="result", tool_call_id="null"),
+            ],
+            model="test",
+        )
+        validator = get_validator(version=version, mode=mode)
+
+        with pytest.raises(InvalidFunctionCallException, match="Tool call id"):
+            validator.validate_request(request)
+
+    @pytest.mark.parametrize("tool_call_id", ["x", "call/id-1"])
+    def test_rejects_non_nine_character_alphanumeric_tool_call_id(self, tool_call_id: str) -> None:
+        request = ChatCompletionRequest[ChatMessage](
+            messages=[
+                UserMessage(content="foo"),
+                AssistantMessage(
+                    tool_calls=[ToolCall(id=tool_call_id, function=FunctionCall(name="foo", arguments="{}"))]
+                ),
+                UserMessage(content="continue"),
+            ]
+        )
+        validator = get_validator(version=TokenizerVersion.v11, mode=ValidationMode.test)
+
+        with pytest.raises(InvalidFunctionCallException, match=r"must be a-z, A-Z, 0-9, with a length of 9"):
+            validator.validate_request(request)
+
+
 class TestChatValidationV13:
+    @pytest.mark.parametrize("version", [TokenizerVersion.v13, TokenizerVersion.v15])
+    @pytest.mark.parametrize("mode", list(ValidationMode))
+    @pytest.mark.parametrize("tool_call_id", [None, "", "null"], ids=["missing", "empty", "null"])
+    def test_rejects_invalid_tool_call_id_in_all_modes(
+        self, version: TokenizerVersion, mode: ValidationMode, tool_call_id: str | None
+    ) -> None:
+        function = FunctionCall(name="foo", arguments="{}")
+        tool_call = (
+            ToolCall(function=function) if tool_call_id is None else ToolCall(id=tool_call_id, function=function)
+        )
+        assistant_message = AssistantMessage(tool_calls=[tool_call])
+        messages: _Messages = [UserMessage(content="foo"), assistant_message]
+        if mode == ValidationMode.serving:
+            messages.append(ToolMessage(content="result", tool_call_id=tool_call.id))
+        elif mode == ValidationMode.test:
+            messages.append(UserMessage(content="continue"))
+
+        validator = get_validator(version=version, mode=mode)
+
+        with pytest.raises(
+            InvalidFunctionCallException,
+            match=(r"Tool call id must be a non-empty string other than 'null' for tokenizer version 13 or newer\."),
+        ):
+            validator.validate_request(ChatCompletionRequest(messages=messages, model="test"))
+
     def test_right_number_results_invalid_id(self, validator_v13: MistralRequestValidatorV13) -> None:
         with pytest.raises(
             InvalidMessageStructureException,

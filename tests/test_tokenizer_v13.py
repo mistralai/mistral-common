@@ -10,6 +10,7 @@ from mistral_common.protocol.instruct.chunk import (
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     BaseMessage,
+    ChatMessage,
     SystemMessage,
     ToolMessage,
     UserMessage,
@@ -235,6 +236,28 @@ def test_end_to_end_v13_wrong_order(
     assert isinstance(tokenized_v13, Tokenized)
     text = decode_keep(mistral_tokenizer_v13, tokenized_v13)
     assert text == EXPECTED_TEXT_V13_FROM_WRONG_ORDER, text
+
+
+@pytest.mark.parametrize("tool_call_id", ["x", "call/id-1"])
+def test_encode_chat_completion_with_arbitrary_tool_call_id(
+    v13_tekkenizer: InstructTokenizerV13, tool_call_id: str
+) -> None:
+    mistral_tokenizer = MistralTokenizer(
+        instruct_tokenizer=v13_tekkenizer,
+        validator=MistralRequestValidatorV13(),
+        request_normalizer=InstructRequestNormalizerV13.normalizer(),
+    )
+    request = ChatCompletionRequest[ChatMessage](
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(tool_calls=[ToolCall(id=tool_call_id, function=FunctionCall(name="f", arguments="{}"))]),
+            ToolMessage(content="b", tool_call_id=tool_call_id),
+        ]
+    )
+
+    tokenized = mistral_tokenizer.encode_chat_completion(request)
+
+    assert tokenized.text == "<s>[INST]a[/INST][TOOL_CALLS]f[ARGS]{}</s>[TOOL_RESULTS]b[/TOOL_RESULTS]"
 
 
 def test_encode_tool_message(v13_tekkenizer: InstructTokenizerV13) -> None:
