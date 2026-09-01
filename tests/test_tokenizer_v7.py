@@ -497,7 +497,7 @@ def test_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkeni
 @pytest.mark.parametrize("tekkenizer", ["no_audio_tekkenizer", "with_audio_tekkenizer"])
 def test_prefixed_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkenizer: str) -> None:
     tokenizer = request.getfixturevalue(tekkenizer)
-    instruct_request = InstructRequest(
+    instruct_request: InstructRequest[ChatMessage, Tool] = InstructRequest(
         available_tools=[
             Tool(function=Function(name="t1", parameters={})),
             Tool(function=Function(name="t2", parameters={})),
