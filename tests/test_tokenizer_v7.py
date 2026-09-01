@@ -494,6 +494,76 @@ def test_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkeni
     assert tokens == tokens_2.tokens
 
 
+@pytest.mark.parametrize("tekkenizer", ["no_audio_tekkenizer", "with_audio_tekkenizer"])
+def test_prefixed_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkenizer: str) -> None:
+    tokenizer = request.getfixturevalue(tekkenizer)
+    instruct_request = InstructRequest(
+        available_tools=[
+            Tool(function=Function(name="t1", parameters={})),
+            Tool(function=Function(name="t2", parameters={})),
+        ],
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(
+                content="b1b2",
+                prefix=True,
+                tool_calls=[
+                    ToolCall(id="000000000", function=FunctionCall(name="t1", arguments="{}")),
+                    ToolCall(id="111111111", function=FunctionCall(name="t2", arguments="{}")),
+                ],
+            ),
+        ],
+    )
+
+    tokenized = tokenizer.encode_instruct(instruct_request)
+
+    assert decode_keep(tokenizer, tokenized) == (
+        '<s>[AVAILABLE_TOOLS][{"type": "function", "function": '
+        '{"name": "t1", "description": "", "parameters": {}}}, '
+        '{"type": "function", "function": {"name": "t2", "description"'
+        ': "", "parameters": {}}}][/AVAILABLE_TOOLS][INST]a[/INST]b1b2[TOOL_CALLS]'
+        '[{"name": "t1", "arguments": {}, "id": "000000000"}, {"name": "t2", "arguments": {}'
+        ', "id": "111111111"}]'
+    )
+
+
+@pytest.mark.parametrize("tekkenizer", ["no_audio_tekkenizer", "with_audio_tekkenizer"])
+def test_assistant_tool_call_and_content_end_to_end(request: pytest.FixtureRequest, tekkenizer: str) -> None:
+    tokenizer = request.getfixturevalue(tekkenizer)
+    instruct_request: InstructRequest = InstructRequest(
+        available_tools=[
+            Tool(function=Function(name="t1", parameters={})),
+            Tool(function=Function(name="t2", parameters={})),
+        ],
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(
+                content="b1b2",
+                tool_calls=[
+                    ToolCall(id="000000000", function=FunctionCall(name="t1", arguments="{}")),
+                    ToolCall(id="111111111", function=FunctionCall(name="t2", arguments="{}")),
+                ],
+            ),
+            ToolMessage(content="r1", tool_call_id="000000000"),
+            ToolMessage(content="r2", tool_call_id="111111111"),
+        ],
+    )
+    tokens = tokenizer.encode_instruct(instruct_request).tokens
+
+    tools = instruct_request.available_tools
+    exclude = {"system_prompt", "truncate_at_max_tokens", "available_tools", "settings"}
+    chat_completion_request = ChatCompletionRequest(
+        **instruct_request.model_dump(exclude=exclude), model="test-model", tools=tools
+    )
+    validator = MistralRequestValidatorV5(mode=ValidationMode.serving)
+    normalizer = InstructRequestNormalizerV7.normalizer()
+
+    mistral_tokenizer = MistralTokenizer(tokenizer, validator, normalizer)
+    tokens_2 = mistral_tokenizer.encode_chat_completion(chat_completion_request)
+
+    assert tokens == tokens_2.tokens
+
+
 def test_encode_chat_completion_prefixed_final_message() -> None:
     tokenizer = MistralTokenizer.v7(is_mm=True)
     eos_id = tokenizer.instruct_tokenizer.tokenizer.eos_id
