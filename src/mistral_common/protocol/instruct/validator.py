@@ -441,18 +441,20 @@ class MistralRequestValidatorV3(MistralRequestValidator):
         Validate that the tool call has a valid ID.
         """
         if tool_call.id == _NULL_TOOL_CALL_ID:
-            if self._mode == ValidationMode.finetuning and is_last_message:
-                return
-            if self._mode == ValidationMode.finetuning:
-                raise InvalidFunctionCallException(
-                    "Tool call id of assistant message that is not last has to be defined in finetuning mode."
-                )
-            if self._mode == ValidationMode.serving:
-                raise InvalidFunctionCallException("Tool call id has to be defined in serving mode.")
-            raise InvalidFunctionCallException(
-                f"Tool call id '{_NULL_TOOL_CALL_ID}' is only allowed for the last assistant message "
-                "in finetuning mode."
-            )
+            match self._mode:
+                case ValidationMode.finetuning:
+                    if not is_last_message:
+                        raise InvalidFunctionCallException(
+                            "Tool call id of assistant message that is not last has to be defined in finetuning mode."
+                        )
+                    return
+                case ValidationMode.serving:
+                    raise InvalidFunctionCallException("Tool call id has to be defined in serving mode.")
+                case _:
+                    raise InvalidFunctionCallException(
+                        f"Tool call id '{_NULL_TOOL_CALL_ID}' is only allowed for the last assistant message "
+                        "in finetuning mode."
+                    )
 
         if not _TOOL_CALL_ID_REGEX.match(tool_call.id):
             raise InvalidFunctionCallException(
