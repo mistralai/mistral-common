@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenizer
 from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
 
 
@@ -18,6 +18,19 @@ def tokenizer_v7() -> SentencePieceTokenizer:
         / "mistral_instruct_tokenizer_241114.model.v7"
     )
     return SentencePieceTokenizer(model_path=_model_path)
+
+
+def test_sentencepiece_tokenizer_matches_tokenizer_contract(tokenizer_v7: SentencePieceTokenizer) -> None:
+    tokenizer: Tokenizer = tokenizer_v7
+    vocab = tokenizer.vocab()
+
+    assert tokenizer.n_words == len(vocab)
+    assert vocab[tokenizer.bos_id] == "<s>"
+    assert vocab[tokenizer.eos_id] == "</s>"
+    assert tokenizer.get_special_token("<s>") == tokenizer.bos_id
+    assert tokenizer.get_special_token("</s>") == tokenizer.eos_id
+    assert tokenizer.id_to_piece(tokenizer.unk_id) == "<unk>"
+    assert tokenizer.pad_id == -1
 
 
 @pytest.mark.parametrize(

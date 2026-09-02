@@ -1,6 +1,7 @@
 import json
 
 import pytest
+from typing_extensions import assert_type
 
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
@@ -730,6 +731,23 @@ class TestFineTuningNormalizer:
         )
         normalized = normalizer.from_chat_completion_request(request)
         assert normalized == expected
+
+    def test_return_type_matches_configured_request_class(self) -> None:
+        normalizer: InstructRequestNormalizer[
+            UserMessage,
+            FinetuningAssistantMessage,
+            ToolMessage,
+            SystemMessage,
+            InstructRequest[FinetuningMessage, Tool],
+        ] = InstructRequestNormalizer(
+            UserMessage, FinetuningAssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
+        )
+        request = ChatCompletionRequest[FinetuningMessage](messages=[UserMessage(content="a")])
+
+        result = normalizer.from_chat_completion_request(request)
+
+        assert_type(result, InstructRequest[FinetuningMessage, Tool])
+        assert result == InstructRequest[FinetuningMessage, Tool](messages=[UserMessage(content="a")])
 
 
 class TestChatCompletionRequestNormalizationV13:
