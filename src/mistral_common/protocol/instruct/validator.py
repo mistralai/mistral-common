@@ -76,9 +76,12 @@ class ValidationMode(str, Enum):
     r"""Enum for the validation mode.
 
     Attributes:
-        serving: The serving mode.
-        finetuning: The finetuning mode.
-        test: The test mode.
+        serving: Requires a model name and allows only user, tool, or prefixed assistant final messages.
+        test: Uses the serving final-message rules without requiring a model name; its tool-pairing and tool-ID
+            validation can differ.
+        finetuning: Requires a final assistant message and rejects prefixed assistant messages.
+        structural: Validates message and tool structure without enforcing a final-message role policy, while
+            retaining content and model-setting validation.
 
     Examples:
         >>> mode = ValidationMode.serving
@@ -87,6 +90,7 @@ class ValidationMode(str, Enum):
     serving = "serving"
     finetuning = "finetuning"
     test = "test"
+    structural = "structural"
 
 
 class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType]):
@@ -307,7 +311,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
 
             prev_role = message.role
 
-        if expected_tool_messages != 0 and self._mode == ValidationMode.serving:
+        if expected_tool_messages != 0 and self._mode in {ValidationMode.serving, ValidationMode.structural}:
             raise InvalidMessageStructureException("Not the same number of function calls and responses")
         elif expected_tool_messages < 0 and self._mode == ValidationMode.finetuning:
             raise InvalidMessageStructureException("More tool responses than tool calls")
@@ -342,6 +346,8 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
     def _validate_last_message(self, message: UATS) -> None:
         # The last message must be a user or tool message in serving mode or an assistant message in finetuning mode
         last_message_role = message.role
+        if self._mode == ValidationMode.structural:
+            return
         if self._mode == ValidationMode.finetuning:
             if last_message_role != Roles.assistant:
                 raise InvalidMessageStructureException(
@@ -579,7 +585,10 @@ class MistralRequestValidatorV11(MistralRequestValidatorV5):
 
             prev_role = message.role
 
-        if len(expected_tool_ids) != len(observed_tool_ids) and self._mode == ValidationMode.serving:
+        if len(expected_tool_ids) != len(observed_tool_ids) and self._mode in {
+            ValidationMode.serving,
+            ValidationMode.structural,
+        }:
             raise InvalidMessageStructureException("Not the same number of function calls and responses")
         elif len(expected_tool_ids) < len(observed_tool_ids) and self._mode == ValidationMode.finetuning:
             raise InvalidMessageStructureException("More tool responses than tool calls")

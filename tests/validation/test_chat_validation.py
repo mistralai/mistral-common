@@ -118,6 +118,87 @@ def validator_v15(request: pytest.FixtureRequest) -> MistralRequestValidator:
 
 
 class TestChatValidation:
+    def test_structural_accepts_unprefixed_final_assistant(self) -> None:
+        validator: MistralRequestValidator = MistralRequestValidator(mode=ValidationMode.structural)
+
+        validator.validate_messages(
+            messages=[UserMessage(content="foo"), AssistantMessage(content="bar", prefix=False)],
+        )
+
+    def test_structural_accepts_non_assistant_final(self) -> None:
+        validator: MistralRequestValidator = MistralRequestValidator(mode=ValidationMode.structural)
+
+        validator.validate_messages(
+            messages=[UserMessage(content="foo"), UserMessage(content="bar")],
+        )
+
+    def test_structural_accepts_prefixed_final_assistant(self) -> None:
+        validator: MistralRequestValidator = MistralRequestValidator(mode=ValidationMode.structural)
+
+        validator.validate_messages(
+            messages=[UserMessage(content="foo"), AssistantMessage(content="bar", prefix=True)],
+        )
+
+    def test_structural_does_not_require_model(self) -> None:
+        validator: MistralRequestValidator = MistralRequestValidator(mode=ValidationMode.structural)
+        request = ChatCompletionRequest(messages=[UserMessage(content="foo")])
+
+        assert validator.validate_request(request=request) is request
+
+    def test_structural_validates_message_structure(self) -> None:
+        validator: MistralRequestValidator = MistralRequestValidator(mode=ValidationMode.structural)
+
+        with pytest.raises(
+            InvalidMessageStructureException,
+            match=r"Conversation must start with a user message or system message",
+        ):
+            validator.validate_messages(
+                messages=[AssistantMessage(content="foo")],
+            )
+
+    def test_structural_retains_model_setting_validation(self) -> None:
+        validator: MistralRequestValidator = MistralRequestValidator(mode=ValidationMode.structural)
+        request = ChatCompletionRequest(messages=[UserMessage(content="foo")], reasoning_effort=ReasoningEffort.none)
+
+        with pytest.raises(InvalidRequestException, match=r"reasoning_effort='none' is not supported for this model"):
+            validator.validate_request(request=request)
+
+    def test_structural_rejects_incomplete_tool_responses(self) -> None:
+        validator: MistralRequestValidator = MistralRequestValidator(mode=ValidationMode.structural)
+
+        with pytest.raises(
+            InvalidMessageStructureException, match=r"Not the same number of function calls and responses"
+        ):
+            validator.validate_messages(
+                messages=[
+                    UserMessage(content="foo"),
+                    AssistantMessage(
+                        tool_calls=[
+                            ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}")),
+                            ToolCall(id="987654321", function=FunctionCall(name="bar", arguments="{}")),
+                        ]
+                    ),
+                    ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
+                ],
+            )
+
+    def test_structural_rejects_extra_tool_responses(self) -> None:
+        validator: MistralRequestValidator = MistralRequestValidator(mode=ValidationMode.structural)
+
+        with pytest.raises(
+            InvalidMessageStructureException, match=r"Not the same number of function calls and responses"
+        ):
+            validator.validate_messages(
+                messages=[
+                    UserMessage(content="foo"),
+                    AssistantMessage(
+                        tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]
+                    ),
+                    ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
+                    ToolMessage(name="bar", content="extra", tool_call_id="987654321"),
+                ],
+            )
+
     def test_multiple_system_messages_OK(self, validator: MistralRequestValidator) -> None:
         validator.validate_messages(
             messages=[
@@ -513,7 +594,7 @@ class TestChatValidationV13:
         )
         assistant_message = AssistantMessage(tool_calls=[tool_call])
         messages: _Messages = [UserMessage(content="foo"), assistant_message]
-        if mode == ValidationMode.serving:
+        if mode in {ValidationMode.serving, ValidationMode.structural}:
             messages.append(ToolMessage(content="result", tool_call_id=tool_call.id))
         elif mode == ValidationMode.test:
             messages.append(UserMessage(content="continue"))

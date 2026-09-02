@@ -278,7 +278,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         Args:
             messages: The messages in the OpenAI format.
             tools: The tools in the OpenAI format.
-            continue_final_message: Whether to continue the final message.
+            continue_final_message: Whether to continue an unprefixed final assistant message.
             **kwargs: Additional keyword arguments to pass to the constructor. These should be the same as the fields
                 of the request class or the OpenAI API equivalent.
 
