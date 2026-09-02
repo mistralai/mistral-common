@@ -123,6 +123,7 @@ class SentencePieceTokenizer(Tokenizer):
         self._logger = logging.getLogger(self.__class__.__name__)
         # reload tokenizer
         assert os.path.isfile(model_path), model_path
+        # SentencePiece is optional and conditionally imported, so narrow its dynamic result to this local protocol.
         self._model: _SentencePieceModel = cast(
             _SentencePieceModel,
             SentencePieceProcessor(model_file=model_path if isinstance(model_path, str) else model_path.as_posix()),
