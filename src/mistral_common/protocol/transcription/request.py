@@ -21,6 +21,18 @@ class StreamingMode(str, Enum):
     OFFLINE = "offline"
 
 
+# Fields of `TranscriptionRequest` that are specific to mistral-common / Mistral's
+# transcription API and are not part of the OpenAI transcription API. They are dropped
+# by `TranscriptionRequest.to_openai`.
+_MISTRAL_TRANSCRIPTION_ONLY_FIELDS: tuple[str, ...] = (
+    "id",
+    "max_tokens",
+    "strict_audio_validation",
+    "streaming",
+    "target_streaming_delay_ms",
+)
+
+
 class TranscriptionRequest(BaseCompletionRequest):
     r"""A class representing a request for audio transcription.
 
@@ -80,15 +92,25 @@ class TranscriptionRequest(BaseCompletionRequest):
     def to_openai(self, exclude: tuple = (), **kwargs: Any) -> dict[str, list[dict[str, Any]]]:
         r"""Convert the transcription request into the OpenAI format.
 
-        This method prepares the transcription request data for compatibility with the OpenAI API.
-        It handles the conversion of audio data and additional parameters into the required format.
+        This method prepares the transcription request data into the OpenAI-compatible transcription
+        format consumed by OpenAI-compatible servers. It handles the conversion of audio data and
+        additional parameters into the required format.
+
+        The payload may include extension fields (e.g. ``seed`` and ``top_p``) that are supported by
+        OpenAI-compatible servers such as vLLM but are not part of OpenAI's hosted transcription API.
+        Pass them via ``exclude`` if you need a strictly OpenAI-valid payload.
+
+        Fields that are specific to mistral-common / Mistral's transcription API and are not part of
+        the OpenAI-compatible transcription format are always dropped (see
+        ``_MISTRAL_TRANSCRIPTION_ONLY_FIELDS``).
 
         Args:
-            exclude: Fields to exclude from the conversion.
+            exclude: Additional fields to exclude from the conversion, on top of the mistral-specific
+                fields that are always dropped.
             kwargs: Additional parameters to be added to the request.
 
         Returns:
-            The request in the OpenAI format.
+            The request in the OpenAI-compatible transcription format.
 
         Raises:
             ImportError: If the required soundfile library is not installed.
@@ -119,10 +141,9 @@ class TranscriptionRequest(BaseCompletionRequest):
         openai_request["seed"] = openai_request.pop("random_seed")
         openai_request.update(kwargs)
 
-        # remove mistral-specific
-        # TODO: revisit which fields to expose in the OpenAI format
-        default_exclude = ("id", "max_tokens", "strict_audio_validation", "streaming")
-        default_exclude += exclude
+        # Drop fields that are specific to mistral-common / Mistral's transcription API
+        # and are not part of the OpenAI transcription API.
+        default_exclude = _MISTRAL_TRANSCRIPTION_ONLY_FIELDS + exclude
         for k in default_exclude:
             openai_request.pop(k, None)
 
