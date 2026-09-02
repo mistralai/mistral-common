@@ -1,0 +1,7 @@
+{% if config.theme.logo %}
+  <img src="{{ config.theme.logo | url }}" alt="=Mistral AI" class="logo-light", id="logo-light" />
+  <img src="{{ config.theme.logo_dark | url }}" alt="Mistral AI" class="logo-dark", id="logo-dark" />
+{% else %}
+  {% set icon = config.theme.icon.logo or "material/library" %}
+  {% include ".icons/" ~ icon ~ ".svg" %}
+{% endif %}
