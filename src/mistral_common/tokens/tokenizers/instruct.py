@@ -22,7 +22,7 @@ from mistral_common.protocol.instruct.chunk import (
 from mistral_common.protocol.instruct.messages import (
     UATS,
     AssistantMessage,
-    AssistantMessageType,
+    ChatMessage,
     SystemMessage,
     ToolMessage,
     UserMessage,
@@ -47,9 +47,7 @@ from mistral_common.tokens.tokenizers.image import ImageEncoder
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 
 
-class InstructTokenizerBase(
-    InstructTokenizer, Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]
-):
+class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMRequestType, TokenizedType]):
     r"""Base instruct tokenizer."""
 
     def __init__(
@@ -112,7 +110,7 @@ class InstructTokenizerBase(
         raise NotImplementedError("Tool message not implemented")
 
     @abstractmethod
-    def encode_assistant_message(self, message: AssistantMessageType, is_before_last_user_message: bool) -> list[int]:
+    def encode_assistant_message(self, message: AssistantMessage, is_before_last_user_message: bool) -> list[int]:
         r"""Encode an assistant message.
 
         Raises:
@@ -132,7 +130,7 @@ class InstructTokenizerBase(
     def _truncate_for_max_tokens(
         self,
         tokenized: list[list[int] | None],
-        messages: list[AssistantMessageType],
+        messages: list[ChatMessage],
         max_tokens: int,
         last_user_message_index: int,
     ) -> None:
@@ -146,7 +144,7 @@ class InstructTokenizerBase(
 
     def encode_instruct(
         self,
-        request: InstructRequest[AssistantMessageType, Tool],
+        request: InstructRequest[ChatMessage, Tool],
     ) -> Tokenized:
         r"""Encode an instruct request.
 
@@ -238,9 +236,7 @@ class InstructTokenizerBase(
         return self.tokenizer._to_string(tokens)
 
 
-class InstructTokenizerV1(
-    InstructTokenizerBase, Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]
-):
+class InstructTokenizerV1(InstructTokenizerBase, Generic[InstructRequestType, FIMRequestType, TokenizedType]):
     r"""Instruct tokenizer V1.
 
     This tokenizer has basic for messages. It does not support tools or image inputs.
@@ -321,7 +317,7 @@ class InstructTokenizerV1(
         """
         raise TokenizerException("Tools not implemented for tokenizer V1")
 
-    def encode_assistant_message(self, message: AssistantMessageType, is_before_last_user_message: bool) -> list[int]:
+    def encode_assistant_message(self, message: AssistantMessage, is_before_last_user_message: bool) -> list[int]:
         r"""Encode an assistant message.
 
         Args:
@@ -365,9 +361,7 @@ class InstructTokenizerV1(
         raise TokenizerException(f"Speech request not available for tokenizer {self.tokenizer.version.value}")
 
 
-class InstructTokenizerV2(
-    InstructTokenizerV1, Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]
-):
+class InstructTokenizerV2(InstructTokenizerV1, Generic[InstructRequestType, FIMRequestType, TokenizedType]):
     r"""Instruct tokenizer V2.
 
     This tokenizer adds supports to images, tools and FIM requests.
@@ -517,12 +511,12 @@ class InstructTokenizerV2(
             "arguments": self._parse_json_content(tool_call.function.arguments),
         }
 
-    def _encode_normal_content_assistant_message(self, message: AssistantMessageType) -> list[int]:
+    def _encode_normal_content_assistant_message(self, message: AssistantMessage) -> list[int]:
         assert message.content, f"Assistant message must have content. Got {message}"
         assert isinstance(message.content, str), "Message content must be a string for tokenizer < V7"
         return self.tokenizer.encode(message.content.rstrip(" "), bos=False, eos=False)
 
-    def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> list[int]:
+    def _encode_tool_calls_in_assistant_message(self, message: AssistantMessage) -> list[int]:
         assert message.tool_calls, f"Assistant message must have tool calls. Got {message}"
         prepared_tool_calls = []
         for tool_call in message.tool_calls:
@@ -542,7 +536,7 @@ class InstructTokenizerV2(
         assert self.tokenizer.model_settings_builder is None, "`model_settings_builder` not supported for this version."
         return []
 
-    def encode_assistant_message(self, message: AssistantMessageType, is_before_last_user_message: bool) -> list[int]:
+    def encode_assistant_message(self, message: AssistantMessage, is_before_last_user_message: bool) -> list[int]:
         r"""Encode an assistant message.
 
         Args:
@@ -597,9 +591,7 @@ class InstructTokenizerV2(
         return tokenized
 
 
-class InstructTokenizerV3(
-    InstructTokenizerV2, Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]
-):
+class InstructTokenizerV3(InstructTokenizerV2, Generic[InstructRequestType, FIMRequestType, TokenizedType]):
     r"""Instruct tokenizer V3.
 
     The only difference with V2 tokenizer is that it encodes the tool messages differently.
@@ -664,7 +656,7 @@ class InstructTokenizerV3(
         ]
         return curr_tokens, [], []
 
-    def encode_assistant_message(self, message: AssistantMessageType, is_before_last_user_message: bool) -> list[int]:
+    def encode_assistant_message(self, message: AssistantMessage, is_before_last_user_message: bool) -> list[int]:
         r"""Encode an assistant message.
 
         Note:
@@ -829,7 +821,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
     def _truncate_for_max_tokens(
         self,
         tokenized_messages: list[list[int] | None],
-        messages: list[AssistantMessageType],
+        messages: list[ChatMessage],
         max_tokens: int,
         last_user_message_index: int,
     ) -> None:
@@ -1122,7 +1114,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
         ]
         return curr_tokens, [], []
 
-    def encode_assistant_message(self, message: AssistantMessageType, is_before_last_user_message: bool) -> list[int]:
+    def encode_assistant_message(self, message: AssistantMessage, is_before_last_user_message: bool) -> list[int]:
         r"""Encode an assistant message.
 
         Args:
@@ -1224,7 +1216,7 @@ class InstructTokenizerV11(InstructTokenizerV7):
         self.ARGS = self.tokenizer.get_special_token(SpecialTokens.args.value)
         self.CALL_ID = self.tokenizer.get_special_token(SpecialTokens.call_id.value)
 
-    def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> list[int]:
+    def _encode_tool_calls_in_assistant_message(self, message: AssistantMessage) -> list[int]:
         assert message.tool_calls, f"Assistant message must have tool calls. Got {message}"
         curr_tokens = []
         for tool_call in message.tool_calls:
@@ -1272,7 +1264,7 @@ class InstructTokenizerV13(InstructTokenizerV11):
             self.BEGIN_THINK = None
             self.END_THINK = None
 
-    def _encode_tool_calls_in_assistant_message(self, message: AssistantMessageType) -> list[int]:
+    def _encode_tool_calls_in_assistant_message(self, message: AssistantMessage) -> list[int]:
         assert message.tool_calls, f"Assistant message must have tool calls. Got {message}"
         curr_tokens = []
         for tool_call in message.tool_calls:

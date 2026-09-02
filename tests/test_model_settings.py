@@ -8,7 +8,36 @@ from mistral_common.protocol.instruct.request import (
     ModelSettings,
     ReasoningEffort,
 )
-from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
+from mistral_common.tokens.tokenizers.model_settings_builder import (
+    EnumBuilder,
+    FieldBuilder,
+    ModelSettingsBuilder,
+    ValidatorType,
+)
+
+
+class StringToIntBuilder(FieldBuilder[str, int]):
+    type: ValidatorType = ValidatorType.ENUM
+    accepts_none: bool = False
+    default: int | None = None
+
+    def _convert(self, input_value: str) -> int:
+        return int(input_value)
+
+    def _validate_built_value(self, field_name: str, value: int) -> None:
+        if value < 0:
+            raise InvalidRequestException(f"{field_name} should be non-negative.")
+
+
+def test_field_builder_converts_and_validates_output() -> None:
+    builder = StringToIntBuilder(accepts_none=False, default=None)
+
+    converted = builder.build_value(field_name="count", value="7")
+    assert converted is not None
+    assert converted + 1 == 8
+
+    with pytest.raises(InvalidRequestException, match="count should be non-negative"):
+        builder.build_value(field_name="count", value="-1")
 
 
 class TestModelSettings:

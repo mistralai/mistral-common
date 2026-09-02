@@ -11,11 +11,8 @@ from mistral_common.base import MistralBase
 from mistral_common.deprecation import warn_once
 from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.instruct.chunk import ContentChunk
-from mistral_common.protocol.instruct.messages import (
-    AssistantMessageType,
-    UserMessage,
-)
-from mistral_common.protocol.instruct.request import InstructRequest
+from mistral_common.protocol.instruct.messages import SystemMessage, UserMessage
+from mistral_common.protocol.instruct.request import InstructRequest, ModelSettings
 from mistral_common.protocol.instruct.tool_calls import Tool
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
@@ -329,7 +326,7 @@ FIMRequestType = TypeVar("FIMRequestType", bound=FIMRequest)
 TokenizedType = TypeVar("TokenizedType", bound=Tokenized)
 
 
-class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedType, AssistantMessageType]):
+class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedType]):
     r"""Base class for instruct tokenizers.
 
     Attributes:
@@ -431,6 +428,7 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         is_first: bool,
         system_prompt: str | None = None,
         force_img_first: bool = False,
+        settings: ModelSettings = ModelSettings.none(),
     ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a user message.
 
@@ -441,10 +439,16 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
             is_first: Whether the message is the first one.
             system_prompt: The system prompt.
             force_img_first: Whether to force the image to be first.
+            settings: The model settings.
 
         Returns:
             The encoded tokens and images.
         """
+        ...
+
+    @abstractmethod
+    def encode_system_message(self, message: SystemMessage) -> tuple[list[int], list[Audio]]:
+        r"""Encode a system message."""
         ...
 
     @abstractmethod
