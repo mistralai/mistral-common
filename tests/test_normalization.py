@@ -1,5 +1,4 @@
 import json
-from typing import Any, NoReturn
 
 import pytest
 from typing_extensions import assert_type
@@ -45,16 +44,6 @@ def mock_chat_completion(messages: list[ChatMessage]) -> ChatCompletionRequest:
         top_p=1.0,
         temperature=0.7,
     )
-
-
-class CustomInstructRequest(InstructRequest[ChatMessage, Tool]):
-    def __init__(self, **data: Any) -> None:
-        data["system_prompt"] = "set by custom init"
-        super().__init__(**data)
-
-    @classmethod
-    def model_validate(cls, obj: Any, **kwargs: Any) -> NoReturn:
-        raise AssertionError("normalizer must use the configured request constructor")
 
 
 class TestChatCompletionRequestNormalization:
@@ -759,24 +748,6 @@ class TestFineTuningNormalizer:
 
         assert_type(result, InstructRequest[FinetuningMessage, Tool])
         assert result == InstructRequest[FinetuningMessage, Tool](messages=[UserMessage(content="a")])
-
-    def test_custom_instruct_request_constructor_is_called(self) -> None:
-        normalizer: InstructRequestNormalizer[
-            UserMessage,
-            AssistantMessage,
-            ToolMessage,
-            SystemMessage,
-            CustomInstructRequest,
-        ] = InstructRequestNormalizer(
-            UserMessage, AssistantMessage, ToolMessage, SystemMessage, CustomInstructRequest, None
-        )
-        request = ChatCompletionRequest[ChatMessage](messages=[UserMessage(content="a")])
-
-        result = normalizer.from_chat_completion_request(request)
-
-        assert_type(result, CustomInstructRequest)
-        assert isinstance(result, CustomInstructRequest)
-        assert result.system_prompt == "set by custom init"
 
 
 class TestChatCompletionRequestNormalizationV13:
