@@ -74,7 +74,7 @@ jobs:
       # Doctests
       - name: Doctests
         run: |
-          uv run pytest --doctest-modules ./src
+          uv run pytest --doctest-modules ./src -n auto --dist loadfile
   
   build_docs:
     if: ${{ github.event.pull_request.draft != true }}
