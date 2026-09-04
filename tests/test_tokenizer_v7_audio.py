@@ -350,6 +350,13 @@ def test_no_audio_in_system_message_before_v7() -> None:
             ],
             "System messages are not yet allowed when audio is present",
         ),
+        (
+            [
+                SystemMessage(content="a b c d"),
+                UserMessage(content=[TextChunk(text="a"), AudioURLChunk(audio_url="https://example.com/a.wav")]),
+            ],
+            "System messages are not yet allowed when audio is present",
+        ),
     ],
 )
 def test_tokenize_audio_raise(tekkenizer: InstructTokenizerV7, messages: list[UATS], match_regex: str) -> None:

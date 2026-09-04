@@ -1077,7 +1077,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
         return any(
             isinstance(message, UserMessage)
             and isinstance(message.content, list)
-            and any(isinstance(chunk, AudioChunk) for chunk in message.content)
+            and any(isinstance(chunk, (AudioChunk, AudioURLChunk)) for chunk in message.content)
             for message in messages
         )
 
@@ -1215,6 +1215,11 @@ class InstructTokenizerV11(InstructTokenizerV7):
         super().__init__(tokenizer, image_encoder, audio_encoder)
         self.ARGS = self.tokenizer.get_special_token(SpecialTokens.args.value)
         self.CALL_ID = self.tokenizer.get_special_token(SpecialTokens.call_id.value)
+
+    @classmethod
+    def validate_messages(cls, messages: list[UATS]) -> None:
+        r"""V11 allows system prompts alongside audio."""
+        return
 
     def _encode_tool_calls_in_assistant_message(self, message: AssistantMessage) -> list[int]:
         assert message.tool_calls, f"Assistant message must have tool calls. Got {message}"
