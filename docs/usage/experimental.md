@@ -39,7 +39,7 @@ pip install mistral-common[server]
 
 ### Launching the Server
 
-You can launch the server using the follwing CLI command:
+You can launch the server using the following CLI command:
 
 ```bash
 mistral_common serve mistralai/Magistral-Small-2507 [validation_mode] \
