@@ -9,11 +9,12 @@ from typing_extensions import Annotated
 from mistral_common import __version__
 
 
-def download_image(url: str) -> Image.Image:
+def download_image(url: str, timeout: float = 10.0) -> Image.Image:
     r"""Download an image from a URL and return it as a PIL Image.
 
     Args:
         url: The URL of the image to download.
+        timeout: The maximum number of seconds to wait for the server response.
 
     Returns:
        The downloaded image as a PIL Image object.
@@ -21,7 +22,7 @@ def download_image(url: str) -> Image.Image:
     headers = {"User-Agent": f"mistral-common/{__version__}"}
     try:
         # Make a request to download the image
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=timeout)
         response.raise_for_status()  # Raise an error for bad responses (4xx, 5xx)
 
         # Convert the image content to a PIL Image
