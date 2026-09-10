@@ -816,8 +816,9 @@ class TestAgnosticValidation:
 
         validator.validate_messages(messages=messages)
 
-    def test_rejects_unresolved_tool_call_before_later_assistant(self) -> None:
-        validator = get_validator(version=TokenizerVersion.v13, mode=ValidationMode.agnostic)
+    @pytest.mark.parametrize("version", [TokenizerVersion.v3, TokenizerVersion.v13])
+    def test_rejects_unresolved_tool_call_before_later_assistant(self, version: TokenizerVersion) -> None:
+        validator = get_validator(version=version, mode=ValidationMode.agnostic)
         messages = [
             UserMessage(content="foo"),
             AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]),
@@ -830,8 +831,15 @@ class TestAgnosticValidation:
         ):
             validator.validate_messages(messages=messages)
 
-    def test_rejects_extra_tool_response(self) -> None:
-        validator = get_validator(version=TokenizerVersion.v13, mode=ValidationMode.agnostic)
+    @pytest.mark.parametrize(
+        ("version", "error_message"),
+        [
+            (TokenizerVersion.v3, r"More tool responses than tool calls"),
+            (TokenizerVersion.v13, r"Unexpected tool call id"),
+        ],
+    )
+    def test_rejects_extra_tool_response(self, version: TokenizerVersion, error_message: str) -> None:
+        validator = get_validator(version=version, mode=ValidationMode.agnostic)
         messages = [
             UserMessage(content="foo"),
             AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]),
@@ -839,7 +847,7 @@ class TestAgnosticValidation:
             ToolMessage(content="extra", tool_call_id="999999999"),
         ]
 
-        with pytest.raises(InvalidMessageStructureException, match=r"Unexpected tool call id"):
+        with pytest.raises(InvalidMessageStructureException, match=error_message):
             validator.validate_messages(messages=messages)
 
     @pytest.mark.parametrize("version", [TokenizerVersion.v3, TokenizerVersion.v7, TokenizerVersion.v11])
