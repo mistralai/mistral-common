@@ -79,6 +79,7 @@ class ValidationMode(str, Enum):
         serving: The serving mode.
         finetuning: The finetuning mode.
         test: The test mode.
+        structural: The structural mode.
 
     Examples:
         >>> mode = ValidationMode.serving
@@ -87,6 +88,7 @@ class ValidationMode(str, Enum):
     serving = "serving"
     finetuning = "finetuning"
     test = "test"
+    structural = "structural"
 
 
 class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType]):
@@ -271,7 +273,9 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
             for tool_call in message.tool_calls:
                 self._validate_tool_call(tool_call, is_last_message=is_last_message)
 
-        if self._mode == ValidationMode.finetuning and isinstance(message, FinetuningAssistantMessage):
+        if self._mode in {ValidationMode.finetuning, ValidationMode.structural} and isinstance(
+            message, FinetuningAssistantMessage
+        ):
             if message.weight is not None and message.weight not in [0, 1]:
                 raise InvalidAssistantMessageException("Assistant message weight must be either 0 or 1")
 
@@ -340,7 +344,10 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
             previous_role = current_role
 
     def _validate_last_message(self, message: UATS) -> None:
-        # The last message must be a user or tool message in serving mode or an assistant message in finetuning mode
+        # Serving and finetuning modes impose pipeline-specific final-role rules.
+        if self._mode == ValidationMode.structural:
+            return
+
         last_message_role = message.role
         if self._mode == ValidationMode.finetuning:
             if last_message_role != Roles.assistant:
@@ -436,10 +443,11 @@ class MistralRequestValidatorV3(MistralRequestValidator):
         """
         if tool_call.id == _NULL_TOOL_CALL_ID:
             match self._mode:
-                case ValidationMode.finetuning:
+                case ValidationMode.finetuning | ValidationMode.structural:
                     if not is_last_message:
                         raise InvalidFunctionCallException(
-                            "Tool call id of assistant message that is not last has to be defined in finetuning mode."
+                            "Tool call id of assistant message that is not last has to be defined in "
+                            f"{self._mode.value} mode."
                         )
                     return
                 case ValidationMode.serving:
@@ -581,7 +589,10 @@ class MistralRequestValidatorV11(MistralRequestValidatorV5):
 
         if len(expected_tool_ids) != len(observed_tool_ids) and self._mode == ValidationMode.serving:
             raise InvalidMessageStructureException("Not the same number of function calls and responses")
-        elif len(expected_tool_ids) < len(observed_tool_ids) and self._mode == ValidationMode.finetuning:
+        elif len(expected_tool_ids) < len(observed_tool_ids) and self._mode in {
+            ValidationMode.finetuning,
+            ValidationMode.structural,
+        }:
             raise InvalidMessageStructureException("More tool responses than tool calls")
 
     def _validate_assistant_content_chunks(self, content: str | Sequence[ContentChunk] | None) -> None:

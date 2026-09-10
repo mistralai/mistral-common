@@ -345,7 +345,7 @@ class FinetuningAssistantMessage(AssistantMessage):
         weight: The weight of the message to train on.
 
     Examples:
-        >>> message = FinetuningAssistantMessage(content="Hello, how can I help you?", weight=0.5)
+        >>> message = FinetuningAssistantMessage(content="Hello, how can I help you?", weight=1)
     """
 
     weight: float | None = None
