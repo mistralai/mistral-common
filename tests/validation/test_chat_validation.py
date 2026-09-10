@@ -831,15 +831,8 @@ class TestAgnosticValidation:
         ):
             validator.validate_messages(messages=messages)
 
-    @pytest.mark.parametrize(
-        ("version", "error_message"),
-        [
-            (TokenizerVersion.v3, r"More tool responses than tool calls"),
-            (TokenizerVersion.v13, r"Unexpected tool call id"),
-        ],
-    )
-    def test_rejects_extra_tool_response(self, version: TokenizerVersion, error_message: str) -> None:
-        validator = get_validator(version=version, mode=ValidationMode.agnostic)
+    def test_accepts_extra_tool_response_for_base_validator(self) -> None:
+        validator = get_validator(version=TokenizerVersion.v3, mode=ValidationMode.agnostic)
         messages = [
             UserMessage(content="foo"),
             AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]),
@@ -847,7 +840,18 @@ class TestAgnosticValidation:
             ToolMessage(content="extra", tool_call_id="999999999"),
         ]
 
-        with pytest.raises(InvalidMessageStructureException, match=error_message):
+        validator.validate_messages(messages=messages)
+
+    def test_rejects_extra_tool_response_for_id_aware_validator(self) -> None:
+        validator = get_validator(version=TokenizerVersion.v13, mode=ValidationMode.agnostic)
+        messages = [
+            UserMessage(content="foo"),
+            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]),
+            ToolMessage(content="result", tool_call_id="123456789"),
+            ToolMessage(content="extra", tool_call_id="999999999"),
+        ]
+
+        with pytest.raises(InvalidMessageStructureException, match=r"Unexpected tool call id"):
             validator.validate_messages(messages=messages)
 
     @pytest.mark.parametrize("version", [TokenizerVersion.v3, TokenizerVersion.v7, TokenizerVersion.v11])

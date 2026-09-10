@@ -395,7 +395,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
 
         if expected_tool_messages != 0 and self._mode == ValidationMode.serving:
             raise InvalidMessageStructureException("Not the same number of function calls and responses")
-        elif expected_tool_messages < 0 and self._mode in {ValidationMode.finetuning, ValidationMode.agnostic}:
+        elif expected_tool_messages < 0 and self._mode == ValidationMode.finetuning:
             raise InvalidMessageStructureException("More tool responses than tool calls")
 
     def _validate_message_order(self, messages: list[UATS]) -> None:
