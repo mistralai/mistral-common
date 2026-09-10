@@ -854,6 +854,21 @@ class TestStructuralValidation:
         with pytest.raises(InvalidMessageStructureException, match=r"Unexpected tool call id"):
             validator.validate_messages(messages=messages)
 
+    def test_rejects_duplicate_tool_response_for_id_aware_validator(self) -> None:
+        validator = get_validator(version=TokenizerVersion.v13, mode=ValidationMode.structural)
+        messages = [
+            UserMessage(content="foo"),
+            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]),
+            ToolMessage(content="result", tool_call_id="123456789"),
+            ToolMessage(content="duplicate", tool_call_id="123456789"),
+        ]
+
+        with pytest.raises(
+            InvalidMessageStructureException,
+            match=r"Duplicate tool call id 123456789 in tool results",
+        ):
+            validator.validate_messages(messages=messages)
+
     @pytest.mark.parametrize("version", [TokenizerVersion.v3, TokenizerVersion.v7, TokenizerVersion.v11])
     def test_allows_final_null_tool_call_id(self, version: TokenizerVersion) -> None:
         validator = get_validator(version=version, mode=ValidationMode.structural)
