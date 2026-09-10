@@ -89,6 +89,9 @@ class ValidationMode(str, Enum):
         finetuning: Validation for finetuning scenarios. May allow some fields
             that are not allowed in serving mode.
         test: Lenient validation for testing. Skips some production constraints.
+        agnostic: Pipeline-agnostic validation. Applies all content checks
+            without assuming a downstream pipeline, so no terminal-role rule is
+            enforced.
 
     Examples:
         >>> mode = ValidationMode.serving
@@ -97,6 +100,7 @@ class ValidationMode(str, Enum):
     serving = "serving"
     finetuning = "finetuning"
     test = "test"
+    agnostic = "agnostic"
 
 
 class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType]):
@@ -122,6 +126,8 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
                 - `ValidationMode.serving`: Strict production validation
                 - `ValidationMode.finetuning`: Finetuning-specific validation
                 - `ValidationMode.test`: Lenient testing validation (default)
+                - `ValidationMode.agnostic`: Pipeline-agnostic validation that
+                    applies all content checks without terminal-role rules
         """
         self._mode = mode
 
@@ -130,8 +136,8 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
         r"""The validation mode this validator enforces.
 
         Returns:
-            The ValidationMode (serving, finetuning, or test) this instance
-            was constructed with.
+            The ValidationMode (serving, finetuning, test, or agnostic) this
+            instance was constructed with.
         """
         return self._mode
 
@@ -343,7 +349,9 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
             for tool_call in message.tool_calls:
                 self._validate_tool_call(tool_call, is_last_message=is_last_message)
 
-        if self._mode == ValidationMode.finetuning and isinstance(message, FinetuningAssistantMessage):
+        if self._mode in {ValidationMode.finetuning, ValidationMode.agnostic} and isinstance(
+            message, FinetuningAssistantMessage
+        ):
             if message.weight is not None and message.weight not in [0, 1]:
                 raise InvalidAssistantMessageException("Assistant message weight must be either 0 or 1")
 
@@ -387,7 +395,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
 
         if expected_tool_messages != 0 and self._mode == ValidationMode.serving:
             raise InvalidMessageStructureException("Not the same number of function calls and responses")
-        elif expected_tool_messages < 0 and self._mode == ValidationMode.finetuning:
+        elif expected_tool_messages < 0 and self._mode in {ValidationMode.finetuning, ValidationMode.agnostic}:
             raise InvalidMessageStructureException("More tool responses than tool calls")
 
     def _validate_message_order(self, messages: list[UATS]) -> None:
@@ -429,12 +437,16 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
 
         In finetuning mode the last message must be an assistant without
         `prefix=True`. In other modes it must be a user or tool message, or an
-        assistant message with `prefix=True` (continuation).
+        assistant message with `prefix=True` (continuation). In agnostic mode,
+        no pipeline-specific final-role rule is enforced.
 
         Raises:
             InvalidMessageStructureException: If the last message's role or
                 prefix is invalid for the mode.
         """
+
+        if self._mode == ValidationMode.agnostic:
+            return
         last_message_role = message.role
         if self._mode == ValidationMode.finetuning:
             if last_message_role != Roles.assistant:
@@ -555,10 +567,11 @@ class MistralRequestValidatorV3(MistralRequestValidator):
         """
         if tool_call.id == _NULL_TOOL_CALL_ID:
             match self._mode:
-                case ValidationMode.finetuning:
+                case ValidationMode.finetuning | ValidationMode.agnostic:
                     if not is_last_message:
                         raise InvalidFunctionCallException(
-                            "Tool call id of assistant message that is not last has to be defined in finetuning mode."
+                            "Tool call id of assistant message that is not last has to be defined in "
+                            f"{self._mode.value} mode."
                         )
                     return
                 case ValidationMode.serving:
@@ -705,7 +718,10 @@ class MistralRequestValidatorV11(MistralRequestValidatorV5):
 
         if len(expected_tool_ids) != len(observed_tool_ids) and self._mode == ValidationMode.serving:
             raise InvalidMessageStructureException("Not the same number of function calls and responses")
-        elif len(expected_tool_ids) < len(observed_tool_ids) and self._mode == ValidationMode.finetuning:
+        elif len(expected_tool_ids) < len(observed_tool_ids) and self._mode in {
+            ValidationMode.finetuning,
+            ValidationMode.agnostic,
+        }:
             raise InvalidMessageStructureException("More tool responses than tool calls")
 
     def _validate_assistant_content_chunks(self, content: str | Sequence[ContentChunk] | None) -> None:
@@ -753,8 +769,8 @@ def get_validator(version: TokenizerVersion, mode: ValidationMode) -> MistralReq
 
     Args:
         version: The tokenizer version the validator should match.
-        mode: The validation mode (serving, finetuning, or test) controlling
-            which constraints are enforced.
+        mode: The validation mode (serving, finetuning, test, or agnostic)
+            controlling which constraints are enforced.
 
     Returns:
         The validator instance appropriate for the version and mode.
