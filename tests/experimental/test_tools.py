@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from mistral_common.experimental.tools import (
@@ -238,6 +240,42 @@ def test_decode_tool_calls(tokenizer: MistralTokenizer, tool_calls: list[ToolCal
         else InvalidArgsToolCallError
     ):
         _decode_tool_calls(splitted_tool_calls, tokenizer.instruct_tokenizer.tokenizer)
+
+
+@pytest.mark.parametrize(
+    "tokenizer",
+    (
+        MistralTokenizer.v2(),
+        MistralTokenizer.v3(is_tekken=True),
+        MistralTokenizer.v7(),
+    ),
+)
+@pytest.mark.parametrize(
+    ("tool_calls_json", "expected_error", "expected_message"),
+    (
+        ("5", InvalidToolCallError, "Expected a list of tool calls."),
+        ("null", InvalidToolCallError, "Expected a list of tool calls."),
+        ('{"name": "f", "arguments": {}}', InvalidToolCallError, "Expected a list of tool calls."),
+        ("[1]", InvalidToolCallError, "Expected a dict with a name."),
+        ('[{"arguments": {}}]', InvalidToolCallError, "Expected a dict with a name."),
+        ('[{"name": "f"}]', InvalidArgsToolCallError, "Expected a dict."),
+        ('[{"name": "f", "arguments": 1}]', InvalidArgsToolCallError, "Expected a dict."),
+    ),
+)
+def test_decode_tool_calls_up_to_v7_malformed(
+    tokenizer: MistralTokenizer,
+    tool_calls_json: str,
+    expected_error: type[InvalidToolCallError],
+    expected_message: str,
+) -> None:
+    raw_tokenizer = tokenizer.instruct_tokenizer.tokenizer
+    tool_call_tokens = [
+        raw_tokenizer.get_special_token("[TOOL_CALLS]"),
+        *raw_tokenizer.encode(tool_calls_json, bos=False, eos=False),
+    ]
+
+    with pytest.raises(expected_error, match=re.escape(expected_message)):
+        _decode_tool_calls(tool_call_tokens=[tool_call_tokens], tokenizer=raw_tokenizer)
 
 
 def test_decode_tool_calls_v11_without_id() -> None:
