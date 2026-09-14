@@ -62,10 +62,6 @@ def _decode_tool_calls_v2_up_to_v7(tool_call_tokens: list[int], tokenizer: Token
     tool_calls_list_string = tokenizer.decode(tool_call_tokens, special_token_policy=SpecialTokenPolicy.IGNORE)
     try:
         tool_calls_decoded_list = json.loads(tool_calls_list_string)
-        for tool_call in tool_calls_decoded_list:
-            # Check that the tool call arguments are dicts.
-            if "arguments" not in tool_call or not isinstance(tool_call["arguments"], dict):
-                raise InvalidArgsToolCallError("Invalid tool call arguments tokenization. Expected a dict.")
     except json.JSONDecodeError as e:
         raise InvalidToolCallError(
             "Invalid tool call tokenization. Expected a JSON list of tool calls.",
@@ -73,6 +69,12 @@ def _decode_tool_calls_v2_up_to_v7(tool_call_tokens: list[int], tokenizer: Token
 
     if not isinstance(tool_calls_decoded_list, list):
         raise InvalidToolCallError("Invalid tool call tokenization. Expected a list of tool calls.")
+
+    for tool_call in tool_calls_decoded_list:
+        if not isinstance(tool_call, dict) or "name" not in tool_call:
+            raise InvalidToolCallError("Invalid tool call tokenization. Expected a dict with a name.")
+        if "arguments" not in tool_call or not isinstance(tool_call["arguments"], dict):
+            raise InvalidArgsToolCallError("Invalid tool call arguments tokenization. Expected a dict.")
 
     return [
         ToolCall(
