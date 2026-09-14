@@ -540,6 +540,53 @@ class TestV7ToolCalls:
         assert "{}" in output
         assert "greet" in output
 
+    @pytest.mark.parametrize(
+        ("version", "spm"),
+        [
+            (TokenizerVersion.v2, False),
+            (TokenizerVersion.v3, False),
+            (TokenizerVersion.v3, True),
+            (TokenizerVersion.v7, False),
+        ],
+    )
+    def test_tool_call_dict_arguments_produce_valid_json(self, version: TokenizerVersion, spm: bool) -> None:
+        """A dict `arguments` must render as literal JSON, not HTML-entity-escaped punctuation.
+
+        `arguments|tojson` returns a `markupsafe.Markup`, and concatenating a plain-str
+        literal with it via `+` used to trigger `Markup.__radd__`, HTML-escaping the
+        literal quotes around `name`/`arguments`/`id` (e.g. `"` became `&#34;`).
+        """
+        template = generate_chat_template(
+            spm=spm,
+            tokenizer_version=version,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+
+        messages: list[dict[str, Any]] = [
+            {"role": "user", "content": "Weather?"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "abc123def",
+                        "type": "function",
+                        "function": {"name": "get_weather", "arguments": {"city": "Paris"}},
+                    }
+                ],
+            },
+        ]
+
+        output = render_template(template, messages)
+        assert "&#34;" not in output
+        assert '"name": "get_weather"' in output
+        assert '"arguments": {"city": "Paris"}' in output
+
 
 class TestV11ToolCalls:
     def test_v11_tool_call_uses_call_id_token(self) -> None:
