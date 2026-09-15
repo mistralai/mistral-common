@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 def _strip_audio_data_url_prefix(data: str) -> str:
     r"""Remove the optional base64 audio data URL prefix."""
-    if re.match(r"^data:audio/\w+;base64,", data):
+    if re.match(r"^data:audio/[^;,]+(?:;[^;,]*)*;base64,", data):
         return data.split(",", 1)[1]
     return data
 
