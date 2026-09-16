@@ -211,7 +211,7 @@ class Tokenized(MistralBase):
     Attributes:
         tokens: The token IDs of the encoded request.
         prefix_ids: The token IDs of the prefix section, set for FIM requests.
-            None for non-FIM requests.
+            `None` for non-FIM requests.
         images: Loaded images referenced by the tokens, as arrays ready for
             the model. Empty if the request has no images.
         audios: Loaded audio referenced by the tokens, as processed Audio
@@ -269,7 +269,7 @@ class Tokenizer(ABC):
     @property
     @abstractmethod
     def model_settings_builder(self) -> ModelSettingsBuilder | None:
-        r"""The model settings builder, or None if unsupported by this version."""
+        r"""The model settings builder, or `None` if unsupported by this version."""
 
     @abstractmethod
     def vocab(self) -> list[str]:
@@ -305,8 +305,8 @@ class Tokenizer(ABC):
 
         Args:
             s: The string to encode.
-            bos: If True, prepend the beginning-of-sentence token ID.
-            eos: If True, append the end-of-sentence token ID.
+            bos: If `True`, prepend the beginning-of-sentence token ID.
+            eos: If `True`, append the end-of-sentence token ID.
 
         Returns:
             The encoded token IDs.
@@ -361,9 +361,9 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
 
     Attributes:
         tokenizer: The text tokenizer to use.
-        image_encoder: The image encoder to use, or None if image support is
+        image_encoder: The image encoder to use, or `None` if image support is
             not configured.
-        audio_encoder: The audio encoder to use, or None if audio support is
+        audio_encoder: The audio encoder to use, or `None` if audio support is
             not configured.
     """
 
@@ -387,9 +387,9 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
 
         Args:
             tokenizer: The text tokenizer to use.
-            image_encoder: The image encoder to use, or None if image support
+            image_encoder: The image encoder to use, or `None` if image support
                 is not configured for this tokenizer.
-            audio_encoder: The audio encoder to use, or None if audio support
+            audio_encoder: The audio encoder to use, or `None` if audio support
                 is not configured for this tokenizer.
         """
 
@@ -476,14 +476,14 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
 
         Args:
             message: The user message to encode.
-            available_tools: The tools available to the assistant, or None.
+            available_tools: The tools available to the assistant, or `None`.
                 Depending on the tokenizer version, wrapped in an
                 [AVAILABLE_TOOLS] section.
-            is_last: True if this is the last message of the conversation.
-            is_first: True if this is the first message of the conversation.
-            system_prompt: The system prompt, or None. Its placement depends on
+            is_last: `True` if this is the last message of the conversation.
+            is_first: `True` if this is the first message of the conversation.
+            system_prompt: The system prompt, or `None`. Its placement depends on
                 the tokenizer version.
-            force_img_first: If True, image tokens are placed before text
+            force_img_first: If `True`, image tokens are placed before text
                 tokens within the message.
             settings: The model settings to encode into the token stream.
 
@@ -519,10 +519,10 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         Args:
             content: The user content to encode. A plain string or a list of
                 content chunks (text, image, audio).
-            is_last: True if this is the last content of the conversation.
-            system_prompt: The system prompt, or None. Its placement depends
+            is_last: `True` if this is the last content of the conversation.
+            system_prompt: The system prompt, or `None`. Its placement depends
                 on the tokenizer version.
-            force_img_first: If True, image tokens are placed before text
+            force_img_first: If `True`, image tokens are placed before text
                 tokens.
 
         Returns:

@@ -152,29 +152,29 @@ class ImageChunk(BaseContentChunk):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def to_openai(self) -> dict[str, Any]:
-        r"""Convert this chunk to the OpenAI image_url format.
+        r"""Convert this chunk to the OpenAI `image_url` format.
 
         Returns:
-            Dictionary with "type" set to "image_url" and the image as a
-            base64 data URL under "image_url" -> "url".
+            Dictionary with "type" set to `image_url` and the image as a
+            base64 data URL under `image_url` -> "url".
         """
         base64_image = self.model_dump(include={"image"}, context={"add_format_prefix": True})["image"]
         return {"type": "image_url", "image_url": {"url": base64_image}}
 
     @classmethod
     def from_openai(cls, openai_chunk: dict[str, Any]) -> "ImageChunk":
-        r"""Create an ImageChunk from an OpenAI image_url chunk.
+        r"""Create an ImageChunk from an OpenAI `image_url` chunk.
 
         Args:
-            openai_chunk: Dictionary with "type" set to "image_url" and an
-                "image_url" -> "url" entry (URL or base64 data URL).
+            openai_chunk: Dictionary with "type" set to `image_url` and an
+                `image_url` -> "url" entry (URL or base64 data URL).
 
         Returns:
             An ImageChunk with the base64 prefix stripped if present.
 
         Raises:
-            AssertionError: If the chunk type is not "image_url" or the
-                image_url entry is malformed.
+            AssertionError: If the chunk type is not `image_url` or the
+                `image_url` entry is malformed.
         """
         assert openai_chunk.get("type") == "image_url", openai_chunk
 
@@ -195,7 +195,7 @@ class ImageURL(MistralBase):
         url: The URL of the image, or a base64-encoded image (optionally with
             a data:...;base64, prefix).
         detail: Optional detail level hint for image processing (e.g., "high",
-            "low", "auto"). If None, the default is used.
+            "low", "auto"). If `None`, the default is used.
 
     Examples:
        >>> image_url = ImageURL(url="https://example.com/image.png")
@@ -228,7 +228,7 @@ class ImageURLChunk(BaseContentChunk):
         r"""Return the underlying image URL string.
 
         Returns:
-            The URL regardless of whether image_url is an ImageURL or a plain string.
+            The URL regardless of whether `image_url` is an ImageURL or a plain string.
         """
         if isinstance(self.image_url, ImageURL):
             return self.image_url.url
@@ -238,8 +238,8 @@ class ImageURLChunk(BaseContentChunk):
         r"""Convert this chunk to the OpenAI format.
 
         Returns:
-            Dictionary with "type" set to "image_url" and the URL (plus
-            optional "detail") under "image_url".
+            Dictionary with "type" set to `image_url` and the URL (plus
+            optional "detail") under `image_url`.
         """
         image_url_dict = {"url": self.get_url()}
         if isinstance(self.image_url, ImageURL) and self.image_url.detail is not None:
@@ -256,10 +256,10 @@ class ImageURLChunk(BaseContentChunk):
         r"""Create an ImageURLChunk from an OpenAI chunk.
 
         Args:
-            openai_chunk: Dictionary with an "image_url" entry (dict or string).
+            openai_chunk: Dictionary with an `image_url` entry (dict or string).
 
         Returns:
-            An ImageURLChunk with the image_url parsed from the OpenAI format.
+            An ImageURLChunk with the `image_url` parsed from the OpenAI format.
         """
         return cls.model_validate({"image_url": openai_chunk["image_url"]})
 
@@ -330,7 +330,7 @@ class AudioURLType(str, Enum):
 class AudioURLChunk(BaseContentChunk):
     r"""Audio content referenced by URL, path, file URI or base64.
 
-    The URL kind is resolved lazily by get_url_type; the audio itself is
+    The URL kind is resolved lazily by `get_url_type`; the audio itself is
     loaded at tokenization time.
 
     Attributes:
@@ -515,7 +515,7 @@ class ThinkChunk(BaseContentChunk):
 
     Attributes:
         thinking: The thinking text content.
-        closed: If True (default), the thinking section is complete. If False,
+        closed: If `True` (default), the thinking section is complete. If `False`,
             the thinking is ongoing (e.g., mid-stream during generation).
     """
 

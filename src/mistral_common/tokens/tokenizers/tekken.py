@@ -44,7 +44,7 @@ class TokenInfo(TypedDict):
     Attributes:
         rank: The integer rank/index of this token in the vocabulary.
         token_bytes: The token's byte representation, base64 encoded.
-        token_str: The token's string representation, or None if not applicable.
+        token_str: The token's string representation, or `None` if not applicable.
     """
 
     rank: int
@@ -58,7 +58,7 @@ class SpecialTokenInfo(TypedDict):
     Attributes:
         rank: The integer rank/index of this special token.
         token_str: The string representation of the special token.
-        is_control: True if this is a control token (non-printable), False otherwise.
+        is_control: `True` if this is a control token (non-printable), `False` otherwise.
     """
 
     rank: int
@@ -70,7 +70,7 @@ class TekkenConfig(TypedDict):
     r"""Tekken tokenizer configuration in the JSON file.
 
     Attributes:
-        pattern: Regex pattern string used for tokenization (tiktoken pat_str).
+        pattern: Regex pattern string used for tokenization (tiktoken `pat_str`).
         num_vocab_tokens: Number of regular (non-special) tokens in the vocabulary.
         default_vocab_size: Default total vocabulary size (vocab + special tokens).
         default_num_special_tokens: Default number of special tokens.
@@ -89,7 +89,7 @@ class ModelData(TypedDict):
 
     Attributes:
         vocab: List of TokenInfo entries for regular vocabulary tokens.
-        special_tokens: List of SpecialTokenInfo entries, or None to use defaults.
+        special_tokens: List of SpecialTokenInfo entries, or `None` to use defaults.
         config: TekkenConfig with tokenizer settings.
         version: Integer version of the tokenizer file format.
         type: String type identifier for the tokenizer.
@@ -116,7 +116,7 @@ class Tekkenizer(Tokenizer):
     The tokenizer works by:
     1. Using tiktoken's fast BPE encoder for regular tokens
     2. Managing special tokens separately (prefixed to the vocabulary)
-    3. Supporting multimodal configurations via image_config and audio_config
+    3. Supporting multimodal configurations via `image_config` and `audio_config`
     """
 
     DEPRECATED_SPECIAL_TOKENS = (
@@ -167,23 +167,23 @@ class Tekkenizer(Tokenizer):
             vocab: List of token information defining the vocabulary. Each entry contains
                 the token's rank, base64-encoded bytes, and string representation.
             special_tokens: List of special token definitions. If fewer than
-                num_special_tokens are provided, filler tokens are generated automatically.
-            pattern: Regex pattern used for tokenization (tiktoken pat_str).
+                `num_special_tokens` are provided, filler tokens are generated automatically.
+            pattern: Regex pattern used for tokenization (tiktoken `pat_str`).
             vocab_size: Total vocabulary size (vocab tokens + special tokens).
-                Must be <= len(vocab) + num_special_tokens.
-            num_special_tokens: Total number of special tokens. If special_tokens list
+                Must be <= len(vocab) + `num_special_tokens`.
+            num_special_tokens: Total number of special tokens. If `special_tokens` list
                 is shorter, filler tokens are added to reach this count.
             version: Tokenizer version. Determines supported features and validation rules.
             name: Identifier for this tokenizer instance. Defaults to "tekkenizer".
             _path: Source file path. Internal use only; not for direct instantiation.
-            image_config: Configuration for image processing, or None if not supported.
-            audio_config: Configuration for audio processing, or None if not supported.
-            model_settings_builder: Builder for model-specific settings. Must be None if
+            image_config: Configuration for image processing, or `None` if not supported.
+            audio_config: Configuration for audio processing, or `None` if not supported.
+            model_settings_builder: Builder for model-specific settings. Must be `None` if
                 version does not support model settings (pre-v15).
 
         Raises:
-            ValueError: If model_settings_builder is provided but version does not support it.
-            AssertionError: If vocab_size constraint is violated or special tokens are invalid.
+            ValueError: If `model_settings_builder` is provided but version does not support it.
+            AssertionError: If `vocab_size` constraint is violated or special tokens are invalid.
         """
         if not version.supports_model_settings and model_settings_builder is not None:
             raise ValueError(
@@ -266,7 +266,7 @@ class Tekkenizer(Tokenizer):
 
         Returns:
             ModelSettingsBuilder instance if the tokenizer version supports model
-            settings, otherwise None.
+            settings, otherwise `None`.
         """
         return self._model_settings_builder
 
@@ -274,8 +274,8 @@ class Tekkenizer(Tokenizer):
     def from_file(cls: type["Tekkenizer"], path: str | Path) -> "Tekkenizer":
         r"""Load the tekken tokenizer from a JSON file.
 
-        The file must contain vocab, config, and optionally special_tokens, image,
-        audio, and model_settings_builder sections.
+        The file must contain vocab, config, and optionally `special_tokens`, image,
+        audio, and `model_settings_builder` sections.
 
         Args:
             path: Path to the tokenizer JSON file. Must exist and be readable.
@@ -285,7 +285,7 @@ class Tekkenizer(Tokenizer):
 
         Raises:
             ValueError: If the file has an unknown version, is missing required fields,
-                or contains incompatible configuration (e.g., model_settings_builder
+                or contains incompatible configuration (e.g., `model_settings_builder`
                 with a version that does not support it).
             AssertionError: If the file does not exist.
         """
@@ -366,7 +366,7 @@ class Tekkenizer(Tokenizer):
         r"""The image configuration for this tokenizer.
 
         Returns:
-            ImageConfig instance if image support is configured, otherwise None.
+            ImageConfig instance if image support is configured, otherwise `None`.
         """
         return self._image_config
 
@@ -379,7 +379,7 @@ class Tekkenizer(Tokenizer):
         r"""The audio configuration for this tokenizer.
 
         Returns:
-            AudioConfig instance if audio support is configured, otherwise None.
+            AudioConfig instance if audio support is configured, otherwise `None`.
         """
         return self._audio_config
 
@@ -465,11 +465,11 @@ class Tekkenizer(Tokenizer):
 
         Args:
             s: The string to encode.
-            bos: If True, prepends the beginning-of-sentence token ID to the result.
-            eos: If True, appends the end-of-sentence token ID to the result.
+            bos: If `True`, prepends the beginning-of-sentence token ID to the result.
+            eos: If `True`, appends the end-of-sentence token ID to the result.
 
         Returns:
-            List of token IDs. Regular tokens are offset by num_special_tokens.
+            List of token IDs. Regular tokens are offset by `num_special_tokens`.
         """
         tokens: list[int] = self._model.encode(s)
         tokens = [t + self.num_special_tokens for t in tokens]
@@ -514,7 +514,7 @@ class Tekkenizer(Tokenizer):
             token_id: The token ID to check.
 
         Returns:
-            True if the token (after subtracting special token offset) is in the
+            `True` if the token (after subtracting special token offset) is in the
             range [0, 255], meaning it represents a single byte.
         """
         return 0 <= token_id - self.num_special_tokens < 256
@@ -543,7 +543,7 @@ class Tekkenizer(Tokenizer):
             token: Token ID (int or numpy integer) or token string to check.
 
         Returns:
-            True if the token is a special token, False otherwise.
+            `True` if the token is a special token, `False` otherwise.
 
         Raises:
             TypeError: If token is not an int, numpy integer, or str.
@@ -558,7 +558,7 @@ class Tekkenizer(Tokenizer):
     def get_control_token(self, s: str) -> int:
         r"""Get the token ID of a control token (deprecated).
 
-        Deprecated: Use get_special_token() instead.
+        Deprecated: Use `get_special_token()` instead.
 
         Args:
             s: The string representation of the control token.
@@ -583,7 +583,7 @@ class Tekkenizer(Tokenizer):
             The decoded UTF-8 string.
 
         Raises:
-            ValueError: If special_token_policy is invalid or RAISE is set and
+            ValueError: If `special_token_policy` is invalid or RAISE is set and
                 special tokens are encountered.
         """
         try:
@@ -628,8 +628,8 @@ class Tekkenizer(Tokenizer):
             original byte sequence from the vocabulary.
 
         Raises:
-            ValueError: If special_token_policy is RAISE and token_id is a special token,
-                or if special_token_policy is invalid.
+            ValueError: If `special_token_policy` is RAISE and `token_id` is a special token,
+                or if `special_token_policy` is invalid.
         """
         if token_id < self.num_special_tokens:
             if special_token_policy == SpecialTokenPolicy.KEEP:
@@ -652,9 +652,9 @@ def _reload_mergeable_ranks(
 
     Args:
         vocab: List of TokenInfo entries from the tokenizer JSON.
-        max_vocab: Maximum number of vocabulary entries to include. If None,
+        max_vocab: Maximum number of vocabulary entries to include. If `None`,
             includes all. If provided and less than len(vocab), truncates to
-            first max_vocab entries.
+            first `max_vocab` entries.
 
     Returns:
         Dictionary mapping byte sequences to their integer ranks.
@@ -688,6 +688,6 @@ def is_tekkenizer(tokenizer: Tokenizer) -> TypeGuard[Tekkenizer]:
         tokenizer: The tokenizer to check.
 
     Returns:
-        True if the tokenizer is an instance of Tekkenizer, False otherwise.
+        `True` if the tokenizer is an instance of Tekkenizer, `False` otherwise.
     """
     return isinstance(tokenizer, Tekkenizer)

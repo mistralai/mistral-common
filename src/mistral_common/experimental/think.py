@@ -12,8 +12,8 @@ def _split_content_and_think_chunks(
         end_think_token_id: The token ID of the end think token.
 
     Returns:
-        Chunks in order, each a tuple of (token_ids, is_think_chunk) where
-        is_think_chunk is True for think chunks and False for content chunks.
+        Chunks in order, each a tuple of (`token_ids`, `is_think_chunk`) where
+        `is_think_chunk` is `True` for think chunks and `False` for content chunks.
         An unclosed think chunk at the end of tokens is returned as a think
         chunk.
 

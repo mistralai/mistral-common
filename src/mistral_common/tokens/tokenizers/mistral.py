@@ -58,7 +58,7 @@ from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hu
 def load_image_encoder(image_config: ImageConfig, tokenizer: Tekkenizer | SentencePieceTokenizer) -> ImageEncoder:
     r"""Build an ImageEncoder from a config and a tokenizer.
 
-    Resolves the image special token IDs (img, img_break, img_end) from the
+    Resolves the image special token IDs (img, `img_break`, `img_end`) from the
     tokenizer and combines them with the image config.
 
     Args:
@@ -83,9 +83,9 @@ def load_image_encoder(image_config: ImageConfig, tokenizer: Tekkenizer | Senten
 def load_audio_encoder(audio_config: AudioConfig, tokenizer: Tekkenizer) -> AudioEncoder:
     r"""Build an AudioEncoder from a config and a tokenizer.
 
-    Resolves the audio special token IDs (audio, begin_audio, streaming_pad,
-    text_to_audio, audio_to_text) from the tokenizer. Tokens that are not
-    defined in the tokenizer are set to None, making them optional.
+    Resolves the audio special token IDs (audio, `begin_audio`, `streaming_pad`,
+    `text_to_audio`, `audio_to_text`) from the tokenizer. Tokens that are not
+    defined in the tokenizer are set to `None`, making them optional.
 
     Args:
         audio_config: Audio processing configuration (encoding, sampling rate, etc.).
@@ -93,7 +93,7 @@ def load_audio_encoder(audio_config: AudioConfig, tokenizer: Tekkenizer) -> Audi
 
     Returns:
         An AudioEncoder bound to the tokenizer's special token IDs. IDs for
-        undefined tokens are None.
+        undefined tokens are `None`.
     """
 
     def get_special_token_or_none(token: str) -> int | None:
@@ -138,7 +138,7 @@ class MistralTokenizer(
     ):
         r"""Initialize a MistralTokenizer.
 
-        Prefer classmethods like from_file or from_hf_hub over direct construction;
+        Prefer classmethods like `from_file` or `from_hf_hub` over direct construction;
         they resolve the correct validator and normalizer for the tokenizer version.
 
         Args:
@@ -155,11 +155,11 @@ class MistralTokenizer(
     def __reduce__(self) -> tuple[Callable, tuple[Any, ...]]:
         r"""Provide a pickling recipe so the tokenizer survives multiprocessing.
 
-        The tokenizer is serialized as a (from_file, (path, mode)) pair, so the
+        The tokenizer is serialized as a (`from_file`, (path, mode)) pair, so the
         object is reconstructed from its source file rather than pickling internal state.
 
         Returns:
-            A tuple of the from_file factory and its arguments (file path, validation mode).
+            A tuple of the `from_file` factory and its arguments (file path, validation mode).
 
         Raises:
             ValueError: If the tokenizer was not loaded from a file, in which case
@@ -207,16 +207,16 @@ class MistralTokenizer(
         r"""Get the Mistral tokenizer v3.
 
         Args:
-            is_tekken: If True, loads the tekken (tiktoken-based) tokenizer instead
+            is_tekken: If `True`, loads the tekken (tiktoken-based) tokenizer instead
                 of the sentencepiece one. Tekken is faster and used by recent models.
-            is_mm: If True, loads the multimodal variant with image support.
-                Only supported together with is_tekken=True.
+            is_mm: If `True`, loads the multimodal variant with image support.
+                Only supported together with `is_tekken=True`.
 
         Returns:
             The Mistral tokenizer v3, in test validation mode.
 
         Raises:
-            ValueError: If is_mm is True and is_tekken is False (multimodal requires tekken).
+            ValueError: If `is_mm` is `True` and `is_tekken` is `False` (multimodal requires tekken).
         """
         if is_tekken and is_mm:
             tokenizer_name = "tekken_240911.json"
@@ -234,7 +234,7 @@ class MistralTokenizer(
         r"""Get the Mistral tokenizer v7.
 
         Args:
-            is_mm: If True, loads the multimodal variant with image support,
+            is_mm: If `True`, loads the multimodal variant with image support,
                 otherwise loads the text-only variant.
 
         Returns:
@@ -257,13 +257,13 @@ class MistralTokenizer(
             model: The model name. Must be one of the known legacy model names
                 (e.g., "mistral-small-2402", "codestral-2405"); newer models are
                 not registered here.
-            strict: Has to be True, not used.
+            strict: Has to be `True`, not used.
 
         Returns:
             The Mistral tokenizer for the given model.
 
         Raises:
-            ValueError: If strict is False.
+            ValueError: If strict is `False`.
             TokenizerException: If the model name is not recognized.
         """
         warnings.warn(
@@ -298,14 +298,14 @@ class MistralTokenizer(
 
         Args:
             repo_id: The Hugging Face repo ID, e.g. "mistralai/Mistral-Small-2411".
-            token: Hugging Face access token for private repos. If True, uses the
-                locally logged-in token. If None, uses no token.
-            revision: Git branch, tag, or commit hash to download. If None, uses
+            token: Hugging Face access token for private repos. If `True`, uses the
+                locally logged-in token. If `None`, uses no token.
+            revision: Git branch, tag, or commit hash to download. If `None`, uses
                 the latest revision of the default branch.
             mode: The validation mode to use for the loaded tokenizer.
-            force_download: If True, re-downloads the tokenizer even if it is
+            force_download: If `True`, re-downloads the tokenizer even if it is
                 already present in the local Hugging Face cache.
-            local_files_only: If True, only uses the local cache and never hits
+            local_files_only: If `True`, only uses the local cache and never hits
                 the network; fails if the tokenizer is not cached.
 
         Returns:
@@ -432,8 +432,8 @@ class MistralTokenizer(
         Args:
             request: The chat completion request to encode.
             max_model_input_len: Maximum number of input tokens the model accepts.
-                Used only when request.truncate_for_context_length is True to
-                truncate the conversation from the start. If None, no truncation
+                Used only when `request.truncate_for_context_length` is `True` to
+                truncate the conversation from the start. If `None`, no truncation
                 is applied.
 
         Returns:
@@ -441,8 +441,8 @@ class MistralTokenizer(
             the tokenizer version.
 
         Raises:
-            TokenizerException: If request.truncate_for_context_length is True but
-                max_model_input_len is None.
+            TokenizerException: If `request.truncate_for_context_length` is `True` but
+                `max_model_input_len` is `None`.
             MistralCommonException: If request validation fails.
         """
 

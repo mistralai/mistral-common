@@ -17,11 +17,11 @@ class SpeechRequest(BaseCompletionRequest):
 
     Attributes:
         id: Optional unique identifier for the speech request.
-        model: Optional model identifier for the speech synthesis. If None, the
+        model: Optional model identifier for the speech synthesis. If `None`, the
             serving side default speech model is used.
         input: Text to convert to speech.
         voice: Optional preset voice identifier (e.g., 'Neutral Male', 'Neutral
-            Female'). Ignored when ref_audio is provided.
+            Female'). Ignored when `ref_audio` is provided.
         ref_audio: Optional reference audio for voice cloning, provided as a
             base64-encoded string or raw bytes. Takes precedence over voice when
             both are provided.
@@ -37,7 +37,7 @@ class SpeechRequest(BaseCompletionRequest):
         r"""Convert this SpeechRequest to an OpenAI-compatible request dictionary.
 
         Reference audio is converted into an in-memory file buffer with the
-        correct format extension, and "random_seed" is renamed to "seed".
+        correct format extension, and `random_seed` is renamed to "seed".
 
         Args:
             **kwargs: Additional key-value pairs merged into the output.
@@ -46,7 +46,7 @@ class SpeechRequest(BaseCompletionRequest):
             An OpenAI-compatible request dictionary.
 
         Raises:
-            ImportError: If soundfile is not installed and ref_audio is provided.
+            ImportError: If soundfile is not installed and `ref_audio` is provided.
         """
         openai_request: dict[str, Any] = self.model_dump(exclude={"ref_audio"})
 
@@ -83,11 +83,11 @@ class SpeechRequest(BaseCompletionRequest):
 
         Args:
             openai_request: Dictionary matching OpenAI's speech request schema.
-            strict: If True, reference audio bytes are strictly validated during
+            strict: If `True`, reference audio bytes are strictly validated during
                 decoding.
 
         Returns:
-            A SpeechRequest instance with "seed" mapped to "random_seed".
+            A SpeechRequest instance with "seed" mapped to `random_seed`.
 
         Raises:
             AssertionError: If decoded reference audio has no detectable format.

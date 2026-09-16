@@ -119,9 +119,9 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
 
         Args:
             mode: The validation mode to use. Options:
-                - ValidationMode.serving: Strict production validation
-                - ValidationMode.finetuning: Finetuning-specific validation
-                - ValidationMode.test: Lenient testing validation (default)
+                - `ValidationMode.serving`: Strict production validation
+                - `ValidationMode.finetuning`: Finetuning-specific validation
+                - `ValidationMode.test`: Lenient testing validation (default)
         """
         self._mode = mode
 
@@ -274,7 +274,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
         r"""Check that a system message has content and valid content chunks.
 
         Raises:
-            InvalidSystemPromptException: If content is None or contains
+            InvalidSystemPromptException: If content is `None` or contains
                 non-text chunks.
         """
         if message.content is None:
@@ -305,20 +305,20 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
     def _validate_assistant_message(self, message: AssistantMessageType, is_last_message: bool = False) -> None:
         r"""Check that an assistant message's content, tool calls, and prefix are valid.
 
-        Content and tool_calls are mutually exclusive unless
-        _allow_tool_call_and_content is True. Tool calls are each validated.
+        Content and `tool_calls` are mutually exclusive unless
+        `_allow_tool_call_and_content` is `True`. Tool calls are each validated.
         In finetuning mode, FinetuningAssistantMessage weights must be 0 or 1.
         A prefix message must be the last message in the conversation.
 
         Args:
             message: The assistant message to validate.
-            is_last_message: True if this is the last message of the conversation,
-                required to allow prefix=True.
+            is_last_message: `True` if this is the last message of the conversation,
+                required to allow `prefix=True`.
 
         Raises:
-            InvalidAssistantMessageException: If content and tool_calls are both
+            InvalidAssistantMessageException: If content and `tool_calls` are both
                 present or both absent, a tool call is invalid, the weight is
-                invalid, or prefix=True on a non-last message.
+                invalid, or `prefix=True` on a non-last message.
         """
 
         self._validate_assistant_content_chunks(message.content)
@@ -348,7 +348,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
     def _validate_tool_calls_followed_by_tool_messages(self, messages: list[UATS]) -> None:
         r"""Check that every tool call is followed by a matching tool message.
 
-        Each assistant message's tool_calls must be answered by exactly as many
+        Each assistant message's `tool_calls` must be answered by exactly as many
         tool messages before the next assistant message. In serving mode the
         counts must balance exactly; in finetuning mode extra tool responses
         are rejected but missing ones are tolerated.
@@ -421,8 +421,8 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
         r"""Check that the last message's role is valid for the mode.
 
         In finetuning mode the last message must be an assistant without
-        prefix=True. In other modes it must be a user or tool message, or an
-        assistant message with prefix=True (continuation).
+        `prefix=True`. In other modes it must be a user or tool message, or an
+        assistant message with `prefix=True` (continuation).
 
         Raises:
             InvalidMessageStructureException: If the last message's role or
@@ -476,9 +476,9 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
     def _validate_message_list_content(self, messages: list[UATS]) -> None:
         r"""Check each message's content according to its role.
 
-        Dispatches to the per-role validators (_validate_user_message,
-        _validate_assistant_message, _validate_tool_message,
-        _validate_system_message).
+        Dispatches to the per-role validators (`_validate_user_message`,
+        `_validate_assistant_message`, `_validate_tool_message`,
+        `_validate_system_message`).
 
         Raises:
             InvalidRequestException: If a message has an unsupported role.
@@ -538,7 +538,7 @@ class MistralRequestValidatorV3(MistralRequestValidator):
 
         Args:
             tool_call: The tool call whose ID is validated.
-            is_last_message: True if the parent message is the last message of
+            is_last_message: `True` if the parent message is the last message of
                 the conversation.
 
         Raises:

@@ -94,13 +94,13 @@ def mel_filter_bank(
         sampling_rate: The sampling rate of the audio signal.
 
     Returns:
-        A filter bank matrix of shape (num_mel_bins, num_frequency_bins)
+        A filter bank matrix of shape (`num_mel_bins`, `num_frequency_bins`)
         that can be used to project frequency bin energies onto Mel bins.
 
     Raises:
-        ValueError: If num_frequency_bins < 2, min_frequency > max_frequency,
-            or at least one mel filter ends up all zero (num_mel_bins too
-            high or num_frequency_bins too low).
+        ValueError: If `num_frequency_bins` < 2, `min_frequency` > `max_frequency`,
+            or at least one mel filter ends up all zero (`num_mel_bins` too
+            high or `num_frequency_bins` too low).
     """
     if num_frequency_bins < 2:
         raise ValueError(f"Require num_frequency_bins: {num_frequency_bins} >= 2")

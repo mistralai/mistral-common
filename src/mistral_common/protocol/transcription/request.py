@@ -35,14 +35,14 @@ class TranscriptionRequest(BaseCompletionRequest):
 
     Attributes:
         id: Optional identifier for this transcription request.
-        model: The model to use for transcription. If None, the serving side
+        model: The model to use for transcription. If `None`, the serving side
             default transcription model is used.
         audio: Audio data to transcribe. Either raw audio bytes or a base64-encoded
             string (decoded automatically).
         language: Language of the input audio in ISO-639-1 format (e.g., "en").
             If provided, improves language adherence of the transcript.
-        strict_audio_validation: If True (default), audio data is validated against
-            the expected format and raises on invalid input. If False, best-effort
+        strict_audio_validation: If `True` (default), audio data is validated against
+            the expected format and raises on invalid input. If `False`, best-effort
             decoding is attempted.
         streaming: The streaming mode for the request. See StreamingMode.
         target_streaming_delay_ms: When streaming is enabled, the target delay in
@@ -111,13 +111,13 @@ class TranscriptionRequest(BaseCompletionRequest):
 
         Args:
             exclude: Extra field names to exclude from the output, in addition to
-                the mistral-specific defaults ("id", "max_tokens",
-                "strict_audio_validation", "streaming").
+                the mistral-specific defaults ("id", `max_tokens`,
+                `strict_audio_validation`, "streaming").
             kwargs: Additional OpenAI parameters merged into the output.
 
         Returns:
             The request in the OpenAI format, with the audio under the "file" key
-            and "random_seed" renamed to "seed".
+            and `random_seed` renamed to "seed".
 
         Raises:
             ImportError: If soundfile is not installed.
@@ -167,7 +167,7 @@ class TranscriptionRequest(BaseCompletionRequest):
         Args:
             openai_request: Dictionary matching OpenAI's transcription request
                 schema. Must contain a "file" entry.
-            strict: If True, audio data is strictly validated during decoding.
+            strict: If `True`, audio data is strictly validated during decoding.
 
         Returns:
             A TranscriptionRequest instance with the audio base64-encoded.

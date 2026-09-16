@@ -15,7 +15,7 @@ def convert_openai_messages(
 ) -> list[ChatMessage]:
     r"""Convert OpenAI messages to Mistral messages.
 
-    Dispatches each message to the from_openai constructor of the matching
+    Dispatches each message to the `from_openai` constructor of the matching
     role class.
 
     Args:

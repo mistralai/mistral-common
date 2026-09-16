@@ -35,8 +35,8 @@ class Function(FunctionName):
         parameters: JSON Schema object defining the function's parameters.
             Used for validation and to generate the function call arguments.
             Must have "type": "object" and define "properties" and optionally "required".
-        strict: If True, the function's parameters schema is enforced: the model's
-            arguments must conform to it. If False (default), the parameters schema
+        strict: If `True`, the function's parameters schema is enforced: the model's
+            arguments must conform to it. If `False` (default), the parameters schema
             is not enforced and the model may emit any JSON object as arguments.
 
     Examples:
@@ -190,7 +190,7 @@ class Tool(MistralBase):
         r"""Create a Tool from an OpenAI tool definition.
 
         Converts OpenAI's tool format to Mistral's format, delegating function
-        parsing to Function.from_openai.
+        parsing to Function.`from_openai`.
 
         Args:
             openai_tool: Dictionary matching OpenAI's tool schema. Must have
@@ -232,7 +232,7 @@ class FunctionCall(MistralBase):
 
         Args:
             v: The arguments value. Can be a dict (converted to JSON string),
-                str (used as-is), or None (converted to "{}").
+                str (used as-is), or `None` (converted to "{}").
 
         Returns:
             The arguments as a JSON string.

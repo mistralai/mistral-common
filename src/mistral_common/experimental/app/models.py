@@ -50,7 +50,7 @@ class EngineBackend(str, Enum):
     r"""The engine backend to use.
 
     Attributes:
-        llama_cpp: The llama.cpp backend.
+        llama_cpp: The `llama.cpp` backend.
     """
 
     llama_cpp = "llama_cpp"
@@ -96,7 +96,7 @@ class Settings(BaseSettings):
     def _load_tokenizer(self, tokenizer_path: str | Path, validation_mode: ValidationMode) -> None:
         r"""Load the tokenizer into the settings, from a local path or the Hugging Face Hub.
 
-        If tokenizer_path is an existing local file, loads it directly;
+        If `tokenizer_path` is an existing local file, loads it directly;
         otherwise treats it as a Hugging Face repo ID.
 
         Args:
@@ -104,7 +104,7 @@ class Settings(BaseSettings):
             validation_mode: The validation mode for the loaded tokenizer.
 
         Raises:
-            ValueError: If tokenizer_path is empty or a tokenizer is already
+            ValueError: If `tokenizer_path` is empty or a tokenizer is already
                 initialized.
         """
         if tokenizer_path == "":

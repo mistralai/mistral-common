@@ -69,8 +69,8 @@ def is_sentencepiece(path: str | Path) -> bool:
         path: The path to check.
 
     Returns:
-        True if the path is an existing file with a known sentencepiece
-        suffix, False otherwise.
+        `True` if the path is an existing file with a known sentencepiece
+        suffix, `False` otherwise.
     """
     if isinstance(path, str):
         path = Path(path)
@@ -86,18 +86,18 @@ def get_spm_version(tokenizer_filename: str | Path, raise_deprecated: bool = Fal
     r"""Get the version of the tokenizer from the filename.
 
     Expects filenames like "tokenizer.model.v3" or "tokenizer.model.v7m1".
-    A bare "tokenizer.model" is treated as v1.
+    A bare `tokenizer.model` is treated as v1.
 
     Args:
         tokenizer_filename: The tokenizer model path to parse.
-        raise_deprecated: If True, raise for the deprecated unversioned
-            "tokenizer.model" filename instead of silently returning v1.
+        raise_deprecated: If `True`, raise for the deprecated unversioned
+            `tokenizer.model` filename instead of silently returning v1.
 
     Returns:
         The TokenizerVersion parsed from the filename.
 
     Raises:
-        TokenizerException: If raise_deprecated is True and the filename has
+        TokenizerException: If `raise_deprecated` is `True` and the filename has
             no version suffix, or the version is unrecognized.
     """
     tokenizer_filename = str(tokenizer_filename)
@@ -129,7 +129,7 @@ def get_image_config(tokenizer_filename: str | Path) -> ImageConfig | None:
         tokenizer_filename: The tokenizer model path to parse.
 
     Returns:
-        The ImageConfig for the multimodal version in the filename, or None
+        The ImageConfig for the multimodal version in the filename, or `None`
         if the filename carries no multimodal version.
 
     Raises:
@@ -158,7 +158,7 @@ class SentencePieceTokenizer(Tokenizer):
 
         Args:
             model_path: The path to the SentencePiece model file.
-            tokenizer_version: The version of the tokenizer. If None, inferred
+            tokenizer_version: The version of the tokenizer. If `None`, inferred
                 from the model path filename.
 
         Raises:
@@ -198,7 +198,7 @@ class SentencePieceTokenizer(Tokenizer):
 
     @property
     def model_settings_builder(self) -> ModelSettingsBuilder | None:
-        r"""Always returns None as SentencePiece does not support `model_settings_builder`."""
+        r"""Always returns `None` as SentencePiece does not support `model_settings_builder`."""
         if self.version.supports_model_settings:
             raise ValueError(f"SentencePieceTokenizer does not support model settings for version {self.version}")
         return None
@@ -250,7 +250,7 @@ class SentencePieceTokenizer(Tokenizer):
             token: Token ID (int or numpy integer) or token string to check.
 
         Returns:
-            True if the token is a sentencepiece control token, False otherwise.
+            `True` if the token is a sentencepiece control token, `False` otherwise.
 
         Raises:
             TypeError: If token is not an int, numpy integer, or str.

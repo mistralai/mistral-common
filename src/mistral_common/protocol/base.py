@@ -14,11 +14,11 @@ class BaseCompletionRequest(MistralBase):
             the output more random; lower values (e.g., 0.2) make it more focused
             and deterministic. Defaults to 0.7.
         top_p: Nucleus sampling probability mass in [0, 1]. The model samples from
-            the smallest set of tokens whose cumulative probability exceeds top_p.
+            the smallest set of tokens whose cumulative probability exceeds `top_p`.
             Defaults to 1.0 (no truncation).
-        max_tokens: Maximum number of tokens to generate. If None, the model
+        max_tokens: Maximum number of tokens to generate. If `None`, the model
             generates until a stop condition (e.g., EOS) is reached.
-        random_seed: Seed for reproducible sampling. If None, sampling is not
+        random_seed: Seed for reproducible sampling. If `None`, sampling is not
             reproducible.
 
     Examples:

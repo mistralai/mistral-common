@@ -64,9 +64,9 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
 
         Args:
             tokenizer: The text tokenizer to use.
-            image_encoder: The image encoder to use, or None if image support is
+            image_encoder: The image encoder to use, or `None` if image support is
                 not configured.
-            audio_encoder: The audio encoder to use, or None if audio support is
+            audio_encoder: The audio encoder to use, or `None` if audio support is
                 not configured.
         """
         self.tokenizer = tokenizer
@@ -97,7 +97,7 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
             request: The request to search for user messages.
 
         Returns:
-            A tuple of (first_user_idx, last_user_idx), the message indexes of
+            A tuple of (`first_user_idx`, `last_user_idx`), the message indexes of
             the first and last UserMessage. Both are -1 if the request has no
             user messages.
         """
@@ -118,7 +118,7 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
 
         Args:
             message: The tool message to encode.
-            is_before_last_user_message: True if this message comes before the
+            is_before_last_user_message: `True` if this message comes before the
                 last user message of the conversation.
 
         Returns:
@@ -136,7 +136,7 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
 
         Args:
             message: The assistant message to encode.
-            is_before_last_user_message: True if this message comes before the
+            is_before_last_user_message: `True` if this message comes before the
                 last user message of the conversation.
 
         Returns:
@@ -186,7 +186,7 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
         Walks the message list, encoding each message with its version-specific
         encoder, and aggregates the resulting tokens, images, and audio into a
         single Tokenized object. Applies truncation when
-        request.truncate_at_max_tokens is set.
+        `request.truncate_at_max_tokens` is set.
 
         Args:
             request: The request to encode.
@@ -1195,8 +1195,8 @@ class InstructTokenizerV7(InstructTokenizerV3):
         r"""Encode reference audio or voice preset into a Tokenized object.
 
         Args:
-            ref_audio: Base64-encoded string or raw bytes of reference audio, or None.
-            voice: Preset voice name, or None.
+            ref_audio: Base64-encoded string or raw bytes of reference audio, or `None`.
+            voice: Preset voice name, or `None`.
 
         Returns:
             Tokenized object with audio tokens and optional audio data.
@@ -1220,7 +1220,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
     def encode_speech_request(self, request: SpeechRequest) -> Tokenized:
         r"""Encode a speech synthesis request into a tokenized sequence.
 
-        Produces: [BOS] + audio_tokens + [TEXT_TO_AUDIO] + text_tokens + [AUDIO_TO_TEXT] + [BEGIN_AUDIO].
+        Produces: [BOS] + `audio_tokens` + [TEXT_TO_AUDIO] + `text_tokens` + [AUDIO_TO_TEXT] + [BEGIN_AUDIO].
 
         Args:
             request: The speech request containing input text and voice/audio data.
@@ -1251,7 +1251,7 @@ class InstructTokenizerV11(InstructTokenizerV7):
 
     The difference with V7 tokenizer is that it encodes tool calls differently:
     Tool call results are encoded as :
-    - [begin tool call] call_name_tokens [call id] call_id_tokens [args] content tokens
+    - [begin tool call] `call_name_tokens` [call id] `call_id_tokens` [args] content tokens
     """
 
     def __init__(

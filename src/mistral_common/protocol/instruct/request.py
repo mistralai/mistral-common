@@ -86,7 +86,7 @@ class ModelSettings(MistralBase):
     Currently supports reasoning effort configuration.
 
     Attributes:
-        reasoning_effort: Controls reasoning effort. If None (default), the model
+        reasoning_effort: Controls reasoning effort. If `None` (default), the model
             uses its default reasoning behavior. Requires tokenizer >= v15.
     """
 
@@ -94,10 +94,10 @@ class ModelSettings(MistralBase):
 
     @staticmethod
     def none() -> "ModelSettings":
-        r"""Create a ModelSettings instance with all fields set to None.
+        r"""Create a ModelSettings instance with all fields set to `None`.
 
         Returns:
-            ModelSettings with reasoning_effort=None.
+            ModelSettings with `reasoning_effort=None`.
         """
         return ModelSettings()
 
@@ -106,8 +106,8 @@ class ResponseFormat(MistralBase):
     r"""Configuration for the response format.
 
     Attributes:
-        type: The response format type. Use ResponseFormats.text for plain text
-            or ResponseFormats.json for JSON output.
+        type: The response format type. Use `ResponseFormats.text` for plain text
+            or `ResponseFormats.json` for JSON output.
 
     Examples:
         >>> response_format = ResponseFormat(type=ResponseFormats.text)
@@ -124,16 +124,16 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
 
     Attributes:
         model: Name of the model to use. Required in serving mode; optional in
-            other modes. If None, the default model will be used.
+            other modes. If `None`, the default model will be used.
         messages: List of chat messages (user, assistant, system, tool). Must not be empty.
         response_format: Format of the response (text or JSON). Defaults to text.
-        tools: List of available tools for the model to use. If None, no tools are available.
+        tools: List of available tools for the model to use. If `None`, no tools are available.
         tool_choice: Strategy for tool selection. Options: auto (model decides),
             none (no tools), any/required (deprecated, use required). Default: auto.
-        truncate_for_context_length: If True, automatically truncate messages to
-            fit within the model's context length. Default: False.
+        truncate_for_context_length: If `True`, automatically truncate messages to
+            fit within the model's context length. Default: `False`.
         reasoning_effort: Controls reasoning effort (none or high). Requires tokenizer
-            >= v15. If None, uses model default.
+            >= v15. If `None`, uses model default.
 
     Examples:
         >>> from mistral_common.protocol.instruct.messages import UserMessage, AssistantMessage
@@ -161,16 +161,16 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     @model_validator(mode="before")
     @classmethod
     def _handle_legacy_continue_final_message(cls, values: Any) -> Any:
-        r"""Translate legacy continue_final_message parameter into AssistantMessage.prefix.
+        r"""Translate legacy `continue_final_message` parameter into `AssistantMessage.prefix`.
 
-        This validator handles the deprecated continue_final_message parameter by
-        converting it to the new AssistantMessage.prefix format.
+        This validator handles the deprecated `continue_final_message` parameter by
+        converting it to the new `AssistantMessage.prefix` format.
 
         Args:
             values: The raw input values being validated.
 
         Returns:
-            The values with continue_final_message translated to message prefix.
+            The values with `continue_final_message` translated to message prefix.
         """
         if not isinstance(values, dict) or _CONTINUE_FINAL_MESSAGE_KEY not in values:
             return values
@@ -205,17 +205,17 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
 
         Args:
             reasoning_field_format: Format for converting thinking/thinking chunks in
-                assistant messages to OpenAI's reasoning field. If None, uses default.
+                assistant messages to OpenAI's reasoning field. If `None`, uses default.
                 See `AssistantMessage.to_openai` for available formats.
             **kwargs: Additional OpenAI-specific parameters to include in the output
-                (e.g., stream, temperature, top_p). Must not conflict with existing fields.
+                (e.g., stream, temperature, `top_p`). Must not conflict with existing fields.
 
         Returns:
             Dictionary matching the OpenAI ChatCompletion request schema.
 
         Raises:
             ValueError: If kwargs contains duplicate or conflicting keys.
-            NotImplementedError: If truncate_for_context_length is True (not implemented).
+            NotImplementedError: If `truncate_for_context_length` is `True` (not implemented).
 
         Examples:
             >>> from mistral_common.protocol.instruct.messages import UserMessage
@@ -309,20 +309,20 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         Args:
             messages: List of message dicts in OpenAI format. Each dict must have
                 a "role" key and optionally "content" or other role-specific fields.
-            tools: List of tool dicts in OpenAI format, or None. Each tool dict must
+            tools: List of tool dicts in OpenAI format, or `None`. Each tool dict must
                 have "type" and "function" keys for function tools.
-            continue_final_message: If True and the last message is an assistant,
-                sets AssistantMessage.prefix=True on it.
+            continue_final_message: If `True` and the last message is an assistant,
+                sets `AssistantMessage.prefix=True` on it.
             **kwargs: Additional request parameters. Supports both OpenAI names
-                (e.g., "seed") and mistral-common names (e.g., "random_seed").
-                Cannot specify both "seed" and "random_seed".
+                (e.g., "seed") and mistral-common names (e.g., `random_seed`).
+                Cannot specify both "seed" and `random_seed`.
 
         Returns:
             A ChatCompletionRequest instance with messages and tools converted
             from OpenAI format.
 
         Raises:
-            ValueError: If both "seed" and "random_seed" are specified in kwargs.
+            ValueError: If both "seed" and `random_seed` are specified in kwargs.
         """
         if "seed" in kwargs and "random_seed" in kwargs:
             raise ValueError("Cannot specify both `seed` and `random_seed`.")
@@ -363,13 +363,13 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
 
     Attributes:
         messages: List of chat messages (user and assistant only; system is separate).
-        system_prompt: System prompt string, or None if no system prompt.
-        available_tools: List of tools available to the assistant. If None, no tools
+        system_prompt: System prompt string, or `None` if no system prompt.
+        available_tools: List of tools available to the assistant. If `None`, no tools
             are available. Tools are separate from messages here.
-        truncate_at_max_tokens: Maximum token count for truncation. If None, no
+        truncate_at_max_tokens: Maximum token count for truncation. If `None`, no
             truncation is performed. If set, messages will be truncated from the
             beginning to fit within this limit.
-        settings: Model configuration settings. Defaults to all None values.
+        settings: Model configuration settings. Defaults to all `None` values.
 
     Examples:
         >>> from mistral_common.protocol.instruct.messages import UserMessage, SystemMessage

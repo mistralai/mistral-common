@@ -28,7 +28,7 @@ class MistralBase(BaseModel):
     def model_validate_ignore_extra(cls, data: dict[str, Any]) -> Self:
         r"""Build the model from the data after filtering out keys not in the model fields.
 
-        Unlike model_validate, does not raise on unknown keys; they are
+        Unlike `model_validate`, does not raise on unknown keys; they are
         silently dropped.
 
         Args:

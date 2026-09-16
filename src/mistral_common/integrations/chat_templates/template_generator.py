@@ -36,7 +36,7 @@ class TemplateConfig:
     Attributes:
         version: The tokenizer version (e.g., v1, v2, v3, v7, v11, v13, v15). Determines
             special token formatting, tool call syntax, and available features.
-        spm: Whether to use SentencePiece tokenizer formatting. When True, adds spaces
+        spm: Whether to use SentencePiece tokenizer formatting. When `True`, adds spaces
             after special tokens. Not supported for versions v11+ or with audio.
         image_support: Whether to enable image chunk processing in user messages.
             Adds [IMG] token support. Requires version v3+. Mutually exclusive with audio.
@@ -49,7 +49,7 @@ class TemplateConfig:
             Mutually exclusive with `thinking_support`.
         use_special_token_variables: Whether to emit BOS/EOS as Jinja variable references
             (`bos_token`/`eos_token`) or as literal string values (`'<s>'`/`'</s>'`).
-            When True, the template expects `bos_token` and `eos_token`
+            When `True`, the template expects `bos_token` and `eos_token`
             to be passed as render kwargs.
 
     Raises:
@@ -138,7 +138,7 @@ class TemplateConfig:
 
     @property
     def uses_json_tool_results(self) -> bool:
-        r"""Whether tool results use JSON format with content/call_id."""
+        r"""Whether tool results use JSON format with `content`/`call_id`."""
         return self.version == TokenizerVersion.v3 and self.spm
 
     @property
@@ -153,7 +153,7 @@ class TemplateConfig:
 
     @property
     def uses_v2_spm_tool_format(self) -> bool:
-        r"""Whether to use v2_spm tool format (no ID, uses name in results)."""
+        r"""Whether to use `v2_spm` tool format (no ID, uses name in results)."""
         return self.version == TokenizerVersion.v2 and self.spm
 
     @property
@@ -163,12 +163,12 @@ class TemplateConfig:
 
     @property
     def uses_spm_space_tracking(self) -> bool:
-        r"""Whether to track add_space for SPM formatting."""
+        r"""Whether to track `add_space` for SPM formatting."""
         return self.spm and self.version >= TokenizerVersion.v2
 
     @property
     def uses_spm_prev_img_tracking(self) -> bool:
-        r"""Whether to track prev_img for SPM image formatting."""
+        r"""Whether to track `prev_img` for SPM image formatting."""
         return self.spm and self.image_support
 
     @property
@@ -183,12 +183,12 @@ class TemplateConfig:
 
     @property
     def tracks_has_sp_for_audio(self) -> bool:
-        r"""Whether to track has_sp for audio constraint. V15+ allows audio with system prompts."""
+        r"""Whether to track `has_sp` for audio constraint. V15+ allows audio with system prompts."""
         return self.audio_support and self.version < TokenizerVersion.v15
 
     @property
     def supports_model_settings(self) -> bool:
-        r"""Whether model settings (reasoning_effort) are supported. V15+."""
+        r"""Whether model settings (`reasoning_effort`) are supported. V15+."""
         return self.version >= TokenizerVersion.v15
 
     @property
@@ -269,13 +269,13 @@ def _render_content_call(
             Only emitted when the macro declares this parameter
             (i.e. when `config` has any extra-type support enabled).
         support_thinking: Whether thinking chunks are allowed at this call site.
-            Only emitted when `config.any_thinking_support` is True.
-        support_images: Whether image/image_url chunks are allowed at this call site.
-            Only emitted when `config.image_support` is True.
-        support_audio: Whether audio/audio_url chunks are allowed at this call site.
-            Only emitted when `config.audio_support` is True.
+            Only emitted when `config.any_thinking_support` is `True`.
+        support_images: Whether image/`image_url` chunks are allowed at this call site.
+            Only emitted when `config.image_support` is `True`.
+        support_audio: Whether audio/`audio_url` chunks are allowed at this call site.
+            Only emitted when `config.audio_support` is `True`.
         initial_prev_img: Initial value for SPM prev-image tracking namespace.
-            Only emitted when `config.uses_spm_prev_img_tracking` is True.
+            Only emitted when `config.uses_spm_prev_img_tracking` is `True`.
 
     Returns:
         A Jinja call string of the form `render_content(<args>)` with all
@@ -1405,7 +1405,7 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
 
 
 def _generate_tool_calls_elif_v2_v3(config: TemplateConfig) -> str:
-    r"""Generate tool calls as elif branch for v2 (SPM and non-SPM) and v3_spm templates.
+    r"""Generate tool calls as elif branch for v2 (SPM and non-SPM) and `v3_spm` templates.
 
     Args:
         config: Template configuration specifying version and features.

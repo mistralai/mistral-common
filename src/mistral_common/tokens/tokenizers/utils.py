@@ -54,7 +54,7 @@ def list_local_hf_repo_files(repo_id: str, revision: str | None) -> list[str]:
 
     Args:
         repo_id: The Hugging Face repo ID.
-        revision: Git branch, tag, or commit hash. If None, the default
+        revision: Git branch, tag, or commit hash. If `None`, the default
             revision (usually "main") is used.
 
     Returns:
@@ -62,7 +62,7 @@ def list_local_hf_repo_files(repo_id: str, revision: str | None) -> list[str]:
         revision is not cached locally.
 
     Raises:
-        ImportError: If huggingface_hub is not installed.
+        ImportError: If `huggingface_hub` is not installed.
     """
     _assert_hub_installed()
 
@@ -117,8 +117,8 @@ def _filter_valid_tokenizer_files(files: list[str]) -> list[tuple[str, str]]:
 def get_one_valid_tokenizer_file(files: list[str]) -> str:
     r"""Get one valid tokenizer file from a list of files.
 
-    Valid files are tekken.json or sentencepiece files with a known version
-    suffix. If multiple valid files exist, tekken.json wins; otherwise the
+    Valid files are `tekken.json` or sentencepiece files with a known version
+    suffix. If multiple valid files exist, `tekken.json` wins; otherwise the
     last one in sorted order is chosen with a warning.
 
     Args:
@@ -166,23 +166,23 @@ def download_tokenizer_from_hf_hub(
 
     Args:
         repo_id: The Hugging Face repo ID, e.g. "mistralai/Mistral-Small-2411".
-        cache_dir: Directory where the tokenizer is cached. If None, uses the
+        cache_dir: Directory where the tokenizer is cached. If `None`, uses the
             default Hugging Face cache.
-        token: Hugging Face access token for private repos. If True, uses the
-            locally logged-in token. If None, uses no token.
-        revision: Git branch, tag, or commit hash to download. If None, uses
+        token: Hugging Face access token for private repos. If `True`, uses the
+            locally logged-in token. If `None`, uses no token.
+        revision: Git branch, tag, or commit hash to download. If `None`, uses
             the default revision.
-        force_download: If True, re-downloads the tokenizer even if it is
+        force_download: If `True`, re-downloads the tokenizer even if it is
             already cached.
-        local_files_only: If True, only uses the local cache and never hits
+        local_files_only: If `True`, only uses the local cache and never hits
             the network; fails if the tokenizer is not cached.
 
     Returns:
         The downloaded tokenizer local path for the given model ID.
 
     Raises:
-        ImportError: If huggingface_hub is not installed.
-        ValueError: If force_download and local_files_only are both True, or
+        ImportError: If `huggingface_hub` is not installed.
+        ValueError: If `force_download` and `local_files_only` are both `True`, or
             no valid tokenizer file exists in the repo.
         FileNotFoundError: If local files were required but none were found
             in the cache.

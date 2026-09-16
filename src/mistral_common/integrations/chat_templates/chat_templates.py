@@ -89,7 +89,7 @@ def convert_tokenizer_to_chat_template(
     `<think>`/`</think>` tags) and `mistralai/Mistral-Small-3.2-24B-Instruct-2506`
     (non-reasoning) ship `tekken.json` files with identical `config`, `vocab`,
     `special_tokens` and `multimodal` sections. When left as
-    `None` (the default), the heuristic `version == TokenizerVersion.v11 and not
+    `None` (the default), the heuristic `version == TokenizerVersion.v11` and not
     audio_support` is used, which over-triggers on non-reasoning v11 models. Pass
     `plain_thinking_support=False` to suppress the guess for such a model.
 

@@ -55,7 +55,7 @@ class Audio:
                 format supported by soundfile.
 
         Raises:
-            AssertionError: If audio_array is not a 1-D numpy array, or format
+            AssertionError: If `audio_array` is not a 1-D numpy array, or format
                 is not supported.
         """
         self.audio_array = audio_array
@@ -94,8 +94,8 @@ class Audio:
 
         Args:
             url: The URL of the audio file (http or https).
-            strict: If True, strictly enforce mono audio; multi-channel audio
-                raises an error. If False, extra channels are dropped.
+            strict: If `True`, strictly enforce mono audio; multi-channel audio
+                raises an error. If `False`, extra channels are dropped.
 
         Returns:
             An instance of the Audio class.
@@ -120,8 +120,8 @@ class Audio:
             audio_base64: The base64 encoded audio data, optionally prefixed
                 with a data:audio/<format>;base64, URL prefix (stripped
                 automatically).
-            strict: If True, strictly enforce mono audio; multi-channel audio
-                raises an error. If False, extra channels are dropped.
+            strict: If `True`, strictly enforce mono audio; multi-channel audio
+                raises an error. If `False`, extra channels are dropped.
 
         Returns:
             An instance of the Audio class.
@@ -148,8 +148,8 @@ class Audio:
         Args:
             file: Path to the audio file. A file:// URI prefix is accepted
                 and stripped.
-            strict: If True, strictly enforce mono audio; multi-channel audio
-                raises an error. If False, extra channels are dropped.
+            strict: If `True`, strictly enforce mono audio; multi-channel audio
+                raises an error. If `False`, extra channels are dropped.
 
         Returns:
             An instance of the Audio class.
@@ -177,15 +177,15 @@ class Audio:
         Args:
             audio_bytes: The audio data as bytes in a soundfile-readable
                 format (e.g., wav, mp3).
-            strict: If True, strictly enforce mono audio; multi-channel audio
-                raises an error. If False, extra channels are averaged down
+            strict: If `True`, strictly enforce mono audio; multi-channel audio
+                raises an error. If `False`, extra channels are averaged down
                 to mono.
 
         Returns:
             An instance of the Audio class.
 
         Raises:
-            ValueError: If the audio is multi-channel and strict is True, or
+            ValueError: If the audio is multi-channel and strict is `True`, or
                 the bytes cannot be decoded.
         """
         assert_soundfile_installed()
@@ -213,7 +213,7 @@ class Audio:
         Args:
             format: The format to encode the audio in (e.g., "wav"). Must be
                 supported by soundfile.
-            prefix: If True, prepend a data:audio/<format>;base64, prefix to
+            prefix: If `True`, prepend a data:audio/<format>;base64, prefix to
                 the output string.
 
         Returns:
@@ -267,7 +267,7 @@ class Audio:
         r"""Create an Audio instance from an AudioChunk.
 
         Args:
-            chunk: An AudioChunk with input_audio as str (base64) or bytes.
+            chunk: An AudioChunk with `input_audio` as str (base64) or bytes.
 
         Returns:
             An instance of the Audio class.
@@ -283,7 +283,7 @@ class Audio:
     def resample(self, new_sampling_rate: int) -> None:
         r"""Resample audio data to a new sampling rate.
 
-        Mutates this instance's audio_array and sampling_rate in place. No-op
+        Mutates this instance's `audio_array` and `sampling_rate` in place. No-op
         if the sampling rate is already the target.
 
         Args:
@@ -357,15 +357,15 @@ class AudioConfig:
         frame_rate: Number of frames per second accepted by the tokenizer model.
         encoding_config: Configuration for the audio spectrogram.
         chunk_length_s: If set, audio is padded into multiples of this many
-            seconds. If None, no padding is applied.
+            seconds. If `None`, no padding is applied.
         transcription_format: INSTRUCT for encoding whole utterances, STREAMING
             for streaming transcription.
         transcription_delay_ms: Target delay in milliseconds between the audio
-            stream and text stream for streaming transcription. If None, the
+            stream and text stream for streaming transcription. If `None`, the
             model's default is used.
         voice_num_audio_tokens: Mapping from speaker voice name to the number
             of audio tokens for that speaker's reference audio. Only used for
-            text-to-speech; None otherwise.
+            text-to-speech; `None` otherwise.
     """
 
     sampling_rate: int
@@ -506,7 +506,7 @@ class AudioEncoding:
 
     Attributes:
         tokens: Text tokens corresponding to this audio chunk.
-        audio: Original audio waveform data, or None when using a preset voice
+        audio: Original audio waveform data, or `None` when using a preset voice
             (no reference audio to forward to the model).
     """
 
@@ -559,7 +559,7 @@ class AudioEncoder:
         Args:
             audio_array: Audio data as a numpy array.
             sampling_rate: Sampling rate of the audio.
-            transcription_delay_ms (optional): Delay in milliseconds for transcription.
+            `transcription_delay_ms` (optional): Delay in milliseconds for transcription.
 
         Returns:
             Padded audio array.
@@ -587,7 +587,7 @@ class AudioEncoder:
         r"""Gets left and right padding for realtime audio models.
 
         Args:
-            transcription_delay_ms (optional): Delay in milliseconds for transcription.
+            `transcription_delay_ms` (optional): Delay in milliseconds for transcription.
 
         Returns:
             Tuple of left and right padding for realtime audio models.
@@ -695,7 +695,7 @@ class AudioEncoder:
             num_audio_tokens: Number of audio placeholder tokens to emit.
 
         Returns:
-            List of token IDs: [BEGIN_AUDIO, AUDIO * num_audio_tokens].
+            List of token IDs: [BEGIN_AUDIO, AUDIO * `num_audio_tokens`].
         """
         tokens = []
         tokens.append(self.begin_audio_token)
@@ -722,8 +722,8 @@ class AudioEncoder:
         must be provided. When `audio` is given it takes precedence.
 
         Args:
-            audio: Reference audio waveform, or None to use a voice preset.
-            voice: Preset voice name (e.g. 'Neutral Male', 'Neutral Female'), or None when using ref audio.
+            audio: Reference audio waveform, or `None` to use a voice preset.
+            voice: Preset voice name (e.g. 'Neutral Male', 'Neutral Female'), or `None` when using ref audio.
 
         Returns:
             AudioEncoding containing the token sequence and optional audio data.
@@ -802,12 +802,12 @@ class AudioEncoder:
 
     @property
     def text_to_audio_token(self) -> int:
-        r"""Get the text_to_audio token."""
+        r"""Get the `text_to_audio` token."""
         assert self.special_ids.text_to_audio is not None, f"{self.special_ids.text_to_audio=} must be set."
         return self.special_ids.text_to_audio
 
     @property
     def audio_to_text_token(self) -> int:
-        r"""Get the audio_to_text token."""
+        r"""Get the `audio_to_text` token."""
         assert self.special_ids.audio_to_text is not None, f"{self.special_ids.audio_to_text=} must be set."
         return self.special_ids.audio_to_text

@@ -42,7 +42,7 @@ def _aggregate_content_chunks_impl(
 
     Args:
         contents: A list of message contents, where each element is either a string,
-            a list of ContentChunks, or None. This is typically
+            a list of ContentChunks, or `None`. This is typically
             `[message.content for message in messages]`.
         msg_join_str: Separator inserted between text from different messages.
         chunk_join_str: Separator inserted between adjacent text chunks within
@@ -134,7 +134,7 @@ class InstructRequestNormalizer(
            system_message_class: Class used to construct system messages. Currently
                unused, but kept for API symmetry.
            instruct_request_class: Class used to construct the final InstructRequest.
-           model_settings_builder: Builder for model settings, or None if the
+           model_settings_builder: Builder for model settings, or `None` if the
                tokenizer version does not support model settings.
         """
         self._user_message_class = user_message_class
@@ -150,13 +150,13 @@ class InstructRequestNormalizer(
         r"""Returns a normalizer for the default instruct request.
 
         Args:
-            model_settings_builder: Must be None for this normalizer version.
+            model_settings_builder: Must be `None` for this normalizer version.
 
         Returns:
             A normalizer for the default instruct request.
 
         Raises:
-            ValueError: If model_settings_builder is not None.
+            ValueError: If `model_settings_builder` is not `None`.
 
         Examples:
             >>> normalizer = InstructRequestNormalizer.normalizer()
@@ -386,7 +386,7 @@ class InstructRequestNormalizer(
     def from_chat_completion_request(self, request: ChatCompletionRequest[UATS]) -> InstructRequestType:
         r"""Convert a chat completion request to an instruct request.
 
-        Aggregates system prompts into a single system_prompt string, merges
+        Aggregates system prompts into a single `system_prompt` string, merges
         consecutive same-role messages, and normalizes tool call arguments.
         Requires model settings to be empty for this normalizer version.
 
@@ -445,13 +445,13 @@ class InstructRequestNormalizerV7(
         r"""Returns a normalizer for the default instruct request.
 
         Args:
-            model_settings_builder: Must be None for this normalizer version.
+            model_settings_builder: Must be `None` for this normalizer version.
 
         Returns:
             A normalizer for the V7 instruct request.
 
         Raises:
-            ValueError: If model_settings_builder is not None.
+            ValueError: If `model_settings_builder` is not `None`.
 
         Examples:
             >>> normalizer = InstructRequestNormalizerV7.normalizer()
@@ -556,13 +556,13 @@ class InstructRequestNormalizerV13(
         r"""Returns a normalizer for the default instruct request.
 
         Args:
-            model_settings_builder: Must be None for this normalizer version.
+            model_settings_builder: Must be `None` for this normalizer version.
 
         Returns:
             A normalizer for the V13 instruct request.
 
         Raises:
-            ValueError: If model_settings_builder is not None.
+            ValueError: If `model_settings_builder` is not `None`.
         """
         if model_settings_builder is not None:
             raise ValueError(
@@ -690,14 +690,14 @@ def get_normalizer(
 
     Args:
         version: The tokenizer version to get the normalizer for.
-        model_settings_builder: The builder for model settings, or None if the
+        model_settings_builder: The builder for model settings, or `None` if the
             tokenizer version does not support model settings (pre-v15).
 
     Returns:
         The appropriate normalizer for the given tokenizer version.
 
     Raises:
-        ValueError: If model_settings_builder is not None but the version's
+        ValueError: If `model_settings_builder` is not `None` but the version's
             normalizer does not support it.
 
     Examples:

@@ -73,8 +73,8 @@ def serialize_image_to_byte_str(im: Image.Image, info: SerializationInfo) -> str
     r"""Serialize an image to a base64 encoded string of bytes.
 
     The output honors two context keys from info, when present:
-    "max_image_b64_len" truncates the base64 string for display, and
-    "add_format_prefix" prepends a data:...;base64, prefix.
+    `max_image_b64_len` truncates the base64 string for display, and
+    `add_format_prefix` prepends a data:...;base64, prefix.
 
     Args:
         im: The image to serialize. Its format is used, defaulting to PNG

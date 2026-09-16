@@ -20,7 +20,7 @@ def assert_package_installed(package_name: str, error_message: str | None = None
 
     Args:
         package_name: The package to check.
-        error_message: Custom error message. If None, a generic message is used.
+        error_message: Custom error message. If `None`, a generic message is used.
 
     Raises:
         ImportError: If the package is not installed.

@@ -154,7 +154,7 @@ def normalize(
         Normalized image with shape (C, H, W), scaled to unit variance.
 
     Raises:
-        AssertionError: If np_image is not (H, W, C) or the channel count does
+        AssertionError: If `np_image` is not (H, W, C) or the channel count does
             not match mean and std.
     """
     np_image = np_image / 255.0
@@ -193,8 +193,8 @@ class ImageEncoder:
     r"""Encodes images into tokens and processed arrays.
 
     An image is turned into a grid of patch tokens: each row is `width_tokens`
-    img tokens terminated by an img_break token, and the last row ends with an
-    img_end token. The image array is resized so its dimensions are multiples
+    img tokens terminated by an `img_break` token, and the last row ends with an
+    `img_end` token. The image array is resized so its dimensions are multiples
     of the patch and merge sizes.
     """
 
@@ -237,7 +237,7 @@ class ImageEncoder:
         r"""Convert an image chunk into an image encoding.
 
         The image is loaded, resized so its token grid covers the image, and
-        encoded as img/img_break/img_end marker tokens plus the processed
+        encoded as img/`img_break`/`img_end` marker tokens plus the processed
         pixel array.
 
         Args:

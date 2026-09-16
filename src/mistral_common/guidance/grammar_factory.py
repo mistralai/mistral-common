@@ -96,7 +96,7 @@ def _get_tool_args_json(tool: Tool) -> dict[str, Any]:
         tool: The tool whose argument schema is extracted.
 
     Returns:
-        The JSON schema for the tool's arguments. Never None; falls back to a
+        The JSON schema for the tool's arguments. Never `None`; falls back to a
         permissive empty-object schema when the tool declares none.
     """
     args = tool.function.parameters if tool.function.strict else {"type": "object"}
@@ -119,8 +119,8 @@ def _convert_tool_calls(
         tools: The list of tools available. Ignored when mode is ToolChoiceEnum.none.
         mode: The tool choice controlling which tools can be called. A
             NamedToolChoice restricts the grammar to that single tool.
-        parallel_tool_calls: If True, the grammar allows repeated tool calls
-            (one or more); if False, exactly one.
+        parallel_tool_calls: If `True`, the grammar allows repeated tool calls
+            (one or more); if `False`, exactly one.
         get_special_token_id: Callable that maps a special token name to its
             lark grammar syntax.
 
@@ -185,7 +185,7 @@ class GrammarFactory:
             tokenizer: The Mistral tokenizer to check.
 
         Returns:
-            True if the tokenizer is a Tekkenizer of version >= v11, False otherwise.
+            `True` if the tokenizer is a Tekkenizer of version >= v11, `False` otherwise.
         """
         inner = tokenizer.instruct_tokenizer.tokenizer
         return is_tekkenizer(inner) and not inner.version < TokenizerVersion.v11
@@ -240,15 +240,15 @@ class GrammarFactory:
         return self._special_token_map[token_name]
 
     def _get_optional_special_token_lark(self, token_name: str) -> str | None:
-        r"""Return lark grammar syntax for a special token, or None if absent.
+        r"""Return lark grammar syntax for a special token, or `None` if absent.
 
-        Unlike _special_token_lark, missing tokens do not raise.
+        Unlike `_special_token_lark`, missing tokens do not raise.
 
         Args:
             token_name: The special token string (e.g., "[THINK]").
 
         Returns:
-            The lark token reference, or None if the token is not registered
+            The lark token reference, or `None` if the token is not registered
             in this tokenizer.
         """
         return self._special_token_map.get(token_name)
@@ -309,17 +309,17 @@ class GrammarFactory:
         JSON schema, and thinking sections according to the requested mode.
 
         Args:
-            template: Jinja template to render, as obtained from select_jinja_template.
-            mode: The tool choice. ToolChoiceEnum.none disables tool call sections;
+            template: Jinja template to render, as obtained from `select_jinja_template`.
+            mode: The tool choice. `ToolChoiceEnum.none` disables tool call sections;
                 a NamedToolChoice restricts the grammar to that single tool.
             tools: The list of tools available. Required when mode is any/required
                 or a NamedToolChoice; ignored when mode is none.
             json_schema: Optional JSON schema additionally allowed by the grammar,
-                unioned with tool call and text alternatives. If None, no JSON
+                unioned with tool call and text alternatives. If `None`, no JSON
                 section is added.
-            parallel_tool_calls: If True, the grammar allows one or more tool
-                calls in sequence; if False, exactly one.
-            json_only: If True, generates only JSON schema grammar without
+            parallel_tool_calls: If `True`, the grammar allows one or more tool
+                calls in sequence; if `False`, exactly one.
+            json_only: If `True`, generates only JSON schema grammar without
                 text/tool call alternatives.
 
         Returns:
@@ -356,11 +356,11 @@ class GrammarFactory:
     def get_lark_for_json_schema(self, template: str, json_schema: dict[str, Any]) -> str:
         r"""Return a lark grammar that only accepts JSON matching the given schema.
 
-        Convenience wrapper around get_lark_from_jinja that disables tool calls
+        Convenience wrapper around `get_lark_from_jinja` that disables tool calls
         and text alternatives, constraining output to the JSON schema alone.
 
         Args:
-            template: Jinja template to render, as obtained from select_jinja_template.
+            template: Jinja template to render, as obtained from `select_jinja_template`.
             json_schema: The JSON schema the output must conform to.
 
         Returns:

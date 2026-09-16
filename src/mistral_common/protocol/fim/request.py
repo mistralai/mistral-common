@@ -9,7 +9,7 @@ class FIMRequest(BaseCompletionRequest):
 
     Attributes:
         prompt: The prefix text the model continues from.
-        suffix: The text that follows the model's completion. If None, the model
+        suffix: The text that follows the model's completion. If `None`, the model
             generates text after prompt only (plain completion); if provided, the
             model generates text that logically fits between prompt and suffix.
 

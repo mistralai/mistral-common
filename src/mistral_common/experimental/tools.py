@@ -32,7 +32,7 @@ def _split_content_and_tool_calls(
             call.
 
     Returns:
-        A tuple of (content_tokens, tool_call_tokens): the content token IDs
+        A tuple of (`content_tokens`, `tool_call_tokens`): the content token IDs
         and a tuple of per-tool-call token ID sequences. Both are empty when
         tokens is empty.
     """

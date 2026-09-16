@@ -8,7 +8,7 @@ def deprecated_import(old_path: str, new_module: str, name: str, version: str) -
     r"""Warn once and lazily import a symbol that moved to a new module.
 
     The deprecation warning is emitted only on the first import for a given
-    old_path/name pair, no matter how often the module is re-imported.
+    (`old_path`, `name`) pair, no matter how often the module is re-imported.
 
     Args:
         old_path: The old module path (e.g. `"mistral_common.audio"`).
@@ -45,7 +45,7 @@ def warn_once(key: str, message: str, category: type[Warning], stacklevel: int) 
         message: The warning message.
         category: The warning category class (e.g., DeprecationWarning).
         stacklevel: Stack level for the warning, so the reported location
-            points at the caller (see warnings.warn).
+            points at the caller (see `warnings.warn`).
     """
     if key not in _warned_keys:
         _warned_keys.add(key)
