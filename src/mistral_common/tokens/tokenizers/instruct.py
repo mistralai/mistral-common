@@ -48,7 +48,11 @@ from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 
 
 class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMRequestType, TokenizedType]):
-    r"""Base instruct tokenizer."""
+    r"""Base instruct tokenizer implementing version-independent encoding.
+
+    Concrete versioned tokenizers (V1, V2, ...) inherit from this class and
+    implement the version-specific message encodings.
+    """
 
     def __init__(
         self,
@@ -59,9 +63,11 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
         r"""Initialize the instruct tokenizer.
 
         Args:
-            tokenizer: The tokenizer to use.
-            image_encoder: The image encoder to use if any.
-            audio_encoder: The audio encoder to use.
+            tokenizer: The text tokenizer to use.
+            image_encoder: The image encoder to use, or None if image support is
+                not configured.
+            audio_encoder: The audio encoder to use, or None if audio support is
+                not configured.
         """
         self.tokenizer = tokenizer
         self.image_encoder = image_encoder
@@ -76,7 +82,11 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
         return self.image_encoder
 
     def start(self) -> list[int]:
-        r"""Return the start tokens."""
+        r"""Return the start tokens of every encoded request.
+
+        Returns:
+            The token IDs prepended to every encoded conversation (the BOS token).
+        """
         return [self.tokenizer.bos_id]
 
     @staticmethod
@@ -87,7 +97,9 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
             request: The request to search for user messages.
 
         Returns:
-            The index of the first and last user message.
+            A tuple of (first_user_idx, last_user_idx), the message indexes of
+            the first and last UserMessage. Both are -1 if the request has no
+            user messages.
         """
         last_user_idx = -1
         first_user_idx = -1
@@ -104,6 +116,15 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
     ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a tool message.
 
+        Args:
+            message: The tool message to encode.
+            is_before_last_user_message: True if this message comes before the
+                last user message of the conversation.
+
+        Returns:
+            A tuple of (tokens, images, audios): the encoded token IDs, images,
+            and audio for this message.
+
         Raises:
             NotImplementedError: The tool message is not implemented for the base tokenizer.
         """
@@ -113,6 +134,14 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
     def encode_assistant_message(self, message: AssistantMessage, is_before_last_user_message: bool) -> list[int]:
         r"""Encode an assistant message.
 
+        Args:
+            message: The assistant message to encode.
+            is_before_last_user_message: True if this message comes before the
+                last user message of the conversation.
+
+        Returns:
+            The encoded token IDs for this message.
+
         Raises:
             NotImplementedError: The assistant message is not implemented for the base tokenizer.
         """
@@ -121,6 +150,12 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
     @abstractmethod
     def encode_think(self, chunk: ThinkChunk) -> list[int]:
         r"""Encode a think chunk.
+
+        Args:
+            chunk: The think chunk to encode.
+
+        Returns:
+            The encoded token IDs for this chunk.
 
         Raises:
             NotImplementedError: The think chunk is not implemented for the base tokenizer.
@@ -148,11 +183,20 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
     ) -> Tokenized:
         r"""Encode an instruct request.
 
+        Walks the message list, encoding each message with its version-specific
+        encoder, and aggregates the resulting tokens, images, and audio into a
+        single Tokenized object. Applies truncation when
+        request.truncate_at_max_tokens is set.
+
         Args:
             request: The request to encode.
 
         Returns:
-            The encoded tokens.
+            The tokenized request, with all images and audio collected across
+            the messages.
+
+        Raises:
+            TokenizerException: If a message has an unknown type.
         """
         # init at bos
         images: list[np.ndarray] = []
@@ -224,8 +268,9 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
         r"""Decode tokens to a string.
 
         Args:
-            tokens: The tokens to decode.
-            special_token_policy: The policy to use for special tokens.
+            tokens: The token IDs to decode.
+            special_token_policy: The policy to use for special tokens
+                (IGNORE, KEEP, or RAISE).
 
         Returns:
             The decoded string.
@@ -239,7 +284,9 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
 class InstructTokenizerV1(InstructTokenizerBase, Generic[InstructRequestType, FIMRequestType, TokenizedType]):
     r"""Instruct tokenizer V1.
 
-    This tokenizer has basic for messages. It does not support tools or image inputs.
+    Basic message encoding wrapping content in [INST]/[/INST] markers. Does not
+    support tools, images, audio, FIM, or system messages as separate messages
+    (the system prompt is merged into the first user message).
     """
 
     def encode_user_message(
@@ -364,7 +411,8 @@ class InstructTokenizerV1(InstructTokenizerBase, Generic[InstructRequestType, FI
 class InstructTokenizerV2(InstructTokenizerV1, Generic[InstructRequestType, FIMRequestType, TokenizedType]):
     r"""Instruct tokenizer V2.
 
-    This tokenizer adds supports to images, tools and FIM requests.
+    Adds support for images, tools, and FIM requests on top of V1. Tool
+    definitions are encoded in the last user message.
     """
 
     _message_position_to_encode_tools_settings = UserMessagePosition.last

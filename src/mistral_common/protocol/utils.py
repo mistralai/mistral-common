@@ -2,5 +2,5 @@ import uuid
 
 
 def random_uuid() -> str:
-    """Generate a random UUID."""
+    r"""Generate a random UUID as a 32-character hex string."""
     return str(uuid.uuid4().hex)

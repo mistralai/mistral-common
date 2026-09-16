@@ -49,9 +49,14 @@ class Audio:
         r"""Initialize an Audio instance with audio data, sampling rate, and format.
 
         Args:
-            audio_array: The audio data as a numpy array.
+            audio_array: The audio data as a 1-D numpy array of samples.
             sampling_rate: The sampling rate of the audio in Hz.
-            format: The format of the audio file.
+            format: The audio file format (e.g., "wav", "mp3"). Must be a
+                format supported by soundfile.
+
+        Raises:
+            AssertionError: If audio_array is not a 1-D numpy array, or format
+                is not supported.
         """
         self.audio_array = audio_array
         self.sampling_rate = sampling_rate
@@ -85,12 +90,18 @@ class Audio:
     def from_url(url: str, strict: bool = True) -> "Audio":
         r"""Create an Audio instance from a URL.
 
+        Downloads the audio file and decodes it into samples.
+
         Args:
-            url: The URL of the audio file.
-            strict: Whether to strictly enforce mono audio.
+            url: The URL of the audio file (http or https).
+            strict: If True, strictly enforce mono audio; multi-channel audio
+                raises an error. If False, extra channels are dropped.
 
         Returns:
             An instance of the Audio class.
+
+        Raises:
+            ValueError: If the download or decoding fails.
         """
         try:
             response = _requests_lib.get(url)
@@ -106,11 +117,17 @@ class Audio:
         r"""Create an Audio instance from a base64 encoded string.
 
         Args:
-            audio_base64: The base64 encoded audio data.
-            strict: Whether to strictly enforce mono audio. Defaults to True.
+            audio_base64: The base64 encoded audio data, optionally prefixed
+                with a data:audio/<format>;base64, URL prefix (stripped
+                automatically).
+            strict: If True, strictly enforce mono audio; multi-channel audio
+                raises an error. If False, extra channels are dropped.
 
         Returns:
             An instance of the Audio class.
+
+        Raises:
+            ValueError: If the string is not valid base64 or decoding fails.
         """
         assert_soundfile_installed()
 
@@ -129,11 +146,16 @@ class Audio:
         r"""Create an Audio instance from an audio file.
 
         Args:
-            file: Path to the audio file.
-            strict: Whether to strictly enforce mono audio. Defaults to True.
+            file: Path to the audio file. A file:// URI prefix is accepted
+                and stripped.
+            strict: If True, strictly enforce mono audio; multi-channel audio
+                raises an error. If False, extra channels are dropped.
 
         Returns:
             An instance of the Audio class.
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
         """
         assert_soundfile_installed()
 
@@ -153,11 +175,18 @@ class Audio:
         r"""Create an Audio instance from bytes.
 
         Args:
-            audio_bytes: The audio data as bytes.
-            strict: Whether to strictly enforce mono audio. Defaults to True.
+            audio_bytes: The audio data as bytes in a soundfile-readable
+                format (e.g., wav, mp3).
+            strict: If True, strictly enforce mono audio; multi-channel audio
+                raises an error. If False, extra channels are averaged down
+                to mono.
 
         Returns:
             An instance of the Audio class.
+
+        Raises:
+            ValueError: If the audio is multi-channel and strict is True, or
+                the bytes cannot be decoded.
         """
         assert_soundfile_installed()
 
@@ -182,11 +211,16 @@ class Audio:
         r"""Convert the audio data to a base64 encoded string.
 
         Args:
-            format: The format to encode the audio in.
-            prefix: Whether to add a data prefix to the base64 encoded string.
+            format: The format to encode the audio in (e.g., "wav"). Must be
+                supported by soundfile.
+            prefix: If True, prepend a data:audio/<format>;base64, prefix to
+                the output string.
 
         Returns:
             The base64 encoded audio data.
+
+        Raises:
+            AssertionError: If format is not supported by soundfile.
         """
         assert_soundfile_installed()
 
@@ -249,8 +283,11 @@ class Audio:
     def resample(self, new_sampling_rate: int) -> None:
         r"""Resample audio data to a new sampling rate.
 
+        Mutates this instance's audio_array and sampling_rate in place. No-op
+        if the sampling rate is already the target.
+
         Args:
-            new_sampling_rate: The new sampling rate to resample the audio to.
+            new_sampling_rate: The new sampling rate in Hz.
         """
         if self.sampling_rate == new_sampling_rate:
             return
@@ -316,12 +353,19 @@ class AudioConfig:
     r"""Configuration for audio processing.
 
     Attributes:
-        sampling_rate: Sampling rate of the audio.
+        sampling_rate: Sampling rate of the audio in Hz.
         frame_rate: Number of frames per second accepted by the tokenizer model.
-        encoding_config: Configuration for audio spectrogram.
-        chunk_length_s: Whether to pad an audio into multiples of chunk_length_s seconds (optional).
-        voice_num_audio_tokens: Mapping from speaker voice name to number of audio tokens
-            for that speaker's reference audio (optional, only for TTS).
+        encoding_config: Configuration for the audio spectrogram.
+        chunk_length_s: If set, audio is padded into multiples of this many
+            seconds. If None, no padding is applied.
+        transcription_format: INSTRUCT for encoding whole utterances, STREAMING
+            for streaming transcription.
+        transcription_delay_ms: Target delay in milliseconds between the audio
+            stream and text stream for streaming transcription. If None, the
+            model's default is used.
+        voice_num_audio_tokens: Mapping from speaker voice name to the number
+            of audio tokens for that speaker's reference audio. Only used for
+            text-to-speech; None otherwise.
     """
 
     sampling_rate: int

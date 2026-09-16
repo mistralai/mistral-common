@@ -6,14 +6,25 @@ logger = logging.getLogger(__name__)
 
 
 def _get_dependency_error_message(package_name: str, dependency_group: str) -> str:
+    r"""Build the install hint shown when an optional dependency is missing."""
     return f"`{package_name}` is not installed. Please install it with `pip install mistral-common[{dependency_group}]`"
 
 
 def is_package_installed(package_name: str) -> bool:
+    r"""Check whether a package is importable in the current environment."""
     return importlib.util.find_spec(package_name) is not None
 
 
 def assert_package_installed(package_name: str, error_message: str | None = None) -> None:
+    r"""Raise ImportError if the package is not importable.
+
+    Args:
+        package_name: The package to check.
+        error_message: Custom error message. If None, a generic message is used.
+
+    Raises:
+        ImportError: If the package is not installed.
+    """
     if not is_package_installed(package_name):
         error_message = error_message or f"Package '{package_name}' is required but not installed."
         raise ImportError(error_message)

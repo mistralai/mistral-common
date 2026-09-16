@@ -20,11 +20,12 @@ if is_opencv_installed():
 
 @dataclass
 class ImageEncoding:
-    """A tokenized image.
+    r"""A tokenized image.
 
     Attributes:
-        tokens: The token ids.
-        image: The image as a numpy array.
+        tokens: The token IDs representing the image (img/break/end markers).
+        image: The processed image as a numpy array of shape (C, H, W),
+            normalized and resized for the model.
 
     Examples:
         >>> import numpy as np
@@ -37,12 +38,12 @@ class ImageEncoding:
 
 @dataclass
 class SpecialImageIDs:
-    """Special image tokens ids.
+    r"""Special image token IDs used to mark image regions in the token stream.
 
     Attributes:
-        img: The image token id.
-        img_break: The image break token id.
-        img_end: The image end token id.
+        img: The token ID marking a single image patch.
+        img_break: The token ID marking the end of an image row.
+        img_end: The token ID marking the end of the whole image.
 
     Examples:
         >>> special_image_ids = SpecialImageIDs(img=1, img_break=2, img_end=3)
@@ -54,13 +55,19 @@ class SpecialImageIDs:
 
 
 def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
-    r"""Get a serializable image from a chunk.
+    r"""Load a serializable image from a chunk.
+
+    Resolves the image from the chunk's data, accepting base64 data URLs,
+    file URIs, and http(s) URLs.
 
     Args:
         chunk: The chunk to get the image from.
 
     Returns:
         The image as a PIL Image object.
+
+    Raises:
+        RuntimeError: If the URL scheme is not data:..., file..., or http(s).
     """
     if isinstance(chunk, ImageChunk):
         return chunk.image
@@ -96,7 +103,16 @@ class MultiModalVersion(str, Enum):
 
 @dataclass
 class ImageConfig:
-    r"""Configuration for the image tokenizers."""
+    r"""Configuration for image tokenization.
+
+    Attributes:
+        image_patch_size: Size of a single image patch in pixels. The image
+            grid is made of patches of this size; must be > 0.
+        max_image_size: Maximum image dimension (width or height) in pixels
+            before downsampling; must be > 0.
+        spatial_merge_size: Number of adjacent patches merged into one image
+            token along each dimension; must be > 0.
+    """
 
     image_patch_size: int
     max_image_size: int
@@ -127,15 +143,19 @@ def normalize(
     mean: tuple[float, float, float],
     std: tuple[float, float, float],
 ) -> np.ndarray:
-    r"""Normalize a tensor image with mean and standard deviation.
+    r"""Normalize an image array with per-channel mean and standard deviation.
 
     Args:
-        np_image: Image to be normalized.
-        mean: Mean for each channel.
-        std: Standard deviation for each channel.
+        np_image: Image to normalize, with shape (H, W, C) and values in [0, 255].
+        mean: Mean for each channel, values in [0, 1].
+        std: Standard deviation for each channel, values in [0, 1].
 
     Returns:
-        Normalized image with shape (C, H, W).
+        Normalized image with shape (C, H, W), scaled to unit variance.
+
+    Raises:
+        AssertionError: If np_image is not (H, W, C) or the channel count does
+            not match mean and std.
     """
     np_image = np_image / 255.0
 
@@ -148,14 +168,20 @@ def normalize(
 
 
 def transform_image(image: Image.Image, new_size: tuple[int, int]) -> np.ndarray:
-    r"""Transform an image to a numpy array with the given size.
+    r"""Resize and normalize an image for the model.
+
+    Converts to RGB (transparent backgrounds become white), resizes with cubic
+    interpolation, then normalizes with the dataset statistics.
 
     Args:
-        image: Image to be transformed.
-        new_size: New size of the image.
+        image: PIL image to transform.
+        new_size: Target (width, height) in pixels.
 
     Returns:
-        Transformed image with shape (C, H, W).
+        Transformed image with shape (C, H, W), normalized.
+
+    Raises:
+        ImportError: If opencv is not installed.
     """
     assert_opencv_installed()
 
@@ -164,14 +190,22 @@ def transform_image(image: Image.Image, new_size: tuple[int, int]) -> np.ndarray
 
 
 class ImageEncoder:
-    r"""Image encoder for the image tokenizer."""
+    r"""Encodes images into tokens and processed arrays.
+
+    An image is turned into a grid of patch tokens: each row is ``width_tokens``
+    img tokens terminated by an img_break token, and the last row ends with an
+    img_end token. The image array is resized so its dimensions are multiples
+    of the patch and merge sizes.
+    """
 
     def __init__(self, image_config: ImageConfig, special_ids: SpecialImageIDs) -> None:
         r"""Initialize the image encoder.
 
         Args:
-            image_config: Configuration for the image tokenizer.
-            special_ids: Special image tokens ids.
+            image_config: Configuration controlling patch size, max image size,
+                and spatial merging.
+            special_ids: Token IDs used to mark image patches, row breaks, and
+                the image end.
         """
         self.image_config = image_config
         self.special_ids = special_ids
@@ -200,13 +234,18 @@ class ImageEncoder:
         return width_tokens, height_tokens
 
     def __call__(self, content: ImageChunk | ImageURLChunk) -> ImageEncoding:
-        r"""Converts an image chunk to an image encoding.
+        r"""Convert an image chunk into an image encoding.
+
+        The image is loaded, resized so its token grid covers the image, and
+        encoded as img/img_break/img_end marker tokens plus the processed
+        pixel array.
 
         Args:
-            content: image chunk to be converted.
+            content: Image chunk to be converted.
 
         Returns:
-            Image encoding.
+            An ImageEncoding with the marker tokens and the processed image
+            of shape (C, H, W).
         """
         image = image_from_chunk(content)
         w, h = self._image_to_num_tokens(image)

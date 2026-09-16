@@ -123,15 +123,19 @@ class InstructRequestNormalizer(
         instruct_request_class: type[InstructRequestType],
         model_settings_builder: ModelSettingsBuilder | None,
     ):
-        r"""Initializes the normalizer with the appropriate message classes.
+        r"""Initialize the normalizer with the appropriate message classes.
+
+        Prefer the normalizer() static methods over direct construction.
 
         Args:
-           user_message_class: The class for user messages.
-           assistant_message_class: The class for assistant messages.
-           tool_message_class: The class for tool messages.
-           system_message_class: The class for system messages.
-           instruct_request_class: The class for instruct requests.
-           model_settings_builder: The builder for model settings, or None if unsupported.
+           user_message_class: Class used to construct aggregated user messages.
+           assistant_message_class: Class used to construct aggregated assistant messages.
+           tool_message_class: Class used to construct aggregated tool messages.
+           system_message_class: Class used to construct system messages. Currently
+               unused, but kept for API symmetry.
+           instruct_request_class: Class used to construct the final InstructRequest.
+           model_settings_builder: Builder for model settings, or None if the
+               tokenizer version does not support model settings.
         """
         self._user_message_class = user_message_class
         self._assistant_message_class = assistant_message_class
@@ -171,10 +175,14 @@ class InstructRequestNormalizer(
         For pre-v15 normalizers, model settings are all `None`.
 
         Args:
-            request: The chat completion request.
+            request: The chat completion request whose settings are built.
 
         Returns:
             Returns `ModelSettings.none()`.
+
+        Raises:
+            InvalidRequestException: If a model settings builder is configured
+                for a normalizer that does not support model settings.
         """
         if self._model_settings_builder is not None:
             raise InvalidRequestException(
@@ -376,13 +384,21 @@ class InstructRequestNormalizer(
         return aggregated_messages
 
     def from_chat_completion_request(self, request: ChatCompletionRequest[UATS]) -> InstructRequestType:
-        r"""Converts a chat completion request to an instruct request.
+        r"""Convert a chat completion request to an instruct request.
+
+        Aggregates system prompts into a single system_prompt string, merges
+        consecutive same-role messages, and normalizes tool call arguments.
+        Requires model settings to be empty for this normalizer version.
 
         Args:
             request: The chat completion request to convert.
 
         Returns:
-            The converted instruct request.
+            The converted instruct request, ready for tokenization.
+
+        Raises:
+            InvalidRequestException: If the request carries model settings that
+                this normalizer version does not support.
 
         Examples:
             >>> from mistral_common.protocol.instruct.messages import UserMessage, AssistantMessage
@@ -670,14 +686,19 @@ def normalizer_for_tokenizer_version(
 def get_normalizer(
     version: TokenizerVersion, model_settings_builder: ModelSettingsBuilder | None = None
 ) -> InstructRequestNormalizer:
-    r"""Gets the appropriate normalizer for the given tokenizer version.
+    r"""Get the appropriate normalizer for the given tokenizer version.
 
     Args:
         version: The tokenizer version to get the normalizer for.
-        model_settings_builder: The builder for model settings, or None if unsupported.
+        model_settings_builder: The builder for model settings, or None if the
+            tokenizer version does not support model settings (pre-v15).
 
     Returns:
         The appropriate normalizer for the given tokenizer version.
+
+    Raises:
+        ValueError: If model_settings_builder is not None but the version's
+            normalizer does not support it.
 
     Examples:
         >>> normalizer = get_normalizer(TokenizerVersion.v1)

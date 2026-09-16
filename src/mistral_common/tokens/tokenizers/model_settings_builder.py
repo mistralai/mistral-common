@@ -49,11 +49,26 @@ class FieldBuilder(MistralBase, Generic[InputT, OutputT]):
         return self
 
     def _validate_built_value(self, field_name: str, value: OutputT) -> None:
-        r"""Validate a non-None built value. Must be implemented by subclasses."""
+        r"""Validate a non-None built value. Must be implemented by subclasses.
+
+        Args:
+            field_name: Name of the field being validated, used in errors.
+            value: The built value to validate.
+
+        Raises:
+            NotImplementedError: Always, as this is an abstract method.
+        """
         raise NotImplementedError(f"{field_name} is not supported")
 
     def _convert(self, input_value: InputT) -> OutputT:
-        r"""Convert an input value into its built value."""
+        r"""Convert an input value into its built value.
+
+        Returns:
+            The converted value.
+
+        Raises:
+            NotImplementedError: Always, as this is an abstract method.
+        """
         raise NotImplementedError
 
     def _build_from_optional(self, field_name: str, value: InputT | None) -> OutputT | None:
@@ -165,7 +180,14 @@ class ModelSettingsBuilder(MistralBase):
 
     @staticmethod
     def none() -> "ModelSettingsBuilder":
-        r"""Return a ModelSettingsBuilder with no field builders configured."""
+        r"""Return a ModelSettingsBuilder with no field builders configured.
+
+        Any model settings field set on a request will be rejected by a builder
+        returned from this method.
+
+        Returns:
+            A builder with all field builders set to None.
+        """
         return ModelSettingsBuilder()
 
     def build_settings(self, request: ChatCompletionRequest) -> ModelSettings:
