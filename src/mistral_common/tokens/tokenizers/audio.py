@@ -556,13 +556,26 @@ class AudioEncoder:
     ) -> np.ndarray:
         r"""Pad the audio array to the desired length.
 
+        Depending on the audio config, pads the audio to a multiple of the
+        chunk length, to the streaming length (both left and right), or to at
+        least one spectrogram frame.
+
         Args:
-            audio_array: Audio data as a numpy array.
-            sampling_rate: Sampling rate of the audio.
-            `transcription_delay_ms` (optional): Delay in milliseconds for transcription.
+            audio_array: Audio data as a numpy array of samples.
+            sampling_rate: Sampling rate of the audio in Hz.
+            transcription_delay_ms: Target delay in milliseconds between the audio
+                and text streams for streaming transcription. Controls how much
+                right padding is added so the model transcribes the induced delay.
+                If `None`, falls back to the audio config's `transcription_delay_ms`.
+            **kwargs: Ignored. Only present to swallow deprecated keyword arguments
+                from callers; will be removed in 1.13.0.
 
         Returns:
-            Padded audio array.
+            The padded audio array.
+
+        Raises:
+            AssertionError: If streaming and no delay is set on either the argument
+                or the audio config.
         """
         # TODO(Patrick) - remove **kwargs as it's just there to swallow deprecated
         # keyword args from voxtral_realtime in vLLM. It was
@@ -587,10 +600,17 @@ class AudioEncoder:
         r"""Gets left and right padding for realtime audio models.
 
         Args:
-            `transcription_delay_ms` (optional): Delay in milliseconds for transcription.
+            transcription_delay_ms: Target delay in milliseconds between the audio
+                and text streams for streaming transcription. Controls the padding
+                length. If `None`, falls back to the audio config's
+                `transcription_delay_ms`.
 
         Returns:
-            Tuple of left and right padding for realtime audio models.
+            Tuple of (left_pad_audio, right_pad_audio) as silent `Audio` objects.
+
+        Raises:
+            AssertionError: If no delay is set on either the argument or the
+                audio config.
         """
 
         left_pad, right_pad = self._get_streaming_pad(0, transcription_delay_ms)
