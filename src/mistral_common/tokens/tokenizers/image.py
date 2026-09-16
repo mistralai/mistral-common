@@ -192,7 +192,7 @@ def transform_image(image: Image.Image, new_size: tuple[int, int]) -> np.ndarray
 class ImageEncoder:
     r"""Encodes images into tokens and processed arrays.
 
-    An image is turned into a grid of patch tokens: each row is ``width_tokens``
+    An image is turned into a grid of patch tokens: each row is `width_tokens`
     img tokens terminated by an img_break token, and the last row ends with an
     img_end token. The image array is resized so its dimensions are multiples
     of the patch and merge sizes.

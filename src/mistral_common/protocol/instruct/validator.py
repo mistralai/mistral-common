@@ -202,7 +202,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
         r"""Check that the function schema and name are valid.
 
         The schema must be a valid JSON Schema (Draft 7) and the name must
-        match ``^[a-zA-Z0-9_-]{1,64}$``.
+        match `^[a-zA-Z0-9_-]{1,64}$`.
 
         Raises:
             InvalidToolSchemaException: If the parameters schema is not valid JSON Schema.
@@ -255,7 +255,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
 
         Raises:
             InvalidToolMessageException: If the optional tool name is set but
-                does not match ``^[a-zA-Z0-9_-]{1,64}$``, or content chunks are
+                does not match `^[a-zA-Z0-9_-]{1,64}$`, or content chunks are
                 not text.
         """
         self._validate_tool_content_chunks(message.content)
@@ -286,7 +286,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
 
         Raises:
             InvalidFunctionCallException: If the name does not match
-                ``^[a-zA-Z0-9_-]{1,64}$``.
+                `^[a-zA-Z0-9_-]{1,64}$`.
         """
         if not re.match(r"^[a-zA-Z0-9_-]{1,64}$", function_call.name):
             raise InvalidFunctionCallException(
@@ -534,7 +534,7 @@ class MistralRequestValidatorV3(MistralRequestValidator):
         r"""Check that a tool call ID is valid for the mode.
 
         The "null" ID is only allowed for the last assistant message in
-        finetuning mode. All other IDs must match ``^[a-zA-Z0-9]{9}$``.
+        finetuning mode. All other IDs must match `^[a-zA-Z0-9]{9}$`.
 
         Args:
             tool_call: The tool call whose ID is validated.

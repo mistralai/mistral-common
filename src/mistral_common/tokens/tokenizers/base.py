@@ -143,7 +143,7 @@ class TokenizerVersion(str, Enum):
 
     Allows distinguishing between tokenizer generations and maintaining
     backward compatibility. Instances compare by numeric version
-    (e.g., ``TokenizerVersion.v13 > TokenizerVersion.v7``).
+    (e.g., `TokenizerVersion.v13 > TokenizerVersion.v7`).
 
     Attributes:
         v1: First version of the tokenizer.
