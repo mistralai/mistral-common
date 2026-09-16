@@ -35,8 +35,9 @@ class Function(FunctionName):
         parameters: JSON Schema object defining the function's parameters.
             Used for validation and to generate the function call arguments.
             Must have "type": "object" and define "properties" and optionally "required".
-        strict: If True, enforces strict JSON Schema validation of arguments.
-            If False (default), allows additional properties not defined in schema.
+        strict: If True, the function's parameters schema is enforced: the model's
+            arguments must conform to it. If False (default), the parameters schema
+            is not enforced and the model may emit any JSON object as arguments.
 
     Examples:
         >>> function = Function(
