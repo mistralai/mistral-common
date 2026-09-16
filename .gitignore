@@ -138,6 +138,9 @@ venv.bak/
 # mkdocs documentation
 /site
 
+# generated code reference pages
+/docs/code_reference
+
 # mypy
 .mypy_cache/
 .dmypy.json

@@ -94,7 +94,8 @@ jobs:
   
       - name: Build Docs
         run: |
-          uv run mkdocs build --strict
+          uv run python docs/gen_api_pages.py
+          uv run zensical build
 
   integration_tests:
     if: ${{ github.event.pull_request.draft != true }}

@@ -57,9 +57,6 @@ extra_css:
 plugins:
   - search
   - autorefs
-  - gen-files:
-      scripts:
-        - docs/gen_api_pages.py
   - literate-nav:
       nav_file: SUMMARY.md
   - mkdocstrings:

@@ -43,5 +43,8 @@ jobs:
           uv sync --all-extras --group docs
           uv pip install -e . --no-deps
 
+      - name: Generate code reference pages
+        run: uv run python docs/gen_api_pages.py
+
       - name: Publish documentation website
-        run: mkdocs gh-deploy --force
+        run: uv run zensical gh-deploy --force
