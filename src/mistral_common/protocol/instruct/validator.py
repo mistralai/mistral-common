@@ -512,7 +512,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
 class MistralRequestValidatorV3(MistralRequestValidator):
     r"""Validator for v3 Mistral requests.
 
-    This validator adds additional validation for tool call IDs.
+    This validator adds tool call ID validation and ID-aware result pairing.
 
     Examples:
         >>> validator = MistralRequestValidatorV3()
@@ -577,6 +577,54 @@ class MistralRequestValidatorV3(MistralRequestValidator):
     def _validate_tool_call(self, tool_call: ToolCall, is_last_message: bool) -> None:
         self._validate_tool_call_id(tool_call, is_last_message=is_last_message)
         self._validate_function_call(tool_call.function)
+
+    def _validate_tool_calls_followed_by_tool_messages(self, messages: list[UATS]) -> None:
+        r"""Check tool call/result pairing by ID.
+
+        Tool results must reference pending call IDs without duplicates, and IDs
+        must be unique within an assistant message.
+
+        Raises:
+            InvalidMessageStructureException: If tool calls and tool messages
+                do not pair up by ID per the active mode's rule, or IDs are
+                duplicated or unexpected.
+        """
+        prev_role = None
+        expected_tool_ids: set[str] = set()
+        observed_tool_ids: set[str] = set()
+        for message in messages:
+            if prev_role is None:
+                prev_role = message.role
+                continue
+
+            if message.role == Roles.tool:
+                tool_call_id = message.tool_call_id
+                if tool_call_id in observed_tool_ids:
+                    raise InvalidMessageStructureException(f"Duplicate tool call id {tool_call_id} in tool results")
+                if tool_call_id not in expected_tool_ids:
+                    raise InvalidMessageStructureException(f"Unexpected tool call id {tool_call_id} in tool results")
+                observed_tool_ids.add(tool_call_id)
+
+            elif message.role == Roles.assistant:
+                if len(expected_tool_ids) != len(observed_tool_ids):
+                    raise InvalidMessageStructureException("Not the same number of function calls and responses")
+
+                expected_tool_ids.clear()
+                observed_tool_ids.clear()
+                if message.tool_calls is not None:
+                    for tool_call in message.tool_calls:
+                        if tool_call.id in expected_tool_ids:
+                            raise InvalidMessageStructureException(
+                                f"Duplicate tool call id {tool_call.id} in assistant message"
+                            )
+                        expected_tool_ids.add(tool_call.id)
+
+            prev_role = message.role
+
+        if len(expected_tool_ids) != len(observed_tool_ids) and self._mode == ValidationMode.serving:
+            raise InvalidMessageStructureException("Not the same number of function calls and responses")
+        elif len(expected_tool_ids) < len(observed_tool_ids) and self._mode == ValidationMode.finetuning:
+            raise InvalidMessageStructureException("More tool responses than tool calls")
 
     def _validate_last_message(self, message: UATS) -> None:
         super()._validate_last_message(message)
@@ -651,62 +699,9 @@ class MistralRequestValidatorV11(MistralRequestValidatorV5):
     r"""Validator for v11 Mistral requests.
 
     This validator extends v5 functionality by:
-    - Adding stricter tool call/result pairing validation.
     - Allowing thinking chunks in assistant messages.
     - Allowing system prompts with audio chunks
     """
-
-    def _validate_tool_calls_followed_by_tool_messages(self, messages: list[UATS]) -> None:
-        r"""Check tool call/result pairing by ID.
-
-        Extends the base check with ID-level rules: tool results must reference
-        pending call IDs without duplicates, and IDs must be unique within an
-        assistant message.
-
-        Raises:
-            InvalidMessageStructureException: If tool calls and tool messages
-                do not pair up by ID per the active mode's rule, or IDs are
-                duplicated or unexpected.
-        """
-        prev_role = None
-        expected_tool_ids: set[str] = set()
-        observed_tool_ids: set[str] = set()
-        for message in messages:
-            if prev_role is None:
-                prev_role = message.role
-                continue
-
-            if message.role == Roles.tool:
-                tool_call_id = message.tool_call_id
-                if tool_call_id in observed_tool_ids:
-                    raise InvalidMessageStructureException(f"Duplicate tool call id {tool_call_id} in tool results")
-                if tool_call_id not in expected_tool_ids:
-                    raise InvalidMessageStructureException(f"Unexpected tool call id {tool_call_id} in tool results")
-                observed_tool_ids.add(tool_call_id)
-
-            elif message.role == Roles.assistant:
-                # if we have an assistant message and we have not received all the function calls
-                # we need to raise an exception
-                if len(expected_tool_ids) != len(observed_tool_ids):
-                    raise InvalidMessageStructureException("Not the same number of function calls and responses")
-
-                expected_tool_ids.clear()
-                observed_tool_ids.clear()
-                if message.tool_calls is not None:
-                    # Validate that the number of function calls and ids are the same
-                    for tool_call in message.tool_calls:
-                        if tool_call.id in expected_tool_ids:
-                            raise InvalidMessageStructureException(
-                                f"Duplicate tool call id {tool_call.id} in assistant message"
-                            )
-                        expected_tool_ids.add(tool_call.id)
-
-            prev_role = message.role
-
-        if len(expected_tool_ids) != len(observed_tool_ids) and self._mode == ValidationMode.serving:
-            raise InvalidMessageStructureException("Not the same number of function calls and responses")
-        elif len(expected_tool_ids) < len(observed_tool_ids) and self._mode == ValidationMode.finetuning:
-            raise InvalidMessageStructureException("More tool responses than tool calls")
 
     def _validate_assistant_content_chunks(self, content: str | Sequence[ContentChunk] | None) -> None:
         r"""v11+ assistant messages accept text and thinking chunks."""

@@ -299,7 +299,9 @@ def test_encode_chat_completion() -> None:
                     ImageChunk(image=Image.new("RGB", (4, 4), "red")),
                 ]
             ),
-            AssistantMessage(content="b"),
+            AssistantMessage(
+                tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="t", arguments='{"g":"b"}'))]
+            ),
             ToolMessage(tool_call_id="123456789", content="f"),
         ],
     )
@@ -310,7 +312,7 @@ def test_encode_chat_completion() -> None:
     assert encoded.images[0].shape == (3, 16, 16)
     assert (
         decode_keep(tokenizer, encoded)
-        == '<s>[SYSTEM_PROMPT]▁a[/SYSTEM_PROMPT][AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"t",▁"description":▁"",▁"parameters":▁{"type":▁"object",▁"properties":▁{"g":▁{"type":▁"string"},▁"h":▁{"type":▁"string"}}}}}][/AVAILABLE_TOOLS][INST][IMG][IMG_END]▁a[/INST]▁b</s>[TOOL_RESULTS]▁123456789[TOOL_CONTENT]▁f[/TOOL_RESULTS]'  # noqa
+        == '<s>[SYSTEM_PROMPT]▁a[/SYSTEM_PROMPT][AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"t",▁"description":▁"",▁"parameters":▁{"type":▁"object",▁"properties":▁{"g":▁{"type":▁"string"},▁"h":▁{"type":▁"string"}}}}}][/AVAILABLE_TOOLS][INST][IMG][IMG_END]▁a[/INST][TOOL_CALLS]▁[{"name":▁"t",▁"arguments":▁{"g":▁"b"},▁"id":▁"123456789"}]</s>[TOOL_RESULTS]▁123456789[TOOL_CONTENT]▁f[/TOOL_RESULTS]'  # noqa
     )
 
 

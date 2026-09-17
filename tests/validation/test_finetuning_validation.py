@@ -112,7 +112,7 @@ class TestFineTuningValidation:
                     UserMessage(content="foo"),
                     # tool_call id left "null" as non-final message => Raise!
                     FinetuningAssistantMessage(tool_calls=[ToolCall(function=function)]),
-                    ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
+                    ToolMessage(name="foo", content="bar", tool_call_id="null"),
                     FinetuningAssistantMessage(tool_calls=[ToolCall(function=function)]),
                 ],
             )
