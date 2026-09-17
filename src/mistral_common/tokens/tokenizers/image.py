@@ -142,7 +142,11 @@ def normalize(
     assert len(np_image.shape) == 3, f"{np_image.shape=}"
     assert np_image.shape[2] == len(mean) == len(std), f"{np_image.shape=}, {mean=}, {std=}"
 
-    np_image = (np_image - mean) / std
+    mean_array = np.asarray(mean, dtype=np_image.dtype)
+    std_array = np.asarray(std, dtype=np_image.dtype)
+
+    np_image -= mean_array
+    np_image /= std_array
 
     return np_image.transpose(2, 0, 1)
 
