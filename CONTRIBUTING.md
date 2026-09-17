@@ -40,6 +40,14 @@ uv sync --frozen --all-extras --group dev
 uv run pre-commit install
 ```
 
+To build the documentation locally (uses [Zensical](https://zensical.org), which reads `mkdocs.yml`):
+
+```bash
+uv sync --frozen --all-extras --group docs
+uv run python docs/gen_api_pages.py  # generate the code reference pages
+uv run zensical serve                # live preview at http://localhost:8000
+```
+
 Run the checks relevant to your change before opening a pull request:
 
 ```bash
