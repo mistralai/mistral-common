@@ -46,5 +46,12 @@ jobs:
       - name: Generate code reference pages
         run: uv run python docs/gen_api_pages.py
 
+      - name: Build documentation
+        run: uv run zensical build
+
       - name: Publish documentation website
-        run: uv run zensical gh-deploy --force
+        uses: peaceiris/actions-gh-pages@4f6cc7439ac4a7ce983c7a6545e2c1f4fcb86186 # v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          force_orphan: true
