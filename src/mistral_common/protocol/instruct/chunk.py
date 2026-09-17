@@ -271,6 +271,7 @@ class RawAudio(MistralBase):
     format: str
 
     def model_post_init(self, __context: Any) -> None:
+        r"""Emit a one-shot deprecation warning for `RawAudio`."""
         warn_once(
             "RawAudio",
             "RawAudio is deprecated. Use str | bytes directly for audio data. Will be removed in 1.13.0.",
@@ -294,6 +295,11 @@ class RawAudio(MistralBase):
 
     @field_validator("format")
     def should_not_be_empty(cls, v: str) -> str:
+        r"""Reject empty format strings.
+
+        Raises:
+            ValueError: If `format` is empty or whitespace.
+        """
         if not v.strip():
             raise ValueError("`format` should not be empty")
 
@@ -346,6 +352,11 @@ class AudioURLChunk(BaseContentChunk):
 
     @property
     def url(self) -> str:
+        r"""The audio URL string.
+
+        Returns:
+            The URL regardless of whether `audio_url` is an `AudioURL` or a plain string.
+        """
         if isinstance(self.audio_url, AudioURL):
             return self.audio_url.url
         return self.audio_url

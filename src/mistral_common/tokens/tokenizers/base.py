@@ -68,6 +68,8 @@ class SpecialTokens(str, Enum):
         streaming_word: The streaming word token.
         text_to_audio: The text to audio token.
         audio_to_text: The audio to text token.
+        begin_model_settings: The beginning of model settings token.
+        end_model_settings: The end of model settings token.
 
     Examples:
         >>> unk = SpecialTokens.unk
@@ -170,10 +172,20 @@ class TokenizerVersion(str, Enum):
 
     @property
     def version_num(self) -> int:
+        r"""Numeric part of the version string.
+
+        Returns:
+            The integer version, e.g. 13 for `TokenizerVersion.v13`.
+        """
         return int(self.value[1:])
 
     @property
     def supports_model_settings(self) -> bool:
+        r"""Whether this version supports model settings.
+
+        Returns:
+            True for v15 and later, False for earlier versions.
+        """
         return self >= TokenizerVersion.v15
 
     def __lt__(self, other: "str | TokenizerVersion") -> bool:
@@ -251,6 +263,12 @@ class Tokenized(MistralBase):
 
 
 class Tokenizer(ABC):
+    r"""Abstract text tokenizer interface.
+
+    Defines the encode/decode and vocabulary introspection API shared by the
+    tekken and sentencepiece implementations.
+    """
+
     @property
     @abstractmethod
     def n_words(self) -> int:

@@ -10,11 +10,11 @@ from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenizer,
 
 
 class InvalidToolCallError(ValueError):
-    pass
+    r"""Raised when tool call tokens cannot be decoded into a valid tool call."""
 
 
 class InvalidArgsToolCallError(InvalidToolCallError):
-    pass
+    r"""Raised when a tool call's arguments are invalid, e.g. not valid JSON."""
 
 
 def _split_content_and_tool_calls(

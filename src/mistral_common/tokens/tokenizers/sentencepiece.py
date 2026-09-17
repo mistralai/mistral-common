@@ -34,29 +34,51 @@ if is_sentencepiece_installed():
 
 
 class _SentencePieceModel(Protocol):
-    """Typed surface of the optional SentencePiece model used by this module."""
+    r"""Typed surface of the optional SentencePiece model used by this module."""
 
-    def piece_to_id(self, piece: str) -> int: ...
+    def piece_to_id(self, piece: str) -> int:
+        r"""Get the token ID of a piece string."""
+        ...
 
-    def vocab_size(self) -> int: ...
+    def vocab_size(self) -> int:
+        r"""Get the vocabulary size."""
+        ...
 
-    def get_piece_size(self) -> int: ...
+    def get_piece_size(self) -> int:
+        r"""Get the total number of pieces."""
+        ...
 
-    def id_to_piece(self, piece_id: int) -> str: ...
+    def id_to_piece(self, piece_id: int) -> str:
+        r"""Get the piece string of a token ID."""
+        ...
 
-    def IsControl(self, token: int) -> bool: ...
+    def IsControl(self, token: int) -> bool:
+        r"""Check whether a token ID is a control token."""
+        ...
 
-    def encode(self, input: str) -> list[int]: ...
+    def encode(self, input: str) -> list[int]:
+        r"""Encode a string into token IDs."""
+        ...
 
-    def decode(self, tokens: list[int]) -> str: ...
+    def decode(self, tokens: list[int]) -> str:
+        r"""Decode token IDs into a string."""
+        ...
 
-    def bos_id(self) -> int: ...
+    def bos_id(self) -> int:
+        r"""Get the beginning-of-sentence token ID."""
+        ...
 
-    def eos_id(self) -> int: ...
+    def eos_id(self) -> int:
+        r"""Get the end-of-sentence token ID."""
+        ...
 
-    def pad_id(self) -> int: ...
+    def pad_id(self) -> int:
+        r"""Get the padding token ID."""
+        ...
 
-    def unk_id(self) -> int: ...
+    def unk_id(self) -> int:
+        r"""Get the unknown token ID."""
+        ...
 
 
 def is_sentencepiece(path: str | Path) -> bool:
@@ -216,6 +238,14 @@ class SentencePieceTokenizer(Tokenizer):
         return self._model.piece_to_id(s)
 
     def get_control_token(self, s: str) -> int:
+        r"""Get the token ID of a control token. Deprecated: use `get_special_token()` instead.
+
+        Args:
+            s: The special token string.
+
+        Returns:
+            The token ID for the special token.
+        """
         warnings.warn("`get_control_token` is deprecated. Use `get_special_token` instead.", FutureWarning)
         return self.get_special_token(s)
 

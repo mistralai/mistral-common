@@ -76,6 +76,11 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
 
     @property
     def mm_encoder(self) -> ImageEncoder | None:
+        r"""Deprecated alias for `image_encoder`.
+
+        Returns:
+            The image encoder, or `None` if image support is not configured.
+        """
         # this funtion is deprecated, use image_encoder instead
         # TODO(Patrick) - throw a deprecation warning once
         # changes applied to vllm and transformers
@@ -174,6 +179,13 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
 
     @classmethod
     def validate_messages(cls, messages: list[UATS]) -> None:
+        r"""Validate messages before tokenization.
+
+        No-op for this tokenizer version; message validation starts at v7.
+
+        Args:
+            messages: The messages that were validated.
+        """
         # We start validating messages for v7
         return
 
@@ -308,6 +320,7 @@ class InstructTokenizerV1(InstructTokenizerBase, Generic[InstructRequestType, FI
             is_first: Whether the message is the first one.
             system_prompt: The system prompt.
             force_img_first: Not used.
+            settings: Not used.
 
         Returns:
             The encoded tokens and empty list.
@@ -326,6 +339,11 @@ class InstructTokenizerV1(InstructTokenizerBase, Generic[InstructRequestType, FI
         return curr_tokens, image, audio
 
     def encode_system_message(self, message: SystemMessage) -> tuple[list[int], list[Audio]]:
+        r"""Encode a system message.
+
+        Raises:
+            NotImplementedError: Always; system messages are not supported by this version.
+        """
         raise NotImplementedError(f"System message encoding not implemented for {self.__class__.__name__}")
 
     def encode_user_content(
@@ -402,9 +420,19 @@ class InstructTokenizerV1(InstructTokenizerBase, Generic[InstructRequestType, FI
         raise TokenizerException(f"FIM not available for {self.tokenizer.version}")
 
     def encode_transcription(self, request: TranscriptionRequest) -> Tokenized:
+        r"""Encode a transcription request.
+
+        Raises:
+            TokenizerException: Always; transcription is not supported by this version.
+        """
         raise TokenizerException(f"Transcription not available for {self.tokenizer.version}")
 
     def encode_speech_request(self, request: SpeechRequest) -> Tokenized:
+        r"""Encode a speech synthesis request.
+
+        Raises:
+            TokenizerException: Always; speech requests are not supported by this version.
+        """
         raise TokenizerException(f"Speech request not available for tokenizer {self.tokenizer.version.value}")
 
 
@@ -461,6 +489,7 @@ class InstructTokenizerV2(InstructTokenizerV1, Generic[InstructRequestType, FIMR
             is_first: Not used.
             system_prompt: The system prompt.
             force_img_first: Whether to force the image to be first.
+            settings: Not used.
 
         Returns:
             The encoded tokens and the list of images.
@@ -973,6 +1002,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
             is_first: Whether the message is the first one.
             system_prompt: Not used.
             force_img_first: Whether to force the image to be first.
+            settings: Not used.
 
         Returns:
             The encoded tokens and the list of images.

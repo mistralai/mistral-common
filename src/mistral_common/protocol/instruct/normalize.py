@@ -228,7 +228,7 @@ class InstructRequestNormalizer(
         return normalized_content
 
     def _aggregate_content_chunks(self, messages: list[UATS]) -> list[ContentChunk] | str:
-        """Coalesce neighboring blocks of ContentChunks across messages."""
+        r"""Coalesce neighboring blocks of ContentChunks across messages."""
         return _aggregate_content_chunks_impl(
             [message.content for message in messages],
             msg_join_str=self._msg_join_str,
@@ -236,7 +236,7 @@ class InstructRequestNormalizer(
         )
 
     def _aggregate_content_chunks_to_str_same_message(self, message: UATS) -> str:
-        """Aggregate a single message's content chunks to a string.
+        r"""Aggregate a single message's content chunks to a string.
 
         Args:
             message: A single message with role system or tool.
@@ -259,7 +259,7 @@ class InstructRequestNormalizer(
         return self._msg_join_str.join(system_prompt) if len(system_prompt) else None
 
     def _aggregate_tool_messages(self, messages: list[UATS], latest_call_ids: list[str]) -> list[ToolMessageType]:
-        """Normalize tool messages without aggregation across messages.
+        r"""Normalize tool messages without aggregation across messages.
 
         Each tool message's content is JSON-normalized; chunk types are guaranteed by the validator.
         """
@@ -328,7 +328,7 @@ class InstructRequestNormalizer(
         return aggregated_message
 
     def _aggregate_user_messages(self, messages: list[UATS]) -> UserMessageType:
-        """Coalesce neighboring blocks of ContentChunks in user messages."""
+        r"""Coalesce neighboring blocks of ContentChunks in user messages."""
         content = self._aggregate_content_chunks(messages)
         return self._user_message_class(content=content)
 
@@ -465,7 +465,7 @@ class InstructRequestNormalizerV7(
         )
 
     def _aggregate_tool_messages(self, messages: list[UATS], latest_call_ids: list[str]) -> list[ToolMessageType]:
-        """Normalize tool messages without JSON normalization.
+        r"""Normalize tool messages without JSON normalization.
 
         V7+ normalizers skip JSON content normalization for tool messages (chunk-type validation is
         handled by the validator).

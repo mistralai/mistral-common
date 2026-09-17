@@ -127,6 +127,12 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
 
     @property
     def mode(self) -> ValidationMode:
+        r"""The validation mode this validator enforces.
+
+        Returns:
+            The ValidationMode (serving, finetuning, or test) this instance
+            was constructed with.
+        """
         return self._mode
 
     def validate_messages(self, messages: list[UATS]) -> None:
@@ -295,9 +301,10 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
             )
 
     def _validate_tool_call(self, tool_call: ToolCall, is_last_message: bool) -> None:
-        """
-        Checks:
-        - That the tool call has a valid function
+        r"""Check that a tool call has a valid function call.
+
+        Raises:
+            InvalidFunctionCallException: If the function call's name is invalid.
         """
 
         self._validate_function_call(tool_call.function)
@@ -518,9 +525,10 @@ class MistralRequestValidatorV3(MistralRequestValidator):
         )
 
     def _validate_tool_message_id(self, message: ToolMessageType) -> None:
-        """
-        Checks:
-        - Tool call id is valid
+        r"""Check that a tool message's call ID is defined.
+
+        Raises:
+            InvalidRequestException: If the tool call ID is None.
         """
         if message.tool_call_id is None:
             raise InvalidRequestException("Tool call id has to be defined.")

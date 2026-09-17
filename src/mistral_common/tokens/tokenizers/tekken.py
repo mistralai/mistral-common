@@ -372,6 +372,11 @@ class Tekkenizer(Tokenizer):
 
     @image.setter
     def image(self, value: ImageConfig) -> None:
+        r"""Setting the image config is not allowed.
+
+        Raises:
+            ValueError: Always; the image config can only be set at init.
+        """
         raise ValueError("Can only set Image config at init")
 
     @property
@@ -385,6 +390,11 @@ class Tekkenizer(Tokenizer):
 
     @audio.setter
     def audio(self, value: AudioConfig) -> None:
+        r"""Setting the audio config is not allowed.
+
+        Raises:
+            ValueError: Always; the audio config can only be set at init.
+        """
         raise ValueError("Can only set Audio config at init")
 
     @property
@@ -556,7 +566,7 @@ class Tekkenizer(Tokenizer):
             raise TypeError(f"Expected int or str, got {type(token).__name__}")
 
     def get_control_token(self, s: str) -> int:
-        r"""Get the token ID of a control token (deprecated).
+        r"""Get the token ID of a control token. Deprecated: use `get_special_token()` instead.
 
         Deprecated: Use `get_special_token()` instead.
 

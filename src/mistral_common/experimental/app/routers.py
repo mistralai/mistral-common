@@ -64,6 +64,7 @@ async def detokenize_to_string(
         tokens: The token IDs to detokenize. Must be non-empty.
         special_token_policy: The policy to use for special tokens
             (IGNORE, KEEP, or RAISE).
+        settings: The app settings providing the tokenizer.
 
     Returns:
         The detokenized string.
@@ -91,6 +92,7 @@ async def detokenize_to_assistant_message(
 
     Args:
         tokens: The token IDs to detokenize. Must be non-empty.
+        settings: The app settings providing the tokenizer.
 
     Returns:
         The detokenized assistant message with content and tool calls.

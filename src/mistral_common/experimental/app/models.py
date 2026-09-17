@@ -90,6 +90,7 @@ class Settings(BaseSettings):
         return value
 
     def model_post_init(self, context: Any) -> None:
+        r"""Initialize the private tokenizer slot to None."""
         super().model_post_init(context)
         self._tokenizer: MistralTokenizer | None = None
 

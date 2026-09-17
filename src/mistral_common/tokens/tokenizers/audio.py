@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from mistral_common.protocol.instruct.chunk import RawAudio
 
     class AudioFormat(Enum):
-        """Dynamic enum whose members depend on soundfile availability at runtime."""
+        r"""Dynamic enum whose members depend on soundfile availability at runtime."""
 
 else:
     if is_soundfile_installed():
@@ -45,6 +45,13 @@ EXPECTED_FORMAT_VALUES = [v.value.lower() for v in AudioFormat.__members__.value
 
 
 class Audio:
+    r"""Loaded audio samples with format metadata.
+
+    Holds a decoded 1-D sample array, its sampling rate, and source format.
+    Build instances via the from_url, from_base64, from_file, or from_bytes
+    constructors.
+    """
+
     def __init__(self, audio_array: np.ndarray, sampling_rate: int, format: str) -> None:
         r"""Initialize an Audio instance with audio data, sampling rate, and format.
 
@@ -316,8 +323,8 @@ class TranscriptionFormat(str, Enum):
     Should be set by the tokenizer for correct encoding.
 
     Attributes:
-    - INSTRUCT: The instruct format.
-    - STREAMING: The streaming format.
+        INSTRUCT: Encode whole utterances at once.
+        STREAMING: Encode audio incrementally with left and right padding.
     """
 
     INSTRUCT = "instruct"
@@ -431,9 +438,23 @@ class AudioConfig:
 
     @property
     def is_streaming(self) -> bool:
+        r"""Whether this config is configured for streaming transcription.
+
+        Returns:
+            True if `transcription_format` is `TranscriptionFormat.STREAMING`, False otherwise.
+        """
         return self.transcription_format == TranscriptionFormat.STREAMING
 
     def num_audio_tokens(self, audio_len: int) -> int:
+        r"""Convert an audio length in samples into the number of audio tokens.
+
+        Args:
+            audio_len: Audio length in samples. Rounded up to a whole number of
+                frames when not a multiple of the hop length.
+
+        Returns:
+            The number of audio tokens covering the given length.
+        """
         if audio_len % self.encoding_config.hop_length != 0:
             audio_len = math.ceil(audio_len / self.encoding_config.hop_length - 1)
         else:
@@ -443,12 +464,30 @@ class AudioConfig:
 
     @property
     def num_delay_tokens(self) -> int:
+        r"""Deprecated in favor of `get_num_delay_tokens`. Will be removed in 1.13.0.
+
+        Returns:
+            The number of delay tokens for this config's `transcription_delay_ms`.
+        """
         # TODO(Patrick) - delete in 1.13.0
         # only used in vLLM in voxtral_realtime.py
         warnings.warn("Use get_num_delay_tokens instead of num_delay_tokens", DeprecationWarning)
         return self.get_num_delay_tokens()
 
     def get_num_delay_tokens(self, transcription_delay_ms: float | None = None) -> int:
+        r"""Compute the number of tokens covering the streaming transcription delay.
+
+        Args:
+            transcription_delay_ms: The delay in milliseconds. If `None`, falls back
+                to the config's `transcription_delay_ms`.
+
+        Returns:
+            The number of audio tokens corresponding to the delay length.
+
+        Raises:
+            AssertionError: If not streaming, or no delay is set on either the
+                argument or the config.
+        """
         assert self.is_streaming, f"Can't call get_num_delay_tokens if {self.is_streaming=}."
         if transcription_delay_ms is None:
             transcription_delay_ms = self.transcription_delay_ms
@@ -457,10 +496,23 @@ class AudioConfig:
         return self.num_audio_tokens(self.delay_len(transcription_delay_ms))
 
     def delay_len(self, transcription_delay_ms: float) -> int:
+        r"""Convert a transcription delay into an audio length in samples.
+
+        Args:
+            transcription_delay_ms: The delay in milliseconds.
+
+        Returns:
+            The corresponding number of audio samples at this config's sampling rate.
+        """
         return int(transcription_delay_ms / 1000.0 * self.sampling_rate)
 
     @property
     def frame_duration_ms(self) -> float:
+        r"""Duration of a single audio frame in milliseconds.
+
+        Returns:
+            The milliseconds per frame, i.e. `1000 / frame_rate`.
+        """
         return 1000.0 / self.frame_rate
 
     @property
@@ -471,6 +523,11 @@ class AudioConfig:
 
     @property
     def raw_audio_length_per_tok(self) -> int:
+        r"""Number of audio samples covered by one audio token.
+
+        Returns:
+            The samples per token, i.e. `sampling_rate // frame_rate`.
+        """
         return int(self.sampling_rate // self.frame_rate)
 
     @property
@@ -481,6 +538,22 @@ class AudioConfig:
         return int(downsample_factor)
 
     def n_right_pad_tokens(self, transcription_delay_ms: float | None = None) -> int:
+        r"""Number of right padding tokens to add after the audio.
+
+        Covers the induced delay, the BOS token, and a buffer for long words
+        (see `OFFLINE_STREAMING_BUFFER_TOKENS`).
+
+        Args:
+            transcription_delay_ms: The delay in milliseconds. If `None`, falls back
+                to the config's `transcription_delay_ms`.
+
+        Returns:
+            The number of right padding tokens.
+
+        Raises:
+            AssertionError: If not streaming, or no delay is set on either the
+                argument or the config.
+        """
         assert self.is_streaming, f"Can't call n_right_pad_tokens if {self.is_streaming=}."
         # we need to pad on the right to ensure the models transcribes
         # - the induced delay on the prefill step (num_delay_tokens)
@@ -491,6 +564,17 @@ class AudioConfig:
 
     @property
     def n_left_pad_tokens(self) -> int:
+        r"""Number of left padding tokens to add before the audio.
+
+        Left padding has shown to improve performance by giving the model more
+        compute. Requires `streaming_n_left_pad_tokens` to be set.
+
+        Returns:
+            The number of left padding tokens.
+
+        Raises:
+            AssertionError: If not streaming or `streaming_n_left_pad_tokens` is None.
+        """
         assert self.is_streaming, f"Can't call n_left_pad_tokens if {self.is_streaming=}."
         # We also pad on the left as this has shown to improve performance
         # simply by giving the model "more compute", we also add

@@ -89,12 +89,24 @@ DATASET_STD = (0.26862954, 0.26130258, 0.27577711)  # RGB
 
 # only relevant for spm
 class MultiModalVersion(str, Enum):
-    r"""Version of the image tokenizer."""
+    r"""Version of the image tokenizer.
+
+    Attributes:
+        m1: The first multimodal version, patch size 16 and max image size 1024.
+    """
 
     m1 = "m1"
 
     @property
     def config(self) -> "ImageConfig":
+        r"""The image config associated with this version.
+
+        Returns:
+            The ImageConfig for this multimodal version.
+
+        Raises:
+            NotImplementedError: If the version has no config.
+        """
         if self.name == "m1":
             return ImageConfig(16, 1024)
 
@@ -212,6 +224,11 @@ class ImageEncoder:
 
     @property
     def mm_config(self) -> ImageConfig:
+        r"""Deprecated alias for `image_config`.
+
+        Returns:
+            The image config.
+        """
         # this property is deprecated, use image_config instead
         # TODO(Patrick) - throw deprecation warning once
         # changes implemented into vLLM and transformers
@@ -262,4 +279,9 @@ class ImageEncoder:
 
     @property
     def image_token(self) -> int:
+        r"""The token ID marking a single image patch.
+
+        Returns:
+            The img special token ID.
+        """
         return self.special_ids.img
