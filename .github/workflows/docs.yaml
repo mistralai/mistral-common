@@ -50,7 +50,7 @@ jobs:
         run: uv run zensical build
 
       - name: Publish documentation website
-        uses: peaceiris/actions-gh-pages@4f6cc7439ac4a7ce983c7a6545e2c1f4fcb86186 # v4
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./site
