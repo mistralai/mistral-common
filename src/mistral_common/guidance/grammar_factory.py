@@ -87,7 +87,18 @@ _TOOL_CALL_GRAMMAR = "{tool_calls_token} SAFE_WS? {tool_name} {args_token} SAFE_
 
 
 def _get_tool_args_json(tool: Tool) -> dict[str, Any]:
-    r"""Returns the JSON schema for a tool's arguments."""
+    r"""Return the JSON schema of a tool's arguments.
+
+    Strict tools use their declared parameters schema; non-strict tools accept
+    any JSON object. Always returns a non-empty object schema.
+
+    Args:
+        tool: The tool whose argument schema is extracted.
+
+    Returns:
+        The JSON schema for the tool's arguments. Never `None`; falls back to a
+        permissive empty-object schema when the tool declares none.
+    """
     args = tool.function.parameters if tool.function.strict else {"type": "object"}
     return args or {"type": "object", "properties": {}, "additionalProperties": False}
 
@@ -98,16 +109,24 @@ def _convert_tool_calls(
     parallel_tool_calls: bool,
     get_special_token_id: Callable[[str], str],
 ) -> str:
-    r"""Converts tool calls to a lark grammar string.
+    r"""Convert tool definitions into a lark grammar fragment.
+
+    Builds a grammar that matches one or more tool calls. Each tool entry maps
+    the tool name to its JSON argument schema. Non-strict tools accept any JSON
+    object arguments.
 
     Args:
-        tools: The list of tools available.
-        mode: The tool choice mode.
-        parallel_tool_calls: Whether parallel tool calls are allowed.
-        get_special_token_id: Callable that maps a special token name to its lark grammar syntax.
+        tools: The list of tools available. Ignored when mode is ToolChoiceEnum.none.
+        mode: The tool choice controlling which tools can be called. A
+            NamedToolChoice restricts the grammar to that single tool.
+        parallel_tool_calls: If `True`, the grammar allows repeated tool calls
+            (one or more); if `False`, exactly one.
+        get_special_token_id: Callable that maps a special token name to its
+            lark grammar syntax.
 
     Returns:
-        The lark grammar string for tool calls.
+        The lark grammar string for tool calls, or an empty string when mode
+        is ToolChoiceEnum.none.
     """
     if mode == ToolChoiceEnum.none:
         return ""
@@ -149,11 +168,16 @@ def _convert_tool_calls(
 
 
 class GrammarFactory:
-    r"""Generates grammars for a given tokenizer."""
+    r"""Generates Lark grammars that constrain model output for a given tokenizer.
+
+    Grammars cover tool calls, JSON schema output, and thinking sections, and are
+    rendered from tokenizer-version-specific jinja templates using the tokenizer's
+    special tokens.
+    """
 
     @staticmethod
     def is_supported(tokenizer: MistralTokenizer) -> bool:
-        r"""Checks whether the given tokenizer is supported by guidance.
+        r"""Check whether the given tokenizer is supported by guidance.
 
         Guidance requires a Tekken tokenizer with version >= v11.
 
@@ -161,7 +185,7 @@ class GrammarFactory:
             tokenizer: The Mistral tokenizer to check.
 
         Returns:
-            Whether the tokenizer is supported.
+            `True` if the tokenizer is a Tekkenizer of version >= v11, `False` otherwise.
         """
         inner = tokenizer.instruct_tokenizer.tokenizer
         return is_tekkenizer(inner) and not inner.version < TokenizerVersion.v11
@@ -169,12 +193,16 @@ class GrammarFactory:
     def __init__(self, tokenizer: MistralTokenizer) -> None:
         r"""Initialize the grammar factory.
 
+        Requires llguidance and jinja2 to be installed.
+
         Args:
-            tokenizer: The Mistral tokenizer to generate grammars for.
+            tokenizer: The Mistral tokenizer to generate grammars for. Must be a
+                Tekken tokenizer with version >= v11 (see
+                [`is_supported`][mistral_common.guidance.grammar_factory.GrammarFactory.is_supported]).
 
         Raises:
-            ValueError: If the tokenizer is not supported (see
-                [`is_supported`][mistral_common.guidance.grammar_factory.GrammarFactory.is_supported]).
+            ValueError: If the tokenizer is not supported.
+            ImportError: If llguidance or jinja2 is not installed.
         """
         assert_llguidance_installed()
         assert_jinja2_installed()
@@ -188,20 +216,50 @@ class GrammarFactory:
         self._special_token_map = self._build_special_token_map()
 
     def _build_special_token_map(self) -> dict[str, str]:
-        r"""Build a mapping from special token names to their grammar syntax."""
+        r"""Map every special token string to its llguidance lark syntax.
+
+        Returns:
+            Dictionary mapping each special token string to its lark token
+            reference, e.g. "<s>" -> "<[1]>".
+        """
         return {self._tokenizer.id_to_piece(i): f"<[{i}]>" for i in range(self._tokenizer.num_special_tokens)}
 
     def _special_token_lark(self, token_name: str) -> str:
-        r"""Convert special token name to lark grammar syntax."""
+        r"""Return the lark grammar syntax for a special token.
+
+        Args:
+            token_name: The special token string (e.g., "[TOOL_CALLS]").
+
+        Returns:
+            The lark token reference for this token.
+
+        Raises:
+            AssertionError: If the token name is not a registered special token.
+        """
         assert token_name in self._special_token_map, f"Unknown special token: {token_name}"
         return self._special_token_map[token_name]
 
     def _get_optional_special_token_lark(self, token_name: str) -> str | None:
-        r"""Returns lark grammar syntax for a special token, or `None` if absent."""
+        r"""Return lark grammar syntax for a special token, or `None` if absent.
+
+        Unlike `_special_token_lark`, missing tokens do not raise.
+
+        Args:
+            token_name: The special token string (e.g., "[THINK]").
+
+        Returns:
+            The lark token reference, or `None` if the token is not registered
+            in this tokenizer.
+        """
         return self._special_token_map.get(token_name)
 
     @property
     def llg_tokenizer(self) -> "llg.LLTokenizer":
+        r"""The llguidance tokenizer used to validate grammars.
+
+        Returns:
+            The LLTokenizer instance adapted from this Mistral tokenizer.
+        """
         return self._llg_tokenizer
 
     def select_jinja_template(self, reasoning: bool | None = None) -> str:
@@ -245,18 +303,31 @@ class GrammarFactory:
         parallel_tool_calls: bool,
         json_only: bool = False,
     ) -> str:
-        r"""Renders a lark grammar from a jinja template.
+        r"""Render a lark grammar from a jinja template.
+
+        This is the general entry point for grammar generation. Combines tool call,
+        JSON schema, and thinking sections according to the requested mode.
 
         Args:
-            template: Jinja template to render as a string.
-            mode: The function calling mode (auto, any, none).
-            tools: The list of tools available.
-            json_schema: JSON schema to additionally allow, unioned with the grammar.
-            parallel_tool_calls: Whether parallel tool calls are allowed.
-            json_only: If True, generates only JSON schema grammar without text/tool call alternatives.
+            template: Jinja template to render, as obtained from `select_jinja_template`.
+            mode: The tool choice. `ToolChoiceEnum.none` disables tool call sections;
+                a NamedToolChoice restricts the grammar to that single tool.
+            tools: The list of tools available. Required when mode is any/required
+                or a NamedToolChoice; ignored when mode is none.
+            json_schema: Optional JSON schema additionally allowed by the grammar,
+                unioned with tool call and text alternatives. If `None`, no JSON
+                section is added.
+            parallel_tool_calls: If `True`, the grammar allows one or more tool
+                calls in sequence; if `False`, exactly one.
+            json_only: If `True`, generates only JSON schema grammar without
+                text/tool call alternatives.
 
         Returns:
             The rendered lark grammar string.
+
+        Raises:
+            ValueError: If a NamedToolChoice references a tool not in tools, or
+                mode is any/required with no tools provided.
         """
         # Verifies that the NamedToolChoice has a valid tool and "any", "required" has tools.
         _validate_mode_and_tools(mode=mode, tools=tools)
@@ -283,11 +354,14 @@ class GrammarFactory:
         )
 
     def get_lark_for_json_schema(self, template: str, json_schema: dict[str, Any]) -> str:
-        r"""Returns a lark grammar that only accepts JSON objects matching the given schema.
+        r"""Return a lark grammar that only accepts JSON matching the given schema.
+
+        Convenience wrapper around `get_lark_from_jinja` that disables tool calls
+        and text alternatives, constraining output to the JSON schema alone.
 
         Args:
-            template: Jinja template to render as a string.
-            json_schema: The JSON schema to validate against.
+            template: Jinja template to render, as obtained from `select_jinja_template`.
+            json_schema: The JSON schema the output must conform to.
 
         Returns:
             The rendered lark grammar string that only matches the given JSON schema.

@@ -56,14 +56,21 @@ from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hu
 
 
 def load_image_encoder(image_config: ImageConfig, tokenizer: Tekkenizer | SentencePieceTokenizer) -> ImageEncoder:
-    r"""Load a image encoder from a config and a tokenizer.
+    r"""Build an ImageEncoder from a config and a tokenizer.
+
+    Resolves the image special token IDs (img, `img_break`, `img_end`) from the
+    tokenizer and combines them with the image config.
 
     Args:
-        image_config: The image config.
-        tokenizer: The tokenizer.
+        image_config: Image processing configuration (image size, patch size, etc.).
+        tokenizer: Tokenizer providing the special token IDs for image markers.
 
     Returns:
-        The image encoder.
+        An ImageEncoder bound to the tokenizer's special token IDs.
+
+    Raises:
+        ValueError: If any of the required image special tokens is not defined
+            in the tokenizer.
     """
     special_ids = SpecialImageIDs(
         img=tokenizer.get_special_token(SpecialTokens.img.value),
@@ -74,14 +81,19 @@ def load_image_encoder(image_config: ImageConfig, tokenizer: Tekkenizer | Senten
 
 
 def load_audio_encoder(audio_config: AudioConfig, tokenizer: Tekkenizer) -> AudioEncoder:
-    r"""Load a audio encoder from a config and a tokenizer.
+    r"""Build an AudioEncoder from a config and a tokenizer.
+
+    Resolves the audio special token IDs (audio, `begin_audio`, `streaming_pad`,
+    `text_to_audio`, `audio_to_text`) from the tokenizer. Tokens that are not
+    defined in the tokenizer are set to `None`, making them optional.
 
     Args:
-        audio_config: The audio config.
-        tokenizer: The tokenizer.
+        audio_config: Audio processing configuration (encoding, sampling rate, etc.).
+        tokenizer: Tekkenizer providing the special token IDs for audio markers.
 
     Returns:
-        The audio encoder.
+        An AudioEncoder bound to the tokenizer's special token IDs. IDs for
+        undefined tokens are `None`.
     """
 
     def get_special_token_or_none(token: str) -> int | None:
@@ -124,34 +136,54 @@ class MistralTokenizer(
             UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType, InstructRequestType
         ],
     ):
-        r"""Initializes a `MistralTokenizer`.
+        r"""Initialize a MistralTokenizer.
+
+        Prefer classmethods like `from_file` or `from_hf_hub` over direct construction;
+        they resolve the correct validator and normalizer for the tokenizer version.
 
         Args:
-            instruct_tokenizer: The instruct tokenizer to use.
-            validator: The request validator to use.
-            request_normalizer: The request normalizer to use.
+            instruct_tokenizer: Versioned tokenizer that performs the actual tokenization.
+            validator: Validator applied to requests before normalization. Its mode
+                (serving/finetuning/test) controls which constraints are enforced.
+            request_normalizer: Normalizer converting validated ChatCompletionRequests
+                into InstructRequests ready for tokenization.
         """
         self._chat_completion_request_validator = validator
         self._instruct_request_normalizer = request_normalizer
         self.instruct_tokenizer: InstructTokenizer[InstructRequest, FIMRequest, TokenizedType] = instruct_tokenizer
 
     def __reduce__(self) -> tuple[Callable, tuple[Any, ...]]:
-        """
-        Provides a recipe for pickling (serializing) this object, which is necessary for use with multiprocessing.
+        r"""Provide a pickling recipe so the tokenizer survives multiprocessing.
+
+        The tokenizer is serialized as a (`from_file`, (path, mode)) pair, so the
+        object is reconstructed from its source file rather than pickling internal state.
 
         Returns:
-            A tuple of the factory function and the arguments to reconstruct the object from its source file.
+            A tuple of the `from_file` factory and its arguments (file path, validation mode).
+
+        Raises:
+            ValueError: If the tokenizer was not loaded from a file, in which case
+                there is no path to reconstruct from.
         """
         return MistralTokenizer.from_file, (self.instruct_tokenizer.tokenizer.file_path, self.mode)
 
     @property
     def mode(self) -> ValidationMode:
-        r"""The validation mode of the tokenizer."""
+        r"""The validation mode of the tokenizer.
+
+        Returns:
+            The ValidationMode (serving, finetuning, or test) used by this tokenizer's validator.
+        """
         return self._chat_completion_request_validator.mode
 
     @property
     def version(self) -> TokenizerVersion:
-        r"""The version of the tokenizer."""
+        r"""The version of the tokenizer.
+
+        Returns:
+            The TokenizerVersion enum value determining supported features
+            (tool calls, audio, model settings, etc.).
+        """
         return self.instruct_tokenizer.tokenizer.version
 
     @classmethod
@@ -175,12 +207,16 @@ class MistralTokenizer(
         r"""Get the Mistral tokenizer v3.
 
         Args:
-            is_tekken: Whether the tokenizer is a tekken tokenizer. See
-                [Tekkenizer][mistral_common.tokens.tokenizers.tekken.Tekkenizer].
-            is_mm: Whether to load image tokenizer.
+            is_tekken: If `True`, loads the tekken (tiktoken-based) tokenizer instead
+                of the sentencepiece one. Tekken is faster and used by recent models.
+            is_mm: If `True`, loads the multimodal variant with image support.
+                Only supported together with `is_tekken=True`.
 
         Returns:
-            The Mistral tokenizer v3.
+            The Mistral tokenizer v3, in test validation mode.
+
+        Raises:
+            ValueError: If `is_mm` is `True` and `is_tekken` is `False` (multimodal requires tekken).
         """
         if is_tekken and is_mm:
             tokenizer_name = "tekken_240911.json"
@@ -195,13 +231,14 @@ class MistralTokenizer(
 
     @classmethod
     def v7(cls, is_mm: bool = False) -> "MistralTokenizer":
-        """Get the Mistral tokenizer v7.
+        r"""Get the Mistral tokenizer v7.
 
         Args:
-            is_mm: Whether to load the image tokenizer.
+            is_mm: If `True`, loads the multimodal variant with image support,
+                otherwise loads the text-only variant.
 
         Returns:
-            The Mistral tokenizer v7.
+            The Mistral tokenizer v7, in test validation mode.
         """
         if is_mm:
             return cls.from_file(
@@ -217,11 +254,17 @@ class MistralTokenizer(
         r"""Deprecated in favor of `from_hf_hub` or `from_file`, will be removed in 1.13.0.
 
         Args:
-            model: The model name.
-            strict: Has to be True, not used.
+            model: The model name. Must be one of the known legacy model names
+                (e.g., "mistral-small-2402", "codestral-2405"); newer models are
+                not registered here.
+            strict: Has to be `True`, not used.
 
         Returns:
             The Mistral tokenizer for the given model.
+
+        Raises:
+            ValueError: If strict is `False`.
+            TokenizerException: If the model name is not recognized.
         """
         warnings.warn(
             "`MistralTokenizer.from_model` is deprecated and will be removed in 1.13.0. "
@@ -254,17 +297,19 @@ class MistralTokenizer(
         See [here](https://huggingface.co/mistralai/models) for a list of our OSS models.
 
         Args:
-            repo_id: The Hugging Face repo ID.
-            token: The Hugging Face token to use to download the tokenizer.
-            revision: The revision of the model to use. If `None`, the latest revision will be used.
-            mode: The validation mode to use.
-            force_download: Whether to force the download of the tokenizer. If `True`, the tokenizer will be downloaded
-                even if it is already cached.
-            local_files_only: Whether to only use local files. If `True`, the tokenizer will be downloaded only if it is
-                already cached.
+            repo_id: The Hugging Face repo ID, e.g. "mistralai/Mistral-Small-2411".
+            token: Hugging Face access token for private repos. If `True`, uses the
+                locally logged-in token. If `None`, uses no token.
+            revision: Git branch, tag, or commit hash to download. If `None`, uses
+                the latest revision of the default branch.
+            mode: The validation mode to use for the loaded tokenizer.
+            force_download: If `True`, re-downloads the tokenizer even if it is
+                already present in the local Hugging Face cache.
+            local_files_only: If `True`, only uses the local cache and never hits
+                the network; fails if the tokenizer is not cached.
 
         Returns:
-            The Mistral tokenizer for the given model.
+            The Mistral tokenizer for the given repository.
         """
         tokenizer_path = download_tokenizer_from_hf_hub(
             repo_id=repo_id,
@@ -281,14 +326,26 @@ class MistralTokenizer(
         tokenizer_filename: str | Path,
         mode: ValidationMode = ValidationMode.test,
     ) -> "MistralTokenizer":
-        r"""Loads a tokenizer from a file.
+        r"""Load a tokenizer from a file.
+
+        Detects the tokenizer type (tekken JSON or sentencepiece model) from the
+        file, wires in the matching image/audio encoders, validator, and normalizer
+        for the tokenizer version, and returns the fully assembled MistralTokenizer.
 
         Args:
-            tokenizer_filename: The path to the tokenizer file.
-            mode: The validation mode to use.
+            tokenizer_filename: Path to a tekken (.json containing "tekken" in the
+                name) or sentencepiece (.model) tokenizer file.
+            mode: The validation mode to use for the loaded tokenizer.
 
         Returns:
-            The loaded tokenizer.
+            The loaded tokenizer, configured with the version-appropriate
+            InstructTokenizer, validator, and normalizer.
+
+        Raises:
+            TokenizerException: If the file is neither a tekken nor a sentencepiece
+                tokenizer, or the tokenizer version is unrecognized.
+            AssertionError: If the file declares image/audio support that its
+                tokenizer version does not support.
         """
         tokenizer: SentencePieceTokenizer | Tekkenizer
 
@@ -367,15 +424,26 @@ class MistralTokenizer(
     def encode_chat_completion(
         self, request: ChatCompletionRequest[UATS], max_model_input_len: int | None = None
     ) -> TokenizedType:
-        r"""Encodes a chat completion request.
+        r"""Encode a chat completion request into tokens.
+
+        Validates the request, normalizes it into an InstructRequest, and tokenizes
+        it. This is the main entry point for chat tokenization.
 
         Args:
             request: The chat completion request to encode.
-            max_model_input_len: The maximum length of the input to the model.
-                If `None`, the input will not be truncated.
+            max_model_input_len: Maximum number of input tokens the model accepts.
+                Used only when `request.truncate_for_context_length` is `True` to
+                truncate the conversation from the start. If `None`, no truncation
+                is applied.
 
         Returns:
-            The encoded chat completion request.
+            The tokenized request (tokens, message boundaries, etc.), specific to
+            the tokenizer version.
+
+        Raises:
+            TokenizerException: If `request.truncate_for_context_length` is `True` but
+                `max_model_input_len` is `None`.
+            MistralCommonException: If request validation fails.
         """
 
         validated_request = self._chat_completion_request_validator.validate_request(request)
@@ -396,44 +464,50 @@ class MistralTokenizer(
         return self.instruct_tokenizer.encode_instruct(instruct_request)
 
     def encode_transcription(self, request: TranscriptionRequest) -> TokenizedType:
-        r"""Encodes a transcription request.
+        r"""Encode a transcription request into tokens.
 
         Args:
-            request: The transcription request to encode.
+            request: The transcription request containing the audio to transcribe.
 
         Returns:
-            The encoded transcription request.
+            The tokenized transcription request.
         """
         return self.instruct_tokenizer.encode_transcription(request)
 
     def encode_speech_request(self, request: SpeechRequest) -> TokenizedType:
-        r"""Encodes a speech synthesis request.
+        r"""Encode a speech synthesis request into tokens.
 
         Args:
-            request: The speech request to encode.
+            request: The speech request containing the text and optional audio.
 
         Returns:
-            The encoded speech request.
+            The tokenized speech request.
         """
         return self.instruct_tokenizer.encode_speech_request(request)
 
     def encode_fim(self, request: FIMRequest) -> TokenizedType:
-        r"""Encodes a fill in the middle request.
+        r"""Encode a fill-in-the-middle request into tokens.
+
+        Wraps the prompt with prefix/middle/suffix markers so the model
+        can complete the middle section.
 
         Args:
-            request: The fill in the middle request to encode.
+            request: The fill-in-the-middle request containing the prompt parts.
 
         Returns:
-            The encoded fill in the middle request.
+            The tokenized fill-in-the-middle request.
         """
         return self.instruct_tokenizer.encode_fim(request)
 
     def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy = SpecialTokenPolicy.IGNORE) -> str:
-        r"""Decodes a list of tokens into a string.
+        r"""Decode a list of tokens into a string.
 
         Args:
-            tokens: The tokens to decode.
-            special_token_policy: The policy to use for special tokens.
+            tokens: List of token IDs to decode.
+            special_token_policy: Policy for handling special tokens:
+                - IGNORE: Skip special tokens (default)
+                - KEEP: Include special token strings in the output
+                - RAISE: Raise ValueError if special tokens are present
 
         Returns:
             The decoded string.

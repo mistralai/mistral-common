@@ -34,33 +34,66 @@ if is_sentencepiece_installed():
 
 
 class _SentencePieceModel(Protocol):
-    """Typed surface of the optional SentencePiece model used by this module."""
+    r"""Typed surface of the optional SentencePiece model used by this module."""
 
-    def piece_to_id(self, piece: str) -> int: ...
+    def piece_to_id(self, piece: str) -> int:
+        r"""Get the token ID of a piece string."""
+        ...
 
-    def vocab_size(self) -> int: ...
+    def vocab_size(self) -> int:
+        r"""Get the vocabulary size."""
+        ...
 
-    def get_piece_size(self) -> int: ...
+    def get_piece_size(self) -> int:
+        r"""Get the total number of pieces."""
+        ...
 
-    def id_to_piece(self, piece_id: int) -> str: ...
+    def id_to_piece(self, piece_id: int) -> str:
+        r"""Get the piece string of a token ID."""
+        ...
 
-    def IsControl(self, token: int) -> bool: ...
+    def IsControl(self, token: int) -> bool:
+        r"""Check whether a token ID is a control token."""
+        ...
 
-    def encode(self, input: str) -> list[int]: ...
+    def encode(self, input: str) -> list[int]:
+        r"""Encode a string into token IDs."""
+        ...
 
-    def decode(self, tokens: list[int]) -> str: ...
+    def decode(self, tokens: list[int]) -> str:
+        r"""Decode token IDs into a string."""
+        ...
 
-    def bos_id(self) -> int: ...
+    def bos_id(self) -> int:
+        r"""Get the beginning-of-sentence token ID."""
+        ...
 
-    def eos_id(self) -> int: ...
+    def eos_id(self) -> int:
+        r"""Get the end-of-sentence token ID."""
+        ...
 
-    def pad_id(self) -> int: ...
+    def pad_id(self) -> int:
+        r"""Get the padding token ID."""
+        ...
 
-    def unk_id(self) -> int: ...
+    def unk_id(self) -> int:
+        r"""Get the unknown token ID."""
+        ...
 
 
 def is_sentencepiece(path: str | Path) -> bool:
-    r"""Check if the given path is a SentencePiece model."""
+    r"""Check if the given path is a SentencePiece model.
+
+    Recognizes files ending in .model or .model.<version>[<mm-version>],
+    e.g. tokenizer.model.v3 or tokenizer.model.v3m1.
+
+    Args:
+        path: The path to check.
+
+    Returns:
+        `True` if the path is an existing file with a known sentencepiece
+        suffix, `False` otherwise.
+    """
     if isinstance(path, str):
         path = Path(path)
 
@@ -72,7 +105,23 @@ def is_sentencepiece(path: str | Path) -> bool:
 
 
 def get_spm_version(tokenizer_filename: str | Path, raise_deprecated: bool = False) -> TokenizerVersion:
-    r"""Get the version of the tokenizer from the filename."""
+    r"""Get the version of the tokenizer from the filename.
+
+    Expects filenames like "tokenizer.model.v3" or "tokenizer.model.v7m1".
+    A bare `tokenizer.model` is treated as v1.
+
+    Args:
+        tokenizer_filename: The tokenizer model path to parse.
+        raise_deprecated: If `True`, raise for the deprecated unversioned
+            `tokenizer.model` filename instead of silently returning v1.
+
+    Returns:
+        The TokenizerVersion parsed from the filename.
+
+    Raises:
+        TokenizerException: If `raise_deprecated` is `True` and the filename has
+            no version suffix, or the version is unrecognized.
+    """
     tokenizer_filename = str(tokenizer_filename)
 
     _version_str = tokenizer_filename.split(".")[-1]
@@ -93,7 +142,22 @@ def get_spm_version(tokenizer_filename: str | Path, raise_deprecated: bool = Fal
 
 
 def get_image_config(tokenizer_filename: str | Path) -> ImageConfig | None:
-    r"""Get the image config from the tokenizer filename."""
+    r"""Get the image config from the tokenizer filename.
+
+    The multimodal version suffix (e.g., "m1" in "tokenizer.model.v7m1")
+    selects the image configuration.
+
+    Args:
+        tokenizer_filename: The tokenizer model path to parse.
+
+    Returns:
+        The ImageConfig for the multimodal version in the filename, or `None`
+        if the filename carries no multimodal version.
+
+    Raises:
+        TokenizerException: If the multimodal version in the filename is
+            unrecognized.
+    """
     tokenizer_filename = str(tokenizer_filename)
 
     _version_str = tokenizer_filename.split(".")[-1]
@@ -112,11 +176,18 @@ class SentencePieceTokenizer(Tokenizer):
     r"""[SentencePiece](https://github.com/google/sentencepiece) tokenizer."""
 
     def __init__(self, model_path: str | Path, tokenizer_version: TokenizerVersion | None = None) -> None:
-        r"""Initialize the `SentencePieceTokenizer`.
+        r"""Initialize the SentencePieceTokenizer.
 
         Args:
-            model_path: The path to the `SentencePiece` model.
-            tokenizer_version: The version of the tokenizer. If not provided, it will be inferred from the model path.
+            model_path: The path to the SentencePiece model file.
+            tokenizer_version: The version of the tokenizer. If `None`, inferred
+                from the model path filename.
+
+        Raises:
+            AssertionError: If the model file does not exist or its internal
+                vocab size is inconsistent.
+            TokenizerException: If the version inferred from the filename is
+                unrecognized.
         """
         assert_sentencepiece_installed()
 
@@ -149,16 +220,32 @@ class SentencePieceTokenizer(Tokenizer):
 
     @property
     def model_settings_builder(self) -> ModelSettingsBuilder | None:
-        r"""Always returns None as SentencePiece does not support `model_settings_builder`."""
+        r"""Always returns `None` as SentencePiece does not support `model_settings_builder`."""
         if self.version.supports_model_settings:
             raise ValueError(f"SentencePieceTokenizer does not support model settings for version {self.version}")
         return None
 
     def get_special_token(self, s: str) -> int:
-        r"""Get the special token for the given string."""
+        r"""Get the token ID for a special token string.
+
+        Args:
+            s: The special token string (e.g., "<s>").
+
+        Returns:
+            The token ID for the special token. Unknown strings map to the
+            unknown token ID (sentencepiece behavior).
+        """
         return self._model.piece_to_id(s)
 
     def get_control_token(self, s: str) -> int:
+        r"""Get the token ID of a control token. Deprecated: use `get_special_token()` instead.
+
+        Args:
+            s: The special token string.
+
+        Returns:
+            The token ID for the special token.
+        """
         warnings.warn("`get_control_token` is deprecated. Use `get_special_token` instead.", FutureWarning)
         return self.get_special_token(s)
 
@@ -187,7 +274,17 @@ class SentencePieceTokenizer(Tokenizer):
         return self._model.eos_id()
 
     def is_special(self, token: int | np.integer | str) -> bool:
-        """Return `True` if the passed `token` is a special token."""
+        r"""Check if a token is a special (control) token.
+
+        Args:
+            token: Token ID (int or numpy integer) or token string to check.
+
+        Returns:
+            `True` if the token is a sentencepiece control token, `False` otherwise.
+
+        Raises:
+            TypeError: If token is not an int, numpy integer, or str.
+        """
         if isinstance(token, (int, np.integer)):
             return self._model.IsControl(int(token))
         elif isinstance(token, str):
@@ -299,5 +396,5 @@ class SentencePieceTokenizer(Tokenizer):
 
 
 def is_sentencepiece_tokenizer(tokenizer: Tokenizer) -> TypeGuard[SentencePieceTokenizer]:
-    r"""Returns whether the tokenizer is a SentencePieceTokenizer."""
+    r"""Return whether the tokenizer is a SentencePieceTokenizer."""
     return isinstance(tokenizer, SentencePieceTokenizer)

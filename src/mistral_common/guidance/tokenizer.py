@@ -10,37 +10,51 @@ if is_llguidance_installed():
 
 
 class MistralLLGTokenizer:
-    r"""Wraps a Tekken tokenizer for use with llguidance."""
+    r"""Wraps a Tekken tokenizer for use with llguidance.
+
+    Adapts Mistral special tokens ([...]) to the angle-bracket format
+    (<...>) llguidance expects, and exposes the vocabulary as byte strings.
+    """
 
     @property
     def bos_token_id(self) -> int:
-        r"""The beginning of string token id."""
+        r"""The beginning-of-string token ID."""
         return self._tokenizer.bos_id
 
     @property
     def eos_token_id(self) -> int:
-        r"""The end of string token id."""
+        r"""The end-of-string token ID."""
         return self._tokenizer.eos_id
 
     @property
     def tokens(self) -> list[bytes]:
-        r"""The list of token byte representations."""
+        r"""The full vocabulary as byte representations.
+
+        Returns:
+            One entry per token ID, in ID order; special tokens use their
+            angle-bracket string encoding.
+        """
         return self._tokens
 
     @property
     def special_token_ids(self) -> list[int]:
-        r"""The list of special token ids."""
+        r"""The IDs of all special tokens."""
         return self._special_token_ids
 
     def __init__(self, tokenizer: Tokenizer) -> None:
         r"""Initialize the wrapper.
+
+        Special token strings in square brackets ([INST]) are converted to
+        angle brackets (<INST>) since llguidance only recognizes the latter.
+        All special tokens must be unique and match the <...> format.
 
         Args:
             tokenizer: The Tekken tokenizer to wrap for llguidance compatibility.
 
         Raises:
             TypeError: If the tokenizer is not a Tekkenizer.
-            ValueError: If a special token has an invalid format.
+            ValueError: If a special token has an invalid format or is
+                duplicated, or the special token count is inconsistent.
         """
         assert_llguidance_installed()
 

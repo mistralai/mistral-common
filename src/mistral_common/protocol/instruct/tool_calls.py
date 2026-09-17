@@ -8,10 +8,12 @@ from mistral_common.base import MistralBase
 
 
 class FunctionName(MistralBase):
-    r"""A function identified by name.
+    r"""Identifier for a function by its name.
+
+    Used to reference a function without its full definition.
 
     Attributes:
-        name: The name of the function.
+        name: The function name string. Must be a valid identifier.
 
     Examples:
         >>> function_name = FunctionName(name="get_current_weather")
@@ -21,13 +23,21 @@ class FunctionName(MistralBase):
 
 
 class Function(FunctionName):
-    r"""Function definition for tools.
+    r"""Complete function definition for a tool.
+
+    Defines a callable function with its schema and metadata. Used within Tool
+    definitions to specify what functions are available.
 
     Attributes:
-        name: The name of the function.
-        description: A description of what the function does.
-        parameters: The parameters the functions accepts, described as a JSON Schema object.
-        strict: Whether to enforce strict function calling.
+        name: Function name. Used by the model to identify which function to call.
+        description: Human-readable description of the function's purpose.
+            Displayed to help users understand when to use this function.
+        parameters: JSON Schema object defining the function's parameters.
+            Used for validation and to generate the function call arguments.
+            Must have "type": "object" and define "properties" and optionally "required".
+        strict: If `True`, the function's parameters schema is enforced: the model's
+            arguments must conform to it. If `False` (default), the parameters schema
+            is not enforced and the model may emit any JSON object as arguments.
 
     Examples:
         >>> function = Function(
@@ -53,15 +63,18 @@ class Function(FunctionName):
 
     @classmethod
     def from_openai(cls, openai_function: dict[str, Any]) -> "Function":
-        r"""Convert an OpenAI function definition to a Mistral `Function`.
+        r"""Convert an OpenAI function definition to a Mistral Function.
 
-        Filters out unknown fields and defaults missing `parameters` and `description`.
+        Handles conversion from OpenAI's format, filtering out unknown fields
+        and providing defaults for missing required fields.
 
         Args:
-            openai_function: The OpenAI function definition.
+            openai_function: Dictionary matching OpenAI's function schema.
+                Must contain at least a "name" key.
 
         Returns:
-            The Mistral function.
+            Function instance with parameters and description defaulted to
+            empty dict and empty string respectively if not provided.
         """
         filtered = cls._filter_cls_fields(openai_function)
         if filtered.get("parameters") is None:
@@ -72,10 +85,10 @@ class Function(FunctionName):
 
 
 class ToolTypes(str, Enum):
-    r"""Enum of tool types.
+    r"""Enum of supported tool types.
 
     Attributes:
-       function: A function tool.
+        function: A function tool that can be called with arguments.
 
     Examples:
         >>> tool_type = ToolTypes.function
@@ -85,13 +98,13 @@ class ToolTypes(str, Enum):
 
 
 class ToolChoiceEnum(str, Enum):
-    r"""Enum of tool choice types.
+    r"""Enum controlling how the model selects tools.
 
     Attributes:
-        auto: Automatically choose the tool.
-        none: Do not use any tools.
-        any: Deprecated in favor of `required`.
-        required: Require the model to call at least one tool.
+        auto: Model automatically decides whether to call tools.
+        none: Model will not call any tools.
+        any: Deprecated; use `required` instead.
+        required: Model must call at least one available tool.
 
     Examples:
         >>> tool_choice = ToolChoiceEnum.auto
@@ -108,9 +121,13 @@ class ToolChoiceEnum(str, Enum):
 class NamedToolChoice(MistralBase):
     r"""Forces the model to call a specific function.
 
+    Use this to constrain the model to use a particular function rather than
+    letting it choose from available tools.
+
     Attributes:
-        type: The type of the tool.
-        function: The function the model should call.
+        type: The tool type. Must be ToolTypes.function.
+        function: The FunctionName identifying which specific function to call.
+            The model will only use this function, regardless of what tools are available.
 
     Examples:
         >>> named = NamedToolChoice(function=FunctionName(name="get_weather"))
@@ -123,15 +140,19 @@ class NamedToolChoice(MistralBase):
 
 
 ToolChoice: TypeAlias = ToolChoiceEnum | NamedToolChoice
-r"""Tool choice are either a `ToolChoiceEnum` or a `NamedToolChoice`."""
+r"""Tool choice can be either a ToolChoiceEnum value or a NamedToolChoice instance."""
 
 
 class Tool(MistralBase):
-    r"""Tool definition.
+    r"""Definition of a tool available to the model.
+
+    A tool combines a function definition with metadata about how it should
+    be presented and used.
 
     Attributes:
-        type: The type of the tool.
-        function: The function definition.
+        type: The tool type. Must be ToolTypes.function.
+        function: The Function definition specifying the callable function,
+            its parameters, and description.
 
     Examples:
         >>> tool = Tool(
@@ -157,19 +178,26 @@ class Tool(MistralBase):
     function: Function
 
     def to_openai(self) -> dict[str, Any]:
+        r"""Convert this tool to OpenAI format.
+
+        Returns:
+            Dictionary matching OpenAI's tool schema.
+        """
         return self.model_dump()
 
     @classmethod
     def from_openai(cls, openai_tool: dict[str, Any]) -> "Tool":
-        r"""Convert an OpenAI tool definition to a Mistral `Tool`.
+        r"""Create a Tool from an OpenAI tool definition.
 
-        Delegates function parsing to `Function.from_openai`.
+        Converts OpenAI's tool format to Mistral's format, delegating function
+        parsing to Function.`from_openai`.
 
         Args:
-            openai_tool: The OpenAI tool definition.
+            openai_tool: Dictionary matching OpenAI's tool schema. Must have
+                "type" and optionally "function" keys.
 
         Returns:
-            The Mistral tool.
+            Tool instance with the function converted from OpenAI format.
         """
         openai_tool = openai_tool.copy()
         if function := openai_tool.get("function"):
@@ -178,11 +206,15 @@ class Tool(MistralBase):
 
 
 class FunctionCall(MistralBase):
-    r"""Function call.
+    r"""Represents a function call made by the model.
+
+    Contains the function name and its arguments as they would be passed
+    to the actual function.
 
     Attributes:
-        name: The name of the function to call.
-        arguments: The arguments to pass to the function.
+        name: The name of the function being called.
+        arguments: JSON string of the arguments to pass to the function.
+            Stored as a string but parsed from/to dict for convenience.
 
     Examples:
         >>> function_call = FunctionCall(
@@ -199,7 +231,8 @@ class FunctionCall(MistralBase):
         r"""Convert arguments to a JSON string if they are a dictionary.
 
         Args:
-            v: The arguments to validate.
+            v: The arguments value. Can be a dict (converted to JSON string),
+                str (used as-is), or `None` (converted to "{}").
 
         Returns:
             The arguments as a JSON string.
@@ -212,12 +245,15 @@ class FunctionCall(MistralBase):
 
 
 class ToolCall(MistralBase):
-    r"""Tool call.
+    r"""Represents a tool call made by the model during generation.
+
+    A tool call wraps a FunctionCall with metadata including a unique ID.
 
     Attributes:
-        id: The ID of the tool call. Required for V3+ tokenization
-        type: The type of the tool call.
-        function: The function call.
+        id: Unique identifier for this tool call. Must be a non-empty string
+            for tokenizer version >= v13. Defaults to "null" for backwards compatibility.
+        type: The tool type. Must be ToolTypes.function.
+        function: The FunctionCall containing the function name and arguments.
 
     Examples:
         >>> tool_call = ToolCall(
@@ -234,10 +270,23 @@ class ToolCall(MistralBase):
     function: FunctionCall
 
     def to_openai(self) -> dict[str, Any]:
+        r"""Convert this tool call to OpenAI format.
+
+        Returns:
+            Dictionary matching OpenAI's tool call schema.
+        """
         return self.model_dump()
 
     @classmethod
     def from_openai(cls, tool_call: dict[str, Any]) -> "ToolCall":
+        r"""Create a ToolCall from an OpenAI tool call definition.
+
+        Args:
+            tool_call: Dictionary matching OpenAI's tool call schema.
+
+        Returns:
+            ToolCall instance with fields parsed from the OpenAI format.
+        """
         return cls.model_validate_ignore_extra(tool_call)
 
 

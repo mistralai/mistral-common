@@ -40,11 +40,15 @@ def maybe_load_image_from_str_or_bytes(x: Image.Image | str | bytes) -> Image.Im
     If the input is already a PIL Image, return it as is.
 
     Args:
-        x: The input to load the image from. Can be a PIL Image, a string, or bytes.
-            If it's a string, it's assumed to be a base64 encoded string of bytes.
+        x: The input to load the image from. Can be a PIL Image, a string, or
+            bytes. If it's a string, it's assumed to be a base64 encoded string
+            of bytes; if it's bytes, raw encoded image data (e.g., PNG).
 
     Returns:
        The loaded image as a PIL Image object.
+
+    Raises:
+        RuntimeError: If the input cannot be decoded into an image.
     """
     if isinstance(x, Image.Image):
         return x
@@ -68,9 +72,14 @@ def maybe_load_image_from_str_or_bytes(x: Image.Image | str | bytes) -> Image.Im
 def serialize_image_to_byte_str(im: Image.Image, info: SerializationInfo) -> str:
     r"""Serialize an image to a base64 encoded string of bytes.
 
+    The output honors two context keys from info, when present:
+    `max_image_b64_len` truncates the base64 string for display, and
+    `add_format_prefix` prepends a data:...;base64, prefix.
+
     Args:
-        im: The image to serialize.
-        info: The serialization info.
+        im: The image to serialize. Its format is used, defaulting to PNG
+            when unset.
+        info: The pydantic serialization info carrying optional context.
 
     Returns:
         The serialized image as a base64 encoded string of bytes.

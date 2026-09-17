@@ -28,14 +28,23 @@ def create_app(
 ) -> FastAPI:
     r"""Create a Mistral-common FastAPI app with the given tokenizer and validation mode.
 
+    The app exposes tokenize, decode, and health routes backed by the given
+    tokenizer, and can proxy completions to an external engine.
+
     Args:
-        tokenizer: The tokenizer path or a MistralTokenizer instance.
-        validation_mode: The validation mode to use.
-        engine_url: The URL of the engine API.
-        timeout: The timeout of the engine API.
+        tokenizer: Path to a tokenizer file, or an already-loaded
+            MistralTokenizer instance.
+        validation_mode: The validation mode applied to incoming requests.
+            Only used when tokenizer is a path.
+        engine_url: The URL of the engine API used for chat completions.
+        engine_backend: The backend type of the engine API.
+        timeout: The timeout of the engine API in seconds.
 
     Returns:
-        The Mistral-common FastAPI app.
+        The configured FastAPI application.
+
+    Raises:
+        ValueError: If tokenizer is neither a path nor a MistralTokenizer.
     """
     if not isinstance(tokenizer, (MistralTokenizer, str, Path)):
         raise ValueError("Tokenizer must be a path or a MistralTokenizer instance.")

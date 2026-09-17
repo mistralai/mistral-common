@@ -48,7 +48,11 @@ from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 
 
 class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMRequestType, TokenizedType]):
-    r"""Base instruct tokenizer."""
+    r"""Base instruct tokenizer implementing version-independent encoding.
+
+    Concrete versioned tokenizers (V1, V2, ...) inherit from this class and
+    implement the version-specific message encodings.
+    """
 
     def __init__(
         self,
@@ -59,9 +63,11 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
         r"""Initialize the instruct tokenizer.
 
         Args:
-            tokenizer: The tokenizer to use.
-            image_encoder: The image encoder to use if any.
-            audio_encoder: The audio encoder to use.
+            tokenizer: The text tokenizer to use.
+            image_encoder: The image encoder to use, or `None` if image support is
+                not configured.
+            audio_encoder: The audio encoder to use, or `None` if audio support is
+                not configured.
         """
         self.tokenizer = tokenizer
         self.image_encoder = image_encoder
@@ -70,13 +76,22 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
 
     @property
     def mm_encoder(self) -> ImageEncoder | None:
+        r"""Deprecated alias for `image_encoder`.
+
+        Returns:
+            The image encoder, or `None` if image support is not configured.
+        """
         # this funtion is deprecated, use image_encoder instead
         # TODO(Patrick) - throw a deprecation warning once
         # changes applied to vllm and transformers
         return self.image_encoder
 
     def start(self) -> list[int]:
-        r"""Return the start tokens."""
+        r"""Return the start tokens of every encoded request.
+
+        Returns:
+            The token IDs prepended to every encoded conversation (the BOS token).
+        """
         return [self.tokenizer.bos_id]
 
     @staticmethod
@@ -87,7 +102,9 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
             request: The request to search for user messages.
 
         Returns:
-            The index of the first and last user message.
+            A tuple of (`first_user_idx`, `last_user_idx`), the message indexes of
+            the first and last UserMessage. Both are -1 if the request has no
+            user messages.
         """
         last_user_idx = -1
         first_user_idx = -1
@@ -104,6 +121,15 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
     ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
         r"""Encode a tool message.
 
+        Args:
+            message: The tool message to encode.
+            is_before_last_user_message: `True` if this message comes before the
+                last user message of the conversation.
+
+        Returns:
+            A tuple of (tokens, images, audios): the encoded token IDs, images,
+            and audio for this message.
+
         Raises:
             NotImplementedError: The tool message is not implemented for the base tokenizer.
         """
@@ -113,6 +139,14 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
     def encode_assistant_message(self, message: AssistantMessage, is_before_last_user_message: bool) -> list[int]:
         r"""Encode an assistant message.
 
+        Args:
+            message: The assistant message to encode.
+            is_before_last_user_message: `True` if this message comes before the
+                last user message of the conversation.
+
+        Returns:
+            The encoded token IDs for this message.
+
         Raises:
             NotImplementedError: The assistant message is not implemented for the base tokenizer.
         """
@@ -121,6 +155,12 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
     @abstractmethod
     def encode_think(self, chunk: ThinkChunk) -> list[int]:
         r"""Encode a think chunk.
+
+        Args:
+            chunk: The think chunk to encode.
+
+        Returns:
+            The encoded token IDs for this chunk.
 
         Raises:
             NotImplementedError: The think chunk is not implemented for the base tokenizer.
@@ -139,6 +179,13 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
 
     @classmethod
     def validate_messages(cls, messages: list[UATS]) -> None:
+        r"""Validate messages before tokenization.
+
+        No-op for this tokenizer version; message validation starts at v7.
+
+        Args:
+            messages: The messages that were validated.
+        """
         # We start validating messages for v7
         return
 
@@ -148,11 +195,20 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
     ) -> Tokenized:
         r"""Encode an instruct request.
 
+        Walks the message list, encoding each message with its version-specific
+        encoder, and aggregates the resulting tokens, images, and audio into a
+        single Tokenized object. Applies truncation when
+        `request.truncate_at_max_tokens` is set.
+
         Args:
             request: The request to encode.
 
         Returns:
-            The encoded tokens.
+            The tokenized request, with all images and audio collected across
+            the messages.
+
+        Raises:
+            TokenizerException: If a message has an unknown type.
         """
         # init at bos
         images: list[np.ndarray] = []
@@ -224,8 +280,9 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
         r"""Decode tokens to a string.
 
         Args:
-            tokens: The tokens to decode.
-            special_token_policy: The policy to use for special tokens.
+            tokens: The token IDs to decode.
+            special_token_policy: The policy to use for special tokens
+                (IGNORE, KEEP, or RAISE).
 
         Returns:
             The decoded string.
@@ -239,7 +296,9 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
 class InstructTokenizerV1(InstructTokenizerBase, Generic[InstructRequestType, FIMRequestType, TokenizedType]):
     r"""Instruct tokenizer V1.
 
-    This tokenizer has basic for messages. It does not support tools or image inputs.
+    Basic message encoding wrapping content in [INST]/[/INST] markers. Does not
+    support tools, images, audio, FIM, or system messages as separate messages
+    (the system prompt is merged into the first user message).
     """
 
     def encode_user_message(
@@ -261,6 +320,7 @@ class InstructTokenizerV1(InstructTokenizerBase, Generic[InstructRequestType, FI
             is_first: Whether the message is the first one.
             system_prompt: The system prompt.
             force_img_first: Not used.
+            settings: Not used.
 
         Returns:
             The encoded tokens and empty list.
@@ -279,6 +339,11 @@ class InstructTokenizerV1(InstructTokenizerBase, Generic[InstructRequestType, FI
         return curr_tokens, image, audio
 
     def encode_system_message(self, message: SystemMessage) -> tuple[list[int], list[Audio]]:
+        r"""Encode a system message.
+
+        Raises:
+            NotImplementedError: Always; system messages are not supported by this version.
+        """
         raise NotImplementedError(f"System message encoding not implemented for {self.__class__.__name__}")
 
     def encode_user_content(
@@ -355,16 +420,27 @@ class InstructTokenizerV1(InstructTokenizerBase, Generic[InstructRequestType, FI
         raise TokenizerException(f"FIM not available for {self.tokenizer.version}")
 
     def encode_transcription(self, request: TranscriptionRequest) -> Tokenized:
+        r"""Encode a transcription request.
+
+        Raises:
+            TokenizerException: Always; transcription is not supported by this version.
+        """
         raise TokenizerException(f"Transcription not available for {self.tokenizer.version}")
 
     def encode_speech_request(self, request: SpeechRequest) -> Tokenized:
+        r"""Encode a speech synthesis request.
+
+        Raises:
+            TokenizerException: Always; speech requests are not supported by this version.
+        """
         raise TokenizerException(f"Speech request not available for tokenizer {self.tokenizer.version.value}")
 
 
 class InstructTokenizerV2(InstructTokenizerV1, Generic[InstructRequestType, FIMRequestType, TokenizedType]):
     r"""Instruct tokenizer V2.
 
-    This tokenizer adds supports to images, tools and FIM requests.
+    Adds support for images, tools, and FIM requests on top of V1. Tool
+    definitions are encoded in the last user message.
     """
 
     _message_position_to_encode_tools_settings = UserMessagePosition.last
@@ -413,6 +489,7 @@ class InstructTokenizerV2(InstructTokenizerV1, Generic[InstructRequestType, FIMR
             is_first: Not used.
             system_prompt: The system prompt.
             force_img_first: Whether to force the image to be first.
+            settings: Not used.
 
         Returns:
             The encoded tokens and the list of images.
@@ -925,6 +1002,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
             is_first: Whether the message is the first one.
             system_prompt: Not used.
             force_img_first: Whether to force the image to be first.
+            settings: Not used.
 
         Returns:
             The encoded tokens and the list of images.
@@ -1067,7 +1145,14 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
     @classmethod
     def validate_messages(cls, messages: list[UATS]) -> None:
-        r"""Validates that system prompts and audio chunks are not used together in v7."""
+        r"""Validate that system prompts and audio chunks are not used together in v7.
+
+        Args:
+            messages: The messages to validate.
+
+        Raises:
+            ValueError: If audio chunks are present alongside a system message.
+        """
         if cls._has_audio(messages):
             if any(isinstance(message, SystemMessage) for message in messages):
                 raise ValueError("System messages are not yet allowed when audio is present")
@@ -1147,8 +1232,8 @@ class InstructTokenizerV7(InstructTokenizerV3):
         r"""Encode reference audio or voice preset into a Tokenized object.
 
         Args:
-            ref_audio: Base64-encoded string or raw bytes of reference audio, or None.
-            voice: Preset voice name, or None.
+            ref_audio: Base64-encoded string or raw bytes of reference audio, or `None`.
+            voice: Preset voice name, or `None`.
 
         Returns:
             Tokenized object with audio tokens and optional audio data.
@@ -1172,7 +1257,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
     def encode_speech_request(self, request: SpeechRequest) -> Tokenized:
         r"""Encode a speech synthesis request into a tokenized sequence.
 
-        Produces: [BOS] + audio_tokens + [TEXT_TO_AUDIO] + text_tokens + [AUDIO_TO_TEXT] + [BEGIN_AUDIO].
+        Produces: [BOS] + `audio_tokens` + [TEXT_TO_AUDIO] + `text_tokens` + [AUDIO_TO_TEXT] + [BEGIN_AUDIO].
 
         Args:
             request: The speech request containing input text and voice/audio data.
@@ -1203,7 +1288,7 @@ class InstructTokenizerV11(InstructTokenizerV7):
 
     The difference with V7 tokenizer is that it encodes tool calls differently:
     Tool call results are encoded as :
-    - [begin tool call] call_name_tokens [call id] call_id_tokens [args] content tokens
+    - [begin tool call] `call_name_tokens` [call id] `call_id_tokens` [args] content tokens
     """
 
     def __init__(
@@ -1324,7 +1409,14 @@ class InstructTokenizerV13(InstructTokenizerV11):
 
     @classmethod
     def validate_messages(cls, messages: list[UATS]) -> None:
-        r"""Allows system prompts and audio chunks to coexist in v13."""
+        r"""Validate messages before tokenization.
+
+        No-op: unlike v7, this version allows system prompts and audio chunks
+        to coexist.
+
+        Args:
+            messages: The messages that were validated.
+        """
         return
 
 

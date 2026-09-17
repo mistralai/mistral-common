@@ -22,7 +22,12 @@ from mistral_common.tokens.tokenizers.model_settings_builder import ModelSetting
 
 
 class UserMessagePosition(str, Enum):
-    """Where to encode available tools"""
+    r"""Where to encode available tools in the token stream.
+
+    Attributes:
+        first: Encode the available tools section before the message.
+        last: Encode the available tools section after the message.
+    """
 
     first = "first"
     last = "last"
@@ -63,6 +68,8 @@ class SpecialTokens(str, Enum):
         streaming_word: The streaming word token.
         text_to_audio: The text to audio token.
         audio_to_text: The audio to text token.
+        begin_model_settings: The beginning of model settings token.
+        end_model_settings: The end of model settings token.
 
     Examples:
         >>> unk = SpecialTokens.unk
@@ -107,9 +114,13 @@ class SpecialTokenPolicy(str, Enum):
     r"""What to do with special tokens when encoding/decoding.
 
     Attributes:
-        IGNORE: Ignore special tokens.
-        KEEP: Keep special tokens.
+        IGNORE: Drop special tokens from the output.
+        KEEP: Include special token strings in the output.
         RAISE: Raise an error if special tokens are found.
+
+    Note:
+        Integer values 0, 1, 2 are still accepted for backward compatibility,
+        mapping to IGNORE, KEEP, RAISE respectively.
     """
 
     IGNORE = "ignore"
@@ -130,20 +141,25 @@ class SpecialTokenPolicy(str, Enum):
 
 
 class TokenizerVersion(str, Enum):
-    r"""Enum of tokenizer versions.
+    r"""Enum of tokenizer versions, ordered and comparable.
 
-    Allow to distinguish between different versions of the tokenizer and maintain backward compatibility.
+    Allows distinguishing between tokenizer generations and maintaining
+    backward compatibility. Instances compare by numeric version
+    (e.g., `TokenizerVersion.v13 > TokenizerVersion.v7`).
 
     Attributes:
-        v1: The first version of the tokenizer.
-        v2: The second version of the tokenizer that includes special control tokens [INST], [\INST].
-        v3: The third version of the tokenizer that includes improved function calling.
-        v7: The seventh version of the tokenizer that includes improved system prompt and function calling.
-        v11: The eleventh version of the tokenizer that includes improved function calling.
-        v13: The thirteenth version of the tokenizer that includes no call id tokenization and better prompt caching.
+        v1: First version of the tokenizer.
+        v2: Adds special control tokens [INST], [/INST].
+        v3: Adds improved function calling.
+        v7: Adds improved system prompt and function calling.
+        v11: Adds improved function calling.
+        v13: Removes call id tokenization and improves prompt caching.
+        v15: Adds model settings support (e.g., reasoning effort).
 
     Examples:
         >>> version = TokenizerVersion.v1
+        >>> TokenizerVersion.v15.supports_model_settings
+        True
     """
 
     @property
@@ -156,10 +172,20 @@ class TokenizerVersion(str, Enum):
 
     @property
     def version_num(self) -> int:
+        r"""Numeric part of the version string.
+
+        Returns:
+            The integer version, e.g. 13 for `TokenizerVersion.v13`.
+        """
         return int(self.value[1:])
 
     @property
     def supports_model_settings(self) -> bool:
+        r"""Whether this version supports model settings.
+
+        Returns:
+            True for v15 and later, False for earlier versions.
+        """
         return self >= TokenizerVersion.v15
 
     def __lt__(self, other: "str | TokenizerVersion") -> bool:
@@ -195,10 +221,13 @@ class Tokenized(MistralBase):
     r"""A tokenized [`InstructRequest`][mistral_common.protocol.instruct.request.InstructRequest].
 
     Attributes:
-        tokens: The token ids.
-        prefix_ids: The prefix ids for FIM.
-        images: The loaded images associated with the tokens.
-        audios: The loaded audio associated with the tokens.
+        tokens: The token IDs of the encoded request.
+        prefix_ids: The token IDs of the prefix section, set for FIM requests.
+            `None` for non-FIM requests.
+        images: Loaded images referenced by the tokens, as arrays ready for
+            the model. Empty if the request has no images.
+        audios: Loaded audio referenced by the tokens, as processed Audio
+            objects. Empty if the request has no audio.
 
     Examples:
         >>> tokenized = Tokenized(tokens=[1, 2, 3], prefix_ids=[1], images=[], audios=[])
@@ -234,6 +263,12 @@ class Tokenized(MistralBase):
 
 
 class Tokenizer(ABC):
+    r"""Abstract text tokenizer interface.
+
+    Defines the encode/decode and vocabulary introspection API shared by the
+    tekken and sentencepiece implementations.
+    """
+
     @property
     @abstractmethod
     def n_words(self) -> int:
@@ -252,7 +287,7 @@ class Tokenizer(ABC):
     @property
     @abstractmethod
     def model_settings_builder(self) -> ModelSettingsBuilder | None:
-        r"""The model settings builder, or None if unsupported by this version."""
+        r"""The model settings builder, or `None` if unsupported by this version."""
 
     @abstractmethod
     def vocab(self) -> list[str]:
@@ -284,7 +319,16 @@ class Tokenizer(ABC):
 
     @abstractmethod
     def encode(self, s: str, bos: bool, eos: bool) -> list[int]:
-        """Convert a string to a list of token ids."""
+        r"""Convert a string to a list of token IDs.
+
+        Args:
+            s: The string to encode.
+            bos: If `True`, prepend the beginning-of-sentence token ID.
+            eos: If `True`, append the end-of-sentence token ID.
+
+        Returns:
+            The encoded token IDs.
+        """
 
     @abstractmethod
     def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy = SpecialTokenPolicy.IGNORE) -> str:
@@ -329,10 +373,16 @@ TokenizedType = TypeVar("TokenizedType", bound=Tokenized)
 class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedType]):
     r"""Base class for instruct tokenizers.
 
+    Combines a text tokenizer with optional image and audio encoders, and
+    defines the encode/decode API for instruct, transcription, speech, and
+    FIM requests.
+
     Attributes:
-        tokenizer: The tokenizer to use.
-        image_encoder: The image encoder to use if any.
-        audio_encoder: The audio encoder to use if any.
+        tokenizer: The text tokenizer to use.
+        image_encoder: The image encoder to use, or `None` if image support is
+            not configured.
+        audio_encoder: The audio encoder to use, or `None` if audio support is
+            not configured.
     """
 
     tokenizer: Tokenizer
@@ -341,7 +391,11 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
 
     @property
     def version(self) -> TokenizerVersion:
-        r"""The version of the tokenizer."""
+        r"""The version of the tokenizer.
+
+        Returns:
+            The TokenizerVersion of the underlying text tokenizer.
+        """
         return self.tokenizer.version
 
     def __init__(
@@ -350,14 +404,16 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         r"""Initialize the instruct tokenizer.
 
         Args:
-            tokenizer: The tokenizer to use.
-            image_encoder: The image encoder to use if any.
-            audio_encoder: The audio encoder to use if any.
+            tokenizer: The text tokenizer to use.
+            image_encoder: The image encoder to use, or `None` if image support
+                is not configured for this tokenizer.
+            audio_encoder: The audio encoder to use, or `None` if audio support
+                is not configured for this tokenizer.
         """
 
     @abstractmethod
     def encode_instruct(self, request: InstructRequestType) -> TokenizedType:
-        r"""Instruct request to Tokenized object
+        r"""Encode an instruct request into a Tokenized object.
 
         Args:
             request: The instruct request to encode.
@@ -398,11 +454,12 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
 
     @abstractmethod
     def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy) -> str:
-        r"""Convert token ids to string
+        r"""Decode the token IDs to a string.
 
         Args:
-            tokens: The token ids to decode.
-            special_token_policy: The policy to use for special tokens.
+            tokens: The token IDs to decode.
+            special_token_policy: The policy to use for special tokens
+                (IGNORE, KEEP, or RAISE).
 
         Returns:
             The decoded string.
@@ -410,7 +467,10 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
 
     @abstractmethod
     def encode_fim(self, request: FIMRequestType) -> TokenizedType:
-        r"""FIM request to Tokenized object
+        r"""Encode a FIM request into a Tokenized object.
+
+        Wraps the prompt and suffix with FIM markers ([PREFIX], [SUFFIX],
+        [MIDDLE]) so the model completes the middle section.
 
         Args:
             request: The FIM request to encode.
@@ -434,21 +494,34 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
 
         Args:
             message: The user message to encode.
-            available_tools: The available tools.
-            is_last: Whether the message is the last one.
-            is_first: Whether the message is the first one.
-            system_prompt: The system prompt.
-            force_img_first: Whether to force the image to be first.
-            settings: The model settings.
+            available_tools: The tools available to the assistant, or `None`.
+                Depending on the tokenizer version, wrapped in an
+                [AVAILABLE_TOOLS] section.
+            is_last: `True` if this is the last message of the conversation.
+            is_first: `True` if this is the first message of the conversation.
+            system_prompt: The system prompt, or `None`. Its placement depends on
+                the tokenizer version.
+            force_img_first: If `True`, image tokens are placed before text
+                tokens within the message.
+            settings: The model settings to encode into the token stream.
 
         Returns:
-            The encoded tokens and images.
+            A tuple of (tokens, images, audios): the encoded token IDs, the
+            loaded images, and the loaded audio for this message.
         """
         ...
 
     @abstractmethod
     def encode_system_message(self, message: SystemMessage) -> tuple[list[int], list[Audio]]:
-        r"""Encode a system message."""
+        r"""Encode a system message.
+
+        Args:
+            message: The system message to encode.
+
+        Returns:
+            A tuple of (tokens, audios): the encoded token IDs and the loaded
+            audio for this message.
+        """
         ...
 
     @abstractmethod
@@ -459,16 +532,20 @@ class InstructTokenizer(Generic[InstructRequestType, FIMRequestType, TokenizedTy
         system_prompt: str | None = None,
         force_img_first: bool = False,
     ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
-        r"""Encode a user content.
+        r"""Encode user content.
 
         Args:
-            content: The user content to encode.
-            is_last: Whether the content is the last one.
-            system_prompt: The system prompt.
-            force_img_first: Whether to force the image to be first.
+            content: The user content to encode. A plain string or a list of
+                content chunks (text, image, audio).
+            is_last: `True` if this is the last content of the conversation.
+            system_prompt: The system prompt, or `None`. Its placement depends
+                on the tokenizer version.
+            force_img_first: If `True`, image tokens are placed before text
+                tokens.
 
         Returns:
-            The encoded tokens and images.
+            A tuple of (tokens, images, audios): the encoded token IDs, the
+            loaded images, and the loaded audio for this content.
         """
         ...
 
