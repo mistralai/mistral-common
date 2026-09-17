@@ -1009,7 +1009,7 @@ docs = [
     { name = "mkdocstrings", specifier = ">=1.0" },
     { name = "mkdocstrings-python", specifier = ">=2.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
-    { name = "zensical" },
+    { name = "zensical", specifier = "==0.0.62" },
 ]
 test-integrations = [
     { name = "regex", specifier = ">=2025.10.22" },

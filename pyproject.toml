@@ -67,7 +67,7 @@ dev = [
 ]
 
 docs = [
-    "zensical",
+    "zensical==0.0.62",
     "mkdocstrings>=1.0",
     "mkdocstrings-python>=2.0",
     "mkdocs-literate-nav",
