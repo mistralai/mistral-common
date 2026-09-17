@@ -681,7 +681,7 @@ class AudioEncoder:
         return audio_array
 
     def get_padding_audio(self, transcription_delay_ms: float | None = None) -> tuple[Audio, Audio]:
-        r"""Gets left and right padding for realtime audio models.
+        r"""Get left and right padding for realtime audio models.
 
         Args:
             transcription_delay_ms: Target delay in milliseconds between the audio

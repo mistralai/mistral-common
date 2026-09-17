@@ -1145,7 +1145,14 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
     @classmethod
     def validate_messages(cls, messages: list[UATS]) -> None:
-        r"""Validates that system prompts and audio chunks are not used together in v7."""
+        r"""Validate that system prompts and audio chunks are not used together in v7.
+
+        Args:
+            messages: The messages to validate.
+
+        Raises:
+            ValueError: If audio chunks are present alongside a system message.
+        """
         if cls._has_audio(messages):
             if any(isinstance(message, SystemMessage) for message in messages):
                 raise ValueError("System messages are not yet allowed when audio is present")
@@ -1402,7 +1409,14 @@ class InstructTokenizerV13(InstructTokenizerV11):
 
     @classmethod
     def validate_messages(cls, messages: list[UATS]) -> None:
-        r"""Allows system prompts and audio chunks to coexist in v13."""
+        r"""Validate messages before tokenization.
+
+        No-op: unlike v7, this version allows system prompts and audio chunks
+        to coexist.
+
+        Args:
+            messages: The messages that were validated.
+        """
         return
 
 

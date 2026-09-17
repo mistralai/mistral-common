@@ -56,7 +56,10 @@ def is_opencv_installed() -> bool:
     r"""Check whether the `cv2` package is importable.
 
     Broken cv2 installs that raise on import are treated as not installed;
-    a warning is logged instead."""
+    a warning is logged instead.
+
+    Returns:
+        True if `cv2` imports cleanly, False otherwise."""
 
     try:
         import cv2  # noqa: F401

@@ -74,6 +74,10 @@ class FieldBuilder(MistralBase, Generic[InputT, OutputT]):
     def _build_from_optional(self, field_name: str, value: InputT | None) -> OutputT | None:
         r"""Resolve an optional value, substituting the default if value is `None`.
 
+        Returns:
+            The converted value, or the field's default when the value is `None`
+            and the field accepts `None`.
+
         Raises:
             InvalidRequestException: If value is `None` and the field does not accept `None`.
         """
@@ -99,6 +103,10 @@ class FieldBuilder(MistralBase, Generic[InputT, OutputT]):
     @final
     def build_value(self, field_name: str, value: InputT | None) -> OutputT | None:
         r"""Resolve and validate a field value, returning the final built result.
+
+        Returns:
+            The resolved, validated value, or None when the field accepts None and
+            the input was None.
 
         Raises:
             InvalidRequestException: If the value is invalid or missing when required.

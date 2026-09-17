@@ -139,7 +139,11 @@ class ImageConfig:
 def _convert_to_rgb(image: Image.Image) -> Image.Image:
     r"""Convert a PIL image to RGB.
 
-    We ensure transparent background becomes white.
+    Transparent areas become white: RGBA images are composited over a white
+    background before the final RGB conversion.
+
+    Returns:
+        The image in RGB mode, or the input unchanged if already RGB.
     """
     if image.mode == "RGB":
         return image

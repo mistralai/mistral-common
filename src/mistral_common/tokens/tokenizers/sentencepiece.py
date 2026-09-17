@@ -396,5 +396,5 @@ class SentencePieceTokenizer(Tokenizer):
 
 
 def is_sentencepiece_tokenizer(tokenizer: Tokenizer) -> TypeGuard[SentencePieceTokenizer]:
-    r"""Returns whether the tokenizer is a SentencePieceTokenizer."""
+    r"""Return whether the tokenizer is a SentencePieceTokenizer."""
     return isinstance(tokenizer, SentencePieceTokenizer)

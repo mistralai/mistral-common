@@ -147,7 +147,7 @@ class InstructRequestNormalizer(
 
     @staticmethod
     def normalizer(model_settings_builder: ModelSettingsBuilder | None = None) -> "InstructRequestNormalizer":
-        r"""Returns a normalizer for the default instruct request.
+        r"""Return a normalizer for the default instruct request.
 
         Args:
             model_settings_builder: Must be `None` for this normalizer version.
@@ -262,6 +262,9 @@ class InstructRequestNormalizer(
         r"""Normalize tool messages without aggregation across messages.
 
         Each tool message's content is JSON-normalized; chunk types are guaranteed by the validator.
+
+        Returns:
+            The tool messages with normalized content, one per input message.
         """
         tool_messages: list[ToolMessageType] = []
         for message in messages:
@@ -442,7 +445,7 @@ class InstructRequestNormalizerV7(
 
     @staticmethod
     def normalizer(model_settings_builder: ModelSettingsBuilder | None = None) -> "InstructRequestNormalizerV7":
-        r"""Returns a normalizer for the default instruct request.
+        r"""Return a normalizer for the default instruct request.
 
         Args:
             model_settings_builder: Must be `None` for this normalizer version.
@@ -469,6 +472,9 @@ class InstructRequestNormalizerV7(
 
         V7+ normalizers skip JSON content normalization for tool messages (chunk-type validation is
         handled by the validator).
+
+        Returns:
+            The tool messages with their content coalesced to a string, one per input message.
         """
         tool_messages: list[ToolMessageType] = []
         for message in messages:
@@ -553,7 +559,7 @@ class InstructRequestNormalizerV13(
 
     @staticmethod
     def normalizer(model_settings_builder: ModelSettingsBuilder | None = None) -> "InstructRequestNormalizerV13":
-        r"""Returns a normalizer for the default instruct request.
+        r"""Return a normalizer for the default instruct request.
 
         Args:
             model_settings_builder: Must be `None` for this normalizer version.
@@ -619,7 +625,7 @@ class InstructRequestNormalizerV15(
 
     @staticmethod
     def normalizer(model_settings_builder: ModelSettingsBuilder | None = None) -> "InstructRequestNormalizerV15":
-        r"""Returns a normalizer for the V15 instruct request.
+        r"""Return a normalizer for the V15 instruct request.
 
         Args:
             model_settings_builder: The builder for model settings.

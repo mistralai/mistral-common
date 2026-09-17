@@ -265,7 +265,14 @@ class ImageURLChunk(BaseContentChunk):
 
 
 class RawAudio(MistralBase):
-    r"""Deprecated: Use `str | bytes` directly. Will be removed in 1.13.0."""
+    r"""Audio data with an explicit format.
+
+    Deprecated: Use `str | bytes` directly. Will be removed in 1.13.0.
+
+    Attributes:
+        data: The audio data as raw bytes or a base64-encoded string.
+        format: The audio format (e.g., "wav", "mp3"). Must not be empty.
+    """
 
     data: str | bytes
     format: str
@@ -296,6 +303,9 @@ class RawAudio(MistralBase):
     @field_validator("format")
     def should_not_be_empty(cls, v: str) -> str:
         r"""Reject empty format strings.
+
+        Returns:
+            The unchanged format string if non-empty.
 
         Raises:
             ValueError: If `format` is empty or whitespace.
@@ -430,6 +440,10 @@ class AudioChunk(BaseContentChunk):
         `data` key (e.g. `{"data": "...", "format": "wav"}`) as well as
         deprecated `RawAudio` instances, flattening them to a plain
         `str | bytes` value.
+
+        Returns:
+            The values with a flattened `input_audio` key, or the input unchanged
+            if there is nothing to flatten.
         """
         if not isinstance(values, dict):
             return values
