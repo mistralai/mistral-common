@@ -5,7 +5,6 @@ theme:
   name: material
   custom_dir: ./docs/overrides
   logo: assets/logo.svg
-  logo_dark: assets/logo-dark.svg
   favicon: assets/logo_favicon.png
   icon:
     repo: fontawesome/brands/github
@@ -39,8 +38,9 @@ theme:
 repo_url: https://github.com/mistralai/mistral-common
 repo_name: mistralai/mistral-common
 edit_uri: blob/main/docs/
-copyright: Mistral AI 2025.
+copyright: Mistral AI 2026.
 extra:
+  logo_dark: assets/logo-dark.svg
   homepage: https://mistral.ai/
   social:
     - icon: material/email-outline
@@ -57,9 +57,6 @@ extra_css:
 plugins:
   - search
   - autorefs
-  - gen-files:
-      scripts:
-        - docs/gen_api_pages.py
   - literate-nav:
       nav_file: SUMMARY.md
   - mkdocstrings:
