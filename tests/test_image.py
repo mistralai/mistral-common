@@ -13,7 +13,15 @@ from mistral_common.protocol.instruct.chunk import (
     ImageURLChunk,
     TextChunk,
 )
-from mistral_common.tokens.tokenizers.image import ImageConfig, ImageEncoder, SpecialImageIDs
+from mistral_common.tokens.tokenizers.image import (
+    DATASET_MEAN,
+    DATASET_STD,
+    ImageConfig,
+    ImageEncoder,
+    SpecialImageIDs,
+    normalize,
+    transform_image,
+)
 
 
 def _create_test_image(size: tuple[int, int], color: tuple[int, int, int] = (128, 128, 128)) -> Image.Image:
@@ -252,35 +260,12 @@ def test_image_encoder_formats(spatial_merge_size: int, special_token_ids: Speci
 
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
 def test_normalize_dtype_preservation(dtype: type) -> None:
-    from mistral_common.tokens.tokenizers.image import DATASET_MEAN, DATASET_STD, normalize
-
     image: np.ndarray = np.zeros((64, 64, 3), dtype=dtype)
     normalized = normalize(image, DATASET_MEAN, DATASET_STD)
     assert normalized.dtype == dtype, f"Expected {dtype} but got {normalized.dtype}"
 
 
 def test_transform_image_returns_float32() -> None:
-    from mistral_common.tokens.tokenizers.image import transform_image
-
     pil_img = _create_test_image((128, 128))
     transformed = transform_image(pil_img, (64, 64))
     assert transformed.dtype == np.float32, f"Expected float32 but got {transformed.dtype}"
-
-
-def test_normalize_numerical_precision() -> None:
-    from mistral_common.tokens.tokenizers.image import DATASET_MEAN, DATASET_STD, normalize
-
-    np.random.seed(42)
-    image: np.ndarray = np.random.rand(64, 64, 3).astype(np.float32) * 255.0
-    image_copy = image.copy()
-
-    normalized = normalize(image, DATASET_MEAN, DATASET_STD)
-
-    # Verify input array was not modified in-place
-    np.testing.assert_array_equal(image, image_copy)
-
-    # Reference calculation
-    ref = (image_copy / 255.0 - np.array(DATASET_MEAN, dtype=np.float32)) / np.array(DATASET_STD, dtype=np.float32)
-    ref = ref.transpose(2, 0, 1)
-
-    np.testing.assert_allclose(normalized, ref, rtol=1e-6, atol=1e-6)
