@@ -199,12 +199,12 @@ def test_image_processing(special_token_ids: SpecialImageIDs, size: tuple[int, i
     # These are manually calculated based on the normalization process and image size
     # The spatial_merge_size doesn't affect image sums, only token generation
     EXP_IMG_SUM = {
-        (200, 311): 38949.726562,
-        (300, 212): 39848.566406,
-        (251, 1374): 115051.507812,
-        (1475, 477): 201340.125000,
-        (1344, 1544): 536907.000000,
-        (2133, 3422): 383505.000000,
+        (200, 311): 38949.706477,
+        (300, 212): 39848.559487,
+        (251, 1374): 115051.500823,
+        (1475, 477): 201339.957814,
+        (1344, 1544): 536907.040239,
+        (2133, 3422): 383504.917753,
     }
 
     test_image = _create_test_image(size, color=(128, 128, 128))
@@ -215,7 +215,7 @@ def test_image_processing(special_token_ids: SpecialImageIDs, size: tuple[int, i
     expected_sum = EXP_IMG_SUM[size]
 
     assert image.transpose().shape[:2] == EXP_IMG_SIZES[size], image.transpose().shape[:2]
-    assert np.abs(image).sum() - expected_sum < 1e-1, np.abs(image).sum()
+    assert np.abs(image).sum(dtype=np.float64) - expected_sum < 1e-1, np.abs(image).sum(dtype=np.float64)
 
 
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
