@@ -9,7 +9,7 @@ import pytest
 import requests
 from PIL import Image
 
-from mistral_common.image import download_image
+from mistral_common.image import IMAGE_DOWNLOAD_TIMEOUT_ENV, download_image, image_download_timeout
 from mistral_common.protocol.instruct.chunk import (
     ImageChunk,
     ImageURLChunk,
@@ -131,20 +131,84 @@ def test_image_from_chunk_file_uri(tmp_path: Path) -> None:
     assert image.size == (8, 8)
 
 
-def test_download_image_passes_timeout() -> None:
+def _mock_png_response() -> Mock:
     img_byte_arr = BytesIO()
     _create_test_image((8, 8)).save(img_byte_arr, format="PNG")
     mock_response = Mock()
     mock_response.content = img_byte_arr.getvalue()
     mock_response.raise_for_status = Mock()
+    return mock_response
+
+
+def test_image_download_timeout_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(IMAGE_DOWNLOAD_TIMEOUT_ENV, raising=False)
+    assert image_download_timeout() == 10.0
+
+
+def test_image_download_timeout_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(IMAGE_DOWNLOAD_TIMEOUT_ENV, "30")
+    assert image_download_timeout() == 30.0
+
+
+@pytest.mark.parametrize("value", ["abc", "0", "-1", "inf", "nan", "1e999"])
+def test_image_download_timeout_invalid_env(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv(IMAGE_DOWNLOAD_TIMEOUT_ENV, value)
+    with pytest.raises(RuntimeError, match=IMAGE_DOWNLOAD_TIMEOUT_ENV):
+        image_download_timeout()
+
+
+def test_download_image_passes_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(IMAGE_DOWNLOAD_TIMEOUT_ENV, raising=False)
+    mock_response = _mock_png_response()
 
     with patch("mistral_common.image.requests.get", return_value=mock_response) as mock_get:
         download_image(url="https://example.com/image.png")
     assert mock_get.call_args.kwargs.get("timeout") == 10.0
 
     with patch("mistral_common.image.requests.get", side_effect=requests.exceptions.Timeout("timed out")):
-        with pytest.raises(RuntimeError, match="Error downloading the image"):
+        with pytest.raises(
+            RuntimeError,
+            match=r"timed out after 10\.0 seconds\. Pass a larger `timeout` or set the environment variable "
+            rf"`{IMAGE_DOWNLOAD_TIMEOUT_ENV}` to increase the timeout\.",
+        ):
             download_image(url="https://example.com/image.png")
+
+
+def test_download_image_uses_env_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(IMAGE_DOWNLOAD_TIMEOUT_ENV, "30")
+
+    with patch("mistral_common.image.requests.get", return_value=_mock_png_response()) as mock_get:
+        download_image(url="https://example.com/image.png")
+    assert mock_get.call_args.kwargs.get("timeout") == 30.0
+
+
+def test_download_image_explicit_timeout_overrides_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(IMAGE_DOWNLOAD_TIMEOUT_ENV, "30")
+
+    with patch("mistral_common.image.requests.get", return_value=_mock_png_response()) as mock_get:
+        download_image(url="https://example.com/image.png", timeout=5.0)
+    assert mock_get.call_args.kwargs.get("timeout") == 5.0
+
+
+@pytest.mark.parametrize("timeout", [0.0, -1.0, float("inf"), float("nan")])
+def test_download_image_rejects_invalid_timeout(timeout: float) -> None:
+    with patch("mistral_common.image.requests.get") as mock_get:
+        with pytest.raises(RuntimeError, match="expected a positive finite number of seconds"):
+            download_image(url="https://example.com/image.png", timeout=timeout)
+    mock_get.assert_not_called()
+
+
+def test_image_from_chunk_http_passes_env_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(IMAGE_DOWNLOAD_TIMEOUT_ENV, "30")
+
+    with patch(
+        "mistral_common.tokens.tokenizers.image.download_image",
+        return_value=_create_test_image((8, 8)),
+    ) as mock_download:
+        image_from_chunk(chunk=ImageURLChunk(image_url="https://example.com/image.png"))
+    mock_download.assert_called_once()
+    assert mock_download.call_args.kwargs["url"] == "https://example.com/image.png"
+    assert mock_download.call_args.kwargs["timeout"] == 30.0
 
 
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])

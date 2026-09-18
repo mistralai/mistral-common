@@ -1,5 +1,7 @@
 import base64
 import io
+import math
+import os
 
 import requests
 from PIL import Image
@@ -8,17 +10,48 @@ from typing_extensions import Annotated
 
 from mistral_common import __version__
 
+IMAGE_DOWNLOAD_TIMEOUT_ENV = "MISTRAL_COMMON_IMAGE_DOWNLOAD_TIMEOUT"
+_DEFAULT_IMAGE_DOWNLOAD_TIMEOUT_S = 10.0
 
-def download_image(url: str, timeout: float = 10.0) -> Image.Image:
+
+def _require_positive_finite_timeout(timeout: float, *, display: str) -> float:
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise RuntimeError(f"Invalid {display}: expected a positive finite number of seconds.")
+    return timeout
+
+
+def image_download_timeout() -> float:
+    r"""Return the HTTP timeout used when downloading images.
+
+    Reads `MISTRAL_COMMON_IMAGE_DOWNLOAD_TIMEOUT` (seconds). Unset or empty uses 10.
+    """
+    raw = os.getenv(IMAGE_DOWNLOAD_TIMEOUT_ENV)
+    if raw is None or raw.strip() == "":
+        return _DEFAULT_IMAGE_DOWNLOAD_TIMEOUT_S
+    try:
+        timeout = float(raw)
+    except ValueError:
+        raise RuntimeError(
+            f"Invalid {IMAGE_DOWNLOAD_TIMEOUT_ENV}={raw!r}: expected a positive finite number of seconds."
+        ) from None
+    return _require_positive_finite_timeout(timeout, display=f"{IMAGE_DOWNLOAD_TIMEOUT_ENV}={raw!r}")
+
+
+def download_image(url: str, timeout: float | None = None) -> Image.Image:
     r"""Download an image from a URL and return it as a PIL Image.
 
     Args:
         url: The URL of the image to download.
-        timeout: The maximum number of seconds to wait for the server response.
+        timeout: Seconds to wait for the server response. If None, uses `image_download_timeout()`.
 
     Returns:
        The downloaded image as a PIL Image object.
     """
+    if timeout is None:
+        timeout = image_download_timeout()
+    else:
+        timeout = _require_positive_finite_timeout(timeout, display=f"timeout={timeout!r}")
+
     headers = {"User-Agent": f"mistral-common/{__version__}"}
     try:
         # Make a request to download the image
@@ -29,6 +62,12 @@ def download_image(url: str, timeout: float = 10.0) -> Image.Image:
         img = Image.open(io.BytesIO(response.content))
         return img
 
+    except requests.exceptions.Timeout as e:
+        raise RuntimeError(
+            f"Error downloading the image from {url}: timed out after {timeout} seconds. "
+            f"Pass a larger `timeout` or set the environment variable `{IMAGE_DOWNLOAD_TIMEOUT_ENV}` "
+            "to increase the timeout."
+        ) from e
     except requests.exceptions.RequestException as e:
         raise RuntimeError(f"Error downloading the image from {url}: {e}.")
     except Exception as e:
