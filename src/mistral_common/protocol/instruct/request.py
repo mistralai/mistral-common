@@ -6,6 +6,7 @@ from pydantic import Field, TypeAdapter, model_validator
 
 from mistral_common.base import MistralBase
 from mistral_common.deprecation import warn_once
+from mistral_common.exceptions import InvalidMessageStructureException
 from mistral_common.protocol.base import BaseCompletionRequest
 from mistral_common.protocol.instruct.converters import (
     convert_openai_messages,
@@ -32,18 +33,18 @@ def _map_continue_final_message(
         return copied_messages
 
     if not copied_messages:
-        raise ValueError(_CONTINUE_FINAL_MESSAGE_ERROR)
+        raise InvalidMessageStructureException(_CONTINUE_FINAL_MESSAGE_ERROR)
 
     if isinstance(copied_messages[-1], dict):
         if copied_messages[-1].get("role") != "assistant":
-            raise ValueError(_CONTINUE_FINAL_MESSAGE_ERROR)
+            raise InvalidMessageStructureException(_CONTINUE_FINAL_MESSAGE_ERROR)
         if "prefix" in copied_messages[-1]:
             TypeAdapter(bool).validate_python(copied_messages[-1]["prefix"])
         copied_messages[-1] = {**copied_messages[-1], "prefix": True}
     elif isinstance(copied_messages[-1], AssistantMessage):
         copied_messages[-1] = copied_messages[-1].model_copy(update={"prefix": True})
     else:
-        raise ValueError(_CONTINUE_FINAL_MESSAGE_ERROR)
+        raise InvalidMessageStructureException(_CONTINUE_FINAL_MESSAGE_ERROR)
 
     return copied_messages
 
@@ -193,7 +194,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
                 continue_final_message=continue_final_message,
             )
         elif continue_final_message:
-            raise ValueError(_CONTINUE_FINAL_MESSAGE_ERROR)
+            raise InvalidMessageStructureException(_CONTINUE_FINAL_MESSAGE_ERROR)
         return copied_values
 
     def to_openai(

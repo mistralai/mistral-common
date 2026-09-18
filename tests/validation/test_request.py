@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 import mistral_common.deprecation
+from mistral_common.exceptions import InvalidMessageStructureException
 from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, SystemMessage, UserMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 
@@ -118,7 +119,7 @@ class TestValidateRequest:
         self, messages: list[ChatMessage], clear_continue_warning: None
     ) -> None:
         with pytest.warns(DeprecationWarning, match="continue_final_message"):
-            with pytest.raises(ValidationError, match="requires final message to be an assistant"):
+            with pytest.raises(InvalidMessageStructureException, match="requires final message to be an assistant"):
                 ChatCompletionRequest[ChatMessage](  # type: ignore[call-arg]
                     messages=messages, continue_final_message=True
                 )

@@ -34,7 +34,7 @@ from PIL import Image
 from pydantic import ValidationError
 from pydantic_extra_types.language_code import LanguageAlpha2
 
-from mistral_common.exceptions import InvalidAssistantMessageException
+from mistral_common.exceptions import InvalidAssistantMessageException, InvalidMessageStructureException
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURL,
@@ -798,7 +798,7 @@ def test_request_from_openai_rejects_invalid_continuation_without_warning() -> N
 def test_request_from_openai_rejects_true_continuation_for_non_assistant_final() -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        with pytest.raises(ValueError, match="requires final message to be an assistant"):
+        with pytest.raises(InvalidMessageStructureException, match="requires final message to be an assistant"):
             ChatCompletionRequest.from_openai(
                 messages=[
                     {"role": "user", "content": "foo"},
