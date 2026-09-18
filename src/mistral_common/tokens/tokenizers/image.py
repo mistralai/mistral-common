@@ -137,7 +137,7 @@ def normalize(
     Returns:
         Normalized image with shape (C, H, W).
     """
-    np_image = np_image / 255.0
+    np_image = np.divide(np_image, np.float32(255.0), dtype=np_image.dtype)
 
     assert len(np_image.shape) == 3, f"{np_image.shape=}"
     assert np_image.shape[2] == len(mean) == len(std), f"{np_image.shape=}, {mean=}, {std=}"
