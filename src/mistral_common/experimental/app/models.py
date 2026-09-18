@@ -23,7 +23,7 @@ class OpenAIChatCompletionRequest(BaseModel):
         This class accepts extra fields that are not validated.
     """
 
-    messages: list[dict[str, str | list[dict[str, str | dict[str, Any]]]]]
+    messages: list[dict[str, str | list[dict[str, str | dict[str, Any]]] | None]]
     tools: list[dict[str, Any]] | None = None
 
     # Allow extra fields as the `from_openai` method will handle them.
