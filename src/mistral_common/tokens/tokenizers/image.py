@@ -7,7 +7,7 @@ from io import BytesIO
 import numpy as np
 from PIL import Image
 
-from mistral_common.image import SerializableImage, download_image
+from mistral_common.image import SerializableImage, apply_exif_orientation, download_image
 from mistral_common.imports import assert_opencv_installed, is_opencv_installed
 from mistral_common.protocol.instruct.chunk import ImageChunk, ImageURLChunk
 
@@ -70,13 +70,13 @@ def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
         RuntimeError: If the URL scheme is not data:..., file..., or http(s).
     """
     if isinstance(chunk, ImageChunk):
-        return chunk.image
+        return apply_exif_orientation(chunk.image)
     if chunk.get_url().startswith("data:image"):
         data = chunk.get_url().split(",")[1]
         image_data = base64.b64decode(data)
-        return Image.open(BytesIO(image_data))
+        return apply_exif_orientation(Image.open(BytesIO(image_data)))
     if chunk.get_url().startswith("file"):
-        return Image.open(open(chunk.get_url().replace("file://", ""), "rb"))
+        return apply_exif_orientation(Image.open(open(chunk.get_url().replace("file://", ""), "rb")))
     if chunk.get_url().startswith("http"):
         return download_image(chunk.get_url())
 
@@ -205,6 +205,7 @@ def transform_image(image: Image.Image, new_size: tuple[int, int]) -> np.ndarray
     """
     assert_opencv_installed()
 
+    image = apply_exif_orientation(image)
     np_image = cv2.resize(np.array(_convert_to_rgb(image), dtype=np.float32), new_size, interpolation=cv2.INTER_CUBIC)
     return normalize(np_image, DATASET_MEAN, DATASET_STD)
 

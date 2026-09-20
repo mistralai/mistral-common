@@ -8,6 +8,7 @@ import pytest
 import requests
 from PIL import Image
 
+from mistral_common.image import apply_exif_orientation
 from mistral_common.protocol.instruct.chunk import (
     ImageChunk,
     ImageURLChunk,
@@ -19,6 +20,7 @@ from mistral_common.tokens.tokenizers.image import (
     ImageConfig,
     ImageEncoder,
     SpecialImageIDs,
+    image_from_chunk,
     normalize,
     transform_image,
 )
@@ -269,3 +271,54 @@ def test_transform_image_returns_float32() -> None:
     pil_img = _create_test_image((128, 128))
     transformed = transform_image(pil_img, (64, 64))
     assert transformed.dtype == np.float32, f"Expected float32 but got {transformed.dtype}"
+
+
+def _create_image_with_exif_orientation(size: tuple[int, int], orientation: int) -> Image.Image:
+    img = Image.new("RGB", size, (128, 128, 128))
+    exif = img.getexif()
+    exif[0x0112] = orientation
+    buf = BytesIO()
+    img.save(buf, format="JPEG", exif=exif)
+    buf.seek(0)
+    return Image.open(buf)
+
+
+@pytest.mark.parametrize(
+    "orientation,expected_size",
+    [
+        (1, (200, 100)),  # normal (0 deg)
+        (3, (200, 100)),  # 180 deg
+        (6, (100, 200)),  # 90 deg CW
+        (8, (100, 200)),  # 90 deg CCW
+    ],
+)
+def test_image_from_chunk_exif_orientation(orientation: int, expected_size: tuple[int, int]) -> None:
+    img = _create_image_with_exif_orientation((200, 100), orientation)
+    chunk = ImageChunk(image=img)
+    oriented = image_from_chunk(chunk)
+    assert oriented.size == expected_size
+
+
+def test_image_encoder_exif_orientation(special_token_ids: SpecialImageIDs) -> None:
+    # A 200x100 raw buffer with orientation 6 represents an upright 100x200 portrait image
+    img = _create_image_with_exif_orientation((200, 100), 6)
+    config = ImageConfig(image_patch_size=16, max_image_size=1024, spatial_merge_size=1)
+    encoder = ImageEncoder(config, special_token_ids)
+
+    encoding = encoder(ImageChunk(image=img))
+    # w_tokens = (100 - 1) // 16 + 1 = 7, h_tokens = (200 - 1) // 16 + 1 = 13
+    # Height = 13 * 16 = 208, Width = 7 * 16 = 112
+    assert encoding.image.shape == (3, 208, 112)
+
+
+def test_apply_exif_orientation_corrupted_fallback() -> None:
+    img = _create_test_image((50, 50))
+    with patch("PIL.ImageOps.exif_transpose", side_effect=ValueError("Corrupted EXIF")):
+        oriented = apply_exif_orientation(img)
+        assert oriented.size == (50, 50)
+
+
+def test_transform_image_applies_exif_orientation() -> None:
+    img = _create_image_with_exif_orientation((200, 100), 6)
+    transformed = transform_image(img, (50, 100))
+    assert transformed.shape == (3, 100, 50)
