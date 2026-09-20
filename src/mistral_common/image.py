@@ -1,12 +1,33 @@
 import base64
+import contextlib
 import io
 
 import requests
-from PIL import Image
+from PIL import Image, ImageOps
 from pydantic import BeforeValidator, PlainSerializer, SerializationInfo
 from typing_extensions import Annotated
 
 from mistral_common import __version__
+
+
+def apply_exif_orientation(image: Image.Image) -> Image.Image:
+    r"""Apply EXIF orientation transposition to an image if present.
+
+    Transposes the image according to its EXIF orientation tag (e.g. from mobile cameras)
+    so pixels match user visual orientation. If no EXIF data is present or if EXIF is
+    malformed, the original image is returned unchanged.
+
+    Args:
+        image: The PIL Image to transpose.
+
+    Returns:
+        The oriented PIL Image.
+    """
+    with contextlib.suppress(Exception):
+        transposed = ImageOps.exif_transpose(image)
+        if transposed is not None:
+            return transposed
+    return image
 
 
 def download_image(url: str) -> Image.Image:
@@ -26,7 +47,7 @@ def download_image(url: str) -> Image.Image:
 
         # Convert the image content to a PIL Image
         img = Image.open(io.BytesIO(response.content))
-        return img
+        return apply_exif_orientation(img)
 
     except requests.exceptions.RequestException as e:
         raise RuntimeError(f"Error downloading the image from {url}: {e}.")
@@ -51,16 +72,16 @@ def maybe_load_image_from_str_or_bytes(x: Image.Image | str | bytes) -> Image.Im
         RuntimeError: If the input cannot be decoded into an image.
     """
     if isinstance(x, Image.Image):
-        return x
+        return apply_exif_orientation(x)
     if isinstance(x, bytes):
         try:
-            return Image.open(io.BytesIO(x))
+            return apply_exif_orientation(Image.open(io.BytesIO(x)))
         except Exception:
             raise RuntimeError("Encountered an error when loading image from bytes.")
 
     try:
         image = Image.open(io.BytesIO(base64.b64decode(x.encode("ascii"))))
-        return image
+        return apply_exif_orientation(image)
     except Exception as e:
         raise RuntimeError(
             f"Encountered an error when loading image from bytes starting "
