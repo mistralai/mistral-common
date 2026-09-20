@@ -20,6 +20,11 @@ if TYPE_CHECKING:
     from mistral_common.tokens.tokenizers.audio import Audio
 
 
+# A MIME subtype may carry `+`, `.` or `-` (svg+xml, x-icon, vnd.microsoft.icon), so match
+# everything up to the `;base64,` delimiter instead of restricting to word characters.
+_IMAGE_DATA_URL_PREFIX_REGEX = re.compile(r"^data:image/[^\s/;]+;base64,")
+
+
 def _strip_audio_data_url_prefix(data: str) -> str:
     r"""Remove the optional base64 audio data URL prefix."""
     if re.match(r"^data:audio/\w+;base64,", data):
@@ -182,8 +187,8 @@ class ImageChunk(BaseContentChunk):
         assert isinstance(image_url_dict, dict) and "url" in image_url_dict, image_url_dict
 
         url = image_url_dict["url"]
-        if re.match(r"^data:image/\w+;base64,", url):  # Remove the prefix if it exists
-            url = url.split(",")[1]
+        if re.match(_IMAGE_DATA_URL_PREFIX_REGEX, url):  # Remove the prefix if it exists
+            url = url.split(",", 1)[1]
 
         return cls.model_validate({"image": url})
 
