@@ -7,7 +7,7 @@ from io import BytesIO
 import numpy as np
 from PIL import Image
 
-from mistral_common.image import SerializableImage, download_image, image_download_timeout
+from mistral_common.image import SerializableImage, download_image
 from mistral_common.imports import assert_opencv_installed, is_opencv_installed
 from mistral_common.protocol.instruct.chunk import ImageChunk, ImageURLChunk
 
@@ -84,7 +84,7 @@ def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
             image.load()
         return image
     if url.startswith("http"):
-        return download_image(url=url, timeout=image_download_timeout())
+        return download_image(url=url)
 
     raise RuntimeError(f"Unsupported image url scheme {url}")
 

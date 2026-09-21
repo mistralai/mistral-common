@@ -21,7 +21,7 @@ from mistral_common.tokens.tokenizers.image import (
     ImageConfig,
     ImageEncoder,
     SpecialImageIDs,
-	image_from_chunk
+    image_from_chunk,
     normalize,
     transform_image,
 )
@@ -207,7 +207,7 @@ def test_download_image_rejects_invalid_timeout(timeout: float) -> None:
     mock_get.assert_not_called()
 
 
-def test_image_from_chunk_http_passes_env_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_image_from_chunk_http_uses_default_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(IMAGE_DOWNLOAD_TIMEOUT_ENV, "30")
 
     with patch(
