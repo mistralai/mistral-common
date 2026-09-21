@@ -144,7 +144,7 @@ def test_image_from_chunk_bare_file_name_is_unsupported(tmp_path: Path, monkeypa
     _create_test_image((8, 8)).save(tmp_path / "file.png")
     monkeypatch.chdir(tmp_path)
 
-    with pytest.raises(RuntimeError, match="Unsupported image url scheme"):
+    with pytest.raises(ValueError, match="Unsupported image url scheme"):
         image_from_chunk(chunk=ImageURLChunk(image_url="file.png"))
 
 

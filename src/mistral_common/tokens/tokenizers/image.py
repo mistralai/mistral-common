@@ -70,8 +70,8 @@ def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
         The image as a PIL Image object.
 
     Raises:
-        ValueError: If a data URL does not contain a base64 payload.
-        RuntimeError: If the URL scheme is not data:..., file..., or http(s).
+        ValueError: If a data URL does not contain a base64 payload or the URL
+            scheme is unsupported.
     """
     if isinstance(chunk, ImageChunk):
         return chunk.image
@@ -90,7 +90,7 @@ def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
     if url.startswith("http"):
         return download_image(url=url, timeout=None)
 
-    raise RuntimeError(f"Unsupported image url scheme {url}")
+    raise ValueError(f"Unsupported image url scheme {url}")
 
 
 DATASET_MEAN = (0.48145466, 0.4578275, 0.40821073)  # RGB
