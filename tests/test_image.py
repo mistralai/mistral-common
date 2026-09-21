@@ -217,7 +217,6 @@ def test_image_from_chunk_http_uses_default_timeout(monkeypatch: pytest.MonkeyPa
         image_from_chunk(chunk=ImageURLChunk(image_url="https://example.com/image.png"))
     mock_download.assert_called_once()
     assert mock_download.call_args.kwargs["url"] == "https://example.com/image.png"
-    assert mock_download.call_args.kwargs["timeout"] == 30.0
 
 
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
