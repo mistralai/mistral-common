@@ -21,7 +21,7 @@ from mistral_common.tokens.tokenizers.image import (
     ImageConfig,
     ImageEncoder,
     SpecialImageIDs,
-	  image_from_chunk
+	image_from_chunk
     normalize,
     transform_image,
 )
