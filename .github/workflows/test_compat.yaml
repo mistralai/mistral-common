@@ -1,0 +1,93 @@
+name: Downstream Compatibility
+
+permissions:
+  contents: read
+
+# Runs targeted downstream tokenization test suites (vLLM, Transformers) against
+# the mistral-common version in this repo when the `test-compat` label is added
+# to a pull request, or on manual dispatch. CPU only, no GPU required.
+on:
+  pull_request:
+    types:
+      - labeled
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || 'manual' }}
+  cancel-in-progress: true
+
+jobs:
+  vllm:
+    if: ${{ github.event.label.name == 'test-compat' || github.event_name == 'workflow_dispatch' }}
+    runs-on:
+      - ubuntu-latest
+      - ${{ github.ref_name == 'main' && 'x64' || 'linux.x64' }}
+    timeout-minutes: 120
+    steps:
+      - name: Checkout mistral-common
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout vLLM
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        with:
+          repository: vllm-project/vllm
+          path: vllm
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Run vLLM mistral tokenizer tests against main mistral-common
+        run: |
+          cd vllm
+          uv venv
+          VLLM_TARGET_DEVICE=empty uv pip install vllm \
+            --torch-backend=cpu \
+            --extra-index-url https://wheels.vllm.ai/nightly/cpu \
+            --index-strategy first-index
+          uv pip install --no-deps -e .
+          uv pip install --no-deps pytest pytest-asyncio 'mistral-common @ file://${{ github.workspace }}'
+          uv pip install ijson
+          uv run pytest -v -m 'not gpu' \
+            tests/tokenizers_/test_mistral.py \
+            tests/entrypoints/openai/test_chat_completion_mistral.py \
+            tests/tokenizers_/test_basic.py
+
+  transformers:
+    if: ${{ github.event.label.name == 'test-compat' || github.event_name == 'workflow_dispatch' }}
+    runs-on:
+      - ubuntu-latest
+      - ${{ github.ref_name == 'main' && 'x64' || 'linux.x64' }}
+    timeout-minutes: 120
+    steps:
+      - name: Checkout mistral-common
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout transformers
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        with:
+          repository: huggingface/transformers
+          path: transformers
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Run Transformers mistral-common tokenizer tests against main mistral-common
+        run: |
+          cd transformers
+          uv venv
+          uv pip install --torch-backend=cpu -e '.[dev]'
+          uv pip install --no-deps 'mistral-common @ file://${{ github.workspace }}'
+          python3 utils/fetch_hub_objects_for_ci.py
+          uv run --no-sync pytest -v \
+            tests/test_tokenization_mistral_common.py \
+            tests/integrations/mistral/test_tokenizer.py
