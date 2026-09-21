@@ -252,6 +252,25 @@ def test_download_image_rejects_invalid_timeout(timeout: float) -> None:
     mock_get.assert_not_called()
 
 
+@pytest.mark.parametrize("timeout", [5, 30])
+def test_download_image_accepts_int_timeout(monkeypatch: pytest.MonkeyPatch, timeout: int) -> None:
+    monkeypatch.delenv(_IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY, raising=False)
+
+    with patch("mistral_common.image.requests.get", return_value=_mock_png_response()) as mock_get:
+        download_image(url="https://example.com/image.png", timeout=timeout)
+    assert mock_get.call_args.kwargs.get("timeout") == float(timeout)
+
+
+@pytest.mark.parametrize("timeout", [True, False])
+def test_download_image_rejects_bool_timeout(timeout: bool) -> None:
+    with (
+        patch("mistral_common.image.requests.get") as mock_get,
+        pytest.raises(ValueError, match="timeout must be a positive finite float, got timeout="),
+    ):
+        download_image(url="https://example.com/image.png", timeout=timeout)
+    mock_get.assert_not_called()
+
+
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
 def test_image_encoder(spatial_merge_size: int, special_token_ids: SpecialImageIDs) -> None:
     image_config = ImageConfig(
