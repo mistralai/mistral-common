@@ -19,9 +19,7 @@ concurrency:
 jobs:
   vllm:
     if: ${{ github.event.label.name == 'run-downstream-tests' || github.event_name == 'workflow_dispatch' }}
-    runs-on:
-      - ubuntu-latest
-      - ${{ github.ref_name == 'main' && 'x64' || 'linux.x64' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
       - name: Checkout mistral-common
@@ -59,9 +57,7 @@ jobs:
 
   transformers:
     if: ${{ github.event.label.name == 'run-downstream-tests' || github.event_name == 'workflow_dispatch' }}
-    runs-on:
-      - ubuntu-latest
-      - ${{ github.ref_name == 'main' && 'x64' || 'linux.x64' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
       - name: Checkout mistral-common
