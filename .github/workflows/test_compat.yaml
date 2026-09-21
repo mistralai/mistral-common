@@ -47,13 +47,15 @@ jobs:
             --torch-backend=cpu \
             --extra-index-url https://wheels.vllm.ai/nightly/cpu \
             --index-strategy first-index
-          uv pip install --no-deps -e .
           uv pip install --no-deps pytest pytest-asyncio 'mistral-common @ file://${{ github.workspace }}'
-          uv pip install ijson
-          uv run pytest -v -m 'not gpu' \
+          uv pip install ijson partial_json_parser
+          uv run --no-sync pytest -v -m 'not gpu' \
             tests/tokenizers_/test_mistral.py \
-            tests/entrypoints/openai/test_chat_completion_mistral.py \
-            tests/tokenizers_/test_basic.py
+            tests/tokenizers_/test_basic.py \
+            tests/tokenizers_/test_registry.py \
+            tests/parser/mistral/test_tool_calls.py \
+            tests/parser/mistral/test_reasoning.py \
+            tests/renderers/test_mistral.py
 
   transformers:
     if: ${{ github.event.label.name == 'run-downstream-tests' || github.event_name == 'workflow_dispatch' }}
