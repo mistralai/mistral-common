@@ -22,6 +22,18 @@ class MistralCommonException(Exception):
             self.message = message
 
 
+class ImageDecodeException(MistralCommonException):
+    r"""Exception raised when image content cannot be decoded."""
+
+    def __init__(self, message: str) -> None:
+        r"""Initialize the image decode exception with a message.
+
+        Args:
+            message: A human-readable message describing the failure.
+        """
+        super().__init__(message)
+
+
 class TokenizerException(MistralCommonException):
     r"""Exception raised for errors in the tokenizer."""
 

@@ -7,7 +7,10 @@ from io import BytesIO
 import numpy as np
 from PIL import Image
 
-from mistral_common.image import SerializableImage, download_image
+from mistral_common.image import (
+    SerializableImage,
+    download_image,
+)
 from mistral_common.imports import assert_opencv_installed, is_opencv_installed
 from mistral_common.protocol.instruct.chunk import ImageChunk, ImageURLChunk
 
@@ -67,6 +70,7 @@ def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
         The image as a PIL Image object.
 
     Raises:
+        ValueError: If a data URL does not contain a base64 payload.
         RuntimeError: If the URL scheme is not data:..., file..., or http(s).
     """
     if isinstance(chunk, ImageChunk):
@@ -75,7 +79,7 @@ def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
     if url.startswith("data:image"):
         _, _, data = url.partition(",")
         if not data:
-            raise RuntimeError(f"Invalid image data URL {url[:64]}: expected a base64 payload after a comma.")
+            raise ValueError(f"Invalid image data URL {url[:64]}: expected a base64 payload after a comma.")
         image_data = base64.b64decode(data)
         return Image.open(BytesIO(image_data))
     if url.startswith("file://"):
@@ -84,7 +88,7 @@ def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
             image.load()
         return image
     if url.startswith("http"):
-        return download_image(url=url)
+        return download_image(url=url, timeout=None)
 
     raise RuntimeError(f"Unsupported image url scheme {url}")
 
