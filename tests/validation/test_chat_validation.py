@@ -18,6 +18,7 @@ from mistral_common.protocol.instruct.chunk import (
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
+    FinetuningAssistantMessage,
     SystemMessage,
     ToolMessage,
     UserMessage,
@@ -755,3 +756,171 @@ class TestChatValidationV15:
         # ThinkChunk is rejected at the Pydantic model level before reaching the validator.
         content = get_content_chunks(("text", "image", "image_url", "audio", "audio_url"))
         validator_v15.validate_messages(_tool_convo(content))
+
+
+class TestAgnosticValidation:
+    @pytest.mark.parametrize(
+        "messages",
+        [
+            [UserMessage(content="foo"), AssistantMessage(content="answer")],
+            [UserMessage(content="foo"), UserMessage(content="follow-up")],
+            [UserMessage(content="foo"), SystemMessage(content="context")],
+            [
+                UserMessage(content="foo"),
+                AssistantMessage(
+                    tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]
+                ),
+                ToolMessage(content="result", tool_call_id="123456789"),
+            ],
+        ],
+        ids=["assistant", "user", "system", "tool"],
+    )
+    def test_accepts_any_terminal_role(self, messages: _Messages) -> None:
+        validator = get_validator(version=TokenizerVersion.v13, mode=ValidationMode.agnostic)
+
+        validator.validate_messages(messages=messages)
+
+    @pytest.mark.parametrize(
+        "messages",
+        [
+            [AssistantMessage(content="answer")],
+            [ToolMessage(content="result")],
+        ],
+        ids=["assistant", "tool"],
+    )
+    def test_retains_single_message_start_rule(self, messages: _Messages) -> None:
+        validator = get_validator(version=TokenizerVersion.v13, mode=ValidationMode.agnostic)
+
+        with pytest.raises(
+            InvalidMessageStructureException,
+            match=r"Conversation must start with a user message or system message",
+        ):
+            validator.validate_messages(messages=messages)
+
+    def test_allows_interrupted_tool_sequence_at_terminal_user(self) -> None:
+        validator = get_validator(version=TokenizerVersion.v13, mode=ValidationMode.agnostic)
+        messages = [
+            UserMessage(content="foo"),
+            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]),
+            UserMessage(content="stop here"),
+        ]
+
+        validator.validate_messages(messages=messages)
+
+    def test_allows_terminal_tool_call_without_response(self) -> None:
+        validator = get_validator(version=TokenizerVersion.v13, mode=ValidationMode.agnostic)
+        messages = [
+            UserMessage(content="foo"),
+            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]),
+        ]
+
+        validator.validate_messages(messages=messages)
+
+    @pytest.mark.parametrize("version", [TokenizerVersion.v3, TokenizerVersion.v13])
+    def test_rejects_unresolved_tool_call_before_later_assistant(self, version: TokenizerVersion) -> None:
+        validator = get_validator(version=version, mode=ValidationMode.agnostic)
+        messages = [
+            UserMessage(content="foo"),
+            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]),
+            AssistantMessage(content="answer"),
+        ]
+
+        with pytest.raises(
+            InvalidMessageStructureException,
+            match=r"Not the same number of function calls and responses",
+        ):
+            validator.validate_messages(messages=messages)
+
+    def test_accepts_extra_tool_response_for_base_validator(self) -> None:
+        validator = get_validator(version=TokenizerVersion.v3, mode=ValidationMode.agnostic)
+        messages = [
+            UserMessage(content="foo"),
+            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]),
+            ToolMessage(content="result", tool_call_id="123456789"),
+            ToolMessage(content="extra", tool_call_id="999999999"),
+        ]
+
+        validator.validate_messages(messages=messages)
+
+    def test_rejects_extra_tool_response_for_id_aware_validator(self) -> None:
+        validator = get_validator(version=TokenizerVersion.v13, mode=ValidationMode.agnostic)
+        messages = [
+            UserMessage(content="foo"),
+            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]),
+            ToolMessage(content="result", tool_call_id="123456789"),
+            ToolMessage(content="extra", tool_call_id="999999999"),
+        ]
+
+        with pytest.raises(InvalidMessageStructureException, match=r"Unexpected tool call id"):
+            validator.validate_messages(messages=messages)
+
+    def test_rejects_duplicate_tool_response_for_id_aware_validator(self) -> None:
+        validator = get_validator(version=TokenizerVersion.v13, mode=ValidationMode.agnostic)
+        messages = [
+            UserMessage(content="foo"),
+            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="foo", arguments="{}"))]),
+            ToolMessage(content="result", tool_call_id="123456789"),
+            ToolMessage(content="duplicate", tool_call_id="123456789"),
+        ]
+
+        with pytest.raises(
+            InvalidMessageStructureException,
+            match=r"Duplicate tool call id 123456789 in tool results",
+        ):
+            validator.validate_messages(messages=messages)
+
+    @pytest.mark.parametrize("version", [TokenizerVersion.v3, TokenizerVersion.v7, TokenizerVersion.v11])
+    def test_allows_final_null_tool_call_id(self, version: TokenizerVersion) -> None:
+        validator = get_validator(version=version, mode=ValidationMode.agnostic)
+        messages = [
+            UserMessage(content="foo"),
+            AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="foo", arguments="{}"))]),
+        ]
+
+        validator.validate_messages(messages=messages)
+
+    @pytest.mark.parametrize("version", [TokenizerVersion.v3, TokenizerVersion.v7, TokenizerVersion.v11])
+    def test_rejects_non_final_null_tool_call_id(self, version: TokenizerVersion) -> None:
+        validator = get_validator(version=version, mode=ValidationMode.agnostic)
+        messages = [
+            UserMessage(content="foo"),
+            AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="foo", arguments="{}"))]),
+            UserMessage(content="continue"),
+        ]
+
+        with pytest.raises(InvalidFunctionCallException, match=r"Tool call id"):
+            validator.validate_messages(messages=messages)
+
+    @pytest.mark.parametrize("version", [TokenizerVersion.v13, TokenizerVersion.v15])
+    def test_rejects_null_tool_call_id_for_newer_versions(self, version: TokenizerVersion) -> None:
+        validator = get_validator(version=version, mode=ValidationMode.agnostic)
+        messages = [
+            UserMessage(content="foo"),
+            AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="foo", arguments="{}"))]),
+        ]
+
+        with pytest.raises(
+            InvalidFunctionCallException,
+            match=r"Tool call id must be a non-empty string other than 'null' for tokenizer version 13 or newer",
+        ):
+            validator.validate_messages(messages=messages)
+
+    @pytest.mark.parametrize("weight", [None, 0, 1])
+    def test_accepts_valid_finetuning_weight(self, weight: float | None) -> None:
+        validator = get_validator(version=TokenizerVersion.v11, mode=ValidationMode.agnostic)
+        messages = [
+            UserMessage(content="foo"),
+            FinetuningAssistantMessage(content="answer", weight=weight),
+        ]
+
+        validator.validate_messages(messages=messages)
+
+    def test_rejects_invalid_finetuning_weight(self) -> None:
+        validator = get_validator(version=TokenizerVersion.v11, mode=ValidationMode.agnostic)
+        messages = [
+            UserMessage(content="foo"),
+            FinetuningAssistantMessage(content="answer", weight=0.5),
+        ]
+
+        with pytest.raises(InvalidAssistantMessageException, match=r"Assistant message weight must be either 0 or 1"):
+            validator.validate_messages(messages=messages)

@@ -42,9 +42,9 @@ class TokenInfo(TypedDict):
     r"""Token information in the JSON file.
 
     Attributes:
-        rank: The rank of the token.
-        token_bytes: The token in bytes, base64 encoded.
-        token_str: The token in string format.
+        rank: The integer rank/index of this token in the vocabulary.
+        token_bytes: The token's byte representation, base64 encoded.
+        token_str: The token's string representation, or `None` if not applicable.
     """
 
     rank: int
@@ -56,9 +56,9 @@ class SpecialTokenInfo(TypedDict):
     r"""Special token information in the JSON file.
 
     Attributes:
-        rank: The rank of the token.
-        token_str: The token in string format.
-        is_control: Whether the token is a control token.
+        rank: The integer rank/index of this special token.
+        token_str: The string representation of the special token.
+        is_control: `True` if this is a control token (non-printable), `False` otherwise.
     """
 
     rank: int
@@ -67,14 +67,14 @@ class SpecialTokenInfo(TypedDict):
 
 
 class TekkenConfig(TypedDict):
-    r"""Tekken configuration in the JSON file.
+    r"""Tekken tokenizer configuration in the JSON file.
 
     Attributes:
-        pattern: The pattern of the tokenizer.
-        num_vocab_tokens: The number of vocabulary tokens.
-        default_vocab_size: The default vocabulary size.
-        default_num_special_tokens: The default number of special tokens.
-        version: The version of the tokenizer.
+        pattern: Regex pattern string used for tokenization (tiktoken `pat_str`).
+        num_vocab_tokens: Number of regular (non-special) tokens in the vocabulary.
+        default_vocab_size: Default total vocabulary size (vocab + special tokens).
+        default_num_special_tokens: Default number of special tokens.
+        version: Version string of the tokenizer (e.g., "v1", "v2").
     """
 
     pattern: str
@@ -85,14 +85,16 @@ class TekkenConfig(TypedDict):
 
 
 class ModelData(TypedDict):
-    r"""The data of the tekken tokenizer model.
+    r"""Complete tekken tokenizer model data from the JSON file.
 
     Attributes:
-        vocab: The vocabulary of the tokenizer.
-        config: The configuration of the tokenizer.
-        version: The version of the tokenizer.
-        type: The type of the tokenizer.
-        image: The image configuration of the tokenizer.
+        vocab: List of TokenInfo entries for regular vocabulary tokens.
+        special_tokens: List of SpecialTokenInfo entries, or `None` to use defaults.
+        config: TekkenConfig with tokenizer settings.
+        version: Integer version of the tokenizer file format.
+        type: String type identifier for the tokenizer.
+        image: ImageConfig for image processing, or missing if not supported.
+        audio: AudioConfig for audio processing, or missing if not supported.
     """
 
     vocab: list[TokenInfo]
@@ -105,10 +107,16 @@ class ModelData(TypedDict):
 
 
 class Tekkenizer(Tokenizer):
-    r"""Tekken tokenizer.
+    r"""Tekken tokenizer based on the tiktoken library.
 
-    This tokenizer is based on the [tiktoken](https://github.com/openai/tiktoken) library. It fastens the tokenization
-    for multiple languages.
+    High-performance tokenizer for multiple languages, supporting text, image, and
+    audio modalities. Uses byte-level BPE with customizable patterns and special
+    tokens.
+
+    The tokenizer works by:
+    1. Using tiktoken's fast BPE encoder for regular tokens
+    2. Managing special tokens separately (prefixed to the vocabulary)
+    3. Supporting multimodal configurations via `image_config` and `audio_config`
     """
 
     DEPRECATED_SPECIAL_TOKENS = (
@@ -156,16 +164,26 @@ class Tekkenizer(Tokenizer):
         r"""Initialize the tekken tokenizer.
 
         Args:
-            vocab: The vocabulary of the tokenizer.
-            special_tokens: The special tokens of the tokenizer.
-            pattern: The pattern of the tokenizer.
-            vocab_size: The vocabulary size of the tokenizer.
-            num_special_tokens: The number of special tokens of the tokenizer.
-            version: The version of the tokenizer.
-            name: The name of the tokenizer.
-            image_config: The image configuration of the tokenizer.
-            audio_config: The audio configuration of the tokenizer.
-            model_settings_builder: The builder for model settings, or None if unsupported.
+            vocab: List of token information defining the vocabulary. Each entry contains
+                the token's rank, base64-encoded bytes, and string representation.
+            special_tokens: List of special token definitions. If fewer than
+                `num_special_tokens` are provided, filler tokens are generated automatically.
+            pattern: Regex pattern used for tokenization (tiktoken `pat_str`).
+            vocab_size: Total vocabulary size (vocab tokens + special tokens).
+                Must be <= len(vocab) + `num_special_tokens`.
+            num_special_tokens: Total number of special tokens. If `special_tokens` list
+                is shorter, filler tokens are added to reach this count.
+            version: Tokenizer version. Determines supported features and validation rules.
+            name: Identifier for this tokenizer instance. Defaults to "tekkenizer".
+            _path: Source file path. Internal use only; not for direct instantiation.
+            image_config: Configuration for image processing, or `None` if not supported.
+            audio_config: Configuration for audio processing, or `None` if not supported.
+            model_settings_builder: Builder for model-specific settings. Must be `None` if
+                version does not support model settings (pre-v15).
+
+        Raises:
+            ValueError: If `model_settings_builder` is provided but version does not support it.
+            AssertionError: If `vocab_size` constraint is violated or special tokens are invalid.
         """
         if not version.supports_model_settings and model_settings_builder is not None:
             raise ValueError(
@@ -229,25 +247,47 @@ class Tekkenizer(Tokenizer):
 
     @property
     def file_path(self) -> Path:
-        r"""The path to the tokenizer file."""
+        r"""The path to the tokenizer file.
+
+        Returns:
+            Path to the source JSON file.
+
+        Raises:
+            ValueError: If the tokenizer was not loaded from a file (e.g., constructed
+                directly via __init__ without _path).
+        """
         if self._file_path is None:
             raise ValueError("The tokenizer was not loaded from a file.")
         return self._file_path
 
     @property
     def model_settings_builder(self) -> ModelSettingsBuilder | None:
-        r"""The model settings builder, or None if unsupported by this version."""
+        r"""The model settings builder for this tokenizer.
+
+        Returns:
+            ModelSettingsBuilder instance if the tokenizer version supports model
+            settings, otherwise `None`.
+        """
         return self._model_settings_builder
 
     @classmethod
     def from_file(cls: type["Tekkenizer"], path: str | Path) -> "Tekkenizer":
-        r"""Load the tekken tokenizer from a file.
+        r"""Load the tekken tokenizer from a JSON file.
+
+        The file must contain vocab, config, and optionally `special_tokens`, image,
+        audio, and `model_settings_builder` sections.
 
         Args:
-            path: The path to the tokenizer file.
+            path: Path to the tokenizer JSON file. Must exist and be readable.
 
         Returns:
-            The tekken tokenizer.
+            A Tekkenizer instance configured from the file.
+
+        Raises:
+            ValueError: If the file has an unknown version, is missing required fields,
+                or contains incompatible configuration (e.g., `model_settings_builder`
+                with a version that does not support it).
+            AssertionError: If the file does not exist.
         """
         if isinstance(path, str):
             path = Path(path)
@@ -323,75 +363,105 @@ class Tekkenizer(Tokenizer):
 
     @property
     def image(self) -> ImageConfig | None:
-        r"""The image configuration of the tokenizer."""
+        r"""The image configuration for this tokenizer.
+
+        Returns:
+            ImageConfig instance if image support is configured, otherwise `None`.
+        """
         return self._image_config
 
     @image.setter
     def image(self, value: ImageConfig) -> None:
+        r"""Setting the image config is not allowed.
+
+        Raises:
+            ValueError: Always; the image config can only be set at init.
+        """
         raise ValueError("Can only set Image config at init")
 
     @property
     def audio(self) -> AudioConfig | None:
-        r"""The audio configuration of the tokenizer.
+        r"""The audio configuration for this tokenizer.
 
         Returns:
-             The audio configuration object if it exists, otherwise None.
+            AudioConfig instance if audio support is configured, otherwise `None`.
         """
         return self._audio_config
 
     @audio.setter
     def audio(self, value: AudioConfig) -> None:
+        r"""Setting the audio config is not allowed.
+
+        Raises:
+            ValueError: Always; the audio config can only be set at init.
+        """
         raise ValueError("Can only set Audio config at init")
 
     @property
     def num_special_tokens(self) -> int:
-        r"""The number of special tokens of the tokenizer."""
+        r"""The total number of special tokens in this tokenizer.
+
+        Returns:
+            Count of all special tokens (original + filler tokens).
+        """
         return len(self._all_special_tokens)
 
     @property
     def n_words(self) -> int:
-        r"""Vocabulary size of the tokenizer."""
+        r"""Total vocabulary size of the tokenizer.
+
+        Returns:
+            Sum of regular vocabulary tokens and special tokens.
+        """
         return self._vocab_size
 
     @cached_property
     def special_ids(self) -> set[int]:
-        r"""Ids of the special tokens."""
+        r"""Set of all special token IDs.
+
+        Returns:
+            Set of integer IDs for all special tokens in this tokenizer.
+        """
         return {token["rank"] for token in self._all_special_tokens}
 
     @property
     def version(self) -> TokenizerVersion:
-        r"""The version of the tokenizer."""
+        r"""The version of this tokenizer.
+
+        Returns:
+            TokenizerVersion enum value indicating the tokenizer's version.
+        """
         return self._version
 
     @cached_property
     def bos_id(self) -> int:
-        r"""The beginning of sentence token id."""
+        r"""The beginning-of-sentence token ID."""
         return self.get_special_token("<s>")
 
     @cached_property
     def eos_id(self) -> int:
-        r"""The end of sentence token id."""
+        r"""The end-of-sentence token ID."""
         return self.get_special_token("</s>")
 
     @cached_property
     def pad_id(self) -> int:
-        r"""The padding token id."""
+        r"""The padding token ID."""
         return self.get_special_token("<pad>")
 
     @cached_property
     def unk_id(self) -> int:
-        r"""The unknown token id."""
+        r"""The unknown token ID."""
         return self.get_special_token("<unk>")
 
     def vocab(self) -> list[str]:
         r"""Get all tokens in the vocabulary as strings.
 
         Note:
-           This will collapse all tokens for which we have a decoding error into
-           the <?> string. This is bad and results in things like len(set(vocab)) != len(vocab)).
+            Tokens with decoding errors are collapsed into the "<?>" string. This may
+            result in len(set(vocab)) != len(vocab). Use with caution.
 
         Returns:
-            The vocabulary of the tokenizer.
+            List of all tokens in the vocabulary as strings, in token ID order.
         """
         # when returning self._vocab this will collapse
         # all tokens for which we have a decoding error into
@@ -405,11 +475,11 @@ class Tekkenizer(Tokenizer):
 
         Args:
             s: The string to encode.
-            bos: Whether to add the beginning of sentence token.
-            eos: Whether to add the end of sentence token.
+            bos: If `True`, prepends the beginning-of-sentence token ID to the result.
+            eos: If `True`, appends the end-of-sentence token ID to the result.
 
         Returns:
-            The list of token ids.
+            List of token IDs. Regular tokens are offset by `num_special_tokens`.
         """
         tokens: list[int] = self._model.encode(s)
         tokens = [t + self.num_special_tokens for t in tokens]
@@ -448,18 +518,46 @@ class Tekkenizer(Tokenizer):
         return decoded
 
     def is_byte(self, token_id: int) -> bool:
-        r"""Check if a token id is a byte token."""
+        r"""Check if a token ID represents a single byte.
+
+        Args:
+            token_id: The token ID to check.
+
+        Returns:
+            `True` if the token (after subtracting special token offset) is in the
+            range [0, 255], meaning it represents a single byte.
+        """
         return 0 <= token_id - self.num_special_tokens < 256
 
     def get_special_token(self, s: str) -> int:
-        r"""Get the token id of a special token."""
+        r"""Get the token ID of a special token by its string representation.
+
+        Args:
+            s: The string representation of the special token (e.g., "<s>", "<eos>").
+
+        Returns:
+            The integer token ID for the special token.
+
+        Raises:
+            ValueError: If the special token string is not recognized.
+        """
         if s in self._special_tokens_reverse_vocab:
             return self._special_tokens_reverse_vocab[s]
         else:
             raise ValueError(f"Unknown control token {s}")
 
     def is_special(self, token: int | np.integer | str) -> bool:
-        """Return `True` if the passed `token` is a special token."""
+        r"""Check if a token is a special token.
+
+        Args:
+            token: Token ID (int or numpy integer) or token string to check.
+
+        Returns:
+            `True` if the token is a special token, `False` otherwise.
+
+        Raises:
+            TypeError: If token is not an int, numpy integer, or str.
+        """
         if isinstance(token, (int, np.integer)):
             return token in self._special_token_ids
         elif isinstance(token, str):
@@ -468,18 +566,35 @@ class Tekkenizer(Tokenizer):
             raise TypeError(f"Expected int or str, got {type(token).__name__}")
 
     def get_control_token(self, s: str) -> int:
+        r"""Get the token ID of a control token. Deprecated: use `get_special_token()` instead.
+
+        Deprecated: Use `get_special_token()` instead.
+
+        Args:
+            s: The string representation of the control token.
+
+        Returns:
+            The integer token ID for the control token.
+        """
         warnings.warn("`get_control_token` is deprecated. Use `get_special_token` instead.", FutureWarning)
         return self.get_special_token(s)
 
     def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy = SpecialTokenPolicy.IGNORE) -> str:
-        r"""Decode a list of token ids into a string.
+        r"""Decode a list of token IDs into a string.
 
         Args:
-            tokens: The list of token ids to decode.
-            special_token_policy: The policy for handling special tokens.
+            tokens: List of token IDs to decode.
+            special_token_policy: Policy for handling special tokens:
+                - IGNORE: Skip special tokens (default)
+                - KEEP: Include special token strings in output
+                - RAISE: Raise ValueError if special tokens are present
 
         Returns:
-            The decoded string.
+            The decoded UTF-8 string.
+
+        Raises:
+            ValueError: If `special_token_policy` is invalid or RAISE is set and
+                special tokens are encountered.
         """
         try:
             special_token_policy = SpecialTokenPolicy(special_token_policy)
@@ -495,20 +610,36 @@ class Tekkenizer(Tokenizer):
         return self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP)
 
     def id_to_piece(self, token_id: int) -> str:
-        r"""Convert a token id to its string representation."""
+        r"""Convert a token ID to its string representation.
+
+        Args:
+            token_id: The token ID to convert.
+
+        Returns:
+            The string representation of the token. Special tokens are decoded as their
+            token string; regular tokens are decoded using the underlying tiktoken model.
+        """
         return self.decode([token_id], special_token_policy=SpecialTokenPolicy.KEEP)
 
     def id_to_byte_piece(
         self, token_id: int, special_token_policy: SpecialTokenPolicy = SpecialTokenPolicy.IGNORE
     ) -> bytes:
-        r"""Convert a token id to its byte representation.
+        r"""Convert a token ID to its byte representation.
 
         Args:
-            token_id: The token id to convert.
-            special_token_policy: The policy for handling special tokens.
+            token_id: The token ID to convert.
+            special_token_policy: Policy for handling special tokens:
+                - IGNORE: Return empty bytes for special tokens
+                - KEEP: Return UTF-8 encoded special token string
+                - RAISE: Raise ValueError if token is special
 
         Returns:
-            The byte representation of the token.
+            The byte representation of the token. For regular tokens, returns the
+            original byte sequence from the vocabulary.
+
+        Raises:
+            ValueError: If `special_token_policy` is RAISE and `token_id` is a special token,
+                or if `special_token_policy` is invalid.
         """
         if token_id < self.num_special_tokens:
             if special_token_policy == SpecialTokenPolicy.KEEP:
@@ -527,7 +658,17 @@ def _reload_mergeable_ranks(
     vocab: list[TokenInfo],
     max_vocab: int | None = None,
 ) -> dict[bytes, int]:
-    r"""Reload our tokenizer JSON file and convert it to Tiktoken format."""
+    r"""Convert vocab TokenInfo list to tiktoken mergeable ranks format.
+
+    Args:
+        vocab: List of TokenInfo entries from the tokenizer JSON.
+        max_vocab: Maximum number of vocabulary entries to include. If `None`,
+            includes all. If provided and less than len(vocab), truncates to
+            first `max_vocab` entries.
+
+    Returns:
+        Dictionary mapping byte sequences to their integer ranks.
+    """
     if max_vocab is not None:
         assert len(vocab) >= max_vocab, (len(vocab), max_vocab)
         if len(vocab) > max_vocab:
@@ -551,5 +692,12 @@ def _reload_mergeable_ranks(
 
 
 def is_tekkenizer(tokenizer: Tokenizer) -> TypeGuard[Tekkenizer]:
-    r"""Returns whether the tokenizer is a Tekkenizer."""
+    r"""Check if a tokenizer is a Tekkenizer.
+
+    Args:
+        tokenizer: The tokenizer to check.
+
+    Returns:
+        `True` if the tokenizer is an instance of Tekkenizer, `False` otherwise.
+    """
     return isinstance(tokenizer, Tekkenizer)

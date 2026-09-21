@@ -61,11 +61,16 @@ async def detokenize_to_string(
     r"""Detokenize a list of tokens to a string.
 
     Args:
-        tokens: The tokens to detokenize.
-        special_token_policy: The policy to use for special tokens.
+        tokens: The token IDs to detokenize. Must be non-empty.
+        special_token_policy: The policy to use for special tokens
+            (IGNORE, KEEP, or RAISE).
+        settings: The app settings providing the tokenizer.
 
     Returns:
-        The detokenized string or assistant message.
+        The detokenized string.
+
+    Raises:
+        HTTPException: 400 if the tokens list is empty.
     """
     if len(tokens) == 0:
         raise HTTPException(status_code=400, detail="Tokens list cannot be empty.")
@@ -82,13 +87,18 @@ async def detokenize_to_assistant_message(
 ) -> AssistantMessage:
     r"""Detokenize a list of tokens to an assistant message.
 
-    Parse tool calls from the tokens and extract content before the first tool call.
+    Parse tool calls from the tokens and extract content before the first
+    tool call. Requires a tokenizer version > v1 for tool call parsing.
 
     Args:
-        tokens: The tokens to detokenize.
+        tokens: The token IDs to detokenize. Must be non-empty.
+        settings: The app settings providing the tokenizer.
 
     Returns:
-        The detokenized assistant message.
+        The detokenized assistant message with content and tool calls.
+
+    Raises:
+        HTTPException: 400 if the tokens list is empty.
     """
     if len(tokens) == 0:
         raise HTTPException(status_code=400, detail="Tokens list cannot be empty.")
@@ -153,14 +163,22 @@ async def generate(
     request: ChatCompletionRequest | OpenAIChatCompletionRequest,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AssistantMessage:
-    r"""Generate a chat completion.
+    r"""Generate a chat completion by proxying to the configured engine.
+
+    The request is validated and tokenized locally, then forwarded to the
+    engine, and the returned tokens are detokenized into an assistant message.
 
     Args:
-        request: The chat completion request.
-        settings: The settings for the Mistral-common API.
+        request: The chat completion request, in Mistral or OpenAI format.
+        settings: The settings for the Mistral-common API, providing the
+            tokenizer and engine configuration.
 
     Returns:
-        The generated chat completion.
+        The generated assistant message.
+
+    Raises:
+        HTTPException: 400 on invalid request or empty messages; 502 if the
+            engine fails.
     """
     if isinstance(request, OpenAIChatCompletionRequest):
         extra_fields = request.drop_extra_fields()

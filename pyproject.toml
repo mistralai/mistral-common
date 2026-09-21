@@ -67,11 +67,9 @@ dev = [
 ]
 
 docs = [
-    "mkdocs",
-    "mkdocstrings",
-    "mkdocstrings-python",
-    "mkdocs-material",
-    "mkdocs-gen-files",
+    "zensical==0.0.62",
+    "mkdocstrings>=1.0",
+    "mkdocstrings-python>=2.0",
     "mkdocs-literate-nav",
     "pyyaml>=6.0.3"
 ]

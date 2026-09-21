@@ -61,7 +61,8 @@ def _create_triangular_filter_bank(fft_freqs: np.ndarray, filter_freqs: np.ndarr
         filter_freqs: Center frequencies of the triangular filters to create, in Hz.
 
     Returns:
-        array of shape `(num_frequency_bins, num_mel_filters)`
+        An array of shape `(num_frequency_bins, num_mel_filters)` with each
+        column holding one triangular filter.
     """
     filter_diff = np.diff(filter_freqs)
     slopes = np.expand_dims(filter_freqs, 0) - np.expand_dims(fft_freqs, 1)
@@ -93,8 +94,13 @@ def mel_filter_bank(
         sampling_rate: The sampling rate of the audio signal.
 
     Returns:
-        A filter bank matrix of shape (num_mel_bins, num_frequency_bins)
+        A filter bank matrix of shape (`num_mel_bins`, `num_frequency_bins`)
         that can be used to project frequency bin energies onto Mel bins.
+
+    Raises:
+        ValueError: If `num_frequency_bins` < 2, `min_frequency` > `max_frequency`,
+            or at least one mel filter ends up all zero (`num_mel_bins` too
+            high or `num_frequency_bins` too low).
     """
     if num_frequency_bins < 2:
         raise ValueError(f"Require num_frequency_bins: {num_frequency_bins} >= 2")

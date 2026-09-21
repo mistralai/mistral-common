@@ -57,14 +57,15 @@ def _detect_audio_format(data: str | bytes) -> str:
 
 
 class ChunkTypes(str, Enum):
-    r"""Enum for the types of chunks that can be sent to the model.
+    r"""Enum of the types of content chunks that can be sent to the model.
 
     Attributes:
-       text: A text chunk.
-       image: An image chunk.
-       image_url: An image url chunk.
-       input_audio: An input audio chunk.
-       audio_url: An audio url chunk.
+        text: A plain text chunk.
+        image: An image provided as raw data (PIL image, base64, URL or path).
+        image_url: An image referenced by URL or base64 data URL.
+        input_audio: Audio provided inline as base64 or raw bytes.
+        audio_url: Audio referenced by URL, file path, file URI or base64.
+        thinking: A reasoning/thinking chunk from the assistant.
 
     Examples:
         >>> from mistral_common.protocol.instruct.chunk import ChunkTypes
@@ -82,10 +83,12 @@ class ChunkTypes(str, Enum):
 class BaseContentChunk(MistralBase):
     r"""Base class for all content chunks.
 
-    Content chunks are used to send different types of content to the model.
+    Content chunks represent a piece of multimodal content (text, image, audio,
+    thinking) inside a message. A message's content can be a string or a list
+    of these chunks.
 
     Attributes:
-       type: The type of the chunk.
+        type: The chunk type, used as the pydantic discriminator.
     """
 
     type: Literal[
@@ -98,26 +101,46 @@ class BaseContentChunk(MistralBase):
     ]
 
     def to_openai(self) -> dict[str, Any]:
-        r"""Converts the chunk to the OpenAI format.
+        r"""Convert this chunk to the OpenAI format.
 
-        Should be implemented by subclasses.
+        Must be implemented by concrete subclasses.
+
+        Returns:
+            Dictionary matching OpenAI's content chunk schema.
+
+        Raises:
+            NotImplementedError: Always, as this is an abstract method.
         """
         raise NotImplementedError(f"to_openai method not implemented for {type(self).__name__}")
 
     @classmethod
     def from_openai(cls, openai_chunk: dict[str, Any]) -> "BaseContentChunk":
-        r"""Converts the OpenAI chunk to the Mistral format.
+        r"""Create a chunk instance from OpenAI format.
 
-        Should be implemented by subclasses.
+        Must be implemented by concrete subclasses.
+
+        Args:
+            openai_chunk: Dictionary matching OpenAI's content chunk schema.
+
+        Returns:
+            Chunk instance of the appropriate subclass.
+
+        Raises:
+            NotImplementedError: Always, as this is an abstract method.
         """
         raise NotImplementedError(f"from_openai method not implemented for {cls.__name__}")
 
 
 class ImageChunk(BaseContentChunk):
-    r"""Image chunk.
+    r"""Image content provided as raw data.
+
+    The image is processed (resized, serialized) at tokenization time by the
+    image encoder.
 
     Attributes:
-       image: The image to be sent to the model.
+        image: The image to send to the model. Accepts a PIL image, a URL
+            (http/https), a base64-encoded string (optionally with a
+            data:...;base64, prefix), or a local file path.
 
     Examples:
         >>> from PIL import Image
@@ -129,13 +152,30 @@ class ImageChunk(BaseContentChunk):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def to_openai(self) -> dict[str, Any]:
-        r"""Converts the chunk to the OpenAI format."""
+        r"""Convert this chunk to the OpenAI `image_url` format.
+
+        Returns:
+            Dictionary with "type" set to `image_url` and the image as a
+            base64 data URL under `image_url` -> "url".
+        """
         base64_image = self.model_dump(include={"image"}, context={"add_format_prefix": True})["image"]
         return {"type": "image_url", "image_url": {"url": base64_image}}
 
     @classmethod
     def from_openai(cls, openai_chunk: dict[str, Any]) -> "ImageChunk":
-        r"""Converts the OpenAI chunk to the Mistral format."""
+        r"""Create an ImageChunk from an OpenAI `image_url` chunk.
+
+        Args:
+            openai_chunk: Dictionary with "type" set to `image_url` and an
+                `image_url` -> "url" entry (URL or base64 data URL).
+
+        Returns:
+            An ImageChunk with the base64 prefix stripped if present.
+
+        Raises:
+            AssertionError: If the chunk type is not `image_url` or the
+                `image_url` entry is malformed.
+        """
         assert openai_chunk.get("type") == "image_url", openai_chunk
 
         image_url_dict = openai_chunk["image_url"]
@@ -149,11 +189,13 @@ class ImageChunk(BaseContentChunk):
 
 
 class ImageURL(MistralBase):
-    r"""Image URL or a base64 encoded image.
+    r"""Image URL with optional detail level.
 
     Attributes:
-       url: The URL of the image.
-       detail: The detail of the image.
+        url: The URL of the image, or a base64-encoded image (optionally with
+            a data:...;base64, prefix).
+        detail: Optional detail level hint for image processing (e.g., "high",
+            "low", "auto"). If `None`, the default is used.
 
     Examples:
        >>> image_url = ImageURL(url="https://example.com/image.png")
@@ -164,10 +206,14 @@ class ImageURL(MistralBase):
 
 
 class ImageURLChunk(BaseContentChunk):
-    r"""Image URL chunk.
+    r"""Image content referenced by URL or base64 data URL.
+
+    Unlike ImageChunk, the image is not loaded at request construction time;
+    the URL is resolved at tokenization time.
 
     Attributes:
-       image_url: The URL of the image or a base64 encoded image to be sent to the model.
+        image_url: The image reference. Either an ImageURL instance (allowing a
+            detail hint) or a plain URL/base64 string.
 
     Examples:
         >>> image_url_chunk = ImageURLChunk(image_url="data:image/png;base64,iVBORw0")
@@ -179,12 +225,22 @@ class ImageURLChunk(BaseContentChunk):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def get_url(self) -> str:
+        r"""Return the underlying image URL string.
+
+        Returns:
+            The URL regardless of whether `image_url` is an ImageURL or a plain string.
+        """
         if isinstance(self.image_url, ImageURL):
             return self.image_url.url
         return self.image_url
 
     def to_openai(self) -> dict[str, Any]:
-        r"""Converts the chunk to the OpenAI format."""
+        r"""Convert this chunk to the OpenAI format.
+
+        Returns:
+            Dictionary with "type" set to `image_url` and the URL (plus
+            optional "detail") under `image_url`.
+        """
         image_url_dict = {"url": self.get_url()}
         if isinstance(self.image_url, ImageURL) and self.image_url.detail is not None:
             image_url_dict["detail"] = self.image_url.detail
@@ -197,17 +253,32 @@ class ImageURLChunk(BaseContentChunk):
 
     @classmethod
     def from_openai(cls, openai_chunk: dict[str, Any]) -> "ImageURLChunk":
-        r"""Converts the OpenAI chunk to the Mistral format."""
+        r"""Create an ImageURLChunk from an OpenAI chunk.
+
+        Args:
+            openai_chunk: Dictionary with an `image_url` entry (dict or string).
+
+        Returns:
+            An ImageURLChunk with the `image_url` parsed from the OpenAI format.
+        """
         return cls.model_validate({"image_url": openai_chunk["image_url"]})
 
 
 class RawAudio(MistralBase):
-    r"""Deprecated: Use `str | bytes` directly. Will be removed in 1.13.0."""
+    r"""Audio data with an explicit format.
+
+    Deprecated: Use `str | bytes` directly. Will be removed in 1.13.0.
+
+    Attributes:
+        data: The audio data as raw bytes or a base64-encoded string.
+        format: The audio format (e.g., "wav", "mp3"). Must not be empty.
+    """
 
     data: str | bytes
     format: str
 
     def model_post_init(self, __context: Any) -> None:
+        r"""Emit a one-shot deprecation warning for `RawAudio`."""
         warn_once(
             "RawAudio",
             "RawAudio is deprecated. Use str | bytes directly for audio data. Will be removed in 1.13.0.",
@@ -231,6 +302,14 @@ class RawAudio(MistralBase):
 
     @field_validator("format")
     def should_not_be_empty(cls, v: str) -> str:
+        r"""Reject empty format strings.
+
+        Returns:
+            The unchanged format string if non-empty.
+
+        Raises:
+            ValueError: If `format` is empty or whitespace.
+        """
         if not v.strip():
             raise ValueError("`format` should not be empty")
 
@@ -238,7 +317,7 @@ class RawAudio(MistralBase):
 
 
 class AudioURL(MistralBase):
-    r"""Audio URL.
+    r"""Audio URL reference.
 
     Attributes:
         url: The URL of the audio file.
@@ -248,13 +327,14 @@ class AudioURL(MistralBase):
 
 
 class AudioURLType(str, Enum):
-    r"""Enum for the types of audio URLs.
+    r"""Enum for the kinds of audio URL references.
 
     Attributes:
-        url: A URL.
-        base64: A base64 encoded audio. Can be prefixed with `data:audio/<format>;base64,`.
-        file: A file path.
-        file_uri: A file URI (eg. `file:///path/to/file`).
+        url: An http(s) URL.
+        base64: A base64-encoded audio string. May be prefixed with
+            `data:audio/<format>;base64,`.
+        file: A local file path (e.g., /path/to/file).
+        file_uri: A file URI (e.g., `file:///path/to/file`).
     """
 
     url = "url"
@@ -264,11 +344,17 @@ class AudioURLType(str, Enum):
 
 
 class AudioURLChunk(BaseContentChunk):
-    r"""Audio URL chunk.
+    r"""Audio content referenced by URL, path, file URI or base64.
+
+    The URL kind is resolved lazily by `get_url_type`; the audio itself is
+    loaded at tokenization time.
 
     Attributes:
-        type: The type of the chunk, which is always `ChunkTypes.audio_url`.
-        audio_url: The URL of the audio file.
+        audio_url: The audio reference. Either an AudioURL instance or a
+            plain string (URL, file path, file URI, or base64).
+
+    Examples:
+        >>> audio_url_chunk = AudioURLChunk(audio_url="https://example.com/audio.mp3")
     """
 
     type: Literal[ChunkTypes.audio_url] = ChunkTypes.audio_url
@@ -276,12 +362,17 @@ class AudioURLChunk(BaseContentChunk):
 
     @property
     def url(self) -> str:
+        r"""The audio URL string.
+
+        Returns:
+            The URL regardless of whether `audio_url` is an `AudioURL` or a plain string.
+        """
         if isinstance(self.audio_url, AudioURL):
             return self.audio_url.url
         return self.audio_url
 
     def get_url_type(self) -> AudioURLType:
-        r"""Returns the type of the audio URL.
+        r"""Detect the kind of the referenced audio URL.
 
         Note:
             URLs should be either:
@@ -291,7 +382,7 @@ class AudioURLChunk(BaseContentChunk):
             - a base64 encoded audio. It is assumed to be base64 encoded if it is not a valid URL or file path.
 
         Returns:
-            The type of the audio URL.
+            The detected AudioURLType for this chunk's URL.
         """
         url_scheme = urlparse(self.url).scheme
         if url_scheme in {"http", "https"}:
@@ -326,11 +417,12 @@ class AudioURLChunk(BaseContentChunk):
 
 
 class AudioChunk(BaseContentChunk):
-    r"""Audio chunk containing raw audio data.
+    r"""Audio content provided inline as base64 or raw bytes.
 
     Attributes:
-        type: The type of the chunk, which is always ChunkTypes.input_audio.
-        input_audio: The audio data as a base64-encoded string or raw bytes.
+        input_audio: The audio data as a base64-encoded string (optionally
+            with a data:audio/<format>;base64, prefix) or raw bytes. The format
+            is detected at serialization time.
 
     Examples:
         >>> audio_chunk = AudioChunk(input_audio="base64_encoded_audio_data")
@@ -348,6 +440,10 @@ class AudioChunk(BaseContentChunk):
         `data` key (e.g. `{"data": "...", "format": "wav"}`) as well as
         deprecated `RawAudio` instances, flattening them to a plain
         `str | bytes` value.
+
+        Returns:
+            The values with a flattened `input_audio` key, or the input unchanged
+            if there is nothing to flatten.
         """
         if not isinstance(values, dict):
             return values
@@ -436,12 +532,16 @@ class TextChunk(BaseContentChunk):
 
 
 class ThinkChunk(BaseContentChunk):
-    r"""Thinking chunk.
+    r"""Reasoning/thinking content from the assistant.
+
+    ThinkChunks represent chain-of-thought text the model produces before the
+    final answer. In AssistantMessage content they must appear before any
+    other chunk.
 
     Attributes:
-        type: The type of the chunk, which is always ChunkTypes.thinking.
-        thinking: The list of text chunks of the thinking.
-        closed: Whether the thinking chunk is closed or not.
+        thinking: The thinking text content.
+        closed: If `True` (default), the thinking section is complete. If `False`,
+            the thinking is ongoing (e.g., mid-stream during generation).
     """
 
     type: Literal[ChunkTypes.thinking] = ChunkTypes.thinking
@@ -464,6 +564,18 @@ ContentChunk = Annotated[
 
 
 def _convert_openai_content_chunks(openai_content_chunks: dict[str, Any]) -> ContentChunk:
+    r"""Convert an OpenAI content chunk dict to the matching ContentChunk subclass.
+
+    Args:
+        openai_content_chunks: Dictionary with a "type" key matching a
+            ChunkTypes value.
+
+    Returns:
+        The ContentChunk instance corresponding to the OpenAI chunk type.
+
+    Raises:
+        ValueError: If the chunk has no "type" field or the type is unknown.
+    """
     content_type_str = openai_content_chunks.get("type")
 
     if content_type_str is None:

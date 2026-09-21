@@ -23,7 +23,7 @@ class OpenAIChatCompletionRequest(BaseModel):
         This class accepts extra fields that are not validated.
     """
 
-    messages: list[dict[str, str | list[dict[str, str | dict[str, Any]]]]]
+    messages: list[dict[str, str | list[dict[str, str | dict[str, Any]]] | None]]
     tools: list[dict[str, Any]] | None = None
 
     # Allow extra fields as the `from_openai` method will handle them.
@@ -50,7 +50,7 @@ class EngineBackend(str, Enum):
     r"""The engine backend to use.
 
     Attributes:
-        llama_cpp: The llama.cpp backend.
+        llama_cpp: The `llama.cpp` backend.
     """
 
     llama_cpp = "llama_cpp"
@@ -62,9 +62,10 @@ class Settings(BaseSettings):
     Attributes:
         app_name: The name of the application.
         app_version: The version of the application.
-        engine_url: The URL of the engine.
+        engine_url: The URL of the engine, with any trailing slash stripped.
         engine_backend: The backend to use for the engine.
-        timeout: The timeout to use for the engine API.
+        api_key: The API key for the engine, or an empty string if none.
+        timeout: The timeout for the engine API in seconds.
     """
 
     app_name: str = "Mistral-common API"
@@ -89,10 +90,24 @@ class Settings(BaseSettings):
         return value
 
     def model_post_init(self, context: Any) -> None:
+        r"""Initialize the private tokenizer slot to None."""
         super().model_post_init(context)
         self._tokenizer: MistralTokenizer | None = None
 
     def _load_tokenizer(self, tokenizer_path: str | Path, validation_mode: ValidationMode) -> None:
+        r"""Load the tokenizer into the settings, from a local path or the Hugging Face Hub.
+
+        If `tokenizer_path` is an existing local file, loads it directly;
+        otherwise treats it as a Hugging Face repo ID.
+
+        Args:
+            tokenizer_path: Local file path or Hugging Face repo ID.
+            validation_mode: The validation mode for the loaded tokenizer.
+
+        Raises:
+            ValueError: If `tokenizer_path` is empty or a tokenizer is already
+                initialized.
+        """
         if tokenizer_path == "":
             raise ValueError("Tokenizer path must be set via the environment variable `TOKENIZER_PATH`.")
         elif self._tokenizer is not None:
@@ -110,17 +125,37 @@ class Settings(BaseSettings):
 
     @property
     def tokenizer(self) -> MistralTokenizer:
+        r"""The application's tokenizer.
+
+        Returns:
+            The loaded MistralTokenizer.
+
+        Raises:
+            ValueError: If the tokenizer has not been initialized yet.
+        """
         if self._tokenizer is None:
             raise ValueError("Tokenizer not initialized.")
         return self._tokenizer
 
     @tokenizer.setter
     def tokenizer(self, value: MistralTokenizer) -> None:
+        r"""Set the application's tokenizer.
+
+        Args:
+            value: The tokenizer instance to set.
+
+        Raises:
+            ValueError: If value is not a MistralTokenizer instance.
+        """
         if not isinstance(value, MistralTokenizer):
             raise ValueError("Tokenizer must be an instance of MistralTokenizer.")
         self._tokenizer = value
 
 
 def get_settings() -> Settings:
-    r"""Get the settings for the Mistral-common API."""
+    r"""Get the settings for the Mistral-common API.
+
+    Returns:
+        A Settings instance built from the environment.
+    """
     return Settings()

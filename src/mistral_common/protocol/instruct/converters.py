@@ -15,11 +15,18 @@ def convert_openai_messages(
 ) -> list[ChatMessage]:
     r"""Convert OpenAI messages to Mistral messages.
 
+    Dispatches each message to the `from_openai` constructor of the matching
+    role class.
+
     Args:
-        messages: The OpenAI messages to convert.
+        messages: Message dicts matching OpenAI's chat schema. Each must have
+            a "role" key of "user", "assistant", "tool", or "system".
 
     Returns:
-        The Mistral messages.
+        The Mistral message instances, one per input dict.
+
+    Raises:
+        ValueError: If a message has an unknown role.
     """
     converted_messages: list[ChatMessage] = []
     for openai_message in messages:
@@ -45,10 +52,11 @@ def convert_openai_tools(
     r"""Convert OpenAI tools to Mistral tools.
 
     Args:
-        tools: The OpenAI tools to convert.
+        tools: Tool dicts matching OpenAI's tool schema, each with "type" and
+            "function" keys.
 
     Returns:
-        The Mistral tools.
+        The Mistral Tool instances, one per input dict.
     """
     converted_tools = [Tool.from_openai(openai_tool) for openai_tool in tools]
     return converted_tools

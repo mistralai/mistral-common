@@ -39,12 +39,17 @@ def _are_text_chunks(chunks: Sequence[ContentChunk]) -> TypeGuard[list[TextChunk
 
 
 class ReasoningFieldFormat(str, Enum):
-    r"""How to serialize leading `ThinkChunk` in `AssistantMessage.to_openai()`.
+    r"""Format options for serializing thinking content in `AssistantMessage.to_openai()`.
+
+    Controls how leading ThinkChunk content is represented in the OpenAI output.
 
     Attributes:
-        thinking_chunks: Use think chunks (Mistral convention).
-        reasoning: Flat `reasoning` string (vLLM convention).
-        reasoning_content: Flat `reasoning_content` string (SGLang convention).
+        thinking_chunks: Keep thinking content as inline chunks (Mistral convention).
+            This preserves the chunk structure in the output.
+        reasoning: Use a flat "reasoning" string field (vLLM convention).
+            All thinking content is concatenated into a single string.
+        reasoning_content: Use a flat `reasoning_content` string field (SGLang convention).
+            Similar to reasoning but with a different field name.
     """
 
     thinking_chunks = "thinking_chunks"
@@ -53,13 +58,13 @@ class ReasoningFieldFormat(str, Enum):
 
 
 class Roles(str, Enum):
-    r"""Enum for the roles of the messages.
+    r"""Enum of valid message roles in a conversation.
 
     Attributes:
-       system: The system role.
-       user: The user role.
-       assistant: The assistant role.
-       tool: The tool role.
+        system: System message providing context or instructions to the assistant.
+        user: User message containing the user's input or query.
+        assistant: Assistant message containing the model's response.
+        tool: Tool message containing output from a tool/function call.
 
     Examples:
         >>> role = Roles.user
@@ -72,10 +77,13 @@ class Roles(str, Enum):
 
 
 class BaseMessage(MistralBase):
-    r"""Base class for all messages.
+    r"""Abstract base class for all chat message types.
+
+    Provides common functionality for message serialization and validation.
+    Subclasses must implement `to_openai()` and `from_openai()`.
 
     Attributes:
-       role: The role of the message.
+        role: The role of this message (system, user, assistant, or tool).
     """
 
     role: Literal[Roles.system, Roles.user, Roles.assistant, Roles.tool]
@@ -85,7 +93,15 @@ class BaseMessage(MistralBase):
 
     @model_validator(mode="after")
     def _validate_allowed_content_chunks(self) -> "BaseMessage":
-        r"""Enforce the per-message content chunk allow-list."""
+        r"""Validate that all content chunks are allowed for this message type.
+
+        Each message subclass defines `_allowed_content_chunks` specifying which
+        chunk types are valid. This validator raises ValueError if any chunk
+        is not in the allowed list.
+
+        Returns:
+            Self, after validation.
+        """
         content = getattr(self, "content", None)
         if isinstance(content, list):
             for chunk in content:
@@ -100,11 +116,16 @@ class BaseMessage(MistralBase):
         r"""Serialize message content to OpenAI format.
 
         Args:
-            content: String, list of content chunks, or None.
+            content: Message content to serialize. Can be:
+                - `None`: Returns `None`
+                - str: Returns the string as-is
+                - list of ContentChunk: Returns list of each chunk's `to_openai()` result
 
         Returns:
-            String content as-is, list of chunks serialized via each chunk's
-            to_openai(), or None.
+            Serialized content matching OpenAI's format:
+                - `None` for `None` input
+                - str for string input
+                - list of dict for chunk list input
         """
         if content is None or isinstance(content, str):
             return content
@@ -114,16 +135,22 @@ class BaseMessage(MistralBase):
     def _content_from_openai(
         raw: str | list[dict[str, Any]] | None,
     ) -> str | list[ContentChunk] | None:
-        r"""Deserialize content from OpenAI format.
+        r"""Deserialize content from OpenAI format to Mistral format.
 
         Args:
-            raw: Raw content from OpenAI message dict.
+            raw: Raw content from an OpenAI message dictionary. Can be:
+                - `None`: Returns `None`
+                - str: Returns the string as-is
+                - list of dict: Each dict is converted to a ContentChunk
 
         Returns:
-            String content as-is, list of deserialized content chunks, or None.
+            Deserialized content in Mistral format:
+                - `None` for `None` input
+                - str for string input
+                - list of ContentChunk for list input
 
         Raises:
-            ValueError: If content type is unrecognized.
+            ValueError: If raw is not `None`, str, or list.
         """
         if raw is None or isinstance(raw, str):
             return raw
@@ -132,26 +159,46 @@ class BaseMessage(MistralBase):
         raise ValueError(f"Unknown content type: {type(raw)}")
 
     def to_openai(self) -> dict[str, Any]:
-        r"""Converts the message to the OpenAI format.
+        r"""Convert this message to OpenAI format.
 
-        Should be implemented by subclasses.
+        Must be implemented by concrete subclasses.
+
+        Returns:
+            Dictionary matching OpenAI's message schema.
+
+        Raises:
+            NotImplementedError: Always, as this is an abstract method.
         """
         raise NotImplementedError(f"to_openai method not implemented for {type(self).__name__}")
 
     @classmethod
     def from_openai(cls, openai_message: dict[str, Any]) -> "BaseMessage":
-        r"""Converts the OpenAI message to the Mistral format.
+        r"""Create a message instance from OpenAI format.
 
-        Should be implemented by subclasses.
+        Must be implemented by concrete subclasses.
+
+        Args:
+            openai_message: Dictionary matching OpenAI's message schema.
+
+        Returns:
+            Message instance of the appropriate subclass.
+
+        Raises:
+            NotImplementedError: Always, as this is an abstract method.
         """
         raise NotImplementedError(f"from_openai method not implemented for {cls.__name__}.")
 
 
 class UserMessage(BaseMessage):
-    r"""User message.
+    r"""A message from the user in a conversation.
+
+    User messages can contain text, images, audio, or combinations thereof.
 
     Attributes:
-        content: The content of the message.
+        content: The message content. Can be:
+            - str: Plain text message
+            - list of ContentChunk: Multimodal content (text, images, audio)
+            Valid chunk types: TextChunk, ImageChunk, ImageURLChunk, AudioChunk, AudioURLChunk
 
     Examples:
         >>> message = UserMessage(content="Can you help me to write a poem?")
@@ -168,22 +215,39 @@ class UserMessage(BaseMessage):
     )
 
     def to_openai(self) -> dict[str, Any]:
-        r"""Converts the message to the OpenAI format."""
+        r"""Convert this user message to OpenAI format.
+
+        Returns:
+            Dictionary with "role" set to "user" and "content" serialized.
+        """
         return {"role": self.role, "content": self._content_to_openai(self.content)}
 
     @classmethod
     def from_openai(cls, openai_message: dict[str, Any]) -> "UserMessage":
-        r"""Converts the OpenAI message to the Mistral format."""
+        r"""Create a UserMessage from OpenAI format.
+
+        Args:
+            openai_message: Dictionary with "role" and "content" keys.
+
+        Returns:
+            UserMessage instance with content deserialized from OpenAI format.
+        """
         return cls.model_validate(
             {"role": openai_message["role"], "content": cls._content_from_openai(openai_message["content"])}
         )
 
 
 class SystemMessage(BaseMessage):
-    r"""System message.
+    r"""A system message providing context or instructions to the assistant.
+
+    System messages set the behavior, persona, or context for the assistant.
+    They are typically provided at the start of a conversation.
 
     Attributes:
-        content: The content of the message.
+        content: The message content. Can be:
+            - str: Plain text instructions
+            - list of ContentChunk: Text, audio, or thinking content
+            Valid chunk types: TextChunk, AudioChunk, ThinkChunk
 
     Examples:
         >>> message = SystemMessage(content="You are a helpful assistant.")
@@ -194,25 +258,43 @@ class SystemMessage(BaseMessage):
     _allowed_content_chunks: ClassVar[tuple[type[BaseContentChunk], ...]] = (TextChunk, AudioChunk, ThinkChunk)
 
     def to_openai(self) -> dict[str, Any]:
-        r"""Converts the message to the OpenAI format."""
+        r"""Convert this system message to OpenAI format.
+
+        Returns:
+            Dictionary with "role" set to "system" and "content" serialized.
+        """
         return {"role": self.role, "content": self._content_to_openai(self.content)}
 
     @classmethod
     def from_openai(cls, openai_message: dict[str, Any]) -> "SystemMessage":
-        r"""Converts the OpenAI message to the Mistral format."""
+        r"""Create a SystemMessage from OpenAI format.
+
+        Args:
+            openai_message: Dictionary with "role" and "content" keys.
+
+        Returns:
+            SystemMessage instance with content deserialized from OpenAI format.
+        """
         return cls.model_validate(
             {"role": openai_message["role"], "content": cls._content_from_openai(openai_message["content"])}
         )
 
 
 class AssistantMessage(BaseMessage):
-    r"""Assistant message.
+    r"""A message from the assistant in a conversation.
+
+    Assistant messages can contain the model's response text and/or tool calls.
 
     Attributes:
-        role: The role of the message.
-        content: The content of the message.
-        tool_calls: The tool calls of the message.
-        prefix: Whether the message is a prefix.
+        content: The message content. Can be:
+            - `None`: Empty message (only valid with `tool_calls`)
+            - str: Plain text response
+            - list of ContentChunk: Text and/or thinking content
+            Valid chunk types: TextChunk, ThinkChunk
+        tool_calls: List of ToolCall objects if the assistant called tools.
+            If `None`, no tools were called.
+        prefix: If `True`, this message is a prefix/partial message that will
+            be continued. Used for streaming and continuation scenarios.
 
     Examples:
         >>> message = AssistantMessage(content="Hello, how can I help you?")
@@ -228,12 +310,27 @@ class AssistantMessage(BaseMessage):
         self,
         reasoning_field_format: ReasoningFieldFormat | None = None,
     ) -> dict[str, Any]:
-        r"""Converts the message to the OpenAI format.
+        r"""Convert this assistant message to OpenAI format.
+
+        Handles conversion of thinking chunks to various OpenAI-compatible formats.
 
         Args:
-            reasoning_field_format: Format for converting thinking chunks. When `None`, defaults to
-                `ReasoningFieldFormat.thinking_chunks` (chunks kept inline) but emits a `FutureWarning` if
-                the content contains `ThinkChunk`.
+            reasoning_field_format: Format for serializing thinking content:
+                - `None`: Defaults to `thinking_chunks` but emits FutureWarning if
+                  content contains ThinkChunk (will change to reasoning in 1.13.0)
+                - `thinking_chunks`: Keep thinking as inline chunks
+                - reasoning: Use flat "reasoning" field (vLLM convention)
+                - `reasoning_content`: Use flat `reasoning_content` field (SGLang)
+
+        Returns:
+            Dictionary with "role" set to "assistant", and `content`/`tool_calls` serialized.
+
+        Raises:
+            InvalidAssistantMessageException: If ThinkChunks are not leading (must
+                appear before any other content chunks).
+            RuntimeError: If content chunks are not all ThinkChunk or TextChunk
+                when using `reasoning`/`reasoning_content` formats.
+            ValueError: If `reasoning_field_format` is not supported.
         """
         out_dict: dict[str, Any] = {
             "role": self.role,
@@ -286,7 +383,24 @@ class AssistantMessage(BaseMessage):
 
     @classmethod
     def from_openai(cls, openai_message: dict[str, Any]) -> "AssistantMessage":
-        r"""Converts the OpenAI message to the Mistral format."""
+        r"""Create an AssistantMessage from OpenAI format.
+
+        Handles conversion of OpenAI's `reasoning`/`reasoning_content` fields to
+        Mistral's ThinkChunk format.
+
+        Args:
+            openai_message: Dictionary matching OpenAI's assistant message schema.
+                Can contain "content", `tool_calls`, "reasoning", or `reasoning_content`.
+
+        Returns:
+            AssistantMessage instance with thinking content converted to ThinkChunk
+            and `tool_calls` parsed from OpenAI format.
+
+        Raises:
+            InvalidAssistantMessageException: If message has both thinking chunks
+                in `content` and a top-level `reasoning`/`reasoning_content` field.
+            ValueError: If both `reasoning` and `reasoning_content` are present but unequal.
+        """
         openai_tool_calls = openai_message.get("tool_calls", None)
         if openai_tool_calls is None:
             tools_calls: list[ToolCall] | None = None
@@ -317,7 +431,7 @@ class AssistantMessage(BaseMessage):
             has_thinking_chunks = isinstance(content, list) and any(isinstance(chunk, ThinkChunk) for chunk in content)
             if has_thinking_chunks:
                 raise InvalidAssistantMessageException(
-                    "Message cannot have both thinking chunks in content and a top-level"
+                    "Message cannot have both thinking chunks in `content` and a top-level"
                     " `reasoning` or `reasoning_content` field."
                 )
 
@@ -339,28 +453,40 @@ class AssistantMessage(BaseMessage):
 
 
 class FinetuningAssistantMessage(AssistantMessage):
-    r"""Assistant message for finetuning.
+    r"""Assistant message with a weight for finetuning.
+
+    Extends AssistantMessage with a weight parameter used during finetuning
+    to control how much this message contributes to the training loss.
 
     Attributes:
-        weight: The weight of the message to train on.
+        weight: The weight for this message during finetuning. If `None`, the message
+            is treated with default weight. Must be >= 0 if provided.
 
     Examples:
-        >>> message = FinetuningAssistantMessage(content="Hello, how can I help you?", weight=0.5)
+        >>> message = FinetuningAssistantMessage(content="Hello, how can I help you?", weight=1)
     """
 
     weight: float | None = None
 
 
 class ToolMessage(BaseMessage):
-    r"""Tool message.
+    r"""A message from a tool containing the result of a function call.
+
+    Tool messages are sent by tools in response to ToolCall objects from
+    the assistant. They contain the tool's output.
 
     Attributes:
-        content: The content of the message.
-        tool_call_id: The tool call id of the message.
-        name: The name of the tool. (Deprecated in V3 tokenization)
+        content: The tool's output content. Can be:
+            - str: Plain text output
+            - list of ContentChunk: Multimodal output (text, images, audio)
+            Valid chunk types: TextChunk, ImageChunk, ImageURLChunk, AudioChunk, AudioURLChunk
+        tool_call_id: The unique ID of the tool call this message responds to.
+            Required for proper association with the assistant's tool call.
+        name: The name of the tool (deprecated in V3 tokenization).
+            Kept for backwards compatibility but not used in newer tokenizers.
 
     Examples:
-       >>> message = ToolMessage(content="Hello, how can I help you?", tool_call_id="123")
+       >>> message = ToolMessage(content="The weather is sunny", tool_call_id="123")
     """
 
     content: str | list[ContentChunk]
@@ -380,7 +506,14 @@ class ToolMessage(BaseMessage):
     )
 
     def to_openai(self) -> dict[str, Any]:
-        r"""Converts the message to the OpenAI format."""
+        r"""Convert this tool message to OpenAI format.
+
+        Returns:
+            Dictionary with "role" set to "tool", `tool_call_id`, and "content".
+
+        Raises:
+            AssertionError: If `tool_call_id` is `None` (required for tool messages).
+        """
         assert self.tool_call_id is not None, "tool_call_id must be provided for tool messages."
         return {
             "role": self.role,
@@ -390,7 +523,15 @@ class ToolMessage(BaseMessage):
 
     @classmethod
     def from_openai(cls, openai_message: dict[str, Any]) -> "ToolMessage":
-        r"""Converts the OpenAI message to the Mistral format."""
+        r"""Create a ToolMessage from OpenAI format.
+
+        Args:
+            openai_message: Dictionary with "role", `tool_call_id`, "content",
+                and optionally "name" keys.
+
+        Returns:
+            ToolMessage instance with content and `tool_call_id` parsed from OpenAI format.
+        """
         content = cls._content_from_openai(openai_message["content"])
         tool_message = cls.model_validate(
             {

@@ -176,6 +176,18 @@ uv run pre-commit install
 
 3. Run linter, formatter (Ruff), type checker (mypy) and tests (pytest), including doctests
 
+### Build documentation locally
+
+The documentation is built with [Zensical](https://zensical.org) (a drop-in successor to MkDocs that reads `mkdocs.yml` natively):
+
+```bash
+uv sync --frozen --all-extras --group docs
+uv run python docs/gen_api_pages.py  # generate the code reference pages
+uv run zensical serve                # live preview at http://localhost:8000
+```
+
+Use `uv run zensical build` for a one-shot static build into `site/`.
+
 ### Commit
 - After adding your changes before committing ensure pre-commit is installed or run it manually.
 - Use imperative grammar, start with a verb and be concise.

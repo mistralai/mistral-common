@@ -16,23 +16,38 @@ if is_soundfile_installed():
 
 
 class StreamingMode(str, Enum):
+    r"""Streaming behavior for a transcription request.
+
+    Attributes:
+        DISABLED: No streaming; the full transcript is returned once complete.
+        ONLINE: Audio is streamed to the server and the transcription is streamed
+            back incrementally.
+        OFFLINE: Audio is sent in one go and the transcription is streamed back.
+    """
+
     DISABLED = "disabled"
     ONLINE = "online"
     OFFLINE = "offline"
 
 
 class TranscriptionRequest(BaseCompletionRequest):
-    r"""A class representing a request for audio transcription.
-
-    This class handles the conversion of audio data into a format suitable for transcription
-    using the OpenAI API. It includes methods to convert the request to and from the OpenAI format.
+    r"""A request for audio transcription.
 
     Attributes:
-        id: An optional identifier for the transcription request.
-        model: The model to be used for transcription.
-        audio: The audio data to be transcribed.
-        language: The language of the input audio in ISO-639-1 format (optional).
-        strict_audio_validation: A flag indicating whether to perform strict validation of the audio data.
+        id: Optional identifier for this transcription request.
+        model: The model to use for transcription. If `None`, the serving side
+            default transcription model is used.
+        audio: Audio data to transcribe. Either raw audio bytes or a base64-encoded
+            string (decoded automatically).
+        language: Language of the input audio in ISO-639-1 format (e.g., "en").
+            If provided, improves language adherence of the transcript.
+        strict_audio_validation: If `True` (default), audio data is validated against
+            the expected format and raises on invalid input. If `False`, best-effort
+            decoding is attempted.
+        streaming: The streaming mode for the request. See StreamingMode.
+        target_streaming_delay_ms: When streaming is enabled, the target delay in
+            milliseconds between hearing a word and producing its transcript. This
+            is a request, not a guarantee; unsupported models ignore it.
     """
 
     id: str | None = None
@@ -67,7 +82,18 @@ class TranscriptionRequest(BaseCompletionRequest):
     @model_validator(mode="before")
     @classmethod
     def _flatten_audio_dict(cls, values: dict[str, Any]) -> dict[str, Any]:
-        r"""Extract audio data from a nested dict or legacy RawAudio payload."""
+        r"""Extract audio data from a nested dict or legacy RawAudio payload.
+
+        Accepts audio provided as {"audio": {"data": ...}} or a legacy RawAudio
+        model and flattens it to a plain audio value.
+
+        Args:
+            values: The raw input values being validated.
+
+        Returns:
+            The values with a flattened "audio" key, or the input unchanged if
+            there is nothing to flatten.
+        """
         if not isinstance(values, dict):
             return values
         raw = values.get("audio")
@@ -80,18 +106,21 @@ class TranscriptionRequest(BaseCompletionRequest):
     def to_openai(self, exclude: tuple = (), **kwargs: Any) -> dict[str, list[dict[str, Any]]]:
         r"""Convert the transcription request into the OpenAI format.
 
-        This method prepares the transcription request data for compatibility with the OpenAI API.
-        It handles the conversion of audio data and additional parameters into the required format.
+        Audio is converted into an in-memory file buffer with the correct format
+        extension, and mistral-specific fields are dropped.
 
         Args:
-            exclude: Fields to exclude from the conversion.
-            kwargs: Additional parameters to be added to the request.
+            exclude: Extra field names to exclude from the output, in addition to
+                the mistral-specific defaults ("id", `max_tokens`,
+                `strict_audio_validation`, "streaming").
+            kwargs: Additional OpenAI parameters merged into the output.
 
         Returns:
-            The request in the OpenAI format.
+            The request in the OpenAI format, with the audio under the "file" key
+            and `random_seed` renamed to "seed".
 
         Raises:
-            ImportError: If the required soundfile library is not installed.
+            ImportError: If soundfile is not installed.
         """
         openai_request: dict[str, Any] = self.model_dump(exclude={"audio"})
 
@@ -130,17 +159,21 @@ class TranscriptionRequest(BaseCompletionRequest):
 
     @classmethod
     def from_openai(cls, openai_request: dict[str, Any], strict: bool = False) -> "TranscriptionRequest":
-        r"""Create a TranscriptionRequest instance from an OpenAI request dictionary.
+        r"""Create a TranscriptionRequest from an OpenAI request dictionary.
 
-        This method converts an OpenAI request dictionary into a TranscriptionRequest instance,
-        handling the conversion of audio data and other parameters.
+        The "file" entry is read (BytesIO or file-like object with a .file
+        attribute), decoded via Audio, and re-encoded as a base64 string.
 
         Args:
-            openai_request: The OpenAI request dictionary.
-            strict: A flag indicating whether to perform strict validation of the audio data.
+            openai_request: Dictionary matching OpenAI's transcription request
+                schema. Must contain a "file" entry.
+            strict: If `True`, audio data is strictly validated during decoding.
 
         Returns:
-           An instance of TranscriptionRequest.
+            A TranscriptionRequest instance with the audio base64-encoded.
+
+        Raises:
+            AssertionError: If no "file" entry is present.
         """
         file = openai_request.get("file")
         seed = openai_request.get("seed")

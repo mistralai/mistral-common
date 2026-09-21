@@ -43,5 +43,15 @@ jobs:
           uv sync --all-extras --group docs
           uv pip install -e . --no-deps
 
+      - name: Generate code reference pages
+        run: uv run python docs/gen_api_pages.py
+
+      - name: Build documentation
+        run: uv run zensical build
+
       - name: Publish documentation website
-        run: mkdocs gh-deploy --force
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          force_orphan: true

@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from mistral_common.protocol.instruct.chunk import RawAudio
 
     class AudioFormat(Enum):
-        """Dynamic enum whose members depend on soundfile availability at runtime."""
+        r"""Dynamic enum whose members depend on soundfile availability at runtime."""
 
 else:
     if is_soundfile_installed():
@@ -45,13 +45,25 @@ EXPECTED_FORMAT_VALUES = [v.value.lower() for v in AudioFormat.__members__.value
 
 
 class Audio:
+    r"""Loaded audio samples with format metadata.
+
+    Holds a decoded 1-D sample array, its sampling rate, and source format.
+    Build instances via the from_url, from_base64, from_file, or from_bytes
+    constructors.
+    """
+
     def __init__(self, audio_array: np.ndarray, sampling_rate: int, format: str) -> None:
         r"""Initialize an Audio instance with audio data, sampling rate, and format.
 
         Args:
-            audio_array: The audio data as a numpy array.
+            audio_array: The audio data as a 1-D numpy array of samples.
             sampling_rate: The sampling rate of the audio in Hz.
-            format: The format of the audio file.
+            format: The audio file format (e.g., "wav", "mp3"). Must be a
+                format supported by soundfile.
+
+        Raises:
+            AssertionError: If `audio_array` is not a 1-D numpy array, or format
+                is not supported.
         """
         self.audio_array = audio_array
         self.sampling_rate = sampling_rate
@@ -85,12 +97,18 @@ class Audio:
     def from_url(url: str, strict: bool = True) -> "Audio":
         r"""Create an Audio instance from a URL.
 
+        Downloads the audio file and decodes it into samples.
+
         Args:
-            url: The URL of the audio file.
-            strict: Whether to strictly enforce mono audio.
+            url: The URL of the audio file (http or https).
+            strict: If `True`, strictly enforce mono audio; multi-channel audio
+                raises an error. If `False`, extra channels are dropped.
 
         Returns:
             An instance of the Audio class.
+
+        Raises:
+            ValueError: If the download or decoding fails.
         """
         try:
             response = _requests_lib.get(url)
@@ -106,11 +124,17 @@ class Audio:
         r"""Create an Audio instance from a base64 encoded string.
 
         Args:
-            audio_base64: The base64 encoded audio data.
-            strict: Whether to strictly enforce mono audio. Defaults to True.
+            audio_base64: The base64 encoded audio data, optionally prefixed
+                with a data:audio/<format>;base64, URL prefix (stripped
+                automatically).
+            strict: If `True`, strictly enforce mono audio; multi-channel audio
+                raises an error. If `False`, extra channels are dropped.
 
         Returns:
             An instance of the Audio class.
+
+        Raises:
+            ValueError: If the string is not valid base64 or decoding fails.
         """
         assert_soundfile_installed()
 
@@ -129,11 +153,16 @@ class Audio:
         r"""Create an Audio instance from an audio file.
 
         Args:
-            file: Path to the audio file.
-            strict: Whether to strictly enforce mono audio. Defaults to True.
+            file: Path to the audio file. A file:// URI prefix is accepted
+                and stripped.
+            strict: If `True`, strictly enforce mono audio; multi-channel audio
+                raises an error. If `False`, extra channels are dropped.
 
         Returns:
             An instance of the Audio class.
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
         """
         assert_soundfile_installed()
 
@@ -153,11 +182,18 @@ class Audio:
         r"""Create an Audio instance from bytes.
 
         Args:
-            audio_bytes: The audio data as bytes.
-            strict: Whether to strictly enforce mono audio. Defaults to True.
+            audio_bytes: The audio data as bytes in a soundfile-readable
+                format (e.g., wav, mp3).
+            strict: If `True`, strictly enforce mono audio; multi-channel audio
+                raises an error. If `False`, extra channels are averaged down
+                to mono.
 
         Returns:
             An instance of the Audio class.
+
+        Raises:
+            ValueError: If the audio is multi-channel and strict is `True`, or
+                the bytes cannot be decoded.
         """
         assert_soundfile_installed()
 
@@ -182,11 +218,16 @@ class Audio:
         r"""Convert the audio data to a base64 encoded string.
 
         Args:
-            format: The format to encode the audio in.
-            prefix: Whether to add a data prefix to the base64 encoded string.
+            format: The format to encode the audio in (e.g., "wav"). Must be
+                supported by soundfile.
+            prefix: If `True`, prepend a data:audio/<format>;base64, prefix to
+                the output string.
 
         Returns:
             The base64 encoded audio data.
+
+        Raises:
+            AssertionError: If format is not supported by soundfile.
         """
         assert_soundfile_installed()
 
@@ -233,7 +274,7 @@ class Audio:
         r"""Create an Audio instance from an AudioChunk.
 
         Args:
-            chunk: An AudioChunk with input_audio as str (base64) or bytes.
+            chunk: An AudioChunk with `input_audio` as str (base64) or bytes.
 
         Returns:
             An instance of the Audio class.
@@ -249,8 +290,11 @@ class Audio:
     def resample(self, new_sampling_rate: int) -> None:
         r"""Resample audio data to a new sampling rate.
 
+        Mutates this instance's `audio_array` and `sampling_rate` in place. No-op
+        if the sampling rate is already the target.
+
         Args:
-            new_sampling_rate: The new sampling rate to resample the audio to.
+            new_sampling_rate: The new sampling rate in Hz.
         """
         if self.sampling_rate == new_sampling_rate:
             return
@@ -279,8 +323,8 @@ class TranscriptionFormat(str, Enum):
     Should be set by the tokenizer for correct encoding.
 
     Attributes:
-    - INSTRUCT: The instruct format.
-    - STREAMING: The streaming format.
+        INSTRUCT: Encode whole utterances at once.
+        STREAMING: Encode audio incrementally with left and right padding.
     """
 
     INSTRUCT = "instruct"
@@ -316,12 +360,19 @@ class AudioConfig:
     r"""Configuration for audio processing.
 
     Attributes:
-        sampling_rate: Sampling rate of the audio.
+        sampling_rate: Sampling rate of the audio in Hz.
         frame_rate: Number of frames per second accepted by the tokenizer model.
-        encoding_config: Configuration for audio spectrogram.
-        chunk_length_s: Whether to pad an audio into multiples of chunk_length_s seconds (optional).
-        voice_num_audio_tokens: Mapping from speaker voice name to number of audio tokens
-            for that speaker's reference audio (optional, only for TTS).
+        encoding_config: Configuration for the audio spectrogram.
+        chunk_length_s: If set, audio is padded into multiples of this many
+            seconds. If `None`, no padding is applied.
+        transcription_format: INSTRUCT for encoding whole utterances, STREAMING
+            for streaming transcription.
+        transcription_delay_ms: Target delay in milliseconds between the audio
+            stream and text stream for streaming transcription. If `None`, the
+            model's default is used.
+        voice_num_audio_tokens: Mapping from speaker voice name to the number
+            of audio tokens for that speaker's reference audio. Only used for
+            text-to-speech; `None` otherwise.
     """
 
     sampling_rate: int
@@ -387,9 +438,23 @@ class AudioConfig:
 
     @property
     def is_streaming(self) -> bool:
+        r"""Whether this config is configured for streaming transcription.
+
+        Returns:
+            True if `transcription_format` is `TranscriptionFormat.STREAMING`, False otherwise.
+        """
         return self.transcription_format == TranscriptionFormat.STREAMING
 
     def num_audio_tokens(self, audio_len: int) -> int:
+        r"""Convert an audio length in samples into the number of audio tokens.
+
+        Args:
+            audio_len: Audio length in samples. Rounded up to a whole number of
+                frames when not a multiple of the hop length.
+
+        Returns:
+            The number of audio tokens covering the given length.
+        """
         if audio_len % self.encoding_config.hop_length != 0:
             audio_len = math.ceil(audio_len / self.encoding_config.hop_length - 1)
         else:
@@ -399,12 +464,30 @@ class AudioConfig:
 
     @property
     def num_delay_tokens(self) -> int:
+        r"""Deprecated in favor of `get_num_delay_tokens`. Will be removed in 1.13.0.
+
+        Returns:
+            The number of delay tokens for this config's `transcription_delay_ms`.
+        """
         # TODO(Patrick) - delete in 1.13.0
         # only used in vLLM in voxtral_realtime.py
         warnings.warn("Use get_num_delay_tokens instead of num_delay_tokens", DeprecationWarning)
         return self.get_num_delay_tokens()
 
     def get_num_delay_tokens(self, transcription_delay_ms: float | None = None) -> int:
+        r"""Compute the number of tokens covering the streaming transcription delay.
+
+        Args:
+            transcription_delay_ms: The delay in milliseconds. If `None`, falls back
+                to the config's `transcription_delay_ms`.
+
+        Returns:
+            The number of audio tokens corresponding to the delay length.
+
+        Raises:
+            AssertionError: If not streaming, or no delay is set on either the
+                argument or the config.
+        """
         assert self.is_streaming, f"Can't call get_num_delay_tokens if {self.is_streaming=}."
         if transcription_delay_ms is None:
             transcription_delay_ms = self.transcription_delay_ms
@@ -413,10 +496,23 @@ class AudioConfig:
         return self.num_audio_tokens(self.delay_len(transcription_delay_ms))
 
     def delay_len(self, transcription_delay_ms: float) -> int:
+        r"""Convert a transcription delay into an audio length in samples.
+
+        Args:
+            transcription_delay_ms: The delay in milliseconds.
+
+        Returns:
+            The corresponding number of audio samples at this config's sampling rate.
+        """
         return int(transcription_delay_ms / 1000.0 * self.sampling_rate)
 
     @property
     def frame_duration_ms(self) -> float:
+        r"""Duration of a single audio frame in milliseconds.
+
+        Returns:
+            The milliseconds per frame, i.e. `1000 / frame_rate`.
+        """
         return 1000.0 / self.frame_rate
 
     @property
@@ -427,6 +523,11 @@ class AudioConfig:
 
     @property
     def raw_audio_length_per_tok(self) -> int:
+        r"""Number of audio samples covered by one audio token.
+
+        Returns:
+            The samples per token, i.e. `sampling_rate // frame_rate`.
+        """
         return int(self.sampling_rate // self.frame_rate)
 
     @property
@@ -437,6 +538,22 @@ class AudioConfig:
         return int(downsample_factor)
 
     def n_right_pad_tokens(self, transcription_delay_ms: float | None = None) -> int:
+        r"""Number of right padding tokens to add after the audio.
+
+        Covers the induced delay, the BOS token, and a buffer for long words
+        (see `OFFLINE_STREAMING_BUFFER_TOKENS`).
+
+        Args:
+            transcription_delay_ms: The delay in milliseconds. If `None`, falls back
+                to the config's `transcription_delay_ms`.
+
+        Returns:
+            The number of right padding tokens.
+
+        Raises:
+            AssertionError: If not streaming, or no delay is set on either the
+                argument or the config.
+        """
         assert self.is_streaming, f"Can't call n_right_pad_tokens if {self.is_streaming=}."
         # we need to pad on the right to ensure the models transcribes
         # - the induced delay on the prefill step (num_delay_tokens)
@@ -447,6 +564,17 @@ class AudioConfig:
 
     @property
     def n_left_pad_tokens(self) -> int:
+        r"""Number of left padding tokens to add before the audio.
+
+        Left padding has shown to improve performance by giving the model more
+        compute. Requires `streaming_n_left_pad_tokens` to be set.
+
+        Returns:
+            The number of left padding tokens.
+
+        Raises:
+            AssertionError: If not streaming or `streaming_n_left_pad_tokens` is None.
+        """
         assert self.is_streaming, f"Can't call n_left_pad_tokens if {self.is_streaming=}."
         # We also pad on the left as this has shown to improve performance
         # simply by giving the model "more compute", we also add
@@ -462,7 +590,7 @@ class AudioEncoding:
 
     Attributes:
         tokens: Text tokens corresponding to this audio chunk.
-        audio: Original audio waveform data, or None when using a preset voice
+        audio: Original audio waveform data, or `None` when using a preset voice
             (no reference audio to forward to the model).
     """
 
@@ -512,13 +640,26 @@ class AudioEncoder:
     ) -> np.ndarray:
         r"""Pad the audio array to the desired length.
 
+        Depending on the audio config, pads the audio to a multiple of the
+        chunk length, to the streaming length (both left and right), or to at
+        least one spectrogram frame.
+
         Args:
-            audio_array: Audio data as a numpy array.
-            sampling_rate: Sampling rate of the audio.
-            transcription_delay_ms (optional): Delay in milliseconds for transcription.
+            audio_array: Audio data as a numpy array of samples.
+            sampling_rate: Sampling rate of the audio in Hz.
+            transcription_delay_ms: Target delay in milliseconds between the audio
+                and text streams for streaming transcription. Controls how much
+                right padding is added so the model transcribes the induced delay.
+                If `None`, falls back to the audio config's `transcription_delay_ms`.
+            **kwargs: Ignored. Only present to swallow deprecated keyword arguments
+                from callers; will be removed in 1.13.0.
 
         Returns:
-            Padded audio array.
+            The padded audio array.
+
+        Raises:
+            AssertionError: If streaming and no delay is set on either the argument
+                or the audio config.
         """
         # TODO(Patrick) - remove **kwargs as it's just there to swallow deprecated
         # keyword args from voxtral_realtime in vLLM. It was
@@ -540,13 +681,20 @@ class AudioEncoder:
         return audio_array
 
     def get_padding_audio(self, transcription_delay_ms: float | None = None) -> tuple[Audio, Audio]:
-        r"""Gets left and right padding for realtime audio models.
+        r"""Get left and right padding for realtime audio models.
 
         Args:
-            transcription_delay_ms (optional): Delay in milliseconds for transcription.
+            transcription_delay_ms: Target delay in milliseconds between the audio
+                and text streams for streaming transcription. Controls the padding
+                length. If `None`, falls back to the audio config's
+                `transcription_delay_ms`.
 
         Returns:
-            Tuple of left and right padding for realtime audio models.
+            Tuple of (left_pad_audio, right_pad_audio) as silent `Audio` objects.
+
+        Raises:
+            AssertionError: If no delay is set on either the argument or the
+                audio config.
         """
 
         left_pad, right_pad = self._get_streaming_pad(0, transcription_delay_ms)
@@ -651,7 +799,7 @@ class AudioEncoder:
             num_audio_tokens: Number of audio placeholder tokens to emit.
 
         Returns:
-            List of token IDs: [BEGIN_AUDIO, AUDIO * num_audio_tokens].
+            List of token IDs: [BEGIN_AUDIO, AUDIO * `num_audio_tokens`].
         """
         tokens = []
         tokens.append(self.begin_audio_token)
@@ -678,8 +826,8 @@ class AudioEncoder:
         must be provided. When `audio` is given it takes precedence.
 
         Args:
-            audio: Reference audio waveform, or None to use a voice preset.
-            voice: Preset voice name (e.g. 'Neutral Male', 'Neutral Female'), or None when using ref audio.
+            audio: Reference audio waveform, or `None` to use a voice preset.
+            voice: Preset voice name (e.g. 'Neutral Male', 'Neutral Female'), or `None` when using ref audio.
 
         Returns:
             AudioEncoding containing the token sequence and optional audio data.
@@ -758,12 +906,12 @@ class AudioEncoder:
 
     @property
     def text_to_audio_token(self) -> int:
-        r"""Get the text_to_audio token."""
+        r"""Get the `text_to_audio` token."""
         assert self.special_ids.text_to_audio is not None, f"{self.special_ids.text_to_audio=} must be set."
         return self.special_ids.text_to_audio
 
     @property
     def audio_to_text_token(self) -> int:
-        r"""Get the audio_to_text token."""
+        r"""Get the `audio_to_text` token."""
         assert self.special_ids.audio_to_text is not None, f"{self.special_ids.audio_to_text=} must be set."
         return self.special_ids.audio_to_text

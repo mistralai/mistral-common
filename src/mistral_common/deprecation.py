@@ -7,6 +7,9 @@ _warned_keys: set[str] = set()
 def deprecated_import(old_path: str, new_module: str, name: str, version: str) -> object:
     r"""Warn once and lazily import a symbol that moved to a new module.
 
+    The deprecation warning is emitted only on the first import for a given
+    (`old_path`, `name`) pair, no matter how often the module is re-imported.
+
     Args:
         old_path: The old module path (e.g. `"mistral_common.audio"`).
         new_module: The new module path (e.g. `"mistral_common.tokens.tokenizers.audio"`).
@@ -33,11 +36,16 @@ def deprecated_import(old_path: str, new_module: str, name: str, version: str) -
 def warn_once(key: str, message: str, category: type[Warning], stacklevel: int) -> None:
     r"""Emit a warning only on the first call for a given key.
 
+    Subsequent calls with the same key are silently ignored, so the user sees
+    each distinct warning exactly once per process.
+
     Args:
-        key: Unique identifier for this warning.
+        key: Unique identifier for this warning. Distinct keys produce
+            distinct warnings.
         message: The warning message.
-        category: The warning category class.
-        stacklevel: Stack level for the warning.
+        category: The warning category class (e.g., DeprecationWarning).
+        stacklevel: Stack level for the warning, so the reported location
+            points at the caller (see `warnings.warn`).
     """
     if key not in _warned_keys:
         _warned_keys.add(key)

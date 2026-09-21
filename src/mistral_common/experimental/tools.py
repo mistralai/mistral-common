@@ -10,11 +10,11 @@ from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenizer,
 
 
 class InvalidToolCallError(ValueError):
-    pass
+    r"""Raised when tool call tokens cannot be decoded into a valid tool call."""
 
 
 class InvalidArgsToolCallError(InvalidToolCallError):
-    pass
+    r"""Raised when a tool call's arguments are invalid, e.g. not valid JSON."""
 
 
 def _split_content_and_tool_calls(
@@ -22,15 +22,19 @@ def _split_content_and_tool_calls(
 ) -> tuple[list[int], tuple[list[int], ...]]:
     r"""Split the content and tool calls from a list of tokens.
 
-    The content is the first sequence of tokens that does not start with the tool call token ID.
-    The tool calls are the remaining sequences of tokens that start with the tool call token ID.
+    The content is the first sequence of tokens that does not start with the
+    tool call token ID. The tool calls are the remaining sequences, each
+    starting with the tool call token ID.
 
     Args:
-        tokens: The list of tokens.
-        tool_call_token_id: The token ID that indicates the start of a tool call.
+        tokens: The token IDs to split.
+        tool_call_token_id: The token ID that indicates the start of a tool
+            call.
 
     Returns:
-        A tuple containing the content and tool calls.
+        A tuple of (`content_tokens`, `tool_call_tokens`): the content token IDs
+        and a tuple of per-tool-call token ID sequences. Both are empty when
+        tokens is empty.
     """
     if not tokens:
         return [], ()
@@ -58,14 +62,22 @@ def _decode_tool_calls_v2_up_to_v7(tool_call_tokens: list[int], tokenizer: Token
         or
 
         `[TOOL_CALLS][{"name": "name", "arguments": {"arg1": "value1", "arg2": "value2"}}, ...]`
+
+    Args:
+        tool_call_tokens: The token IDs to decode.
+        tokenizer: The tokenizer to use for decoding.
+
+    Returns:
+        The decoded tool calls.
+
+    Raises:
+        InvalidToolCallError: If the decoded payload is not a JSON list.
+        InvalidArgsToolCallError: If the payload is not valid JSON or a tool
+            call's arguments are not a dict.
     """
     tool_calls_list_string = tokenizer.decode(tool_call_tokens, special_token_policy=SpecialTokenPolicy.IGNORE)
     try:
         tool_calls_decoded_list = json.loads(tool_calls_list_string)
-        for tool_call in tool_calls_decoded_list:
-            # Check that the tool call arguments are dicts.
-            if "arguments" not in tool_call or not isinstance(tool_call["arguments"], dict):
-                raise InvalidArgsToolCallError("Invalid tool call arguments tokenization. Expected a dict.")
     except json.JSONDecodeError as e:
         raise InvalidToolCallError(
             "Invalid tool call tokenization. Expected a JSON list of tool calls.",
@@ -73,6 +85,12 @@ def _decode_tool_calls_v2_up_to_v7(tool_call_tokens: list[int], tokenizer: Token
 
     if not isinstance(tool_calls_decoded_list, list):
         raise InvalidToolCallError("Invalid tool call tokenization. Expected a list of tool calls.")
+
+    for tool_call in tool_calls_decoded_list:
+        if not isinstance(tool_call, dict) or "name" not in tool_call:
+            raise InvalidToolCallError("Invalid tool call tokenization. Expected a dict with a name.")
+        if "arguments" not in tool_call or not isinstance(tool_call["arguments"], dict):
+            raise InvalidArgsToolCallError("Invalid tool call arguments tokenization. Expected a dict.")
 
     return [
         ToolCall(
@@ -91,6 +109,16 @@ def _decode_tool_call_v11_with_call_id(tool_call_tokens: list[int], tokenizer: T
 
         `[TOOL_CALLS]name[CALL_ID]call_id[ARGS]{"arg1": "value1", "arg2": "value2"}`
 
+    Args:
+        tool_call_tokens: The token IDs to decode.
+        tokenizer: The tokenizer to use for decoding.
+
+    Returns:
+        The decoded tool call with its call ID.
+
+    Raises:
+        ValueError: If [CALL_ID] or [ARGS] is missing or appears more than once.
+        InvalidArgsToolCallError: If the arguments are not valid JSON.
     """
     name, call_id_and_args = _split_tokens_by_one_occurrence_control_token(tool_call_tokens, tokenizer, "[CALL_ID]")
 
@@ -116,6 +144,17 @@ def _decode_tool_call_v11(tool_call_tokens: list[int], tokenizer: Tokenizer) -> 
         Expects the tool call tokens to be in the format:
 
         `[TOOL_CALLS]name[ARGS]{"arg1": "value1", "arg2": "value2"}`
+
+    Args:
+        tool_call_tokens: The token IDs to decode.
+        tokenizer: The tokenizer to use for decoding.
+
+    Returns:
+        The decoded tool call.
+
+    Raises:
+        ValueError: If [ARGS] is missing or appears more than once.
+        InvalidArgsToolCallError: If the arguments are not valid JSON.
     """
     name, args = _split_tokens_by_one_occurrence_control_token(tool_call_tokens, tokenizer, "[ARGS]")
     try:
@@ -133,6 +172,8 @@ def _decode_tool_call_v11(tool_call_tokens: list[int], tokenizer: Tokenizer) -> 
 def _decode_tool_calls(tool_call_tokens: Sequence[list[int]], tokenizer: Tokenizer) -> list[ToolCall]:
     r"""Decode a list of tool call tokens into a list of tool calls.
 
+    Dispatches to the version-specific decoder.
+
     Note:
         Each list of tool call tokens are expected to be in the format:
         - v2 to v7: `[TOOL_CALLS][{"name": "name", "arguments": {"arg1": "value1", "arg2": "value2"}}, ...]`
@@ -140,11 +181,15 @@ def _decode_tool_calls(tool_call_tokens: Sequence[list[int]], tokenizer: Tokeniz
         - v11+ with call ID: `[TOOL_CALLS]name[CALL_ID]call_id[ARGS]{"arg1": "value1", "arg2": "value2"}`
 
     Args:
-        tool_call_tokens: A list of lists of tokens.
+        tool_call_tokens: A list of tool call token ID lists, one per tool call.
         tokenizer: The tokenizer to use for decoding.
 
     Returns:
         The list of decoded tool calls.
+
+    Raises:
+        ValueError: If the tokenizer version is v1 (no tool call support), or
+            version-specific decoding errors.
     """
     tools_calls = []
     for tool_call in tool_call_tokens:

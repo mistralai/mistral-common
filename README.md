@@ -61,11 +61,11 @@ pip install "mistral-common[image,audio,hf-hub,sentencepiece,server]"
 
 For more information, please refer to the [documentation](https://mistralai.github.io/mistral-common/).
 
-## How to contribute ?
+## How to contribute?
 
-We welcome contributions to this library. All of our features are tested to ensure best usage. But if you encounter a bug, find difficulties in using `mistral-common`, please open an issue on our [GitHub repository](https://github.com/mistralai/mistral-common/issues).
+We welcome contributions to this library. Please read our [contribution guide](CONTRIBUTING.md) first. If you encounter a bug, have difficulties using `mistral-common`, or want to propose a feature, search the existing issues and open an issue on our [GitHub repository](https://github.com/mistralai/mistral-common/issues) before starting work.
 
-If you want to contribute to the code, please fork the repository and open a pull request. We will review your changes and merge them if they are relevant to the library.
+If you want to contribute code after the issue discussion, you may fork the repository and open a pull request. We will review changes that are relevant to the library and meet the contribution guidelines.
 
 ```sh
 # Clone the repository
