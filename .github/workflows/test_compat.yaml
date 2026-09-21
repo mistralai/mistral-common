@@ -72,8 +72,9 @@ jobs:
             --torch-backend=cpu \
             --extra-index-url https://wheels.vllm.ai/nightly/cpu \
             --index-strategy first-index
-          uv pip install --no-deps pytest pytest-asyncio 'mistral-common @ file://${{ github.workspace }}'
-          uv pip install ijson partial_json_parser
+          uv pip install pytest pytest-asyncio regex psutil
+          uv pip install ijson partial-json-parser
+          uv pip install --no-deps 'mistral-common @ file://${{ github.workspace }}'
           uv run --no-sync pytest -v -m 'not gpu' \
             tests/tokenizers_/test_mistral.py \
             tests/tokenizers_/test_basic.py \
