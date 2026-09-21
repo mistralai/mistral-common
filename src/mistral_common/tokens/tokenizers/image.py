@@ -88,7 +88,7 @@ def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
             image.load()
         return image
     if url.startswith("http"):
-        return download_image(url=url, timeout=None)
+        return download_image(url)
 
     raise ValueError(f"Unsupported image url scheme {url}")
 

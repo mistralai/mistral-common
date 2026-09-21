@@ -40,7 +40,7 @@ def _resolve_env_image_download_timeout() -> float:
     return _validate_timeout(timeout, error_message=error_message)
 
 
-def download_image(url: str, timeout: float | None) -> Image.Image:
+def download_image(url: str, timeout: float | None = None) -> Image.Image:
     r"""Download an image from a URL and return it as a PIL Image.
 
     Args:
