@@ -33,7 +33,7 @@ jobs:
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/labels" \
+          if gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels" \
               --jq 'any(.[]; .name == "run-downstream-tests")' | grep -q true; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
           else
