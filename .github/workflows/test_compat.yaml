@@ -4,12 +4,14 @@ permissions:
   contents: read
 
 # Runs targeted downstream tokenization test suites (vLLM, Transformers) against
-# the mistral-common version in this repo when the `run-downstream-tests` label is added
-# to a pull request, or on manual dispatch. CPU only, no GPU required.
+# the mistral-common version in this repo whenever the PR carries the
+# `run-downstream-tests` label (label added, or new push while labeled), or on
+# manual dispatch. CPU only, no GPU required.
 on:
   pull_request:
     types:
       - labeled
+      - synchronize
   workflow_dispatch:
 
 concurrency:
@@ -17,8 +19,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - name: Check if PR carries the run-downstream-tests label
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/labels" \
+              --jq 'any(.[]; .name == "run-downstream-tests")' | grep -q true; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "PR does not carry the run-downstream-tests label, skipping."
+          fi
+
   vllm:
-    if: ${{ github.event.label.name == 'run-downstream-tests' || github.event_name == 'workflow_dispatch' }}
+    needs: gate
+    if: ${{ needs.gate.outputs.should_run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -58,7 +83,8 @@ jobs:
             tests/renderers/test_mistral.py
 
   transformers:
-    if: ${{ github.event.label.name == 'run-downstream-tests' || github.event_name == 'workflow_dispatch' }}
+    needs: gate
+    if: ${{ needs.gate.outputs.should_run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
