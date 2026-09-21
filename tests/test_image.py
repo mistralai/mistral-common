@@ -1,13 +1,20 @@
 import base64
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
 import requests
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
+from mistral_common.exceptions import ImageDecodeException
+from mistral_common.image import (
+    _IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY,
+    _resolve_env_image_download_timeout,
+    download_image,
+)
 from mistral_common.protocol.instruct.chunk import (
     ImageChunk,
     ImageURLChunk,
@@ -19,6 +26,7 @@ from mistral_common.tokens.tokenizers.image import (
     ImageConfig,
     ImageEncoder,
     SpecialImageIDs,
+    image_from_chunk,
     normalize,
     transform_image,
 )
@@ -36,7 +44,9 @@ def special_token_ids() -> SpecialImageIDs:
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
 def test_image_to_num_tokens(spatial_merge_size: int, special_token_ids: SpecialImageIDs) -> None:
     image_config = ImageConfig(
-        image_patch_size=16 // spatial_merge_size, max_image_size=128, spatial_merge_size=spatial_merge_size
+        image_patch_size=16 // spatial_merge_size,
+        max_image_size=128,
+        spatial_merge_size=spatial_merge_size,
     )
     image_encoder = ImageEncoder(image_config, special_token_ids)
 
@@ -44,7 +54,12 @@ def test_image_to_num_tokens(spatial_merge_size: int, special_token_ids: Special
         img = Image.new("RGB", (size, size), "red")
         assert image_encoder._image_to_num_tokens(img) == (exp, exp)
 
-    for size1, size2, exp1, exp2 in [(4, 2, 1, 1), (8, 16, 1, 1), (128, 64, 8, 4), (512, 1024, 4, 8)]:
+    for size1, size2, exp1, exp2 in [
+        (4, 2, 1, 1),
+        (8, 16, 1, 1),
+        (128, 64, 8, 4),
+        (512, 1024, 4, 8),
+    ]:
         img = Image.new("RGB", (size1, size2), "red")
         assert image_encoder._image_to_num_tokens(img) == (exp1, exp2)
 
@@ -55,7 +70,9 @@ def test_image_to_num_tokens_extreme_aspect_ratio(
     special_token_ids: SpecialImageIDs, size: tuple[int, int], spatial_merge_size: int
 ) -> None:
     image_config = ImageConfig(
-        image_patch_size=16 // spatial_merge_size, max_image_size=128, spatial_merge_size=spatial_merge_size
+        image_patch_size=16 // spatial_merge_size,
+        max_image_size=128,
+        spatial_merge_size=spatial_merge_size,
     )
     image_encoder = ImageEncoder(image_config, special_token_ids)
 
@@ -69,14 +86,16 @@ def test_image_to_num_tokens_extreme_aspect_ratio(
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
 def test_download_image(spatial_merge_size: int, special_token_ids: SpecialImageIDs) -> None:
     image_config = ImageConfig(
-        image_patch_size=16 // spatial_merge_size, max_image_size=128, spatial_merge_size=spatial_merge_size
+        image_patch_size=16 // spatial_merge_size,
+        max_image_size=128,
+        spatial_merge_size=spatial_merge_size,
     )
     image_encoder = ImageEncoder(image_config, special_token_ids)
 
     test_image1 = _create_test_image((500, 300), color=(128, 128, 128))
     test_image2 = _create_test_image((400, 600), color=(100, 150, 200))
 
-    def mock_get(url: str, headers: Any = None) -> Any:
+    def mock_get(url: str, headers: Any = None, timeout: Any = None) -> Any:
         mock_response = Mock()
 
         if url == url1:
@@ -110,15 +129,135 @@ def test_download_image(spatial_merge_size: int, special_token_ids: SpecialImage
     response._content = b"Not found"
 
     with patch("mistral_common.image.requests.get", return_value=response):
-        with pytest.raises(RuntimeError, match="Error downloading the image"):
+        with pytest.raises(requests.exceptions.HTTPError, match="404 Client Error"):
             content = ImageURLChunk(image_url=invalid_url)
             image_encoder(content)
+
+
+@pytest.mark.parametrize("url", ["data:image/png;base64", "data:image/png;base64,"])
+def test_image_from_chunk_data_url_without_payload(url: str) -> None:
+    with pytest.raises(ValueError, match="expected a base64 payload"):
+        image_from_chunk(chunk=ImageURLChunk(image_url=url))
+
+
+def test_image_from_chunk_bare_file_name_is_unsupported(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _create_test_image((8, 8)).save(tmp_path / "file.png")
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(ValueError, match="Unsupported image url scheme"):
+        image_from_chunk(chunk=ImageURLChunk(image_url="file.png"))
+
+
+def test_image_from_chunk_file_uri(tmp_path: Path) -> None:
+    image_path = tmp_path / "image.png"
+    _create_test_image((8, 8)).save(image_path)
+
+    image = image_from_chunk(chunk=ImageURLChunk(image_url=f"file://{image_path}"))
+    assert image.size == (8, 8)
+
+
+def _mock_png_response() -> Mock:
+    img_byte_arr = BytesIO()
+    _create_test_image((8, 8)).save(img_byte_arr, format="PNG")
+    mock_response = Mock()
+    mock_response.content = img_byte_arr.getvalue()
+    mock_response.raise_for_status = Mock()
+    return mock_response
+
+
+def test_image_download_timeout_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(_IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY, raising=False)
+    assert _resolve_env_image_download_timeout() == 10.0
+
+
+@pytest.mark.parametrize("value", ["invalid", "0", "-1", "inf", "-inf", "nan"])
+def test_image_download_timeout_rejects_invalid_env(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv(_IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY, value)
+
+    with pytest.raises(ValueError, match="expected a positive finite number of seconds"):
+        _resolve_env_image_download_timeout()
+
+
+def test_download_image_passes_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(_IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY, raising=False)
+    mock_response = _mock_png_response()
+
+    with patch("mistral_common.image.requests.get", return_value=mock_response) as mock_get:
+        download_image(url="https://example.com/image.png", timeout=10.0)
+    assert mock_get.call_args.kwargs.get("timeout") == 10.0
+
+    timeout_error = requests.exceptions.ReadTimeout("timed out")
+    with (
+        patch("mistral_common.image.requests.get", side_effect=timeout_error),
+        pytest.raises(
+            requests.exceptions.Timeout,
+            match=r"timed out after 10\.0 seconds\. Pass a larger `timeout` or set the environment variable "
+            rf"`{_IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY}` to increase the timeout\.",
+        ) as exc_info,
+    ):
+        download_image(url="https://example.com/image.png", timeout=10.0)
+    assert exc_info.value.__cause__ is timeout_error
+
+
+def test_download_image_preserves_request_error() -> None:
+    request_error = requests.exceptions.ConnectionError("connection failed")
+
+    with (
+        patch("mistral_common.image.requests.get", side_effect=request_error),
+        pytest.raises(requests.exceptions.ConnectionError) as exc_info,
+    ):
+        download_image(url="https://example.com/image.png", timeout=10.0)
+
+    assert exc_info.value is request_error
+
+
+def test_download_image_preserves_image_error() -> None:
+    image_error = UnidentifiedImageError("invalid image")
+
+    with (
+        patch("mistral_common.image.requests.get", return_value=_mock_png_response()),
+        patch("mistral_common.image.Image.open", side_effect=image_error),
+        pytest.raises(ImageDecodeException) as exc_info,
+    ):
+        download_image(url="https://example.com/image.png", timeout=10.0)
+
+    assert exc_info.value.__cause__ is image_error
+
+
+def test_download_image_uses_env_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(_IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY, "30")
+
+    with patch("mistral_common.image.requests.get", return_value=_mock_png_response()) as mock_get:
+        download_image(url="https://example.com/image.png", timeout=None)
+    assert mock_get.call_args.kwargs.get("timeout") == 30.0
+
+
+def test_download_image_explicit_timeout_overrides_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(_IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY, "30")
+
+    with patch("mistral_common.image.requests.get", return_value=_mock_png_response()) as mock_get:
+        download_image(url="https://example.com/image.png", timeout=5.0)
+    assert mock_get.call_args.kwargs.get("timeout") == 5.0
+
+
+@pytest.mark.parametrize("timeout", [0.0, -1.0, float("inf"), float("-inf"), float("nan")])
+def test_download_image_rejects_invalid_timeout(timeout: float) -> None:
+    with (
+        patch("mistral_common.image.requests.get") as mock_get,
+        pytest.raises(ValueError, match="timeout must be a positive finite float, got timeout="),
+    ):
+        download_image(url="https://example.com/image.png", timeout=timeout)
+    mock_get.assert_not_called()
 
 
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
 def test_image_encoder(spatial_merge_size: int, special_token_ids: SpecialImageIDs) -> None:
     image_config = ImageConfig(
-        image_patch_size=16 // spatial_merge_size, max_image_size=128, spatial_merge_size=spatial_merge_size
+        image_patch_size=16 // spatial_merge_size,
+        max_image_size=128,
+        spatial_merge_size=spatial_merge_size,
     )
     image_encoder = ImageEncoder(image_config, special_token_ids)
 
@@ -180,7 +319,9 @@ def test_image_encoder(spatial_merge_size: int, special_token_ids: SpecialImageI
 )
 def test_image_processing(special_token_ids: SpecialImageIDs, size: tuple[int, int], spatial_merge_size: int) -> None:
     image_config = ImageConfig(
-        image_patch_size=16 // spatial_merge_size, max_image_size=1024, spatial_merge_size=spatial_merge_size
+        image_patch_size=16 // spatial_merge_size,
+        max_image_size=1024,
+        spatial_merge_size=spatial_merge_size,
     )
     image_encoder = ImageEncoder(image_config, special_token_ids)
 
@@ -221,7 +362,9 @@ def test_image_processing(special_token_ids: SpecialImageIDs, size: tuple[int, i
 @pytest.mark.parametrize("spatial_merge_size", [1, 2])
 def test_image_encoder_formats(spatial_merge_size: int, special_token_ids: SpecialImageIDs) -> None:
     image_config = ImageConfig(
-        image_patch_size=16 // spatial_merge_size, max_image_size=1024, spatial_merge_size=spatial_merge_size
+        image_patch_size=16 // spatial_merge_size,
+        max_image_size=1024,
+        spatial_merge_size=spatial_merge_size,
     )
     image_encoder = ImageEncoder(image_config, special_token_ids)
 
@@ -240,7 +383,7 @@ def test_image_encoder_formats(spatial_merge_size: int, special_token_ids: Speci
         assert isinstance(content, (ImageChunk, ImageURLChunk))
         outputs.append(image_encoder(content))
 
-    def mock_get(url: str, headers: Any = None) -> Any:
+    def mock_get(url: str, headers: Any = None, timeout: Any = None) -> Any:
         mock_response = Mock()
 
         if url == "https://url.com":

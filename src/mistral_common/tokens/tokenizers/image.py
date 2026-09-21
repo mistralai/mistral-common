@@ -7,7 +7,10 @@ from io import BytesIO
 import numpy as np
 from PIL import Image
 
-from mistral_common.image import SerializableImage, download_image
+from mistral_common.image import (
+    SerializableImage,
+    download_image,
+)
 from mistral_common.imports import assert_opencv_installed, is_opencv_installed
 from mistral_common.protocol.instruct.chunk import ImageChunk, ImageURLChunk
 
@@ -67,20 +70,27 @@ def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
         The image as a PIL Image object.
 
     Raises:
-        RuntimeError: If the URL scheme is not data:..., file..., or http(s).
+        ValueError: If a data URL does not contain a base64 payload or the URL
+            scheme is unsupported.
     """
     if isinstance(chunk, ImageChunk):
         return chunk.image
-    if chunk.get_url().startswith("data:image"):
-        data = chunk.get_url().split(",")[1]
+    url = chunk.get_url()
+    if url.startswith("data:image"):
+        _, _, data = url.partition(",")
+        if not data:
+            raise ValueError(f"Invalid image data URL {url[:64]}: expected a base64 payload after a comma.")
         image_data = base64.b64decode(data)
         return Image.open(BytesIO(image_data))
-    if chunk.get_url().startswith("file"):
-        return Image.open(open(chunk.get_url().replace("file://", ""), "rb"))
-    if chunk.get_url().startswith("http"):
-        return download_image(chunk.get_url())
+    if url.startswith("file://"):
+        with open(url.removeprefix("file://"), "rb") as file:
+            image = Image.open(file)
+            image.load()
+        return image
+    if url.startswith("http"):
+        return download_image(url=url, timeout=None)
 
-    raise RuntimeError(f"Unsupported image url scheme {chunk.get_url()}")
+    raise ValueError(f"Unsupported image url scheme {url}")
 
 
 DATASET_MEAN = (0.48145466, 0.4578275, 0.40821073)  # RGB
