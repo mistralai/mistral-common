@@ -4,7 +4,7 @@ permissions:
   contents: read
 
 # Runs targeted downstream tokenization test suites (vLLM, Transformers) against
-# the mistral-common version in this repo when the `test-compat` label is added
+# the mistral-common version in this repo when the `run-downstream-tests` label is added
 # to a pull request, or on manual dispatch. CPU only, no GPU required.
 on:
   pull_request:
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   vllm:
-    if: ${{ github.event.label.name == 'test-compat' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event.label.name == 'run-downstream-tests' || github.event_name == 'workflow_dispatch' }}
     runs-on:
       - ubuntu-latest
       - ${{ github.ref_name == 'main' && 'x64' || 'linux.x64' }}
@@ -58,7 +58,7 @@ jobs:
             tests/tokenizers_/test_basic.py
 
   transformers:
-    if: ${{ github.event.label.name == 'test-compat' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event.label.name == 'run-downstream-tests' || github.event_name == 'workflow_dispatch' }}
     runs-on:
       - ubuntu-latest
       - ${{ github.ref_name == 'main' && 'x64' || 'linux.x64' }}
