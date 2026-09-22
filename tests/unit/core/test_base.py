@@ -1,33 +1,80 @@
+from enum import Enum
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
 from mistral_common.base import MistralBase
-from mistral_common.protocol.instruct.chunk import TextChunk
-from mistral_common.protocol.instruct.messages import UserMessage
 
 
-def test_filter_cls_fields_filters_unknown_values() -> None:
-    assert MistralBase._filter_cls_fields({}) == {}
-    assert UserMessage._filter_cls_fields({"role": "user", "content": "hi", "name": "u1"}) == {
-        "role": "user",
-        "content": "hi",
-    }
-    assert TextChunk._filter_cls_fields({"type": "text", "text": "hi", "annotations": []}) == {
-        "type": "text",
-        "text": "hi",
-    }
+class LocalEnum(str, Enum):
+    VALUE = "value"
 
 
-def test_model_validate_ignore_extra_filters_and_validates() -> None:
-    assert UserMessage.model_validate_ignore_extra({"role": "user", "content": "hi", "name": "u1"}) == UserMessage(
-        content="hi"
-    )
+class RequiredModel(MistralBase):
+    value: str
 
 
-def test_model_validate_ignore_extra_preserves_valid_input() -> None:
-    assert TextChunk.model_validate_ignore_extra({"type": "text", "text": "hello"}) == TextChunk(text="hello")
+class InvalidDefaultModel(MistralBase):
+    value: int = "invalid"  # type: ignore[assignment]
 
 
-def test_model_validate_ignore_extra_rejects_missing_required_fields() -> None:
-    with pytest.raises(ValidationError):
-        UserMessage.model_validate_ignore_extra({"role": "user"})
+class EnumModel(MistralBase):
+    value: LocalEnum
+
+
+@pytest.mark.parametrize(
+    ("model_type", "data", "expected"),
+    [
+        pytest.param(MistralBase, {}, {}, id="empty"),
+        pytest.param(RequiredModel, {"value": "known"}, {"value": "known"}, id="known"),
+        pytest.param(RequiredModel, {"unknown": "extra"}, {}, id="unknown"),
+        pytest.param(
+            RequiredModel,
+            {"value": "known", "unknown": "extra"},
+            {"value": "known"},
+            id="known-and-unknown",
+        ),
+    ],
+)
+def test_filter_cls_fields(model_type: type[MistralBase], data: dict[str, Any], expected: dict[str, Any]) -> None:
+    assert model_type._filter_cls_fields(data) == expected
+
+
+@pytest.mark.parametrize(
+    ("model_type", "data", "expected"),
+    [
+        pytest.param(RequiredModel, {"value": "valid"}, RequiredModel(value="valid"), id="valid"),
+        pytest.param(
+            RequiredModel,
+            {"value": "valid", "unknown": "extra"},
+            RequiredModel(value="valid"),
+            id="extra",
+        ),
+    ],
+)
+def test_model_validate_ignore_extra(
+    model_type: type[MistralBase], data: dict[str, Any], expected: MistralBase
+) -> None:
+    assert model_type.model_validate_ignore_extra(data) == expected
+
+
+def test_model_validate_ignore_extra_rejects_missing_required() -> None:
+    with pytest.raises(ValidationError, match="value"):
+        RequiredModel.model_validate_ignore_extra({})
+
+
+def test_mistral_base_forbids_extra_fields() -> None:
+    with pytest.raises(ValidationError, match="extra"):
+        RequiredModel.model_validate({"value": "valid", "extra": "forbidden"})
+
+
+def test_mistral_base_validates_default_values() -> None:
+    with pytest.raises(ValidationError, match="valid integer"):
+        InvalidDefaultModel()
+
+
+def test_mistral_base_uses_enum_values() -> None:
+    model = EnumModel(value=LocalEnum.VALUE)
+    assert model.value == "value"
+    assert model.model_dump() == {"value": "value"}

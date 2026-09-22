@@ -1,11 +1,10 @@
-import re
+import uuid
+from unittest.mock import patch
 
 from mistral_common.protocol.utils import random_uuid
 
 
-def test_random_uuid_is_a_new_32_character_hex_value() -> None:
-    first = random_uuid()
-    second = random_uuid()
-    assert re.fullmatch(r"[0-9a-f]{32}", first)
-    assert re.fullmatch(r"[0-9a-f]{32}", second)
-    assert first != second
+def test_random_uuid_returns_uuid4_hex() -> None:
+    known_uuid = uuid.UUID("12345678-1234-4abc-8def-1234567890ab")
+    with patch("mistral_common.protocol.utils.uuid.uuid4", return_value=known_uuid):
+        assert random_uuid() == "1234567812344abc8def1234567890ab"
