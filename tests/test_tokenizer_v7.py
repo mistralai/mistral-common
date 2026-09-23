@@ -386,6 +386,19 @@ def test_encode_chat_completion() -> None:
             "<s>[SYSTEM_PROMPT]a[/SYSTEM_PROMPT][INST]a[/INST]a</s>[SYSTEM_PROMPT]b[/SYSTEM_PROMPT][INST]a[/INST]",
             id="full_convo",
         ),
+        pytest.param(
+            # multi-turn SFT: drop older turn, keep final prompt and assistant response
+            [
+                UserMessage(content="c"),
+                AssistantMessage(content="c"),
+                UserMessage(content="c"),
+                AssistantMessage(content="c"),
+                UserMessage(content="a"),
+                AssistantMessage(content="bbbbbbb"),
+            ],
+            "<s>[INST]a[/INST]bbbbbbb</s>",
+            id="sft_drop_history_preserve_last_turn",
+        ),
     ],
 )
 @pytest.mark.parametrize("tekkenizer", ["no_audio_tekkenizer", "with_audio_tekkenizer"])
@@ -410,6 +423,23 @@ def test_truncation(
             # last user msg doesn't fit
             UserMessage(content="a" * 10),
         ],
+        [
+            # last assistant msg doesn't fit (SFT single turn)
+            UserMessage(content="a"),
+            AssistantMessage(content="a" * 10),
+        ],
+        [
+            # multi-tool final turn doesn't fit under tight budget
+            UserMessage(content="a"),
+            ToolMessage(content="a" * 5, tool_call_id="1"),
+            ToolMessage(content="a" * 5, tool_call_id="2"),
+        ],
+        [
+            # system prompt + final turn doesn't fit
+            SystemMessage(content="a"),
+            UserMessage(content="a" * 5),
+            AssistantMessage(content="a" * 5),
+        ],
     ],
 )
 @pytest.mark.parametrize("tekkenizer", ["no_audio_tekkenizer", "with_audio_tekkenizer"])
@@ -417,6 +447,67 @@ def test_truncation_failed(request: pytest.FixtureRequest, tekkenizer: str, mess
     tokenizer = request.getfixturevalue(tekkenizer)
     with pytest.raises(TokenizerException):
         tokenizer.encode_instruct(InstructRequest(messages=messages, truncate_at_max_tokens=9))
+
+
+def test_truncation_prefix_ids(request: pytest.FixtureRequest) -> None:
+    tokenizer: InstructTokenizer = request.getfixturevalue("no_audio_tekkenizer")
+    messages: list[ChatMessage] = [
+        UserMessage(content="c"),
+        AssistantMessage(content="c"),
+        UserMessage(content="a"),
+        AssistantMessage(content="b", prefix=True),
+    ]
+    tokenized = tokenizer.encode_instruct(InstructRequest(messages=messages, truncate_at_max_tokens=8))
+    assert tokenized.prefix_ids is not None
+    assert tokenized.tokens[-len(tokenized.prefix_ids) :] == tokenized.prefix_ids
+
+
+def test_truncation_multi_tool_final_turn(request: pytest.FixtureRequest) -> None:
+    tokenizer: InstructTokenizer = request.getfixturevalue("no_audio_tekkenizer")
+    messages: list[ChatMessage] = [
+        UserMessage(content="c"),
+        AssistantMessage(content="c"),
+        UserMessage(content="a"),
+        ToolMessage(content="f", tool_call_id="1"),
+        ToolMessage(content="f", tool_call_id="2"),
+    ]
+    final_turn_len = len(tokenizer.encode_instruct(InstructRequest(messages=messages[2:])).tokens)
+    tokenized = tokenizer.encode_instruct(InstructRequest(messages=messages, truncate_at_max_tokens=final_turn_len))
+    text = decode_keep(tokenizer=tokenizer, tokenized=tokenized)
+    assert "[INST]a[/INST]" in text
+    assert "[TOOL_RESULTS]1[TOOL_CONTENT]f[/TOOL_RESULTS]" in text
+    assert "[TOOL_RESULTS]2[TOOL_CONTENT]f[/TOOL_RESULTS]" in text
+    assert "c" not in text
+
+    with pytest.raises(TokenizerException):
+        tokenizer.encode_instruct(InstructRequest(messages=messages, truncate_at_max_tokens=final_turn_len - 2))
+
+
+def test_truncation_no_user_message(request: pytest.FixtureRequest) -> None:
+    tokenizer: InstructTokenizerV7 = request.getfixturevalue("no_audio_tekkenizer")
+    tokenized_messages: list[list[int] | None] = [[1, 2], [3, 4], [5, 6]]
+    messages: list[ChatMessage] = [
+        AssistantMessage(content="a"),
+        AssistantMessage(content="b"),
+        AssistantMessage(content="c"),
+    ]
+    tokenizer._truncate_for_max_tokens(
+        tokenized_messages=tokenized_messages,
+        messages=messages,
+        max_tokens=4,
+        last_user_message_index=-1,
+    )
+    assert tokenized_messages[0] is None
+    assert tokenized_messages[1] == [3, 4]
+    assert tokenized_messages[2] == [5, 6]
+
+    with pytest.raises(TokenizerException):
+        tokenizer._truncate_for_max_tokens(
+            tokenized_messages=[[1, 2, 3], [4, 5, 6]],
+            messages=[AssistantMessage(content="a"), AssistantMessage(content="b")],
+            max_tokens=2,
+            last_user_message_index=-1,
+        )
 
 
 def test_from_model() -> None:

@@ -902,35 +902,59 @@ class InstructTokenizerV7(InstructTokenizerV3):
         max_tokens: int,
         last_user_message_index: int,
     ) -> None:
-        # drop some messages to fit in max_tokens. Rules:
-        # - don't drop any system messages
-        # - when a user message is dropped, all following assistant|tool message should be dropped until the next
-        #   user message
-        # - we never drop the last message
+        r"""Drop older messages to fit the conversation in max_tokens.
+
+        Rules:
+        - Don't drop any system messages.
+        - When a user message is dropped, all following assistant/tool messages
+          are dropped until the next user message.
+        - Never drop the last message.
+        - Never drop the last user message or any messages in the active final
+          interaction turn.
+
+        Args:
+            tokenized_messages: Tokenized message chunks, updated in-place by
+                setting dropped messages to None.
+            messages: The list of chat messages to truncate.
+            max_tokens: Maximum allowed token budget.
+            last_user_message_index: Index of the last user message in messages,
+                or -1 if not exists.
+
+        Raises:
+            TokenizerException: If the minimum required context (all system
+                messages and the final interaction turn) exceeds max_tokens.
+        """
+        if not messages:
+            return
+
         to_drop = sum(len(t) for t in tokenized_messages if t is not None) - max_tokens
+        if to_drop <= 0:
+            return
+
+        last_message_index = len(messages) - 1
+        limit = last_user_message_index if last_user_message_index >= 0 else max(0, last_message_index)
 
         def drop(idx: int) -> None:
             nonlocal to_drop
             if isinstance(messages[idx], SystemMessage):
-                # never drop system messages
                 return
-            if idx == last_user_message_index:
-                # never drop the last user message
+            if last_user_message_index >= 0 and idx >= last_user_message_index:
+                return
+            if idx == last_message_index:
                 return
             tok = tokenized_messages[idx]
-            assert tok is not None
+            if tok is None:
+                return
             to_drop -= len(tok)
             tokenized_messages[idx] = None
 
         current_idx = 0
-        while to_drop > 0 and current_idx < len(messages):
-            drop(current_idx)
+        while to_drop > 0 and current_idx < limit:
+            drop(idx=current_idx)
             current_idx += 1
-            if isinstance(messages[current_idx - 1], UserMessage):
-                # if we just dropped a UserMessage,
-                # also drop everything until the next user message
-                while current_idx < len(messages) and not isinstance(messages[current_idx], UserMessage):
-                    drop(current_idx)
+            if tokenized_messages[current_idx - 1] is None and isinstance(messages[current_idx - 1], UserMessage):
+                while current_idx < limit and not isinstance(messages[current_idx], UserMessage):
+                    drop(idx=current_idx)
                     current_idx += 1
 
         if to_drop > 0:
