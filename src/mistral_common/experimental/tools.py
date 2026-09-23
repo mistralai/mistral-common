@@ -94,7 +94,7 @@ def _decode_tool_calls_v2_up_to_v7(tool_call_tokens: list[int], tokenizer: Token
 
     return [
         ToolCall(
-            id=tool_call.get("id", "null"),
+            id=tool_call.get("id"),
             function=FunctionCall(name=tool_call["name"], arguments=tool_call["arguments"]),
         )
         for tool_call in tool_calls_decoded_list

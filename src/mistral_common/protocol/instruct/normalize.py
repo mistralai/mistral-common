@@ -584,7 +584,7 @@ class InstructRequestNormalizerV13(
         # First order by tool call idx and then by tool result idx
         tool_messages.sort(
             key=lambda msg: (
-                id_to_tool_call_idx.get(msg.tool_call_id or "null", float("inf")),
+                id_to_tool_call_idx.get(msg.tool_call_id, float("inf")),
                 id_to_tool_result_idx[msg.tool_call_id],
             ),
         )

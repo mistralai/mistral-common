@@ -475,7 +475,7 @@ class TestChatValidationV11:
                 AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="foo", arguments="{}"))]),
                 UserMessage(content="continue")
                 if mode == ValidationMode.test
-                else ToolMessage(content="result", tool_call_id="null"),
+                else ToolMessage(content="result", tool_call_id="nul123456"),
             ],
             model="test",
         )
@@ -504,7 +504,7 @@ class TestChatValidationV11:
 class TestChatValidationV13:
     @pytest.mark.parametrize("version", [TokenizerVersion.v13, TokenizerVersion.v15])
     @pytest.mark.parametrize("mode", list(ValidationMode))
-    @pytest.mark.parametrize("tool_call_id", [None, "", "null"], ids=["missing", "empty", "null"])
+    @pytest.mark.parametrize("tool_call_id", [None, ""], ids=["missing", "empty"])
     def test_rejects_invalid_tool_call_id_in_all_modes(
         self, version: TokenizerVersion, mode: ValidationMode, tool_call_id: str | None
     ) -> None:
@@ -523,7 +523,7 @@ class TestChatValidationV13:
 
         with pytest.raises(
             InvalidFunctionCallException,
-            match=(r"Tool call id must be a non-empty string other than 'null' for tokenizer version 13 or newer\."),
+            match=(r"Tool call id must be a non-empty string for tokenizer version 13 or newer\."),
         ):
             validator.validate_request(ChatCompletionRequest(messages=messages, model="test"))
 
@@ -901,7 +901,7 @@ class TestAgnosticValidation:
 
         with pytest.raises(
             InvalidFunctionCallException,
-            match=r"Tool call id must be a non-empty string other than 'null' for tokenizer version 13 or newer",
+            match=r"Tool call id must be a non-empty string for tokenizer version 13 or newer",
         ):
             validator.validate_messages(messages=messages)
 

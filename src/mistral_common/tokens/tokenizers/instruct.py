@@ -695,7 +695,7 @@ class InstructTokenizerV3(InstructTokenizerV2, Generic[InstructRequestType, FIMR
             "arguments": self._parse_json_content(tool_call.function.arguments),
         }
 
-        if tool_call.id and tool_call.id != "null":
+        if tool_call.id:
             function_call["id"] = tool_call.id
 
         return function_call
@@ -1353,7 +1353,7 @@ class InstructTokenizerV13(InstructTokenizerV11):
         assert message.tool_calls, f"Assistant message must have tool calls. Got {message}"
         curr_tokens = []
         for tool_call in message.tool_calls:
-            assert tool_call.id and tool_call.id != "null"
+            assert tool_call.id
             prepared = self._prepare_function_call(tool_call)
 
             curr_tokens += [

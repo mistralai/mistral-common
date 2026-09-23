@@ -369,10 +369,10 @@ def test_tool_message(tokenizer: InstructTokenizer, special_ws: str, ws: str) ->
 )
 def test_tool_message_no_id_fine_tuning_ok(tokenizer: InstructTokenizer, special_ws: str, ws: str) -> None:
     # In fine-tuning we allow passing a tool call as the last message.
-    # We need to make sure to not parse this empty id as "null"
+    # We need to make sure that a missing id (None) is not serialized.
     function = FunctionCall(name="b", arguments="{}")
 
-    tool_calls = [ToolCall(id="null", function=function), ToolCall(function=function)]
+    tool_calls = [ToolCall(id=None, function=function), ToolCall(function=function)]
     for tool_call in tool_calls:
         tokenized = tokenizer.encode_instruct(
             InstructRequest(

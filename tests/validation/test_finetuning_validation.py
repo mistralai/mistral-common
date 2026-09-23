@@ -81,7 +81,7 @@ class TestFineTuningValidation:
                 UserMessage(content="foo"),
                 FinetuningAssistantMessage(tool_calls=[ToolCall(id="123456789", function=function)]),
                 ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
-                # tool_call id left "null" as final message => OK!
+                # tool_call id left None as final message => OK!
                 FinetuningAssistantMessage(tool_calls=[ToolCall(function=function)]),
             ],
         )
@@ -110,7 +110,7 @@ class TestFineTuningValidation:
             validator.validate_messages(
                 messages=[
                     UserMessage(content="foo"),
-                    # tool_call id left "null" as non-final message => Raise!
+                    # tool_call id left None as non-final message => Raise!
                     FinetuningAssistantMessage(tool_calls=[ToolCall(function=function)]),
                     ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
                     FinetuningAssistantMessage(tool_calls=[ToolCall(function=function)]),

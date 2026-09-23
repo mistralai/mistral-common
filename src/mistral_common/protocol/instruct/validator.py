@@ -48,10 +48,9 @@ from mistral_common.protocol.instruct.tool_calls import (
 )
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 
-_NULL_TOOL_CALL_ID = "null"
 _TOOL_CALL_ID_REGEX = re.compile(r"^[a-zA-Z0-9]{9}$")
 _INVALID_TOOL_CALL_ID_MESSAGE = (
-    f"Tool call id must be a non-empty string other than '{_NULL_TOOL_CALL_ID}' for tokenizer version 13 or newer."
+    "Tool call id must be a non-empty string for tokenizer version 13 or newer."
 )
 
 
@@ -553,7 +552,7 @@ class MistralRequestValidatorV3(MistralRequestValidator):
     def _validate_tool_call_id(self, tool_call: ToolCall, is_last_message: bool) -> None:
         r"""Check that a tool call ID is valid for the mode.
 
-        The "null" ID is only allowed for the last assistant message in
+        A missing ID (None) is only allowed for the last assistant message in
         finetuning mode. All other IDs must match `^[a-zA-Z0-9]{9}$`.
 
         Args:
@@ -562,10 +561,10 @@ class MistralRequestValidatorV3(MistralRequestValidator):
                 the conversation.
 
         Raises:
-            InvalidFunctionCallException: If the ID is "null" in a context that
+            InvalidFunctionCallException: If the ID is missing in a context that
                 does not allow it, or the ID does not match the expected format.
         """
-        if tool_call.id == _NULL_TOOL_CALL_ID:
+        if tool_call.id is None:
             match self._mode:
                 case ValidationMode.finetuning | ValidationMode.agnostic:
                     if not is_last_message:
@@ -578,8 +577,8 @@ class MistralRequestValidatorV3(MistralRequestValidator):
                     raise InvalidFunctionCallException("Tool call id has to be defined in serving mode.")
                 case _:
                     raise InvalidFunctionCallException(
-                        f"Tool call id '{_NULL_TOOL_CALL_ID}' is only allowed for the last assistant message "
-                        "in finetuning mode."
+                        "Tool call id of assistant message that is not last has to be defined in "
+                        "test mode."
                     )
 
         if not _TOOL_CALL_ID_REGEX.match(tool_call.id):
@@ -737,11 +736,11 @@ class MistralRequestValidatorV13(MistralRequestValidatorV11):
     r"""Validator for v13 Mistral requests."""
 
     def _validate_tool_message_id(self, message: ToolMessageType) -> None:
-        if not message.tool_call_id or message.tool_call_id == _NULL_TOOL_CALL_ID:
+        if not message.tool_call_id:
             raise InvalidToolMessageException(_INVALID_TOOL_CALL_ID_MESSAGE)
 
     def _validate_tool_call_id(self, tool_call: ToolCall, is_last_message: bool) -> None:
-        if not tool_call.id or tool_call.id == _NULL_TOOL_CALL_ID:
+        if not tool_call.id:
             raise InvalidFunctionCallException(_INVALID_TOOL_CALL_ID_MESSAGE)
 
 

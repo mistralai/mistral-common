@@ -251,7 +251,9 @@ class ToolCall(MistralBase):
 
     Attributes:
         id: Unique identifier for this tool call. Must be a non-empty string
-            for tokenizer version >= v13. Defaults to "null" for backwards compatibility.
+            for tokenizer version >= v13. If omitted (None), the tool call is only
+            valid as part of the last assistant message in finetuning mode
+            (tokenizer versions v3 to v11).
         type: The tool type. Must be ToolTypes.function.
         function: The FunctionCall containing the function name and arguments.
 
@@ -265,7 +267,7 @@ class ToolCall(MistralBase):
         ... )
     """
 
-    id: str = "null"
+    id: str | None = None
     type: ToolTypes = ToolTypes.function
     function: FunctionCall
 
