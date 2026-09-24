@@ -1,4 +1,5 @@
 import builtins
+import logging
 from functools import _lru_cache_wrapper
 from types import ModuleType
 from typing import Any
@@ -85,22 +86,27 @@ def test_is_package_installed(mock_find_spec: MagicMock) -> None:
 @patch("mistral_common.imports.is_package_installed")
 def test_assert_package_installed(mock_is_package_installed: MagicMock) -> None:
     mock_is_package_installed.return_value = True
-    assert_package_installed("package_name")
+    assert_package_installed(package_name="package_name")
 
     mock_is_package_installed.return_value = False
     with pytest.raises(ImportError):
-        assert_package_installed("package_name")
+        assert_package_installed(package_name="package_name")
+
+    with pytest.raises(ImportError) as exc_info:
+        assert_package_installed(
+            package_name="missing_pkg",
+            error_message="Install missing_pkg for this test",
+        )
+    assert str(exc_info.value) == "Install missing_pkg for this test"
 
 
 def test_is_opencv_installed() -> None:
     is_opencv_installed.cache_clear()
 
-    # Module OpenCV is installed.
     with patch.dict("sys.modules", {"cv2": Mock()}):
         assert is_opencv_installed() is True
     is_opencv_installed.cache_clear()
 
-    # Module OpenCV is missing.
     real_import = builtins.__import__
 
     def fake_import(name: str, *args: Any, **kwargs: Any) -> ModuleType:
@@ -112,6 +118,19 @@ def test_is_opencv_installed() -> None:
         assert is_opencv_installed() is False
 
     is_opencv_installed.cache_clear()
+
+
+def test_is_opencv_installed_handles_broken_import(caplog: pytest.LogCaptureFixture) -> None:
+    is_opencv_installed.cache_clear()
+    try:
+        with caplog.at_level(logging.WARNING, logger="mistral_common.imports"):
+            with patch("builtins.__import__", side_effect=RuntimeError("broken cv2")) as mock_import:
+                assert not is_opencv_installed()
+
+        assert any(call.args and call.args[0] == "cv2" for call in mock_import.call_args_list)
+        assert "Your installation of OpenCV appears to be broken: broken cv2." in caplog.text
+    finally:
+        is_opencv_installed.cache_clear()
 
 
 @patch("mistral_common.imports.is_package_installed")
