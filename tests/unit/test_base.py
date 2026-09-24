@@ -21,7 +21,7 @@ class _Envelope(MistralBase):
 
 
 class _InvalidDefault(MistralBase):
-    value: int = "not an integer"
+    value: int = "not an integer"  # type: ignore[assignment]
 
 
 class _Choice(str, Enum):
@@ -97,8 +97,10 @@ def test_model_validate_ignore_extra_does_not_filter_nested_fields() -> None:
 
 
 def test_model_validate_validates_defaults_on_instantiation() -> None:
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as exc_info:
         _InvalidDefault()
+
+    assert [(error["loc"], error["input"]) for error in exc_info.value.errors()] == [(("value",), "not an integer")]
 
 
 def test_model_validate_uses_enum_values() -> None:
