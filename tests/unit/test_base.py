@@ -32,14 +32,26 @@ class _EnumModel(MistralBase):
     choice: _Choice
 
 
-def test_filter_cls_fields() -> None:
-    assert MistralBase._filter_cls_fields({}) == {}
-
-    filtered = UserMessage._filter_cls_fields({"role": "user", "content": "hi", "name": "u1"})
-    assert filtered == {"role": "user", "content": "hi"}
-
-    filtered = TextChunk._filter_cls_fields({"type": "text", "text": "hi", "annotations": []})
-    assert filtered == {"type": "text", "text": "hi"}
+@pytest.mark.parametrize(
+    "model_cls, data, expected",
+    [
+        pytest.param(MistralBase, {}, {}, id="empty-base"),
+        pytest.param(
+            UserMessage,
+            {"role": "user", "content": "hi", "name": "u1"},
+            {"role": "user", "content": "hi"},
+            id="user-extra-name",
+        ),
+        pytest.param(
+            TextChunk,
+            {"type": "text", "text": "hi", "annotations": []},
+            {"type": "text", "text": "hi"},
+            id="text-extra-annotations",
+        ),
+    ],
+)
+def test_filter_cls_fields(model_cls: type[MistralBase], data: dict[str, object], expected: dict[str, object]) -> None:
+    assert model_cls._filter_cls_fields(data) == expected
 
 
 def test_model_validate_ignore_extra_filters_and_validates() -> None:
