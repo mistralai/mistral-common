@@ -183,15 +183,15 @@ def test_direct_unsupported_audio_capability(
     ("version", "operation", "message"),
     [
         pytest.param(
-            "v1", "transcription", r"Transcription not available for TokenizerVersion\.v1", id="v1-transcription"
+            "v1", "transcription", r"^Transcription not available for (?:TokenizerVersion\.)?v1$", id="v1-transcription"
         ),
         pytest.param("v1", "speech", r"Speech request not available for tokenizer v1", id="v1-speech"),
         pytest.param(
-            "v2", "transcription", r"Transcription not available for TokenizerVersion\.v2", id="v2-transcription"
+            "v2", "transcription", r"^Transcription not available for (?:TokenizerVersion\.)?v2$", id="v2-transcription"
         ),
         pytest.param("v2", "speech", r"Speech request not available for tokenizer v2", id="v2-speech"),
         pytest.param(
-            "v3", "transcription", r"Transcription not available for TokenizerVersion\.v3", id="v3-transcription"
+            "v3", "transcription", r"^Transcription not available for (?:TokenizerVersion\.)?v3$", id="v3-transcription"
         ),
         pytest.param("v3", "speech", r"Speech request not available for tokenizer v3", id="v3-speech"),
     ],
