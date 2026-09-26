@@ -7,12 +7,13 @@ import warnings
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import requests as _requests_lib
 
 from mistral_common.deprecation import warn_once
+from mistral_common.exceptions import InvalidRequestException, UnsupportedTokenizerFeatureException
 from mistral_common.imports import (
     assert_soundfile_installed,
     assert_soxr_installed,
@@ -631,6 +632,17 @@ class AudioEncoder:
         self.encoding_config = audio_config.encoding_config
         self.special_ids = special_ids
 
+    def _require_marker(
+        self,
+        marker: Literal["audio", "begin_audio", "streaming_pad"],
+        operation: str,
+    ) -> None:
+        r"""Raise a project feature error when an operation's marker is absent."""
+        if getattr(self.special_ids, marker) is None:
+            raise UnsupportedTokenizerFeatureException(
+                f"Audio encoder does not provide the {marker} marker required for {operation}."
+            )
+
     def pad(
         self,
         audio_array: np.ndarray,
@@ -840,13 +852,17 @@ class AudioEncoder:
             audio.resample(self.audio_config.sampling_rate)
             num_audio_tokens = self._get_num_audio_token_for_speech_request(len(audio.audio_array))
         else:
-            assert self.audio_config.voice_num_audio_tokens is not None, (
-                "voice_num_audio_tokens must be set in audio config to use voice-based speech requests"
-            )
-            assert voice is not None and voice in self.audio_config.voice_num_audio_tokens, (
-                f"Unknown voice {voice!r}, expected one of {list(self.audio_config.voice_num_audio_tokens)}"
-            )
+            if self.audio_config.voice_num_audio_tokens is None:
+                raise UnsupportedTokenizerFeatureException(
+                    "Preset voices are not configured for this audio configuration."
+                )
+            if voice not in self.audio_config.voice_num_audio_tokens:
+                raise InvalidRequestException(
+                    f"Unknown voice {voice!r}, expected one of {list(self.audio_config.voice_num_audio_tokens)}."
+                )
             num_audio_tokens = self.audio_config.voice_num_audio_tokens[voice]
+        self._require_marker(marker="begin_audio", operation="speech")
+        self._require_marker(marker="audio", operation="speech")
         tokens = self._encode_audio_tokens_for_speech_request(num_audio_tokens)
 
         return AudioEncoding(
