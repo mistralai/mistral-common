@@ -3,6 +3,7 @@ import math
 import numpy as np
 import pytest
 
+from mistral_common.exceptions import UnsupportedTokenizerFeatureException
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.tokens.tokenizers.audio import (
     Audio,
@@ -170,7 +171,7 @@ def test_encode_speech_request_no_audio_encoder_fails() -> None:
     tokenizer_no_encoder = InstructTokenizerV7(tokenizer=mm_tekkenizer, audio_encoder=None)
 
     request = SpeechRequest(input="Hello world", voice="female")
-    with pytest.raises(AssertionError, match="Audio encoder must be defined"):
+    with pytest.raises(UnsupportedTokenizerFeatureException, match="audio encoder.*speech"):
         tokenizer_no_encoder.encode_speech_request(request)
 
 
