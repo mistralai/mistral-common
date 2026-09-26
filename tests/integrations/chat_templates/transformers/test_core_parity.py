@@ -14,7 +14,10 @@ from tests.integrations.chat_templates.conftest import (
     ALL_TRANSFORMERS_CONFIGS,
     _config_id,
 )
-from tests.integrations.chat_templates.fixtures_data import _get_conversations
+from tests.integrations.chat_templates.fixtures_data import (
+    REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
+    _get_conversations,
+)
 from tests.integrations.chat_templates.helpers import (
     TestConfig,
     _build_spm_path,
@@ -38,6 +41,14 @@ class TestTransformersMistralCommonParity:
     @pytest.mark.parametrize("mode", [ValidationMode.test, ValidationMode.finetuning])
     def test_chat_template(self, config: TestConfig, mode: ValidationMode, tmp_path: Path) -> None:
         conversations = _get_conversations(config.version, mode, config.image, config.audio, config.think)
+        if config.version == TokenizerVersion.v2 and mode == ValidationMode.finetuning:
+            # Static/dynamic template parity still uses this shared fixture,
+            # but v2 cannot encode its two results.
+            conversations = [
+                conversation
+                for conversation in conversations
+                if conversation != REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2
+            ]
 
         if config.spm:
             tokenizer_path = _build_spm_path(config, tmp_path)

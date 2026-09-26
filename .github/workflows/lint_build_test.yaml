@@ -124,4 +124,4 @@ jobs:
 
       - name: Integration Tests
         run: |
-          uv run --no-sync pytest tests/integrations/ -n auto --dist loadfile -v
+          uv run --no-sync pytest tests/integrations/ tests/integration/ -n auto --dist loadfile -v
