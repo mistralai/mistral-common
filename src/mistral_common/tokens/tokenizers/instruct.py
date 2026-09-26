@@ -1060,6 +1060,9 @@ class InstructTokenizerV7(InstructTokenizerV3):
                 f"Tokenizer {self.tokenizer.version.value} does not provide the TRANSCRIBE marker required for "
                 "transcription."
             )
+        assert self.audio_encoder is not None
+        self.audio_encoder._require_marker(marker="begin_audio", operation="transcription")
+        self.audio_encoder._require_marker(marker="audio", operation="transcription")
         prefix = self.start()
         tokens, images, audio = self.encode_user_message(
             UserMessage(content=[AudioChunk(input_audio=request.audio)]),
@@ -1100,6 +1103,8 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
     def _encode_streaming_transcription(self, request: TranscriptionRequest) -> Tokenized:
         if request.streaming == StreamingMode.OFFLINE:
+            assert self.audio_encoder is not None
+            self.audio_encoder._require_marker(marker="streaming_pad", operation="transcription")
             tokenized = self._encode_audio(request.audio, request.target_streaming_delay_ms)
 
             # we also add a BOS token in the beginning
@@ -1112,6 +1117,7 @@ class InstructTokenizerV7(InstructTokenizerV3):
                 raise InvalidRequestException(
                     "ONLINE streaming audio must be a base64 text value or empty prefill; received bytes."
                 )
+            self.audio_encoder._require_marker(marker="streaming_pad", operation="transcription")
             left_pad, right_pad = self.audio_encoder.get_padding_audio(request.target_streaming_delay_ms)
             audios = [left_pad, right_pad]
 

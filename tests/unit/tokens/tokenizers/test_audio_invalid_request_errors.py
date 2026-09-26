@@ -120,7 +120,12 @@ def test_reference_audio_ignores_unknown_voice_with_direct_encoder() -> None:
 
 def test_online_base64_audio_keeps_direct_warning_and_combine_path() -> None:
     tokenizer = build_synthetic_v7_audio_tokenizer(profile=SYNTHETIC_V7_STREAMING, mode=ValidationMode.test)
-    encoded_audio = valid_reference_audio()
+    input_audio = Audio(
+        audio_array=np.linspace(-0.75, 0.75, 2_400, dtype=np.float32),
+        sampling_rate=24_000,
+        format="wav",
+    )
+    encoded_audio = input_audio.to_base64("wav")
     request = TranscriptionRequest(
         audio=encoded_audio,
         streaming=StreamingMode.ONLINE,
@@ -134,4 +139,11 @@ def test_online_base64_audio_keeps_direct_warning_and_combine_path() -> None:
     decoded_audio = Audio.from_base64(encoded_audio)
     assert len(tokenized.audios) == 1
     assert tokenized.audios[0].sampling_rate == decoded_audio.sampling_rate
-    assert tokenized.audios[0].audio_array.size > decoded_audio.audio_array.size
+    audio_encoder = tokenizer.instruct_tokenizer.audio_encoder
+    assert audio_encoder is not None
+    audio_config = audio_encoder.audio_config
+    left_padding_samples = audio_config.n_left_pad_tokens * audio_config.raw_audio_length_per_tok
+    expected_audio = np.concatenate(
+        (np.zeros(left_padding_samples, dtype=decoded_audio.audio_array.dtype), decoded_audio.audio_array)
+    )
+    np.testing.assert_array_equal(tokenized.audios[0].audio_array, expected_audio)
