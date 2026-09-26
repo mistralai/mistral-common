@@ -1051,9 +1051,10 @@ class InstructTokenizerV7(InstructTokenizerV3):
         )
 
     def _encode_instruct_transcription(self, request: TranscriptionRequest) -> Tokenized:
-        assert request.streaming == StreamingMode.DISABLED, (
-            f"Request must not be in streaming mode, got {request.streaming=}"
-        )
+        if request.streaming != StreamingMode.DISABLED:
+            raise InvalidRequestException(
+                f"Instruct transcription requires streaming mode DISABLED, got {request.streaming.upper()}."
+            )
         if self.TRANSCRIBE is None:
             raise UnsupportedTokenizerFeatureException(
                 f"Tokenizer {self.tokenizer.version.value} does not provide the TRANSCRIBE marker required for "
@@ -1107,6 +1108,10 @@ class InstructTokenizerV7(InstructTokenizerV3):
             audios = tokenized.audios
         elif request.streaming == StreamingMode.ONLINE:
             assert self.audio_encoder is not None
+            if request.audio and not isinstance(request.audio, str):
+                raise InvalidRequestException(
+                    "ONLINE streaming audio must be a base64 text value or empty prefill; received bytes."
+                )
             left_pad, right_pad = self.audio_encoder.get_padding_audio(request.target_streaming_delay_ms)
             audios = [left_pad, right_pad]
 
@@ -1141,7 +1146,9 @@ class InstructTokenizerV7(InstructTokenizerV3):
             # we also add a BOS token in the beginning
             tokens = self.start() + self.audio_encoder.encode_streaming_tokens(request.target_streaming_delay_ms)
         else:
-            raise ValueError(f"Request must be in streaming mode, got {request.streaming=}")
+            raise InvalidRequestException(
+                f"Streaming transcription requires mode OFFLINE or ONLINE, got {request.streaming.upper()}."
+            )
 
         tokenized = Tokenized(
             tokens=tokens,
@@ -1246,9 +1253,8 @@ class InstructTokenizerV7(InstructTokenizerV3):
         Returns:
             Tokenized object with audio tokens and optional audio data.
         """
-        assert ref_audio is not None or voice is not None, (
-            f"Either ref_audio or voice must be defined to encode audio, got {ref_audio=} and {voice=}"
-        )
+        if ref_audio is None and voice is None:
+            raise InvalidRequestException("Either ref_audio or voice must be defined to encode speech.")
         assert self.audio_encoder is not None, (
             f"Audio encoder must be defined to encode audio, got {self.audio_encoder=}"
         )

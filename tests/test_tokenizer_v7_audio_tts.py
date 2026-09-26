@@ -3,7 +3,7 @@ import math
 import numpy as np
 import pytest
 
-from mistral_common.exceptions import UnsupportedTokenizerFeatureException
+from mistral_common.exceptions import InvalidRequestException, UnsupportedTokenizerFeatureException
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.tokens.tokenizers.audio import (
     Audio,
@@ -144,7 +144,7 @@ def test_encode_speech_request_neither_audio_nor_voice_fails(
     tts_tokenizer: InstructTokenizerV7,
 ) -> None:
     request = SpeechRequest(input="Hello world")
-    with pytest.raises(AssertionError, match="Either ref_audio or voice must be defined"):
+    with pytest.raises(InvalidRequestException, match="Either ref_audio or voice must be defined"):
         tts_tokenizer.encode_speech_request(request)
 
 

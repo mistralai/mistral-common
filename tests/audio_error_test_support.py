@@ -1,3 +1,4 @@
+import base64
 import hashlib
 from dataclasses import dataclass
 
@@ -5,7 +6,7 @@ import numpy as np
 
 from mistral_common.protocol.instruct.normalize import get_normalizer
 from mistral_common.protocol.instruct.validator import ValidationMode, get_validator
-from mistral_common.tokens.tokenizers.audio import Audio, AudioConfig, AudioSpectrogramConfig
+from mistral_common.tokens.tokenizers.audio import Audio, AudioConfig, AudioSpectrogramConfig, TranscriptionFormat
 from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer, load_audio_encoder
@@ -22,6 +23,7 @@ class SyntheticV7AudioProfile:
     unavailable_instruct_markers: tuple[str, ...]
     omitted_audio_markers: tuple[str, ...]
     voice_num_audio_tokens: tuple[tuple[str, int], ...] | None
+    transcription_format: TranscriptionFormat = TranscriptionFormat.INSTRUCT
 
 
 SYNTHETIC_V7_INSTRUCT_NO_TRANSCRIBE = SyntheticV7AudioProfile(
@@ -48,6 +50,25 @@ SYNTHETIC_V7_SPEECH_NO_VOICE_MAP = SyntheticV7AudioProfile(
     omitted_audio_markers=(),
     voice_num_audio_tokens=None,
 )
+SYNTHETIC_V7_INSTRUCT = SyntheticV7AudioProfile(
+    configuration_id="synthetic-v7-instruct-test",
+    unavailable_instruct_markers=(),
+    omitted_audio_markers=(),
+    voice_num_audio_tokens=(("preset", 5),),
+)
+SYNTHETIC_V7_STREAMING = SyntheticV7AudioProfile(
+    configuration_id="synthetic-v7-streaming-test",
+    unavailable_instruct_markers=(),
+    omitted_audio_markers=(),
+    voice_num_audio_tokens=(("preset", 5),),
+    transcription_format=TranscriptionFormat.STREAMING,
+)
+SYNTHETIC_V7_SPEECH = SyntheticV7AudioProfile(
+    configuration_id="synthetic-v7-speech-test",
+    unavailable_instruct_markers=(),
+    omitted_audio_markers=(),
+    voice_num_audio_tokens=(("preset", 5),),
+)
 
 
 def load_bundled_v7_no_audio_tokenizer(mode: ValidationMode) -> MistralTokenizer:
@@ -64,6 +85,15 @@ def load_bundled_v7_no_audio_tokenizer(mode: ValidationMode) -> MistralTokenizer
 
 def build_synthetic_v7_audio_tokenizer(profile: SyntheticV7AudioProfile, mode: ValidationMode) -> MistralTokenizer:
     special_tokens = get_special_tokens(tokenizer_version=TokenizerVersion.v7, add_audio=True)
+    if profile.transcription_format == TranscriptionFormat.STREAMING:
+        special_tokens.extend(
+            [
+                SpecialTokenInfo(rank=37, token_str="<SPCECIAL_37>", is_control=True),
+                SpecialTokenInfo(rank=38, token_str="<SPCECIAL_38>", is_control=True),
+                SpecialTokenInfo(rank=39, token_str=SpecialTokens.streaming_pad.value, is_control=True),
+                SpecialTokenInfo(rank=40, token_str=SpecialTokens.streaming_word.value, is_control=True),
+            ]
+        )
     omitted_tokens = set(profile.unavailable_instruct_markers) | set(profile.omitted_audio_markers)
     special_tokens = [
         SpecialTokenInfo(
@@ -79,6 +109,11 @@ def build_synthetic_v7_audio_tokenizer(profile: SyntheticV7AudioProfile, mode: V
         sampling_rate=24_000,
         frame_rate=12.5,
         encoding_config=AudioSpectrogramConfig(num_mel_bins=128, window_size=400, hop_length=160),
+        transcription_format=profile.transcription_format,
+        transcription_delay_ms=480.0 if profile.transcription_format == TranscriptionFormat.STREAMING else None,
+        streaming_look_ahead_ms=2.5 if profile.transcription_format == TranscriptionFormat.STREAMING else None,
+        streaming_look_back_ms=52.5 if profile.transcription_format == TranscriptionFormat.STREAMING else None,
+        streaming_n_left_pad_tokens=16 if profile.transcription_format == TranscriptionFormat.STREAMING else None,
         voice_num_audio_tokens=(
             dict(profile.voice_num_audio_tokens) if profile.voice_num_audio_tokens is not None else None
         ),
@@ -113,3 +148,7 @@ def valid_reference_audio() -> str:
         format="wav",
     )
     return audio.to_base64("wav")
+
+
+def valid_reference_audio_bytes() -> bytes:
+    return base64.b64decode(valid_reference_audio(), validate=True)
