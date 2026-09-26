@@ -81,7 +81,11 @@ PUBLIC_AUDIO_ERROR_CASES = (
 
 def _build_request(recipe: str) -> TranscriptionRequest | SpeechRequest:
     if recipe == "transcription":
-        return TranscriptionRequest(audio=b"not decoded before capability check")
+        return TranscriptionRequest(
+            audio=b"not decoded before capability check",
+            language=None,
+            target_streaming_delay_ms=None,
+        )
     if recipe == "speech-no-source":
         return SpeechRequest(input="hello")
     if recipe == "speech-reference":

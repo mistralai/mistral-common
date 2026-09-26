@@ -87,8 +87,13 @@ def test_direct_unsupported_audio_capability(
             profile=SYNTHETIC_V7_SPEECH_NO_VOICE_MAP, mode=ValidationMode.test
         )
 
+    request: TranscriptionRequest | SpeechRequest
     if request_recipe == "transcription":
-        request = TranscriptionRequest(audio=b"not decoded before capability check")
+        request = TranscriptionRequest(
+            audio=b"not decoded before capability check",
+            language=None,
+            target_streaming_delay_ms=None,
+        )
     elif request_recipe == "speech-no-source":
         request = SpeechRequest(input="hello")
     elif request_recipe == "speech-reference":
@@ -99,9 +104,11 @@ def test_direct_unsupported_audio_capability(
 
     with pytest.raises(UnsupportedTokenizerFeatureException, match=message):
         if operation == "transcription":
+            assert isinstance(request, TranscriptionRequest)
             tokenizer.instruct_tokenizer.encode_transcription(request)
         else:
             assert operation == "speech"
+            assert isinstance(request, SpeechRequest)
             tokenizer.instruct_tokenizer.encode_speech_request(request)
 
 
@@ -123,21 +130,25 @@ def test_direct_unsupported_audio_capability(
     ],
 )
 def test_pre_v7_audio_operation_remains_tokenizer_error(version: str, operation: str, message: str) -> None:
-    tokenizer_factory = {
-        "v1": MistralTokenizer.v1,
-        "v2": MistralTokenizer.v2,
-        "v3": MistralTokenizer.v3,
-    }[version]
-    tokenizer = tokenizer_factory()
+    if version == "v1":
+        tokenizer = MistralTokenizer.v1()
+    elif version == "v2":
+        tokenizer = MistralTokenizer.v2()
+    else:
+        assert version == "v3"
+        tokenizer = MistralTokenizer.v3()
 
+    request: TranscriptionRequest | SpeechRequest
     if operation == "transcription":
-        request = TranscriptionRequest(audio=b"audio")
+        request = TranscriptionRequest(audio=b"audio", language=None, target_streaming_delay_ms=None)
     else:
         assert operation == "speech"
         request = SpeechRequest(input="hello")
 
     with pytest.raises(TokenizerException, match=message):
         if operation == "transcription":
+            assert isinstance(request, TranscriptionRequest)
             tokenizer.instruct_tokenizer.encode_transcription(request)
         else:
+            assert isinstance(request, SpeechRequest)
             tokenizer.instruct_tokenizer.encode_speech_request(request)
