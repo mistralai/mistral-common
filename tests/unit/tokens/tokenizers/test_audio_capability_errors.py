@@ -3,13 +3,18 @@ import pytest
 from mistral_common.exceptions import TokenizerException, UnsupportedTokenizerFeatureException
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.protocol.speech.request import SpeechRequest
-from mistral_common.protocol.transcription.request import TranscriptionRequest
+from mistral_common.protocol.transcription.request import StreamingMode, TranscriptionRequest
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.audio_error_test_support import (
+    SYNTHETIC_V7_INSTRUCT_NO_AUDIO,
+    SYNTHETIC_V7_INSTRUCT_NO_BEGIN_AUDIO,
     SYNTHETIC_V7_INSTRUCT_NO_TRANSCRIBE,
+    SYNTHETIC_V7_SPEECH_NO_AUDIO,
     SYNTHETIC_V7_SPEECH_NO_AUDIO_TO_TEXT,
+    SYNTHETIC_V7_SPEECH_NO_BEGIN_AUDIO,
     SYNTHETIC_V7_SPEECH_NO_MARKER,
     SYNTHETIC_V7_SPEECH_NO_VOICE_MAP,
+    SYNTHETIC_V7_STREAMING_NO_PAD,
     build_synthetic_v7_audio_tokenizer,
     load_bundled_v7_no_audio_tokenizer,
     valid_reference_audio,
@@ -55,6 +60,41 @@ from tests.audio_error_test_support import (
             id="v7-speech-profile-without-audio-to-text-marker",
         ),
         pytest.param(
+            "no-audio-marker",
+            "transcription",
+            "transcription-audio",
+            r"audio marker.*transcription",
+            id="v7-instruct-profile-without-audio-marker",
+        ),
+        pytest.param(
+            "no-begin-audio-marker",
+            "transcription",
+            "transcription-audio",
+            r"begin_audio marker.*transcription",
+            id="v7-instruct-profile-without-begin-audio-marker",
+        ),
+        pytest.param(
+            "no-audio-marker-speech",
+            "speech",
+            "speech-reference",
+            r"audio marker.*speech",
+            id="v7-speech-profile-without-audio-marker",
+        ),
+        pytest.param(
+            "no-begin-audio-marker-speech",
+            "speech",
+            "speech-reference",
+            r"begin_audio marker.*speech",
+            id="v7-speech-profile-without-begin-audio-marker",
+        ),
+        pytest.param(
+            "no-streaming-pad-marker",
+            "transcription",
+            "streaming-online",
+            r"streaming_pad marker.*transcription",
+            id="v7-streaming-profile-without-streaming-pad-marker",
+        ),
+        pytest.param(
             "no-voice-map",
             "speech",
             "speech-preset",
@@ -81,6 +121,20 @@ def test_direct_unsupported_audio_capability(
         tokenizer = build_synthetic_v7_audio_tokenizer(
             profile=SYNTHETIC_V7_SPEECH_NO_AUDIO_TO_TEXT, mode=ValidationMode.test
         )
+    elif configuration == "no-audio-marker":
+        tokenizer = build_synthetic_v7_audio_tokenizer(profile=SYNTHETIC_V7_INSTRUCT_NO_AUDIO, mode=ValidationMode.test)
+    elif configuration == "no-begin-audio-marker":
+        tokenizer = build_synthetic_v7_audio_tokenizer(
+            profile=SYNTHETIC_V7_INSTRUCT_NO_BEGIN_AUDIO, mode=ValidationMode.test
+        )
+    elif configuration == "no-audio-marker-speech":
+        tokenizer = build_synthetic_v7_audio_tokenizer(profile=SYNTHETIC_V7_SPEECH_NO_AUDIO, mode=ValidationMode.test)
+    elif configuration == "no-begin-audio-marker-speech":
+        tokenizer = build_synthetic_v7_audio_tokenizer(
+            profile=SYNTHETIC_V7_SPEECH_NO_BEGIN_AUDIO, mode=ValidationMode.test
+        )
+    elif configuration == "no-streaming-pad-marker":
+        tokenizer = build_synthetic_v7_audio_tokenizer(profile=SYNTHETIC_V7_STREAMING_NO_PAD, mode=ValidationMode.test)
     else:
         assert configuration == "no-voice-map"
         tokenizer = build_synthetic_v7_audio_tokenizer(
@@ -91,6 +145,19 @@ def test_direct_unsupported_audio_capability(
     if request_recipe == "transcription":
         request = TranscriptionRequest(
             audio=b"not decoded before capability check",
+            language=None,
+            target_streaming_delay_ms=None,
+        )
+    elif request_recipe == "transcription-audio":
+        request = TranscriptionRequest(
+            audio=valid_reference_audio(),
+            language=None,
+            target_streaming_delay_ms=None,
+        )
+    elif request_recipe == "streaming-online":
+        request = TranscriptionRequest(
+            audio="",
+            streaming=StreamingMode.ONLINE,
             language=None,
             target_streaming_delay_ms=None,
         )

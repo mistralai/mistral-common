@@ -6,12 +6,17 @@ import pytest
 from mistral_common.exceptions import UnsupportedTokenizerFeatureException
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.protocol.speech.request import SpeechRequest
-from mistral_common.protocol.transcription.request import TranscriptionRequest
+from mistral_common.protocol.transcription.request import StreamingMode, TranscriptionRequest
 from tests.audio_error_test_support import (
     BUNDLED_V7_NO_AUDIO_CONFIGURATION_ID,
+    SYNTHETIC_V7_INSTRUCT_NO_AUDIO,
+    SYNTHETIC_V7_INSTRUCT_NO_BEGIN_AUDIO,
     SYNTHETIC_V7_INSTRUCT_NO_TRANSCRIBE,
+    SYNTHETIC_V7_SPEECH_NO_AUDIO,
+    SYNTHETIC_V7_SPEECH_NO_BEGIN_AUDIO,
     SYNTHETIC_V7_SPEECH_NO_MARKER,
     SYNTHETIC_V7_SPEECH_NO_VOICE_MAP,
+    SYNTHETIC_V7_STREAMING_NO_PAD,
     SyntheticV7AudioProfile,
     build_synthetic_v7_audio_tokenizer,
     load_bundled_v7_no_audio_tokenizer,
@@ -26,7 +31,14 @@ class PublicAudioErrorCase:
     mode: ValidationMode
     profile: SyntheticV7AudioProfile | None
     operation: Literal["transcription", "speech"]
-    request_recipe: Literal["transcription", "speech-no-source", "speech-reference", "speech-preset"]
+    request_recipe: Literal[
+        "transcription",
+        "transcription-audio",
+        "streaming-online",
+        "speech-no-source",
+        "speech-reference",
+        "speech-preset",
+    ]
     message: str
 
 
@@ -76,13 +88,65 @@ PUBLIC_AUDIO_ERROR_CASES = (
         request_recipe="speech-preset",
         message=r"(?i)preset voices.*not configured",
     ),
+    PublicAudioErrorCase(
+        case_id="audio-v7-instruct-transcription-no-audio-test",
+        configuration_id=SYNTHETIC_V7_INSTRUCT_NO_AUDIO.configuration_id,
+        mode=ValidationMode.test,
+        profile=SYNTHETIC_V7_INSTRUCT_NO_AUDIO,
+        operation="transcription",
+        request_recipe="transcription-audio",
+        message=r"audio marker.*transcription",
+    ),
+    PublicAudioErrorCase(
+        case_id="audio-v7-instruct-transcription-no-begin-audio-test",
+        configuration_id=SYNTHETIC_V7_INSTRUCT_NO_BEGIN_AUDIO.configuration_id,
+        mode=ValidationMode.test,
+        profile=SYNTHETIC_V7_INSTRUCT_NO_BEGIN_AUDIO,
+        operation="transcription",
+        request_recipe="transcription-audio",
+        message=r"begin_audio marker.*transcription",
+    ),
+    PublicAudioErrorCase(
+        case_id="audio-v7-speech-no-audio-token-test",
+        configuration_id=SYNTHETIC_V7_SPEECH_NO_AUDIO.configuration_id,
+        mode=ValidationMode.test,
+        profile=SYNTHETIC_V7_SPEECH_NO_AUDIO,
+        operation="speech",
+        request_recipe="speech-reference",
+        message=r"audio marker.*speech",
+    ),
+    PublicAudioErrorCase(
+        case_id="audio-v7-speech-no-begin-audio-test",
+        configuration_id=SYNTHETIC_V7_SPEECH_NO_BEGIN_AUDIO.configuration_id,
+        mode=ValidationMode.test,
+        profile=SYNTHETIC_V7_SPEECH_NO_BEGIN_AUDIO,
+        operation="speech",
+        request_recipe="speech-reference",
+        message=r"begin_audio marker.*speech",
+    ),
+    PublicAudioErrorCase(
+        case_id="audio-v7-streaming-transcription-no-streaming-pad-test",
+        configuration_id=SYNTHETIC_V7_STREAMING_NO_PAD.configuration_id,
+        mode=ValidationMode.test,
+        profile=SYNTHETIC_V7_STREAMING_NO_PAD,
+        operation="transcription",
+        request_recipe="streaming-online",
+        message=r"streaming_pad marker.*transcription",
+    ),
 )
 
 
 def _build_request(recipe: str) -> TranscriptionRequest | SpeechRequest:
-    if recipe == "transcription":
+    if recipe in {"transcription", "transcription-audio"}:
         return TranscriptionRequest(
-            audio=b"not decoded before capability check",
+            audio=b"not decoded before capability check" if recipe == "transcription" else valid_reference_audio(),
+            language=None,
+            target_streaming_delay_ms=None,
+        )
+    if recipe == "streaming-online":
+        return TranscriptionRequest(
+            audio="",
+            streaming=StreamingMode.ONLINE,
             language=None,
             target_streaming_delay_ms=None,
         )

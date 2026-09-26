@@ -44,6 +44,37 @@ SYNTHETIC_V7_SPEECH_NO_AUDIO_TO_TEXT = SyntheticV7AudioProfile(
     omitted_audio_markers=(SpecialTokens.audio_to_text.value,),
     voice_num_audio_tokens=(("preset", 5),),
 )
+SYNTHETIC_V7_INSTRUCT_NO_AUDIO = SyntheticV7AudioProfile(
+    configuration_id="synthetic-v7-instruct-no-audio-test",
+    unavailable_instruct_markers=(),
+    omitted_audio_markers=(SpecialTokens.audio.value,),
+    voice_num_audio_tokens=(("preset", 5),),
+)
+SYNTHETIC_V7_INSTRUCT_NO_BEGIN_AUDIO = SyntheticV7AudioProfile(
+    configuration_id="synthetic-v7-instruct-no-begin-audio-test",
+    unavailable_instruct_markers=(),
+    omitted_audio_markers=(SpecialTokens.begin_audio.value,),
+    voice_num_audio_tokens=(("preset", 5),),
+)
+SYNTHETIC_V7_STREAMING_NO_PAD = SyntheticV7AudioProfile(
+    configuration_id="synthetic-v7-streaming-no-streaming-pad-test",
+    unavailable_instruct_markers=(),
+    omitted_audio_markers=(SpecialTokens.streaming_pad.value,),
+    voice_num_audio_tokens=(("preset", 5),),
+    transcription_format=TranscriptionFormat.STREAMING,
+)
+SYNTHETIC_V7_SPEECH_NO_AUDIO = SyntheticV7AudioProfile(
+    configuration_id="synthetic-v7-speech-no-audio-test",
+    unavailable_instruct_markers=(),
+    omitted_audio_markers=(SpecialTokens.audio.value,),
+    voice_num_audio_tokens=(("preset", 5),),
+)
+SYNTHETIC_V7_SPEECH_NO_BEGIN_AUDIO = SyntheticV7AudioProfile(
+    configuration_id="synthetic-v7-speech-no-begin-audio-test",
+    unavailable_instruct_markers=(),
+    omitted_audio_markers=(SpecialTokens.begin_audio.value,),
+    voice_num_audio_tokens=(("preset", 5),),
+)
 SYNTHETIC_V7_SPEECH_NO_VOICE_MAP = SyntheticV7AudioProfile(
     configuration_id="synthetic-v7-speech-no-map-test",
     unavailable_instruct_markers=(),

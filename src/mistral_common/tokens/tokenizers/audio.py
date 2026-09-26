@@ -7,7 +7,7 @@ import warnings
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import requests as _requests_lib
@@ -632,6 +632,17 @@ class AudioEncoder:
         self.encoding_config = audio_config.encoding_config
         self.special_ids = special_ids
 
+    def _require_marker(
+        self,
+        marker: Literal["audio", "begin_audio", "streaming_pad"],
+        operation: str,
+    ) -> None:
+        r"""Raise a project feature error when an operation's marker is absent."""
+        if getattr(self.special_ids, marker) is None:
+            raise UnsupportedTokenizerFeatureException(
+                f"Audio encoder does not provide the {marker} marker required for {operation}."
+            )
+
     def pad(
         self,
         audio_array: np.ndarray,
@@ -850,6 +861,8 @@ class AudioEncoder:
                     f"Unknown voice {voice!r}, expected one of {list(self.audio_config.voice_num_audio_tokens)}."
                 )
             num_audio_tokens = self.audio_config.voice_num_audio_tokens[voice]
+        self._require_marker(marker="begin_audio", operation="speech")
+        self._require_marker(marker="audio", operation="speech")
         tokens = self._encode_audio_tokens_for_speech_request(num_audio_tokens)
 
         return AudioEncoding(
