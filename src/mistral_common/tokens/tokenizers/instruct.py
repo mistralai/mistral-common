@@ -8,6 +8,7 @@ import numpy as np
 from mistral_common.exceptions import (
     InvalidRequestException,
     TokenizerException,
+    UnsupportedTokenizerFeatureException,
 )
 from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.instruct.chunk import (
@@ -1035,7 +1036,10 @@ class InstructTokenizerV7(InstructTokenizerV3):
         Returns:
             Tokenized: The tokenized representation of the audio data, including processed audio and tokens
         """
-        assert self.audio_encoder is not None, f"Audio encoder must be defined, got {self.audio_encoder=}"
+        if self.audio_encoder is None:
+            raise UnsupportedTokenizerFeatureException(
+                f"Tokenizer {self.tokenizer.version.value} does not provide an audio encoder for transcription."
+            )
         if self.audio_encoder.audio_config.transcription_format == TranscriptionFormat.INSTRUCT:
             return self._encode_instruct_transcription(request)
         elif self.audio_encoder.audio_config.transcription_format == TranscriptionFormat.STREAMING:
@@ -1050,7 +1054,11 @@ class InstructTokenizerV7(InstructTokenizerV3):
         assert request.streaming == StreamingMode.DISABLED, (
             f"Request must not be in streaming mode, got {request.streaming=}"
         )
-        assert self.TRANSCRIBE is not None, f"{self.__class__.__name__} needs to have a TRANSCRIBE token"
+        if self.TRANSCRIBE is None:
+            raise UnsupportedTokenizerFeatureException(
+                f"Tokenizer {self.tokenizer.version.value} does not provide the TRANSCRIBE marker required for "
+                "transcription."
+            )
         prefix = self.start()
         tokens, images, audio = self.encode_user_message(
             UserMessage(content=[AudioChunk(input_audio=request.audio)]),
@@ -1265,15 +1273,26 @@ class InstructTokenizerV7(InstructTokenizerV3):
         Returns:
             Tokenized object with the full token sequence and optional audio data.
         """
-        assert self.audio_encoder is not None, (
-            f"Audio encoder must be defined to encode audio, got {self.audio_encoder=}"
-        )
+        if self.audio_encoder is None:
+            raise UnsupportedTokenizerFeatureException(
+                f"Tokenizer {self.tokenizer.version.value} does not provide an audio encoder for speech."
+            )
         init_tokens = self.start()
         tokenized = Tokenized(tokens=init_tokens)
         tokenized_audio = self._encode_audio_for_speech_request(request.ref_audio, request.voice)
         tokenized.tokens.extend(tokenized_audio.tokens)
         tokenized.audios.extend(tokenized_audio.audios)
         tokens: list[int] = tokenized.tokens
+        if self.audio_encoder.special_ids.text_to_audio is None:
+            raise UnsupportedTokenizerFeatureException(
+                f"Tokenizer {self.tokenizer.version.value} does not provide the text_to_audio marker required for "
+                "speech."
+            )
+        if self.audio_encoder.special_ids.audio_to_text is None:
+            raise UnsupportedTokenizerFeatureException(
+                f"Tokenizer {self.tokenizer.version.value} does not provide the audio_to_text marker required for "
+                "speech."
+            )
         tokens.append(self.audio_encoder.text_to_audio_token)
         tokens.extend(self.tokenizer.encode(request.input, bos=False, eos=False))
         tokens.append(self.audio_encoder.audio_to_text_token)

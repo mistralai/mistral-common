@@ -13,6 +13,7 @@ import numpy as np
 import requests as _requests_lib
 
 from mistral_common.deprecation import warn_once
+from mistral_common.exceptions import UnsupportedTokenizerFeatureException
 from mistral_common.imports import (
     assert_soundfile_installed,
     assert_soxr_installed,
@@ -840,9 +841,10 @@ class AudioEncoder:
             audio.resample(self.audio_config.sampling_rate)
             num_audio_tokens = self._get_num_audio_token_for_speech_request(len(audio.audio_array))
         else:
-            assert self.audio_config.voice_num_audio_tokens is not None, (
-                "voice_num_audio_tokens must be set in audio config to use voice-based speech requests"
-            )
+            if self.audio_config.voice_num_audio_tokens is None:
+                raise UnsupportedTokenizerFeatureException(
+                    "Preset voices are not configured for this audio configuration."
+                )
             assert voice is not None and voice in self.audio_config.voice_num_audio_tokens, (
                 f"Unknown voice {voice!r}, expected one of {list(self.audio_config.voice_num_audio_tokens)}"
             )
