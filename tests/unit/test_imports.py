@@ -1,7 +1,8 @@
 import builtins
 import logging
-from functools import _lru_cache_wrapper
-from types import ModuleType
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from importlib.machinery import ModuleSpec
 from typing import Any
 from unittest.mock import MagicMock, Mock, patch
 
@@ -26,145 +27,273 @@ from mistral_common.imports import (
     is_soxr_installed,
 )
 
-_IS_INSTALLED_TO_TESTS = [
-    is_hf_hub_installed,
-    is_jinja2_installed,
-    is_llguidance_installed,
-    is_sentencepiece_installed,
-    is_soundfile_installed,
-    is_soxr_installed,
-]
+_AVAILABILITY_CHECKS = (
+    ("hf-hub", "huggingface_hub", is_hf_hub_installed),
+    ("jinja2", "jinja2", is_jinja2_installed),
+    ("llguidance", "llguidance", is_llguidance_installed),
+    ("sentencepiece", "sentencepiece", is_sentencepiece_installed),
+    ("soundfile", "soundfile", is_soundfile_installed),
+    ("soxr", "soxr", is_soxr_installed),
+)
 
-_ASSERT_TO_TESTS = [
+_AVAILABILITY_CASES = tuple(
+    pytest.param(
+        check,
+        package_name,
+        expected,
+        id=f"{case_id}-{'present' if expected else 'missing'}",
+    )
+    for case_id, package_name, check in _AVAILABILITY_CHECKS
+    for expected in (True, False)
+)
+
+_ASSERTION_CHECKS = (
     (
-        is_hf_hub_installed,
+        "hf-hub",
+        "huggingface_hub",
         assert_hf_hub_installed,
         "`huggingface_hub` is not installed. Please install it with `pip install mistral-common[hf-hub]`",
     ),
     (
-        is_jinja2_installed,
+        "jinja2",
+        "jinja2",
         assert_jinja2_installed,
         "`jinja2` is not installed. Please install it with `pip install mistral-common[guidance]`",
     ),
     (
-        is_llguidance_installed,
+        "llguidance",
+        "llguidance",
         assert_llguidance_installed,
         "`llguidance` is not installed. Please install it with `pip install mistral-common[guidance]`",
     ),
     (
-        is_opencv_installed,
+        "opencv",
+        "cv2",
         assert_opencv_installed,
         "`opencv` is not installed. Please install it with `pip install mistral-common[opencv]`",
     ),
     (
-        is_sentencepiece_installed,
+        "sentencepiece",
+        "sentencepiece",
         assert_sentencepiece_installed,
         "`sentencepiece` is not installed. Please install it with `pip install mistral-common[sentencepiece]`",
     ),
     (
-        is_soundfile_installed,
+        "soundfile",
+        "soundfile",
         assert_soundfile_installed,
         "`soundfile` is not installed. Please install it with `pip install mistral-common[soundfile]`",
     ),
     (
-        is_soxr_installed,
+        "soxr",
+        "soxr",
         assert_soxr_installed,
         "`soxr` is not installed. Please install it with `pip install mistral-common[soxr]`",
     ),
-]
+)
+
+_ASSERTION_CASES = tuple(
+    pytest.param(
+        package_name,
+        check,
+        installed,
+        error_message,
+        id=f"{case_id}-{'present' if installed else 'missing'}",
+    )
+    for case_id, package_name, check, error_message in _ASSERTION_CHECKS
+    for installed in (True, False)
+)
+
+_CACHED_IMPORT_CHECKS = (
+    is_hf_hub_installed,
+    is_jinja2_installed,
+    is_llguidance_installed,
+    is_opencv_installed,
+    is_sentencepiece_installed,
+    is_soundfile_installed,
+    is_soxr_installed,
+    assert_hf_hub_installed,
+    assert_jinja2_installed,
+    assert_llguidance_installed,
+    assert_opencv_installed,
+    assert_sentencepiece_installed,
+    assert_soundfile_installed,
+    assert_soxr_installed,
+)
 
 
+@contextmanager
+def _isolated_import_caches() -> Iterator[None]:
+    for cached_check in _CACHED_IMPORT_CHECKS:
+        cached_check.cache_clear()
+
+    try:
+        yield
+    finally:
+        for cached_check in _CACHED_IMPORT_CHECKS:
+            cached_check.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def clear_import_caches() -> Iterator[None]:
+    with _isolated_import_caches():
+        yield
+
+
+@pytest.mark.parametrize(
+    ("package_spec", "expected_installed"),
+    [
+        pytest.param(ModuleSpec(name="package_name", loader=None), True, id="package-present"),
+        pytest.param(None, False, id="package-missing"),
+    ],
+)
 @patch("importlib.util.find_spec")
-def test_is_package_installed(mock_find_spec: MagicMock) -> None:
-    mock_find_spec.return_value = True
-    assert is_package_installed("package_name") is True
+def test_is_package_installed(
+    mock_find_spec: MagicMock, package_spec: ModuleSpec | None, expected_installed: bool
+) -> None:
+    mock_find_spec.return_value = package_spec
 
-    mock_find_spec.return_value = None
-    assert is_package_installed("package_name") is False
+    assert is_package_installed("package_name") is expected_installed
+
+    mock_find_spec.assert_called_once_with("package_name")
 
 
+@pytest.mark.parametrize(
+    ("package_name", "is_installed", "error_message", "expected_error_message"),
+    [
+        pytest.param("package_name", True, None, None, id="package-present"),
+        pytest.param(
+            "package_name",
+            False,
+            None,
+            "Package 'package_name' is required but not installed.",
+            id="package-missing-default-message",
+        ),
+        pytest.param(
+            "missing_pkg",
+            False,
+            "Install missing_pkg for this test",
+            "Install missing_pkg for this test",
+            id="package-missing-custom-message",
+        ),
+    ],
+)
 @patch("mistral_common.imports.is_package_installed")
-def test_assert_package_installed(mock_is_package_installed: MagicMock) -> None:
-    mock_is_package_installed.return_value = True
-    assert_package_installed(package_name="package_name")
+def test_assert_package_installed(
+    mock_is_package_installed: MagicMock,
+    package_name: str,
+    is_installed: bool,
+    error_message: str | None,
+    expected_error_message: str | None,
+) -> None:
+    mock_is_package_installed.return_value = is_installed
 
-    mock_is_package_installed.return_value = False
-    with pytest.raises(ImportError):
-        assert_package_installed(package_name="package_name")
+    def call_package_check() -> None:
+        if error_message is None:
+            assert_package_installed(package_name=package_name)
+        else:
+            assert_package_installed(package_name=package_name, error_message=error_message)
 
-    with pytest.raises(ImportError) as exc_info:
-        assert_package_installed(
-            package_name="missing_pkg",
-            error_message="Install missing_pkg for this test",
-        )
-    assert str(exc_info.value) == "Install missing_pkg for this test"
+    if expected_error_message is None:
+        call_package_check()
+    else:
+        with pytest.raises(ImportError) as exc_info:
+            call_package_check()
+        assert str(exc_info.value) == expected_error_message
+
+    mock_is_package_installed.assert_called_once_with(package_name)
 
 
-def test_is_opencv_installed() -> None:
-    is_opencv_installed.cache_clear()
-
+def test_is_opencv_installed_when_cv2_import_succeeds() -> None:
     with patch.dict("sys.modules", {"cv2": Mock()}):
         assert is_opencv_installed() is True
-    is_opencv_installed.cache_clear()
 
+
+def test_is_opencv_installed_when_cv2_import_raises_import_error(caplog: pytest.LogCaptureFixture) -> None:
     real_import = builtins.__import__
 
-    def fake_import(name: str, *args: Any, **kwargs: Any) -> ModuleType:
+    def fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
         if name == "cv2":
             raise ImportError("Simulated import error for cv2")
         return real_import(name, *args, **kwargs)
 
-    with patch("builtins.__import__", side_effect=fake_import):
-        assert is_opencv_installed() is False
+    with caplog.at_level(logging.WARNING, logger="mistral_common.imports"):
+        with patch("builtins.__import__", side_effect=fake_import):
+            assert is_opencv_installed() is False
 
-    is_opencv_installed.cache_clear()
-
-
-def test_is_opencv_installed_handles_broken_import(caplog: pytest.LogCaptureFixture) -> None:
-    is_opencv_installed.cache_clear()
-    try:
-        with caplog.at_level(logging.WARNING, logger="mistral_common.imports"):
-            with patch("builtins.__import__", side_effect=RuntimeError("broken cv2")) as mock_import:
-                assert not is_opencv_installed()
-
-        assert any(call.args and call.args[0] == "cv2" for call in mock_import.call_args_list)
-        assert "Your installation of OpenCV appears to be broken: broken cv2." in caplog.text
-    finally:
-        is_opencv_installed.cache_clear()
+    assert not [record for record in caplog.records if record.name == "mistral_common.imports"]
 
 
+def test_is_opencv_installed_logs_broken_install_diagnostic(caplog: pytest.LogCaptureFixture) -> None:
+    real_import = builtins.__import__
+
+    def fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name == "cv2":
+            raise RuntimeError("broken cv2")
+        return real_import(name, *args, **kwargs)
+
+    with caplog.at_level(logging.WARNING, logger="mistral_common.imports"):
+        with patch("builtins.__import__", side_effect=fake_import):
+            assert is_opencv_installed() is False
+
+    assert "Your installation of OpenCV appears to be broken: broken cv2." in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("is_installed_fn", "package_name", "expected_installed"),
+    _AVAILABILITY_CASES,
+)
 @patch("mistral_common.imports.is_package_installed")
-@pytest.mark.parametrize("is_installed_fn", _IS_INSTALLED_TO_TESTS)
-def test_is_installed(mock_is_package_installed: MagicMock, is_installed_fn: _lru_cache_wrapper) -> None:
-    is_installed_fn.cache_clear()
-
-    mock_is_package_installed.return_value = True
-    assert is_installed_fn() is True
-    is_installed_fn.cache_clear()
-
-    mock_is_package_installed.return_value = False
-    assert is_installed_fn() is False
-    is_installed_fn.cache_clear()
-
-
-@patch("mistral_common.imports.is_package_installed")
-@pytest.mark.parametrize("is_installed_fn, assert_fn, error_message", _ASSERT_TO_TESTS)
-def test_assert_installed(
+def test_dependency_availability_reports_package_state(
     mock_is_package_installed: MagicMock,
-    is_installed_fn: _lru_cache_wrapper,
-    assert_fn: _lru_cache_wrapper,
-    error_message: str,
+    is_installed_fn: Callable[[], bool],
+    package_name: str,
+    expected_installed: bool,
 ) -> None:
-    is_installed_fn.cache_clear()
-    assert_fn.cache_clear()
-    mock_is_package_installed.return_value = True
-    assert_fn()
-    is_installed_fn.cache_clear()
-    assert_fn.cache_clear()
+    mock_is_package_installed.return_value = expected_installed
 
-    mock_is_package_installed.return_value = False
-    with pytest.raises(ImportError) as exc_info:
-        assert_fn()
-    assert str(exc_info.value) == error_message
-    is_installed_fn.cache_clear()
-    assert_fn.cache_clear()
+    assert is_installed_fn() is expected_installed
+
+    mock_is_package_installed.assert_called_once_with(package_name)
+
+
+@pytest.mark.parametrize(
+    ("package_name", "assert_installed_fn", "is_installed", "expected_error_message"),
+    _ASSERTION_CASES,
+)
+@patch("mistral_common.imports.is_package_installed")
+def test_dependency_assertion_reports_package_state(
+    mock_is_package_installed: MagicMock,
+    package_name: str,
+    assert_installed_fn: Callable[[], None],
+    is_installed: bool,
+    expected_error_message: str,
+) -> None:
+    mock_is_package_installed.return_value = is_installed
+
+    if is_installed:
+        assert_installed_fn()
+    else:
+        with pytest.raises(ImportError) as exc_info:
+            assert_installed_fn()
+        assert str(exc_info.value) == expected_error_message
+
+    mock_is_package_installed.assert_called_once_with(package_name)
+
+
+def test_import_caches_are_cleared_after_a_case_fails() -> None:
+    with pytest.raises(RuntimeError, match="simulated test failure"):
+        with _isolated_import_caches():
+            with patch("mistral_common.imports.is_package_installed", return_value=True):
+                for _, _, availability_check in _AVAILABILITY_CHECKS:
+                    availability_check()
+                for _, _, assertion_check, _ in _ASSERTION_CHECKS:
+                    assertion_check()
+                assert_opencv_installed()
+            with patch.dict("sys.modules", {"cv2": Mock()}):
+                is_opencv_installed()
+
+            assert all(cached_check.cache_info().currsize == 1 for cached_check in _CACHED_IMPORT_CHECKS)
+            raise RuntimeError("simulated test failure")
+
+    assert all(cached_check.cache_info().currsize == 0 for cached_check in _CACHED_IMPORT_CHECKS)
