@@ -1,35 +1,22 @@
-from enum import Enum
-
 import pytest
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
 
 from mistral_common.base import MistralBase
-from mistral_common.protocol.instruct.chunk import TextChunk
+from mistral_common.protocol.instruct.chunk import ImageURLChunk, TextChunk
 from mistral_common.protocol.instruct.messages import UserMessage
+from mistral_common.protocol.instruct.request import ResponseFormat, ResponseFormats
 
 
 class _RequiredParent(MistralBase):
-    inherited_value: int
+    parent_id: int
 
 
 class _RequiredChild(_RequiredParent):
-    child_value: str
+    child_text: str
 
 
-class _Envelope(MistralBase):
-    child: _RequiredChild
-
-
-class _InvalidDefault(MistralBase):
-    value: int = "not an integer"  # type: ignore[assignment]
-
-
-class _Choice(str, Enum):
-    first = "first"
-
-
-class _EnumModel(MistralBase):
-    choice: _Choice
+class _InvalidLabelDefault(MistralBase):
+    label: str = Field(default="", min_length=1)
 
 
 @pytest.mark.parametrize(
@@ -59,64 +46,68 @@ def test_model_validate_ignore_extra_filters_and_validates() -> None:
     assert message == UserMessage(content="hi")
 
 
-def test_model_validate_ignore_extra_no_extra_keys() -> None:
-    chunk = TextChunk.model_validate_ignore_extra({"type": "text", "text": "hello"})
-    assert chunk == TextChunk(text="hello")
-
-
 def test_model_validate_ignore_extra_raises_on_missing_required() -> None:
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as exc_info:
         UserMessage.model_validate_ignore_extra({"role": "user"})
+
+    assert [error["loc"] for error in exc_info.value.errors()] == [("content",)]
 
 
 def test_filter_cls_fields_includes_inherited_fields() -> None:
-    data = {"inherited_value": 7, "child_value": "child", "unknown": "ignored"}
+    data = {"parent_id": 7, "child_text": "child", "unknown": "ignored"}
 
-    assert _RequiredChild._filter_cls_fields(data) == {"inherited_value": 7, "child_value": "child"}
-    assert _RequiredChild.model_validate_ignore_extra(data) == _RequiredChild(inherited_value=7, child_value="child")
-
-    with pytest.raises(ValidationError):
-        _RequiredChild.model_validate(data)
+    assert _RequiredChild._filter_cls_fields(data) == {"parent_id": 7, "child_text": "child"}
+    assert _RequiredChild.model_validate_ignore_extra(data) == _RequiredChild(parent_id=7, child_text="child")
 
 
 @pytest.mark.parametrize(
     "data",
     [
-        {"child_value": "child", "unknown": "ignored"},
-        {"inherited_value": "not an integer", "child_value": "child", "unknown": "ignored"},
+        pytest.param({"child_text": "child", "unknown": "ignored"}, id="missing-parent-id"),
+        pytest.param(
+            {"parent_id": "not an integer", "child_text": "child", "unknown": "ignored"},
+            id="invalid-parent-id",
+        ),
     ],
-    ids=["missing-inherited-field", "invalid-inherited-field"],
 )
 def test_model_validate_ignore_extra_validates_inherited_fields(data: dict[str, object]) -> None:
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as exc_info:
         _RequiredChild.model_validate_ignore_extra(data)
+
+    assert [error["loc"] for error in exc_info.value.errors()] == [("parent_id",)]
 
 
 def test_model_validate_ignore_extra_does_not_filter_nested_fields() -> None:
-    valid_child = {"inherited_value": 7, "child_value": "child"}
-    assert _Envelope.model_validate_ignore_extra({"child": valid_child, "unknown_outer": "ignored"}) == _Envelope(
-        child=_RequiredChild(inherited_value=7, child_value="child")
-    )
-
-    invalid_nested_data = {
-        "child": {"inherited_value": 7, "child_value": "child", "unknown_nested": "rejected"},
+    data = {
+        "image_url": {"url": "https://example.com/image.png", "unknown_nested": "rejected"},
         "unknown_outer": "ignored",
     }
-    with pytest.raises(ValidationError) as exc_info:
-        _Envelope.model_validate_ignore_extra(invalid_nested_data)
 
-    assert [error["loc"] for error in exc_info.value.errors()] == [("child", "unknown_nested")]
+    with pytest.raises(ValidationError) as exc_info:
+        ImageURLChunk.model_validate_ignore_extra(data)
+
+    assert ("image_url", "ImageURL", "unknown_nested") in [error["loc"] for error in exc_info.value.errors()]
+
+
+def test_text_chunk_rejects_annotations() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        TextChunk(text="hello", annotations=[])
+
+    assert [error["loc"] for error in exc_info.value.errors()] == [("annotations",)]
 
 
 def test_model_validate_validates_defaults_on_instantiation() -> None:
     with pytest.raises(ValidationError) as exc_info:
-        _InvalidDefault()
+        _InvalidLabelDefault()
 
-    assert [(error["loc"], error["input"]) for error in exc_info.value.errors()] == [(("value",), "not an integer")]
+    assert [(error["loc"], error["input"]) for error in exc_info.value.errors()] == [(("label",), "")]
 
 
 def test_model_validate_uses_enum_values() -> None:
-    model = _EnumModel(choice=_Choice.first)
+    default_model = ResponseFormat()
+    explicit_model = ResponseFormat(type=ResponseFormats.json)
 
-    assert model.choice == "first"
-    assert type(model.choice) is str
+    assert default_model.type == ResponseFormats.text.value
+    assert type(default_model.type) is str
+    assert explicit_model.type == ResponseFormats.json.value
+    assert type(explicit_model.type) is str
