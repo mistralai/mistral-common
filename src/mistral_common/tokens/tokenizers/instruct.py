@@ -8,6 +8,7 @@ import numpy as np
 from mistral_common.exceptions import (
     InvalidRequestException,
     TokenizerException,
+    UnsupportedTokenizerFeatureException,
 )
 from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.instruct.chunk import (
@@ -41,6 +42,7 @@ from mistral_common.tokens.tokenizers.base import (
     Tokenized,
     TokenizedType,
     Tokenizer,
+    TokenizerVersion,
     UserMessagePosition,
 )
 from mistral_common.tokens.tokenizers.image import ImageEncoder
@@ -444,6 +446,53 @@ class InstructTokenizerV2(InstructTokenizerV1, Generic[InstructRequestType, FIMR
     """
 
     _message_position_to_encode_tools_settings = UserMessagePosition.last
+
+    def encode_instruct(self, request: InstructRequest[ChatMessage, Tool]) -> Tokenized:
+        r"""Encode a request after checking v2 tool-result limitations.
+
+        Args:
+            request: The instruct request to encode.
+
+        Returns:
+            The tokenized request.
+
+        Raises:
+            UnsupportedTokenizerFeatureException: If a v2 assistant turn has
+                multiple tool results.
+        """
+        if self.tokenizer.version == TokenizerVersion.v2:
+            self._validate_tool_results(request=request)
+        return super().encode_instruct(request)
+
+    def _validate_tool_results(self, request: InstructRequest[ChatMessage, Tool]) -> None:
+        r"""Reject multiple tool results for a single encoded v2 assistant turn.
+
+        Args:
+            request: The normalized request to encode.
+
+        Raises:
+            UnsupportedTokenizerFeatureException: If a v2 assistant turn in the
+                encoded suffix has more than one tool result.
+        """
+        _, last_user_idx = self.find_first_last_user(request=request)
+        has_tool_call_turn = False
+        result_count = 0
+        for message_idx, message in enumerate(request.messages):
+            if message_idx < last_user_idx:
+                continue
+            if isinstance(message, AssistantMessage):
+                has_tool_call_turn = bool(message.tool_calls)
+                result_count = 0
+            elif isinstance(message, ToolMessage):
+                if has_tool_call_turn:
+                    result_count += 1
+                    if result_count > 1:
+                        raise UnsupportedTokenizerFeatureException(
+                            "Tokenizer v2 does not support multiple tool results for one assistant turn."
+                        )
+            else:
+                has_tool_call_turn = False
+                result_count = 0
 
     def __init__(
         self,
