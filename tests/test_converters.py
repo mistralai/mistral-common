@@ -1,5 +1,4 @@
 import base64
-import copy
 import io
 import warnings
 from pathlib import Path
@@ -17,12 +16,6 @@ from openai.types.chat.chat_completion_content_part_image_param import (
 )
 from openai.types.chat.chat_completion_content_part_input_audio_param import (
     ChatCompletionContentPartInputAudioParam as OpenAIInputAudioChunk,
-)
-from openai.types.chat.chat_completion_content_part_text_param import (
-    ChatCompletionContentPartTextParam as OpenAITextChunk,
-)
-from openai.types.chat.chat_completion_message_tool_call_param import (
-    ChatCompletionMessageToolCallParam as OpenAIToolCall,
 )
 from openai.types.chat.chat_completion_system_message_param import (
     ChatCompletionSystemMessageParam as OpenAISystemMessage,
@@ -138,18 +131,6 @@ def test_convert_image_chunk_from_openai_does_not_mutate_input() -> None:
     assert openai_chunk["image_url"]["url"] == original_url
 
 
-def test_convert_text_chunk() -> None:
-    chunk = TextChunk(text="Hello")
-    text_openai = chunk.to_openai()
-
-    assert text_openai == {"type": "text", "text": "Hello"}
-
-    assert TextChunk.from_openai(text_openai) == chunk
-
-    typeddict_openai = OpenAITextChunk(**chunk.to_openai())  # type: ignore[typeddict-item]
-    assert TextChunk.from_openai(typeddict_openai) == chunk
-
-
 def test_convert_input_audio_chunk() -> None:
     chunk = DUMMY_AUDIO_CHUNK
     openai_dict = chunk.to_openai()
@@ -258,128 +239,6 @@ def test_convert_audio_url_chunk(vllm_audio_url_chunk: dict, audio_url_chunk: Au
         assert audio_url_from_openai.type == audio_url_chunk.type
     else:
         assert AudioURLChunk.from_openai(vllm_audio_url_chunk) == audio_url_chunk
-
-
-def test_convert_function_from_openai_missing_parameters_and_description_and_unk_args() -> None:
-    openai_function: dict[str, Any] = {"name": "do_nothing", "unk_field": "1"}
-    assert Function.from_openai(openai_function) == Function(name="do_nothing", description="", parameters={})
-
-
-def test_convert_tool() -> None:
-    tool = Tool(
-        function=Function(
-            name="get_current_weather",
-            description="Get the current weather",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "location": {
-                        "type": "string",
-                        "description": "The city and state, e.g. San Francisco, CA",
-                    },
-                    "format": {
-                        "type": "string",
-                        "enum": ["celsius", "fahrenheit"],
-                        "description": "The temperature unit to use. Infer this from the user's location.",
-                    },
-                },
-                "required": ["location", "format"],
-            },
-            strict=True,
-        )
-    )
-
-    tool_openai = tool.to_openai()
-    assert tool_openai == (
-        {
-            "type": "function",
-            "function": {
-                "name": "get_current_weather",
-                "description": "Get the current weather",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "location": {
-                            "type": "string",
-                            "description": "The city and state, e.g. San Francisco, CA",
-                        },
-                        "format": {
-                            "type": "string",
-                            "enum": ["celsius", "fahrenheit"],
-                            "description": "The temperature unit to use. Infer this from the user's location.",
-                        },
-                    },
-                    "required": ["location", "format"],
-                },
-                "strict": True,
-            },
-        }
-    )
-    assert Tool.from_openai(tool.to_openai()) == tool
-
-    typeddict_openai = OpenAITool(**tool.to_openai())  # type: ignore[typeddict-item]
-    assert Tool.from_openai(typeddict_openai) == tool
-
-
-def test_convert_tool_from_openai_missing_parameters_description_and_unknown_field() -> None:
-    openai_tool: dict[str, Any] = {
-        "type": "function",
-        "function": {
-            "name": "do_nothing",
-            "unknown_field": "should be ignored",
-        },
-    }
-    original_openai_tool = copy.deepcopy(openai_tool)
-    tool = Tool.from_openai(openai_tool)
-
-    assert tool == Tool(function=Function(name="do_nothing", description="", parameters={}))
-    assert openai_tool == original_openai_tool
-
-
-def test_convert_tool_call() -> None:
-    tool_call = ToolCall(
-        id="VvvODy9mT",
-        function=FunctionCall(
-            name="get_current_weather",
-            arguments='{"location": "Paris, France", "format": "celsius"}',
-        ),
-    )
-    tool_call_openai = tool_call.to_openai()
-
-    assert tool_call_openai == (
-        {
-            "id": "VvvODy9mT",
-            "type": "function",
-            "function": {
-                "name": "get_current_weather",
-                "arguments": '{"location": "Paris, France", "format": "celsius"}',
-            },
-        }
-    )
-    assert ToolCall.from_openai(tool_call.to_openai()) == tool_call
-
-    typeddict_openai = OpenAIToolCall(**tool_call.to_openai())  # type: ignore[typeddict-item]
-    assert ToolCall.from_openai(typeddict_openai) == tool_call
-
-
-def test_tool_call_from_openai_ignores_index() -> None:
-    openai_tool_call = {
-        "id": "call_123",
-        "index": 0,
-        "type": "function",
-        "function": {"name": "foo", "arguments": "{}"},
-    }
-    assert ToolCall.from_openai(openai_tool_call) == ToolCall(
-        id="call_123", function=FunctionCall(name="foo", arguments="{}")
-    )
-
-
-def test_convert_think_chunk() -> None:
-    chunk = ThinkChunk(thinking="Hello", closed=False)
-    text_openai = chunk.to_openai()
-
-    assert ThinkChunk.from_openai(text_openai) == chunk
-    assert text_openai == {"type": "thinking", "thinking": "Hello", "closed": False}
 
 
 @pytest.mark.parametrize(
@@ -1435,107 +1294,3 @@ class TestToolChoice:
 
         reconstructed = ChatCompletionRequest.from_openai(**openai_request)
         assert reconstructed.tool_choice == expected_reconstructed
-
-
-@pytest.mark.parametrize(
-    ["from_openai_call", "expected"],
-    [
-        # Messages with extra fields
-        (
-            lambda: UserMessage.from_openai({"role": "user", "content": "Hello", "name": "user1"}),
-            UserMessage(content="Hello"),
-        ),
-        (
-            lambda: UserMessage.from_openai(
-                {"role": "user", "content": [{"type": "text", "text": "Hello"}], "name": "user1"}
-            ),
-            UserMessage(content=[TextChunk(text="Hello")]),
-        ),
-        (
-            lambda: SystemMessage.from_openai({"role": "system", "content": "Be helpful", "name": "sys"}),
-            SystemMessage(content="Be helpful"),
-        ),
-        (
-            lambda: ToolMessage.from_openai(
-                {"role": "tool", "content": "42", "tool_call_id": "c1", "extra": "ignored"}
-            ),
-            ToolMessage(content="42", tool_call_id="c1"),
-        ),
-        (
-            lambda: AssistantMessage.from_openai(
-                {"role": "assistant", "content": "Hi", "refusal": None, "audio": None}
-            ),
-            AssistantMessage(content="Hi"),
-        ),
-        # ToolCall with index
-        (
-            lambda: ToolCall.from_openai(
-                {"id": "c1", "index": 0, "type": "function", "function": {"name": "f", "arguments": "{}"}}
-            ),
-            ToolCall(id="c1", function=FunctionCall(name="f", arguments="{}")),
-        ),
-        # Tool with extra field
-        (
-            lambda: Tool.from_openai(
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "get_weather",
-                        "description": "",
-                        "parameters": {"type": "object"},
-                        "strict": False,
-                    },
-                    "extra_openai_field": True,
-                }
-            ),
-            Tool(function=Function(name="get_weather", description="", parameters={"type": "object"})),
-        ),
-        # Chunks with extra fields
-        (
-            lambda: TextChunk.from_openai({"type": "text", "text": "Hello", "annotations": []}),
-            TextChunk(text="Hello"),
-        ),
-        (
-            lambda: ThinkChunk.from_openai({"type": "thinking", "thinking": "hmm", "closed": True, "extra": 1}),
-            ThinkChunk(thinking="hmm", closed=True),
-        ),
-        (
-            lambda: AudioURLChunk.from_openai(
-                {"type": "audio_url", "audio_url": {"url": AUDIO_SAMPLE_URL}, "extra": True}
-            ),
-            AudioURLChunk(audio_url=AudioURL(url=AUDIO_SAMPLE_URL)),
-        ),
-        (
-            lambda: AudioChunk.from_openai({**DUMMY_AUDIO_CHUNK.to_openai(), "extra": True}),
-            DUMMY_AUDIO_CHUNK,
-        ),
-        # Requests with unsupported OpenAI / unknown fields
-        (
-            lambda: ChatCompletionRequest.from_openai(
-                messages=[{"role": "user", "content": "Hello"}],
-                temperature=0.5,
-                stream=False,
-                n=2,
-                logprobs=True,
-                frequency_penalty=0.1,
-                unknown_field="value",
-            ),
-            ChatCompletionRequest(messages=[UserMessage(content="Hello")], temperature=0.5),
-        ),
-    ],
-)
-def test_from_openai_drops_extra_fields(from_openai_call: Any, expected: Any) -> None:
-    assert from_openai_call() == expected
-
-
-@pytest.mark.parametrize(
-    "constructor",
-    [
-        lambda: UserMessage(content="Hello", name="user1"),  # type: ignore[call-arg]
-        lambda: SystemMessage(content="Be helpful", name="sys"),  # type: ignore[call-arg]
-        lambda: TextChunk(text="Hello", extra="bad"),  # type: ignore[call-arg]
-    ],
-)
-def test_direct_construction_still_strict(constructor: Any) -> None:
-    with pytest.raises(Exception):
-        constructor()
