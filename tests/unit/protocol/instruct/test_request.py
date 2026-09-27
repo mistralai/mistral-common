@@ -1,5 +1,6 @@
 import warnings
 from collections.abc import Iterator
+from copy import deepcopy
 from typing import Any
 
 import pytest
@@ -7,8 +8,16 @@ from pydantic import ValidationError
 
 import mistral_common.deprecation
 from mistral_common.exceptions import InvalidMessageStructureException
-from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, SystemMessage, UserMessage
+from mistral_common.protocol.instruct.chunk import TextChunk, ThinkChunk
+from mistral_common.protocol.instruct.messages import (
+    AssistantMessage,
+    ChatMessage,
+    ReasoningFieldFormat,
+    SystemMessage,
+    UserMessage,
+)
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
+from mistral_common.protocol.instruct.tool_calls import FunctionName, NamedToolChoice, ToolChoiceEnum
 
 
 class TestRequestConstruction:
@@ -188,3 +197,140 @@ def test_request_from_openai_rejects_invalid_recognized_value() -> None:
             messages=[{"role": "user", "content": "Hello"}],
             temperature="not-a-number",
         )
+
+
+def test_request_to_openai_forwards_reasoning_field_format() -> None:
+    messages: list[ChatMessage] = [
+        UserMessage(content="Hi"),
+        AssistantMessage(content=[ThinkChunk(thinking="Let me think", closed=True), TextChunk(text="Done")]),
+    ]
+    request = ChatCompletionRequest(messages=messages)
+
+    openai_request = request.to_openai(reasoning_field_format=ReasoningFieldFormat.reasoning)
+
+    assistant_message = [message for message in openai_request["messages"] if message["role"] == "assistant"][0]
+    assert assistant_message == {"role": "assistant", "reasoning": "Let me think", "content": "Done"}
+
+
+def test_request_from_openai_maps_continuation_without_warning() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        request = ChatCompletionRequest.from_openai(
+            messages=[
+                {"role": "user", "content": "foo"},
+                {"role": "assistant", "content": "bar"},
+            ],
+            continue_final_message=True,
+        )
+
+    assert isinstance(request.messages[-1], AssistantMessage)
+    assert request.messages[-1].prefix is True
+
+
+@pytest.mark.parametrize(
+    ("legacy_value", "expected_prefix"),
+    [
+        pytest.param(1, True, id="integer-true"),
+        pytest.param("true", True, id="string-true"),
+        pytest.param(0, False, id="integer-false"),
+        pytest.param("false", False, id="string-false"),
+    ],
+)
+def test_request_from_openai_preserves_legacy_boolean_coercion(
+    legacy_value: bool | int | str, expected_prefix: bool
+) -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        request = ChatCompletionRequest.from_openai(
+            messages=[
+                {"role": "user", "content": "foo"},
+                {"role": "assistant", "content": "bar"},
+            ],
+            continue_final_message=legacy_value,  # type: ignore[arg-type]
+        )
+
+    assert caught == []
+    assert isinstance(request.messages[-1], AssistantMessage)
+    assert request.messages[-1].prefix is expected_prefix
+
+
+def test_request_from_openai_rejects_invalid_continuation_without_warning() -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(ValidationError, match="valid boolean"):
+            ChatCompletionRequest.from_openai(
+                messages=[{"role": "user", "content": "foo"}],
+                continue_final_message="not-a-bool",  # type: ignore[arg-type]
+            )
+
+    assert caught == []
+
+
+def test_request_from_openai_rejects_true_continuation_for_non_assistant_final() -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(InvalidMessageStructureException, match="requires final message to be an assistant"):
+            ChatCompletionRequest.from_openai(
+                messages=[
+                    {"role": "user", "content": "foo"},
+                    {"role": "user", "content": "bar"},
+                ],
+                continue_final_message=True,
+            )
+
+    assert caught == []
+
+
+@pytest.mark.parametrize(
+    ("messages", "expected"),
+    [
+        pytest.param(
+            [UserMessage(content="foo"), AssistantMessage(content="bar", prefix=True)],
+            True,
+            id="prefixed-final-assistant",
+        ),
+        pytest.param(
+            [UserMessage(content="foo"), AssistantMessage(content="bar")],
+            False,
+            id="unprefixed-final-assistant",
+        ),
+        pytest.param(
+            [UserMessage(content="foo")],
+            False,
+            id="non-assistant-final",
+        ),
+    ],
+)
+def test_request_to_openai_derives_continuation_flag(messages: list[ChatMessage], expected: bool) -> None:
+    request = ChatCompletionRequest(messages=deepcopy(messages))
+
+    assert request.to_openai()["continue_final_message"] is expected
+
+
+@pytest.mark.parametrize(
+    ("tool_choice", "expected_openai", "expected_reconstructed"),
+    [
+        pytest.param(ToolChoiceEnum.auto, "auto", ToolChoiceEnum.auto.value, id="auto"),
+        pytest.param(ToolChoiceEnum.none, "none", ToolChoiceEnum.none.value, id="none"),
+        pytest.param(ToolChoiceEnum.required, "required", ToolChoiceEnum.required.value, id="required"),
+        pytest.param(ToolChoiceEnum.any, "required", ToolChoiceEnum.required.value, id="any-maps-to-required"),
+        pytest.param(
+            NamedToolChoice(function=FunctionName(name="get_weather")),
+            {"type": "function", "function": {"name": "get_weather"}},
+            NamedToolChoice(function=FunctionName(name="get_weather")),
+            id="named-tool",
+        ),
+    ],
+)
+def test_request_tool_choice_round_trip(
+    tool_choice: ToolChoiceEnum | NamedToolChoice,
+    expected_openai: str | dict[str, Any],
+    expected_reconstructed: str | NamedToolChoice,
+) -> None:
+    request = ChatCompletionRequest(messages=[UserMessage(content="Hello")], tool_choice=deepcopy(tool_choice))
+    openai_request = request.to_openai()
+
+    assert openai_request["tool_choice"] == expected_openai
+
+    reconstructed = ChatCompletionRequest.from_openai(**openai_request)
+    assert reconstructed.tool_choice == expected_reconstructed

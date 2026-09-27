@@ -1,6 +1,5 @@
 import base64
 import io
-import warnings
 from pathlib import Path
 from typing import Any
 
@@ -24,25 +23,20 @@ from openai.types.chat.chat_completion_tool_message_param import ChatCompletionT
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam as OpenAITool
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam as OpenAIUserMessage
 from PIL import Image
-from pydantic import ValidationError
 from pydantic_extra_types.language_code import LanguageAlpha2
 
-from mistral_common.exceptions import InvalidAssistantMessageException, InvalidMessageStructureException
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURL,
     AudioURLChunk,
-    ContentChunk,
     ImageChunk,
     ImageURL,
     ImageURLChunk,
     TextChunk,
-    ThinkChunk,
 )
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
-    ReasoningFieldFormat,
     SystemMessage,
     ToolMessage,
     UserMessage,
@@ -54,11 +48,8 @@ from mistral_common.protocol.instruct.request import (
 from mistral_common.protocol.instruct.tool_calls import (
     Function,
     FunctionCall,
-    FunctionName,
-    NamedToolChoice,
     Tool,
     ToolCall,
-    ToolChoiceEnum,
 )
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
@@ -244,12 +235,7 @@ def test_convert_audio_url_chunk(vllm_audio_url_chunk: dict, audio_url_chunk: Au
 @pytest.mark.parametrize(
     ["openai_message", "message"],
     [
-        ({"role": "user", "content": "Hello"}, UserMessage(content="Hello")),
-        (
-            {"role": "user", "content": [{"type": "text", "text": "Hello"}]},
-            UserMessage(content=[TextChunk(text="Hello")]),
-        ),
-        (
+        pytest.param(
             OpenAIUserMessage(
                 role="user",
                 content=[
@@ -274,416 +260,13 @@ def test_convert_audio_url_chunk(vllm_audio_url_chunk: dict, audio_url_chunk: Au
                     ),
                 ]
             ),
-        ),
-        (OpenAIAssistantMessage(role="assistant", content="Hi"), AssistantMessage(content="Hi")),
-        (
-            {
-                "role": "assistant",
-                "content": [
-                    {"type": "thinking", "thinking": "Hello", "closed": True},
-                    {"type": "thinking", "thinking": "Hello", "closed": False},
-                    {"type": "text", "text": "Hi"},
-                ],
-            },
-            AssistantMessage(
-                content=[
-                    ThinkChunk(thinking="Hello", closed=True),
-                    ThinkChunk(thinking="Hello", closed=False),
-                    TextChunk(text="Hi"),
-                ]
-            ),
-        ),
-        (
-            OpenAIAssistantMessage(
-                role="assistant",
-                content="Hi",
-                tool_calls=[
-                    {
-                        "id": "VvvODy9mT",
-                        "type": "function",
-                        "function": {
-                            "name": "get_current_weather",
-                            "arguments": '{"location": "Paris, France", "format": "celsius"}',
-                        },
-                    }
-                ],
-            ),
-            AssistantMessage(
-                content="Hi",
-                tool_calls=[
-                    ToolCall(
-                        id="VvvODy9mT",
-                        function=FunctionCall(
-                            name="get_current_weather",
-                            arguments='{"location": "Paris, France", "format": "celsius"}',
-                        ),
-                    )
-                ],
-            ),
-        ),
-        (
-            OpenAIToolMessage(role="tool", content="22", tool_call_id="VvvODy9mT"),
-            ToolMessage(tool_call_id="VvvODy9mT", content="22"),
-        ),
-        (
-            OpenAIToolMessage(
-                role="tool",
-                content=[{"type": "text", "text": "22"}, {"type": "text", "text": "23"}],
-                tool_call_id="VvvODy9mT",
-            ),
-            ToolMessage(tool_call_id="VvvODy9mT", content=[TextChunk(text="22"), TextChunk(text="23")]),
-        ),
-        (
-            OpenAISystemMessage(role="system", content="You are a helpful assistant."),
-            SystemMessage(content="You are a helpful assistant."),
-        ),
-        (
-            {
-                "role": "system",
-                "content": [
-                    {"type": "text", "text": "You are a helpful assistant."},
-                    {"type": "thinking", "thinking": "Hello", "closed": False},
-                ],
-            },
-            SystemMessage(
-                content=[TextChunk(text="You are a helpful assistant."), ThinkChunk(thinking="Hello", closed=False)]
-            ),
+            id="user-image-url-detail-order",
         ),
     ],
 )
 def test_convert_openai_message_to_message_and_back(openai_message: dict, message: ChatMessage) -> None:
     assert type(message).from_openai(openai_message) == message
     assert message.to_openai() == openai_message
-
-
-@pytest.mark.parametrize(
-    ["openai_message", "expected"],
-    [
-        (
-            {"role": "assistant", "content": "Hi", "reasoning": "Let me think..."},
-            AssistantMessage(content=[ThinkChunk(thinking="Let me think...", closed=True), TextChunk(text="Hi")]),
-        ),
-        (
-            {
-                "role": "assistant",
-                "content": None,
-                "reasoning": "Thinking aloud",
-                "reasoning_content": "Thinking aloud",
-            },
-            AssistantMessage(content=[ThinkChunk(thinking="Thinking aloud", closed=True)]),
-        ),
-        (
-            {"role": "assistant", "reasoning": "Thinking aloud"},
-            AssistantMessage(content=[ThinkChunk(thinking="Thinking aloud", closed=True)]),
-        ),
-        (
-            {
-                "role": "assistant",
-                "content": [{"type": "text", "text": "Hello"}],
-                "reasoning": "Deep thought",
-            },
-            AssistantMessage(content=[ThinkChunk(thinking="Deep thought", closed=True), TextChunk(text="Hello")]),
-        ),
-        (
-            {"role": "assistant", "content": "Hi", "reasoning_content": "Only reasoning"},
-            AssistantMessage(content=[ThinkChunk(thinking="Only reasoning", closed=True), TextChunk(text="Hi")]),
-        ),
-    ],
-)
-def test_from_openai_reasoning_in_assistant_message(openai_message: dict[str, Any], expected: AssistantMessage) -> None:
-    assert AssistantMessage.from_openai(openai_message) == expected
-
-
-def test_from_openai_reasoning_differ_reasoning_content_in_assistant_message() -> None:
-    openai_message = {"role": "assistant", "content": "Hi", "reasoning": "Primary", "reasoning_content": "Fallback"}
-    with pytest.raises(ValueError, match=r"`reasoning_content` and `reasoning` should be equal"):
-        AssistantMessage.from_openai(openai_message)
-
-
-@pytest.mark.parametrize(
-    "openai_message",
-    [
-        {
-            "role": "assistant",
-            "content": [{"type": "thinking", "thinking": "hmm", "closed": True}, {"type": "text", "text": "Hi"}],
-            "reasoning": "also thinking",
-        },
-        {
-            "role": "assistant",
-            "content": [{"type": "thinking", "thinking": "hmm", "closed": True}],
-            "reasoning_content": "also thinking",
-        },
-        {
-            "role": "assistant",
-            "content": [{"type": "thinking", "thinking": "hmm", "closed": True}],
-            "reasoning": "also thinking",
-            "reasoning_content": "also thinking",
-        },
-    ],
-)
-def test_from_openai_thinking_chunks_and_reasoning_raises(openai_message: dict[str, Any]) -> None:
-    with pytest.raises(InvalidAssistantMessageException):
-        AssistantMessage.from_openai(openai_message)
-
-
-def test_non_leading_think_chunks_construction_ok() -> None:
-    """Non-leading ThinkChunks are allowed at construction time."""
-    msg = AssistantMessage(
-        content=[
-            ThinkChunk(thinking="First", closed=True),
-            TextChunk(text="Reply"),
-            ThinkChunk(thinking="Third", closed=False),
-        ]
-    )
-    assert msg.content is not None
-
-
-@pytest.mark.parametrize(
-    "content",
-    [
-        [ThinkChunk(thinking="First", closed=True), TextChunk(text="Reply"), ThinkChunk(thinking="Third")],
-        [TextChunk(text="Reply"), ThinkChunk(thinking="After", closed=True)],
-        [TextChunk(text="A"), TextChunk(text="B"), ThinkChunk(thinking="End", closed=True)],
-    ],
-)
-def test_non_leading_think_chunks_to_openai_raises(content: list[ContentChunk]) -> None:
-    """to_openai raises when ThinkChunks are not leading."""
-    msg = AssistantMessage(content=content)
-    with pytest.raises(InvalidAssistantMessageException, match="ThinkChunks must be leading"):
-        msg.to_openai()
-
-
-@pytest.mark.parametrize(
-    ["message", "convert_thinking_format", "expected"],
-    [
-        # thinking: chunks stay inline
-        (
-            AssistantMessage(content=[ThinkChunk(thinking="Deep thought", closed=True), TextChunk(text="Answer")]),
-            ReasoningFieldFormat.thinking_chunks,
-            {
-                "role": "assistant",
-                "content": [
-                    {"type": "thinking", "thinking": "Deep thought", "closed": True},
-                    {"type": "text", "text": "Answer"},
-                ],
-            },
-        ),
-        # thinking: multiple leading ThinkChunks stay as-is (no aggregation)
-        (
-            AssistantMessage(
-                content=[
-                    ThinkChunk(thinking="First", closed=True),
-                    ThinkChunk(thinking="Second", closed=False),
-                    TextChunk(text="Reply"),
-                ]
-            ),
-            ReasoningFieldFormat.thinking_chunks,
-            {
-                "role": "assistant",
-                "content": [
-                    {"type": "thinking", "thinking": "First", "closed": True},
-                    {"type": "thinking", "thinking": "Second", "closed": False},
-                    {"type": "text", "text": "Reply"},
-                ],
-            },
-        ),
-        # reasoning: single leading ThinkChunk extracted as flat string
-        (
-            AssistantMessage(content=[ThinkChunk(thinking="Let me think", closed=True), TextChunk(text="Done")]),
-            ReasoningFieldFormat.reasoning,
-            {"role": "assistant", "reasoning": "Let me think", "content": "Done"},
-        ),
-        # reasoning_content: single leading ThinkChunk extracted as flat string
-        (
-            AssistantMessage(content=[ThinkChunk(thinking="Pondering", closed=True), TextChunk(text="Result")]),
-            ReasoningFieldFormat.reasoning_content,
-            {"role": "assistant", "reasoning_content": "Pondering", "content": "Result"},
-        ),
-        # reasoning: multiple leading ThinkChunks concatenated with newline
-        (
-            AssistantMessage(
-                content=[
-                    ThinkChunk(thinking="Part 1", closed=True),
-                    ThinkChunk(thinking="Part 2", closed=True),
-                    TextChunk(text="Final"),
-                ]
-            ),
-            ReasoningFieldFormat.reasoning,
-            {"role": "assistant", "reasoning": "Part 1\nPart 2", "content": "Final"},
-        ),
-        # thinking: ThinkChunk only, no remaining content
-        (
-            AssistantMessage(content=[ThinkChunk(thinking="Just thinking", closed=True)]),
-            ReasoningFieldFormat.thinking_chunks,
-            {
-                "role": "assistant",
-                "content": [{"type": "thinking", "thinking": "Just thinking", "closed": True}],
-            },
-        ),
-        # reasoning: ThinkChunk only, no remaining content
-        (
-            AssistantMessage(content=[ThinkChunk(thinking="Only reasoning", closed=True)]),
-            ReasoningFieldFormat.reasoning,
-            {"role": "assistant", "reasoning": "Only reasoning"},
-        ),
-        # reasoning: leading ThinkChunk with remaining list content (multiple chunks)
-        (
-            AssistantMessage(
-                content=[
-                    ThinkChunk(thinking="Think", closed=True),
-                    TextChunk(text="A"),
-                    TextChunk(text="B"),
-                ]
-            ),
-            ReasoningFieldFormat.reasoning,
-            {
-                "role": "assistant",
-                "reasoning": "Think",
-                "content": [{"type": "text", "text": "A"}, {"type": "text", "text": "B"}],
-            },
-        ),
-        # String content unchanged regardless of convert_thinking_format
-        (
-            AssistantMessage(content="Simple text"),
-            ReasoningFieldFormat.reasoning,
-            {"role": "assistant", "content": "Simple text"},
-        ),
-        # None content unchanged
-        (
-            AssistantMessage(content=None),
-            ReasoningFieldFormat.thinking_chunks,
-            {"role": "assistant"},
-        ),
-    ],
-)
-def test_assistant_message_to_openai_convert_thinking_format(
-    message: AssistantMessage,
-    convert_thinking_format: ReasoningFieldFormat,
-    expected: dict[str, Any],
-) -> None:
-    assert message.to_openai(reasoning_field_format=convert_thinking_format) == expected
-
-
-def test_assistant_message_to_openai_none_warns_with_think_chunks() -> None:
-    message = AssistantMessage(content=[ThinkChunk(thinking="Hmm", closed=True), TextChunk(text="Answer")])
-    with pytest.warns(FutureWarning, match=r"convert_thinking_format.*defaults to 'thinking_chunks'"):
-        result = message.to_openai()
-    assert result == {
-        "role": "assistant",
-        "content": [
-            {"type": "thinking", "thinking": "Hmm", "closed": True},
-            {"type": "text", "text": "Answer"},
-        ],
-    }
-
-
-def test_assistant_message_to_openai_none_no_warning_without_think_chunks() -> None:
-    message = AssistantMessage(content="Plain text")
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        result = message.to_openai()
-    assert result == {"role": "assistant", "content": "Plain text"}
-
-
-def test_assistant_message_to_openai_none_no_warning_with_none_content() -> None:
-    message = AssistantMessage(content=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        result = message.to_openai()
-    assert result == {"role": "assistant"}
-
-
-def test_request_to_openai_forwards_reasoning_field_format() -> None:
-    messages: list[ChatMessage] = [
-        UserMessage(content="Hi"),
-        AssistantMessage(content=[ThinkChunk(thinking="Let me think", closed=True), TextChunk(text="Done")]),
-    ]
-    request = ChatCompletionRequest(messages=messages)
-
-    openai_request = request.to_openai(reasoning_field_format=ReasoningFieldFormat.reasoning)
-    assistant_msg = [m for m in openai_request["messages"] if m["role"] == "assistant"][0]
-    assert assistant_msg == {"role": "assistant", "reasoning": "Let me think", "content": "Done"}
-
-
-def test_request_from_openai_maps_continuation_without_warning() -> None:
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        request = ChatCompletionRequest.from_openai(
-            messages=[
-                {"role": "user", "content": "foo"},
-                {"role": "assistant", "content": "bar"},
-            ],
-            continue_final_message=True,
-        )
-
-    assert isinstance(request.messages[-1], AssistantMessage)
-    assert request.messages[-1].prefix is True
-
-
-@pytest.mark.parametrize(
-    ["legacy_value", "expected_prefix"],
-    [(1, True), ("true", True), (0, False), ("false", False)],
-)
-def test_request_from_openai_preserves_legacy_boolean_coercion(
-    legacy_value: bool | int | str, expected_prefix: bool
-) -> None:
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        request = ChatCompletionRequest.from_openai(
-            messages=[
-                {"role": "user", "content": "foo"},
-                {"role": "assistant", "content": "bar"},
-            ],
-            continue_final_message=legacy_value,  # type: ignore[arg-type]
-        )
-
-    assert caught == []
-    assert isinstance(request.messages[-1], AssistantMessage)
-    assert request.messages[-1].prefix is expected_prefix
-
-
-def test_request_from_openai_rejects_invalid_continuation_without_warning() -> None:
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        with pytest.raises(ValidationError, match="valid boolean"):
-            ChatCompletionRequest.from_openai(
-                messages=[{"role": "user", "content": "foo"}],
-                continue_final_message="not-a-bool",  # type: ignore[arg-type]
-            )
-
-    assert caught == []
-
-
-def test_request_from_openai_rejects_true_continuation_for_non_assistant_final() -> None:
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        with pytest.raises(InvalidMessageStructureException, match="requires final message to be an assistant"):
-            ChatCompletionRequest.from_openai(
-                messages=[
-                    {"role": "user", "content": "foo"},
-                    {"role": "user", "content": "bar"},
-                ],
-                continue_final_message=True,
-            )
-
-    assert caught == []
-
-
-@pytest.mark.parametrize(
-    ["messages", "expected"],
-    [
-        (
-            [UserMessage(content="foo"), AssistantMessage(content="bar", prefix=True)],
-            True,
-        ),
-        ([UserMessage(content="foo"), AssistantMessage(content="bar")], False),
-        ([UserMessage(content="foo")], False),
-    ],
-)
-def test_request_to_openai_derives_continuation_flag(messages: list[ChatMessage], expected: bool) -> None:
-    request = ChatCompletionRequest(messages=messages)
-
-    assert request.to_openai()["continue_final_message"] is expected
 
 
 @pytest.mark.parametrize(
@@ -1265,32 +848,3 @@ def test_convert_speech_request_round_trip(voice: str | None, with_ref_audio: bo
         assert np.allclose(restored_audio.audio_array, original_audio.audio_array, atol=1e-3)
     else:
         assert restored.ref_audio is None
-
-
-class TestToolChoice:
-    @pytest.mark.parametrize(
-        ["tool_choice", "expected_openai", "expected_reconstructed"],
-        [
-            (ToolChoiceEnum.auto, "auto", ToolChoiceEnum.auto.value),
-            (ToolChoiceEnum.none, "none", ToolChoiceEnum.none.value),
-            (ToolChoiceEnum.required, "required", ToolChoiceEnum.required.value),
-            (ToolChoiceEnum.any, "required", ToolChoiceEnum.required.value),
-            (
-                NamedToolChoice(function=FunctionName(name="get_weather")),
-                {"type": "function", "function": {"name": "get_weather"}},
-                NamedToolChoice(function=FunctionName(name="get_weather")),
-            ),
-        ],
-    )
-    def test_tool_choice_round_trip(
-        self,
-        tool_choice: ToolChoiceEnum | NamedToolChoice,
-        expected_openai: str | dict[str, Any],
-        expected_reconstructed: str | NamedToolChoice,
-    ) -> None:
-        request = ChatCompletionRequest(messages=[UserMessage(content="Hello")], tool_choice=tool_choice)
-        openai_request = request.to_openai()
-        assert openai_request["tool_choice"] == expected_openai
-
-        reconstructed = ChatCompletionRequest.from_openai(**openai_request)
-        assert reconstructed.tool_choice == expected_reconstructed
