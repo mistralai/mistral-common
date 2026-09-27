@@ -90,8 +90,10 @@ def test_model_validate_ignore_extra_does_not_filter_nested_fields() -> None:
 
 
 def test_text_chunk_rejects_annotations() -> None:
+    assert TextChunk.model_validate({"text": "hello"}) == TextChunk(text="hello")
+
     with pytest.raises(ValidationError) as exc_info:
-        TextChunk(text="hello", annotations=[])
+        TextChunk.model_validate({"text": "hello", "annotations": []})
 
     assert [error["loc"] for error in exc_info.value.errors()] == [("annotations",)]
 
