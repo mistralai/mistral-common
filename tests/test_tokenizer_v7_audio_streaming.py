@@ -4,6 +4,8 @@ from typing import Any
 import numpy as np
 import pytest
 
+from mistral_common.exceptions import InvalidRequestException, UnsupportedTokenizerFeatureException
+from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.protocol.transcription.request import (
     StreamingMode,
     TranscriptionRequest,
@@ -24,6 +26,14 @@ from mistral_common.tokens.tokenizers.mistral import (
 )
 from mistral_common.tokens.tokenizers.tekken import SpecialTokenInfo, Tekkenizer
 from tests.test_tekken import get_special_tokens, quick_vocab
+from tests.test_tokenizer_v7_audio import (
+    SYNTHETIC_V7_STREAMING,
+    SYNTHETIC_V7_STREAMING_NO_PAD,
+    SyntheticV7AudioProfile,
+    build_synthetic_v7_audio_tokenizer,
+    valid_reference_audio,
+    valid_reference_audio_bytes,
+)
 from tests.utils import decode_keep
 
 _audio_spectrogram_config = {
@@ -204,3 +214,140 @@ def test_audio_config_delay(rate: float, delay: int, num_delay_tokens: int) -> N
             audio_config_fn()
     else:
         assert audio_config_fn().get_num_delay_tokens() == num_delay_tokens
+
+
+@pytest.mark.parametrize(
+    ("configuration_id", "profile", "mode", "audio", "streaming", "error_type", "message"),
+    [
+        pytest.param(
+            SYNTHETIC_V7_STREAMING_NO_PAD.configuration_id,
+            SYNTHETIC_V7_STREAMING_NO_PAD,
+            ValidationMode.test,
+            "",
+            StreamingMode.ONLINE,
+            UnsupportedTokenizerFeatureException,
+            r"streaming_pad marker.*transcription",
+            id="audio-v7-streaming-transcription-no-streaming-pad-test",
+        ),
+        pytest.param(
+            SYNTHETIC_V7_STREAMING.configuration_id,
+            SYNTHETIC_V7_STREAMING,
+            ValidationMode.test,
+            valid_reference_audio(),
+            StreamingMode.DISABLED,
+            InvalidRequestException,
+            r"Streaming transcription.*OFFLINE.*ONLINE.*DISABLED",
+            id="audio-v7-streaming-disabled-rejected-test",
+        ),
+        pytest.param(
+            SYNTHETIC_V7_STREAMING.configuration_id,
+            SYNTHETIC_V7_STREAMING,
+            ValidationMode.test,
+            valid_reference_audio_bytes(),
+            StreamingMode.ONLINE,
+            InvalidRequestException,
+            r"ONLINE streaming audio.*base64 text.*bytes",
+            id="audio-v7-online-bytes-rejected-test",
+        ),
+    ],
+)
+def test_public_streaming_transcription_errors(
+    configuration_id: str,
+    profile: SyntheticV7AudioProfile,
+    mode: ValidationMode,
+    audio: str | bytes,
+    streaming: StreamingMode,
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    assert configuration_id == profile.configuration_id
+    tokenizer = build_synthetic_v7_audio_tokenizer(profile=profile, mode=mode)
+    assert tokenizer.mode == mode
+
+    request = TranscriptionRequest(
+        audio=audio,
+        streaming=streaming,
+        language=None,
+        target_streaming_delay_ms=None,
+    )
+    with pytest.raises(error_type, match=message):
+        tokenizer.encode_transcription(request)
+
+
+@pytest.mark.parametrize(
+    ("profile", "audio", "streaming", "error_type", "message"),
+    [
+        pytest.param(
+            SYNTHETIC_V7_STREAMING_NO_PAD,
+            "",
+            StreamingMode.ONLINE,
+            UnsupportedTokenizerFeatureException,
+            r"streaming_pad marker.*transcription",
+            id="v7-streaming-profile-without-streaming-pad-marker",
+        ),
+        pytest.param(
+            SYNTHETIC_V7_STREAMING,
+            valid_reference_audio(),
+            StreamingMode.DISABLED,
+            InvalidRequestException,
+            r"Streaming transcription.*OFFLINE.*ONLINE.*DISABLED",
+            id="streaming-disabled-mode",
+        ),
+        pytest.param(
+            SYNTHETIC_V7_STREAMING,
+            valid_reference_audio_bytes(),
+            StreamingMode.ONLINE,
+            InvalidRequestException,
+            r"ONLINE streaming audio.*base64 text.*bytes",
+            id="online-nonempty-wav-bytes",
+        ),
+    ],
+)
+def test_direct_streaming_transcription_errors(
+    profile: SyntheticV7AudioProfile,
+    audio: str | bytes,
+    streaming: StreamingMode,
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    tokenizer = build_synthetic_v7_audio_tokenizer(profile=profile, mode=ValidationMode.test)
+    request = TranscriptionRequest(
+        audio=audio,
+        streaming=streaming,
+        language=None,
+        target_streaming_delay_ms=None,
+    )
+
+    with pytest.raises(error_type, match=message):
+        tokenizer.instruct_tokenizer.encode_transcription(request)
+
+
+def test_online_base64_audio_keeps_direct_warning_and_combine_path() -> None:
+    tokenizer = build_synthetic_v7_audio_tokenizer(profile=SYNTHETIC_V7_STREAMING, mode=ValidationMode.test)
+    input_audio = Audio(
+        audio_array=np.linspace(-0.75, 0.75, 2_400, dtype=np.float32),
+        sampling_rate=24_000,
+        format="wav",
+    )
+    encoded_audio = input_audio.to_base64("wav")
+    request = TranscriptionRequest(
+        audio=encoded_audio,
+        streaming=StreamingMode.ONLINE,
+        language=None,
+        target_streaming_delay_ms=None,
+    )
+
+    with pytest.warns(FutureWarning, match="Passing audio.*deprecated"):
+        tokenized = tokenizer.instruct_tokenizer.encode_transcription(request)
+
+    decoded_audio = Audio.from_base64(encoded_audio)
+    assert len(tokenized.audios) == 1
+    assert tokenized.audios[0].sampling_rate == decoded_audio.sampling_rate
+    audio_encoder = tokenizer.instruct_tokenizer.audio_encoder
+    assert audio_encoder is not None
+    audio_config = audio_encoder.audio_config
+    left_padding_samples = audio_config.n_left_pad_tokens * audio_config.raw_audio_length_per_tok
+    expected_audio = np.concatenate(
+        (np.zeros(left_padding_samples, dtype=decoded_audio.audio_array.dtype), decoded_audio.audio_array)
+    )
+    np.testing.assert_array_equal(tokenized.audios[0].audio_array, expected_audio)
