@@ -1,5 +1,6 @@
 import os.path
 import warnings
+from collections.abc import Generator
 
 import pytest
 
@@ -8,8 +9,20 @@ from mistral_common.deprecation import deprecated_import, warn_once
 
 
 @pytest.fixture(autouse=True)
-def _clear_warned_keys() -> None:
+def _assert_warned_keys_are_cleared() -> Generator[None, None, None]:
+    yield
+    assert mistral_common.deprecation._warned_keys == set()
+
+
+@pytest.fixture(autouse=True)
+def _clear_warned_keys(
+    _assert_warned_keys_are_cleared: None,
+) -> Generator[None, None, None]:
     mistral_common.deprecation._warned_keys.clear()
+    try:
+        yield
+    finally:
+        mistral_common.deprecation._warned_keys.clear()
 
 
 def test_deprecated_import_returns_correct_object() -> None:
