@@ -156,6 +156,16 @@ mistral-common/
 - New unit tests belong under `tests/unit/` and mirror the source package structure.
 - New integration tests belong under `tests/integration/` and exercise public workflows.
 - Existing tests elsewhere are legacy during the ongoing migration and are removed as their replacements land.
+- Temporary exception for the v2 parallel-result and public audio-error
+  source fixes only: add regression cases to their existing owning legacy
+  test modules rather than creating new `tests/unit/` or
+  `tests/integration/` modules. Public cases in those modules temporarily
+  run in the existing `tests/` lane. Move direct cases into `tests/unit/`
+  with the versioned-instruct or audio-unit migration, and public cases into
+  `tests/integration/` with the public-chat or transcription/speech migration.
+  Keep shared legacy test providers importable until all consumers move;
+  retire old cases only after their replacements are reviewed. All other
+  new tests follow the placement rules above.
 
 ## Development Workflow
 
