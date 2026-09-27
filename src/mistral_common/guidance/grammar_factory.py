@@ -57,7 +57,7 @@ def _cached_get_lark_from_jinja(
     end_think_token: str | None,
 ) -> str:
     jinja_template = Template(template)
-    lark_grammar = jinja_template.render(
+    lark_grammar : str = jinja_template.render(
         mode=mode,
         fcall=fcall,
         json_schema_str=json_schema_str,
