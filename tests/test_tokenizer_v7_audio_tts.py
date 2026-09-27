@@ -1,9 +1,16 @@
 import math
+from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 import pytest
 
-from mistral_common.exceptions import InvalidRequestException, UnsupportedTokenizerFeatureException
+from mistral_common.exceptions import (
+    InvalidRequestException,
+    TokenizerException,
+    UnsupportedTokenizerFeatureException,
+)
+from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.tokens.tokenizers.audio import (
     Audio,
@@ -13,10 +20,23 @@ from mistral_common.tokens.tokenizers.audio import (
 )
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTokens
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7
-from mistral_common.tokens.tokenizers.mistral import load_audio_encoder
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer, load_audio_encoder
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 
-from .test_tokenizer_v7_audio import get_tekkenizer_with_audio
+from .test_tokenizer_v7_audio import (
+    BUNDLED_V7_NO_AUDIO_CONFIGURATION_ID,
+    SYNTHETIC_V7_SPEECH,
+    SYNTHETIC_V7_SPEECH_NO_AUDIO,
+    SYNTHETIC_V7_SPEECH_NO_AUDIO_TO_TEXT,
+    SYNTHETIC_V7_SPEECH_NO_BEGIN_AUDIO,
+    SYNTHETIC_V7_SPEECH_NO_MARKER,
+    SYNTHETIC_V7_SPEECH_NO_VOICE_MAP,
+    SyntheticV7AudioProfile,
+    build_synthetic_v7_audio_tokenizer,
+    get_tekkenizer_with_audio,
+    load_bundled_v7_no_audio_tokenizer,
+    valid_reference_audio,
+)
 
 
 @pytest.fixture(scope="session")
@@ -196,3 +216,224 @@ def test_encode_speech_request_audio_resampled(tts_tokenizer: InstructTokenizerV
     audio_token_count = tokenized.tokens.count(AUDIO)
     assert audio_token_count == num_audio_tokens, f"{audio_token_count=} != {num_audio_tokens=}"
     assert len(tokenized.audios) == 1
+
+
+@dataclass(frozen=True)
+class PublicSpeechErrorCase:
+    case_id: str
+    configuration_id: str
+    mode: ValidationMode
+    profile: SyntheticV7AudioProfile | None
+    request_recipe: Literal["speech-no-source", "speech-reference", "speech-preset", "speech-unknown-voice"]
+    exception_type: type[UnsupportedTokenizerFeatureException] | type[InvalidRequestException]
+    message: str
+
+
+PUBLIC_SPEECH_ERROR_CASES = (
+    PublicSpeechErrorCase(
+        case_id="audio-v7-speech-no-encoder-test",
+        configuration_id=BUNDLED_V7_NO_AUDIO_CONFIGURATION_ID,
+        mode=ValidationMode.test,
+        profile=None,
+        request_recipe="speech-no-source",
+        exception_type=UnsupportedTokenizerFeatureException,
+        message=r"audio encoder.*speech",
+    ),
+    PublicSpeechErrorCase(
+        case_id="audio-v7-speech-no-marker-test",
+        configuration_id=SYNTHETIC_V7_SPEECH_NO_MARKER.configuration_id,
+        mode=ValidationMode.test,
+        profile=SYNTHETIC_V7_SPEECH_NO_MARKER,
+        request_recipe="speech-reference",
+        exception_type=UnsupportedTokenizerFeatureException,
+        message=r"text_to_audio marker.*speech",
+    ),
+    PublicSpeechErrorCase(
+        case_id="audio-v7-speech-no-voice-map-test",
+        configuration_id=SYNTHETIC_V7_SPEECH_NO_VOICE_MAP.configuration_id,
+        mode=ValidationMode.test,
+        profile=SYNTHETIC_V7_SPEECH_NO_VOICE_MAP,
+        request_recipe="speech-preset",
+        exception_type=UnsupportedTokenizerFeatureException,
+        message=r"(?i)preset voices.*not configured",
+    ),
+    PublicSpeechErrorCase(
+        case_id="audio-v7-speech-no-audio-token-test",
+        configuration_id=SYNTHETIC_V7_SPEECH_NO_AUDIO.configuration_id,
+        mode=ValidationMode.test,
+        profile=SYNTHETIC_V7_SPEECH_NO_AUDIO,
+        request_recipe="speech-reference",
+        exception_type=UnsupportedTokenizerFeatureException,
+        message=r"audio marker.*speech",
+    ),
+    PublicSpeechErrorCase(
+        case_id="audio-v7-speech-no-begin-audio-test",
+        configuration_id=SYNTHETIC_V7_SPEECH_NO_BEGIN_AUDIO.configuration_id,
+        mode=ValidationMode.test,
+        profile=SYNTHETIC_V7_SPEECH_NO_BEGIN_AUDIO,
+        request_recipe="speech-reference",
+        exception_type=UnsupportedTokenizerFeatureException,
+        message=r"begin_audio marker.*speech",
+    ),
+    PublicSpeechErrorCase(
+        case_id="audio-v7-speech-source-required-test",
+        configuration_id=SYNTHETIC_V7_SPEECH.configuration_id,
+        mode=ValidationMode.test,
+        profile=SYNTHETIC_V7_SPEECH,
+        request_recipe="speech-no-source",
+        exception_type=InvalidRequestException,
+        message=r"Either ref_audio or voice must be defined",
+    ),
+    PublicSpeechErrorCase(
+        case_id="audio-v7-speech-unknown-voice-test",
+        configuration_id=SYNTHETIC_V7_SPEECH.configuration_id,
+        mode=ValidationMode.test,
+        profile=SYNTHETIC_V7_SPEECH,
+        request_recipe="speech-unknown-voice",
+        exception_type=InvalidRequestException,
+        message=r"Unknown voice.*expected one of \['preset'\]",
+    ),
+)
+
+
+def _build_speech_error_request(
+    recipe: Literal["speech-no-source", "speech-reference", "speech-preset", "speech-unknown-voice"],
+) -> SpeechRequest:
+    if recipe == "speech-no-source":
+        return SpeechRequest(input="hello")
+    if recipe == "speech-reference":
+        return SpeechRequest(input="hello", ref_audio=valid_reference_audio())
+    if recipe == "speech-preset":
+        return SpeechRequest(input="hello", voice="preset")
+    assert recipe == "speech-unknown-voice"
+    return SpeechRequest(input="hello", voice="not-configured")
+
+
+@pytest.mark.parametrize("case", PUBLIC_SPEECH_ERROR_CASES, ids=lambda case: case.case_id)
+def test_public_speech_error(case: PublicSpeechErrorCase) -> None:
+    if case.profile is None:
+        assert case.configuration_id == BUNDLED_V7_NO_AUDIO_CONFIGURATION_ID
+        tokenizer = load_bundled_v7_no_audio_tokenizer(mode=case.mode)
+    else:
+        assert case.configuration_id == case.profile.configuration_id
+        tokenizer = build_synthetic_v7_audio_tokenizer(profile=case.profile, mode=case.mode)
+    assert tokenizer.mode == case.mode
+
+    request = _build_speech_error_request(case.request_recipe)
+    with pytest.raises(case.exception_type, match=case.message):
+        tokenizer.encode_speech_request(request)
+
+
+@pytest.mark.parametrize(
+    ("profile", "request_recipe", "message"),
+    [
+        pytest.param(
+            None,
+            "speech-no-source",
+            r"audio encoder.*speech",
+            id="v7-speech-without-encoder-takes-priority-over-missing-source",
+        ),
+        pytest.param(
+            SYNTHETIC_V7_SPEECH_NO_MARKER,
+            "speech-reference",
+            r"text_to_audio marker.*speech",
+            id="v7-speech-profile-without-required-marker",
+        ),
+        pytest.param(
+            SYNTHETIC_V7_SPEECH_NO_AUDIO_TO_TEXT,
+            "speech-reference",
+            r"audio_to_text marker.*speech",
+            id="v7-speech-profile-without-audio-to-text-marker",
+        ),
+        pytest.param(
+            SYNTHETIC_V7_SPEECH_NO_AUDIO,
+            "speech-reference",
+            r"audio marker.*speech",
+            id="v7-speech-profile-without-audio-marker",
+        ),
+        pytest.param(
+            SYNTHETIC_V7_SPEECH_NO_BEGIN_AUDIO,
+            "speech-reference",
+            r"begin_audio marker.*speech",
+            id="v7-speech-profile-without-begin-audio-marker",
+        ),
+        pytest.param(
+            SYNTHETIC_V7_SPEECH_NO_VOICE_MAP,
+            "speech-preset",
+            r"(?i)preset voices.*not configured",
+            id="v7-speech-profile-without-voice-map",
+        ),
+    ],
+)
+def test_direct_unsupported_speech_capability(
+    profile: SyntheticV7AudioProfile | None,
+    request_recipe: Literal["speech-no-source", "speech-reference", "speech-preset", "speech-unknown-voice"],
+    message: str,
+) -> None:
+    if profile is None:
+        tokenizer = load_bundled_v7_no_audio_tokenizer(mode=ValidationMode.test)
+    else:
+        tokenizer = build_synthetic_v7_audio_tokenizer(profile=profile, mode=ValidationMode.test)
+
+    request = _build_speech_error_request(request_recipe)
+    with pytest.raises(UnsupportedTokenizerFeatureException, match=message):
+        tokenizer.instruct_tokenizer.encode_speech_request(request)
+
+
+@pytest.mark.parametrize(
+    ("request_recipe", "message"),
+    [
+        pytest.param(
+            "speech-no-source",
+            r"Either ref_audio or voice must be defined",
+            id="speech-source-required",
+        ),
+        pytest.param(
+            "speech-unknown-voice",
+            r"Unknown voice.*expected one of \['preset'\]",
+            id="speech-unknown-configured-voice",
+        ),
+    ],
+)
+def test_direct_invalid_speech_request(
+    request_recipe: Literal["speech-no-source", "speech-unknown-voice"], message: str
+) -> None:
+    tokenizer = build_synthetic_v7_audio_tokenizer(profile=SYNTHETIC_V7_SPEECH, mode=ValidationMode.test)
+    request = _build_speech_error_request(request_recipe)
+
+    with pytest.raises(InvalidRequestException, match=message):
+        tokenizer.instruct_tokenizer.encode_speech_request(request)
+
+
+@pytest.mark.parametrize(
+    ("version", "message"),
+    [
+        pytest.param("v1", r"Speech request not available for tokenizer v1", id="v1-speech"),
+        pytest.param("v2", r"Speech request not available for tokenizer v2", id="v2-speech"),
+        pytest.param("v3", r"Speech request not available for tokenizer v3", id="v3-speech"),
+    ],
+)
+def test_pre_v7_speech_remains_tokenizer_error(version: str, message: str) -> None:
+    if version == "v1":
+        tokenizer = MistralTokenizer.v1()
+    elif version == "v2":
+        tokenizer = MistralTokenizer.v2()
+    else:
+        assert version == "v3"
+        tokenizer = MistralTokenizer.v3()
+
+    request = SpeechRequest(input="hello")
+    with pytest.raises(TokenizerException, match=message):
+        tokenizer.instruct_tokenizer.encode_speech_request(request)
+
+
+def test_reference_audio_ignores_unknown_voice_with_direct_encoder() -> None:
+    tokenizer = build_synthetic_v7_audio_tokenizer(profile=SYNTHETIC_V7_SPEECH, mode=ValidationMode.test)
+    encoded_audio = valid_reference_audio()
+    request = SpeechRequest(input="hello", ref_audio=encoded_audio, voice="not-configured")
+
+    tokenized = tokenizer.instruct_tokenizer.encode_speech_request(request)
+
+    expected_audio = Audio.from_base64(encoded_audio)
+    assert len(tokenized.audios) == 1
+    assert np.allclose(tokenized.audios[0].audio_array, expected_audio.audio_array, atol=1e-3)
