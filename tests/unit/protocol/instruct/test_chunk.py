@@ -172,6 +172,13 @@ def test_image_chunk_from_openai_does_not_mutate_input() -> None:
     assert openai_chunk == original_openai_chunk
 
 
+def test_image_chunk_from_openai_rejects_missing_nested_url() -> None:
+    openai_chunk = {"type": "image_url", "image_url": {"detail": "high"}}
+
+    with pytest.raises(AssertionError, match=r"\{'detail': 'high'\}"):
+        ImageChunk.from_openai(openai_chunk)
+
+
 @pytest.mark.parametrize(
     ("openai_chunk", "image_url_chunk", "canonical_chunk"),
     [
