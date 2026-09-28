@@ -81,6 +81,16 @@ def _bundled_spm_v3(mode: ValidationMode) -> TokenizerConfiguration:
     )
 
 
+def _bundled_spm_v7_mm(mode: ValidationMode) -> TokenizerConfiguration:
+    return TokenizerConfiguration(
+        configuration_id=f"bundled-spm-v7-mm-{mode.value}",
+        tokenizer_path=_BUNDLED_DATA / "mistral_instruct_tokenizer_241114.model.v7m1",
+        mode=mode,
+        sha256="1b968b8dc352f42192367337c78ccc61e1eaddc6d641a579372d4f20694beb7a",
+        provenance="bundled",
+    )
+
+
 def _pinned(profile_id: str, filename: str, sha256: str, mode: ValidationMode) -> TokenizerConfiguration:
     return TokenizerConfiguration(
         configuration_id=f"pinned-{profile_id}-{mode.value}",
@@ -97,6 +107,7 @@ BUNDLED_SPM_V2_SERVING = _bundled_spm_v2(ValidationMode.serving)
 BUNDLED_SPM_V2_FINETUNING = _bundled_spm_v2(ValidationMode.finetuning)
 BUNDLED_SPM_V2_AGNOSTIC = _bundled_spm_v2(ValidationMode.agnostic)
 BUNDLED_SPM_V3_TEST = _bundled_spm_v3(ValidationMode.test)
+BUNDLED_SPM_V7_MM_TEST = _bundled_spm_v7_mm(ValidationMode.test)
 
 
 def _set_test_image_patch_size_2(tokenizer: MistralTokenizer) -> None:
@@ -144,6 +155,30 @@ PINNED_V7_AUDIO_TEST = _pinned(
     filename="v7-audio.tekken.json",
     sha256="4aaf3836c2a5332f029ce85a7a62255c966f47b6797ef81dedd0ade9c862e4a8",
     mode=ValidationMode.test,
+)
+PINNED_V7_IMAGE_FINETUNING = _pinned(
+    profile_id="v7-image",
+    filename="v7-image.tekken.json",
+    sha256="c604f35d1035f534519622c0ec83fed6184978d4fdee92a5bd2a50bc05438094",
+    mode=ValidationMode.finetuning,
+)
+PINNED_V7_IMAGE_SERVING = _pinned(
+    profile_id="v7-image",
+    filename="v7-image.tekken.json",
+    sha256="c604f35d1035f534519622c0ec83fed6184978d4fdee92a5bd2a50bc05438094",
+    mode=ValidationMode.serving,
+)
+PINNED_V7_AUDIO_FINETUNING = _pinned(
+    profile_id="v7-audio",
+    filename="v7-audio.tekken.json",
+    sha256="4aaf3836c2a5332f029ce85a7a62255c966f47b6797ef81dedd0ade9c862e4a8",
+    mode=ValidationMode.finetuning,
+)
+PINNED_V7_AUDIO_SERVING = _pinned(
+    profile_id="v7-audio",
+    filename="v7-audio.tekken.json",
+    sha256="4aaf3836c2a5332f029ce85a7a62255c966f47b6797ef81dedd0ade9c862e4a8",
+    mode=ValidationMode.serving,
 )
 PINNED_V11_IMAGE_TEST = _pinned(
     profile_id="v11-image",
