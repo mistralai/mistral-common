@@ -1,6 +1,5 @@
 import base64
 import io
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -10,21 +9,16 @@ from openai.types.audio.transcription_create_params import TranscriptionCreatePa
 from openai.types.chat.chat_completion_assistant_message_param import (
     ChatCompletionAssistantMessageParam as OpenAIAssistantMessage,
 )
-from openai.types.chat.chat_completion_content_part_image_param import (
-    ChatCompletionContentPartImageParam as OpenAIImageChunk,
-)
 from openai.types.chat.chat_completion_content_part_input_audio_param import (
     ChatCompletionContentPartInputAudioParam as OpenAIInputAudioChunk,
 )
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam as OpenAIUserMessage
-from PIL import Image
 from pydantic_extra_types.language_code import LanguageAlpha2
 
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURL,
     AudioURLChunk,
-    ImageChunk,
     ImageURL,
     ImageURLChunk,
     TextChunk,
@@ -49,9 +43,6 @@ from mistral_common.tokens.tokenizers.audio import Audio
 
 from .test_tokenizer_v7_audio_tts import _make_fake_audio
 
-CURRENT_FILE_PATH = Path(__file__).resolve()
-ROOT_PATH = CURRENT_FILE_PATH.parents[1]
-LOGO_PATH = ROOT_PATH / "docs" / "assets" / "logo_favicon.png"
 AUDIO_SAMPLE_URL = "https://freetestdata.com/wp-content/uploads/2021/09/Free_Test_Data_100KB_MP3.mp3"
 
 
@@ -87,33 +78,6 @@ DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX = AudioURLChunk(
 DUMMY_AUDIO_URL_CHUNK_URL = AudioURLChunk(audio_url=AudioURL(url=AUDIO_SAMPLE_URL))
 
 
-def test_convert_image_chunk() -> None:
-    image = Image.open(LOGO_PATH.as_posix())
-    chunk = ImageChunk(image=image)
-
-    openai_image = chunk.to_openai()
-    assert openai_image["type"] == "image_url"
-    assert isinstance(openai_image["image_url"], dict)
-    assert openai_image["image_url"]["url"].startswith("data:image/png;base64,")
-
-    assert isinstance(ImageChunk.from_openai(openai_image), ImageChunk)
-
-    typeddict_openai = OpenAIImageChunk(**openai_image)  # type: ignore[typeddict-item]
-
-    assert isinstance(ImageChunk.from_openai(typeddict_openai), ImageChunk)
-
-
-def test_convert_image_chunk_from_openai_does_not_mutate_input() -> None:
-    image = Image.open(LOGO_PATH.as_posix())
-    original_chunk = ImageChunk(image=image)
-    openai_chunk = original_chunk.to_openai()
-    original_url = openai_chunk["image_url"]["url"]
-
-    ImageChunk.from_openai(openai_chunk)
-
-    assert openai_chunk["image_url"]["url"] == original_url
-
-
 def test_convert_input_audio_chunk() -> None:
     chunk = DUMMY_AUDIO_CHUNK
     openai_dict = chunk.to_openai()
@@ -130,54 +94,6 @@ def test_convert_input_audio_chunk() -> None:
 
     typeddict_openai = OpenAIInputAudioChunk(**openai_dict)  # type: ignore[typeddict-item]
     assert AudioChunk.from_openai(typeddict_openai) == chunk
-
-
-@pytest.mark.parametrize(
-    ["openai_image_url_chunk", "image_url_chunk"],
-    [
-        (
-            OpenAIImageChunk(
-                type="image_url",
-                image_url={
-                    "url": "https://upload.wikimedia.org/wikipedia/commons/d/da/2015_Kaczka_krzy%C5%BCowka_w_wodzie_%28samiec%29.jpg",
-                    "detail": "auto",
-                },
-            ),
-            ImageURLChunk(
-                image_url=ImageURL(
-                    url="https://upload.wikimedia.org/wikipedia/commons/d/da/2015_Kaczka_krzy%C5%BCowka_w_wodzie_%28samiec%29.jpg",
-                    detail="auto",
-                )
-            ),
-        ),
-        (
-            OpenAIImageChunk(
-                type="image_url",
-                image_url={
-                    "url": "data:image/png;base64,iVBORw0",
-                },
-            ),
-            ImageURLChunk(
-                image_url="data:image/png;base64,iVBORw0",
-            ),
-        ),
-    ],
-)
-def test_convert_image_url_chunk(openai_image_url_chunk: dict, image_url_chunk: ImageURLChunk) -> None:
-    assert image_url_chunk.to_openai() == openai_image_url_chunk
-    if not isinstance(image_url_chunk.image_url, ImageURL):
-        image_url_from_openai = ImageURLChunk.from_openai(openai_image_url_chunk)
-        assert isinstance(image_url_from_openai.image_url, ImageURL)
-        assert image_url_from_openai.image_url.url == image_url_chunk.image_url
-        assert image_url_from_openai.type == image_url_chunk.type
-    else:
-        assert ImageURLChunk.from_openai(openai_image_url_chunk) == image_url_chunk
-
-    typeddict_openai = OpenAIImageChunk(**openai_image_url_chunk)  # type: ignore[typeddict-item]
-    if not isinstance(image_url_chunk.image_url, ImageURL):
-        image_url_chunk.image_url = ImageURL(url=image_url_chunk.image_url, detail=None)
-
-    assert ImageURLChunk.from_openai(typeddict_openai) == image_url_chunk
 
 
 @pytest.mark.parametrize(
