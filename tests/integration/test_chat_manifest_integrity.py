@@ -50,6 +50,18 @@ def _load(manifest_dir: Path) -> ExpectedSuccess:
     )
 
 
+def _assert_full_path(manifest_dir: Path, tokenized: Tokenized) -> None:
+    expected = _load(manifest_dir)
+    assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s>hello</s>")
+
+
+def _write_image_entry(manifest_dir: Path, *, path: str, shape: list[int], dtype: str) -> None:
+    manifest_path = manifest_dir / "expected.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["images"] = [{"path": path, "shape": shape, "dtype": dtype}]
+    manifest_path.write_text(json.dumps(manifest))
+
+
 def test_missing_manifest_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="Missing expected manifest"):
         load_expected_success(
@@ -80,9 +92,37 @@ def test_manifest_configuration_mismatch_is_rejected(manifest_dir: Path) -> None
         )
 
 
+@pytest.mark.parametrize("missing_field", ["images", "audios"])
+def test_manifest_requires_ordered_media_fields(manifest_dir: Path, missing_field: str) -> None:
+    manifest_path = manifest_dir / "expected.json"
+    manifest = json.loads(manifest_path.read_text())
+    del manifest[missing_field]
+    manifest_path.write_text(json.dumps(manifest))
+
+    with pytest.raises(ValueError, match=f"missing required.*{missing_field}"):
+        _assert_full_path(manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
+
+
 def test_escaping_sidecar_path_is_rejected(manifest_dir: Path) -> None:
     with pytest.raises(ValueError, match="escapes the case directory"):
         resolve_sidecar(case_dir=manifest_dir, relative_path="../outside.npy")
+
+
+def test_manifest_escaping_sidecar_is_rejected(manifest_dir: Path) -> None:
+    (manifest_dir.parent / "outside.npy").write_bytes(b"outside the case")
+    _write_image_entry(manifest_dir, path="../outside.npy", shape=[1, 2], dtype="float32")
+    tokenized = Tokenized(tokens=[1, 2, 3], images=[np.zeros(shape=(1, 2), dtype=np.float32)])
+
+    with pytest.raises(ValueError, match="Case 'integrity-case' image entry 0:.*escapes the case directory"):
+        _assert_full_path(manifest_dir, tokenized=tokenized)
+
+
+def test_manifest_missing_sidecar_is_rejected(manifest_dir: Path) -> None:
+    _write_image_entry(manifest_dir, path="images/missing.npy", shape=[1, 2], dtype="float32")
+    tokenized = Tokenized(tokens=[1, 2, 3], images=[np.zeros(shape=(1, 2), dtype=np.float32)])
+
+    with pytest.raises(ValueError, match="Case 'integrity-case' image entry 0 references missing sidecar"):
+        _assert_full_path(manifest_dir, tokenized=tokenized)
 
 
 def test_absolute_sidecar_path_is_rejected(manifest_dir: Path) -> None:
@@ -175,7 +215,7 @@ def test_media_metadata_mismatches_fail_before_values(tmp_path: Path) -> None:
     case_dir = tmp_path / "integrity-metadata-case"
     case_dir.mkdir()
     (case_dir / "images").mkdir()
-    np.save(file=case_dir / "images" / "0.npy", arr=np.zeros(shape=(1, 2), dtype=np.float32))
+    np.save(file=case_dir / "images" / "0.npy", arr=np.zeros(shape=(2, 1), dtype=np.float32))
     (case_dir / "expected.json").write_text(
         json.dumps(
             {
@@ -196,3 +236,23 @@ def test_media_metadata_mismatches_fail_before_values(tmp_path: Path) -> None:
     tokenized = Tokenized(tokens=[1], images=[np.zeros(shape=(1, 2), dtype=np.float32)])
     with pytest.raises(AssertionError, match="Image shape"):
         assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s></s>")
+
+
+def test_sidecar_dtype_mismatch_is_rejected_before_values(manifest_dir: Path) -> None:
+    (manifest_dir / "images").mkdir()
+    np.save(file=manifest_dir / "images" / "0.npy", arr=np.zeros(shape=(1, 2), dtype=np.float64))
+    _write_image_entry(manifest_dir, path="images/0.npy", shape=[1, 2], dtype="float32")
+    tokenized = Tokenized(tokens=[1, 2, 3], images=[np.zeros(shape=(1, 2), dtype=np.float32)])
+
+    with pytest.raises(ValueError, match="sidecar dtype.*does not match manifest declared dtype float32"):
+        _assert_full_path(manifest_dir, tokenized=tokenized)
+
+
+def test_sidecar_shape_mismatch_is_rejected_before_values(manifest_dir: Path) -> None:
+    (manifest_dir / "images").mkdir()
+    np.save(file=manifest_dir / "images" / "0.npy", arr=np.zeros(shape=(2, 1), dtype=np.float32))
+    _write_image_entry(manifest_dir, path="images/0.npy", shape=[1, 2], dtype="float32")
+    tokenized = Tokenized(tokens=[1, 2, 3], images=[np.zeros(shape=(1, 2), dtype=np.float32)])
+
+    with pytest.raises(ValueError, match=r"sidecar shape.*does not match manifest declared shape \(1, 2\)"):
+        _assert_full_path(manifest_dir, tokenized=tokenized)

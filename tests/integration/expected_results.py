@@ -36,6 +36,7 @@ class ExpectedImage:
     path: str
     shape: tuple[int, ...]
     dtype: str
+    array: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,7 @@ class ExpectedAudio:
     dtype: str
     sampling_rate: int
     format: str
+    array: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -98,21 +100,81 @@ def load_sidecar(sidecar_path: Path) -> np.ndarray:
     return np.asarray(loaded)
 
 
-def _parse_image(entry: dict[str, Any]) -> ExpectedImage:
+def _load_manifest_sidecar(
+    *,
+    case_dir: Path,
+    case_id: str,
+    media_kind: str,
+    entry_index: int,
+    path: str,
+    shape: tuple[int, ...],
+    dtype: str,
+) -> np.ndarray:
+    entry_context = f"Case {case_id!r} {media_kind} entry {entry_index}"
+    try:
+        sidecar_path = resolve_sidecar(case_dir=case_dir, relative_path=path)
+    except ValueError as error:
+        raise ValueError(f"{entry_context}: {error}") from error
+    if not sidecar_path.is_file():
+        raise ValueError(f"{entry_context} references missing sidecar {path!r}")
+
+    try:
+        array = load_sidecar(sidecar_path=sidecar_path)
+    except (OSError, ValueError) as error:
+        raise ValueError(f"{entry_context} cannot load sidecar {path!r} without pickle: {error}") from error
+
+    if array.shape != shape:
+        raise ValueError(f"{entry_context} sidecar shape {array.shape} does not match manifest declared shape {shape}")
+    try:
+        declared_dtype = np.dtype(dtype)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"{entry_context} has invalid manifest dtype {dtype!r}") from error
+    if array.dtype != declared_dtype:
+        raise ValueError(
+            f"{entry_context} sidecar dtype {array.dtype} does not match manifest declared dtype {declared_dtype}"
+        )
+    return array
+
+
+def _parse_image(entry: dict[str, Any], *, case_dir: Path, case_id: str, entry_index: int) -> ExpectedImage:
+    path = entry["path"]
+    shape = tuple(int(dimension) for dimension in entry["shape"])
+    dtype = entry["dtype"]
     return ExpectedImage(
-        path=entry["path"],
-        shape=tuple(int(dimension) for dimension in entry["shape"]),
-        dtype=entry["dtype"],
+        path=path,
+        shape=shape,
+        dtype=dtype,
+        array=_load_manifest_sidecar(
+            case_dir=case_dir,
+            case_id=case_id,
+            media_kind="image",
+            entry_index=entry_index,
+            path=path,
+            shape=shape,
+            dtype=dtype,
+        ),
     )
 
 
-def _parse_audio(entry: dict[str, Any]) -> ExpectedAudio:
+def _parse_audio(entry: dict[str, Any], *, case_dir: Path, case_id: str, entry_index: int) -> ExpectedAudio:
+    path = entry["path"]
+    shape = tuple(int(dimension) for dimension in entry["shape"])
+    dtype = entry["dtype"]
     return ExpectedAudio(
-        path=entry["path"],
-        shape=tuple(int(dimension) for dimension in entry["shape"]),
-        dtype=entry["dtype"],
+        path=path,
+        shape=shape,
+        dtype=dtype,
         sampling_rate=int(entry["sampling_rate"]),
         format=entry["format"],
+        array=_load_manifest_sidecar(
+            case_dir=case_dir,
+            case_id=case_id,
+            media_kind="audio",
+            entry_index=entry_index,
+            path=path,
+            shape=shape,
+            dtype=dtype,
+        ),
     )
 
 
@@ -149,8 +211,20 @@ def load_expected_success(
             f"does not match the requested configuration {tokenizer_configuration_id!r}"
         )
 
-    images = tuple(_parse_image(entry) for entry in manifest.get("images", []))
-    audios = tuple(_parse_audio(entry) for entry in manifest.get("audios", []))
+    for media_field in ("images", "audios"):
+        if media_field not in manifest:
+            raise ValueError(f"Manifest for case {case_id!r} is missing required {media_field!r} field")
+        if not isinstance(manifest[media_field], list):
+            raise ValueError(f"Manifest {media_field!r} for case {case_id!r} must be an ordered list")
+
+    images = tuple(
+        _parse_image(entry, case_dir=case_dir, case_id=case_id, entry_index=index)
+        for index, entry in enumerate(manifest["images"])
+    )
+    audios = tuple(
+        _parse_audio(entry, case_dir=case_dir, case_id=case_id, entry_index=index)
+        for index, entry in enumerate(manifest["audios"])
+    )
     return ExpectedSuccess(
         case_id=case_id,
         tokenizer_configuration_id=tokenizer_configuration_id,
@@ -180,7 +254,6 @@ def assert_public_success(*, expected: ExpectedSuccess, tokenized: Tokenized, de
     )
     assert decoded_text == expected.decoded_text, "Decoded text differs from the reviewed manifest"
 
-    case_dir = case_directory(expected_root=expected.root, case_id=expected.case_id)
     assert len(tokenized.images) == len(expected.images), (
         f"Expected {len(expected.images)} returned images, got {len(tokenized.images)}"
     )
@@ -193,7 +266,7 @@ def assert_public_success(*, expected: ExpectedSuccess, tokenized: Tokenized, de
         )
         assert_allclose(
             actual=actual_image.astype(dtype=np.float64),
-            desired=load_sidecar(resolve_sidecar(case_dir, expected_image.path)),
+            desired=expected_image.array,
             atol=ATOL,
             rtol=RTOL,
             err_msg="Image array differs from the reviewed sidecar",
@@ -217,7 +290,7 @@ def assert_public_success(*, expected: ExpectedSuccess, tokenized: Tokenized, de
         )
         assert_allclose(
             actual=actual_audio.audio_array.astype(dtype=np.float64),
-            desired=load_sidecar(resolve_sidecar(case_dir, expected_audio.path)),
+            desired=expected_audio.array,
             atol=ATOL,
             rtol=RTOL,
             err_msg="Audio array differs from the reviewed sidecar",
