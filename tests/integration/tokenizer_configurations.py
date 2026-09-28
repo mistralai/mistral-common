@@ -205,11 +205,23 @@ PINNED_V11_IMAGE_TEST = _pinned(
     sha256="6e2501687ccd0e1f30f36319eaf2b46958b897811e246cd8eb5d385b9e3de7d1",
     mode=ValidationMode.test,
 )
+PINNED_V11_IMAGE_FINETUNING = _pinned(
+    profile_id="v11-image",
+    filename="v11-image.tekken.json",
+    sha256="6e2501687ccd0e1f30f36319eaf2b46958b897811e246cd8eb5d385b9e3de7d1",
+    mode=ValidationMode.finetuning,
+)
 PINNED_V13_TEXT_TEST = _pinned(
     profile_id="v13-text",
     filename="v13-text.tekken.json",
     sha256="93a2d5af491c61f0b8f5233a1c0b91e5edb7332bf6000038f06a9b3ab92bfe8d",
     mode=ValidationMode.test,
+)
+PINNED_V13_TEXT_FINETUNING = _pinned(
+    profile_id="v13-text",
+    filename="v13-text.tekken.json",
+    sha256="93a2d5af491c61f0b8f5233a1c0b91e5edb7332bf6000038f06a9b3ab92bfe8d",
+    mode=ValidationMode.finetuning,
 )
 PINNED_V13_IMAGE_TEST = _pinned(
     profile_id="v13-image",
@@ -222,6 +234,12 @@ PINNED_V15_IMAGE_SETTINGS_TEST = _pinned(
     filename="v15-image-settings.tekken.json",
     sha256="b1272b956bd6edd2d2c674c76896c7661308c9e723997b0afb55ecb429cb5dc7",
     mode=ValidationMode.test,
+)
+PINNED_V15_IMAGE_SETTINGS_FINETUNING = _pinned(
+    profile_id="v15-image-settings",
+    filename="v15-image-settings.tekken.json",
+    sha256="b1272b956bd6edd2d2c674c76896c7661308c9e723997b0afb55ecb429cb5dc7",
+    mode=ValidationMode.finetuning,
 )
 
 
