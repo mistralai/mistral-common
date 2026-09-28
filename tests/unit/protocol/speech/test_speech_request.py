@@ -4,35 +4,14 @@ from typing import Any
 
 import numpy as np
 import pytest
-import soundfile as sf
 
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.tokens.tokenizers.audio import Audio
-
-
-@pytest.fixture
-def audio_samples() -> np.ndarray:
-    return np.tile(np.array([0.0, 0.25, -0.5, 0.75]), 100)
-
-
-def _audio_bytes(samples: np.ndarray, fmt: str) -> bytes:
-    buffer = io.BytesIO()
-    sf.write(file=buffer, data=samples, samplerate=16000, format=fmt)
-    return buffer.getvalue()
-
-
-def _assert_audio_buffer(buffer: object, raw_audio: bytes, fmt: str, samples: np.ndarray) -> None:
-    assert isinstance(buffer, io.BytesIO)
-    assert buffer.name == f"audio.{fmt}"
-    assert buffer.getvalue() == raw_audio
-    decoded = Audio.from_bytes(buffer.getvalue())
-    assert decoded.format == fmt
-    assert decoded.sampling_rate == 16000
-    np.testing.assert_allclose(decoded.audio_array, samples, atol=1e-3)
+from tests.unit.protocol.audio_conversion import assert_audio_buffer, audio_bytes
 
 
 def test_speech_from_openai_filters_instructions_and_decodes_reference_audio(audio_samples: np.ndarray) -> None:
-    raw_audio = _audio_bytes(samples=audio_samples, fmt="wav")
+    raw_audio = audio_bytes(samples=audio_samples, fmt="wav")
     incoming: dict[str, Any] = {
         "input": "Hello world",
         "model": "tts-1",
@@ -79,7 +58,7 @@ def test_speech_from_openai_filters_instructions_and_decodes_reference_audio(aud
 def test_speech_reference_audio_export_and_canonical_import(
     audio_samples: np.ndarray, fmt: str, representation: str
 ) -> None:
-    raw_audio = _audio_bytes(samples=audio_samples, fmt=fmt)
+    raw_audio = audio_bytes(samples=audio_samples, fmt=fmt)
     canonical_audio = base64.b64encode(raw_audio).decode("ascii")
     source_audio = canonical_audio if representation == "base64" else raw_audio
     request = SpeechRequest(input="Hello world", ref_audio=source_audio)
@@ -96,7 +75,7 @@ def test_speech_reference_audio_export_and_canonical_import(
         "voice": None,
         "seed": None,
     }
-    _assert_audio_buffer(buffer=exported["ref_audio"], raw_audio=raw_audio, fmt=fmt, samples=audio_samples)
+    assert_audio_buffer(buffer=exported["ref_audio"], raw_audio=raw_audio, fmt=fmt, samples=audio_samples)
     assert SpeechRequest.from_openai(exported) == SpeechRequest(input="Hello world", ref_audio=canonical_audio)
 
 
@@ -118,7 +97,7 @@ def test_speech_export_rejects_invalid_reference_audio_bytes() -> None:
 def test_speech_request_openai_round_trip(
     audio_samples: np.ndarray, voice: str | None, with_ref_audio: bool, seed: int | None
 ) -> None:
-    raw_audio = _audio_bytes(samples=audio_samples, fmt="wav")
+    raw_audio = audio_bytes(samples=audio_samples, fmt="wav")
     canonical_audio = base64.b64encode(raw_audio).decode("ascii") if with_ref_audio else None
     original = SpeechRequest(
         input="Round trip test", ref_audio=canonical_audio, voice=voice, model="tts-1", random_seed=seed
@@ -137,7 +116,7 @@ def test_speech_request_openai_round_trip(
         "seed": seed,
     }
     if with_ref_audio:
-        _assert_audio_buffer(buffer=exported["ref_audio"], raw_audio=raw_audio, fmt="wav", samples=audio_samples)
+        assert_audio_buffer(buffer=exported["ref_audio"], raw_audio=raw_audio, fmt="wav", samples=audio_samples)
     else:
         assert "ref_audio" not in exported
     assert SpeechRequest.from_openai(exported) == SpeechRequest(

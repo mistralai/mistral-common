@@ -618,6 +618,28 @@ def test_request_to_openai_derives_continuation_flag(messages: list[ChatMessage]
     assert request.to_openai()["continue_final_message"] is expected
 
 
+def test_prefixed_assistant_request_exports_continuation_without_message_prefix() -> None:
+    messages: list[ChatMessage] = [UserMessage(content="foo"), AssistantMessage(content="bar", prefix=True)]
+    request = ChatCompletionRequest(messages=messages)
+    expected_openai_request = {
+        "temperature": 0.7,
+        "top_p": 1.0,
+        "response_format": {"type": "text"},
+        "continue_final_message": True,
+        "messages": [
+            {"role": "user", "content": "foo"},
+            {"role": "assistant", "content": "bar"},
+        ],
+        "tool_choice": "auto",
+    }
+
+    exported = request.to_openai()
+
+    assert exported == expected_openai_request
+    expected_messages: list[ChatMessage] = [UserMessage(content="foo"), AssistantMessage(content="bar", prefix=True)]
+    assert ChatCompletionRequest.from_openai(**exported) == ChatCompletionRequest(messages=expected_messages)
+
+
 @pytest.mark.parametrize(
     ("tool_choice", "expected_openai", "expected_reconstructed"),
     [

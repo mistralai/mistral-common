@@ -1,35 +1,12 @@
 import base64
-import io
 
 import numpy as np
 import pytest
-import soundfile as sf
 from openai.types.audio.transcription_create_params import TranscriptionCreateParamsBase
 from pydantic_extra_types.language_code import LanguageAlpha2
 
 from mistral_common.protocol.transcription.request import StreamingMode, TranscriptionRequest
-from mistral_common.tokens.tokenizers.audio import Audio
-
-
-@pytest.fixture
-def audio_samples() -> np.ndarray:
-    return np.tile(np.array([0.0, 0.25, -0.5, 0.75]), 100)
-
-
-def _audio_bytes(samples: np.ndarray, fmt: str) -> bytes:
-    buffer = io.BytesIO()
-    sf.write(file=buffer, data=samples, samplerate=16000, format=fmt)
-    return buffer.getvalue()
-
-
-def _assert_audio_buffer(buffer: object, raw_audio: bytes, fmt: str, samples: np.ndarray) -> None:
-    assert isinstance(buffer, io.BytesIO)
-    assert buffer.name == f"audio.{fmt}"
-    assert buffer.getvalue() == raw_audio
-    decoded = Audio.from_bytes(buffer.getvalue())
-    assert decoded.format == fmt
-    assert decoded.sampling_rate == 16000
-    np.testing.assert_allclose(decoded.audio_array, samples, atol=1e-3)
+from tests.unit.protocol.audio_conversion import assert_audio_buffer, audio_bytes
 
 
 @pytest.mark.parametrize(
@@ -43,7 +20,7 @@ def _assert_audio_buffer(buffer: object, raw_audio: bytes, fmt: str, samples: np
 def test_transcription_openai_round_trip(
     audio_samples: np.ndarray, language: LanguageAlpha2 | None, stream: bool
 ) -> None:
-    raw_audio = _audio_bytes(samples=audio_samples, fmt="wav")
+    raw_audio = audio_bytes(samples=audio_samples, fmt="wav")
     canonical_audio = base64.b64encode(raw_audio).decode("ascii")
     request = TranscriptionRequest(
         audio=canonical_audio,
@@ -68,7 +45,7 @@ def test_transcription_openai_round_trip(
         "stream": stream,
     }
     assert {key: value for key, value in exported.items() if key != "file"} == expected_fields
-    _assert_audio_buffer(buffer=exported["file"], raw_audio=raw_audio, fmt="wav", samples=audio_samples)
+    assert_audio_buffer(buffer=exported["file"], raw_audio=raw_audio, fmt="wav", samples=audio_samples)
 
     expected_import = TranscriptionRequest(
         audio=canonical_audio,
@@ -94,7 +71,7 @@ def test_transcription_openai_round_trip(
 def test_transcription_export_preserves_audio_buffer_and_import_canonicalizes(
     audio_samples: np.ndarray, fmt: str, representation: str
 ) -> None:
-    raw_audio = _audio_bytes(samples=audio_samples, fmt=fmt)
+    raw_audio = audio_bytes(samples=audio_samples, fmt=fmt)
     canonical_audio = base64.b64encode(raw_audio).decode("ascii")
     input_audio = canonical_audio if representation == "base64" else raw_audio
     request = TranscriptionRequest(audio=input_audio, model="model", language=None, target_streaming_delay_ms=None)
@@ -109,7 +86,7 @@ def test_transcription_export_preserves_audio_buffer_and_import_canonicalizes(
         "target_streaming_delay_ms": None,
         "seed": None,
     }
-    _assert_audio_buffer(buffer=exported["file"], raw_audio=raw_audio, fmt=fmt, samples=audio_samples)
+    assert_audio_buffer(buffer=exported["file"], raw_audio=raw_audio, fmt=fmt, samples=audio_samples)
     assert TranscriptionRequest.from_openai(exported) == TranscriptionRequest(
         audio=canonical_audio, model="model", language=None, target_streaming_delay_ms=None
     )

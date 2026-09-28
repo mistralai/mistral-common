@@ -59,6 +59,15 @@ def test_text_and_thinking_chunks_convert_with_explicit_canonical_values(
     assert type(chunk).from_openai(openai_chunk) == canonical_chunk
 
 
+def test_thinking_chunk_from_openai_defaults_missing_closed_to_true() -> None:
+    openai_chunk = {"type": "thinking", "thinking": "Finished"}
+
+    imported = ThinkChunk.from_openai(openai_chunk)
+
+    assert imported == ThinkChunk(thinking="Finished", closed=True)
+    assert imported.to_openai() == {"type": "thinking", "thinking": "Finished", "closed": True}
+
+
 def test_text_chunk_from_openai_accepts_openai_typed_dict() -> None:
     openai_chunk = OpenAITextChunk(type="text", text="Hello")
 
