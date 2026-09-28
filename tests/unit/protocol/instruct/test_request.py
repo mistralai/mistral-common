@@ -1,7 +1,7 @@
 import warnings
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from copy import deepcopy
-from typing import Any
+from typing import Any, TypeAlias
 
 import pytest
 from pydantic import ValidationError
@@ -14,10 +14,157 @@ from mistral_common.protocol.instruct.messages import (
     ChatMessage,
     ReasoningFieldFormat,
     SystemMessage,
+    ToolMessage,
     UserMessage,
 )
-from mistral_common.protocol.instruct.request import ChatCompletionRequest
-from mistral_common.protocol.instruct.tool_calls import FunctionName, NamedToolChoice, ToolChoiceEnum
+from mistral_common.protocol.instruct.request import ChatCompletionRequest, ReasoningEffort
+from mistral_common.protocol.instruct.tool_calls import (
+    Function,
+    FunctionCall,
+    FunctionName,
+    NamedToolChoice,
+    Tool,
+    ToolCall,
+    ToolChoiceEnum,
+)
+
+_RequestRoundTripInputs: TypeAlias = tuple[
+    list[ChatMessage],
+    list[dict[str, Any]],
+    list[Tool] | None,
+    list[dict[str, Any]] | None,
+]
+
+
+def _weather_tool_round_trip_values() -> tuple[list[Tool], list[dict[str, Any]]]:
+    parameters: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "location": {
+                "type": "string",
+                "description": "The city and state, e.g. San Francisco, CA",
+            },
+            "format": {
+                "type": "string",
+                "enum": ["celsius", "fahrenheit"],
+                "description": "The temperature unit to use. Infer this from the user's location.",
+            },
+        },
+        "required": ["location", "format"],
+    }
+    tool = Tool(
+        function=Function(
+            name="get_current_weather",
+            description="Get the current weather",
+            parameters=deepcopy(parameters),
+        )
+    )
+    openai_tool: dict[str, Any] = {
+        "type": "function",
+        "function": {
+            "name": "get_current_weather",
+            "description": "Get the current weather",
+            "parameters": deepcopy(parameters),
+            "strict": False,
+        },
+    }
+
+    return [tool], [openai_tool]
+
+
+def _weather_tool_result_scenario() -> _RequestRoundTripInputs:
+    tools, openai_tools = _weather_tool_round_trip_values()
+    messages: list[ChatMessage] = [
+        SystemMessage(content="You are a helpful assistant."),
+        UserMessage(content="What's the weather like in Paris?"),
+        AssistantMessage(
+            content="Let me think...",
+            tool_calls=[
+                ToolCall(
+                    id="VvvODy9mT",
+                    function=FunctionCall(
+                        name="get_current_weather",
+                        arguments='{"location": "Paris, France", "format": "celsius"}',
+                    ),
+                )
+            ],
+        ),
+        ToolMessage(tool_call_id="VvvODy9mT", name="get_current_weather", content="22"),
+    ]
+    openai_messages: list[dict[str, Any]] = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "What's the weather like in Paris?"},
+        {
+            "role": "assistant",
+            "content": "Let me think...",
+            "tool_calls": [
+                {
+                    "id": "VvvODy9mT",
+                    "type": "function",
+                    "function": {
+                        "name": "get_current_weather",
+                        "arguments": '{"location": "Paris, France", "format": "celsius"}',
+                    },
+                }
+            ],
+        },
+        {"role": "tool", "content": "22", "tool_call_id": "VvvODy9mT"},
+    ]
+
+    return messages, openai_messages, tools, openai_tools
+
+
+def _no_tool_conversation_scenario() -> _RequestRoundTripInputs:
+    messages: list[ChatMessage] = [
+        SystemMessage(content="You are a helpful assistant."),
+        UserMessage(content="What's the weather like in Paris?"),
+        AssistantMessage(content="How should I know?"),
+    ]
+    openai_messages: list[dict[str, Any]] = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "What's the weather like in Paris?"},
+        {"role": "assistant", "content": "How should I know?"},
+    ]
+
+    return messages, openai_messages, None, None
+
+
+def _weather_call_scenario() -> _RequestRoundTripInputs:
+    tools, openai_tools = _weather_tool_round_trip_values()
+    messages: list[ChatMessage] = [
+        UserMessage(content="What's the weather like in Paris?"),
+        AssistantMessage(
+            tool_calls=[
+                ToolCall(
+                    id="VvvODy9mT",
+                    function=FunctionCall(
+                        name="get_current_weather",
+                        arguments='{"location": "Paris, France", "format": "celsius"}',
+                    ),
+                )
+            ]
+        ),
+        ToolMessage(tool_call_id="VvvODy9mT", name="get_current_weather", content="22"),
+    ]
+    openai_messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "What's the weather like in Paris?"},
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "VvvODy9mT",
+                    "type": "function",
+                    "function": {
+                        "name": "get_current_weather",
+                        "arguments": '{"location": "Paris, France", "format": "celsius"}',
+                    },
+                }
+            ],
+        },
+        {"role": "tool", "content": "22", "tool_call_id": "VvvODy9mT"},
+    ]
+
+    return messages, openai_messages, tools, openai_tools
 
 
 class TestRequestConstruction:
@@ -334,3 +481,55 @@ def test_request_tool_choice_round_trip(
 
     reconstructed = ChatCompletionRequest.from_openai(**openai_request)
     assert reconstructed.tool_choice == expected_reconstructed
+
+
+@pytest.mark.parametrize(
+    "scenario_factory",
+    [
+        pytest.param(_weather_tool_result_scenario, id="weather-tool-result"),
+        pytest.param(_no_tool_conversation_scenario, id="no-tool-conversation"),
+        pytest.param(_weather_call_scenario, id="weather-call-with-tool-result"),
+    ],
+)
+@pytest.mark.parametrize(
+    "reasoning_effort",
+    [
+        pytest.param(None, id="effort-absent"),
+        pytest.param(ReasoningEffort.none, id="effort-none"),
+        pytest.param(ReasoningEffort.high, id="effort-high"),
+    ],
+)
+def test_request_openai_round_trip_preserves_non_media_scenarios(
+    scenario_factory: Callable[[], _RequestRoundTripInputs], reasoning_effort: ReasoningEffort | None
+) -> None:
+    messages, expected_openai_messages, tools, expected_openai_tools = scenario_factory()
+    expected_messages = deepcopy(messages)
+    expected_tools = deepcopy(tools)
+    request = ChatCompletionRequest(messages=messages, tools=tools, reasoning_effort=reasoning_effort)
+
+    openai_request = request.to_openai(stream=True)
+
+    assert openai_request["messages"] == expected_openai_messages
+    if tools is not None:
+        assert openai_request["tools"] == expected_openai_tools
+    else:
+        assert "tools" not in openai_request
+    if reasoning_effort is not None:
+        assert openai_request["reasoning_effort"] == reasoning_effort.value
+    else:
+        assert "reasoning_effort" not in openai_request
+    assert openai_request["temperature"] == 0.7
+
+    assert openai_request.pop("stream") is True
+    reconstructed_request = ChatCompletionRequest.from_openai(**openai_request)
+
+    assert len(reconstructed_request.messages) == len(expected_messages)
+    for index, reconstructed_message in enumerate(reconstructed_request.messages):
+        expected_message = expected_messages[index]
+        if isinstance(expected_message, ToolMessage):
+            assert reconstructed_message.model_dump(exclude={"name"}) == expected_message.model_dump(exclude={"name"})
+        else:
+            assert reconstructed_message == expected_message
+
+    assert reconstructed_request.tools == expected_tools
+    assert reconstructed_request.reasoning_effort == reasoning_effort
