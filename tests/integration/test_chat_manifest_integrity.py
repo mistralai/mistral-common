@@ -151,6 +151,22 @@ def test_pickle_sidecar_is_rejected(manifest_dir: Path) -> None:
         load_sidecar(sidecar_path=pickled_path)
 
 
+def test_npz_archive_renamed_as_npy_is_rejected(manifest_dir: Path) -> None:
+    images_dir = manifest_dir / "images"
+    images_dir.mkdir()
+    archive_path = images_dir / "0.npz"
+    np.savez(file=archive_path, p=np.array(["p"], dtype="<U1"))
+    archive_path.rename(images_dir / "0.npy")
+    _write_image_entry(manifest_dir, path="images/0.npy", shape=[1], dtype="<U1")
+    tokenized = Tokenized(tokens=[1, 2, 3], images=[np.array(["p"], dtype="<U1")])
+
+    with pytest.raises(
+        ValueError,
+        match=r"Case 'integrity-case' image entry 0 cannot load sidecar 'images/0.npy'.*array sidecar",
+    ):
+        _assert_full_path(manifest_dir, tokenized=tokenized)
+
+
 def test_missing_sidecar_file_is_rejected(manifest_dir: Path) -> None:
     with pytest.raises(FileNotFoundError):
         load_sidecar(sidecar_path=manifest_dir / "absent.npy")
