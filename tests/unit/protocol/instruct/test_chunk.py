@@ -1,7 +1,11 @@
+import base64
+import io
 from copy import deepcopy
 from typing import Any
 
+import numpy as np
 import pytest
+import soundfile as sf
 from openai.types.chat.chat_completion_content_part_image_param import (
     ChatCompletionContentPartImageParam as OpenAIImageChunk,
 )
@@ -100,6 +104,69 @@ def test_from_openai_drops_unknown_fields_and_converts_known_data(
     chunk_type = expected.__class__
 
     assert chunk_type.from_openai(openai_chunk) == expected
+
+
+@pytest.mark.parametrize(
+    ("format", "representation"),
+    [
+        pytest.param("wav", "base64", id="wav-base64"),
+        pytest.param("wav", "bytes", id="wav-raw-bytes"),
+        pytest.param("wav", "data-url", id="wav-data-url"),
+        pytest.param("flac", "base64", id="flac-base64"),
+        pytest.param("flac", "bytes", id="flac-raw-bytes"),
+        pytest.param("flac", "data-url", id="flac-data-url"),
+    ],
+)
+def test_audio_chunk_conversion_preserves_data_and_detected_format(format: str, representation: str) -> None:
+    audio_buffer = io.BytesIO()
+    audio_samples = np.array([0.0, 0.25, -0.25, 0.5], dtype=np.float32)
+    sf.write(file=audio_buffer, data=audio_samples, samplerate=16000, format=format)
+    audio_bytes = audio_buffer.getvalue()
+    expected_data = base64.b64encode(audio_bytes).decode("ascii")
+
+    if representation == "bytes":
+        input_audio: str | bytes = audio_bytes
+    elif representation == "data-url":
+        input_audio = f"data:audio/{format};base64,{expected_data}"
+    else:
+        input_audio = expected_data
+
+    chunk = AudioChunk(input_audio=input_audio)
+    expected_openai_chunk = {
+        "type": "input_audio",
+        "input_audio": {"data": expected_data, "format": format},
+    }
+    openai_chunk = chunk.to_openai()
+
+    assert openai_chunk == expected_openai_chunk
+    assert AudioChunk.from_openai(openai_chunk) == AudioChunk(input_audio=expected_data)
+
+
+@pytest.mark.parametrize(
+    ("url", "representation"),
+    [
+        pytest.param("https://example.com/audio.wav", "nested", id="https-url-object"),
+        pytest.param("YXVkaW8=", "nested", id="base64-url-object"),
+        pytest.param("YXVkaW8=", "string", id="base64-plain-string"),
+        pytest.param("data:audio/wav;base64,YXVkaW8=", "nested", id="prefixed-data-url-object"),
+    ],
+)
+def test_audio_url_chunk_conversion_preserves_url(url: str, representation: str) -> None:
+    audio_url = url if representation == "string" else AudioURL(url=url)
+    chunk = AudioURLChunk(audio_url=audio_url)
+    expected_openai_chunk = {"type": "audio_url", "audio_url": {"url": url}}
+    canonical_chunk = AudioURLChunk(audio_url=AudioURL(url=url))
+    openai_chunk = chunk.to_openai()
+
+    assert openai_chunk == expected_openai_chunk
+    assert AudioURLChunk.from_openai(openai_chunk) == canonical_chunk
+
+
+def test_audio_url_chunk_from_openai_rejects_invalid_known_url() -> None:
+    openai_chunk = {"type": "audio_url", "audio_url": {"url": 42}}
+
+    with pytest.raises(ValidationError, match="url"):
+        AudioURLChunk.from_openai(openai_chunk)
 
 
 @pytest.mark.parametrize(

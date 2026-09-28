@@ -1,4 +1,3 @@
-import base64
 import io
 from typing import Any
 
@@ -8,9 +7,6 @@ import soundfile as sf
 from openai.types.audio.transcription_create_params import TranscriptionCreateParamsBase as OpenAITranscriptionRequest
 from openai.types.chat.chat_completion_assistant_message_param import (
     ChatCompletionAssistantMessageParam as OpenAIAssistantMessage,
-)
-from openai.types.chat.chat_completion_content_part_input_audio_param import (
-    ChatCompletionContentPartInputAudioParam as OpenAIInputAudioChunk,
 )
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam as OpenAIUserMessage
 from pydantic_extra_types.language_code import LanguageAlpha2
@@ -71,73 +67,10 @@ def _get_audio_chunk() -> AudioChunk:
 DUMMY_AUDIO_CHUNK = _get_audio_chunk()
 assert isinstance(DUMMY_AUDIO_CHUNK.input_audio, str)
 DUMMY_AUDIO_URL_CHUNK_BASE64 = AudioURLChunk(audio_url=AudioURL(url=DUMMY_AUDIO_CHUNK.input_audio))
-DUMMY_AUDIO_URL_CHUNK_BASE64_STR = AudioURLChunk(audio_url=DUMMY_AUDIO_CHUNK.input_audio)
 DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX = AudioURLChunk(
     audio_url=AudioURL(url=f"data:audio/wav;base64,{DUMMY_AUDIO_CHUNK.input_audio}")
 )
 DUMMY_AUDIO_URL_CHUNK_URL = AudioURLChunk(audio_url=AudioURL(url=AUDIO_SAMPLE_URL))
-
-
-def test_convert_input_audio_chunk() -> None:
-    chunk = DUMMY_AUDIO_CHUNK
-    openai_dict = chunk.to_openai()
-
-    # Verify OpenAI-compliant shape
-    assert openai_dict["type"] == "input_audio"
-    assert isinstance(openai_dict["input_audio"], dict)
-    assert "data" in openai_dict["input_audio"]
-    assert "format" in openai_dict["input_audio"]
-    assert openai_dict["input_audio"]["format"] in ("wav", "mp3", "flac", "ogg")
-
-    # Roundtrip
-    assert AudioChunk.from_openai(openai_dict) == chunk
-
-    typeddict_openai = OpenAIInputAudioChunk(**openai_dict)  # type: ignore[typeddict-item]
-    assert AudioChunk.from_openai(typeddict_openai) == chunk
-
-
-@pytest.mark.parametrize(
-    ["vllm_audio_url_chunk", "audio_url_chunk"],
-    [
-        (
-            {
-                "type": "audio_url",
-                "audio_url": {"url": AUDIO_SAMPLE_URL},
-            },
-            DUMMY_AUDIO_URL_CHUNK_URL,
-        ),
-        (
-            {
-                "type": "audio_url",
-                "audio_url": {"url": DUMMY_AUDIO_CHUNK.input_audio},
-            },
-            DUMMY_AUDIO_URL_CHUNK_BASE64,
-        ),
-        (
-            {
-                "type": "audio_url",
-                "audio_url": {"url": DUMMY_AUDIO_CHUNK.input_audio},
-            },
-            DUMMY_AUDIO_URL_CHUNK_BASE64_STR,
-        ),
-        (
-            {
-                "type": "audio_url",
-                "audio_url": {"url": f"data:audio/wav;base64,{DUMMY_AUDIO_CHUNK.input_audio}"},
-            },
-            DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX,
-        ),
-    ],
-)
-def test_convert_audio_url_chunk(vllm_audio_url_chunk: dict, audio_url_chunk: AudioURLChunk) -> None:
-    assert audio_url_chunk.to_openai() == vllm_audio_url_chunk
-    if not isinstance(audio_url_chunk.audio_url, AudioURL):
-        audio_url_from_openai = AudioURLChunk.from_openai(vllm_audio_url_chunk)
-        assert isinstance(audio_url_from_openai.audio_url, AudioURL)
-        assert audio_url_from_openai.audio_url.url == audio_url_chunk.audio_url
-        assert audio_url_from_openai.type == audio_url_chunk.type
-    else:
-        assert AudioURLChunk.from_openai(vllm_audio_url_chunk) == audio_url_chunk
 
 
 @pytest.mark.parametrize(
@@ -384,45 +317,6 @@ def test_convert_transcription_bytes_invalid_format() -> None:
     )
     with pytest.raises(ValueError, match="Failed to detect audio format"):
         request.to_openai()
-
-
-@pytest.mark.parametrize("fmt", ["wav", "flac"])
-def test_audio_chunk_to_openai_format_detection(fmt: str) -> None:
-    audio = _make_fake_audio(0.5)
-    b64 = audio.to_base64(fmt)
-    chunk = AudioChunk(input_audio=b64)
-    result = chunk.to_openai()
-
-    assert result["input_audio"]["format"] == fmt
-    assert result["input_audio"]["data"] == b64
-    assert AudioChunk.from_openai(result).input_audio == b64
-
-
-@pytest.mark.parametrize("fmt", ["wav", "flac"])
-def test_audio_chunk_to_openai_raw_bytes_format_detection(fmt: str) -> None:
-    audio = _make_fake_audio(0.5)
-    buffer = io.BytesIO()
-    sf.write(buffer, audio.audio_array, audio.sampling_rate, format=fmt)
-    raw_bytes = buffer.getvalue()
-
-    result = AudioChunk(input_audio=raw_bytes).to_openai()
-
-    assert result["input_audio"]["format"] == fmt
-    assert result["input_audio"]["data"] == base64.b64encode(raw_bytes).decode("utf-8")
-    assert AudioChunk.from_openai(result).input_audio == result["input_audio"]["data"]
-
-
-@pytest.mark.parametrize("fmt", ["wav", "flac"])
-def test_audio_chunk_to_openai_strips_base64_data_url_prefix(fmt: str) -> None:
-    audio = _make_fake_audio(0.5)
-    b64 = audio.to_base64(fmt)
-    chunk = AudioChunk(input_audio=f"data:audio/{fmt};base64,{b64}")
-
-    result = chunk.to_openai()
-
-    assert result["input_audio"]["format"] == fmt
-    assert result["input_audio"]["data"] == b64
-    assert AudioChunk.from_openai(result).input_audio == b64
 
 
 @pytest.mark.parametrize("fmt", ["wav", "flac"])
