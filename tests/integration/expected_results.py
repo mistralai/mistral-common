@@ -64,6 +64,32 @@ class ExpectedSuccess:
     root: Path
 
 
+@dataclass(frozen=True)
+class _ImageManifestEntry:
+    path: str
+    shape: tuple[int, ...]
+    dtype: str
+
+
+@dataclass(frozen=True)
+class _AudioManifestEntry:
+    path: str
+    shape: tuple[int, ...]
+    dtype: str
+    sampling_rate: int
+    format: str
+
+
+@dataclass(frozen=True)
+class _ValidatedManifest:
+    case_id: str
+    tokenizer_configuration_id: str
+    token_ids: list[int]
+    decoded_text: str
+    images: list[_ImageManifestEntry]
+    audios: list[_AudioManifestEntry]
+
+
 def case_directory(expected_root: Path, case_id: str) -> Path:
     """Directory holding one case's manifest and sidecars."""
     return expected_root / case_id
@@ -128,7 +154,7 @@ def _load_manifest_sidecar(
     try:
         declared_dtype = np.dtype(dtype)
     except (TypeError, ValueError) as error:
-        raise ValueError(f"{entry_context} has invalid manifest dtype {dtype!r}") from error
+        raise ValueError(f"{entry_context} has invalid manifest dtype {dtype!r} ({type(dtype).__name__})") from error
     if array.dtype != declared_dtype:
         raise ValueError(
             f"{entry_context} sidecar dtype {array.dtype} does not match manifest declared dtype {declared_dtype}"
@@ -138,58 +164,180 @@ def _load_manifest_sidecar(
 
 def _require_exact_integer(*, value: Any, context: str, field: str) -> int:
     if type(value) is not int:
-        raise ValueError(f"{context} field {field!r} must be an integer, got {value!r}")
+        raise ValueError(f"{context} field {field!r} must be an integer, got {value!r} ({type(value).__name__})")
     return value
 
 
-def _parse_image(entry: dict[str, Any], *, case_dir: Path, case_id: str, entry_index: int) -> ExpectedImage:
-    entry_context = f"Case {case_id!r} image entry {entry_index}"
-    path = entry["path"]
-    shape = tuple(
-        _require_exact_integer(value=dimension, context=entry_context, field=f"shape[{index}]")
-        for index, dimension in enumerate(entry["shape"])
+def _require_object(*, value: Any, context: str, field: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{context} field {field!r} must be an object, got {value!r} ({type(value).__name__})")
+    return value
+
+
+def _require_array(*, value: Any, context: str, field: str) -> list[Any]:
+    if not isinstance(value, list):
+        raise ValueError(f"{context} field {field!r} must be an array, got {value!r} ({type(value).__name__})")
+    return value
+
+
+def _require_string(*, value: Any, context: str, field: str, non_empty: bool) -> str:
+    if not isinstance(value, str) or (non_empty and not value):
+        requirement = "a non-empty string" if non_empty else "a string"
+        raise ValueError(f"{context} field {field!r} must be {requirement}, got {value!r} ({type(value).__name__})")
+    return value
+
+
+def _required_field(*, record: dict[str, Any], field: str, context: str) -> Any:
+    if field not in record:
+        raise ValueError(f"{context} is missing required field {field!r}")
+    return record[field]
+
+
+def _validate_shape(*, value: Any, context: str) -> tuple[int, ...]:
+    dimensions = _require_array(value=value, context=context, field="shape")
+    return tuple(
+        _require_exact_integer(value=dimension, context=context, field=f"shape[{index}]")
+        for index, dimension in enumerate(dimensions)
     )
-    dtype = entry["dtype"]
-    return ExpectedImage(
+
+
+def _validate_image_entry(*, value: Any, case_id: str, entry_index: int) -> _ImageManifestEntry:
+    context = f"Case {case_id!r} image entry {entry_index}"
+    entry = _require_object(value=value, context=context, field="entry")
+    path = _require_string(
+        value=_required_field(record=entry, field="path", context=context),
+        context=context,
+        field="path",
+        non_empty=False,
+    )
+    shape = _validate_shape(value=_required_field(record=entry, field="shape", context=context), context=context)
+    dtype = _require_string(
+        value=_required_field(record=entry, field="dtype", context=context),
+        context=context,
+        field="dtype",
+        non_empty=True,
+    )
+    return _ImageManifestEntry(path=path, shape=shape, dtype=dtype)
+
+
+def _validate_audio_entry(*, value: Any, case_id: str, entry_index: int) -> _AudioManifestEntry:
+    context = f"Case {case_id!r} audio entry {entry_index}"
+    entry = _require_object(value=value, context=context, field="entry")
+    path = _require_string(
+        value=_required_field(record=entry, field="path", context=context),
+        context=context,
+        field="path",
+        non_empty=False,
+    )
+    shape = _validate_shape(value=_required_field(record=entry, field="shape", context=context), context=context)
+    dtype = _require_string(
+        value=_required_field(record=entry, field="dtype", context=context),
+        context=context,
+        field="dtype",
+        non_empty=True,
+    )
+    sampling_rate = _require_exact_integer(
+        value=_required_field(record=entry, field="sampling_rate", context=context),
+        context=context,
+        field="sampling_rate",
+    )
+    audio_format = _require_string(
+        value=_required_field(record=entry, field="format", context=context),
+        context=context,
+        field="format",
+        non_empty=False,
+    )
+    return _AudioManifestEntry(
         path=path,
         shape=shape,
         dtype=dtype,
+        sampling_rate=sampling_rate,
+        format=audio_format,
+    )
+
+
+def _validate_manifest_schema(*, value: Any, case_id: str) -> _ValidatedManifest:
+    context = f"Case {case_id!r} manifest"
+    manifest = _require_object(value=value, context=context, field="manifest")
+    required_fields = (
+        "case_id",
+        "tokenizer_configuration_id",
+        "token_ids",
+        "decoded_text",
+        "images",
+        "audios",
+    )
+    for field in required_fields:
+        _required_field(record=manifest, field=field, context=context)
+
+    manifest_case_id = _require_string(value=manifest["case_id"], context=context, field="case_id", non_empty=False)
+    configuration_id = _require_string(
+        value=manifest["tokenizer_configuration_id"],
+        context=context,
+        field="tokenizer_configuration_id",
+        non_empty=False,
+    )
+    token_ids = [
+        _require_exact_integer(value=token_id, context=context, field=f"token_ids[{index}]")
+        for index, token_id in enumerate(
+            _require_array(value=manifest["token_ids"], context=context, field="token_ids")
+        )
+    ]
+    decoded_text = _require_string(
+        value=manifest["decoded_text"], context=context, field="decoded_text", non_empty=False
+    )
+    image_values = _require_array(value=manifest["images"], context=context, field="images")
+    audio_values = _require_array(value=manifest["audios"], context=context, field="audios")
+    images = [
+        _validate_image_entry(value=entry, case_id=case_id, entry_index=index)
+        for index, entry in enumerate(image_values)
+    ]
+    audios = [
+        _validate_audio_entry(value=entry, case_id=case_id, entry_index=index)
+        for index, entry in enumerate(audio_values)
+    ]
+    return _ValidatedManifest(
+        case_id=manifest_case_id,
+        tokenizer_configuration_id=configuration_id,
+        token_ids=token_ids,
+        decoded_text=decoded_text,
+        images=images,
+        audios=audios,
+    )
+
+
+def _parse_image(entry: _ImageManifestEntry, *, case_dir: Path, case_id: str, entry_index: int) -> ExpectedImage:
+    return ExpectedImage(
+        path=entry.path,
+        shape=entry.shape,
+        dtype=entry.dtype,
         array=_load_manifest_sidecar(
             case_dir=case_dir,
             case_id=case_id,
             media_kind="image",
             entry_index=entry_index,
-            path=path,
-            shape=shape,
-            dtype=dtype,
+            path=entry.path,
+            shape=entry.shape,
+            dtype=entry.dtype,
         ),
     )
 
 
-def _parse_audio(entry: dict[str, Any], *, case_dir: Path, case_id: str, entry_index: int) -> ExpectedAudio:
-    entry_context = f"Case {case_id!r} audio entry {entry_index}"
-    path = entry["path"]
-    shape = tuple(
-        _require_exact_integer(value=dimension, context=entry_context, field=f"shape[{index}]")
-        for index, dimension in enumerate(entry["shape"])
-    )
-    dtype = entry["dtype"]
+def _parse_audio(entry: _AudioManifestEntry, *, case_dir: Path, case_id: str, entry_index: int) -> ExpectedAudio:
     return ExpectedAudio(
-        path=path,
-        shape=shape,
-        dtype=dtype,
-        sampling_rate=_require_exact_integer(
-            value=entry["sampling_rate"], context=entry_context, field="sampling_rate"
-        ),
-        format=entry["format"],
+        path=entry.path,
+        shape=entry.shape,
+        dtype=entry.dtype,
+        sampling_rate=entry.sampling_rate,
+        format=entry.format,
         array=_load_manifest_sidecar(
             case_dir=case_dir,
             case_id=case_id,
             media_kind="audio",
             entry_index=entry_index,
-            path=path,
-            shape=shape,
-            dtype=dtype,
+            path=entry.path,
+            shape=entry.shape,
+            dtype=entry.dtype,
         ),
     )
 
@@ -217,40 +365,33 @@ def load_expected_success(
     manifest_path = case_dir / "expected.json"
     if not manifest_path.is_file():
         raise ValueError(f"Missing expected manifest: {manifest_path}")
-    manifest = json.loads(manifest_path.read_text())
+    manifest = _validate_manifest_schema(value=json.loads(manifest_path.read_text()), case_id=case_id)
 
-    if manifest.get("case_id") != case_id:
-        raise ValueError(f"Manifest case_id {manifest.get('case_id')!r} does not match the requested case {case_id!r}")
-    if manifest.get("tokenizer_configuration_id") != tokenizer_configuration_id:
+    if manifest.case_id != case_id:
         raise ValueError(
-            f"Manifest tokenizer_configuration_id {manifest.get('tokenizer_configuration_id')!r} "
+            f"Manifest case_id {manifest.case_id!r} ({type(manifest.case_id).__name__}) "
+            f"does not match the requested case {case_id!r}"
+        )
+    if manifest.tokenizer_configuration_id != tokenizer_configuration_id:
+        raise ValueError(
+            f"Manifest tokenizer_configuration_id {manifest.tokenizer_configuration_id!r} "
+            f"({type(manifest.tokenizer_configuration_id).__name__}) "
             f"does not match the requested configuration {tokenizer_configuration_id!r}"
         )
 
-    token_ids = [
-        _require_exact_integer(value=token_id, context=f"Case {case_id!r}", field=f"token_ids[{index}]")
-        for index, token_id in enumerate(manifest["token_ids"])
-    ]
-
-    for media_field in ("images", "audios"):
-        if media_field not in manifest:
-            raise ValueError(f"Manifest for case {case_id!r} is missing required {media_field!r} field")
-        if not isinstance(manifest[media_field], list):
-            raise ValueError(f"Manifest {media_field!r} for case {case_id!r} must be an ordered list")
-
     images = tuple(
         _parse_image(entry, case_dir=case_dir, case_id=case_id, entry_index=index)
-        for index, entry in enumerate(manifest["images"])
+        for index, entry in enumerate(manifest.images)
     )
     audios = tuple(
         _parse_audio(entry, case_dir=case_dir, case_id=case_id, entry_index=index)
-        for index, entry in enumerate(manifest["audios"])
+        for index, entry in enumerate(manifest.audios)
     )
     return ExpectedSuccess(
-        case_id=case_id,
-        tokenizer_configuration_id=tokenizer_configuration_id,
-        token_ids=token_ids,
-        decoded_text=manifest["decoded_text"],
+        case_id=manifest.case_id,
+        tokenizer_configuration_id=manifest.tokenizer_configuration_id,
+        token_ids=manifest.token_ids,
+        decoded_text=manifest.decoded_text,
         images=images,
         audios=audios,
         root=root,
