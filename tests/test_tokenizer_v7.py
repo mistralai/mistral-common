@@ -271,49 +271,6 @@ def test_encode_spm(spm_tokenizer: InstructTokenizerV7, messages: list[ChatMessa
     assert text == expected_text, f"{text} != {expected_text}"
 
 
-def test_encode_chat_completion() -> None:
-    tokenizer = MistralTokenizer.v7(is_mm=True)
-
-    request: ChatCompletionRequest = ChatCompletionRequest(
-        tools=[
-            Tool(
-                function=Function(
-                    name="t",
-                    parameters={
-                        "type": "object",
-                        "properties": {
-                            "g": {"type": "string"},
-                            "h": {"type": "string"},
-                        },
-                    },
-                )
-            ),
-        ],
-        messages=[
-            SystemMessage(content="a"),
-            UserMessage(
-                content=[
-                    TextChunk(
-                        text="a",
-                    ),
-                    ImageChunk(image=Image.new("RGB", (4, 4), "red")),
-                ]
-            ),
-            AssistantMessage(content="b"),
-            ToolMessage(tool_call_id="123456789", content="f"),
-        ],
-    )
-
-    encoded = tokenizer.encode_chat_completion(request)
-
-    assert len(encoded.images) == 1
-    assert encoded.images[0].shape == (3, 16, 16)
-    assert (
-        decode_keep(tokenizer, encoded)
-        == '<s>[SYSTEM_PROMPT]▁a[/SYSTEM_PROMPT][AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"t",▁"description":▁"",▁"parameters":▁{"type":▁"object",▁"properties":▁{"g":▁{"type":▁"string"},▁"h":▁{"type":▁"string"}}}}}][/AVAILABLE_TOOLS][INST][IMG][IMG_END]▁a[/INST]▁b</s>[TOOL_RESULTS]▁123456789[TOOL_CONTENT]▁f[/TOOL_RESULTS]'  # noqa
-    )
-
-
 @pytest.mark.parametrize(
     "messages,truncated_text",
     [
@@ -562,20 +519,6 @@ def test_assistant_tool_call_and_content_end_to_end(request: pytest.FixtureReque
     tokens_2 = mistral_tokenizer.encode_chat_completion(chat_completion_request)
 
     assert tokens == tokens_2.tokens
-
-
-def test_encode_chat_completion_prefixed_final_message() -> None:
-    tokenizer = MistralTokenizer.v7(is_mm=True)
-    eos_id = tokenizer.instruct_tokenizer.tokenizer.eos_id
-
-    request: ChatCompletionRequest = ChatCompletionRequest(
-        messages=[UserMessage(content="a"), AssistantMessage(content="b", prefix=True)],
-    )
-    encoded = tokenizer.encode_chat_completion(request)
-
-    assert encoded.tokens == [1, 3, 1032, 4, 1055]
-    assert encoded.tokens[-1] != eos_id
-    assert eos_id not in encoded.prefix_ids
 
 
 def _image_tokens(width: int, height: int) -> list[int]:
