@@ -4,7 +4,7 @@ from PIL import Image
 
 from mistral_common.exceptions import InvalidMessageStructureException, InvalidSystemPromptException, TokenizerException
 from mistral_common.protocol.instruct.chunk import ImageChunk, TextChunk, ThinkChunk
-from mistral_common.protocol.instruct.messages import ChatMessage, SystemMessage, UserMessage
+from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, SystemMessage, UserMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
 from tests.integration.chat_cases import PublicChatErrorCase, PublicChatSuccessCase
@@ -69,11 +69,18 @@ def _build_system_think() -> ChatCompletionRequest[ChatMessage]:
     )
 
 
+def _build_prefixed_final() -> ChatCompletionRequest[ChatMessage]:
+    return ChatCompletionRequest[ChatMessage](
+        messages=[UserMessage(content="a"), AssistantMessage(content="b", prefix=True)]
+    )
+
+
 _USER_IMAGE = ChatRecipe(recipe_id="released-user-image", build=_build_user_image)
 _USER_AUDIO = ChatRecipe(recipe_id="released-user-audio", build=_build_user_audio)
 _USER_AUDIO_URL = ChatRecipe(recipe_id="released-user-audio-url", build=_build_user_audio_url)
 _TWO_USER_IMAGES = ChatRecipe(recipe_id="released-two-user-images", build=_build_two_user_images)
 _SYSTEM_THINK = ChatRecipe(recipe_id="released-system-think", build=_build_system_think)
+_PREFIXED_FINAL = ChatRecipe(recipe_id="released-prefixed-final", build=_build_prefixed_final)
 
 
 RELEASED_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
@@ -108,6 +115,9 @@ RELEASED_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
     ),
     PublicChatSuccessCase(
         case_id="chat-v11-released-image-order", recipe=_TWO_USER_IMAGES, configuration=PINNED_V11_IMAGE_TEST
+    ),
+    PublicChatSuccessCase(
+        case_id="chat-v11-released-prefixed-final", recipe=_PREFIXED_FINAL, configuration=PINNED_V11_IMAGE_TEST
     ),
     PublicChatSuccessCase(
         case_id="chat-v13-released-user-image", recipe=_USER_IMAGE, configuration=PINNED_V13_IMAGE_TEST
