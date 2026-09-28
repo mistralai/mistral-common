@@ -34,7 +34,7 @@ def _encode_and_verify(
     return tokenizer, tokenized, decoded_text
 
 
-@pytest.mark.parametrize("case", V7_SUCCESS_CASES, ids=lambda case: case.case_id)
+@pytest.mark.parametrize(argnames="case", argvalues=V7_SUCCESS_CASES, ids=lambda case: case.case_id)
 def test_public_chat_v7_success(
     case: PublicChatSuccessCase,
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],

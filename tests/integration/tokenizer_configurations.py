@@ -335,7 +335,7 @@ def _load_synthetic_v15(
     return MistralTokenizer(
         instruct_tokenizer=instruct_tokenizer,
         validator=get_validator(TokenizerVersion.v15, mode=ValidationMode.test),
-        request_normalizer=get_normalizer(TokenizerVersion.v15, settings_builder),
+        request_normalizer=get_normalizer(version=TokenizerVersion.v15, model_settings_builder=settings_builder),
     )
 
 

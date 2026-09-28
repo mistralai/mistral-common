@@ -24,7 +24,7 @@ from tests.integration.tokenizer_configurations import TokenizerConfiguration
 from tests.utils import decode_keep
 
 
-@pytest.mark.parametrize("case", SAMPLE_SUCCESS_CASES, ids=lambda case: case.case_id)
+@pytest.mark.parametrize(argnames="case", argvalues=SAMPLE_SUCCESS_CASES, ids=lambda case: case.case_id)
 def test_public_chat_success(
     case: PublicChatSuccessCase,
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
@@ -40,7 +40,7 @@ def test_public_chat_success(
     assert_public_success(expected=expected, tokenized=tokenized, decoded_text=decoded_text)
 
 
-@pytest.mark.parametrize("case", SAMPLE_ERROR_CASES, ids=lambda case: case.case_id)
+@pytest.mark.parametrize(argnames="case", argvalues=SAMPLE_ERROR_CASES, ids=lambda case: case.case_id)
 def test_public_chat_rejection(
     case: PublicChatErrorCase,
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
