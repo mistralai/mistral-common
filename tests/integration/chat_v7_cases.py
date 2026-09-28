@@ -109,7 +109,9 @@ def _build_tool_content() -> ChatCompletionRequest[ChatMessage]:
 
 
 def _build_tool_results() -> ChatCompletionRequest[ChatMessage]:
-    return _build_chat_request_from_instruct(_build_tool_results_instruct_request(), model="test-model")
+    return _build_chat_request_from_instruct(
+        instruct_request=_build_tool_results_instruct_request(), model="test-model"
+    )
 
 
 def _build_prefixed_final() -> ChatCompletionRequest[ChatMessage]:

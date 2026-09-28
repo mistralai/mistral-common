@@ -156,7 +156,7 @@ def test_released_profile_public_chat_success(
     if case.case_id == "chat-v7-released-user-audio-url":
         assert get_dummy_audio_url_chunk().get_url_type() == AudioURLType.base64
         with patch(
-            "mistral_common.tokens.tokenizers.audio._requests_lib.get",
+            target="mistral_common.tokens.tokenizers.audio._requests_lib.get",
             side_effect=AssertionError("network used"),
         ):
             tokenizer, tokenized, decoded_text = _encode_and_verify(case=case, public_tokenizer=public_tokenizer)
@@ -209,7 +209,7 @@ def test_released_profile_public_chat_error(
     request = case.recipe.build()
     tokenizer = public_tokenizer(case.configuration)
 
-    with pytest.raises(case.expected_exception, match=case.message_pattern):
+    with pytest.raises(expected_exception=case.expected_exception, match=case.message_pattern):
         tokenizer.encode_chat_completion(request)
 
 

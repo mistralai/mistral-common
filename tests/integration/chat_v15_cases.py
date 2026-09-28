@@ -153,7 +153,7 @@ def _dummy_image_url_chunk() -> ImageURLChunk:
     r"""Build a fresh 4x4 red PNG data URL for an image request."""
     image = Image.new(mode="RGB", size=(4, 4), color="red")
     buffer = BytesIO()
-    image.save(buffer, format="PNG")
+    image.save(fp=buffer, format="PNG")
     image_url = f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}"
     return ImageURLChunk(image_url=image_url)
 

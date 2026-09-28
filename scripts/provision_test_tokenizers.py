@@ -167,7 +167,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     for pinned in PINNED_TOKENIZERS:
-        provision(pinned, directory=args.directory)
+        provision(pinned=pinned, directory=args.directory)
     return 0
 
 

@@ -122,7 +122,7 @@ def test_public_chat_trailing_image_moves_first(
     assert _image_tokenizer_spans(tokens=tokenized.tokens, special_ids=special_ids) == [
         _image_tokens(width=2, height=2, special_ids=special_ids)
     ]
-    x_token = tokenizer.instruct_tokenizer.tokenizer.encode("x", bos=False, eos=False)[0]
+    x_token = tokenizer.instruct_tokenizer.tokenizer.encode(s="x", bos=False, eos=False)[0]
     assert tokenized.tokens.index(special_ids.img) < tokenized.tokens.index(x_token)
 
 
@@ -134,5 +134,5 @@ def test_public_chat_leading_image_remains_first(
     assert _image_tokenizer_spans(tokens=tokenized.tokens, special_ids=special_ids) == [
         _image_tokens(width=2, height=2, special_ids=special_ids)
     ]
-    x_token = tokenizer.instruct_tokenizer.tokenizer.encode("x", bos=False, eos=False)[0]
+    x_token = tokenizer.instruct_tokenizer.tokenizer.encode(s="x", bos=False, eos=False)[0]
     assert tokenized.tokens.index(special_ids.img) < tokenized.tokens.index(x_token)
