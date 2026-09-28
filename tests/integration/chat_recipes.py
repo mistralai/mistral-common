@@ -7,6 +7,7 @@ tokenizer configuration and one expected outcome.
 """
 
 from collections.abc import Callable
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
@@ -94,7 +95,7 @@ def _current_weather_tool() -> Tool:
         function=Function(
             name="get_current_weather",
             description="Get the current weather",
-            parameters=_CURRENT_WEATHER_PARAMETERS,
+            parameters=deepcopy(_CURRENT_WEATHER_PARAMETERS),
         )
     )
 
@@ -104,7 +105,7 @@ def _n_day_weather_tool() -> Tool:
         function=Function(
             name="get_n_day_weather_forecast",
             description="Get an N-day weather forecast",
-            parameters=_N_DAY_WEATHER_PARAMETERS,
+            parameters=deepcopy(_N_DAY_WEATHER_PARAMETERS),
         )
     )
 
@@ -114,7 +115,7 @@ def _send_email_tool() -> Tool:
         function=Function(
             name="send_email",
             description="Send an email to a recipient",
-            parameters=_SEND_EMAIL_PARAMETERS,
+            parameters=deepcopy(_SEND_EMAIL_PARAMETERS),
         )
     )
 

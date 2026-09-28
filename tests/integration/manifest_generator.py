@@ -81,7 +81,9 @@ def propose_manifest(case: PublicChatSuccessCase, *, force: bool) -> Path:
     images = [np.asarray(image) for image in tokenized.images]
     audios = [np.asarray(audio.audio_array) for audio in tokenized.audios]
     audio_entries: list[dict[str, object]] = []
-    for entry, audio in zip(_write_sidecars(case_dir, "audios", audios), tokenized.audios, strict=True):
+    for entry, audio in zip(
+        _write_sidecars(case_dir=case_dir, prefix="audios", arrays=audios), tokenized.audios, strict=True
+    ):
         entry["sampling_rate"] = audio.sampling_rate
         entry["format"] = audio.format
         audio_entries.append(entry)
@@ -91,7 +93,7 @@ def propose_manifest(case: PublicChatSuccessCase, *, force: bool) -> Path:
         "tokenizer_configuration_id": case.configuration.configuration_id,
         "token_ids": tokenized.tokens,
         "decoded_text": decoded_text,
-        "images": _write_sidecars(case_dir, "images", images),
+        "images": _write_sidecars(case_dir=case_dir, prefix="images", arrays=images),
         "audios": audio_entries,
     }
     case_dir.mkdir(parents=True, exist_ok=True)
