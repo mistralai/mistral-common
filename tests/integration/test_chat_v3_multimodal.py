@@ -36,7 +36,7 @@ def _encode_and_verify(
 ) -> Tokenized:
     request = case.recipe.build()
     tokenizer = public_tokenizer(case.configuration)
-    tokenized = tokenizer.encode_chat_completion(request)
+    tokenized: Tokenized = tokenizer.encode_chat_completion(request)
     decoded_text = decode_keep(tokenizer=tokenizer, tokenized=tokenized)
     expected = load_expected_success(
         case_id=case.case_id,
