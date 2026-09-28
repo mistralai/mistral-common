@@ -125,3 +125,36 @@ jobs:
       - name: Integration Tests
         run: |
           uv run --no-sync pytest tests/integrations/ -n auto --dist loadfile -v
+
+  integration_tests_singular:
+    if: ${{ github.event.pull_request.draft != true }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [
+          "3.10",
+          "3.11",
+          "3.12",
+          "3.13",
+          "3.14",
+        ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Dependencies
+        run: |
+          uv sync --frozen --all-extras --group dev
+
+      - name: Provision Test Tokenizers
+        run: |
+          uv run python scripts/provision_test_tokenizers.py
+
+      - name: Integration Tests
+        run: |
+          HF_HUB_OFFLINE=1 uv run --no-sync pytest tests/integration/ -n auto --dist loadfile -v

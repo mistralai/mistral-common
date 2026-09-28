@@ -2,41 +2,19 @@ import pytest
 
 from mistral_common.exceptions import TokenizerException
 from mistral_common.protocol.instruct.chunk import (
-    AudioChunk,
-    AudioURLChunk,
     TextChunk,
     ThinkChunk,
 )
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
-    BaseMessage,
-    ChatMessage,
     SystemMessage,
     ToolMessage,
-    UserMessage,
 )
-from mistral_common.protocol.instruct.normalize import InstructRequestNormalizerV13
-from mistral_common.protocol.instruct.request import ChatCompletionRequest
-from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
-from mistral_common.protocol.instruct.validator import MistralRequestValidatorV13
-from mistral_common.tokens.tokenizers.audio import AudioConfig, AudioEncoder, AudioSpectrogramConfig, SpecialAudioIDs
-from mistral_common.tokens.tokenizers.base import InstructTokenizer, SpecialTokens, Tokenized, TokenizerVersion
+from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
+from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13
-from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import SpecialTokenPolicy, Tekkenizer
-from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
 from tests.test_tekken import get_special_tokens, quick_vocab
-from tests.utils import decode_keep
-
-
-@pytest.fixture(scope="module")
-def audio_chunk() -> AudioChunk:
-    return get_dummy_audio_chunk()
-
-
-@pytest.fixture(scope="module")
-def audio_url_chunk() -> AudioURLChunk:
-    return get_dummy_audio_url_chunk()
 
 
 @pytest.fixture(scope="session")
@@ -65,199 +43,6 @@ def v13_tekkenizer_think() -> InstructTokenizerV13:
         version=TokenizerVersion.v13,
     )
     return InstructTokenizerV13(tokenizer)
-
-
-@pytest.fixture(scope="session")
-def v13_tekkenizer_audio() -> InstructTokenizerV13:
-    special_tokens = get_special_tokens(TokenizerVersion.v13, add_think=False, add_audio=True)
-    tokenizer = Tekkenizer(
-        quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
-        special_tokens=special_tokens,
-        pattern=r".+",  # single token, whole string
-        vocab_size=256 + 100,
-        num_special_tokens=100,
-        version=TokenizerVersion.v13,
-    )
-
-    audio_config = AudioConfig(
-        sampling_rate=24_000,
-        frame_rate=12.5,
-        encoding_config=AudioSpectrogramConfig(
-            num_mel_bins=128,
-            window_size=400,
-            hop_length=160,
-        ),
-    )
-    special_audio_ids = SpecialAudioIDs(
-        audio=tokenizer.get_special_token(SpecialTokens.audio.value),
-        begin_audio=tokenizer.get_special_token(SpecialTokens.begin_audio.value),
-        streaming_pad=None,
-        text_to_audio=None,
-        audio_to_text=None,
-    )
-    audio_encoder = AudioEncoder(audio_config, special_audio_ids)
-    return InstructTokenizerV13(tokenizer, audio_encoder=audio_encoder)
-
-
-EXPECTED_TEXT_V13: str = (
-    r"<s>[SYSTEM_PROMPT]S1[THINK]TS[/THINK]S2[/SYSTEM_PROMPT][AVAILABLE_TOOLS][{"
-    r'"type": "function", "function": {"name": "math_interpreter", '
-    r'"description": "Get the value of an arithmetic expression.", '
-    r'"parameters": {"type": "object", "properties": {'
-    r'"expression": {"type": "string", "description": '
-    r'"Math expression."}}}}}][/AVAILABLE_TOOLS][INST]U1[/INST]A1'
-    r"[TOOL_CALLS]F1[ARGS]{}[TOOL_CALLS]F2[ARGS]{}</s>"
-    r"[TOOL_RESULTS]R1[/TOOL_RESULTS][TOOL_RESULTS]R2"
-    r"[/TOOL_RESULTS][THINK]T1[/THINK]A2</s>[INST]U2[/INST]"
-)
-
-
-EXPECTED_TEXT_V13_FROM_WRONG_ORDER: str = (
-    r"<s>[SYSTEM_PROMPT]S[/SYSTEM_PROMPT][AVAILABLE_TOOLS][{"
-    r'"type": "function", "function": {"name": "math_interpreter", '
-    r'"description": "Get the value of an arithmetic expression.", '
-    r'"parameters": {"type": "object", "properties": {'
-    r'"expression": {"type": "string", "description": '
-    r'"Math expression."}}}}}][/AVAILABLE_TOOLS][INST]U1[/INST]A1'
-    r"[TOOL_CALLS]F1[ARGS]{}[TOOL_CALLS]F2[ARGS]{}</s>"
-    r"[TOOL_RESULTS]R1[/TOOL_RESULTS][TOOL_RESULTS]R2"
-    r"[/TOOL_RESULTS]A2</s>[INST]U2[/INST]"
-)
-
-
-@pytest.fixture
-def available_tools() -> list[Tool]:
-    return [
-        Tool(
-            function=Function(
-                name="math_interpreter",
-                description="Get the value of an arithmetic expression.",
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "expression": {
-                            "type": "string",
-                            "description": "Math expression.",
-                        }
-                    },
-                },
-            )
-        )
-    ]
-
-
-@pytest.fixture
-def messages() -> list[BaseMessage]:
-    return [
-        SystemMessage(content=[TextChunk(text="S1"), ThinkChunk(thinking="TS"), TextChunk(text="S2")]),
-        UserMessage(content="U1"),
-        AssistantMessage(
-            content="A1",
-            tool_calls=[
-                ToolCall(id="123456789", function=FunctionCall(name="F1", arguments="{}")),
-                ToolCall(id="999999999", function=FunctionCall(name="F2", arguments="{}")),
-            ],
-        ),
-        ToolMessage(content="R1", tool_call_id="123456789"),
-        ToolMessage(content="R2", tool_call_id="999999999"),
-        AssistantMessage(content=[ThinkChunk(thinking="T1"), TextChunk(text="A2")]),
-        UserMessage(content="U2"),
-    ]
-
-
-@pytest.fixture
-def messages_wrong_order_results() -> list[BaseMessage]:
-    return [
-        SystemMessage(content="S"),
-        UserMessage(content="U1"),
-        AssistantMessage(
-            content="A1",
-            tool_calls=[
-                ToolCall(id="123456789", function=FunctionCall(name="F1", arguments="{}")),
-                ToolCall(id="999999999", function=FunctionCall(name="F2", arguments="{}")),
-            ],
-        ),
-        ToolMessage(
-            content="R2", tool_call_id="999999999"
-        ),  # wrong order of results but passes validation and is later normalized
-        ToolMessage(content="R1", tool_call_id="123456789"),
-        AssistantMessage(content="A2"),
-        UserMessage(content="U2"),
-    ]
-
-
-def test_end_to_end_v13(
-    v13_tekkenizer_think: InstructTokenizer,
-    available_tools: list[Tool],
-    messages: list[BaseMessage],
-) -> None:
-    """
-    Tests normalization (including reordering) and validation
-    """
-    request_normalizer = InstructRequestNormalizerV13.normalizer()
-    validator = MistralRequestValidatorV13()
-    mistral_tokenizer_v13 = MistralTokenizer(
-        instruct_tokenizer=v13_tekkenizer_think, validator=validator, request_normalizer=request_normalizer
-    )
-    chat_completion_request: ChatCompletionRequest = ChatCompletionRequest(
-        messages=messages,
-        tools=available_tools,
-    )
-
-    assert isinstance(mistral_tokenizer_v13, MistralTokenizer), type(mistral_tokenizer_v13)
-    # This does validation, normalization and encoding
-    tokenized_v13 = mistral_tokenizer_v13.encode_chat_completion(chat_completion_request)
-    assert isinstance(tokenized_v13, Tokenized)
-    text = decode_keep(mistral_tokenizer_v13, tokenized_v13)
-    assert text == EXPECTED_TEXT_V13, text
-
-
-def test_end_to_end_v13_wrong_order(
-    v13_tekkenizer: InstructTokenizer,
-    available_tools: list[Tool],
-    messages_wrong_order_results: list[BaseMessage],
-) -> None:
-    """
-    Tests normalization (including reordering) and validation
-    """
-    request_normalizer = InstructRequestNormalizerV13.normalizer()
-    validator = MistralRequestValidatorV13()
-    mistral_tokenizer_v13 = MistralTokenizer(
-        instruct_tokenizer=v13_tekkenizer, validator=validator, request_normalizer=request_normalizer
-    )
-    chat_completion_request: ChatCompletionRequest = ChatCompletionRequest(
-        messages=messages_wrong_order_results,
-        tools=available_tools,
-    )
-
-    assert isinstance(mistral_tokenizer_v13, MistralTokenizer), type(mistral_tokenizer_v13)
-    # This does validation, normalization and encoding
-    tokenized_v13 = mistral_tokenizer_v13.encode_chat_completion(chat_completion_request)
-    assert isinstance(tokenized_v13, Tokenized)
-    text = decode_keep(mistral_tokenizer_v13, tokenized_v13)
-    assert text == EXPECTED_TEXT_V13_FROM_WRONG_ORDER, text
-
-
-@pytest.mark.parametrize("tool_call_id", ["x", "call/id-1"])
-def test_encode_chat_completion_with_arbitrary_tool_call_id(
-    v13_tekkenizer: InstructTokenizerV13, tool_call_id: str
-) -> None:
-    mistral_tokenizer = MistralTokenizer(
-        instruct_tokenizer=v13_tekkenizer,
-        validator=MistralRequestValidatorV13(),
-        request_normalizer=InstructRequestNormalizerV13.normalizer(),
-    )
-    request = ChatCompletionRequest[ChatMessage](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(tool_calls=[ToolCall(id=tool_call_id, function=FunctionCall(name="f", arguments="{}"))]),
-            ToolMessage(content="b", tool_call_id=tool_call_id),
-        ]
-    )
-
-    tokenized = mistral_tokenizer.encode_chat_completion(request)
-
-    assert tokenized.text == "<s>[INST]a[/INST][TOOL_CALLS]f[ARGS]{}</s>[TOOL_RESULTS]b[/TOOL_RESULTS]"
 
 
 def test_encode_tool_message(v13_tekkenizer: InstructTokenizerV13) -> None:
@@ -377,38 +162,3 @@ def test_encode_system_message(
     encoded, audios = v13_tekkenizer_think.encode_system_message(message)
     assert v13_tekkenizer_think.decode(encoded, special_token_policy=SpecialTokenPolicy.KEEP) == expected
     assert audios == []
-
-
-@pytest.mark.parametrize("audio_fixture", ["audio_chunk", "audio_url_chunk"])
-def test_encode_chat_completion_request_with_sp_and_audio(
-    v13_tekkenizer_audio: InstructTokenizerV13, audio_fixture: str, request: pytest.FixtureRequest
-) -> None:
-    audio_chunk: AudioChunk | AudioURLChunk = request.getfixturevalue(audio_fixture)
-    request_normalizer = InstructRequestNormalizerV13.normalizer()
-    validator = MistralRequestValidatorV13()
-    messages = [
-        SystemMessage(content="hello"),
-        UserMessage(content=[audio_chunk]),
-    ]
-    mistral_tokenizer_v13 = MistralTokenizer(
-        instruct_tokenizer=v13_tekkenizer_audio, validator=validator, request_normalizer=request_normalizer
-    )
-    encoded = mistral_tokenizer_v13.encode_chat_completion(ChatCompletionRequest(messages=messages))
-    text = decode_keep(mistral_tokenizer_v13, encoded)
-    assert text == "<s>[SYSTEM_PROMPT]hello[/SYSTEM_PROMPT][INST][BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
-    assert len(encoded.audios) == 1
-
-
-def test_encode_chat_completion_prefixed_final_message(v13_tekkenizer: InstructTokenizerV13) -> None:
-    request_normalizer = InstructRequestNormalizerV13.normalizer()
-    validator = MistralRequestValidatorV13()
-    mistral_tokenizer = MistralTokenizer(
-        instruct_tokenizer=v13_tekkenizer, validator=validator, request_normalizer=request_normalizer
-    )
-    request: ChatCompletionRequest = ChatCompletionRequest(
-        messages=[UserMessage(content="a"), AssistantMessage(content="b", prefix=True)],
-    )
-    encoded = mistral_tokenizer.encode_chat_completion(request)
-
-    eos_id = v13_tekkenizer.tokenizer.eos_id
-    assert encoded.tokens[-1] != eos_id
