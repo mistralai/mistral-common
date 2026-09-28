@@ -22,6 +22,7 @@ from pathlib import Path
 import numpy as np
 
 from tests.integration.chat_cases import SAMPLE_SUCCESS_CASES, PublicChatSuccessCase
+from tests.integration.chat_released_cases import RELEASED_SUCCESS_CASES
 from tests.integration.chat_v3_cases import V3_SUCCESS_CASES
 from tests.integration.chat_v7_cases import V7_SUCCESS_CASES
 from tests.integration.chat_v13_cases import V13_SUCCESS_CASES
@@ -35,6 +36,7 @@ ALL_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
     *V7_SUCCESS_CASES,
     *V13_SUCCESS_CASES,
     *V15_SUCCESS_CASES,
+    *RELEASED_SUCCESS_CASES,
 )
 
 
