@@ -9,20 +9,42 @@ from pydantic import ValidationError
 from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURL, AudioURLChunk, TextChunk, ThinkChunk
 
 
-def test_text_chunk_round_trip() -> None:
-    chunk = TextChunk(text="Hello")
-    openai_chunk = chunk.to_openai()
+@pytest.mark.parametrize(
+    ("chunk", "openai_chunk", "canonical_chunk"),
+    [
+        pytest.param(
+            TextChunk(text="Hello"),
+            {"type": "text", "text": "Hello"},
+            TextChunk(text="Hello"),
+            id="text",
+        ),
+        pytest.param(
+            ThinkChunk(thinking="Hello", closed=False),
+            {"type": "thinking", "thinking": "Hello", "closed": False},
+            ThinkChunk(thinking="Hello", closed=False),
+            id="thinking-open",
+        ),
+        pytest.param(
+            ThinkChunk(thinking="Finished"),
+            {"type": "thinking", "thinking": "Finished", "closed": True},
+            ThinkChunk(thinking="Finished", closed=True),
+            id="thinking-default-closed",
+        ),
+    ],
+)
+def test_text_and_thinking_chunks_convert_with_explicit_canonical_values(
+    chunk: TextChunk | ThinkChunk,
+    openai_chunk: dict[str, Any],
+    canonical_chunk: TextChunk | ThinkChunk,
+) -> None:
+    assert chunk.to_openai() == openai_chunk
+    assert type(chunk).from_openai(openai_chunk) == canonical_chunk
 
-    assert openai_chunk == {"type": "text", "text": "Hello"}
-    assert TextChunk.from_openai(openai_chunk) == chunk
-    assert TextChunk.from_openai(OpenAITextChunk(**openai_chunk)) == chunk  # type: ignore[typeddict-item]
 
+def test_text_chunk_from_openai_accepts_openai_typed_dict() -> None:
+    openai_chunk = OpenAITextChunk(type="text", text="Hello")
 
-def test_think_chunk_round_trip() -> None:
-    chunk = ThinkChunk(thinking="Hello", closed=False)
-
-    assert chunk.to_openai() == {"type": "thinking", "thinking": "Hello", "closed": False}
-    assert ThinkChunk.from_openai(chunk.to_openai()) == chunk
+    assert TextChunk.from_openai(openai_chunk) == TextChunk(text="Hello")  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
@@ -82,3 +104,15 @@ def test_from_openai_rejects_invalid_recognized_data(openai_chunk: dict[str, Any
 
     with pytest.raises(ValidationError, match=field):
         chunk_type.from_openai(openai_chunk)
+
+
+@pytest.mark.parametrize(
+    ("openai_chunk", "field"),
+    [
+        pytest.param({"type": "thinking", "thinking": 42}, "thinking", id="thinking-is-not-a-string"),
+        pytest.param({"type": "thinking", "thinking": "hmm", "closed": "unknown"}, "closed", id="closed-is-not-a-bool"),
+    ],
+)
+def test_think_chunk_from_openai_rejects_invalid_recognized_fields(openai_chunk: dict[str, Any], field: str) -> None:
+    with pytest.raises(ValidationError, match=field):
+        ThinkChunk.from_openai(openai_chunk)
