@@ -10,8 +10,10 @@ entry point so cases exercise the same path production users take.
 import hashlib
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 from mistral_common.protocol.instruct.validator import ValidationMode
+from mistral_common.tokens.tokenizers.image import ImageEncoder
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -28,6 +30,7 @@ class TokenizerConfiguration:
     mode: ValidationMode
     sha256: str
     provenance: str
+    post_load: Callable[[MistralTokenizer], None] | None = None
 
     def load(self) -> MistralTokenizer:
         r"""Load the public tokenizer after verifying the artifact bytes.
@@ -42,7 +45,10 @@ class TokenizerConfiguration:
                 f"Tokenizer artifact mismatch for {self.configuration_id} at {self.tokenizer_path}: "
                 f"expected sha256={self.sha256}, got sha256={actual_sha256}"
             )
-        return MistralTokenizer.from_file(tokenizer_filename=self.tokenizer_path, mode=self.mode)
+        tokenizer = MistralTokenizer.from_file(tokenizer_filename=self.tokenizer_path, mode=self.mode)
+        if self.post_load is not None:
+            self.post_load(tokenizer)
+        return tokenizer
 
 
 def _bundled_spm_v1(mode: ValidationMode) -> TokenizerConfiguration:
@@ -91,6 +97,40 @@ BUNDLED_SPM_V2_SERVING = _bundled_spm_v2(ValidationMode.serving)
 BUNDLED_SPM_V2_FINETUNING = _bundled_spm_v2(ValidationMode.finetuning)
 BUNDLED_SPM_V2_AGNOSTIC = _bundled_spm_v2(ValidationMode.agnostic)
 BUNDLED_SPM_V3_TEST = _bundled_spm_v3(ValidationMode.test)
+
+
+def _set_test_image_patch_size_2(tokenizer: MistralTokenizer) -> None:
+    """Apply the test-only patch-size override to this configuration's own instance."""
+    image_encoder = tokenizer.instruct_tokenizer.image_encoder
+    assert isinstance(image_encoder, ImageEncoder)
+    image_encoder.image_config.image_patch_size = 2
+
+
+BUNDLED_TEKKEN_V3_TEXT_TEST = TokenizerConfiguration(
+    configuration_id="bundled-tekken-v3-text-test",
+    tokenizer_path=_BUNDLED_DATA / "tekken_240718.json",
+    mode=ValidationMode.test,
+    sha256="eccd1665d2e477697c33cb7f0daa6f6dfefc57a0a6bceb66d4be52952f827516",
+    provenance="bundled",
+)
+BUNDLED_TEKKEN_V3_MM_TEST = TokenizerConfiguration(
+    configuration_id="bundled-tekken-v3-mm-test",
+    tokenizer_path=_BUNDLED_DATA / "tekken_240911.json",
+    mode=ValidationMode.test,
+    sha256="1948e2d48b0e7377f1bb5f1210f1ae5f984934e75713fc07e2452729b8365316",
+    provenance="bundled",
+)
+# Bundled v3 multimodal bytes with a test-only image patch-size override; the
+# mutation belongs to this configuration's own loaded instance, never to a
+# shared tokenizer, and is not evidence of an unmodified released profile.
+BUNDLED_TEKKEN_V3_MM_PATCH2_TEST = TokenizerConfiguration(
+    configuration_id="bundled-tekken-v3-mm-patch2-test",
+    tokenizer_path=_BUNDLED_DATA / "tekken_240911.json",
+    mode=ValidationMode.test,
+    sha256="1948e2d48b0e7377f1bb5f1210f1ae5f984934e75713fc07e2452729b8365316",
+    provenance="modified-bundled",
+    post_load=_set_test_image_patch_size_2,
+)
 
 # Pinned released profiles provisioned by scripts/provision_test_tokenizers.py.
 PINNED_V7_IMAGE_TEST = _pinned(
