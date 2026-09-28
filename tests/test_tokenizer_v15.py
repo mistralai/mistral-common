@@ -55,8 +55,8 @@ def _build_v15_tekkenizer(model_settings_builder: ModelSettingsBuilder | None) -
             a tekkenizer without model settings support.
     """
     return Tekkenizer(
-        quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
-        special_tokens=get_special_tokens(TokenizerVersion.v15, add_think=True),
+        vocab=quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
+        special_tokens=get_special_tokens(tokenizer_version=TokenizerVersion.v15, add_think=True),
         pattern=r".+",
         vocab_size=256 + 100,
         num_special_tokens=100,
@@ -151,7 +151,7 @@ def test_tools_and_reasoning_effort(
         settings=ModelSettings(reasoning_effort=ReasoningEffort.high),
     )
     tokenized = v15_tekkenizer.encode_instruct(request)
-    text = decode_keep(v15_tekkenizer, tokenized)
+    text = decode_keep(tokenizer=v15_tekkenizer, tokenized=tokenized)
     assert text == EXPECTED_TEXT_V15, text
 
 
@@ -161,7 +161,7 @@ def test_no_tools_and_reasoning_effort(v15_tekkenizer: InstructTokenizerV15, mes
     )
     tokenized = v15_tekkenizer.encode_instruct(request)
     expected_text_no_tools = EXPECTED_TEXT_V15_NO_TOOLS.replace("high", "none")
-    text = decode_keep(v15_tekkenizer, tokenized)
+    text = decode_keep(tokenizer=v15_tekkenizer, tokenized=tokenized)
     assert text == expected_text_no_tools, text
 
 
@@ -170,7 +170,7 @@ def test_no_settings_does_not_encode_model_settings(
 ) -> None:
     request: InstructRequest = InstructRequest(messages=messages, available_tools=None, settings=ModelSettings.none())
     tokenized = v15_tekkenizer_no_reasoning.encode_instruct(request)
-    text = decode_keep(v15_tekkenizer_no_reasoning, tokenized)
+    text = decode_keep(tokenizer=v15_tekkenizer_no_reasoning, tokenized=tokenized)
     assert "[MODEL_SETTINGS]" not in text
 
 
@@ -179,5 +179,7 @@ def test_system_think_chunk_raises_v15(v15_tekkenizer: InstructTokenizerV15) -> 
     request: InstructRequest = InstructRequest(
         messages=messages, settings=ModelSettings(reasoning_effort=ReasoningEffort.high)
     )
-    with pytest.raises(TokenizerException, match="ThinkChunk in system message is not supported for this model"):
+    with pytest.raises(
+        expected_exception=TokenizerException, match="ThinkChunk in system message is not supported for this model"
+    ):
         v15_tekkenizer.encode_instruct(request)

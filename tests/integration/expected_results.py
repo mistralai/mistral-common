@@ -384,11 +384,11 @@ def load_expected_success(
         )
 
     images = tuple(
-        _parse_image(entry, case_dir=case_dir, case_id=case_id, entry_index=index)
+        _parse_image(entry=entry, case_dir=case_dir, case_id=case_id, entry_index=index)
         for index, entry in enumerate(manifest.images)
     )
     audios = tuple(
-        _parse_audio(entry, case_dir=case_dir, case_id=case_id, entry_index=index)
+        _parse_audio(entry=entry, case_dir=case_dir, case_id=case_id, entry_index=index)
         for index, entry in enumerate(manifest.audios)
     )
     return ExpectedSuccess(

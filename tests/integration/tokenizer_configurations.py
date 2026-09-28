@@ -244,9 +244,9 @@ PINNED_V15_IMAGE_SETTINGS_FINETUNING = _pinned(
 
 
 def _load_synthetic_v13_audio() -> MistralTokenizer:
-    special_tokens = get_special_tokens(TokenizerVersion.v13, add_think=False, add_audio=True)
+    special_tokens = get_special_tokens(tokenizer_version=TokenizerVersion.v13, add_think=False, add_audio=True)
     tekkenizer = Tekkenizer(
-        quick_vocab(extra_toks=[b"a", b"b", b"c", b"f", b"de"]),
+        vocab=quick_vocab(extra_toks=[b"a", b"b", b"c", b"f", b"de"]),
         special_tokens=special_tokens,
         pattern=r".+",
         vocab_size=256 + 100,
@@ -334,7 +334,7 @@ def _load_synthetic_v15(
     instruct_tokenizer = InstructTokenizerV15(tokenizer=tekkenizer, audio_encoder=audio_encoder)
     return MistralTokenizer(
         instruct_tokenizer=instruct_tokenizer,
-        validator=get_validator(TokenizerVersion.v15, mode=ValidationMode.test),
+        validator=get_validator(version=TokenizerVersion.v15, mode=ValidationMode.test),
         request_normalizer=get_normalizer(version=TokenizerVersion.v15, model_settings_builder=settings_builder),
     )
 

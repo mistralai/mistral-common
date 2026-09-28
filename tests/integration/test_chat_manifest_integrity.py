@@ -75,7 +75,7 @@ def _read_manifest(manifest_dir: Path) -> dict[str, Any]:
 
 
 def test_missing_manifest_is_rejected(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="Missing expected manifest"):
+    with pytest.raises(expected_exception=ValueError, match="Missing expected manifest"):
         load_expected_success(
             case_id="absent-case",
             tokenizer_configuration_id="integrity-configuration",
@@ -87,7 +87,7 @@ def test_manifest_case_id_mismatch_is_rejected(manifest_dir: Path) -> None:
     copied_dir = manifest_dir.parent / "other-case"
     copied_dir.mkdir()
     (copied_dir / "expected.json").write_text((manifest_dir / "expected.json").read_text())
-    with pytest.raises(ValueError, match="does not match the requested case"):
+    with pytest.raises(expected_exception=ValueError, match="does not match the requested case"):
         load_expected_success(
             case_id="other-case",
             tokenizer_configuration_id="integrity-configuration",
@@ -96,7 +96,7 @@ def test_manifest_case_id_mismatch_is_rejected(manifest_dir: Path) -> None:
 
 
 def test_manifest_configuration_mismatch_is_rejected(manifest_dir: Path) -> None:
-    with pytest.raises(ValueError, match="does not match the requested configuration"):
+    with pytest.raises(expected_exception=ValueError, match="does not match the requested configuration"):
         load_expected_success(
             case_id="integrity-case",
             tokenizer_configuration_id="other-configuration",
@@ -111,46 +111,50 @@ def test_manifest_requires_ordered_media_fields(manifest_dir: Path, missing_fiel
     del manifest[missing_field]
     manifest_path.write_text(json.dumps(manifest))
 
-    with pytest.raises(ValueError, match=f"missing required.*{missing_field}"):
-        _assert_full_path(manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
+    with pytest.raises(expected_exception=ValueError, match=f"missing required.*{missing_field}"):
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
 
 
 def test_escaping_sidecar_path_is_rejected(manifest_dir: Path) -> None:
-    with pytest.raises(ValueError, match="escapes the case directory"):
+    with pytest.raises(expected_exception=ValueError, match="escapes the case directory"):
         resolve_sidecar(case_dir=manifest_dir, relative_path="../outside.npy")
 
 
 def test_manifest_escaping_sidecar_is_rejected(manifest_dir: Path) -> None:
     (manifest_dir.parent / "outside.npy").write_bytes(b"outside the case")
-    _write_image_entry(manifest_dir, path="../outside.npy", shape=[1, 2], dtype="float32")
+    _write_image_entry(manifest_dir=manifest_dir, path="../outside.npy", shape=[1, 2], dtype="float32")
     tokenized = Tokenized(tokens=[1, 2, 3], images=[np.zeros(shape=(1, 2), dtype=np.float32)])
 
-    with pytest.raises(ValueError, match="Case 'integrity-case' image entry 0:.*escapes the case directory"):
-        _assert_full_path(manifest_dir, tokenized=tokenized)
+    with pytest.raises(
+        expected_exception=ValueError, match="Case 'integrity-case' image entry 0:.*escapes the case directory"
+    ):
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
 
 
 def test_manifest_missing_sidecar_is_rejected(manifest_dir: Path) -> None:
-    _write_image_entry(manifest_dir, path="images/missing.npy", shape=[1, 2], dtype="float32")
+    _write_image_entry(manifest_dir=manifest_dir, path="images/missing.npy", shape=[1, 2], dtype="float32")
     tokenized = Tokenized(tokens=[1, 2, 3], images=[np.zeros(shape=(1, 2), dtype=np.float32)])
 
-    with pytest.raises(ValueError, match="Case 'integrity-case' image entry 0 references missing sidecar"):
-        _assert_full_path(manifest_dir, tokenized=tokenized)
+    with pytest.raises(
+        expected_exception=ValueError, match="Case 'integrity-case' image entry 0 references missing sidecar"
+    ):
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
 
 
 def test_absolute_sidecar_path_is_rejected(manifest_dir: Path) -> None:
-    with pytest.raises(ValueError, match="must be relative"):
+    with pytest.raises(expected_exception=ValueError, match="must be relative"):
         resolve_sidecar(case_dir=manifest_dir, relative_path=str(manifest_dir / "absolute.npy"))
 
 
 def test_non_npy_sidecar_path_is_rejected(manifest_dir: Path) -> None:
-    with pytest.raises(ValueError, match="must reference a .npy file"):
+    with pytest.raises(expected_exception=ValueError, match="must reference a .npy file"):
         resolve_sidecar(case_dir=manifest_dir, relative_path="payload.txt")
 
 
 def test_pickle_sidecar_is_rejected(manifest_dir: Path) -> None:
     pickled_path = manifest_dir / "pickled.npy"
-    np.save(file=pickled_path, arr=np.array([{"surprise": "pickle"}], dtype=object))
-    with pytest.raises(ValueError, match="pick"):
+    np.save(file=pickled_path, arr=np.array(object=[{"surprise": "pickle"}], dtype=object))
+    with pytest.raises(expected_exception=ValueError, match="pick"):
         load_sidecar(sidecar_path=pickled_path)
 
 
@@ -158,16 +162,16 @@ def test_npz_archive_renamed_as_npy_is_rejected(manifest_dir: Path) -> None:
     images_dir = manifest_dir / "images"
     images_dir.mkdir()
     archive_path = images_dir / "0.npz"
-    np.savez(file=archive_path, p=np.array(["p"], dtype="<U1"))
+    np.savez(file=archive_path, p=np.array(object=["p"], dtype="<U1"))
     archive_path.rename(images_dir / "0.npy")
-    _write_image_entry(manifest_dir, path="images/0.npy", shape=[1], dtype="<U1")
-    tokenized = Tokenized(tokens=[1, 2, 3], images=[np.array(["p"], dtype="<U1")])
+    _write_image_entry(manifest_dir=manifest_dir, path="images/0.npy", shape=[1], dtype="<U1")
+    tokenized = Tokenized(tokens=[1, 2, 3], images=[np.array(object=["p"], dtype="<U1")])
 
     with pytest.raises(
-        ValueError,
+        expected_exception=ValueError,
         match=r"Case 'integrity-case' image entry 0 cannot load sidecar 'images/0.npy'.*array sidecar",
     ):
-        _assert_full_path(manifest_dir, tokenized=tokenized)
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
 
 
 def test_missing_sidecar_file_is_rejected(manifest_dir: Path) -> None:
@@ -178,7 +182,7 @@ def test_missing_sidecar_file_is_rejected(manifest_dir: Path) -> None:
 def test_changed_token_ids_fail_the_comparison(manifest_dir: Path) -> None:
     expected = _load(manifest_dir)
     tokenized = Tokenized(tokens=[1, 2, 4])
-    with pytest.raises(AssertionError, match="Token ids differ"):
+    with pytest.raises(expected_exception=AssertionError, match="Token ids differ"):
         assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s>hello</s>")
 
 
@@ -188,8 +192,8 @@ def test_non_integer_token_id_is_rejected_before_public_comparison(manifest_dir:
     manifest["token_ids"] = [1.9, 2, 3]
     manifest_path.write_text(json.dumps(manifest))
 
-    with pytest.raises(ValueError, match=r"Case 'integrity-case'.*token_ids\[0\].*1\.9"):
-        _assert_full_path(manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
+    with pytest.raises(expected_exception=ValueError, match=r"Case 'integrity-case'.*token_ids\[0\].*1\.9"):
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
 
 
 @pytest.mark.parametrize(
@@ -206,8 +210,8 @@ def test_token_ids_must_be_an_array_of_exact_integers(manifest_dir: Path, token_
     manifest["token_ids"] = token_ids
     _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
 
-    with pytest.raises(ValueError, match=message):
-        _assert_full_path(manifest_dir, tokenized=Tokenized(tokens=[]))
+    with pytest.raises(expected_exception=ValueError, match=message):
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[]))
 
 
 @pytest.mark.parametrize(
@@ -230,8 +234,8 @@ def test_manifest_string_fields_reject_other_json_types(
     manifest[field] = value
     _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
 
-    with pytest.raises(ValueError, match=message):
-        _assert_full_path(manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
+    with pytest.raises(expected_exception=ValueError, match=message):
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
 
 
 @pytest.mark.parametrize(
@@ -249,8 +253,8 @@ def test_manifest_media_fields_must_be_arrays(manifest_dir: Path, field: str, va
     manifest[field] = value
     _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
 
-    with pytest.raises(ValueError, match=message):
-        _assert_full_path(manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
+    with pytest.raises(expected_exception=ValueError, match=message):
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
 
 
 @pytest.mark.parametrize(argnames="field", argvalues=["images", "audios"], ids=["image", "audio"])
@@ -260,8 +264,8 @@ def test_media_entries_must_be_objects(manifest_dir: Path, field: str) -> None:
     _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
 
     media_kind = "image" if field == "images" else "audio"
-    with pytest.raises(ValueError, match=rf"{media_kind} entry 0.*must be an object"):
-        _assert_full_path(manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
+    with pytest.raises(expected_exception=ValueError, match=rf"{media_kind} entry 0.*must be an object"):
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
 
 
 @pytest.mark.parametrize(
@@ -320,8 +324,8 @@ def test_media_entry_fields_have_the_declared_types(
     manifest[field] = [entry]
     _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
 
-    with pytest.raises(ValueError, match=message):
-        _assert_full_path(manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
+    with pytest.raises(expected_exception=ValueError, match=message):
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
 
 
 @pytest.mark.parametrize(
@@ -362,8 +366,10 @@ def test_media_dtype_must_be_a_non_empty_string(manifest_dir: Path, media_kind: 
     else:
         tokenized = Tokenized(tokens=[1, 2, 3], audios=[Audio(audio_array=array, sampling_rate=16000, format="wav")])
 
-    with pytest.raises(ValueError, match=rf"{media_kind} entry 0.*field 'dtype'.*must be a non-empty string"):
-        _assert_full_path(manifest_dir, tokenized=tokenized)
+    with pytest.raises(
+        expected_exception=ValueError, match=rf"{media_kind} entry 0.*field 'dtype'.*must be a non-empty string"
+    ):
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
 
 
 @pytest.mark.parametrize(
@@ -389,8 +395,10 @@ def test_media_entries_require_all_schema_fields(manifest_dir: Path, field: str,
     _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
 
     media_kind = "image" if field == "images" else "audio"
-    with pytest.raises(ValueError, match=rf"{media_kind} entry 0.*missing required field '{missing_field}'"):
-        _assert_full_path(manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
+    with pytest.raises(
+        expected_exception=ValueError, match=rf"{media_kind} entry 0.*missing required field '{missing_field}'"
+    ):
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
 
 
 def test_audio_format_must_be_a_string(manifest_dir: Path) -> None:
@@ -410,8 +418,8 @@ def test_audio_format_must_be_a_string(manifest_dir: Path) -> None:
     _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
     tokenized = Tokenized(tokens=[1, 2, 3], audios=[Audio(audio_array=audio_array, sampling_rate=16000, format="wav")])
 
-    with pytest.raises(ValueError, match=r"audio entry 0.*field 'format'.*must be a string"):
-        _assert_full_path(manifest_dir, tokenized=tokenized)
+    with pytest.raises(expected_exception=ValueError, match=r"audio entry 0.*field 'format'.*must be a string"):
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
 
 
 @pytest.mark.parametrize(
@@ -423,29 +431,31 @@ def test_manifest_requires_all_top_level_fields(manifest_dir: Path, field: str) 
     del manifest[field]
     _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
 
-    with pytest.raises(ValueError, match=rf"Case 'integrity-case'.*missing required field '{field}'"):
-        _assert_full_path(manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
+    with pytest.raises(
+        expected_exception=ValueError, match=rf"Case 'integrity-case'.*missing required field '{field}'"
+    ):
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
 
 
 def test_manifest_root_must_be_an_object(manifest_dir: Path) -> None:
     (manifest_dir / "expected.json").write_text(json.dumps(["not", "an", "object"]))
 
-    with pytest.raises(ValueError, match=r"Case 'integrity-case'.*manifest.*must be an object"):
-        _assert_full_path(manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
+    with pytest.raises(expected_exception=ValueError, match=r"Case 'integrity-case'.*manifest.*must be an object"):
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
 
 
 def test_non_integer_image_shape_dimension_is_rejected_before_comparison(manifest_dir: Path) -> None:
     (manifest_dir / "images").mkdir()
     np.save(file=manifest_dir / "images" / "0.npy", arr=np.zeros(shape=(1, 2), dtype=np.float32))
-    _write_image_entry(manifest_dir, path="images/0.npy", shape=[1, 2], dtype="float32")
+    _write_image_entry(manifest_dir=manifest_dir, path="images/0.npy", shape=[1, 2], dtype="float32")
     manifest_path = manifest_dir / "expected.json"
     manifest = json.loads(manifest_path.read_text())
     manifest["images"][0]["shape"] = [1.9, 2]
     manifest_path.write_text(json.dumps(manifest))
     tokenized = Tokenized(tokens=[1, 2, 3], images=[np.zeros(shape=(1, 2), dtype=np.float32)])
 
-    with pytest.raises(ValueError, match=r"Case 'integrity-case' image entry 0.*shape\[0\].*1\.9"):
-        _assert_full_path(manifest_dir, tokenized=tokenized)
+    with pytest.raises(expected_exception=ValueError, match=r"Case 'integrity-case' image entry 0.*shape\[0\].*1\.9"):
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
 
 
 def test_non_integer_audio_shape_dimension_is_rejected_before_comparison(manifest_dir: Path) -> None:
@@ -462,8 +472,8 @@ def test_non_integer_audio_shape_dimension_is_rejected_before_comparison(manifes
         audios=[Audio(audio_array=np.zeros(shape=(4,), dtype=np.float32), sampling_rate=16000, format="wav")],
     )
 
-    with pytest.raises(ValueError, match=r"Case 'integrity-case' audio entry 0.*shape\[0\].*4\.9"):
-        _assert_full_path(manifest_dir, tokenized=tokenized)
+    with pytest.raises(expected_exception=ValueError, match=r"Case 'integrity-case' audio entry 0.*shape\[0\].*4\.9"):
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
 
 
 def test_non_integer_audio_sampling_rate_is_rejected_before_comparison(manifest_dir: Path) -> None:
@@ -480,14 +490,16 @@ def test_non_integer_audio_sampling_rate_is_rejected_before_comparison(manifest_
         audios=[Audio(audio_array=np.zeros(shape=(4,), dtype=np.float32), sampling_rate=16000, format="wav")],
     )
 
-    with pytest.raises(ValueError, match=r"Case 'integrity-case' audio entry 0.*sampling_rate.*16000\.9"):
-        _assert_full_path(manifest_dir, tokenized=tokenized)
+    with pytest.raises(
+        expected_exception=ValueError, match=r"Case 'integrity-case' audio entry 0.*sampling_rate.*16000\.9"
+    ):
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
 
 
 def test_changed_decoded_text_fails_the_comparison(manifest_dir: Path) -> None:
     expected = _load(manifest_dir)
     tokenized = Tokenized(tokens=[1, 2, 3])
-    with pytest.raises(AssertionError, match="Decoded text differs"):
+    with pytest.raises(expected_exception=AssertionError, match="Decoded text differs"):
         assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s>hello there</s>")
 
 
@@ -529,7 +541,7 @@ def test_changed_media_values_fail_under_the_shared_tolerance(tmp_path: Path) ->
         audio_array=np.full(shape=(4,), fill_value=1.0, dtype=np.float32), sampling_rate=16000, format="wav"
     )
     tokenized = Tokenized(tokens=[1], images=[changed_image], audios=[changed_audio])
-    with pytest.raises(AssertionError, match="Image array differs"):
+    with pytest.raises(expected_exception=AssertionError, match="Image array differs"):
         assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s></s>")
 
     tokenized = Tokenized(
@@ -537,7 +549,7 @@ def test_changed_media_values_fail_under_the_shared_tolerance(tmp_path: Path) ->
         images=[np.zeros(shape=(1, 2), dtype=np.float32)],
         audios=[changed_audio],
     )
-    with pytest.raises(AssertionError, match="Audio array differs"):
+    with pytest.raises(expected_exception=AssertionError, match="Audio array differs"):
         assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s></s>")
 
 
@@ -564,25 +576,29 @@ def test_media_metadata_mismatches_fail_before_values(tmp_path: Path) -> None:
         expected_root=tmp_path,
     )
     tokenized = Tokenized(tokens=[1], images=[np.zeros(shape=(1, 2), dtype=np.float32)])
-    with pytest.raises(AssertionError, match="Image shape"):
+    with pytest.raises(expected_exception=AssertionError, match="Image shape"):
         assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s></s>")
 
 
 def test_sidecar_dtype_mismatch_is_rejected_before_values(manifest_dir: Path) -> None:
     (manifest_dir / "images").mkdir()
     np.save(file=manifest_dir / "images" / "0.npy", arr=np.zeros(shape=(1, 2), dtype=np.float64))
-    _write_image_entry(manifest_dir, path="images/0.npy", shape=[1, 2], dtype="float32")
+    _write_image_entry(manifest_dir=manifest_dir, path="images/0.npy", shape=[1, 2], dtype="float32")
     tokenized = Tokenized(tokens=[1, 2, 3], images=[np.zeros(shape=(1, 2), dtype=np.float32)])
 
-    with pytest.raises(ValueError, match="sidecar dtype.*does not match manifest declared dtype float32"):
-        _assert_full_path(manifest_dir, tokenized=tokenized)
+    with pytest.raises(
+        expected_exception=ValueError, match="sidecar dtype.*does not match manifest declared dtype float32"
+    ):
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
 
 
 def test_sidecar_shape_mismatch_is_rejected_before_values(manifest_dir: Path) -> None:
     (manifest_dir / "images").mkdir()
     np.save(file=manifest_dir / "images" / "0.npy", arr=np.zeros(shape=(2, 1), dtype=np.float32))
-    _write_image_entry(manifest_dir, path="images/0.npy", shape=[1, 2], dtype="float32")
+    _write_image_entry(manifest_dir=manifest_dir, path="images/0.npy", shape=[1, 2], dtype="float32")
     tokenized = Tokenized(tokens=[1, 2, 3], images=[np.zeros(shape=(1, 2), dtype=np.float32)])
 
-    with pytest.raises(ValueError, match=r"sidecar shape.*does not match manifest declared shape \(1, 2\)"):
-        _assert_full_path(manifest_dir, tokenized=tokenized)
+    with pytest.raises(
+        expected_exception=ValueError, match=r"sidecar shape.*does not match manifest declared shape \(1, 2\)"
+    ):
+        _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)

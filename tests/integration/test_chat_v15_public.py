@@ -127,5 +127,5 @@ def test_public_chat_v15_error(
     request = case.recipe.build()
     tokenizer = public_tokenizer(case.configuration)
 
-    with pytest.raises(case.expected_exception, match=case.message_pattern):
+    with pytest.raises(expected_exception=case.expected_exception, match=case.message_pattern):
         tokenizer.encode_chat_completion(request)
