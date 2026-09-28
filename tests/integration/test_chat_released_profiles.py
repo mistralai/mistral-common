@@ -109,6 +109,10 @@ def test_released_profile_public_chat_success(
         np.testing.assert_array_equal(tokenized.images[0], red_encoding.image)
         np.testing.assert_array_equal(tokenized.images[1], blue_encoding.image)
 
+    if case.case_id == "chat-v11-released-prefixed-final":
+        eos_id = tokenizer.instruct_tokenizer.tokenizer.eos_id
+        assert tokenized.tokens[-1] != eos_id
+
 
 @pytest.mark.parametrize("case", RELEASED_ERROR_CASES, ids=lambda case: case.case_id)
 def test_released_profile_public_chat_error(
