@@ -5,41 +5,14 @@ import numpy as np
 import pytest
 import soundfile as sf
 from openai.types.audio.transcription_create_params import TranscriptionCreateParamsBase as OpenAITranscriptionRequest
-from openai.types.chat.chat_completion_assistant_message_param import (
-    ChatCompletionAssistantMessageParam as OpenAIAssistantMessage,
-)
-from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam as OpenAIUserMessage
 from pydantic_extra_types.language_code import LanguageAlpha2
 
-from mistral_common.protocol.instruct.chunk import (
-    AudioChunk,
-    AudioURL,
-    AudioURLChunk,
-    ImageURL,
-    ImageURLChunk,
-    TextChunk,
-)
-from mistral_common.protocol.instruct.messages import (
-    AssistantMessage,
-    ChatMessage,
-    SystemMessage,
-    ToolMessage,
-    UserMessage,
-)
-from mistral_common.protocol.instruct.request import (
-    ChatCompletionRequest,
-    ReasoningEffort,
-)
-from mistral_common.protocol.instruct.tool_calls import (
-    Tool,
-)
+from mistral_common.protocol.instruct.chunk import AudioChunk
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import Audio
 
 from .test_tokenizer_v7_audio_tts import _make_fake_audio
-
-AUDIO_SAMPLE_URL = "https://freetestdata.com/wp-content/uploads/2021/09/Free_Test_Data_100KB_MP3.mp3"
 
 
 def _get_audio_chunk() -> AudioChunk:
@@ -66,167 +39,6 @@ def _get_audio_chunk() -> AudioChunk:
 
 DUMMY_AUDIO_CHUNK = _get_audio_chunk()
 assert isinstance(DUMMY_AUDIO_CHUNK.input_audio, str)
-DUMMY_AUDIO_URL_CHUNK_BASE64 = AudioURLChunk(audio_url=AudioURL(url=DUMMY_AUDIO_CHUNK.input_audio))
-DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX = AudioURLChunk(
-    audio_url=AudioURL(url=f"data:audio/wav;base64,{DUMMY_AUDIO_CHUNK.input_audio}")
-)
-DUMMY_AUDIO_URL_CHUNK_URL = AudioURLChunk(audio_url=AudioURL(url=AUDIO_SAMPLE_URL))
-
-
-@pytest.mark.parametrize(
-    ["openai_message", "message"],
-    [
-        pytest.param(
-            OpenAIUserMessage(
-                role="user",
-                content=[
-                    {"type": "text", "text": "Describe this image"},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": "https://upload.wikimedia.org/wikipedia/commons/d/da/2015_Kaczka_krzy%C5%BCowka_w_wodzie_%28samiec%29.jpg",
-                            "detail": "auto",
-                        },
-                    },
-                ],
-            ),
-            UserMessage(
-                content=[
-                    TextChunk(text="Describe this image"),
-                    ImageURLChunk(
-                        image_url=ImageURL(
-                            url="https://upload.wikimedia.org/wikipedia/commons/d/da/2015_Kaczka_krzy%C5%BCowka_w_wodzie_%28samiec%29.jpg",
-                            detail="auto",
-                        )
-                    ),
-                ]
-            ),
-            id="user-image-url-detail-order",
-        ),
-    ],
-)
-def test_convert_openai_message_to_message_and_back(openai_message: dict, message: ChatMessage) -> None:
-    assert type(message).from_openai(openai_message) == message
-    assert message.to_openai() == openai_message
-
-
-@pytest.mark.parametrize(
-    "reasoning_effort",
-    [None, ReasoningEffort.none, ReasoningEffort.high],
-)
-@pytest.mark.parametrize(
-    ["openai_messages", "messages", "openai_tools", "tools"],
-    [
-        (
-            [
-                OpenAIUserMessage({"role": "user", "content": "Listen to this"}),
-                OpenAIAssistantMessage(
-                    {
-                        "role": "assistant",
-                        "content": "Pass the URL please.",
-                    }
-                ),
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Here it is !"},
-                        {
-                            "type": "audio_url",
-                            "audio_url": {
-                                "url": AUDIO_SAMPLE_URL,
-                            },
-                        },
-                        {"type": "text", "text": "What do you think also of these ones?"},
-                        {
-                            "type": "audio_url",
-                            "audio_url": {
-                                "url": DUMMY_AUDIO_URL_CHUNK_URL.audio_url.url,
-                            },
-                        },
-                        {
-                            "type": "audio_url",
-                            "audio_url": {
-                                "url": DUMMY_AUDIO_URL_CHUNK_BASE64.audio_url.url,
-                            },
-                        },
-                        {
-                            "type": "audio_url",
-                            "audio_url": {
-                                "url": DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX.audio_url.url,
-                            },
-                        },
-                    ],
-                },
-            ],
-            [
-                UserMessage(content="Listen to this"),
-                AssistantMessage(content="Pass the URL please."),
-                UserMessage(
-                    content=[
-                        TextChunk(text="Here it is !"),
-                        AudioURLChunk(audio_url=AudioURL(url=AUDIO_SAMPLE_URL)),
-                        TextChunk(text="What do you think also of these ones?"),
-                        DUMMY_AUDIO_URL_CHUNK_URL,
-                        DUMMY_AUDIO_URL_CHUNK_BASE64,
-                        DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX,
-                    ]
-                ),
-            ],
-            None,
-            None,
-        ),
-    ],
-)
-def test_convert_requests(
-    openai_messages: list[dict[str, Any]],
-    messages: list[ChatMessage],
-    openai_tools: list[dict[str, Any]] | None,
-    tools: list[Tool] | None,
-    reasoning_effort: ReasoningEffort | None,
-) -> None:
-    request = ChatCompletionRequest(
-        messages=messages,
-        tools=tools,
-        reasoning_effort=reasoning_effort,
-    )
-
-    openai_request = request.to_openai(stream=True)
-
-    assert openai_request["messages"] == openai_messages
-    if tools is not None:
-        assert openai_request["tools"] == openai_tools
-    else:
-        assert "tools" not in openai_request
-
-    if reasoning_effort is not None:
-        assert openai_request["reasoning_effort"] == reasoning_effort.value
-    else:
-        assert "reasoning_effort" not in openai_request
-
-    assert openai_request["temperature"] == 0.7
-
-    stream = openai_request.pop("stream")
-    assert stream is True
-
-    reconstructed_request = ChatCompletionRequest.from_openai(**openai_request)
-
-    for i, reconstructed_message in enumerate(reconstructed_request.messages):
-        if isinstance(reconstructed_message, (SystemMessage, UserMessage, AssistantMessage)):
-            assert reconstructed_message == messages[i]
-        elif isinstance(reconstructed_message, ToolMessage):
-            assert reconstructed_message.model_dump(exclude={"name"}) == messages[i].model_dump(exclude={"name"})
-
-    if tools is not None:
-        reconstructed_tools = reconstructed_request.tools
-        assert isinstance(tools, list)
-        assert isinstance(reconstructed_tools, list)
-
-        # Not using zip below because of mypy not recognizing reconstructed_tools as a list of Tools.
-        assert len(tools) == len(reconstructed_tools)
-        for i in range(len(tools)):
-            assert reconstructed_tools[i] == tools[i]
-
-    assert reconstructed_request.reasoning_effort == reasoning_effort
 
 
 @pytest.mark.parametrize(

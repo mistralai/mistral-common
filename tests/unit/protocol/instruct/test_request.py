@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 import mistral_common.deprecation
 from mistral_common.exceptions import InvalidMessageStructureException
-from mistral_common.protocol.instruct.chunk import TextChunk, ThinkChunk
+from mistral_common.protocol.instruct.chunk import AudioURL, AudioURLChunk, TextChunk, ThinkChunk
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
@@ -165,6 +165,43 @@ def _weather_call_scenario() -> _RequestRoundTripInputs:
     ]
 
     return messages, openai_messages, tools, openai_tools
+
+
+def _audio_url_conversation_scenario() -> _RequestRoundTripInputs:
+    sample_audio_url = "https://freetestdata.com/wp-content/uploads/2021/09/Free_Test_Data_100KB_MP3.mp3"
+    base64_audio_url = "YXVkaW8="
+    prefixed_audio_url = f"data:audio/wav;base64,{base64_audio_url}"
+    messages: list[ChatMessage] = [
+        UserMessage(content="Listen to this"),
+        AssistantMessage(content="Pass the URL please."),
+        UserMessage(
+            content=[
+                TextChunk(text="Here it is !"),
+                AudioURLChunk(audio_url=AudioURL(url=sample_audio_url)),
+                TextChunk(text="What do you think also of these ones?"),
+                AudioURLChunk(audio_url=AudioURL(url=sample_audio_url)),
+                AudioURLChunk(audio_url=AudioURL(url=base64_audio_url)),
+                AudioURLChunk(audio_url=AudioURL(url=prefixed_audio_url)),
+            ]
+        ),
+    ]
+    openai_messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "Listen to this"},
+        {"role": "assistant", "content": "Pass the URL please."},
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Here it is !"},
+                {"type": "audio_url", "audio_url": {"url": sample_audio_url}},
+                {"type": "text", "text": "What do you think also of these ones?"},
+                {"type": "audio_url", "audio_url": {"url": sample_audio_url}},
+                {"type": "audio_url", "audio_url": {"url": base64_audio_url}},
+                {"type": "audio_url", "audio_url": {"url": prefixed_audio_url}},
+            ],
+        },
+    ]
+
+    return messages, openai_messages, None, None
 
 
 class TestRequestConstruction:
@@ -616,6 +653,7 @@ def test_request_tool_choice_round_trip(
         pytest.param(_weather_tool_result_scenario, id="weather-tool-result"),
         pytest.param(_no_tool_conversation_scenario, id="no-tool-conversation"),
         pytest.param(_weather_call_scenario, id="weather-call-with-tool-result"),
+        pytest.param(_audio_url_conversation_scenario, id="audio-url-conversation"),
     ],
 )
 @pytest.mark.parametrize(
@@ -626,7 +664,7 @@ def test_request_tool_choice_round_trip(
         pytest.param(ReasoningEffort.high, id="effort-high"),
     ],
 )
-def test_request_openai_round_trip_preserves_non_media_scenarios(
+def test_request_openai_round_trip_preserves_message_scenarios(
     scenario_factory: Callable[[], _RequestRoundTripInputs], reasoning_effort: ReasoningEffort | None
 ) -> None:
     messages, expected_openai_messages, tools, expected_openai_tools = scenario_factory()
@@ -636,20 +674,25 @@ def test_request_openai_round_trip_preserves_non_media_scenarios(
 
     openai_request = request.to_openai(stream=True)
 
-    assert openai_request["messages"] == expected_openai_messages
-    if tools is not None:
-        assert openai_request["tools"] == expected_openai_tools
-    else:
-        assert "tools" not in openai_request
+    expected_openai_request: dict[str, Any] = {
+        "temperature": 0.7,
+        "top_p": 1.0,
+        "response_format": {"type": "text"},
+        "continue_final_message": False,
+        "messages": expected_openai_messages,
+        "tool_choice": "auto",
+        "stream": True,
+    }
+    if expected_openai_tools is not None:
+        expected_openai_request["tools"] = expected_openai_tools
     if reasoning_effort is not None:
-        assert openai_request["reasoning_effort"] == reasoning_effort.value
-    else:
-        assert "reasoning_effort" not in openai_request
-    assert openai_request["temperature"] == 0.7
+        expected_openai_request["reasoning_effort"] = reasoning_effort.value
+    assert openai_request == expected_openai_request
 
-    assert openai_request.pop("stream") is True
     reconstructed_request = ChatCompletionRequest.from_openai(**openai_request)
 
+    assert "stream" not in reconstructed_request.model_dump()
+    assert reconstructed_request.temperature == 0.7
     assert len(reconstructed_request.messages) == len(expected_messages)
     for index, reconstructed_message in enumerate(reconstructed_request.messages):
         expected_message = expected_messages[index]

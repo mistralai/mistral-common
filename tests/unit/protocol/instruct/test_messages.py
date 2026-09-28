@@ -3,14 +3,16 @@ from copy import deepcopy
 from typing import Any
 
 import pytest
+from PIL import Image
 from pydantic import ValidationError
 
 from mistral_common.exceptions import InvalidAssistantMessageException
-from mistral_common.protocol.instruct.chunk import TextChunk, ThinkChunk
+from mistral_common.protocol.instruct.chunk import ImageChunk, ImageURL, ImageURLChunk, TextChunk, ThinkChunk
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     BaseMessage,
     ChatMessage,
+    FinetuningAssistantMessage,
     ReasoningFieldFormat,
     Roles,
     SystemMessage,
@@ -118,6 +120,34 @@ def test_message_rejects_forbidden_chunk_for_role(
             id="user-text-chunk",
         ),
         pytest.param(
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Describe this image"},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://upload.wikimedia.org/wikipedia/commons/d/da/2015_Kaczka_krzy%C5%BCowka_w_wodzie_%28samiec%29.jpg",
+                            "detail": "auto",
+                        },
+                    },
+                ],
+            },
+            UserMessage(
+                content=[
+                    TextChunk(text="Describe this image"),
+                    ImageURLChunk(
+                        image_url=ImageURL(
+                            url="https://upload.wikimedia.org/wikipedia/commons/d/da/2015_Kaczka_krzy%C5%BCowka_w_wodzie_%28samiec%29.jpg",
+                            detail="auto",
+                        )
+                    ),
+                ]
+            ),
+            False,
+            id="user-image-url-detail-order",
+        ),
+        pytest.param(
             {"role": "assistant", "content": "Hi"},
             AssistantMessage(content="Hi"),
             False,
@@ -221,6 +251,48 @@ def test_openai_message_round_trip(openai_message: dict[str, Any], message: Chat
             assert deepcopy(message).to_openai() == openai_message
     else:
         assert deepcopy(message).to_openai() == openai_message
+
+
+def test_image_message_export_import_canonicalizes_image_chunk_to_image_url_chunk() -> None:
+    image = Image.new(mode="RGB", size=(2, 1))
+    image.putpixel((0, 0), (255, 0, 0))
+    image.putpixel((1, 0), (0, 0, 255))
+    message = UserMessage(content=[TextChunk(text="Before"), ImageChunk(image=image), TextChunk(text="After")])
+    image_data_url = (
+        "data:image/png;base64,"
+        "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAD0lEQVR4nGP4z8DAwPAfAAcAAf9+CLHQAAAAAElFTkSuQmCC"
+    )
+    expected_openai_message = {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "Before"},
+            {"type": "image_url", "image_url": {"url": image_data_url}},
+            {"type": "text", "text": "After"},
+        ],
+    }
+    expected_reconstructed_message = UserMessage(
+        content=[
+            TextChunk(text="Before"),
+            ImageURLChunk(image_url=ImageURL(url=image_data_url)),
+            TextChunk(text="After"),
+        ]
+    )
+
+    openai_message = message.to_openai()
+
+    assert openai_message == expected_openai_message
+    assert UserMessage.from_openai(deepcopy(openai_message)) == expected_reconstructed_message
+
+
+def test_finetuning_assistant_message_openai_round_trip_omits_weight() -> None:
+    message = FinetuningAssistantMessage(content="Weighted response", weight=0.25)
+    expected_openai_message = {"role": "assistant", "content": "Weighted response"}
+    expected_reconstructed_message = FinetuningAssistantMessage(content="Weighted response", weight=None)
+
+    openai_message = message.to_openai()
+
+    assert openai_message == expected_openai_message
+    assert FinetuningAssistantMessage.from_openai(deepcopy(openai_message)) == expected_reconstructed_message
 
 
 @pytest.mark.parametrize(
