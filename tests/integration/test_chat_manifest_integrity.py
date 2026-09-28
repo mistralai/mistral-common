@@ -154,6 +154,66 @@ def test_changed_token_ids_fail_the_comparison(manifest_dir: Path) -> None:
         assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s>hello</s>")
 
 
+def test_non_integer_token_id_is_rejected_before_public_comparison(manifest_dir: Path) -> None:
+    manifest_path = manifest_dir / "expected.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["token_ids"] = [1.9, 2, 3]
+    manifest_path.write_text(json.dumps(manifest))
+
+    with pytest.raises(ValueError, match=r"Case 'integrity-case'.*token_ids\[0\].*1\.9"):
+        _assert_full_path(manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
+
+
+def test_non_integer_image_shape_dimension_is_rejected_before_comparison(manifest_dir: Path) -> None:
+    (manifest_dir / "images").mkdir()
+    np.save(file=manifest_dir / "images" / "0.npy", arr=np.zeros(shape=(1, 2), dtype=np.float32))
+    _write_image_entry(manifest_dir, path="images/0.npy", shape=[1, 2], dtype="float32")
+    manifest_path = manifest_dir / "expected.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["images"][0]["shape"] = [1.9, 2]
+    manifest_path.write_text(json.dumps(manifest))
+    tokenized = Tokenized(tokens=[1, 2, 3], images=[np.zeros(shape=(1, 2), dtype=np.float32)])
+
+    with pytest.raises(ValueError, match=r"Case 'integrity-case' image entry 0.*shape\[0\].*1\.9"):
+        _assert_full_path(manifest_dir, tokenized=tokenized)
+
+
+def test_non_integer_audio_shape_dimension_is_rejected_before_comparison(manifest_dir: Path) -> None:
+    (manifest_dir / "audios").mkdir()
+    np.save(file=manifest_dir / "audios" / "0.npy", arr=np.zeros(shape=(4,), dtype=np.float32))
+    manifest_path = manifest_dir / "expected.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["audios"] = [
+        {"path": "audios/0.npy", "shape": [4.9], "dtype": "float32", "sampling_rate": 16000, "format": "wav"}
+    ]
+    manifest_path.write_text(json.dumps(manifest))
+    tokenized = Tokenized(
+        tokens=[1, 2, 3],
+        audios=[Audio(audio_array=np.zeros(shape=(4,), dtype=np.float32), sampling_rate=16000, format="wav")],
+    )
+
+    with pytest.raises(ValueError, match=r"Case 'integrity-case' audio entry 0.*shape\[0\].*4\.9"):
+        _assert_full_path(manifest_dir, tokenized=tokenized)
+
+
+def test_non_integer_audio_sampling_rate_is_rejected_before_comparison(manifest_dir: Path) -> None:
+    (manifest_dir / "audios").mkdir()
+    np.save(file=manifest_dir / "audios" / "0.npy", arr=np.zeros(shape=(4,), dtype=np.float32))
+    manifest_path = manifest_dir / "expected.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["audios"] = [
+        {"path": "audios/0.npy", "shape": [4], "dtype": "float32", "sampling_rate": 16000.9, "format": "wav"}
+    ]
+    manifest_path.write_text(json.dumps(manifest))
+    tokenized = Tokenized(
+        tokens=[1, 2, 3],
+        audios=[Audio(audio_array=np.zeros(shape=(4,), dtype=np.float32), sampling_rate=16000, format="wav")],
+    )
+
+    with pytest.raises(ValueError, match=r"Case 'integrity-case' audio entry 0.*sampling_rate.*16000\.9"):
+        _assert_full_path(manifest_dir, tokenized=tokenized)
+
+
 def test_changed_decoded_text_fails_the_comparison(manifest_dir: Path) -> None:
     expected = _load(manifest_dir)
     tokenized = Tokenized(tokens=[1, 2, 3])

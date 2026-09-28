@@ -136,9 +136,19 @@ def _load_manifest_sidecar(
     return array
 
 
+def _require_exact_integer(*, value: Any, context: str, field: str) -> int:
+    if type(value) is not int:
+        raise ValueError(f"{context} field {field!r} must be an integer, got {value!r}")
+    return value
+
+
 def _parse_image(entry: dict[str, Any], *, case_dir: Path, case_id: str, entry_index: int) -> ExpectedImage:
+    entry_context = f"Case {case_id!r} image entry {entry_index}"
     path = entry["path"]
-    shape = tuple(int(dimension) for dimension in entry["shape"])
+    shape = tuple(
+        _require_exact_integer(value=dimension, context=entry_context, field=f"shape[{index}]")
+        for index, dimension in enumerate(entry["shape"])
+    )
     dtype = entry["dtype"]
     return ExpectedImage(
         path=path,
@@ -157,14 +167,20 @@ def _parse_image(entry: dict[str, Any], *, case_dir: Path, case_id: str, entry_i
 
 
 def _parse_audio(entry: dict[str, Any], *, case_dir: Path, case_id: str, entry_index: int) -> ExpectedAudio:
+    entry_context = f"Case {case_id!r} audio entry {entry_index}"
     path = entry["path"]
-    shape = tuple(int(dimension) for dimension in entry["shape"])
+    shape = tuple(
+        _require_exact_integer(value=dimension, context=entry_context, field=f"shape[{index}]")
+        for index, dimension in enumerate(entry["shape"])
+    )
     dtype = entry["dtype"]
     return ExpectedAudio(
         path=path,
         shape=shape,
         dtype=dtype,
-        sampling_rate=int(entry["sampling_rate"]),
+        sampling_rate=_require_exact_integer(
+            value=entry["sampling_rate"], context=entry_context, field="sampling_rate"
+        ),
         format=entry["format"],
         array=_load_manifest_sidecar(
             case_dir=case_dir,
@@ -211,6 +227,11 @@ def load_expected_success(
             f"does not match the requested configuration {tokenizer_configuration_id!r}"
         )
 
+    token_ids = [
+        _require_exact_integer(value=token_id, context=f"Case {case_id!r}", field=f"token_ids[{index}]")
+        for index, token_id in enumerate(manifest["token_ids"])
+    ]
+
     for media_field in ("images", "audios"):
         if media_field not in manifest:
             raise ValueError(f"Manifest for case {case_id!r} is missing required {media_field!r} field")
@@ -228,7 +249,7 @@ def load_expected_success(
     return ExpectedSuccess(
         case_id=case_id,
         tokenizer_configuration_id=tokenizer_configuration_id,
-        token_ids=[int(token_id) for token_id in manifest["token_ids"]],
+        token_ids=token_ids,
         decoded_text=manifest["decoded_text"],
         images=images,
         audios=audios,
