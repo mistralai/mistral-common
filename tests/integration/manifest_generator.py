@@ -21,9 +21,12 @@ from pathlib import Path
 
 import numpy as np
 
-from tests.integration.chat_cases import ALL_SUCCESS_CASES, PublicChatSuccessCase
+from tests.integration.chat_cases import SAMPLE_SUCCESS_CASES, PublicChatSuccessCase
+from tests.integration.chat_v3_cases import V3_SUCCESS_CASES
 from tests.integration.expected_results import _EXPECTED_ROOT
 from tests.utils import decode_keep
+
+ALL_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (*SAMPLE_SUCCESS_CASES, *V3_SUCCESS_CASES)
 
 
 def _write_sidecars(case_dir: Path, prefix: str, arrays: list[np.ndarray]) -> list[dict[str, object]]:
@@ -51,14 +54,13 @@ def propose_manifest(case: PublicChatSuccessCase, *, force: bool) -> Path:
 
     Returns:
         The written manifest path.
-
-    Raises:
-        SystemExit: The manifest already exists and ``force`` was not passed.
     """
     case_dir = _EXPECTED_ROOT / case.case_id
     manifest_path = case_dir / "expected.json"
-    if manifest_path.exists() and not force:
-        raise SystemExit(f"Refusing to overwrite existing manifest {manifest_path}; pass --force")
+    if manifest_path.exists():
+        if not force:
+            print(f"exists {case.case_id}: {manifest_path} (pass --force to regenerate)")
+            return manifest_path
 
     tokenizer = case.configuration.load()
     request = case.recipe.build()
