@@ -204,7 +204,7 @@ def _audio_url_conversation_scenario() -> _RequestRoundTripInputs:
     return messages, openai_messages, None, None
 
 
-class TestRequestConstruction:
+class TestChatCompletionRequest:
     @pytest.fixture
     def clear_continue_warning(self) -> Iterator[None]:
         key = "ChatCompletionRequest.continue_final_message"

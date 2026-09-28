@@ -17,7 +17,7 @@ from tests.unit.protocol.audio_conversion import assert_audio_buffer, audio_byte
         pytest.param("en", True, id="english-streamed-export"),
     ],
 )
-def test_transcription_openai_round_trip(
+def test_transcription_request_openai_round_trip(
     audio_samples: np.ndarray, language: LanguageAlpha2 | None, stream: bool
 ) -> None:
     raw_audio = audio_bytes(samples=audio_samples, fmt="wav")
@@ -68,7 +68,7 @@ def test_transcription_openai_round_trip(
         pytest.param("flac", "bytes", id="flac-bytes"),
     ],
 )
-def test_transcription_export_preserves_audio_buffer_and_import_canonicalizes(
+def test_transcription_request_to_openai_preserves_buffer_and_from_openai_canonicalizes(
     audio_samples: np.ndarray, fmt: str, representation: str
 ) -> None:
     raw_audio = audio_bytes(samples=audio_samples, fmt=fmt)
@@ -92,7 +92,7 @@ def test_transcription_export_preserves_audio_buffer_and_import_canonicalizes(
     )
 
 
-def test_transcription_export_rejects_invalid_audio_bytes() -> None:
+def test_transcription_request_to_openai_rejects_invalid_audio_bytes() -> None:
     request = TranscriptionRequest(
         audio=b"not valid audio data", model="model", language=None, target_streaming_delay_ms=None
     )

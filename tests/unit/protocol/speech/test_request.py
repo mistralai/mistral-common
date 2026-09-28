@@ -10,7 +10,7 @@ from mistral_common.tokens.tokenizers.audio import Audio
 from tests.unit.protocol.audio_conversion import assert_audio_buffer, audio_bytes
 
 
-def test_speech_from_openai_filters_instructions_and_decodes_reference_audio(audio_samples: np.ndarray) -> None:
+def test_speech_request_from_openai_filters_instructions_and_decodes_reference_audio(audio_samples: np.ndarray) -> None:
     raw_audio = audio_bytes(samples=audio_samples, fmt="wav")
     incoming: dict[str, Any] = {
         "input": "Hello world",
@@ -55,7 +55,7 @@ def test_speech_from_openai_filters_instructions_and_decodes_reference_audio(aud
         pytest.param("flac", "bytes", id="flac-bytes"),
     ],
 )
-def test_speech_reference_audio_export_and_canonical_import(
+def test_speech_request_to_openai_exports_reference_audio_and_from_openai_canonicalizes(
     audio_samples: np.ndarray, fmt: str, representation: str
 ) -> None:
     raw_audio = audio_bytes(samples=audio_samples, fmt=fmt)
@@ -79,7 +79,7 @@ def test_speech_reference_audio_export_and_canonical_import(
     assert SpeechRequest.from_openai(exported) == SpeechRequest(input="Hello world", ref_audio=canonical_audio)
 
 
-def test_speech_export_rejects_invalid_reference_audio_bytes() -> None:
+def test_speech_request_to_openai_rejects_invalid_reference_audio_bytes() -> None:
     request = SpeechRequest(input="Hello world", ref_audio=b"not valid audio data")
 
     with pytest.raises(ValueError, match="Failed to detect audio format"):
