@@ -25,6 +25,7 @@ from tests.integration.chat_cases import SAMPLE_SUCCESS_CASES, PublicChatSuccess
 from tests.integration.chat_v3_cases import V3_SUCCESS_CASES
 from tests.integration.chat_v7_cases import V7_SUCCESS_CASES
 from tests.integration.chat_v13_cases import V13_SUCCESS_CASES
+from tests.integration.chat_v15_cases import V15_SUCCESS_CASES
 from tests.integration.expected_results import _EXPECTED_ROOT
 from tests.utils import decode_keep
 
@@ -33,6 +34,7 @@ ALL_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
     *V3_SUCCESS_CASES,
     *V7_SUCCESS_CASES,
     *V13_SUCCESS_CASES,
+    *V15_SUCCESS_CASES,
 )
 
 

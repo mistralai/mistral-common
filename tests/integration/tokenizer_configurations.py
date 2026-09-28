@@ -12,13 +12,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from mistral_common.protocol.instruct.normalize import InstructRequestNormalizerV13
-from mistral_common.protocol.instruct.validator import MistralRequestValidatorV13, ValidationMode
+from mistral_common.protocol.instruct.normalize import InstructRequestNormalizerV13, get_normalizer
+from mistral_common.protocol.instruct.request import ReasoningEffort
+from mistral_common.protocol.instruct.validator import MistralRequestValidatorV13, ValidationMode, get_validator
 from mistral_common.tokens.tokenizers.audio import AudioConfig, AudioEncoder, AudioSpectrogramConfig, SpecialAudioIDs
 from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
 from mistral_common.tokens.tokenizers.image import ImageEncoder
-from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13
+from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13, InstructTokenizerV15
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import get_special_tokens, quick_vocab
 
@@ -254,6 +256,98 @@ def _load_synthetic_v13_audio() -> MistralTokenizer:
     )
 
 
+def _load_synthetic_v15(
+    *,
+    allowed_reasoning_effort: tuple[ReasoningEffort, ...] | None,
+    default_reasoning_effort: ReasoningEffort | None,
+    add_audio: bool,
+) -> MistralTokenizer:
+    r"""Construct a v15 quick-vocabulary tokenizer for synthetic claims.
+
+    Args:
+        allowed_reasoning_effort: Allowed effort values, or `None` for no settings builder.
+        default_reasoning_effort: Builder default, or `None` for no default.
+        add_audio: Whether to attach the legacy-compatible audio encoder.
+
+    Returns:
+        A v15 tokenizer using synthetic quick-vocabulary bytes.
+    """
+    if allowed_reasoning_effort is None:
+        settings_builder = ModelSettingsBuilder.none()
+    else:
+        settings_builder = ModelSettingsBuilder(
+            reasoning_effort=EnumBuilder[ReasoningEffort](
+                values=list(allowed_reasoning_effort),
+                accepts_none=True,
+                default=default_reasoning_effort,
+            )
+        )
+
+    tekkenizer = Tekkenizer(
+        vocab=quick_vocab(extra_toks=[b"a", b"b", b"c", b"f", b"de"]),
+        special_tokens=get_special_tokens(
+            tokenizer_version=TokenizerVersion.v15,
+            add_audio=add_audio,
+            add_think=not add_audio,
+        ),
+        pattern=r".+",
+        vocab_size=256 + 100,
+        num_special_tokens=100,
+        version=TokenizerVersion.v15,
+        model_settings_builder=settings_builder,
+    )
+
+    audio_encoder: AudioEncoder | None = None
+    if add_audio:
+        audio_config = AudioConfig(
+            sampling_rate=24_000,
+            frame_rate=12.5,
+            encoding_config=AudioSpectrogramConfig(num_mel_bins=128, hop_length=160, window_size=400),
+        )
+        special_audio_ids = SpecialAudioIDs(
+            audio=tekkenizer.get_special_token(SpecialTokens.audio.value),
+            begin_audio=tekkenizer.get_special_token(SpecialTokens.begin_audio.value),
+            streaming_pad=None,
+            text_to_audio=None,
+            audio_to_text=None,
+        )
+        audio_encoder = AudioEncoder(audio_config=audio_config, special_ids=special_audio_ids)
+
+    instruct_tokenizer = InstructTokenizerV15(tokenizer=tekkenizer, audio_encoder=audio_encoder)
+    return MistralTokenizer(
+        instruct_tokenizer=instruct_tokenizer,
+        validator=get_validator(TokenizerVersion.v15, mode=ValidationMode.test),
+        request_normalizer=get_normalizer(TokenizerVersion.v15, settings_builder),
+    )
+
+
+def _synthetic_v15_loader(
+    *,
+    allowed_reasoning_effort: tuple[ReasoningEffort, ...] | None,
+    default_reasoning_effort: ReasoningEffort | None,
+    add_audio: bool,
+) -> Callable[[], MistralTokenizer]:
+    r"""Capture immutable v15 settings for a lazy synthetic configuration.
+
+    Args:
+        allowed_reasoning_effort: Allowed effort values, or `None` for no settings builder.
+        default_reasoning_effort: Builder default, or `None` for no default.
+        add_audio: Whether to attach the legacy-compatible audio encoder.
+
+    Returns:
+        A zero-argument loader creating the synthetic tokenizer.
+    """
+
+    def load() -> MistralTokenizer:
+        return _load_synthetic_v15(
+            allowed_reasoning_effort=allowed_reasoning_effort,
+            default_reasoning_effort=default_reasoning_effort,
+            add_audio=add_audio,
+        )
+
+    return load
+
+
 SYNTHETIC_V13_AUDIO_TEST = TokenizerConfiguration(
     configuration_id="synthetic-v13-audio-test",
     tokenizer_path=None,
@@ -261,4 +355,58 @@ SYNTHETIC_V13_AUDIO_TEST = TokenizerConfiguration(
     sha256=None,
     provenance="synthetic",
     synthetic_loader=_load_synthetic_v13_audio,
+)
+
+
+SYNTHETIC_V15_REASONING_NONE_ONLY_TEST = TokenizerConfiguration(
+    configuration_id="synthetic-v15-reasoning-none-only-test",
+    tokenizer_path=None,
+    mode=ValidationMode.test,
+    sha256=None,
+    provenance="synthetic",
+    synthetic_loader=_synthetic_v15_loader(
+        allowed_reasoning_effort=(ReasoningEffort.none,),
+        default_reasoning_effort=ReasoningEffort.none,
+        add_audio=False,
+    ),
+)
+SYNTHETIC_V15_REASONING_EMPTY_TEST = TokenizerConfiguration(
+    configuration_id="synthetic-v15-reasoning-empty-test",
+    tokenizer_path=None,
+    mode=ValidationMode.test,
+    sha256=None,
+    provenance="synthetic",
+    synthetic_loader=_synthetic_v15_loader(allowed_reasoning_effort=(), default_reasoning_effort=None, add_audio=False),
+)
+SYNTHETIC_V15_NO_SETTINGS_TEST = TokenizerConfiguration(
+    configuration_id="synthetic-v15-no-settings-test",
+    tokenizer_path=None,
+    mode=ValidationMode.test,
+    sha256=None,
+    provenance="synthetic",
+    synthetic_loader=_synthetic_v15_loader(
+        allowed_reasoning_effort=None, default_reasoning_effort=None, add_audio=False
+    ),
+)
+SYNTHETIC_V15_NO_DEFAULT_TEST = TokenizerConfiguration(
+    configuration_id="synthetic-v15-no-default-test",
+    tokenizer_path=None,
+    mode=ValidationMode.test,
+    sha256=None,
+    provenance="synthetic",
+    synthetic_loader=_synthetic_v15_loader(
+        allowed_reasoning_effort=tuple(ReasoningEffort), default_reasoning_effort=None, add_audio=False
+    ),
+)
+SYNTHETIC_V15_AUDIO_TEST = TokenizerConfiguration(
+    configuration_id="synthetic-v15-audio-test",
+    tokenizer_path=None,
+    mode=ValidationMode.test,
+    sha256=None,
+    provenance="synthetic",
+    synthetic_loader=_synthetic_v15_loader(
+        allowed_reasoning_effort=tuple(ReasoningEffort),
+        default_reasoning_effort=ReasoningEffort.none,
+        add_audio=True,
+    ),
 )
