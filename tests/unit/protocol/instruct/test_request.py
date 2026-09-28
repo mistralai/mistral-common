@@ -193,6 +193,85 @@ class TestRequestConstruction:
 
         assert request.random_seed == 0
 
+    def test_from_openai_converts_zero_seed_messages_and_tools_without_mutating_input(self) -> None:
+        parameters: dict[str, Any] = {
+            "type": "object",
+            "properties": {"location": {"type": "string"}},
+            "required": ["location"],
+        }
+        openai_request: dict[str, Any] = {
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "What is the weather in Paris?"},
+                {
+                    "role": "assistant",
+                    "content": "Checking the weather.",
+                    "tool_calls": [
+                        {
+                            "id": "weather-call-1",
+                            "type": "function",
+                            "function": {
+                                "name": "get_current_weather",
+                                "arguments": '{"location": "Paris"}',
+                            },
+                        }
+                    ],
+                },
+                {"role": "tool", "tool_call_id": "weather-call-1", "content": "Sunny, 18 C"},
+            ],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_current_weather",
+                        "description": "Get the current weather.",
+                        "parameters": parameters,
+                        "strict": True,
+                    },
+                }
+            ],
+            "seed": 0,
+            "temperature": 0.25,
+            "unsupported_outer_field": "discard this field",
+        }
+        original_request = deepcopy(openai_request)
+        expected_messages: list[ChatMessage] = [
+            SystemMessage(content="You are a helpful assistant."),
+            UserMessage(content="What is the weather in Paris?"),
+            AssistantMessage(
+                content="Checking the weather.",
+                tool_calls=[
+                    ToolCall(
+                        id="weather-call-1",
+                        function=FunctionCall(
+                            name="get_current_weather",
+                            arguments='{"location": "Paris"}',
+                        ),
+                    )
+                ],
+            ),
+            ToolMessage(tool_call_id="weather-call-1", content="Sunny, 18 C"),
+        ]
+        expected_tools = [
+            Tool(
+                function=Function(
+                    name="get_current_weather",
+                    description="Get the current weather.",
+                    parameters=deepcopy(parameters),
+                    strict=True,
+                )
+            )
+        ]
+
+        request = ChatCompletionRequest.from_openai(**openai_request)
+
+        assert request.messages == expected_messages
+        assert request.tools == expected_tools
+        assert request.random_seed == 0
+        assert request.temperature == 0.25
+        assert "unsupported_outer_field" not in request.model_dump()
+        assert openai_request == original_request
+
     def test_legacy_continuation_sets_final_assistant_prefix_and_warns_once(self, clear_continue_warning: None) -> None:
         raw_assistant: dict[str, Any] = {"role": "assistant", "content": "bar", "prefix": False}
         raw_request: dict[str, Any] = {

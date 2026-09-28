@@ -37,34 +37,46 @@ def _construct_message_for_role(role: str, content: list[Any]) -> BaseMessage:
 
 def test_user_preserves_compound_multimodal_content() -> None:
     content = get_content_chunks(("text", "image", "image_url", "audio", "audio_url"))
+    expected_content = tuple(content)
 
     message = UserMessage(content=content)
 
-    assert message == UserMessage(role=Roles.user, content=content)
+    assert message.model_dump(exclude={"content"}) == {"role": "user"}
+    assert isinstance(message.content, list)
+    assert tuple(message.content) == expected_content
 
 
 def test_assistant_preserves_text_and_thinking_content() -> None:
     content = get_content_chunks(("text", "think"))
+    expected_content = tuple(content)
 
     message = AssistantMessage(content=content)
 
-    assert message == AssistantMessage(role=Roles.assistant, content=content)
+    assert message.model_dump(exclude={"content"}) == {"role": "assistant", "tool_calls": None, "prefix": False}
+    assert isinstance(message.content, list)
+    assert tuple(message.content) == expected_content
 
 
 def test_system_preserves_text_audio_and_thinking_content() -> None:
     content = get_content_chunks(("text", "audio", "think"))
+    expected_content = tuple(content)
 
     message = SystemMessage(content=content)
 
-    assert message == SystemMessage(role=Roles.system, content=content)
+    assert message.model_dump(exclude={"content"}) == {"role": "system"}
+    assert isinstance(message.content, list)
+    assert tuple(message.content) == expected_content
 
 
 def test_tool_preserves_non_thinking_content() -> None:
     content = get_content_chunks(("text", "image", "image_url", "audio", "audio_url"))
+    expected_content = tuple(content)
 
     message = ToolMessage(content=content, tool_call_id="c1")
 
-    assert message == ToolMessage(role=Roles.tool, content=content, tool_call_id="c1")
+    assert message.model_dump(exclude={"content"}) == {"role": "tool", "tool_call_id": "c1", "name": None}
+    assert isinstance(message.content, list)
+    assert tuple(message.content) == expected_content
 
 
 @pytest.mark.parametrize(
