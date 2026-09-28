@@ -24,11 +24,11 @@ from tests.integration.tokenizer_configurations import (
 
 
 def _red_image() -> Image.Image:
-    return Image.new("RGB", (4, 4), "red")
+    return Image.new(mode="RGB", size=(4, 4), color="red")
 
 
 def _blue_image() -> Image.Image:
-    return Image.new("RGB", (30, 4), "blue")
+    return Image.new(mode="RGB", size=(30, 4), color="blue")
 
 
 def _build_user_image() -> ChatCompletionRequest[ChatMessage]:

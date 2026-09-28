@@ -46,32 +46,32 @@ def _encode_and_verify(
     return tokenized
 
 
-@pytest.mark.parametrize("pair", AGREEMENT_PAIRS, ids=lambda pair: pair.pair_id)
+@pytest.mark.parametrize(argnames="pair", argvalues=AGREEMENT_PAIRS, ids=lambda pair: pair.pair_id)
 def test_public_chat_agreement_pair(
     pair: PairedChatCase, public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer]
 ) -> None:
-    first = _encode_and_verify(pair.first, public_tokenizer)
-    second = _encode_and_verify(pair.second, public_tokenizer)
+    first = _encode_and_verify(case=pair.first, public_tokenizer=public_tokenizer)
+    second = _encode_and_verify(case=pair.second, public_tokenizer=public_tokenizer)
     assert first.tokens == second.tokens, "Text-only and multimodal outputs differ for the same request"
 
 
-@pytest.mark.parametrize("pair", SWAP_PAIRS, ids=lambda pair: pair.pair_id)
+@pytest.mark.parametrize(argnames="pair", argvalues=SWAP_PAIRS, ids=lambda pair: pair.pair_id)
 def test_public_chat_swap_pair(
     pair: PairedChatCase, public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer]
 ) -> None:
-    first = _encode_and_verify(pair.first, public_tokenizer)
-    second = _encode_and_verify(pair.second, public_tokenizer)
+    first = _encode_and_verify(case=pair.first, public_tokenizer=public_tokenizer)
+    second = _encode_and_verify(case=pair.second, public_tokenizer=public_tokenizer)
     if pair.token_relation == EQUAL_TOKENS:
         assert first.tokens == second.tokens, "Image-first and text-first outputs were expected to agree"
     else:
         assert first.tokens != second.tokens, "Appending text was expected to break the swap agreement"
 
 
-@pytest.mark.parametrize("case", IMAGE_CASES, ids=lambda case: case.case_id)
+@pytest.mark.parametrize(argnames="case", argvalues=IMAGE_CASES, ids=lambda case: case.case_id)
 def test_public_chat_image_case(
     case: PublicChatSuccessCase, public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer]
 ) -> None:
-    _encode_and_verify(case, public_tokenizer)
+    _encode_and_verify(case=case, public_tokenizer=public_tokenizer)
 
 
 def _image_tokens(width: int, height: int, special_ids: SpecialImageIDs) -> list[int]:
@@ -102,13 +102,13 @@ def _patch2_special_ids(
     return image_encoder.special_ids, tokenizer
 
 
-@pytest.mark.parametrize("case", MULTI_IMAGE_ORDER_CASES, ids=lambda case: case.case_id)
+@pytest.mark.parametrize(argnames="case", argvalues=MULTI_IMAGE_ORDER_CASES, ids=lambda case: case.case_id)
 def test_public_chat_multi_image_order(
     case: PublicChatSuccessCase, public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer]
 ) -> None:
-    special_ids, _ = _patch2_special_ids(case, public_tokenizer)
-    tokenized = _encode_and_verify(case, public_tokenizer)
-    assert _image_tokenizer_spans(tokenized.tokens, special_ids) == [
+    special_ids, _ = _patch2_special_ids(case=case, public_tokenizer=public_tokenizer)
+    tokenized = _encode_and_verify(case=case, public_tokenizer=public_tokenizer)
+    assert _image_tokenizer_spans(tokens=tokenized.tokens, special_ids=special_ids) == [
         _image_tokens(width=2, height=2, special_ids=special_ids),
         _image_tokens(width=3, height=2, special_ids=special_ids),
     ]
@@ -117,9 +117,9 @@ def test_public_chat_multi_image_order(
 def test_public_chat_trailing_image_moves_first(
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
 ) -> None:
-    special_ids, tokenizer = _patch2_special_ids(TRAILING_IMAGE_CASE, public_tokenizer)
-    tokenized = _encode_and_verify(TRAILING_IMAGE_CASE, public_tokenizer)
-    assert _image_tokenizer_spans(tokenized.tokens, special_ids) == [
+    special_ids, tokenizer = _patch2_special_ids(case=TRAILING_IMAGE_CASE, public_tokenizer=public_tokenizer)
+    tokenized = _encode_and_verify(case=TRAILING_IMAGE_CASE, public_tokenizer=public_tokenizer)
+    assert _image_tokenizer_spans(tokens=tokenized.tokens, special_ids=special_ids) == [
         _image_tokens(width=2, height=2, special_ids=special_ids)
     ]
     x_token = tokenizer.instruct_tokenizer.tokenizer.encode("x", bos=False, eos=False)[0]
@@ -129,9 +129,9 @@ def test_public_chat_trailing_image_moves_first(
 def test_public_chat_leading_image_remains_first(
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
 ) -> None:
-    special_ids, tokenizer = _patch2_special_ids(LEADING_IMAGE_CASE, public_tokenizer)
-    tokenized = _encode_and_verify(LEADING_IMAGE_CASE, public_tokenizer)
-    assert _image_tokenizer_spans(tokenized.tokens, special_ids) == [
+    special_ids, tokenizer = _patch2_special_ids(case=LEADING_IMAGE_CASE, public_tokenizer=public_tokenizer)
+    tokenized = _encode_and_verify(case=LEADING_IMAGE_CASE, public_tokenizer=public_tokenizer)
+    assert _image_tokenizer_spans(tokens=tokenized.tokens, special_ids=special_ids) == [
         _image_tokens(width=2, height=2, special_ids=special_ids)
     ]
     x_token = tokenizer.instruct_tokenizer.tokenizer.encode("x", bos=False, eos=False)[0]

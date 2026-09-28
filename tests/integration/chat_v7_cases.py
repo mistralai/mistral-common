@@ -35,7 +35,7 @@ class V7DirectEqualityCase:
 
 
 def _red_4x4() -> Image.Image:
-    return Image.new("RGB", (4, 4), "red")
+    return Image.new(mode="RGB", size=(4, 4), color="red")
 
 
 def _build_system_tools_image() -> ChatCompletionRequest[ChatMessage]:

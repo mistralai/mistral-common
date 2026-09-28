@@ -148,7 +148,7 @@ def provision(pinned: PinnedTokenizer, *, directory: Path) -> None:
     response = requests.get(url=url, timeout=120)
     response.raise_for_status()
     data = response.content
-    _verify_pinned(pinned, data, source=url)
+    _verify_pinned(pinned=pinned, data=data, source=url)
 
     directory.mkdir(parents=True, exist_ok=True)
     target.write_bytes(data)

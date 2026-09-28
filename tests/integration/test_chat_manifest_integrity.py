@@ -7,7 +7,7 @@ value must fail loudly instead of silently comparing an unrelated golden.
 
 import json
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 import pytest
@@ -68,7 +68,10 @@ def _write_manifest(manifest_dir: Path, manifest: dict[str, object]) -> None:
 
 
 def _read_manifest(manifest_dir: Path) -> dict[str, Any]:
-    return cast(dict[str, Any], json.loads((manifest_dir / "expected.json").read_text()))
+    manifest = json.loads((manifest_dir / "expected.json").read_text())
+    if not isinstance(manifest, dict):
+        raise ValueError("Manifest must be an object")
+    return manifest
 
 
 def test_missing_manifest_is_rejected(tmp_path: Path) -> None:
@@ -101,7 +104,7 @@ def test_manifest_configuration_mismatch_is_rejected(manifest_dir: Path) -> None
         )
 
 
-@pytest.mark.parametrize("missing_field", ["images", "audios"])
+@pytest.mark.parametrize(argnames="missing_field", argvalues=["images", "audios"])
 def test_manifest_requires_ordered_media_fields(manifest_dir: Path, missing_field: str) -> None:
     manifest_path = manifest_dir / "expected.json"
     manifest = json.loads(manifest_path.read_text())
@@ -190,8 +193,8 @@ def test_non_integer_token_id_is_rejected_before_public_comparison(manifest_dir:
 
 
 @pytest.mark.parametrize(
-    ("token_ids", "message"),
-    [
+    argnames=("token_ids", "message"),
+    argvalues=[
         ({}, "field 'token_ids' must be an array"),
         ("123", "field 'token_ids' must be an array"),
         ([True, 2, 3], r"token_ids\[0\].*must be an integer"),
@@ -201,15 +204,15 @@ def test_non_integer_token_id_is_rejected_before_public_comparison(manifest_dir:
 def test_token_ids_must_be_an_array_of_exact_integers(manifest_dir: Path, token_ids: object, message: str) -> None:
     manifest = _read_manifest(manifest_dir)
     manifest["token_ids"] = token_ids
-    _write_manifest(manifest_dir, manifest)
+    _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
 
     with pytest.raises(ValueError, match=message):
         _assert_full_path(manifest_dir, tokenized=Tokenized(tokens=[]))
 
 
 @pytest.mark.parametrize(
-    ("field", "value", "message"),
-    [
+    argnames=("field", "value", "message"),
+    argvalues=[
         ("case_id", 42, "field 'case_id' must be a string"),
         (
             "tokenizer_configuration_id",
@@ -225,15 +228,15 @@ def test_manifest_string_fields_reject_other_json_types(
 ) -> None:
     manifest = _read_manifest(manifest_dir)
     manifest[field] = value
-    _write_manifest(manifest_dir, manifest)
+    _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
 
     with pytest.raises(ValueError, match=message):
         _assert_full_path(manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
 
 
 @pytest.mark.parametrize(
-    ("field", "value", "message"),
-    [
+    argnames=("field", "value", "message"),
+    argvalues=[
         ("images", {}, "field 'images' must be an array"),
         ("images", "none", "field 'images' must be an array"),
         ("audios", {}, "field 'audios' must be an array"),
@@ -244,17 +247,17 @@ def test_manifest_string_fields_reject_other_json_types(
 def test_manifest_media_fields_must_be_arrays(manifest_dir: Path, field: str, value: object, message: str) -> None:
     manifest = _read_manifest(manifest_dir)
     manifest[field] = value
-    _write_manifest(manifest_dir, manifest)
+    _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
 
     with pytest.raises(ValueError, match=message):
         _assert_full_path(manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
 
 
-@pytest.mark.parametrize("field", ["images", "audios"], ids=["image", "audio"])
+@pytest.mark.parametrize(argnames="field", argvalues=["images", "audios"], ids=["image", "audio"])
 def test_media_entries_must_be_objects(manifest_dir: Path, field: str) -> None:
     manifest = _read_manifest(manifest_dir)
     manifest[field] = ["not-an-object"]
-    _write_manifest(manifest_dir, manifest)
+    _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
 
     media_kind = "image" if field == "images" else "audio"
     with pytest.raises(ValueError, match=rf"{media_kind} entry 0.*must be an object"):
@@ -262,8 +265,8 @@ def test_media_entries_must_be_objects(manifest_dir: Path, field: str) -> None:
 
 
 @pytest.mark.parametrize(
-    ("field", "entry", "message"),
-    [
+    argnames=("field", "entry", "message"),
+    argvalues=[
         (
             "images",
             {"path": 5, "shape": [1], "dtype": "float32"},
@@ -315,15 +318,15 @@ def test_media_entry_fields_have_the_declared_types(
 ) -> None:
     manifest = _read_manifest(manifest_dir)
     manifest[field] = [entry]
-    _write_manifest(manifest_dir, manifest)
+    _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
 
     with pytest.raises(ValueError, match=message):
         _assert_full_path(manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
 
 
 @pytest.mark.parametrize(
-    ("media_kind", "declared_dtype"),
-    [
+    argnames=("media_kind", "declared_dtype"),
+    argvalues=[
         ("image", None),
         ("image", 7),
         ("image", ""),
@@ -353,7 +356,7 @@ def test_media_dtype_must_be_a_non_empty_string(manifest_dir: Path, media_kind: 
     np.save(file=media_dir / "0.npy", arr=array)
     manifest = _read_manifest(manifest_dir)
     manifest[field] = [entry]
-    _write_manifest(manifest_dir, manifest)
+    _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
     if media_kind == "image":
         tokenized = Tokenized(tokens=[1, 2, 3], images=[array])
     else:
@@ -364,8 +367,8 @@ def test_media_dtype_must_be_a_non_empty_string(manifest_dir: Path, media_kind: 
 
 
 @pytest.mark.parametrize(
-    ("field", "missing_field"),
-    [
+    argnames=("field", "missing_field"),
+    argvalues=[
         ("images", "path"),
         ("images", "shape"),
         ("images", "dtype"),
@@ -383,7 +386,7 @@ def test_media_entries_require_all_schema_fields(manifest_dir: Path, field: str,
     del entry[missing_field]
     manifest = _read_manifest(manifest_dir)
     manifest[field] = [entry]
-    _write_manifest(manifest_dir, manifest)
+    _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
 
     media_kind = "image" if field == "images" else "audio"
     with pytest.raises(ValueError, match=rf"{media_kind} entry 0.*missing required field '{missing_field}'"):
@@ -404,7 +407,7 @@ def test_audio_format_must_be_a_string(manifest_dir: Path) -> None:
             "format": 7,
         }
     ]
-    _write_manifest(manifest_dir, manifest)
+    _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
     tokenized = Tokenized(tokens=[1, 2, 3], audios=[Audio(audio_array=audio_array, sampling_rate=16000, format="wav")])
 
     with pytest.raises(ValueError, match=r"audio entry 0.*field 'format'.*must be a string"):
@@ -412,13 +415,13 @@ def test_audio_format_must_be_a_string(manifest_dir: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "field",
-    ["case_id", "tokenizer_configuration_id", "token_ids", "decoded_text", "images", "audios"],
+    argnames="field",
+    argvalues=["case_id", "tokenizer_configuration_id", "token_ids", "decoded_text", "images", "audios"],
 )
 def test_manifest_requires_all_top_level_fields(manifest_dir: Path, field: str) -> None:
     manifest = _read_manifest(manifest_dir)
     del manifest[field]
-    _write_manifest(manifest_dir, manifest)
+    _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
 
     with pytest.raises(ValueError, match=rf"Case 'integrity-case'.*missing required field '{field}'"):
         _assert_full_path(manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))

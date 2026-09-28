@@ -39,11 +39,11 @@ class PairedChatCase:
 
 
 def _red_4x4() -> Image.Image:
-    return Image.new("RGB", (4, 4), "red")
+    return Image.new(mode="RGB", size=(4, 4), color="red")
 
 
 def _blue_6x4() -> Image.Image:
-    return Image.new("RGB", (6, 4), "blue")
+    return Image.new(mode="RGB", size=(6, 4), color="blue")
 
 
 def _build_multiturn_text() -> ChatCompletionRequest[ChatMessage]:

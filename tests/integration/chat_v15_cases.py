@@ -151,7 +151,7 @@ def _build_prefixed_final() -> ChatCompletionRequest[ChatMessage]:
 
 def _dummy_image_url_chunk() -> ImageURLChunk:
     r"""Build a fresh 4x4 red PNG data URL for an image request."""
-    image = Image.new("RGB", (4, 4), "red")
+    image = Image.new(mode="RGB", size=(4, 4), color="red")
     buffer = BytesIO()
     image.save(buffer, format="PNG")
     image_url = f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}"
