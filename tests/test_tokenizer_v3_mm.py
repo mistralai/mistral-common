@@ -14,7 +14,7 @@ from mistral_common.protocol.instruct.messages import (
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
-img = Image.new("RGB", (4, 4), "red")
+img = Image.new(mode="RGB", size=(4, 4), color="red")
 img_requests: list[ChatCompletionRequest] = [
     ChatCompletionRequest(
         messages=[
@@ -101,7 +101,7 @@ def mm_tokenizer() -> MistralTokenizer:
     return tokenizer
 
 
-@pytest.mark.parametrize("r", img_requests + text_requests)
+@pytest.mark.parametrize(argnames="r", argvalues=img_requests + text_requests)
 def test_mm_normalizer(
     mm_tokenizer: MistralTokenizer,
     r: ChatCompletionRequest,

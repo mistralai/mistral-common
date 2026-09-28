@@ -97,7 +97,7 @@ def propose_manifest(case: PublicChatSuccessCase, *, force: bool) -> Path:
         "audios": audio_entries,
     }
     case_dir.mkdir(parents=True, exist_ok=True)
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+    manifest_path.write_text(json.dumps(obj=manifest, indent=2) + "\n")
     print(f"proposed {case.case_id}: {manifest_path}")
     return manifest_path
 
@@ -119,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         selected = tuple(case for case in ALL_SUCCESS_CASES if case.case_id in wanted)
 
     for case in selected:
-        propose_manifest(case, force=args.force)
+        propose_manifest(case=case, force=args.force)
     return 0
 
 
