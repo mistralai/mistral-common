@@ -12,9 +12,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from mistral_common.protocol.instruct.validator import ValidationMode
+from mistral_common.protocol.instruct.normalize import InstructRequestNormalizerV13
+from mistral_common.protocol.instruct.validator import MistralRequestValidatorV13, ValidationMode
+from mistral_common.tokens.tokenizers.audio import AudioConfig, AudioEncoder, AudioSpectrogramConfig, SpecialAudioIDs
+from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
 from mistral_common.tokens.tokenizers.image import ImageEncoder
+from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from mistral_common.tokens.tokenizers.tekken import Tekkenizer
+from tests.test_tekken import get_special_tokens, quick_vocab
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _BUNDLED_DATA = _REPO_ROOT / "src" / "mistral_common" / "data"
@@ -26,11 +32,12 @@ class TokenizerConfiguration:
     """One identified tokenizer artifact bound to a validation mode."""
 
     configuration_id: str
-    tokenizer_path: Path
+    tokenizer_path: Path | None
     mode: ValidationMode
-    sha256: str
+    sha256: str | None
     provenance: str
     post_load: Callable[[MistralTokenizer], None] | None = None
+    synthetic_loader: Callable[[], MistralTokenizer] | None = None
 
     def load(self) -> MistralTokenizer:
         r"""Load the public tokenizer after verifying the artifact bytes.
@@ -38,6 +45,16 @@ class TokenizerConfiguration:
         Returns:
             The tokenizer loaded from the verified file in this configuration's mode.
         """
+        if self.provenance == "synthetic":
+            if self.tokenizer_path is not None or self.sha256 is not None or self.synthetic_loader is None:
+                raise ValueError(f"Synthetic tokenizer configuration is incomplete: {self.configuration_id}")
+            tokenizer = self.synthetic_loader()
+            if self.post_load is not None:
+                self.post_load(tokenizer)
+            return tokenizer
+
+        if self.tokenizer_path is None or self.sha256 is None or self.synthetic_loader is not None:
+            raise ValueError(f"File-backed tokenizer configuration is incomplete: {self.configuration_id}")
         data = self.tokenizer_path.read_bytes()
         actual_sha256 = hashlib.sha256(data).hexdigest()
         if actual_sha256 != self.sha256:
@@ -203,4 +220,45 @@ PINNED_V15_IMAGE_SETTINGS_TEST = _pinned(
     filename="v15-image-settings.tekken.json",
     sha256="b1272b956bd6edd2d2c674c76896c7661308c9e723997b0afb55ecb429cb5dc7",
     mode=ValidationMode.test,
+)
+
+
+def _load_synthetic_v13_audio() -> MistralTokenizer:
+    special_tokens = get_special_tokens(TokenizerVersion.v13, add_think=False, add_audio=True)
+    tekkenizer = Tekkenizer(
+        quick_vocab(extra_toks=[b"a", b"b", b"c", b"f", b"de"]),
+        special_tokens=special_tokens,
+        pattern=r".+",
+        vocab_size=256 + 100,
+        num_special_tokens=100,
+        version=TokenizerVersion.v13,
+    )
+    audio_config = AudioConfig(
+        sampling_rate=24_000,
+        frame_rate=12.5,
+        encoding_config=AudioSpectrogramConfig(num_mel_bins=128, window_size=400, hop_length=160),
+    )
+    special_audio_ids = SpecialAudioIDs(
+        audio=tekkenizer.get_special_token(SpecialTokens.audio.value),
+        begin_audio=tekkenizer.get_special_token(SpecialTokens.begin_audio.value),
+        streaming_pad=None,
+        text_to_audio=None,
+        audio_to_text=None,
+    )
+    audio_encoder = AudioEncoder(audio_config=audio_config, special_ids=special_audio_ids)
+    instruct_tokenizer = InstructTokenizerV13(tokenizer=tekkenizer, audio_encoder=audio_encoder)
+    return MistralTokenizer(
+        instruct_tokenizer=instruct_tokenizer,
+        validator=MistralRequestValidatorV13(),
+        request_normalizer=InstructRequestNormalizerV13.normalizer(),
+    )
+
+
+SYNTHETIC_V13_AUDIO_TEST = TokenizerConfiguration(
+    configuration_id="synthetic-v13-audio-test",
+    tokenizer_path=None,
+    mode=ValidationMode.test,
+    sha256=None,
+    provenance="synthetic",
+    synthetic_loader=_load_synthetic_v13_audio,
 )
