@@ -193,7 +193,7 @@ class TestRequestConstruction:
 
         assert request.random_seed == 0
 
-    def test_from_openai_converts_zero_seed_messages_and_tools_without_mutating_input(self) -> None:
+    def test_request_openai_round_trip_preserves_zero_seed_messages_and_tools(self) -> None:
         parameters: dict[str, Any] = {
             "type": "object",
             "properties": {"location": {"type": "string"}},
@@ -262,6 +262,49 @@ class TestRequestConstruction:
                 )
             )
         ]
+        expected_openai_export: dict[str, Any] = {
+            "temperature": 0.25,
+            "top_p": 1.0,
+            "response_format": {"type": "text"},
+            "continue_final_message": False,
+            "seed": 0,
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "What is the weather in Paris?"},
+                {
+                    "role": "assistant",
+                    "content": "Checking the weather.",
+                    "tool_calls": [
+                        {
+                            "id": "weather-call-1",
+                            "type": "function",
+                            "function": {
+                                "name": "get_current_weather",
+                                "arguments": '{"location": "Paris"}',
+                            },
+                        }
+                    ],
+                },
+                {"role": "tool", "content": "Sunny, 18 C", "tool_call_id": "weather-call-1"},
+            ],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_current_weather",
+                        "description": "Get the current weather.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {"location": {"type": "string"}},
+                            "required": ["location"],
+                        },
+                        "strict": True,
+                    },
+                }
+            ],
+            "tool_choice": "auto",
+            "stream": True,
+        }
 
         request = ChatCompletionRequest.from_openai(**openai_request)
 
@@ -270,6 +313,11 @@ class TestRequestConstruction:
         assert request.random_seed == 0
         assert request.temperature == 0.25
         assert "unsupported_outer_field" not in request.model_dump()
+
+        openai_export = request.to_openai(stream=True)
+
+        assert openai_export == expected_openai_export
+        assert "unsupported_outer_field" not in openai_export
         assert openai_request == original_request
 
     def test_legacy_continuation_sets_final_assistant_prefix_and_warns_once(self, clear_continue_warning: None) -> None:
