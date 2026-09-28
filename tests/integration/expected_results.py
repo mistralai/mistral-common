@@ -123,7 +123,11 @@ def resolve_sidecar(case_dir: Path, relative_path: str) -> Path:
 def load_sidecar(sidecar_path: Path) -> np.ndarray:
     """Load one expected array sidecar without pickle support."""
     loaded = np.load(file=sidecar_path, allow_pickle=False)
-    return np.asarray(loaded)
+    if not isinstance(loaded, np.ndarray):
+        if isinstance(loaded, np.lib.npyio.NpzFile):
+            loaded.close()
+        raise ValueError(f"Expected a NumPy array sidecar, got {type(loaded).__name__}")
+    return loaded
 
 
 def _load_manifest_sidecar(
