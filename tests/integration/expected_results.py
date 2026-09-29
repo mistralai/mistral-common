@@ -414,11 +414,44 @@ def assert_public_success(*, expected: ExpectedSuccess, tokenized: Tokenized, de
         tokenized: The public encode result.
         decoded_text: The result decoded with special tokens kept.
     """
-    assert tokenized.tokens == expected.token_ids, (
-        f"Token ids differ from the reviewed manifest: "
-        f"expected {len(expected.token_ids)} ids, got {len(tokenized.tokens)}"
-    )
-    assert decoded_text == expected.decoded_text, "Decoded text differs from the reviewed manifest"
+    if tokenized.tokens != expected.token_ids:
+        first_difference = next(
+            (
+                index
+                for index, (expected_id, actual_id) in enumerate(zip(expected.token_ids, tokenized.tokens))
+                if expected_id != actual_id
+            ),
+            min(len(expected.token_ids), len(tokenized.tokens)),
+        )
+        expected_id = expected.token_ids[first_difference] if first_difference < len(expected.token_ids) else "<end>"
+        actual_id = tokenized.tokens[first_difference] if first_difference < len(tokenized.tokens) else "<end>"
+        assert tokenized.tokens == expected.token_ids, (
+            f"Token ids differ from the reviewed manifest: "
+            f"expected {len(expected.token_ids)} ids, got {len(tokenized.tokens)}; "
+            f"first difference at index {first_difference}: expected {expected_id!r}, got {actual_id!r}"
+        )
+    if decoded_text != expected.decoded_text:
+        first_difference = next(
+            (
+                index
+                for index, (expected_character, actual_character) in enumerate(zip(expected.decoded_text, decoded_text))
+                if expected_character != actual_character
+            ),
+            min(len(expected.decoded_text), len(decoded_text)),
+        )
+        context_start = max(0, first_difference - 20)
+        context_end = first_difference + 21
+        expected_context = expected.decoded_text[context_start:context_end]
+        actual_context = decoded_text[context_start:context_end]
+        expected_character = (
+            expected.decoded_text[first_difference] if first_difference < len(expected.decoded_text) else "<end>"
+        )
+        actual_character = decoded_text[first_difference] if first_difference < len(decoded_text) else "<end>"
+        assert decoded_text == expected.decoded_text, (
+            "Decoded text differs from the reviewed manifest "
+            f"at character index {first_difference}: expected {expected_character!r}, got {actual_character!r}; "
+            f"expected context {expected_context!r}, got {actual_context!r}"
+        )
 
     assert len(tokenized.images) == len(expected.images), (
         f"Expected {len(expected.images)} returned images, got {len(tokenized.images)}"
