@@ -28,9 +28,8 @@ from tests.integration.chat_v3_cases import V3_SUCCESS_CASES
 from tests.integration.chat_v7_cases import V7_DIRECT_EQUALITY_CASES, V7_SUCCESS_CASES, V7DirectEqualityCase
 from tests.integration.chat_v13_cases import V13_SUCCESS_CASES
 from tests.integration.chat_v15_cases import V15_ERROR_CASES, V15_SUCCESS_CASES
-from tests.integration.expected_results import assert_public_success, load_expected_success
 from tests.integration.tokenizer_configurations import TokenizerConfiguration
-from tests.utils import decode_keep
+from tests.integration.utils import encode_and_verify
 
 _ALL_PUBLIC_CASES: tuple[PublicChatSuccessCase | PublicChatErrorCase, ...] = (
     *SAMPLE_SUCCESS_CASES,
@@ -115,21 +114,6 @@ def _assert_fresh_request_graph(*, recipe_id: str, build: Callable[[], BaseModel
     assert (_structure(second), _structure(third)) == (expected_structure, expected_structure)
 
 
-def _encode_and_verify(
-    case: PublicChatSuccessCase,
-    public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
-) -> None:
-    request = case.recipe.build()
-    tokenizer = public_tokenizer(case.configuration)
-    tokenized = tokenizer.encode_chat_completion(request)
-    decoded_text = decode_keep(tokenizer=tokenizer, tokenized=tokenized)
-    expected = load_expected_success(
-        case_id=case.case_id,
-        tokenizer_configuration_id=case.configuration.configuration_id,
-    )
-    assert_public_success(expected=expected, tokenized=tokenized, decoded_text=decoded_text)
-
-
 @pytest.mark.parametrize(argnames="case", argvalues=RELEASED_SUCCESS_CASES, ids=lambda case: case.case_id)
 def test_released_profile_public_chat_success(
     case: PublicChatSuccessCase,
@@ -141,9 +125,9 @@ def test_released_profile_public_chat_success(
             target="mistral_common.tokens.tokenizers.audio._requests_lib.get",
             side_effect=AssertionError("network used"),
         ):
-            _encode_and_verify(case=case, public_tokenizer=public_tokenizer)
+            encode_and_verify(case=case, public_tokenizer=public_tokenizer)
     else:
-        _encode_and_verify(case=case, public_tokenizer=public_tokenizer)
+        encode_and_verify(case=case, public_tokenizer=public_tokenizer)
 
 
 @pytest.mark.parametrize(argnames="case", argvalues=RELEASED_ERROR_CASES, ids=lambda case: case.case_id)
