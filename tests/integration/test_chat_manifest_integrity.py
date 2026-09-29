@@ -32,7 +32,7 @@ from tests.integration.expected_results import (
     load_sidecar,
     resolve_sidecar,
 )
-from tests.integration.test_chat_samples import test_public_chat_rejection
+from tests.integration.test_chat_samples import test_public_chat_rejection as run_public_chat_rejection
 from tests.integration.tokenizer_configurations import TokenizerConfiguration
 from tests.utils import decode_keep
 
@@ -653,7 +653,7 @@ def test_construction_failure_fails_expected_error_case(
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
 ) -> None:
     case = next(case for case in SAMPLE_ERROR_CASES if case.case_id == "chat-sample-v1-tools-rejected-test")
-    test_public_chat_rejection(case=case, public_tokenizer=public_tokenizer)
+    run_public_chat_rejection(case=case, public_tokenizer=public_tokenizer)
 
     def fail_request_construction() -> ChatCompletionRequest[ChatMessage]:
         raise case.expected_exception("request construction: Tools not implemented for tokenizer V1")
@@ -662,5 +662,5 @@ def test_construction_failure_fails_expected_error_case(
     sabotaged_case = replace(case, recipe=sabotaged_recipe)
 
     with pytest.raises(expected_exception=case.expected_exception, match=case.message_pattern) as error_info:
-        test_public_chat_rejection(case=sabotaged_case, public_tokenizer=public_tokenizer)
+        run_public_chat_rejection(case=sabotaged_case, public_tokenizer=public_tokenizer)
     assert str(error_info.value).startswith("request construction:")
