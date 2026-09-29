@@ -9,6 +9,7 @@ from tests.utils import decode_keep
 
 
 def encode_and_verify(
+    *,
     case: PublicChatSuccessCase,
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
 ) -> tuple[MistralTokenizer, Tokenized, str]:
