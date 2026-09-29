@@ -70,42 +70,33 @@ class TokenizerConfiguration:
         return tokenizer
 
 
-def _bundled_spm_v1(mode: ValidationMode) -> TokenizerConfiguration:
+_BUNDLED_SPM_V1_FILENAME = "tokenizer.model.v1"
+_BUNDLED_SPM_V1_SHA256 = "dadfd56d766715c61d2ef780a525ab43b8e6da4de6865bda3d95fdef5e134055"
+_BUNDLED_SPM_V2_FILENAME = "mistral_instruct_tokenizer_240216.model.v2"
+_BUNDLED_SPM_V2_SHA256 = "37f00374dea48658ee8f5d0f21895b9bc55cb0103939607c8185bfd1c6ca1f89"
+_BUNDLED_SPM_V3_FILENAME = "mistral_instruct_tokenizer_240323.model.v3"
+_BUNDLED_SPM_V3_SHA256 = "9addc8bdce5988448ae81b729336f43a81262160ae8da760674badab9d4c7d33"
+_BUNDLED_SPM_V7_MM_FILENAME = "mistral_instruct_tokenizer_241114.model.v7m1"
+_BUNDLED_SPM_V7_MM_SHA256 = "1b968b8dc352f42192367337c78ccc61e1eaddc6d641a579372d4f20694beb7a"
+
+
+def _bundled_spm(*, profile_id: str, filename: str, sha256: str, mode: ValidationMode) -> TokenizerConfiguration:
+    r"""Build a bundled SentencePiece configuration for one profile and mode.
+
+    Args:
+        profile_id: Version-specific portion of the configuration identity.
+        filename: Bundled tokenizer filename.
+        sha256: Expected digest of the tokenizer bytes.
+        mode: Validation mode applied when loading the tokenizer.
+
+    Returns:
+        A configuration pinned to the selected bundled file.
+    """
     return TokenizerConfiguration(
-        configuration_id=f"bundled-spm-v1-{mode.value}",
-        tokenizer_path=_BUNDLED_DATA / "tokenizer.model.v1",
+        configuration_id=f"bundled-spm-{profile_id}-{mode.value}",
+        tokenizer_path=_BUNDLED_DATA / filename,
         mode=mode,
-        sha256="dadfd56d766715c61d2ef780a525ab43b8e6da4de6865bda3d95fdef5e134055",
-        provenance="bundled",
-    )
-
-
-def _bundled_spm_v2(mode: ValidationMode) -> TokenizerConfiguration:
-    return TokenizerConfiguration(
-        configuration_id=f"bundled-spm-v2-{mode.value}",
-        tokenizer_path=_BUNDLED_DATA / "mistral_instruct_tokenizer_240216.model.v2",
-        mode=mode,
-        sha256="37f00374dea48658ee8f5d0f21895b9bc55cb0103939607c8185bfd1c6ca1f89",
-        provenance="bundled",
-    )
-
-
-def _bundled_spm_v3(mode: ValidationMode) -> TokenizerConfiguration:
-    return TokenizerConfiguration(
-        configuration_id=f"bundled-spm-v3-{mode.value}",
-        tokenizer_path=_BUNDLED_DATA / "mistral_instruct_tokenizer_240323.model.v3",
-        mode=mode,
-        sha256="9addc8bdce5988448ae81b729336f43a81262160ae8da760674badab9d4c7d33",
-        provenance="bundled",
-    )
-
-
-def _bundled_spm_v7_mm(mode: ValidationMode) -> TokenizerConfiguration:
-    return TokenizerConfiguration(
-        configuration_id=f"bundled-spm-v7-mm-{mode.value}",
-        tokenizer_path=_BUNDLED_DATA / "mistral_instruct_tokenizer_241114.model.v7m1",
-        mode=mode,
-        sha256="1b968b8dc352f42192367337c78ccc61e1eaddc6d641a579372d4f20694beb7a",
+        sha256=sha256,
         provenance="bundled",
     )
 
@@ -120,13 +111,39 @@ def _pinned(profile_id: str, filename: str, sha256: str, mode: ValidationMode) -
     )
 
 
-BUNDLED_SPM_V1_TEST = _bundled_spm_v1(ValidationMode.test)
-BUNDLED_SPM_V2_TEST = _bundled_spm_v2(ValidationMode.test)
-BUNDLED_SPM_V2_SERVING = _bundled_spm_v2(ValidationMode.serving)
-BUNDLED_SPM_V2_FINETUNING = _bundled_spm_v2(ValidationMode.finetuning)
-BUNDLED_SPM_V2_AGNOSTIC = _bundled_spm_v2(ValidationMode.agnostic)
-BUNDLED_SPM_V3_TEST = _bundled_spm_v3(ValidationMode.test)
-BUNDLED_SPM_V7_MM_TEST = _bundled_spm_v7_mm(ValidationMode.test)
+BUNDLED_SPM_V1_TEST = _bundled_spm(
+    profile_id="v1", filename=_BUNDLED_SPM_V1_FILENAME, sha256=_BUNDLED_SPM_V1_SHA256, mode=ValidationMode.test
+)
+BUNDLED_SPM_V2_TEST = _bundled_spm(
+    profile_id="v2", filename=_BUNDLED_SPM_V2_FILENAME, sha256=_BUNDLED_SPM_V2_SHA256, mode=ValidationMode.test
+)
+BUNDLED_SPM_V2_SERVING = _bundled_spm(
+    profile_id="v2",
+    filename=_BUNDLED_SPM_V2_FILENAME,
+    sha256=_BUNDLED_SPM_V2_SHA256,
+    mode=ValidationMode.serving,
+)
+BUNDLED_SPM_V2_FINETUNING = _bundled_spm(
+    profile_id="v2",
+    filename=_BUNDLED_SPM_V2_FILENAME,
+    sha256=_BUNDLED_SPM_V2_SHA256,
+    mode=ValidationMode.finetuning,
+)
+BUNDLED_SPM_V2_AGNOSTIC = _bundled_spm(
+    profile_id="v2",
+    filename=_BUNDLED_SPM_V2_FILENAME,
+    sha256=_BUNDLED_SPM_V2_SHA256,
+    mode=ValidationMode.agnostic,
+)
+BUNDLED_SPM_V3_TEST = _bundled_spm(
+    profile_id="v3", filename=_BUNDLED_SPM_V3_FILENAME, sha256=_BUNDLED_SPM_V3_SHA256, mode=ValidationMode.test
+)
+BUNDLED_SPM_V7_MM_TEST = _bundled_spm(
+    profile_id="v7-mm",
+    filename=_BUNDLED_SPM_V7_MM_FILENAME,
+    sha256=_BUNDLED_SPM_V7_MM_SHA256,
+    mode=ValidationMode.test,
+)
 
 
 def _set_test_image_patch_size_2(tokenizer: MistralTokenizer) -> None:
@@ -243,16 +260,15 @@ PINNED_V15_IMAGE_SETTINGS_FINETUNING = _pinned(
 )
 
 
-def _load_synthetic_v13_audio() -> MistralTokenizer:
-    special_tokens = get_special_tokens(tokenizer_version=TokenizerVersion.v13, add_think=False, add_audio=True)
-    tekkenizer = Tekkenizer(
-        vocab=quick_vocab(extra_toks=[b"a", b"b", b"c", b"f", b"de"]),
-        special_tokens=special_tokens,
-        pattern=r".+",
-        vocab_size=256 + 100,
-        num_special_tokens=100,
-        version=TokenizerVersion.v13,
-    )
+def _synthetic_audio_encoder(*, tekkenizer: Tekkenizer) -> AudioEncoder:
+    r"""Attach the shared synthetic audio profile to a tokenizer.
+
+    Args:
+        tekkenizer: Synthetic tokenizer supplying the audio token IDs.
+
+    Returns:
+        An audio encoder with the chat-test synthetic configuration.
+    """
     audio_config = AudioConfig(
         sampling_rate=24_000,
         frame_rate=12.5,
@@ -265,7 +281,20 @@ def _load_synthetic_v13_audio() -> MistralTokenizer:
         text_to_audio=None,
         audio_to_text=None,
     )
-    audio_encoder = AudioEncoder(audio_config=audio_config, special_ids=special_audio_ids)
+    return AudioEncoder(audio_config=audio_config, special_ids=special_audio_ids)
+
+
+def _load_synthetic_v13_audio() -> MistralTokenizer:
+    special_tokens = get_special_tokens(tokenizer_version=TokenizerVersion.v13, add_think=False, add_audio=True)
+    tekkenizer = Tekkenizer(
+        vocab=quick_vocab(extra_toks=[b"a", b"b", b"c", b"f", b"de"]),
+        special_tokens=special_tokens,
+        pattern=r".+",
+        vocab_size=256 + 100,
+        num_special_tokens=100,
+        version=TokenizerVersion.v13,
+    )
+    audio_encoder = _synthetic_audio_encoder(tekkenizer=tekkenizer)
     instruct_tokenizer = InstructTokenizerV13(tokenizer=tekkenizer, audio_encoder=audio_encoder)
     return MistralTokenizer(
         instruct_tokenizer=instruct_tokenizer,
@@ -317,19 +346,7 @@ def _load_synthetic_v15(
 
     audio_encoder: AudioEncoder | None = None
     if add_audio:
-        audio_config = AudioConfig(
-            sampling_rate=24_000,
-            frame_rate=12.5,
-            encoding_config=AudioSpectrogramConfig(num_mel_bins=128, hop_length=160, window_size=400),
-        )
-        special_audio_ids = SpecialAudioIDs(
-            audio=tekkenizer.get_special_token(SpecialTokens.audio.value),
-            begin_audio=tekkenizer.get_special_token(SpecialTokens.begin_audio.value),
-            streaming_pad=None,
-            text_to_audio=None,
-            audio_to_text=None,
-        )
-        audio_encoder = AudioEncoder(audio_config=audio_config, special_ids=special_audio_ids)
+        audio_encoder = _synthetic_audio_encoder(tekkenizer=tekkenizer)
 
     instruct_tokenizer = InstructTokenizerV15(tokenizer=tekkenizer, audio_encoder=audio_encoder)
     return MistralTokenizer(

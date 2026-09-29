@@ -3,8 +3,6 @@ r"""Public v7 chat recipes and success cases from the legacy v7 selectors."""
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from PIL import Image
-
 from mistral_common.protocol.instruct.chunk import ImageChunk, TextChunk
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
@@ -16,7 +14,7 @@ from mistral_common.protocol.instruct.messages import (
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from tests.integration.chat_cases import PublicChatSuccessCase
-from tests.integration.chat_recipes import ChatRecipe
+from tests.integration.chat_recipes import ChatRecipe, build_prefixed_final_request, build_red_image
 from tests.integration.tokenizer_configurations import (
     BUNDLED_SPM_V7_MM_TEST,
     PINNED_V7_AUDIO_FINETUNING,
@@ -34,10 +32,6 @@ class V7DirectEqualityCase:
     build_direct_request: Callable[[], InstructRequest]
 
 
-def _red_4x4() -> Image.Image:
-    return Image.new(mode="RGB", size=(4, 4), color="red")
-
-
 def _build_system_tools_image() -> ChatCompletionRequest[ChatMessage]:
     return ChatCompletionRequest[ChatMessage](
         tools=[
@@ -53,7 +47,7 @@ def _build_system_tools_image() -> ChatCompletionRequest[ChatMessage]:
         ],
         messages=[
             SystemMessage(content="a"),
-            UserMessage(content=[TextChunk(text="a"), ImageChunk(image=_red_4x4())]),
+            UserMessage(content=[TextChunk(text="a"), ImageChunk(image=build_red_image())]),
             AssistantMessage(content="b"),
             ToolMessage(tool_call_id="123456789", content="f"),
         ],
@@ -114,16 +108,10 @@ def _build_tool_results() -> ChatCompletionRequest[ChatMessage]:
     )
 
 
-def _build_prefixed_final() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[UserMessage(content="a"), AssistantMessage(content="b", prefix=True)],
-    )
-
-
 _SYSTEM_TOOLS_IMAGE = ChatRecipe(recipe_id="v7-system-tools-image", build=_build_system_tools_image)
 _TOOL_CONTENT = ChatRecipe(recipe_id="v7-tool-content", build=_build_tool_content)
 _TOOL_RESULTS = ChatRecipe(recipe_id="v7-tool-results", build=_build_tool_results)
-_PREFIXED_FINAL = ChatRecipe(recipe_id="v7-prefixed-final", build=_build_prefixed_final)
+_PREFIXED_FINAL = ChatRecipe(recipe_id="v7-prefixed-final", build=build_prefixed_final_request)
 
 V7_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
     PublicChatSuccessCase(

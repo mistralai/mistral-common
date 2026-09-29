@@ -4,8 +4,6 @@ import base64
 from collections.abc import Callable
 from io import BytesIO
 
-from PIL import Image
-
 from mistral_common.exceptions import InvalidRequestException
 from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk, ImageURLChunk, TextChunk
 from mistral_common.protocol.instruct.messages import (
@@ -19,7 +17,14 @@ from mistral_common.protocol.instruct.request import ChatCompletionRequest, Reas
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
 from tests.integration.chat_cases import PublicChatErrorCase, PublicChatSuccessCase
-from tests.integration.chat_recipes import ChatRecipe
+from tests.integration.chat_recipes import (
+    ChatRecipe,
+    build_math_interpreter_tool,
+    build_prefixed_final_request,
+    build_red_image,
+    build_user_media_request,
+    call_id_recipe,
+)
 from tests.integration.tokenizer_configurations import (
     PINNED_V15_IMAGE_SETTINGS_TEST,
     SYNTHETIC_V15_AUDIO_TEST,
@@ -28,27 +33,6 @@ from tests.integration.tokenizer_configurations import (
     SYNTHETIC_V15_REASONING_EMPTY_TEST,
     SYNTHETIC_V15_REASONING_NONE_ONLY_TEST,
 )
-
-
-def _available_tools() -> list[Tool]:
-    r"""Build fresh tools matching the v15 public tool selectors."""
-    return [
-        Tool(
-            function=Function(
-                name="math_interpreter",
-                description="Get the value of an arithmetic expression.",
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "expression": {
-                            "type": "string",
-                            "description": "Math expression.",
-                        }
-                    },
-                },
-            )
-        )
-    ]
 
 
 def _messages() -> list[ChatMessage]:
@@ -70,41 +54,6 @@ def _messages() -> list[ChatMessage]:
     ]
 
 
-def _build_call_id_request(*, tool_call_id: str) -> ChatCompletionRequest[ChatMessage]:
-    r"""Build a request whose tool call and result share an arbitrary id.
-
-    Args:
-        tool_call_id: Identifier paired between the call and result.
-
-    Returns:
-        A fresh request with one call and its result.
-    """
-    return ChatCompletionRequest[ChatMessage](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(tool_calls=[ToolCall(id=tool_call_id, function=FunctionCall(name="f", arguments="{}"))]),
-            ToolMessage(content="b", tool_call_id=tool_call_id),
-        ]
-    )
-
-
-def _call_id_recipe(*, recipe_id: str, tool_call_id: str) -> ChatRecipe:
-    r"""Bind an arbitrary tool-call id to a fresh-request recipe.
-
-    Args:
-        recipe_id: Stable identity for the recipe.
-        tool_call_id: Identifier paired between the call and result.
-
-    Returns:
-        A recipe that builds a fresh request each time.
-    """
-
-    def build() -> ChatCompletionRequest[ChatMessage]:
-        return _build_call_id_request(tool_call_id=tool_call_id)
-
-    return ChatRecipe(recipe_id=recipe_id, build=build)
-
-
 def _build_settings_request(
     *, reasoning_effort: ReasoningEffort | None, include_tools: bool
 ) -> ChatCompletionRequest[ChatMessage]:
@@ -119,7 +68,7 @@ def _build_settings_request(
     """
     return ChatCompletionRequest[ChatMessage](
         messages=_messages(),
-        tools=_available_tools() if include_tools else None,
+        tools=[build_math_interpreter_tool()] if include_tools else None,
         reasoning_effort=reasoning_effort,
     )
 
@@ -142,16 +91,9 @@ def _settings_recipe(*, recipe_id: str, reasoning_effort: ReasoningEffort | None
     return ChatRecipe(recipe_id=recipe_id, build=build)
 
 
-def _build_prefixed_final() -> ChatCompletionRequest[ChatMessage]:
-    r"""Build the legacy user/assistant-prefix request with fresh messages."""
-    return ChatCompletionRequest[ChatMessage](
-        messages=[UserMessage(content="a"), AssistantMessage(content="b", prefix=True)]
-    )
-
-
 def _dummy_image_url_chunk() -> ImageURLChunk:
     r"""Build a fresh 4x4 red PNG data URL for an image request."""
-    image = Image.new(mode="RGB", size=(4, 4), color="red")
+    image = build_red_image()
     buffer = BytesIO()
     image.save(fp=buffer, format="PNG")
     image_url = f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}"
@@ -222,8 +164,9 @@ def _build_user_multimodal_request(
     Returns:
         A fresh public request containing the media chunk.
     """
-    return ChatCompletionRequest[ChatMessage](
-        messages=[UserMessage(content=[TextChunk(text="Here is content"), content_chunk])]
+    return build_user_media_request(
+        prompt="Here is content",
+        content_chunk=content_chunk,
     )
 
 
@@ -246,8 +189,8 @@ def _user_media_recipe(
     return ChatRecipe(recipe_id=recipe_id, build=build)
 
 
-_CALL_ID_X = _call_id_recipe(recipe_id="v15-call-id-x", tool_call_id="x")
-_CALL_ID_SLASH = _call_id_recipe(recipe_id="v15-call-id-slash", tool_call_id="call/id-1")
+_CALL_ID_X = call_id_recipe(recipe_id="v15-call-id-x", tool_call_id="x")
+_CALL_ID_SLASH = call_id_recipe(recipe_id="v15-call-id-slash", tool_call_id="call/id-1")
 _POLICY_ABSENT = _settings_recipe(recipe_id="v15-policy-absent", reasoning_effort=None, include_tools=True)
 _POLICY_NONE = _settings_recipe(recipe_id="v15-policy-none", reasoning_effort=ReasoningEffort.none, include_tools=True)
 _POLICY_HIGH = _settings_recipe(recipe_id="v15-policy-high", reasoning_effort=ReasoningEffort.high, include_tools=True)
@@ -274,7 +217,7 @@ _SYSTEM_AUDIO = ChatRecipe(recipe_id="v15-system-audio", build=_build_system_aud
 _USER_AUDIO = _user_media_recipe(recipe_id="v15-user-audio", content_factory=get_dummy_audio_chunk)
 _USER_AUDIO_URL = _user_media_recipe(recipe_id="v15-user-audio-url", content_factory=get_dummy_audio_url_chunk)
 _USER_IMAGE_URL = _user_media_recipe(recipe_id="v15-user-image-url", content_factory=_dummy_image_url_chunk)
-_PREFIXED_FINAL = ChatRecipe(recipe_id="v15-prefixed-final", build=_build_prefixed_final)
+_PREFIXED_FINAL = ChatRecipe(recipe_id="v15-prefixed-final", build=build_prefixed_final_request)
 
 V15_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
     PublicChatSuccessCase(

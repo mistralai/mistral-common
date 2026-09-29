@@ -11,10 +11,14 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
+from PIL import Image
+
+from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk, ImageURLChunk
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
     SystemMessage,
+    TextChunk,
     ToolMessage,
     UserMessage,
 )
@@ -28,6 +32,103 @@ class ChatRecipe:
 
     recipe_id: str
     build: Callable[[], ChatCompletionRequest[ChatMessage]]
+
+
+def build_red_image() -> Image.Image:
+    r"""Create a fresh 4x4 RGB red image for image-bearing recipes."""
+    return Image.new(mode="RGB", size=(4, 4), color="red")
+
+
+def build_math_interpreter_tool() -> Tool:
+    r"""Create the shared arithmetic-expression tool with fresh schema data."""
+    return Tool(
+        function=Function(
+            name="math_interpreter",
+            description="Get the value of an arithmetic expression.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "expression": {
+                        "type": "string",
+                        "description": "Math expression.",
+                    }
+                },
+            },
+        )
+    )
+
+
+def build_call_id_request(*, tool_call_id: str) -> ChatCompletionRequest[ChatMessage]:
+    r"""Build a fresh request whose call and result share an arbitrary id.
+
+    Args:
+        tool_call_id: Identifier paired between the call and result.
+
+    Returns:
+        A request containing the call and its result.
+    """
+    return ChatCompletionRequest[ChatMessage](
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(tool_calls=[ToolCall(id=tool_call_id, function=FunctionCall(name="f", arguments="{}"))]),
+            ToolMessage(content="b", tool_call_id=tool_call_id),
+        ]
+    )
+
+
+def call_id_recipe(*, recipe_id: str, tool_call_id: str) -> ChatRecipe:
+    r"""Bind a call id to a recipe that creates a fresh request each time.
+
+    Args:
+        recipe_id: Stable identity for the recipe.
+        tool_call_id: Identifier paired between the call and result.
+
+    Returns:
+        A recipe that builds a fresh request each time.
+    """
+
+    def build() -> ChatCompletionRequest[ChatMessage]:
+        return build_call_id_request(tool_call_id=tool_call_id)
+
+    return ChatRecipe(recipe_id=recipe_id, build=build)
+
+
+def build_prefixed_final_request() -> ChatCompletionRequest[ChatMessage]:
+    r"""Build the shared user message followed by a prefixed assistant turn."""
+    return ChatCompletionRequest[ChatMessage](
+        messages=[UserMessage(content="a"), AssistantMessage(content="b", prefix=True)]
+    )
+
+
+def build_system_audio_request(
+    *, audio_chunk_factory: Callable[[], AudioChunk | AudioURLChunk]
+) -> ChatCompletionRequest[ChatMessage]:
+    r"""Build the v13 system/user scaffold with a fresh user audio chunk.
+
+    Args:
+        audio_chunk_factory: Factory for the user message's audio chunk.
+
+    Returns:
+        A fresh request with the selected audio representation.
+    """
+    return ChatCompletionRequest[ChatMessage](
+        messages=[SystemMessage(content="hello"), UserMessage(content=[audio_chunk_factory()])]
+    )
+
+
+def build_user_media_request(
+    *, prompt: str, content_chunk: AudioChunk | AudioURLChunk | ImageURLChunk
+) -> ChatCompletionRequest[ChatMessage]:
+    r"""Build a user prompt followed by the supplied media chunk.
+
+    Args:
+        prompt: Text preceding the media chunk.
+        content_chunk: Fresh audio or image-URL chunk for this request.
+
+    Returns:
+        A fresh request containing the prompt and media chunk.
+    """
+    return ChatCompletionRequest[ChatMessage](messages=[UserMessage(content=[TextChunk(text=prompt), content_chunk])])
 
 
 _CURRENT_WEATHER_PARAMETERS: dict[str, Any] = {
