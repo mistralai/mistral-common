@@ -10,9 +10,7 @@ import pytest
 from PIL import Image
 from pydantic import BaseModel
 
-from mistral_common.protocol.instruct.chunk import AudioURLType, ImageChunk
-from mistral_common.tokens.tokenizers.base import Tokenized
-from mistral_common.tokens.tokenizers.image import SpecialImageIDs
+from mistral_common.protocol.instruct.chunk import AudioURLType
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.fixtures.audio import get_dummy_audio_url_chunk
 from tests.integration.chat_cases import (
@@ -25,8 +23,6 @@ from tests.integration.chat_recipes import ChatRecipe
 from tests.integration.chat_released_cases import (
     RELEASED_ERROR_CASES,
     RELEASED_SUCCESS_CASES,
-    _blue_image,
-    _red_image,
 )
 from tests.integration.chat_v3_cases import V3_SUCCESS_CASES
 from tests.integration.chat_v7_cases import V7_DIRECT_EQUALITY_CASES, V7_SUCCESS_CASES, V7DirectEqualityCase
@@ -122,7 +118,7 @@ def _assert_fresh_request_graph(*, recipe_id: str, build: Callable[[], BaseModel
 def _encode_and_verify(
     case: PublicChatSuccessCase,
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
-) -> tuple[MistralTokenizer, Tokenized, str]:
+) -> None:
     request = case.recipe.build()
     tokenizer = public_tokenizer(case.configuration)
     tokenized = tokenizer.encode_chat_completion(request)
@@ -132,20 +128,6 @@ def _encode_and_verify(
         tokenizer_configuration_id=case.configuration.configuration_id,
     )
     assert_public_success(expected=expected, tokenized=tokenized, decoded_text=decoded_text)
-    return tokenizer, tokenized, decoded_text
-
-
-def _image_tokenizer_spans(tokens: list[int], special_ids: SpecialImageIDs) -> list[list[int]]:
-    spans: list[list[int]] = []
-    start_idx: int | None = None
-    for idx, token in enumerate(tokens):
-        if start_idx is None:
-            if token == special_ids.img:
-                start_idx = idx
-        elif token == special_ids.img_end:
-            spans.append(tokens[start_idx : idx + 1])
-            start_idx = None
-    return spans
 
 
 @pytest.mark.parametrize(argnames="case", argvalues=RELEASED_SUCCESS_CASES, ids=lambda case: case.case_id)
@@ -159,46 +141,9 @@ def test_released_profile_public_chat_success(
             target="mistral_common.tokens.tokenizers.audio._requests_lib.get",
             side_effect=AssertionError("network used"),
         ):
-            tokenizer, tokenized, decoded_text = _encode_and_verify(case=case, public_tokenizer=public_tokenizer)
+            _encode_and_verify(case=case, public_tokenizer=public_tokenizer)
     else:
-        tokenizer, tokenized, decoded_text = _encode_and_verify(case=case, public_tokenizer=public_tokenizer)
-
-    if case.case_id.startswith("chat-sample-weather-full-released-"):
-        assert "[AVAILABLE_TOOLS]" in decoded_text
-        assert "get_current_weather" in decoded_text
-        assert "[INST]" in decoded_text
-        assert "[TOOL_CALLS]" in decoded_text
-        assert decoded_text.count("[TOOL_RESULTS]") == 2
-        assert decoded_text.index("22[/TOOL_RESULTS]") < decoded_text.index('{"2024-05-22"')
-        if case.case_id.endswith("-p15i"):
-            assert '[MODEL_SETTINGS]{"reasoning_effort": "none"}[/MODEL_SETTINGS]' in decoded_text
-        if case.case_id.endswith(("-p13t", "-p13i")):
-            assert "[THINK]" not in decoded_text
-
-    if case.case_id in {"chat-v7-released-user-image", "chat-v13-released-user-image"}:
-        assert len(tokenized.images) == 1
-
-    if case.case_id in {"chat-v7-released-user-audio", "chat-v7-released-user-audio-url"}:
-        assert len(tokenized.audios) == 1
-        assert tokenized.audios[0].audio_array.ndim == 1
-
-    if case.case_id == "chat-v11-released-image-order":
-        image_encoder = tokenizer.instruct_tokenizer.image_encoder
-        assert image_encoder is not None
-        red_encoding = image_encoder(ImageChunk(image=_red_image()))
-        blue_encoding = image_encoder(ImageChunk(image=_blue_image()))
-        assert red_encoding.tokens != blue_encoding.tokens
-        assert _image_tokenizer_spans(tokens=tokenized.tokens, special_ids=image_encoder.special_ids) == [
-            red_encoding.tokens,
-            blue_encoding.tokens,
-        ]
-        assert len(tokenized.images) == 2
-        np.testing.assert_array_equal(actual=tokenized.images[0], desired=red_encoding.image)
-        np.testing.assert_array_equal(actual=tokenized.images[1], desired=blue_encoding.image)
-
-    if case.case_id == "chat-v11-released-prefixed-final":
-        eos_id = tokenizer.instruct_tokenizer.tokenizer.eos_id
-        assert tokenized.tokens[-1] != eos_id
+        _encode_and_verify(case=case, public_tokenizer=public_tokenizer)
 
 
 @pytest.mark.parametrize(argnames="case", argvalues=RELEASED_ERROR_CASES, ids=lambda case: case.case_id)

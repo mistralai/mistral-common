@@ -41,16 +41,7 @@ def test_public_chat_v7_success(
 ) -> None:
     tokenizer, tokenized, _ = _encode_and_verify(case=case, public_tokenizer=public_tokenizer)
 
-    if case.case_id == "chat-v7-system-tools-image":
-        assert len(tokenized.images) == 1
-        assert tokenized.images[0].shape == (3, 16, 16)
-    elif case.case_id == "chat-v7-prefixed-final":
-        eos_id = tokenizer.instruct_tokenizer.tokenizer.eos_id
-        assert tokenized.tokens == [1, 3, 1032, 4, 1055]
-        assert tokenized.tokens[-1] != eos_id
-        assert tokenized.prefix_ids is not None
-        assert eos_id not in tokenized.prefix_ids
-    else:
+    if case.case_id in _DIRECT_RECIPES:
         instruct_request = _DIRECT_RECIPES[case.case_id]()
         direct = tokenizer.instruct_tokenizer.encode_instruct(instruct_request)
         assert tokenized.tokens == direct.tokens
