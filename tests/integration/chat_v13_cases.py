@@ -9,36 +9,22 @@ from mistral_common.protocol.instruct.messages import (
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
-from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
+from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
 from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
 from tests.integration.chat_cases import PublicChatSuccessCase
-from tests.integration.chat_recipes import ChatRecipe
+from tests.integration.chat_recipes import (
+    ChatRecipe,
+    build_math_interpreter_tool,
+    build_prefixed_final_request,
+    build_system_audio_request,
+    call_id_recipe,
+)
 from tests.integration.tokenizer_configurations import PINNED_V13_TEXT_TEST, SYNTHETIC_V13_AUDIO_TEST
-
-
-def _available_tools() -> list[Tool]:
-    return [
-        Tool(
-            function=Function(
-                name="math_interpreter",
-                description="Get the value of an arithmetic expression.",
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "expression": {
-                            "type": "string",
-                            "description": "Math expression.",
-                        }
-                    },
-                },
-            )
-        )
-    ]
 
 
 def _build_think_order() -> ChatCompletionRequest[ChatMessage]:
     return ChatCompletionRequest[ChatMessage](
-        tools=_available_tools(),
+        tools=[build_math_interpreter_tool()],
         messages=[
             SystemMessage(content=[TextChunk(text="S1"), ThinkChunk(thinking="TS"), TextChunk(text="S2")]),
             UserMessage(content="U1"),
@@ -59,7 +45,7 @@ def _build_think_order() -> ChatCompletionRequest[ChatMessage]:
 
 def _build_reversed_results() -> ChatCompletionRequest[ChatMessage]:
     return ChatCompletionRequest[ChatMessage](
-        tools=_available_tools(),
+        tools=[build_math_interpreter_tool()],
         messages=[
             SystemMessage(content="S"),
             UserMessage(content="U1"),
@@ -78,47 +64,23 @@ def _build_reversed_results() -> ChatCompletionRequest[ChatMessage]:
     )
 
 
-def _build_call_id_request(*, tool_call_id: str) -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(tool_calls=[ToolCall(id=tool_call_id, function=FunctionCall(name="f", arguments="{}"))]),
-            ToolMessage(content="b", tool_call_id=tool_call_id),
-        ]
-    )
-
-
-def _build_call_id_x() -> ChatCompletionRequest[ChatMessage]:
-    return _build_call_id_request(tool_call_id="x")
-
-
-def _build_call_id_slash() -> ChatCompletionRequest[ChatMessage]:
-    return _build_call_id_request(tool_call_id="call/id-1")
-
-
-def _build_prefixed_final() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[UserMessage(content="a"), AssistantMessage(content="b", prefix=True)]
-    )
-
-
 def _build_system_audio_chunk() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[SystemMessage(content="hello"), UserMessage(content=[get_dummy_audio_chunk()])]
+    return build_system_audio_request(
+        audio_chunk_factory=get_dummy_audio_chunk,
     )
 
 
 def _build_system_audio_url() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[SystemMessage(content="hello"), UserMessage(content=[get_dummy_audio_url_chunk()])]
+    return build_system_audio_request(
+        audio_chunk_factory=get_dummy_audio_url_chunk,
     )
 
 
 _THINK_ORDER = ChatRecipe(recipe_id="v13-think-order", build=_build_think_order)
 _REVERSED_RESULTS = ChatRecipe(recipe_id="v13-reversed-results", build=_build_reversed_results)
-_CALL_ID_X = ChatRecipe(recipe_id="v13-call-id-x", build=_build_call_id_x)
-_CALL_ID_SLASH = ChatRecipe(recipe_id="v13-call-id-slash", build=_build_call_id_slash)
-_PREFIXED_FINAL = ChatRecipe(recipe_id="v13-prefixed-final", build=_build_prefixed_final)
+_CALL_ID_X = call_id_recipe(recipe_id="v13-call-id-x", tool_call_id="x")
+_CALL_ID_SLASH = call_id_recipe(recipe_id="v13-call-id-slash", tool_call_id="call/id-1")
+_PREFIXED_FINAL = ChatRecipe(recipe_id="v13-prefixed-final", build=build_prefixed_final_request)
 _SYSTEM_AUDIO_CHUNK = ChatRecipe(recipe_id="v13-system-audio-chunk", build=_build_system_audio_chunk)
 _SYSTEM_AUDIO_URL = ChatRecipe(recipe_id="v13-system-audio-url", build=_build_system_audio_url)
 

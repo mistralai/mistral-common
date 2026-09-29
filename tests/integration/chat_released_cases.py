@@ -4,11 +4,17 @@ from PIL import Image
 
 from mistral_common.exceptions import InvalidMessageStructureException, InvalidSystemPromptException, TokenizerException
 from mistral_common.protocol.instruct.chunk import ImageChunk, TextChunk, ThinkChunk
-from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, SystemMessage, UserMessage
+from mistral_common.protocol.instruct.messages import ChatMessage, SystemMessage, UserMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
 from tests.integration.chat_cases import PublicChatErrorCase, PublicChatSuccessCase
-from tests.integration.chat_recipes import WEATHER_FULL, ChatRecipe
+from tests.integration.chat_recipes import (
+    WEATHER_FULL,
+    ChatRecipe,
+    build_prefixed_final_request,
+    build_red_image,
+    build_user_media_request,
+)
 from tests.integration.tokenizer_configurations import (
     PINNED_V7_AUDIO_TEST,
     PINNED_V7_IMAGE_FINETUNING,
@@ -23,29 +29,27 @@ from tests.integration.tokenizer_configurations import (
 )
 
 
-def _red_image() -> Image.Image:
-    return Image.new(mode="RGB", size=(4, 4), color="red")
-
-
 def _blue_image() -> Image.Image:
     return Image.new(mode="RGB", size=(30, 4), color="blue")
 
 
 def _build_user_image() -> ChatCompletionRequest[ChatMessage]:
     return ChatCompletionRequest[ChatMessage](
-        messages=[UserMessage(content=[TextChunk(text="Describe this image."), ImageChunk(image=_red_image())])]
+        messages=[UserMessage(content=[TextChunk(text="Describe this image."), ImageChunk(image=build_red_image())])]
     )
 
 
 def _build_user_audio() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[UserMessage(content=[TextChunk(text="Transcribe this audio."), get_dummy_audio_chunk()])]
+    return build_user_media_request(
+        prompt="Transcribe this audio.",
+        content_chunk=get_dummy_audio_chunk(),
     )
 
 
 def _build_user_audio_url() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[UserMessage(content=[TextChunk(text="Transcribe this audio."), get_dummy_audio_url_chunk()])]
+    return build_user_media_request(
+        prompt="Transcribe this audio.",
+        content_chunk=get_dummy_audio_url_chunk(),
     )
 
 
@@ -55,7 +59,7 @@ def _build_two_user_images() -> ChatCompletionRequest[ChatMessage]:
             UserMessage(
                 content=[
                     TextChunk(text="Compare these images."),
-                    ImageChunk(image=_red_image()),
+                    ImageChunk(image=build_red_image()),
                     ImageChunk(image=_blue_image()),
                 ]
             )
@@ -69,18 +73,12 @@ def _build_system_think() -> ChatCompletionRequest[ChatMessage]:
     )
 
 
-def _build_prefixed_final() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[UserMessage(content="a"), AssistantMessage(content="b", prefix=True)]
-    )
-
-
 _USER_IMAGE = ChatRecipe(recipe_id="released-user-image", build=_build_user_image)
 _USER_AUDIO = ChatRecipe(recipe_id="released-user-audio", build=_build_user_audio)
 _USER_AUDIO_URL = ChatRecipe(recipe_id="released-user-audio-url", build=_build_user_audio_url)
 _TWO_USER_IMAGES = ChatRecipe(recipe_id="released-two-user-images", build=_build_two_user_images)
 _SYSTEM_THINK = ChatRecipe(recipe_id="released-system-think", build=_build_system_think)
-_PREFIXED_FINAL = ChatRecipe(recipe_id="released-prefixed-final", build=_build_prefixed_final)
+_PREFIXED_FINAL = ChatRecipe(recipe_id="released-prefixed-final", build=build_prefixed_final_request)
 
 
 RELEASED_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
