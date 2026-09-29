@@ -5,15 +5,26 @@ escaping or missing sidecar, a pickle-based array, or a changed token/text
 value must fail loudly instead of silently comparing an unrelated golden.
 """
 
+import base64
 import json
+from collections.abc import Callable
+from dataclasses import replace
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pytest
+from PIL import Image
 
+from mistral_common.protocol.instruct.chunk import ImageURLChunk
+from mistral_common.protocol.instruct.messages import ChatMessage, UserMessage
+from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import Tokenized
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from tests.integration.chat_cases import SAMPLE_ERROR_CASES
+from tests.integration.chat_v15_cases import V15_SUCCESS_CASES
 from tests.integration.expected_results import (
     ExpectedSuccess,
     assert_public_success,
@@ -21,6 +32,9 @@ from tests.integration.expected_results import (
     load_sidecar,
     resolve_sidecar,
 )
+from tests.integration.test_chat_samples import test_public_chat_rejection
+from tests.integration.tokenizer_configurations import TokenizerConfiguration
+from tests.utils import decode_keep
 
 
 @pytest.fixture()
@@ -602,3 +616,51 @@ def test_sidecar_shape_mismatch_is_rejected_before_values(manifest_dir: Path) ->
         expected_exception=ValueError, match=r"sidecar shape.*does not match manifest declared shape \(1, 2\)"
     ):
         _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
+
+
+def test_changed_media_input_fails_public_encode_comparison(
+    public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
+) -> None:
+    case = next(case for case in V15_SUCCESS_CASES if case.case_id == "chat-v15-user-image-url")
+    tokenizer = public_tokenizer(case.configuration)
+    expected = load_expected_success(
+        case_id=case.case_id,
+        tokenizer_configuration_id=case.configuration.configuration_id,
+    )
+    original_tokenized = tokenizer.encode_chat_completion(case.recipe.build())
+    original_decoded_text = decode_keep(tokenizer=tokenizer, tokenized=original_tokenized)
+    assert_public_success(expected=expected, tokenized=original_tokenized, decoded_text=original_decoded_text)
+
+    request = case.recipe.build()
+    user_message = request.messages[0]
+    assert isinstance(user_message, UserMessage)
+    assert isinstance(user_message.content, list)
+    image_chunk = user_message.content[1]
+    assert isinstance(image_chunk, ImageURLChunk)
+    image_buffer = BytesIO()
+    Image.new(mode="RGB", size=(4, 4), color="blue").save(fp=image_buffer, format="PNG")
+    image_chunk.image_url = (
+        f"data:image/png;base64,{base64.b64encode(image_buffer.getvalue()).decode(encoding='ascii')}"
+    )
+    changed_tokenized = tokenizer.encode_chat_completion(request)
+    changed_decoded_text = decode_keep(tokenizer=tokenizer, tokenized=changed_tokenized)
+
+    with pytest.raises(expected_exception=AssertionError, match="Image array differs"):
+        assert_public_success(expected=expected, tokenized=changed_tokenized, decoded_text=changed_decoded_text)
+
+
+def test_construction_failure_fails_expected_error_case(
+    public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
+) -> None:
+    case = next(case for case in SAMPLE_ERROR_CASES if case.case_id == "chat-sample-v1-tools-rejected-test")
+    test_public_chat_rejection(case=case, public_tokenizer=public_tokenizer)
+
+    def fail_request_construction() -> ChatCompletionRequest[ChatMessage]:
+        raise case.expected_exception("request construction: Tools not implemented for tokenizer V1")
+
+    sabotaged_recipe = replace(case.recipe, build=fail_request_construction)
+    sabotaged_case = replace(case, recipe=sabotaged_recipe)
+
+    with pytest.raises(expected_exception=case.expected_exception, match=case.message_pattern) as error_info:
+        test_public_chat_rejection(case=sabotaged_case, public_tokenizer=public_tokenizer)
+    assert str(error_info.value).startswith("request construction:")
