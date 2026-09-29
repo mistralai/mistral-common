@@ -1,15 +1,16 @@
 from enum import Enum
-from typing import Any, ClassVar, Generic, Literal, TypeAlias, TypeVar, final
+from typing import Any, ClassVar, Generic, Literal, TypeAlias, TypeVar, cast, final
 
 from pydantic import model_validator
 
 from mistral_common.base import MistralBase
 from mistral_common.exceptions import InvalidRequestException
 from mistral_common.protocol.instruct.request import (
-    ChatCompletionRequest,
     ModelSettings,
+    ModelSettingsConv,
     ReasoningEffort,
     ResponseFormat,
+    SchemaRenderingMode,
 )
 from mistral_common.utils.json_utils import validate_json_schema_by_draft7
 
@@ -94,7 +95,6 @@ class FieldBuilder(MistralBase, Generic[InputT, OutputT]):
             return self.default
         return self._convert(input_value=value)
 
-    @final
     def validate_built_value(self, field_name: str, value: OutputT | None) -> None:
         r"""Validate a fully built value, including `None` checks.
 
@@ -182,22 +182,30 @@ class JSONSchemaBuilder(FieldBuilder[ResponseFormat, JSONSchemaDict]):
 
     Attributes:
         type: The type of validator (always JSON_SCHEMA for this class).
-        accepts_none: Always True, as text responses yield no schema.
+        accepts_none: Always False because response-format values are required.
         default: Always None, no default schema is supported.
     """
 
     type: ValidatorType = ValidatorType.JSON_SCHEMA
-    accepts_none: Literal[True]
+    accepts_none: Literal[False]
     default: None
+
+    def validate_built_value(self, field_name: str, value: JSONSchemaDict | None) -> None:
+        if value is not None:
+            self._validate_built_value(field_name=field_name, value=value)
 
     def _convert(self, input_value: ResponseFormat) -> JSONSchemaDict:
         r"""Render the response format's schema for model-settings encoding."""
-        return input_value.get_schema()
+        return input_value.get_schema(purpose=SchemaRenderingMode.model_settings)
 
     def _validate_built_value(self, field_name: str, value: JSONSchemaDict) -> None:
         r"""Validate the built schema against Draft 7 when present."""
         if value is not None:
             validate_json_schema_by_draft7(value)
+
+
+class ReasoningEffortEnumBuilder(EnumBuilder[ReasoningEffort]):
+    r"""Concrete enum builder with a stable pickleable class path."""
 
 
 class ModelSettingsBuilder(MistralBase):
@@ -220,8 +228,29 @@ class ModelSettingsBuilder(MistralBase):
         "json_schema": "response_format",
     }
 
-    reasoning_effort: EnumBuilder[ReasoningEffort] | None = None
+    reasoning_effort: ReasoningEffortEnumBuilder | None = None
     json_schema: JSONSchemaBuilder | None = None
+
+    def __init__(
+        self,
+        *,
+        reasoning_effort: ReasoningEffortEnumBuilder | EnumBuilder[ReasoningEffort] | None = None,
+        json_schema: JSONSchemaBuilder | None = None,
+    ) -> None:
+        cast(Any, super()).__init__(reasoning_effort=reasoning_effort, json_schema=json_schema)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_reasoning_effort_builder(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        reasoning_effort_builder = value.get("reasoning_effort")
+        if isinstance(reasoning_effort_builder, EnumBuilder) and not isinstance(
+            reasoning_effort_builder, ReasoningEffortEnumBuilder
+        ):
+            value = value.copy()
+            value["reasoning_effort"] = ReasoningEffortEnumBuilder.model_validate(reasoning_effort_builder.model_dump())
+        return value
 
     @staticmethod
     def none() -> "ModelSettingsBuilder":
@@ -235,7 +264,7 @@ class ModelSettingsBuilder(MistralBase):
         """
         return ModelSettingsBuilder()
 
-    def build_settings(self, request: ChatCompletionRequest) -> ModelSettings:
+    def build_settings(self, request: ModelSettingsConv) -> ModelSettings:
         r"""Build and validate a ModelSettings instance from a raw request.
 
         Iterates over all known fields, applies the corresponding builder, and
@@ -258,7 +287,9 @@ class ModelSettingsBuilder(MistralBase):
             if field_builder is not None:
                 dict_settings[field_name] = field_builder.build_value(field_name, value)
 
-        return ModelSettings.model_validate(dict_settings)
+        settings = ModelSettings.model_validate(dict_settings)
+        self.validate_settings(settings=settings)
+        return settings
 
     def validate_settings(self, settings: ModelSettings) -> None:
         r"""Validate that all fields in a ModelSettings instance match the configured builders.

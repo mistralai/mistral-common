@@ -493,7 +493,7 @@ def test_end_to_end_no_default(messages: list[ChatMessage], reasoning_effort: Re
 
 @pytest.fixture
 def v15_json_schema_mistral_tokenizer() -> MistralTokenizer:
-    builder = ModelSettingsBuilder(json_schema=JSONSchemaBuilder(accepts_none=True, default=None))
+    builder = ModelSettingsBuilder(json_schema=JSONSchemaBuilder(accepts_none=False, default=None))
     return get_v15_mistral_tokenizer(builder)
 
 
@@ -536,7 +536,7 @@ def test_v15_encodes_json_schema_into_model_settings(
 def v15_reasoning_and_json_schema_mistral_tokenizer() -> MistralTokenizer:
     builder = ModelSettingsBuilder(
         reasoning_effort=EnumBuilder[ReasoningEffort](values=list(ReasoningEffort), accepts_none=True, default=None),
-        json_schema=JSONSchemaBuilder(accepts_none=True, default=None),
+        json_schema=JSONSchemaBuilder(accepts_none=False, default=None),
     )
     return get_v15_mistral_tokenizer(builder)
 

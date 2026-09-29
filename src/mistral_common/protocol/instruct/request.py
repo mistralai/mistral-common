@@ -1,6 +1,6 @@
 from collections.abc import Iterable, Mapping
 from enum import Enum
-from typing import Any, Generic
+from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
 
 from pydantic import ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
@@ -65,6 +65,13 @@ class ResponseFormats(str, Enum):
     text = "text"
     json = "json_object"
     json_schema = "json_schema"
+
+
+class SchemaRenderingMode(str, Enum):
+    r"""Select the schema representation for its consumer."""
+
+    grammar = "grammar"
+    model_settings = "model_settings"
 
 
 class ReasoningEffort(str, Enum):
@@ -153,25 +160,44 @@ class ResponseFormat(MistralBase):
     type: ResponseFormats = ResponseFormats.text
     json_schema: JsonSchema | None = None
 
-    def get_schema(self) -> dict[str, Any] | None:
-        r"""Return the JSON schema to enforce for this response format.
+    def get_schema(self, purpose: SchemaRenderingMode) -> dict[str, Any] | None:
+        r"""Render a schema for grammar constraints or model settings.
+
+        Args:
+            purpose: Consumer that determines non-strict schema rendering.
 
         Returns:
             The schema dict, or None when no constraint applies.
 
         Raises:
-            InvalidRequestException: If ``type`` is ``json_schema`` but no schema is set.
+            InvalidRequestException: If the response format requires a schema
+                but none is set.
         """
         schema: dict[str, Any] | None
         if self.type == ResponseFormats.json_schema:
             if self.json_schema is None:
                 raise InvalidRequestException("Response format `json_schema` must define the schema")
-            schema = self.json_schema.custom_schema
+            schema = (
+                self.json_schema.custom_schema
+                if self.json_schema.strict or purpose == SchemaRenderingMode.model_settings
+                else {"type": "object"}
+            )
         elif self.type == ResponseFormats.json:
             schema = {"anyOf": [{"type": "object"}, {"type": "array"}]}
         else:
             schema = None
         return schema
+
+
+ReasoningEffortType = TypeVar("ReasoningEffortType", ReasoningEffort, "ReasoningEffort | None")
+
+
+@runtime_checkable
+class ModelSettingsConv(Protocol[ReasoningEffortType]):
+    r"""Information required from a chat request to build model settings."""
+
+    reasoning_effort: ReasoningEffortType
+    response_format: ResponseFormat
 
 
 class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
