@@ -46,7 +46,7 @@ def chunks(lst: list[str], chunk_size: int) -> Iterator[list[str]]:
         yield lst[i : i + chunk_size]
 
 
-def list_local_hf_repo_files(repo_id: str, revision: str | None) -> list[str]:
+def list_local_hf_repo_files(repo_id: str, revision: str | None, cache_dir: str | Path | None = None) -> list[str]:
     r"""List the files of a locally cached Hugging Face repo.
 
     Reads directly from the Hugging Face cache directory without network
@@ -56,6 +56,8 @@ def list_local_hf_repo_files(repo_id: str, revision: str | None) -> list[str]:
         repo_id: The Hugging Face repo ID.
         revision: Git branch, tag, or commit hash. If `None`, the default
             revision (usually "main") is used.
+        cache_dir: Directory where the repo is cached. If `None`, uses the
+            default Hugging Face cache.
 
     Returns:
         The file names in the repo snapshot, or an empty list if the repo or
@@ -66,9 +68,10 @@ def list_local_hf_repo_files(repo_id: str, revision: str | None) -> list[str]:
     """
     _assert_hub_installed()
 
-    repo_cache = Path(huggingface_hub.constants.HF_HUB_CACHE) / huggingface_hub.constants.REPO_ID_SEPARATOR.join(
-        ["models", *repo_id.split("/")]
-    )
+    # Must match the cache that `hf_hub_download` reads from, otherwise a tokenizer cached in a custom
+    # `cache_dir` is reported as missing.
+    cache_root = Path(cache_dir) if cache_dir is not None else Path(huggingface_hub.constants.HF_HUB_CACHE)
+    repo_cache = cache_root / huggingface_hub.constants.REPO_ID_SEPARATOR.join(["models", *repo_id.split("/")])
 
     if revision is None:
         revision = huggingface_hub.constants.DEFAULT_REVISION
@@ -206,7 +209,7 @@ def download_tokenizer_from_hf_hub(
             if force_download:
                 raise e
 
-            repo_files = list_local_hf_repo_files(repo_id=repo_id, revision=revision)
+            repo_files = list_local_hf_repo_files(repo_id=repo_id, revision=revision, cache_dir=cache_dir)
             local_files_only = True
 
             logger.info("Could not connect to the Hugging Face Hub. Using local files only.")
@@ -217,7 +220,7 @@ def download_tokenizer_from_hf_hub(
                     f" and revision {revision}. Please check your internet connection and try again."
                 ) from e
     else:
-        repo_files = list_local_hf_repo_files(repo_id=repo_id, revision=revision)
+        repo_files = list_local_hf_repo_files(repo_id=repo_id, revision=revision, cache_dir=cache_dir)
         if len(repo_files) == 0:
             raise FileNotFoundError(
                 f"No local files found for the repo ID {repo_id} and revision {revision}. Please check the repo ID and"
