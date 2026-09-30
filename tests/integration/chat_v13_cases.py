@@ -17,6 +17,7 @@ from tests.integration.chat_recipes import (
     build_math_interpreter_tool,
     build_prefixed_final_request,
     build_system_audio_request,
+    build_two_tool_call_messages,
     call_id_recipe,
 )
 from tests.integration.tokenizer_configurations import PINNED_V13_TEXT_TEST, SYNTHETIC_V13_AUDIO_TEST
@@ -46,21 +47,7 @@ def _build_think_order() -> ChatCompletionRequest[ChatMessage]:
 def _build_reversed_results() -> ChatCompletionRequest[ChatMessage]:
     return ChatCompletionRequest[ChatMessage](
         tools=[build_math_interpreter_tool()],
-        messages=[
-            SystemMessage(content="S"),
-            UserMessage(content="U1"),
-            AssistantMessage(
-                content="A1",
-                tool_calls=[
-                    ToolCall(id="123456789", function=FunctionCall(name="F1", arguments="{}")),
-                    ToolCall(id="999999999", function=FunctionCall(name="F2", arguments="{}")),
-                ],
-            ),
-            ToolMessage(content="R2", tool_call_id="999999999"),
-            ToolMessage(content="R1", tool_call_id="123456789"),
-            AssistantMessage(content="A2"),
-            UserMessage(content="U2"),
-        ],
+        messages=build_two_tool_call_messages(tool_results=(("R2", "999999999"), ("R1", "123456789"))),
     )
 
 

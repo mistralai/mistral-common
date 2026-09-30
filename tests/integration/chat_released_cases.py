@@ -13,6 +13,7 @@ from tests.integration.chat_recipes import (
     ChatRecipe,
     build_prefixed_final_request,
     build_red_image,
+    build_user_content_request,
     build_user_media_request,
 )
 from tests.integration.tokenizer_configurations import (
@@ -34,8 +35,8 @@ def _blue_image() -> Image.Image:
 
 
 def _build_user_image() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[UserMessage(content=[TextChunk(text="Describe this image."), ImageChunk(image=build_red_image())])]
+    return build_user_content_request(
+        content=[TextChunk(text="Describe this image."), ImageChunk(image=build_red_image())]
     )
 
 
@@ -54,15 +55,11 @@ def _build_user_audio_url() -> ChatCompletionRequest[ChatMessage]:
 
 
 def _build_two_user_images() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[
-            UserMessage(
-                content=[
-                    TextChunk(text="Compare these images."),
-                    ImageChunk(image=build_red_image()),
-                    ImageChunk(image=_blue_image()),
-                ]
-            )
+    return build_user_content_request(
+        content=[
+            TextChunk(text="Compare these images."),
+            ImageChunk(image=build_red_image()),
+            ImageChunk(image=_blue_image()),
         ]
     )
 
