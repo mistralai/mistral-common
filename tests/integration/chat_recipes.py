@@ -13,7 +13,7 @@ from typing import Any
 
 from PIL import Image
 
-from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk, ImageURLChunk
+from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk, ContentChunk, ImageURLChunk
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
@@ -56,6 +56,60 @@ def build_math_interpreter_tool() -> Tool:
             },
         )
     )
+
+
+def build_function_tool(*, name: str, description: str | None, parameters: dict[str, Any]) -> Tool:
+    r"""Create a tool with independent schema data for one request.
+
+    Args:
+        name: Function name carried by the tool.
+        description: Function description, or `None` to use the model default.
+        parameters: JSON schema copied into the fresh tool.
+
+    Returns:
+        A tool with a deep copy of the supplied parameter schema.
+    """
+    function_values: dict[str, Any] = {"name": name, "parameters": deepcopy(parameters)}
+    if description is not None:
+        function_values["description"] = description
+    return Tool(function=Function(**function_values))
+
+
+def build_user_content_request(*, content: list[ContentChunk]) -> ChatCompletionRequest[ChatMessage]:
+    r"""Wrap fresh content in a single user message.
+
+    Args:
+        content: Ordered chunks belonging to the user message.
+
+    Returns:
+        A request containing the user message.
+    """
+    return ChatCompletionRequest[ChatMessage](messages=[UserMessage(content=content)])
+
+
+def build_two_tool_call_messages(*, tool_results: tuple[tuple[str, str], tuple[str, str]]) -> list[ChatMessage]:
+    r"""Build the shared two-call scaffold, preserving the supplied result order.
+
+    Args:
+        tool_results: Ordered pairs of result content and matching tool-call id.
+
+    Returns:
+        Fresh system, user, tool-call, tool-result, assistant, and user messages.
+    """
+    return [
+        SystemMessage(content="S"),
+        UserMessage(content="U1"),
+        AssistantMessage(
+            content="A1",
+            tool_calls=[
+                ToolCall(id="123456789", function=FunctionCall(name="F1", arguments="{}")),
+                ToolCall(id="999999999", function=FunctionCall(name="F2", arguments="{}")),
+            ],
+        ),
+        *[ToolMessage(content=content, tool_call_id=tool_call_id) for content, tool_call_id in tool_results],
+        AssistantMessage(content="A2"),
+        UserMessage(content="U2"),
+    ]
 
 
 def build_call_id_request(*, tool_call_id: str) -> ChatCompletionRequest[ChatMessage]:
@@ -192,32 +246,26 @@ _SEND_EMAIL_PARAMETERS: dict[str, Any] = {
 
 
 def _current_weather_tool() -> Tool:
-    return Tool(
-        function=Function(
-            name="get_current_weather",
-            description="Get the current weather",
-            parameters=deepcopy(_CURRENT_WEATHER_PARAMETERS),
-        )
+    return build_function_tool(
+        name="get_current_weather",
+        description="Get the current weather",
+        parameters=_CURRENT_WEATHER_PARAMETERS,
     )
 
 
 def _n_day_weather_tool() -> Tool:
-    return Tool(
-        function=Function(
-            name="get_n_day_weather_forecast",
-            description="Get an N-day weather forecast",
-            parameters=deepcopy(_N_DAY_WEATHER_PARAMETERS),
-        )
+    return build_function_tool(
+        name="get_n_day_weather_forecast",
+        description="Get an N-day weather forecast",
+        parameters=_N_DAY_WEATHER_PARAMETERS,
     )
 
 
 def _send_email_tool() -> Tool:
-    return Tool(
-        function=Function(
-            name="send_email",
-            description="Send an email to a recipient",
-            parameters=deepcopy(_SEND_EMAIL_PARAMETERS),
-        )
+    return build_function_tool(
+        name="send_email",
+        description="Send an email to a recipient",
+        parameters=_SEND_EMAIL_PARAMETERS,
     )
 
 

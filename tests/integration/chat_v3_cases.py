@@ -16,7 +16,7 @@ from mistral_common.protocol.instruct.chunk import ImageChunk, TextChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, SystemMessage, UserMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from tests.integration.chat_cases import PublicChatSuccessCase
-from tests.integration.chat_recipes import ChatRecipe, build_red_image
+from tests.integration.chat_recipes import ChatRecipe, build_red_image, build_user_content_request
 from tests.integration.tokenizer_configurations import (
     BUNDLED_TEKKEN_V3_MM_PATCH2_TEST,
     BUNDLED_TEKKEN_V3_MM_TEST,
@@ -73,49 +73,39 @@ def _build_system_adjacent_text() -> ChatCompletionRequest[ChatMessage]:
 
 
 def _build_swap_image_first() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[UserMessage(content=[ImageChunk(image=build_red_image()), TextChunk(text="What is on this image?")])],
+    return build_user_content_request(
+        content=[ImageChunk(image=build_red_image()), TextChunk(text="What is on this image?")]
     )
 
 
 def _build_swap_text_first() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[UserMessage(content=[TextChunk(text="What is on this image?"), ImageChunk(image=build_red_image())])],
+    return build_user_content_request(
+        content=[TextChunk(text="What is on this image?"), ImageChunk(image=build_red_image())]
     )
 
 
 def _build_swap_appended_image_first() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[
-            UserMessage(
-                content=[
-                    ImageChunk(image=build_red_image()),
-                    TextChunk(text="What is on this image?"),
-                    TextChunk(text="more"),
-                ]
-            )
-        ],
+    return build_user_content_request(
+        content=[
+            ImageChunk(image=build_red_image()),
+            TextChunk(text="What is on this image?"),
+            TextChunk(text="more"),
+        ]
     )
 
 
 def _build_swap_appended_text_first() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[
-            UserMessage(
-                content=[
-                    TextChunk(text="What is on this image?"),
-                    ImageChunk(image=build_red_image()),
-                    TextChunk(text="more"),
-                ]
-            )
-        ],
+    return build_user_content_request(
+        content=[
+            TextChunk(text="What is on this image?"),
+            ImageChunk(image=build_red_image()),
+            TextChunk(text="more"),
+        ]
     )
 
 
 def _build_image_user_text_first() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[UserMessage(content=[TextChunk(text="a"), ImageChunk(image=build_red_image())])],
-    )
+    return build_user_content_request(content=[TextChunk(text="a"), ImageChunk(image=build_red_image())])
 
 
 def _build_image_system_text_first() -> ChatCompletionRequest[ChatMessage]:
@@ -152,59 +142,41 @@ def _build_image_multiturn_four() -> ChatCompletionRequest[ChatMessage]:
 
 
 def _build_image_interleaved_two() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[
-            UserMessage(
-                content=[
-                    TextChunk(text="A"),
-                    ImageChunk(image=build_red_image()),
-                    TextChunk(text="B"),
-                    TextChunk(text="C"),
-                    ImageChunk(image=build_red_image()),
-                    TextChunk(text="D"),
-                    TextChunk(text="E"),
-                ]
-            )
-        ],
+    return build_user_content_request(
+        content=[
+            TextChunk(text="A"),
+            ImageChunk(image=build_red_image()),
+            TextChunk(text="B"),
+            TextChunk(text="C"),
+            ImageChunk(image=build_red_image()),
+            TextChunk(text="D"),
+            TextChunk(text="E"),
+        ]
     )
 
 
 def _build_order_empty_text_two_images() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[
-            UserMessage(
-                content=[TextChunk(text=""), ImageChunk(image=build_red_image()), ImageChunk(image=_blue_6x4())]
-            )
-        ],
+    return build_user_content_request(
+        content=[TextChunk(text=""), ImageChunk(image=build_red_image()), ImageChunk(image=_blue_6x4())]
     )
 
 
 def _build_order_text_two_images() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[
-            UserMessage(
-                content=[TextChunk(text="x"), ImageChunk(image=build_red_image()), ImageChunk(image=_blue_6x4())]
-            )
-        ],
+    return build_user_content_request(
+        content=[TextChunk(text="x"), ImageChunk(image=build_red_image()), ImageChunk(image=_blue_6x4())]
     )
 
 
 def _build_order_two_images() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[UserMessage(content=[ImageChunk(image=build_red_image()), ImageChunk(image=_blue_6x4())])],
-    )
+    return build_user_content_request(content=[ImageChunk(image=build_red_image()), ImageChunk(image=_blue_6x4())])
 
 
 def _build_order_trailing_image() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[UserMessage(content=[TextChunk(text="x"), ImageChunk(image=build_red_image())])],
-    )
+    return build_user_content_request(content=[TextChunk(text="x"), ImageChunk(image=build_red_image())])
 
 
 def _build_order_leading_image() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[UserMessage(content=[ImageChunk(image=build_red_image()), TextChunk(text="x")])],
-    )
+    return build_user_content_request(content=[ImageChunk(image=build_red_image()), TextChunk(text="x")])
 
 
 _MULTITURN_TEXT = ChatRecipe(recipe_id="v3-agree-multiturn-text", build=_build_multiturn_text)

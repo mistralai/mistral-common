@@ -12,9 +12,14 @@ from mistral_common.protocol.instruct.messages import (
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
-from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
+from mistral_common.protocol.instruct.tool_calls import FunctionCall, Tool, ToolCall
 from tests.integration.chat_cases import PublicChatSuccessCase
-from tests.integration.chat_recipes import ChatRecipe, build_prefixed_final_request, build_red_image
+from tests.integration.chat_recipes import (
+    ChatRecipe,
+    build_function_tool,
+    build_prefixed_final_request,
+    build_red_image,
+)
 from tests.integration.tokenizer_configurations import (
     BUNDLED_SPM_V7_MM_TEST,
     PINNED_V7_AUDIO_FINETUNING,
@@ -35,14 +40,13 @@ class V7DirectEqualityCase:
 def _build_system_tools_image() -> ChatCompletionRequest[ChatMessage]:
     return ChatCompletionRequest[ChatMessage](
         tools=[
-            Tool(
-                function=Function(
-                    name="t",
-                    parameters={
-                        "type": "object",
-                        "properties": {"g": {"type": "string"}, "h": {"type": "string"}},
-                    },
-                )
+            build_function_tool(
+                name="t",
+                description=None,
+                parameters={
+                    "type": "object",
+                    "properties": {"g": {"type": "string"}, "h": {"type": "string"}},
+                },
             )
         ],
         messages=[
@@ -56,8 +60,8 @@ def _build_system_tools_image() -> ChatCompletionRequest[ChatMessage]:
 
 def _available_tools() -> list[Tool]:
     return [
-        Tool(function=Function(name="t1", parameters={})),
-        Tool(function=Function(name="t2", parameters={})),
+        build_function_tool(name="t1", description=None, parameters={}),
+        build_function_tool(name="t2", description=None, parameters={}),
     ]
 
 
