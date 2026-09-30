@@ -1,0 +1,18 @@
+{
+  "case_id": "chat-v13-released-system-think",
+  "tokenizer_configuration_id": "pinned-v13-text-test",
+  "token_ids": [
+    1,
+    17,
+    34,
+    37133,
+    35,
+    18,
+    3,
+    22177,
+    4
+  ],
+  "decoded_text": "<s>[SYSTEM_PROMPT][THINK]Hi[/THINK][/SYSTEM_PROMPT][INST]Hello[/INST]",
+  "images": [],
+  "audios": []
+}
