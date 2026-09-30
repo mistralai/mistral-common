@@ -14,14 +14,16 @@ from mistral_common.protocol.instruct.messages import (
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, ReasoningEffort
-from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
+from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
 from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
 from tests.integration.chat_cases import PublicChatErrorCase, PublicChatSuccessCase
 from tests.integration.chat_recipes import (
     ChatRecipe,
+    build_function_tool,
     build_math_interpreter_tool,
     build_prefixed_final_request,
     build_red_image,
+    build_two_tool_call_messages,
     build_user_media_request,
     call_id_recipe,
 )
@@ -37,21 +39,7 @@ from tests.integration.tokenizer_configurations import (
 
 def _messages() -> list[ChatMessage]:
     r"""Build fresh ordered tool-call messages for v15 settings selectors."""
-    return [
-        SystemMessage(content="S"),
-        UserMessage(content="U1"),
-        AssistantMessage(
-            content="A1",
-            tool_calls=[
-                ToolCall(id="123456789", function=FunctionCall(name="F1", arguments="{}")),
-                ToolCall(id="999999999", function=FunctionCall(name="F2", arguments="{}")),
-            ],
-        ),
-        ToolMessage(content="R1", tool_call_id="123456789"),
-        ToolMessage(content="R2", tool_call_id="999999999"),
-        AssistantMessage(content="A2"),
-        UserMessage(content="U2"),
-    ]
+    return build_two_tool_call_messages(tool_results=(("R1", "123456789"), ("R2", "999999999")))
 
 
 def _build_settings_request(
@@ -120,7 +108,7 @@ def _build_tool_multimodal_request(
                 tool_call_id="test12345",
             ),
         ],
-        tools=[Tool(function=Function(name="fn", description="test", parameters={}))],
+        tools=[build_function_tool(name="fn", description="test", parameters={})],
     )
 
 
