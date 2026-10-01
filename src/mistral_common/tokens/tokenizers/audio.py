@@ -138,7 +138,7 @@ class Audio:
         """
         assert_soundfile_installed()
 
-        if re.match(r"^data:audio/\w+;base64,", audio_base64):
+        if re.match(r"^data:audio/[\w.+-]+;base64,", audio_base64):
             audio_base64 = audio_base64.split(",")[1]
 
         try:
