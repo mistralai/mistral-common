@@ -1,10 +1,11 @@
 import pytest
 
 from mistral_common.exceptions import (
+    InvalidFunctionCallException,
     InvalidToolException,
     InvalidToolSchemaException,
 )
-from mistral_common.protocol.instruct.tool_calls import Function, Tool
+from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool
 from mistral_common.protocol.instruct.validator import (
     MistralRequestValidator,
     MistralRequestValidatorV3,
@@ -23,13 +24,14 @@ class TestValidateTools:
     def validator(self) -> MistralRequestValidator:
         return MistralRequestValidator()
 
-    def test_tool_function_bad_name(self, validator: MistralRequestValidator) -> None:
+    @pytest.mark.parametrize("name", [')_(_)~@:}>""', "function_name\n", "a" * 64 + "\n"])
+    def test_tool_function_bad_name(self, validator: MistralRequestValidator, name: str) -> None:
         with pytest.raises(InvalidToolException, match=r"must be a-z, A-Z, 0-9"):
             validator._validate_tools(
                 tools=[
                     Tool(
                         function=Function(
-                            name=')_(_)~@:}>""',
+                            name=name,
                             parameters={
                                 "type": "object",
                                 "properties": {
@@ -43,6 +45,11 @@ class TestValidateTools:
                     )
                 ]
             )
+
+    @pytest.mark.parametrize("name", ["function name", "function_name\n"])
+    def test_function_call_bad_name(self, validator: MistralRequestValidator, name: str) -> None:
+        with pytest.raises(InvalidFunctionCallException, match=r"must be a-z, A-Z, 0-9"):
+            validator._validate_function_call(function_call=FunctionCall(name=name, arguments="{}"))
 
     def test_tool_function_invalid_schema(self, validator: MistralRequestValidator) -> None:
         with pytest.raises(InvalidToolSchemaException, match=r"32 is not valid under any of the given schemas"):
