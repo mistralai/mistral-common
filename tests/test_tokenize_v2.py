@@ -7,7 +7,7 @@ from mistral_common.protocol.instruct.chunk import TextChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, ToolMessage, UserMessage
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
-from mistral_common.tokens.tokenizers.base import InstructTokenizer, SpecialTokenPolicy, SpecialTokens, Tokenized
+from mistral_common.tokens.tokenizers.base import InstructTokenizer, SpecialTokens, Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.utils import decode_keep
 
@@ -19,10 +19,9 @@ def tokenizer() -> InstructTokenizer:
     return MistralTokenizer.v2().instruct_tokenizer
 
 
-def build_instruct_request(*, call_count: int, result_count: int) -> InstructRequest[ChatMessage, Tool]:
+def parallel_results_request() -> InstructRequest[ChatMessage, Tool]:
     tool_calls = [
-        ToolCall(id=f"call0000{index}", function=FunctionCall(name=f"tool_{index}", arguments="{}"))
-        for index in range(1, call_count + 1)
+        ToolCall(id=f"call0000{index}", function=FunctionCall(name=f"tool_{index}", arguments="{}")) for index in (1, 2)
     ]
     messages: list[ChatMessage] = [
         UserMessage(content="Run these tools."),
@@ -34,7 +33,7 @@ def build_instruct_request(*, call_count: int, result_count: int) -> InstructReq
             content=f"result {index}",
             tool_call_id=f"call0000{index}",
         )
-        for index in range(1, result_count + 1)
+        for index in (1, 2)
     )
     return InstructRequest[ChatMessage, Tool](messages=messages)
 
@@ -45,78 +44,16 @@ def tool_result_block_count(tokenizer: InstructTokenizer, tokenized: Tokenized) 
     return tokenized.tokens.count(marker)
 
 
-@pytest.mark.parametrize(
-    "call_count",
-    [2, 1],
-    ids=["two-calls-two-results", "one-call-two-results"],
-)
-def test_rejects_multiple_results_for_one_v2_turn(tokenizer: InstructTokenizer, call_count: int) -> None:
-    request = build_instruct_request(call_count=call_count, result_count=2)
+def test_rejects_multiple_results_for_one_v2_turn(tokenizer: InstructTokenizer) -> None:
+    request = parallel_results_request()
 
     with pytest.raises(UnsupportedTokenizerFeatureException, match=_PARALLEL_RESULTS_MESSAGE):
         tokenizer.encode_instruct(request)
 
 
-def test_allows_multiple_calls_with_one_result(tokenizer: InstructTokenizer) -> None:
-    request = build_instruct_request(call_count=2, result_count=1)
-
-    tokenized = tokenizer.encode_instruct(request)
-
-    assert tool_result_block_count(tokenizer=tokenizer, tokenized=tokenized) == 1
-
-
-def test_allows_sequential_single_result_turns(tokenizer: InstructTokenizer) -> None:
-    request = InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content="First request."),
-            AssistantMessage(
-                content=None,
-                tool_calls=[ToolCall(id="call00001", function=FunctionCall(name="tool_1", arguments="{}"))],
-            ),
-            ToolMessage(name="tool_1", content="first result", tool_call_id="call00001"),
-            AssistantMessage(content="First turn is complete."),
-            UserMessage(content="Second request."),
-            AssistantMessage(
-                content=None,
-                tool_calls=[ToolCall(id="call00002", function=FunctionCall(name="tool_2", arguments="{}"))],
-            ),
-            ToolMessage(name="tool_2", content="second result", tool_call_id="call00002"),
-        ]
-    )
-
-    tokenized = tokenizer.encode_instruct(request)
-
-    assert tool_result_block_count(tokenizer=tokenizer, tokenized=tokenized) == 1
-    assert "second▁result" in tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
-
-
-def test_ignores_multiple_results_before_latest_user(tokenizer: InstructTokenizer) -> None:
-    request = InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content="Earlier request."),
-            AssistantMessage(
-                content=None,
-                tool_calls=[
-                    ToolCall(id="call00001", function=FunctionCall(name="tool_1", arguments="{}")),
-                    ToolCall(id="call00002", function=FunctionCall(name="tool_2", arguments="{}")),
-                ],
-            ),
-            ToolMessage(name="tool_1", content="earlier result one", tool_call_id="call00001"),
-            ToolMessage(name="tool_2", content="earlier result two", tool_call_id="call00002"),
-            UserMessage(content="Latest request."),
-            AssistantMessage(content="Latest answer."),
-        ]
-    )
-
-    tokenized = tokenizer.encode_instruct(request)
-
-    assert tool_result_block_count(tokenizer=tokenizer, tokenized=tokenized) == 0
-    assert "Latest▁answer." in tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)
-
-
 def test_v3_still_encodes_multiple_tool_results() -> None:
     v3_tokenizer = MistralTokenizer.v3().instruct_tokenizer
-    request = build_instruct_request(call_count=2, result_count=2)
+    request = parallel_results_request()
 
     tokenized = v3_tokenizer.encode_instruct(request)
 

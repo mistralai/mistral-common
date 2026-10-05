@@ -42,7 +42,6 @@ from mistral_common.tokens.tokenizers.base import (
     Tokenized,
     TokenizedType,
     Tokenizer,
-    TokenizerVersion,
     UserMessagePosition,
 )
 from mistral_common.tokens.tokenizers.image import ImageEncoder
@@ -448,7 +447,7 @@ class InstructTokenizerV2(InstructTokenizerV1, Generic[InstructRequestType, FIMR
     _message_position_to_encode_tools_settings = UserMessagePosition.last
 
     def encode_instruct(self, request: InstructRequest[ChatMessage, Tool]) -> Tokenized:
-        r"""Encode a request after checking v2 tool-result limitations.
+        r"""Encode a request after validating tool-result limitations.
 
         Args:
             request: The instruct request to encode.
@@ -457,11 +456,10 @@ class InstructTokenizerV2(InstructTokenizerV1, Generic[InstructRequestType, FIMR
             The tokenized request.
 
         Raises:
-            UnsupportedTokenizerFeatureException: If a v2 assistant turn has
+            UnsupportedTokenizerFeatureException: If an assistant turn has
                 multiple tool results.
         """
-        if self.tokenizer.version == TokenizerVersion.v2:
-            self._validate_tool_results(request=request)
+        self._validate_tool_results(request=request)
         return super().encode_instruct(request)
 
     def _validate_tool_results(self, request: InstructRequest[ChatMessage, Tool]) -> None:
@@ -737,6 +735,13 @@ class InstructTokenizerV3(InstructTokenizerV2, Generic[InstructRequestType, FIMR
             audio_encoder: The audio encoder to use.
         """
         super().__init__(tokenizer, image_encoder=image_encoder, audio_encoder=audio_encoder)
+
+    def _validate_tool_results(self, request: InstructRequest[ChatMessage, Tool]) -> None:
+        r"""Skip the v2 multiple-tool-result restriction.
+
+        V3 encodes each tool result as its own block, so one assistant turn may
+        carry multiple tool results.
+        """
 
     def _prepare_function_call(self, tool_call: ToolCall) -> dict[str, Any]:
         function_call = {
