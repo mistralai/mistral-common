@@ -373,3 +373,13 @@ def test_transcription_request_with_rawaudio_backward_compat() -> None:
         req = TranscriptionRequest(audio=ra, language=None, target_streaming_delay_ms=None)  # type: ignore[arg-type]
     assert isinstance(req.audio, str)
     assert req.audio == b64
+
+
+@pytest.mark.parametrize("subtype", ["wav", "x-wav", "vnd.wave"])
+def test_audio_from_base64_mime_subtypes(subtype: str) -> None:
+    audio = Audio(audio_array=np.zeros(1600), sampling_rate=16000, format="wav")
+    payload = audio.to_base64("wav", False)
+
+    new_audio = Audio.from_base64(f"data:audio/{subtype};base64,{payload}")
+
+    assert new_audio.sampling_rate == 16000

@@ -138,6 +138,16 @@ def test_convert_image_chunk_from_openai_does_not_mutate_input() -> None:
     assert openai_chunk["image_url"]["url"] == original_url
 
 
+@pytest.mark.parametrize("subtype", ["png", "x-icon", "svg+xml", "vnd.microsoft.icon"])
+def test_convert_image_chunk_from_openai_mime_subtypes(subtype: str) -> None:
+    image = Image.open(LOGO_PATH.as_posix())
+    url = ImageChunk(image=image).to_openai()["image_url"]["url"]
+    payload = url.split(",", 1)[1]
+    openai_chunk = {"type": "image_url", "image_url": {"url": f"data:image/{subtype};base64,{payload}"}}
+
+    assert isinstance(ImageChunk.from_openai(openai_chunk), ImageChunk)  # type: ignore[arg-type]
+
+
 def test_convert_text_chunk() -> None:
     chunk = TextChunk(text="Hello")
     text_openai = chunk.to_openai()
