@@ -196,6 +196,9 @@
 
     {#- Tool messages supports int, float or text content. #}
     {%- elif message['role'] == 'tool' and ns.index > ns.max_idx_user %}
+        {%- if loop.index0 > 0 and loop_messages[loop.index0 - 1]['role'] == 'tool' %}
+            {{- raise_exception('Tokenizer v2 does not support multiple tool results for one assistant turn.') }}
+        {%- endif %}
         {# Try to parse 'content' as int or float if possible #}
         {%- set tool_content = message['content']|string %}
         {# Try to parse as int #}

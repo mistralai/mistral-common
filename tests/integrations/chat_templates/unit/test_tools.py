@@ -273,6 +273,41 @@ class TestV2ToolResultParsing:
                 ],
             )
 
+    @pytest.mark.parametrize("spm", [False, True])
+    def test_parallel_tool_results_rejected(self, spm: bool) -> None:
+        template = generate_chat_template(
+            spm=spm,
+            tokenizer_version=TokenizerVersion.v2,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+
+        messages: list[dict[str, Any]] = [
+            {"role": "user", "content": "Run these tools."},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {"id": "call00001", "type": "function", "function": {"name": "tool_1", "arguments": "{}"}},
+                    {"id": "call00002", "type": "function", "function": {"name": "tool_2", "arguments": "{}"}},
+                ],
+            },
+            {"role": "tool", "name": "tool_1", "content": "result 1", "tool_call_id": "call00001"},
+            {"role": "tool", "name": "tool_2", "content": "result 2", "tool_call_id": "call00002"},
+        ]
+
+        tools: list[dict[str, Any]] = [
+            {"type": "function", "function": {"name": "tool_1", "parameters": {}}},
+            {"type": "function", "function": {"name": "tool_2", "parameters": {}}},
+        ]
+
+        with pytest.raises(ValueError, match=r"v2 does not support multiple tool results for one assistant turn"):
+            render_template(template, messages, tools=tools)
+
 
 class TestV3ToolResultParsing:
     @pytest.fixture()

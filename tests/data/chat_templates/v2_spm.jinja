@@ -214,6 +214,9 @@
             {%- endif %}
             {%- set ns.add_space=false %}
         {%- endif %}
+        {%- if loop.index0 > 0 and loop_messages[loop.index0 - 1]['role'] == 'tool' %}
+            {{- raise_exception('Tokenizer v2 does not support multiple tool results for one assistant turn.') }}
+        {%- endif %}
         {# Try to parse 'content' as int or float if possible #}
         {%- set tool_content = message['content']|string %}
         {# Try to parse as int #}

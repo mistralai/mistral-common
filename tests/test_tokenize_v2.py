@@ -2,18 +2,47 @@ import json
 
 import pytest
 
+from mistral_common.exceptions import UnsupportedTokenizerFeatureException
 from mistral_common.protocol.instruct.chunk import TextChunk
-from mistral_common.protocol.instruct.messages import AssistantMessage, ToolMessage, UserMessage
+from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, ToolMessage, UserMessage
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.tokens.tokenizers.base import InstructTokenizer
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.utils import decode_keep
 
+_PARALLEL_RESULTS_MESSAGE = r"v2.*multiple tool results.*assistant turn"
+
 
 @pytest.fixture()
 def tokenizer() -> InstructTokenizer:
     return MistralTokenizer.v2().instruct_tokenizer
+
+
+def parallel_results_request() -> InstructRequest[ChatMessage, Tool]:
+    tool_calls = [
+        ToolCall(id=f"call0000{index}", function=FunctionCall(name=f"tool_{index}", arguments="{}")) for index in (1, 2)
+    ]
+    messages: list[ChatMessage] = [
+        UserMessage(content="Run these tools."),
+        AssistantMessage(content=None, tool_calls=tool_calls),
+    ]
+    messages.extend(
+        ToolMessage(
+            name=f"tool_{index}",
+            content=f"result {index}",
+            tool_call_id=f"call0000{index}",
+        )
+        for index in (1, 2)
+    )
+    return InstructRequest[ChatMessage, Tool](messages=messages)
+
+
+def test_rejects_multiple_results_for_one_v2_turn(tokenizer: InstructTokenizer) -> None:
+    request = parallel_results_request()
+
+    with pytest.raises(UnsupportedTokenizerFeatureException, match=_PARALLEL_RESULTS_MESSAGE):
+        tokenizer.encode_instruct(request)
 
 
 def test_normal(tokenizer: InstructTokenizer) -> None:
