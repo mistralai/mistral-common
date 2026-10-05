@@ -68,8 +68,6 @@ def list_local_hf_repo_files(repo_id: str, revision: str | None, cache_dir: str 
     """
     _assert_hub_installed()
 
-    # Must match the cache that `hf_hub_download` reads from, otherwise a tokenizer cached in a custom
-    # `cache_dir` is reported as missing.
     cache_root = Path(cache_dir) if cache_dir is not None else Path(huggingface_hub.constants.HF_HUB_CACHE)
     repo_cache = cache_root / huggingface_hub.constants.REPO_ID_SEPARATOR.join(["models", *repo_id.split("/")])
 
