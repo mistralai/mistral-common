@@ -42,8 +42,9 @@ class TestTransformersMistralCommonParity:
     def test_chat_template(self, config: TestConfig, mode: ValidationMode, tmp_path: Path) -> None:
         conversations = _get_conversations(config.version, mode, config.image, config.audio, config.think)
         if config.version == TokenizerVersion.v2 and mode == ValidationMode.finetuning:
-            # Static/dynamic template parity still uses this shared fixture,
-            # but v2 cannot encode its two results.
+            # v2 rejects multiple tool results for one assistant turn, both at
+            # encoding time and in the generated chat template, so this shared
+            # fixture cannot be parity-tested for v2.
             conversations = [
                 conversation
                 for conversation in conversations

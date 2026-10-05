@@ -7,7 +7,10 @@ from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from tests.integrations.chat_templates.conftest import ALL_CONFIGS, _config_id
-from tests.integrations.chat_templates.fixtures_data import _get_conversations
+from tests.integrations.chat_templates.fixtures_data import (
+    REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
+    _get_conversations,
+)
 from tests.integrations.chat_templates.helpers import (
     TestConfig,
     _load_golden_template,
@@ -105,6 +108,14 @@ def test_dynamic_template_comprehensive(config: TestConfig) -> None:
 
     for mode in (ValidationMode.finetuning, ValidationMode.test):
         conversations = _get_conversations(config.version, mode, config.image, config.audio, config.think)
+        if config.version == TokenizerVersion.v2 and mode == ValidationMode.finetuning:
+            # v2 rejects multiple tool results for one assistant turn; the
+            # dedicated parallel-results tests cover both outcomes.
+            conversations = [
+                conversation
+                for conversation in conversations
+                if conversation != REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2
+            ]
         for idx, request in enumerate(conversations):
             render_args = _request_to_render_args(request)
             static_output = render_template(static_template, **render_args)

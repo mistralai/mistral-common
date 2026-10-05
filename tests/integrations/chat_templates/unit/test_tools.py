@@ -376,6 +376,56 @@ class TestV3ToolResultParsing:
             )
 
 
+class TestParallelToolResults:
+    _PARALLEL_MESSAGES: list[dict[str, Any]] = [
+        {"role": "user", "content": "Run these tools."},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "call00001", "type": "function", "function": {"name": "tool_1", "arguments": "{}"}},
+                {"id": "call00002", "type": "function", "function": {"name": "tool_2", "arguments": "{}"}},
+            ],
+        },
+        {"role": "tool", "name": "tool_1", "content": "result 1", "tool_call_id": "call00001"},
+        {"role": "tool", "name": "tool_2", "content": "result 2", "tool_call_id": "call00002"},
+    ]
+    _TOOLS: list[dict[str, Any]] = [
+        {"type": "function", "function": {"name": "tool_1", "parameters": {}}},
+        {"type": "function", "function": {"name": "tool_2", "parameters": {}}},
+    ]
+
+    @staticmethod
+    def _template(version: TokenizerVersion, spm: bool) -> str:
+        return generate_chat_template(
+            spm=spm,
+            tokenizer_version=version,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+
+    @pytest.mark.parametrize("spm", [False, True])
+    def test_v2_rejects_multiple_tool_results_for_one_turn(self, spm: bool) -> None:
+        template = self._template(TokenizerVersion.v2, spm=spm)
+
+        with pytest.raises(ValueError, match=r"v2 does not support multiple tool results for one assistant turn"):
+            render_template(template, self._PARALLEL_MESSAGES, tools=self._TOOLS)
+
+    @pytest.mark.parametrize("spm", [False, True])
+    def test_v3_encodes_multiple_tool_results(self, spm: bool) -> None:
+        template = self._template(TokenizerVersion.v3, spm=spm)
+
+        output = render_template(template, self._PARALLEL_MESSAGES, tools=self._TOOLS)
+
+        assert output.count("[TOOL_RESULTS]") == 2
+        assert "result 1" in output
+        assert "result 2" in output
+
+
 class TestV7ToolCalls:
     def test_v7_content_and_tool_calls_accepted(self) -> None:
         template = generate_chat_template(

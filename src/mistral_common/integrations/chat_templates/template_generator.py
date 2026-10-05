@@ -1559,6 +1559,11 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         lines.append("        {%- endif %}")
 
     if config.uses_v2_tool_format:
+        lines.append("        {%- if loop.index0 > 0 and loop_messages[loop.index0 - 1]['role'] == 'tool' %}")
+        lines.append(
+            "            {{- raise_exception('Tokenizer v2 does not support multiple tool results for one assistant turn.') }}"  # noqa: E501
+        )
+        lines.append("        {%- endif %}")
         lines.extend(_emit_int_float_parsing("        "))
         lines.append("        ")
         lines.append("        {%- if message['name'] is undefined or message['name'] is none %}")
