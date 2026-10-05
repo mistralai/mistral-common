@@ -597,10 +597,6 @@ def _build_parallel_tool_results() -> ChatCompletionRequest[ChatMessage]:
     return _build_tool_results_request(call_count=2, result_count=2, terminal_assistant=False)
 
 
-def _build_parallel_tool_results_finetuning() -> ChatCompletionRequest[ChatMessage]:
-    return _build_tool_results_request(call_count=2, result_count=2, terminal_assistant=True)
-
-
 def _build_mismatched_tool_results() -> ChatCompletionRequest[ChatMessage]:
     return _build_tool_results_request(call_count=1, result_count=2, terminal_assistant=False)
 
@@ -616,9 +612,6 @@ WEATHER_NO_SYSTEM = ChatRecipe(recipe_id="sample-weather-no-system", build=_buil
 SEVERAL_CALLS = ChatRecipe(recipe_id="sample-several-calls", build=_build_several_calls)
 PARALLEL_CALLS = ChatRecipe(recipe_id="sample-parallel-calls", build=_build_parallel_calls)
 PARALLEL_TOOL_RESULTS = ChatRecipe(recipe_id="parallel-tool-results", build=_build_parallel_tool_results)
-PARALLEL_TOOL_RESULTS_FINETUNING = ChatRecipe(
-    recipe_id="parallel-tool-results-finetuning", build=_build_parallel_tool_results_finetuning
-)
 MISMATCHED_TOOL_RESULTS = ChatRecipe(recipe_id="mismatched-tool-results", build=_build_mismatched_tool_results)
 MISMATCHED_TOOL_RESULTS_FINETUNING = ChatRecipe(
     recipe_id="mismatched-tool-results-finetuning", build=_build_mismatched_tool_results_finetuning

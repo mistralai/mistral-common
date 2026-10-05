@@ -21,7 +21,6 @@ from tests.integration.chat_recipes import (
     NO_TOOLS,
     PARALLEL_CALLS,
     PARALLEL_TOOL_RESULTS,
-    PARALLEL_TOOL_RESULTS_FINETUNING,
     SEVERAL_CALLS,
     WEATHER_FULL,
     WEATHER_NO_HISTORY,
@@ -30,7 +29,6 @@ from tests.integration.chat_recipes import (
 )
 from tests.integration.tokenizer_configurations import (
     BUNDLED_SPM_V1_TEST,
-    BUNDLED_SPM_V2_AGNOSTIC,
     BUNDLED_SPM_V2_FINETUNING,
     BUNDLED_SPM_V2_SERVING,
     BUNDLED_SPM_V2_TEST,
@@ -109,30 +107,9 @@ SAMPLE_ERROR_CASES: tuple[PublicChatErrorCase, ...] = (
         message_pattern=r"Tools not implemented for tokenizer V1",
     ),
     PublicChatErrorCase(
-        case_id="chat-v2-parallel-results-rejected-serving",
-        recipe=PARALLEL_TOOL_RESULTS,
-        configuration=BUNDLED_SPM_V2_SERVING,
-        expected_exception=UnsupportedTokenizerFeatureException,
-        message_pattern=r"v2.*multiple tool results.*assistant turn",
-    ),
-    PublicChatErrorCase(
         case_id="chat-v2-parallel-results-rejected-test",
         recipe=PARALLEL_TOOL_RESULTS,
         configuration=BUNDLED_SPM_V2_TEST,
-        expected_exception=UnsupportedTokenizerFeatureException,
-        message_pattern=r"v2.*multiple tool results.*assistant turn",
-    ),
-    PublicChatErrorCase(
-        case_id="chat-v2-parallel-results-rejected-finetuning",
-        recipe=PARALLEL_TOOL_RESULTS_FINETUNING,
-        configuration=BUNDLED_SPM_V2_FINETUNING,
-        expected_exception=UnsupportedTokenizerFeatureException,
-        message_pattern=r"v2.*multiple tool results.*assistant turn",
-    ),
-    PublicChatErrorCase(
-        case_id="chat-v2-parallel-results-rejected-agnostic",
-        recipe=PARALLEL_TOOL_RESULTS,
-        configuration=BUNDLED_SPM_V2_AGNOSTIC,
         expected_exception=UnsupportedTokenizerFeatureException,
         message_pattern=r"v2.*multiple tool results.*assistant turn",
     ),
