@@ -212,7 +212,7 @@
                     {{- raise_exception('Tool call must have an id of 9 characters or numbers.') }}
                 {%- endif %}
                 {%- if arguments is not string %}
-                    {%- set arguments = arguments|tojson|safe %}
+                    {%- set arguments = arguments|tojson ~ '' %}
                 {%- elif arguments == '' %}
                     {%- set arguments = '{}' %}
                 {%- endif %}

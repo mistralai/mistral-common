@@ -695,7 +695,7 @@ def _emit_call_id_resolution(indent: str) -> list[str]:
 def _emit_argument_normalization(indent: str) -> list[str]:
     r"""Generate the Jinja2 block for normalizing tool call `arguments`.
 
-    Converts non-string arguments to JSON via `tojson|safe`, and replaces
+    Converts non-string arguments to JSON via `tojson`, and replaces
     empty-string arguments with `'{}'`.
 
     Args:
@@ -706,7 +706,12 @@ def _emit_argument_normalization(indent: str) -> list[str]:
     """
     return [
         f"{indent}{{%- if arguments is not string %}}",
-        f"{indent}    {{%- set arguments = arguments|tojson|safe %}}",
+        # tojson returns a markupsafe.Markup (a str subclass); Markup.__radd__ takes
+        # priority over str.__add__ and HTML-escapes the plain-str literal on the other
+        # side of a `+`, corrupting the surrounding JSON punctuation. Jinja's `string`
+        # filter (soft_str) deliberately preserves Markup, so it can't undo this; `~ ''`
+        # forces the `str_join` path instead, which plain-str()s every piece.
+        f"{indent}    {{%- set arguments = arguments|tojson ~ '' %}}",
         f"{indent}{{%- elif arguments == '' %}}",
         f"{indent}    {{%- set arguments = '{{}}' %}}",
         f"{indent}{{%- endif %}}",
