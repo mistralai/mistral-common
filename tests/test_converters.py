@@ -1272,6 +1272,36 @@ def test_audio_chunk_to_openai_strips_base64_data_url_prefix(fmt: str) -> None:
     assert AudioChunk.from_openai(result).input_audio == b64
 
 
+def _create_1x1_png() -> bytes:
+    image = Image.new("RGB", (1, 1))
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+@pytest.mark.parametrize("subtype", ["image/x-icon", "image/svg+xml", "image/vnd.microsoft.icon"])
+def test_image_chunk_from_openai_strips_data_url_with_non_word_subtype(subtype: str) -> None:
+    """MIME subtypes may contain "-", "+" and "." (RFC 6838), and the prefix must still be stripped."""
+    png = base64.b64encode(_create_1x1_png()).decode("utf-8")
+    chunk = ImageChunk.from_openai({"type": "image_url", "image_url": {"url": f"data:{subtype};base64,{png}"}})
+
+    # the prefix is stripped and the payload decoded, instead of the whole data URL
+    # being handed to the image loader as if it were base64
+    assert isinstance(chunk.image, Image.Image)
+    assert chunk.image.size == (1, 1)
+
+
+def test_audio_chunk_to_openai_strips_data_url_with_non_word_subtype() -> None:
+    """``data:audio/x-wav;base64,`` is a valid data URL; the format comes from the audio itself."""
+    b64 = _make_fake_audio(0.5).to_base64("wav")
+    chunk = AudioChunk(input_audio=f"data:audio/x-wav;base64,{b64}")
+
+    result = chunk.to_openai()
+
+    assert result["input_audio"]["format"] == "wav"
+    assert result["input_audio"]["data"] == b64
+
+
 @pytest.mark.parametrize("fmt", ["wav", "flac"])
 def test_transcription_to_openai_format_detection(fmt: str) -> None:
     audio = _make_fake_audio(0.5)
