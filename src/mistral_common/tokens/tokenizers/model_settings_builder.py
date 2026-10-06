@@ -178,12 +178,14 @@ class EnumBuilder(FieldBuilder[E, E]):
 
 
 class JSONSchemaBuilder(FieldBuilder[ResponseFormat, JSONSchemaDict]):
-    r"""Converts a `ResponseFormat` into a JSON-schema dict for model settings.
+    r"""Builder for response-format JSON schema fields.
+
+    Converts a `ResponseFormat` into the JSON schema encoded in model settings.
 
     Attributes:
         type: The type of validator (always JSON_SCHEMA for this class).
-        accepts_none: Always False because response-format values are required.
-        default: Always None, no default schema is supported.
+        accepts_none: Always `False` because the response format is always present on requests.
+        default: Always `None`, no default schema is supported.
     """
 
     type: ValidatorType = ValidatorType.JSON_SCHEMA
@@ -191,6 +193,14 @@ class JSONSchemaBuilder(FieldBuilder[ResponseFormat, JSONSchemaDict]):
     default: None
 
     def validate_built_value(self, field_name: str, value: JSONSchemaDict | None) -> None:
+        r"""Validate a built schema value, allowing `None`.
+
+        Unlike the base implementation, `None` skips validation: a response
+        format without a schema (e.g. `text`) legitimately builds to `None`.
+
+        Raises:
+            ValueError: If the built schema is not a valid Draft 7 JSON schema.
+        """
         if value is not None:
             self._validate_built_value(field_name=field_name, value=value)
 
@@ -199,7 +209,11 @@ class JSONSchemaBuilder(FieldBuilder[ResponseFormat, JSONSchemaDict]):
         return input_value.get_schema(purpose=SchemaRenderingMode.model_settings)
 
     def _validate_built_value(self, field_name: str, value: JSONSchemaDict) -> None:
-        r"""Validate the built schema against Draft 7 when present."""
+        r"""Validate the built schema against Draft 7 when present.
+
+        Raises:
+            ValueError: If the schema is not a valid Draft 7 JSON schema.
+        """
         if value is not None:
             validate_json_schema_by_draft7(value)
 
