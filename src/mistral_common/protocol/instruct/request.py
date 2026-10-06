@@ -68,7 +68,14 @@ class ResponseFormats(str, Enum):
 
 
 class SchemaRenderingMode(str, Enum):
-    r"""Select the schema representation for its consumer."""
+    r"""Select the schema representation rendered for a given consumer.
+
+    Attributes:
+        grammar: Non-strict `json_schema` formats render as a generic object,
+            for grammar constraints.
+        model_settings: The custom schema always renders as-is, for model
+            settings encoding.
+    """
 
     grammar = "grammar"
     model_settings = "model_settings"
@@ -111,7 +118,7 @@ class ModelSettings(MistralBase):
         r"""Create a ModelSettings instance with all fields set to `None`.
 
         Returns:
-            ModelSettings with `reasoning_effort=None`.
+            An instance with all fields set to `None`.
         """
         return ModelSettings()
 
@@ -164,7 +171,9 @@ class ResponseFormat(MistralBase):
         r"""Render a schema for grammar constraints or model settings.
 
         Args:
-            purpose: Consumer that determines non-strict schema rendering.
+            purpose: The consumer of the rendered schema. Non-strict `json_schema`
+                formats render as a generic object for `grammar`, and as their
+                custom schema for `model_settings`.
 
         Returns:
             The rendered schema, or None when no constraint applies.
