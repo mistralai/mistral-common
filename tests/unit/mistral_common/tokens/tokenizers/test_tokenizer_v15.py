@@ -12,7 +12,6 @@ from mistral_common.protocol.instruct.request import (
     ReasoningEffort,
     ResponseFormat,
     ResponseFormats,
-    SchemaRenderingMode,
 )
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
@@ -80,11 +79,10 @@ def test_v15_tekken_mm_from_file_loads_response_format_builder(tmp_path: Path) -
 
 
 @pytest.mark.parametrize(
-    ("response_format", "grammar_schema", "settings_schema"),
+    ("response_format", "settings_schema"),
     [
         pytest.param(
             ResponseFormat(type=ResponseFormats.json),
-            {"anyOf": [{"type": "object"}, {"type": "array"}]},
             {"anyOf": [{"type": "object"}, {"type": "array"}]},
             id="json",
         ),
@@ -93,7 +91,6 @@ def test_v15_tekken_mm_from_file_loads_response_format_builder(tmp_path: Path) -
                 type=ResponseFormats.json_schema,
                 json_schema=JsonSchema(name="synthetic", schema=SCHEMA, strict=False),
             ),
-            {"type": "object"},
             SCHEMA,
             id="json-schema-non-strict",
         ),
@@ -103,7 +100,6 @@ def test_v15_tekken_mm_from_file_loads_response_format_builder(tmp_path: Path) -
                 json_schema=JsonSchema(name="synthetic", schema=SCHEMA, strict=True),
             ),
             SCHEMA,
-            SCHEMA,
             id="json-schema-strict",
         ),
     ],
@@ -111,7 +107,6 @@ def test_v15_tekken_mm_from_file_loads_response_format_builder(tmp_path: Path) -
 def test_v15_tekken_mm_encodes_json_schema_settings(
     tmp_path: Path,
     response_format: ResponseFormat,
-    grammar_schema: dict[str, Any],
     settings_schema: dict[str, Any],
 ) -> None:
     r"""Encode schema settings with a synthetic fixture, not released vocabulary."""
@@ -122,8 +117,7 @@ def test_v15_tekken_mm_encodes_json_schema_settings(
         response_format=response_format,
     )
 
-    assert response_format.get_schema(purpose=SchemaRenderingMode.grammar) == grammar_schema
-    assert response_format.get_schema(purpose=SchemaRenderingMode.model_settings) == settings_schema
+    assert response_format.get_schema() == settings_schema
 
     encoded = tokenizer.encode_chat_completion(request=request)
     text = decode_keep(tokenizer=tokenizer, tokenized=encoded)
