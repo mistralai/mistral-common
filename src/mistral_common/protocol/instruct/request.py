@@ -97,10 +97,10 @@ class ModelSettings(MistralBase):
     Currently supports reasoning effort and response format configuration.
 
     Attributes:
-        reasoning_effort: Controls reasoning effort. If `None` (default), the model
+        reasoning_effort: Controls reasoning effort. If `None`, the model
             uses its default reasoning behavior. Requires tokenizer >= v15.
         json_schema: The JSON schema to enforce on the response, derived from the request's
-            response format. If `None` (default), no schema is enforced. Requires tokenizer >= v15.
+            response format. If `None`, no schema is enforced. Requires tokenizer >= v15.
     """
 
     reasoning_effort: ReasoningEffort | None = None
@@ -122,7 +122,7 @@ class JsonSchema(MistralBase):
     Attributes:
         name: The schema name.
         description: An optional description of the schema.
-        custom_schema: The JSON schema (aliased ``schema``).
+        custom_schema: The JSON schema (aliased `schema`).
         strict: Whether the model must strictly adhere to the schema.
 
     Examples:
@@ -151,7 +151,7 @@ class ResponseFormat(MistralBase):
         type: The response format type. Use `ResponseFormats.text` for plain text,
             `ResponseFormats.json` for JSON output, or `ResponseFormats.json_schema`
             for a custom JSON schema.
-        json_schema: The JSON schema when ``type`` is ``json_schema``.
+        json_schema: The JSON schema when `type` is `json_schema`.
 
     Examples:
         >>> response_format = ResponseFormat(type=ResponseFormats.text)
@@ -167,7 +167,7 @@ class ResponseFormat(MistralBase):
             purpose: Consumer that determines non-strict schema rendering.
 
         Returns:
-            The schema dict, or None when no constraint applies.
+            The rendered schema, or None when no constraint applies.
 
         Raises:
             InvalidRequestException: If the response format requires a schema
