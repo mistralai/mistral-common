@@ -2,7 +2,6 @@ import pytest
 from pydantic import ValidationError
 
 from mistral_common.exceptions import InvalidRequestException
-from mistral_common.protocol.instruct import request as instruct_request
 from mistral_common.protocol.instruct.messages import UATS, UserMessage
 from mistral_common.protocol.instruct.request import (
     ChatCompletionRequest,
@@ -250,8 +249,7 @@ def _req(rf: ResponseFormat) -> ChatCompletionRequest:
 def test_builder_text_yields_none() -> None:
     b = ModelSettingsBuilder(json_schema=JSONSchemaBuilder(accepts_none=False, default=None))
     response_format = ResponseFormat(type=ResponseFormats.text)
-    assert response_format.get_schema(purpose=instruct_request.SchemaRenderingMode.grammar) is None
-    assert response_format.get_schema(purpose=instruct_request.SchemaRenderingMode.model_settings) is None
+    assert response_format.get_schema() is None
     assert b.build_settings(_req(response_format)).json_schema is None
 
 
@@ -259,8 +257,7 @@ def test_builder_json_yields_anyof() -> None:
     b = ModelSettingsBuilder(json_schema=JSONSchemaBuilder(accepts_none=False, default=None))
     response_format = ResponseFormat(type=ResponseFormats.json)
     expected_schema = {"anyOf": [{"type": "object"}, {"type": "array"}]}
-    assert response_format.get_schema(purpose=instruct_request.SchemaRenderingMode.grammar) == expected_schema
-    assert response_format.get_schema(purpose=instruct_request.SchemaRenderingMode.model_settings) == expected_schema
+    assert response_format.get_schema() == expected_schema
     assert b.build_settings(_req(response_format)).json_schema == expected_schema
 
 
@@ -271,19 +268,13 @@ def test_builder_json_schema_yields_custom_schema(strict: bool) -> None:
         type=ResponseFormats.json_schema,
         json_schema=JsonSchema(name="x", schema=JSON_SCHEMA_DICT, strict=strict),
     )
-    grammar_schema = JSON_SCHEMA_DICT if strict else {"type": "object"}
-    assert response_format.get_schema(purpose=instruct_request.SchemaRenderingMode.grammar) == grammar_schema
-    assert response_format.get_schema(purpose=instruct_request.SchemaRenderingMode.model_settings) == JSON_SCHEMA_DICT
+    assert response_format.get_schema() == JSON_SCHEMA_DICT
     assert b.build_settings(_req(response_format)).json_schema == JSON_SCHEMA_DICT
 
 
 def test_json_schema_missing_schema_raises() -> None:
-    for purpose in (
-        instruct_request.SchemaRenderingMode.grammar,
-        instruct_request.SchemaRenderingMode.model_settings,
-    ):
-        with pytest.raises(InvalidRequestException, match="must define the schema"):
-            ResponseFormat(type=ResponseFormats.json_schema).get_schema(purpose=purpose)
+    with pytest.raises(InvalidRequestException, match="must define the schema"):
+        ResponseFormat(type=ResponseFormats.json_schema).get_schema()
 
 
 def test_builder_without_json_schema_ignores_response_format() -> None:

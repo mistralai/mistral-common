@@ -67,20 +67,6 @@ class ResponseFormats(str, Enum):
     json_schema = "json_schema"
 
 
-class SchemaRenderingMode(str, Enum):
-    r"""Select the schema representation rendered for a given consumer.
-
-    Attributes:
-        grammar: Non-strict `json_schema` formats render as a generic object,
-            for grammar constraints.
-        model_settings: The custom schema always renders as-is, for model
-            settings encoding.
-    """
-
-    grammar = "grammar"
-    model_settings = "model_settings"
-
-
 class ReasoningEffort(str, Enum):
     r"""Controls the amount of reasoning effort the model applies during generation.
 
@@ -167,35 +153,24 @@ class ResponseFormat(MistralBase):
     type: ResponseFormats = ResponseFormats.text
     json_schema: JsonSchema | None = None
 
-    def get_schema(self, purpose: SchemaRenderingMode) -> dict[str, Any] | None:
-        r"""Render a schema for grammar constraints or model settings.
-
-        Args:
-            purpose: The consumer of the rendered schema. Non-strict `json_schema`
-                formats render as a generic object for `grammar`, and as their
-                custom schema for `model_settings`.
+    def get_schema(self) -> dict[str, Any] | None:
+        r"""Resolve the JSON schema to enforce on the response.
 
         Returns:
-            The rendered schema, or None when no constraint applies.
+            The custom schema for `json_schema`, a generic object/array `anyOf`
+            for `json_object`, and None for `text`.
 
         Raises:
             InvalidRequestException: If the response format requires a schema
                 but none is set.
         """
-        schema: dict[str, Any] | None
         if self.type == ResponseFormats.json_schema:
             if self.json_schema is None:
                 raise InvalidRequestException("Response format `json_schema` must define the schema")
-            schema = (
-                self.json_schema.custom_schema
-                if self.json_schema.strict or purpose == SchemaRenderingMode.model_settings
-                else {"type": "object"}
-            )
-        elif self.type == ResponseFormats.json:
-            schema = {"anyOf": [{"type": "object"}, {"type": "array"}]}
-        else:
-            schema = None
-        return schema
+            return self.json_schema.custom_schema
+        if self.type == ResponseFormats.json:
+            return {"anyOf": [{"type": "object"}, {"type": "array"}]}
+        return None
 
 
 ReasoningEffortType = TypeVar("ReasoningEffortType", ReasoningEffort, "ReasoningEffort | None")
