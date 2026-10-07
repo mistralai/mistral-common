@@ -55,6 +55,7 @@ class TestTransformersMistralCommonParity:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=config.model_settings_fields,
         )
 
         # Build HF tokenizer for Tekken-based token ID comparison
@@ -111,6 +112,7 @@ class TestTransformersMistralCommonParity:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=config.model_settings_fields,
         )
 
         # Starting with assistant is rejected by the first-message constraint
@@ -201,6 +203,7 @@ class TestTransformersMistralCommonParity:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=config.model_settings_fields,
         )
         # Not using parametrize here because invalid_convs depends on the version/image/audio/think
         # parameters from the outer parametrize. Each sub-case is identifiable via the TemplateError
