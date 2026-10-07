@@ -128,7 +128,7 @@ class TestV15ResponseFormat:
             config=TestConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields),
             output_dir=tmp_path,
         )
-        mistral_tokenizer = MistralTokenizer.from_file(str(tokenizer_path), mode=ValidationMode.test)
+        mistral_tokenizer = MistralTokenizer.from_file(tokenizer_filename=str(tokenizer_path), mode=ValidationMode.test)
         request = ChatCompletionRequest(
             messages=[UserMessage(content="Hello")],
             reasoning_effort=ReasoningEffort.high,
@@ -159,7 +159,7 @@ class TestV15ResponseFormat:
             config=TestConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields),
             output_dir=tmp_path,
         )
-        mistral_tokenizer = MistralTokenizer.from_file(str(tokenizer_path), mode=ValidationMode.test)
+        mistral_tokenizer = MistralTokenizer.from_file(tokenizer_filename=str(tokenizer_path), mode=ValidationMode.test)
         request = ChatCompletionRequest(
             messages=[UserMessage(content="Hello")],
             reasoning_effort=ReasoningEffort.high,
@@ -190,7 +190,7 @@ class TestV15ResponseFormat:
             config=TestConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields),
             output_dir=tmp_path,
         )
-        mistral_tokenizer = MistralTokenizer.from_file(str(tokenizer_path), mode=ValidationMode.test)
+        mistral_tokenizer = MistralTokenizer.from_file(tokenizer_filename=str(tokenizer_path), mode=ValidationMode.test)
         request = ChatCompletionRequest(
             messages=[UserMessage(content="Hello")],
             response_format=ResponseFormat(type=ResponseFormats.json),
@@ -217,7 +217,7 @@ class TestV15ResponseFormat:
             config=TestConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields),
             output_dir=tmp_path,
         )
-        mistral_tokenizer = MistralTokenizer.from_file(str(tokenizer_path), mode=ValidationMode.test)
+        mistral_tokenizer = MistralTokenizer.from_file(tokenizer_filename=str(tokenizer_path), mode=ValidationMode.test)
         request = ChatCompletionRequest(
             messages=[UserMessage(content="Hello")],
             response_format=ResponseFormat(type=ResponseFormats.text),
@@ -244,7 +244,7 @@ class TestV15ResponseFormat:
             config=TestConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields),
             output_dir=tmp_path,
         )
-        mistral_tokenizer = MistralTokenizer.from_file(str(tokenizer_path), mode=ValidationMode.test)
+        mistral_tokenizer = MistralTokenizer.from_file(tokenizer_filename=str(tokenizer_path), mode=ValidationMode.test)
         request = ChatCompletionRequest(
             messages=[UserMessage(content="Hello")],
             reasoning_effort=ReasoningEffort.high,
@@ -290,4 +290,4 @@ class TestV15ResponseFormat:
         }
 
         with pytest.raises(TemplateError, match="Response format `json_schema` must define the schema"):
-            encode_transformers_from_openai(template, openai_request)
+            encode_transformers_from_openai(chat_template=template, openai_request=openai_request)
