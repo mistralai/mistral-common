@@ -63,6 +63,7 @@ def build_template_config(config: TestConfig) -> TemplateConfig:
         thinking_support=config.think,
         plain_thinking_support=config.plain_think,
         use_special_token_variables=True,
+        model_settings_fields=c.model_settings_fields,
     )
 
 

@@ -206,6 +206,8 @@ def encode_hf_tokens(
     reasoning_effort = openai_request.get("reasoning_effort")
     if reasoning_effort is not None:
         template_kwargs["reasoning_effort"] = reasoning_effort
+    if "response_format" in openai_request:
+        template_kwargs["response_format"] = openai_request["response_format"]
 
     result = hf_tokenizer.apply_chat_template(
         conversation=messages,
@@ -228,6 +230,8 @@ def _render_via_transformers(chat_template: str, openai_request: dict[str, Any])
     template_kwargs: dict[str, Any] = {}
     if reasoning_effort is not None:
         template_kwargs["reasoning_effort"] = reasoning_effort
+    if "response_format" in openai_request:
+        template_kwargs["response_format"] = openai_request["response_format"]
 
     encoded = render_jinja_template(
         [openai_request["messages"]],
