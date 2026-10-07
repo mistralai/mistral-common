@@ -82,7 +82,11 @@ def _load_golden_template(config: TemplateConfig) -> str:
 
 
 def render_template(
-    template: str, messages: list[Any], tools: list[Any] | None = None, reasoning_effort: str | None = None
+    template: str,
+    messages: list[Any],
+    tools: list[Any] | None = None,
+    reasoning_effort: str | None = None,
+    response_format: dict[str, Any] | None = None,
 ) -> str:
     r"""Render a Jinja2 template with the given messages using a pure Jinja2 sandbox.
 
@@ -95,8 +99,24 @@ def render_template(
     def raise_exception(msg: str) -> None:
         raise ValueError(msg)
 
+    def tojson(
+        value: Any,
+        ensure_ascii: bool = False,
+        indent: int | None = None,
+        separators: tuple[str, str] | None = None,
+        sort_keys: bool = False,
+    ) -> str:
+        return json.dumps(
+            value,
+            ensure_ascii=ensure_ascii,
+            indent=indent,
+            separators=separators,
+            sort_keys=sort_keys,
+        )
+
     env = ImmutableSandboxedEnvironment(loader=BaseLoader())
     env.globals["raise_exception"] = raise_exception
+    env.filters["tojson"] = tojson
     jinja_template = env.from_string(template)
 
     render_kwargs: dict[str, Any] = {
@@ -109,6 +129,8 @@ def render_template(
     # Only add reasoning_effort for v15+ templates that support it
     if reasoning_effort is not None:
         render_kwargs["reasoning_effort"] = reasoning_effort
+    if response_format is not None:
+        render_kwargs["response_format"] = response_format
 
     return jinja_template.render(**render_kwargs)
 

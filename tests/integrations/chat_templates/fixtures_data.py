@@ -1,5 +1,7 @@
 r"""Test data constants for chat template tests."""
 
+from typing import Any
+
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURLChunk,
@@ -38,6 +40,18 @@ _TOOLS = [
     ),
     Tool(function=Function(name="tool2", parameters={})),
 ]
+
+PARITY_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {"answer": {"type": "string"}},
+    "required": ["answer"],
+}
+
+PARITY_JSON_SCHEMA_NON_ASCII: dict[str, Any] = {
+    "type": "object",
+    "properties": {"clé": {"type": "string", "description": "L'<é> & Co's"}},
+    "required": ["clé"],
+}
 
 # -- Request fixtures --
 

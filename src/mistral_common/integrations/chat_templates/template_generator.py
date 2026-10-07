@@ -481,15 +481,14 @@ def _generate_system_prompt_handling_v7_plus(config: TemplateConfig) -> list[str
 
 
 def _generate_available_tools_definition(config: TemplateConfig) -> str:
-    r"""Generate available tools and model settings definition.
+    r"""Generate available tools and selected model settings definitions.
 
     Builds an `available_tools` string variable that contains
     `[AVAILABLE_TOOLS]...[/AVAILABLE_TOOLS]` (if tools are provided).
-    For v15+, also builds a separate `model_settings` variable containing
-    `[MODEL_SETTINGS]...[/MODEL_SETTINGS]` which is always emitted
-    (defaults to `reasoning_effort="none"` when not specified).
-    Both variables are emitted later in the message loop at the appropriate
-    user message position.
+    When the configuration selects model settings fields, builds a
+    `model_settings` variable containing `[MODEL_SETTINGS]...[/MODEL_SETTINGS]`
+    only when a selected field resolves to a value. Both variables are emitted
+    later in the message loop at the appropriate user message position.
 
     Args:
         config: The template configuration.
@@ -497,7 +496,7 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
     Returns:
         The tools and settings definition section of the chat template.
     """
-    if config.supports_model_settings:
+    if config.emits_model_settings:
         comment = "{#- Tools and model settings definition #}"
     else:
         comment = "{#- Tools definition #}"
@@ -523,7 +522,39 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
             )
         lines.append("{%- endif %}")
 
-    if config.supports_model_settings:
+    selected_fields = tuple(
+        field for field in MODEL_SETTINGS_FIELD_CHOICES if field in (config.model_settings_fields or frozenset())
+    )
+    has_reasoning_effort = "reasoning_effort" in selected_fields
+    has_json_schema = "json_schema" in selected_fields
+
+    if has_json_schema:
+        lines.extend(
+            [
+                "{%- set json_schema = none %}",
+                "{%- if response_format is defined and response_format is not none %}",
+                "    {%- if response_format['type'] == 'json_schema' %}",
+                "        {%- if 'json_schema' in response_format and response_format['json_schema'] is not none %}",
+                "            {%- if 'schema' in response_format['json_schema'] %}",
+                "                {%- if response_format['json_schema']['schema'] is not none %}",
+                "                    {%- set json_schema = response_format['json_schema']['schema'] %}",
+                "                {%- else %}",
+                "                    {{- raise_exception('Response format `json_schema` must define the schema') }}",
+                "                {%- endif %}",
+                "            {%- else %}",
+                "                {{- raise_exception('Response format `json_schema` must define the schema') }}",
+                "            {%- endif %}",
+                "        {%- else %}",
+                "            {{- raise_exception('Response format `json_schema` must define the schema') }}",
+                "        {%- endif %}",
+                "    {%- elif response_format['type'] == 'json_object' %}",
+                "        {%- set json_schema = {'anyOf': [{'type': 'object'}, {'type': 'array'}]} %}",
+                "    {%- endif %}",
+                "{%- endif %}",
+            ]
+        )
+
+    if has_reasoning_effort:
         lines.extend(
             [
                 "{%- if reasoning_effort is not defined or reasoning_effort is none %}",
@@ -532,12 +563,47 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
                 "{%- if reasoning_effort not in ['none', 'high'] %}",
                 '    {{- raise_exception(\'reasoning_effort must be either "none" or "high"\') }}',
                 "{%- endif %}",
-                "{%- set model_settings = '"
+            ]
+        )
+
+    if has_json_schema and has_reasoning_effort:
+        lines.extend(
+            [
+                "{%- if json_schema is not none %}",
+                "    {%- set model_settings = '"
+                + _BEGIN_MODEL_SETTINGS
+                + '{"json_schema": \' + (json_schema|tojson) + \', "reasoning_effort": "\' + reasoning_effort + \'"}'
+                + _END_MODEL_SETTINGS
+                + "' %}",
+                "{%- else %}",
+                "    {%- set model_settings = '"
                 + _BEGIN_MODEL_SETTINGS
                 + '{"reasoning_effort": "\' + reasoning_effort + \'"}'
                 + _END_MODEL_SETTINGS
-                + "' %}",  # noqa: E501
+                + "' %}",
+                "{%- endif %}",
             ]
+        )
+    elif has_json_schema:
+        lines.extend(
+            [
+                "{%- set model_settings = '' %}",
+                "{%- if json_schema is not none %}",
+                "    {%- set model_settings = '"
+                + _BEGIN_MODEL_SETTINGS
+                + "{\"json_schema\": ' + (json_schema|tojson) + '}"
+                + _END_MODEL_SETTINGS
+                + "' %}",
+                "{%- endif %}",
+            ]
+        )
+    elif has_reasoning_effort:
+        lines.append(
+            "{%- set model_settings = '"
+            + _BEGIN_MODEL_SETTINGS
+            + '{"reasoning_effort": "\' + reasoning_effort + \'"}'
+            + _END_MODEL_SETTINGS
+            + "' %}"
         )
 
     return "\n".join(lines)
@@ -1060,7 +1126,7 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
         ns_vars.append("prev_tool=false")
     if config.tools_at_beginning:
         emitted_var = (
-            "available_tools_and_settings_emitted" if config.supports_model_settings else "available_tools_emitted"
+            "available_tools_and_settings_emitted" if config.emits_model_settings else "available_tools_emitted"
         )
         ns_vars.append(f"{emitted_var}=false")
 
@@ -1157,11 +1223,11 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
     elif config.tools_at_beginning:
         # v13+: emit tools and settings before the first user message
         emitted_var = (
-            "available_tools_and_settings_emitted" if config.supports_model_settings else "available_tools_emitted"
+            "available_tools_and_settings_emitted" if config.emits_model_settings else "available_tools_emitted"
         )
         lines.append(f"        {{%- if not ns.{emitted_var} %}}")
         lines.append("            {{- available_tools }}")
-        if config.supports_model_settings:
+        if config.emits_model_settings:
             lines.append("            {{- model_settings }}")
         lines.append(f"            {{%- set ns.{emitted_var} = true %}}")
         lines.append("        {%- endif %}")

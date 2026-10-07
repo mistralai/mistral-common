@@ -1,9 +1,12 @@
+import json
 from typing import Any
 
 import pytest
 
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
+from mistral_common.integrations.chat_templates.template_generator import TemplateConfig, build_chat_template
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
+from tests.integrations.chat_templates.fixtures_data import PARITY_JSON_SCHEMA, PARITY_JSON_SCHEMA_NON_ASCII
 from tests.integrations.chat_templates.helpers import TestConfig, _load_golden_template, _make_config, render_template
 
 
@@ -246,6 +249,262 @@ class TestV15ModelSettings:
 
         with pytest.raises(ValueError, match="Only text chunks are supported in system message contents"):
             render_template(template, messages)
+
+    def test_v15_json_schema_only_renders_custom_schema(self) -> None:
+        template = build_chat_template(
+            config=TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"json_schema"}),
+            )
+        )
+        messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {"name": "answer", "schema": PARITY_JSON_SCHEMA},
+        }
+
+        output = render_template(template=template, messages=messages, response_format=response_format)
+
+        expected_settings = f'[MODEL_SETTINGS]{{"json_schema": {json.dumps(PARITY_JSON_SCHEMA)}}}[/MODEL_SETTINGS]'
+        assert expected_settings in output
+
+    def test_v15_json_schema_non_ascii_html_specials_full_parity(self) -> None:
+        template = build_chat_template(
+            config=TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"json_schema"}),
+            )
+        )
+        messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {"name": "answer", "schema": PARITY_JSON_SCHEMA_NON_ASCII},
+        }
+
+        output = render_template(template=template, messages=messages, response_format=response_format)
+
+        expected_settings = (
+            f'[MODEL_SETTINGS]{{"json_schema": '
+            f"{json.dumps(PARITY_JSON_SCHEMA_NON_ASCII, ensure_ascii=False)}}}[/MODEL_SETTINGS]"
+        )
+        assert expected_settings in output
+        assert "\\u00e9" not in output
+        assert "&lt;" not in output
+        assert "&gt;" not in output
+        assert "&amp;" not in output
+
+    def test_v15_json_schema_only_json_object_generic(self) -> None:
+        template = build_chat_template(
+            config=TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"json_schema"}),
+            )
+        )
+        messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
+
+        output = render_template(
+            template=template,
+            messages=messages,
+            response_format={"type": "json_object"},
+        )
+
+        assert (
+            '[MODEL_SETTINGS]{"json_schema": {"anyOf": [{"type": "object"}, '
+            '{"type": "array"}]}}[/MODEL_SETTINGS]' in output
+        )
+
+    def test_v15_json_schema_only_text_no_block(self) -> None:
+        template = build_chat_template(
+            config=TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"json_schema"}),
+            )
+        )
+        messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
+
+        output = render_template(
+            template=template,
+            messages=messages,
+            response_format={"type": "text"},
+        )
+
+        assert "[MODEL_SETTINGS]" not in output
+
+    def test_v15_json_schema_only_unknown_type_no_block(self) -> None:
+        template = build_chat_template(
+            config=TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"json_schema"}),
+            )
+        )
+        messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
+
+        output = render_template(
+            template=template,
+            messages=messages,
+            response_format={"type": "xml"},
+        )
+
+        assert "[MODEL_SETTINGS]" not in output
+
+    def test_v15_json_schema_only_missing_kwarg_no_block(self) -> None:
+        template = build_chat_template(
+            config=TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"json_schema"}),
+            )
+        )
+        messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
+
+        output = render_template(template=template, messages=messages)
+
+        assert "[MODEL_SETTINGS]" not in output
+
+    def test_v15_json_schema_missing_schema_raises(self) -> None:
+        template = build_chat_template(
+            config=TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"json_schema"}),
+            )
+        )
+        messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
+
+        with pytest.raises(ValueError, match="Response format `json_schema` must define the schema"):
+            render_template(
+                template=template,
+                messages=messages,
+                response_format={"type": "json_schema", "json_schema": {"name": "answer"}},
+            )
+
+    def test_v15_both_fields_sorted_keys(self) -> None:
+        template = build_chat_template(
+            config=TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+            )
+        )
+        messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {"name": "answer", "schema": PARITY_JSON_SCHEMA},
+        }
+
+        output = render_template(
+            template=template,
+            messages=messages,
+            reasoning_effort="high",
+            response_format=response_format,
+        )
+
+        expected_settings = (
+            f'[MODEL_SETTINGS]{{"json_schema": {json.dumps(PARITY_JSON_SCHEMA)}, '
+            '"reasoning_effort": "high"}[/MODEL_SETTINGS]'
+        )
+        assert expected_settings in output
+
+    def test_v15_both_fields_json_object(self) -> None:
+        template = build_chat_template(
+            config=TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+            )
+        )
+        messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
+
+        output = render_template(
+            template=template,
+            messages=messages,
+            response_format={"type": "json_object"},
+        )
+
+        assert (
+            '[MODEL_SETTINGS]{"json_schema": {"anyOf": [{"type": "object"}, '
+            '{"type": "array"}]}, "reasoning_effort": "none"}[/MODEL_SETTINGS]' in output
+        )
+
+    def test_v15_both_fields_text_reasoning_effort_only(self) -> None:
+        template = build_chat_template(
+            config=TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+            )
+        )
+        messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
+
+        output = render_template(
+            template=template,
+            messages=messages,
+            reasoning_effort="high",
+            response_format={"type": "text"},
+        )
+
+        assert '[MODEL_SETTINGS]{"reasoning_effort": "high"}[/MODEL_SETTINGS]' in output
+        assert '"json_schema"' not in output
+
+    def test_v15_both_fields_invalid_reasoning_effort_raises(self) -> None:
+        template = build_chat_template(
+            config=TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+            )
+        )
+        messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
+
+        with pytest.raises(ValueError, match='reasoning_effort must be either "none" or "high"'):
+            render_template(
+                template=template,
+                messages=messages,
+                reasoning_effort="medium",
+            )
+
+    def test_v15_reasoning_effort_only_ignores_response_format(self) -> None:
+        template = build_chat_template(config=TemplateConfig(version=TokenizerVersion.v15))
+        messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {"name": "answer", "schema": PARITY_JSON_SCHEMA},
+        }
+
+        output = render_template(template=template, messages=messages, response_format=response_format)
+
+        assert '[MODEL_SETTINGS]{"reasoning_effort": "none"}[/MODEL_SETTINGS]' in output
+        assert '"json_schema"' not in output
+
+    def test_v15_both_fields_with_tools_placement(self) -> None:
+        template = build_chat_template(
+            config=TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+            )
+        )
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "lookup",
+                    "description": "Find a value",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+        messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {"name": "answer", "schema": PARITY_JSON_SCHEMA},
+        }
+
+        output = render_template(
+            template=template,
+            messages=messages,
+            tools=tools,
+            reasoning_effort="high",
+            response_format=response_format,
+        )
+
+        tools_position = output.index("[AVAILABLE_TOOLS]")
+        settings_position = output.index("[MODEL_SETTINGS]")
+        first_user_position = output.index("[INST]")
+        assert tools_position < settings_position < first_user_position
 
 
 class TestV15MultimodalContent:
