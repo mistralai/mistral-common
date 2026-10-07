@@ -24,7 +24,11 @@ from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
+from mistral_common.tokens.tokenizers.model_settings_builder import (
+    EnumBuilder,
+    JSONSchemaBuilder,
+    ModelSettingsBuilder,
+)
 from tests.test_tekken import get_special_tokens
 from tests.utils import decode_keep
 
@@ -46,6 +50,7 @@ class TestConfig:
     audio: bool = False
     think: bool = False
     plain_think: bool = False
+    model_settings_fields: frozenset[str] | None = None
 
 
 def _make_config(c: TestConfig) -> TemplateConfig:
@@ -236,11 +241,20 @@ def _build_tekken_json(config: TestConfig, output_dir: Path) -> Path:
 
     if config.version.supports_model_settings:
         model_settings_builder = ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder(
-                accepts_none=True,
-                default=ReasoningEffort.none,
-                values=[ReasoningEffort.none, ReasoningEffort.high],
-            )
+            reasoning_effort=(
+                EnumBuilder(
+                    accepts_none=True,
+                    default=ReasoningEffort.none,
+                    values=[ReasoningEffort.none, ReasoningEffort.high],
+                )
+                if config.model_settings_fields is None or "reasoning_effort" in config.model_settings_fields
+                else None
+            ),
+            json_schema=(
+                JSONSchemaBuilder(accepts_none=False, default=None)
+                if config.model_settings_fields is not None and "json_schema" in config.model_settings_fields
+                else None
+            ),
         )
         tekken_data["model_settings_builder"] = model_settings_builder.model_dump(mode="json")
 

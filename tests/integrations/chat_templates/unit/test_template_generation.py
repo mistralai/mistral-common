@@ -30,6 +30,32 @@ class TestGenerateChatTemplateAPI:
         assert "{%- set default_system_message = '' %}" in v13_template
         assert "bos_token" in v13_template
 
+    def test_generate_chat_template_forwards_model_settings_fields(self) -> None:
+        selected_template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v15,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+            model_settings_fields=frozenset({"json_schema"}),
+        )
+        default_template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v15,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+
+        assert "response_format" in selected_template
+        assert "response_format" not in default_template
+
     def test_default_system_prompt(self) -> None:
         template_with_prompt = generate_chat_template(
             spm=False,
