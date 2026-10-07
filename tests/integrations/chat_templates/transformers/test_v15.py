@@ -9,6 +9,7 @@ from mistral_common.protocol.instruct.messages import UserMessage
 from mistral_common.protocol.instruct.request import (
     ChatCompletionRequest,
     JsonSchema,
+    ReasoningEffort,
     ResponseFormat,
     ResponseFormats,
 )
@@ -130,7 +131,7 @@ class TestV15ResponseFormat:
         mistral_tokenizer = MistralTokenizer.from_file(str(tokenizer_path), mode=ValidationMode.test)
         request = ChatCompletionRequest(
             messages=[UserMessage(content="Hello")],
-            reasoning_effort="high",
+            reasoning_effort=ReasoningEffort.high,
             response_format=ResponseFormat(
                 type=ResponseFormats.json_schema,
                 json_schema=JsonSchema(name="answer", schema=PARITY_JSON_SCHEMA),
@@ -161,7 +162,7 @@ class TestV15ResponseFormat:
         mistral_tokenizer = MistralTokenizer.from_file(str(tokenizer_path), mode=ValidationMode.test)
         request = ChatCompletionRequest(
             messages=[UserMessage(content="Hello")],
-            reasoning_effort="high",
+            reasoning_effort=ReasoningEffort.high,
             response_format=ResponseFormat(
                 type=ResponseFormats.json_schema,
                 json_schema=JsonSchema(name="answer", schema=PARITY_JSON_SCHEMA_NON_ASCII),
@@ -246,7 +247,7 @@ class TestV15ResponseFormat:
         mistral_tokenizer = MistralTokenizer.from_file(str(tokenizer_path), mode=ValidationMode.test)
         request = ChatCompletionRequest(
             messages=[UserMessage(content="Hello")],
-            reasoning_effort="high",
+            reasoning_effort=ReasoningEffort.high,
             response_format=ResponseFormat(
                 type=ResponseFormats.json_schema,
                 json_schema=JsonSchema(name="answer", schema=PARITY_JSON_SCHEMA),
