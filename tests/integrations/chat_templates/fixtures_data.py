@@ -50,6 +50,18 @@ _TOOLS = [
     Tool(function=Function(name="tool2", parameters={})),
 ]
 
+PARITY_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {"answer": {"type": "string"}},
+    "required": ["answer"],
+}
+
+PARITY_JSON_SCHEMA_NON_ASCII: dict[str, Any] = {
+    "type": "object",
+    "properties": {"clé": {"type": "string", "description": "L'<é> & Co's"}},
+    "required": ["clé"],
+}
+
 # -- Request fixtures --
 
 REQUEST_ONE_TURN_TEST = ChatCompletionRequest(
