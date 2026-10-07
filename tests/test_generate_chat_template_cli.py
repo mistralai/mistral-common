@@ -28,7 +28,7 @@ def tekken_v11_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 @pytest.fixture(scope="session")
 def tekken_v15_json_schema_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """Path to a v15 Tekken tokenizer with both model settings builders."""
+    r"""Path to a v15 Tekken tokenizer with both model settings builders."""
     build_dir = tmp_path_factory.mktemp("tokenizer")
     config = TestConfig(
         version=TokenizerVersion.v15,
