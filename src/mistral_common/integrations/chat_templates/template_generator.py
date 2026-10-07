@@ -24,6 +24,8 @@ _END_THINK = SpecialTokens.end_think.value
 _BEGIN_MODEL_SETTINGS = SpecialTokens.begin_model_settings.value
 _END_MODEL_SETTINGS = SpecialTokens.end_model_settings.value
 
+MODEL_SETTINGS_FIELD_CHOICES: tuple[str, ...] = ("reasoning_effort", "json_schema")
+
 
 @dataclass
 class TemplateConfig:
@@ -51,6 +53,8 @@ class TemplateConfig:
             (`bos_token`/`eos_token`) or as literal string values (`'<s>'`/`'</s>'`).
             When `True`, the template expects `bos_token` and `eos_token`
             to be passed as render kwargs.
+        model_settings_fields: Model settings fields to render. `None` selects the
+            automatic fields for the tokenizer version.
 
     Raises:
         ValueError: If the configuration is invalid (e.g., conflicting options like
@@ -71,8 +75,25 @@ class TemplateConfig:
     thinking_support: bool = False
     plain_thinking_support: bool = False
     use_special_token_variables: bool = False
+    model_settings_fields: frozenset[str] | None = None
 
     def __post_init__(self) -> None:
+        explicit_model_settings_fields = self.model_settings_fields is not None
+        if self.model_settings_fields is None:
+            self.model_settings_fields = (
+                frozenset({"reasoning_effort"}) if self.supports_model_settings else frozenset()
+            )
+
+        unknown_model_settings_fields = self.model_settings_fields - set(MODEL_SETTINGS_FIELD_CHOICES)
+        if unknown_model_settings_fields:
+            unknown_names = ", ".join(sorted(unknown_model_settings_fields))
+            allowed_names = ", ".join(MODEL_SETTINGS_FIELD_CHOICES)
+            raise ValueError(f"Unknown model settings fields: {unknown_names}. Allowed fields are: {allowed_names}.")
+        if explicit_model_settings_fields and not self.supports_model_settings:
+            raise ValueError("Model settings fields are only available for tokenizer versions v15 and above")
+        if explicit_model_settings_fields and not self.model_settings_fields:
+            raise ValueError("Model settings fields must be None (automatic) or a non-empty set")
+
         if self.plain_thinking_support and self.thinking_support:
             raise ValueError("Plain thinking support and thinking support are mutually exclusive")
         if self.spm and (self.version >= TokenizerVersion.v11 or self.audio_support):
@@ -188,8 +209,17 @@ class TemplateConfig:
 
     @property
     def supports_model_settings(self) -> bool:
-        r"""Whether model settings (`reasoning_effort`) are supported. V15+."""
+        r"""Whether model settings are supported. V15+."""
         return self.version >= TokenizerVersion.v15
+
+    @property
+    def emits_model_settings(self) -> bool:
+        r"""Whether any selected model settings fields can be emitted."""
+        return (
+            self.supports_model_settings
+            and self.model_settings_fields is not None
+            and len(self.model_settings_fields) > 0
+        )
 
     @property
     def is_v1(self) -> bool:
