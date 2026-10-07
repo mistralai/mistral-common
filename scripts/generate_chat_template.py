@@ -22,6 +22,16 @@ def main() -> None:
     parser.add_argument("--audio", action="store_true", help="Enable audio support")
     parser.add_argument("--thinking", action="store_true", help="Enable thinking support (special tokens)")
     parser.add_argument(
+        "--model_settings_fields",
+        type=str,
+        default=None,
+        help=(
+            "Comma-separated model settings fields to render (choices: reasoning_effort, json_schema). "
+            "Default when omitted: automatic (reasoning_effort at v15+, no fields below v15). "
+            "An empty value is rejected."
+        ),
+    )
+    parser.add_argument(
         "--plain_thinking",
         action="store_true",
         help=(
@@ -58,6 +68,7 @@ def main() -> None:
             (args.image, "--image"),
             (args.audio, "--audio"),
             (args.thinking, "--thinking"),
+            (args.model_settings_fields is not None, "--model_settings_fields"),
         ]
         conflicting = [flag for is_set, flag in manual_flag_checks if is_set]
 
@@ -84,6 +95,12 @@ def main() -> None:
         if args.version is None:
             parser.error("--version is required when --tokenizer_file is not provided")
 
+        model_settings_fields = (
+            None
+            if args.model_settings_fields is None
+            else frozenset(item.strip() for item in args.model_settings_fields.split(",") if item.strip())
+        )
+
         try:
             template = generate_chat_template(
                 spm=args.spm,
@@ -94,6 +111,7 @@ def main() -> None:
                 default_system_prompt=args.default_system_prompt,
                 plain_thinking_support=args.plain_thinking,
                 use_special_token_variables=not args.no_special_token_variables,
+                model_settings_fields=model_settings_fields,
             )
         except ValueError as e:
             parser.error(str(e))

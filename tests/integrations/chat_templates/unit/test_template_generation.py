@@ -30,6 +30,32 @@ class TestGenerateChatTemplateAPI:
         assert "{%- set default_system_message = '' %}" in v13_template
         assert "bos_token" in v13_template
 
+    def test_generate_chat_template_forwards_model_settings_fields(self) -> None:
+        selected_template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v15,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+            model_settings_fields=frozenset({"json_schema"}),
+        )
+        default_template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v15,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+        )
+
+        assert "response_format" in selected_template
+        assert "response_format" not in default_template
+
     def test_default_system_prompt(self) -> None:
         template_with_prompt = generate_chat_template(
             spm=False,
@@ -77,6 +103,57 @@ class TestGenerateChatTemplateAPI:
         messages: list[dict[str, Any]] = [{"role": "user", "content": "Hello"}]
         result = render_template(template, messages=messages)
         assert 'You are "the best" assistant.' in result
+
+
+class TestTemplateConfigModelSettings:
+    def test_default_model_settings_fields_is_reasoning_effort(self) -> None:
+        config = TemplateConfig(version=TokenizerVersion.v15)
+
+        assert config.model_settings_fields == frozenset({"reasoning_effort"})
+        assert config.emits_model_settings is True
+
+    def test_unknown_model_settings_field_raises(self) -> None:
+        with pytest.raises(ValueError) as excinfo:
+            TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=frozenset({"bogus"}))
+
+        assert str(excinfo.value) == (
+            "Unknown model settings fields: bogus. Allowed fields are: reasoning_effort, json_schema."
+        )
+
+    def test_unknown_model_settings_fields_sorted_in_message(self) -> None:
+        with pytest.raises(ValueError) as excinfo:
+            TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=frozenset({"zzz", "aaa"}))
+
+        assert str(excinfo.value) == (
+            "Unknown model settings fields: aaa, zzz. Allowed fields are: reasoning_effort, json_schema."
+        )
+
+    def test_model_settings_fields_require_v15(self) -> None:
+        with pytest.raises(ValueError) as excinfo:
+            TemplateConfig(
+                version=TokenizerVersion.v13,
+                model_settings_fields=frozenset({"reasoning_effort"}),
+            )
+
+        assert str(excinfo.value) == "Model settings fields are only available for tokenizer versions v15 and above"
+
+    def test_none_model_settings_fields_resolves_automatically(self) -> None:
+        v15_config = TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=None)
+        v13_config = TemplateConfig(version=TokenizerVersion.v13, model_settings_fields=None)
+
+        assert v15_config.model_settings_fields == frozenset({"reasoning_effort"})
+        assert v15_config.emits_model_settings is True
+        assert v13_config.model_settings_fields == frozenset()
+        assert v13_config.emits_model_settings is False
+
+    def test_explicit_empty_model_settings_fields_rejected(self) -> None:
+        with pytest.raises(ValueError) as v15_excinfo:
+            TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=frozenset())
+        with pytest.raises(ValueError) as v13_excinfo:
+            TemplateConfig(version=TokenizerVersion.v13, model_settings_fields=frozenset())
+
+        assert str(v15_excinfo.value) == "Model settings fields must be None (automatic) or a non-empty set"
+        assert str(v13_excinfo.value) == "Model settings fields are only available for tokenizer versions v15 and above"
 
 
 class TestTokenVariables:
