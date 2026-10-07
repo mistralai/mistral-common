@@ -70,6 +70,18 @@ def _make_config(c: TestConfig) -> TemplateConfig:
 def _load_golden_template(config: TemplateConfig) -> str:
     r"""Load the static golden template for a config."""
     parts = [config.version.value]
+    if config.supports_model_settings:
+        model_settings_fields = config.model_settings_fields
+        assert model_settings_fields is not None
+        settings_part = "_".join(
+            filename
+            for field, filename in (
+                ("reasoning_effort", "reasoning_effort"),
+                ("json_schema", "response_format"),
+            )
+            if field in model_settings_fields
+        )
+        parts.append(settings_part)
     if config.image_support and config.any_thinking_support:
         parts.append("image_think")
     elif config.image_support:
