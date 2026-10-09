@@ -8,12 +8,11 @@ never a skipped test case.
 
 Usage:
 
-    uv run python scripts/provision_test_tokenizers.py [--directory PATH]
+    uv run python scripts/provision_test_tokenizers.py
 
 Tests load the provisioned files from local paths without network access.
 """
 
-import argparse
 import hashlib
 import sys
 from pathlib import Path
@@ -21,7 +20,7 @@ from pathlib import Path
 import requests
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_DEFAULT_DIRECTORY = _REPO_ROOT / ".cache" / "test-tokenizers"
+_CACHE_DIRECTORY = _REPO_ROOT / ".cache" / "test-tokenizers"
 _HUB_RESOLVE_URL = "https://huggingface.co/{repo}/resolve/{revision}/{filename}"
 
 
@@ -41,13 +40,9 @@ class PinnedTokenizer:
         """File name used in the provisioned directory."""
         return f"{self.profile_id}.tekken.json"
 
-    def local_path(self, directory: Path) -> Path:
-        """Absolute path of the provisioned file inside ``directory``."""
-        return directory / self.local_name
-
-    def matches(self, data: bytes) -> bool:
-        """Whether ``data`` has the pinned size and SHA-256 digest."""
-        return len(data) == self.size and hashlib.sha256(data).hexdigest() == self.sha256
+    def local_path(self) -> Path:
+        """Absolute path of this tokenizer in the provisioned cache."""
+        return _CACHE_DIRECTORY / self.local_name
 
 
 # Selection recorded in the approved public-chat child plan (2026-09-28):
@@ -122,7 +117,7 @@ def _verify_pinned(pinned: PinnedTokenizer, data: bytes, *, source: str) -> None
         )
 
 
-def provision(pinned: PinnedTokenizer, *, directory: Path) -> None:
+def provision(pinned: PinnedTokenizer) -> None:
     r"""Ensure the pinned tokenizer file exists locally with verified bytes.
 
     Reuses an already provisioned file when its size and digest match;
@@ -131,18 +126,13 @@ def provision(pinned: PinnedTokenizer, *, directory: Path) -> None:
 
     Args:
         pinned: The artifact to provision.
-        directory: Writable cache directory receiving the file.
     """
-    target = pinned.local_path(directory)
+    target = pinned.local_path()
     if target.exists():
         data = target.read_bytes()
-        if pinned.matches(data):
-            print(f"verified existing {pinned.profile_id}: {target}")
-            return
-        raise ValueError(
-            f"{pinned.profile_id} exists at {target} but does not match the pinned bytes; "
-            "delete it or pass a clean --directory"
-        )
+        _verify_pinned(pinned=pinned, data=data, source=f"{target} (delete it to re-provision)")
+        print(f"verified existing {pinned.profile_id}: {target}")
+        return
 
     url = _HUB_RESOLVE_URL.format(repo=pinned.repo, revision=pinned.revision, filename=pinned.filename)
     response = requests.get(url=url, timeout=120)
@@ -150,24 +140,15 @@ def provision(pinned: PinnedTokenizer, *, directory: Path) -> None:
     data = response.content
     _verify_pinned(pinned=pinned, data=data, source=url)
 
-    directory.mkdir(parents=True, exist_ok=True)
+    _CACHE_DIRECTORY.mkdir(parents=True, exist_ok=True)
     target.write_bytes(data)
     print(f"provisioned {pinned.profile_id}: {pinned.repo}@{pinned.revision} -> {target}")
 
 
-def main(argv: list[str] | None = None) -> int:
+def main() -> int:
     r"""Provision every pinned tokenizer or fail with a non-zero exit code."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--directory",
-        type=Path,
-        default=_DEFAULT_DIRECTORY,
-        help="Cache directory receiving the pinned tokenizer files (default: %(default)s).",
-    )
-    args = parser.parse_args(argv)
-
     for pinned in PINNED_TOKENIZERS:
-        provision(pinned=pinned, directory=args.directory)
+        provision(pinned=pinned)
     return 0
 
 

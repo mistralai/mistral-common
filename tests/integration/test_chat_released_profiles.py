@@ -1,7 +1,9 @@
 r"""Released-profile public chat behavior and full-result expectations."""
 
 from collections.abc import Callable
+from dataclasses import replace
 from enum import Enum
+from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
@@ -21,7 +23,7 @@ from tests.integration.chat_recipes import ChatRecipe
 from tests.integration.chat_registry import ALL_PUBLIC_CASES
 from tests.integration.chat_released_cases import RELEASED_ERROR_CASES, RELEASED_SUCCESS_CASES
 from tests.integration.chat_v7_cases import V7_DIRECT_EQUALITY_CASES, V7DirectEqualityCase
-from tests.integration.tokenizer_configurations import TokenizerConfiguration
+from tests.integration.tokenizer_configurations import PINNED_V7_IMAGE_TEST, TokenizerConfiguration
 from tests.integration.utils import encode_and_expect_error, encode_and_verify
 
 _REGISTERED_RECIPES = tuple({case.recipe.recipe_id: case.recipe for case in ALL_PUBLIC_CASES}.values())
@@ -118,6 +120,16 @@ def test_released_profile_public_chat_error(
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
 ) -> None:
     encode_and_expect_error(case=case, public_tokenizer=public_tokenizer)
+
+
+def test_missing_pinned_tokenizer_names_provisioning_script(tmp_path: Path) -> None:
+    configuration = replace(
+        PINNED_V7_IMAGE_TEST,
+        tokenizer_path=tmp_path / "v7-image.tekken.json",
+    )
+
+    with pytest.raises(FileNotFoundError, match=r"scripts/provision_test_tokenizers\.py"):
+        configuration.load()
 
 
 def test_public_chat_case_ids_are_globally_unique() -> None:

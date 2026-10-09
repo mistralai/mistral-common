@@ -50,13 +50,15 @@ class TokenizerConfiguration:
         if self.provenance == "synthetic":
             if self.tokenizer_path is not None or self.sha256 is not None or self.synthetic_loader is None:
                 raise ValueError(f"Synthetic tokenizer configuration is incomplete: {self.configuration_id}")
-            tokenizer = self.synthetic_loader()
-            if self.post_load is not None:
-                self.post_load(tokenizer)
-            return tokenizer
+            return self.synthetic_loader()
 
         if self.tokenizer_path is None or self.sha256 is None or self.synthetic_loader is not None:
             raise ValueError(f"File-backed tokenizer configuration is incomplete: {self.configuration_id}")
+        if self.provenance == "pinned-released" and not self.tokenizer_path.is_file():
+            raise FileNotFoundError(
+                f"Pinned tokenizer configuration {self.configuration_id} is missing at {self.tokenizer_path}; "
+                "run `uv run python scripts/provision_test_tokenizers.py` first"
+            )
         data = self.tokenizer_path.read_bytes()
         actual_sha256 = hashlib.sha256(data).hexdigest()
         if actual_sha256 != self.sha256:
@@ -101,14 +103,22 @@ def _bundled_spm(*, profile_id: str, filename: str, sha256: str, mode: Validatio
     )
 
 
-def _pinned(profile_id: str, filename: str, sha256: str, mode: ValidationMode) -> TokenizerConfiguration:
+def _pinned(*, profile_id: str, sha256: str, mode: ValidationMode) -> TokenizerConfiguration:
     return TokenizerConfiguration(
         configuration_id=f"pinned-{profile_id}-{mode.value}",
-        tokenizer_path=_PINNED_CACHE / filename,
+        tokenizer_path=_PINNED_CACHE / f"{profile_id}.tekken.json",
         mode=mode,
         sha256=sha256,
         provenance="pinned-released",
     )
+
+
+_PINNED_V7_IMAGE_SHA256 = "c604f35d1035f534519622c0ec83fed6184978d4fdee92a5bd2a50bc05438094"
+_PINNED_V7_AUDIO_SHA256 = "4aaf3836c2a5332f029ce85a7a62255c966f47b6797ef81dedd0ade9c862e4a8"
+_PINNED_V11_IMAGE_SHA256 = "6e2501687ccd0e1f30f36319eaf2b46958b897811e246cd8eb5d385b9e3de7d1"
+_PINNED_V13_TEXT_SHA256 = "93a2d5af491c61f0b8f5233a1c0b91e5edb7332bf6000038f06a9b3ab92bfe8d"
+_PINNED_V13_IMAGE_SHA256 = "600bb27946565481ecf51ba8aee252e49b9a68507866080ac9c30185bb312843"
+_PINNED_V15_IMAGE_SETTINGS_SHA256 = "b1272b956bd6edd2d2c674c76896c7661308c9e723997b0afb55ecb429cb5dc7"
 
 
 BUNDLED_SPM_V1_TEST = _bundled_spm(
@@ -176,80 +186,67 @@ BUNDLED_TEKKEN_V3_MM_PATCH2_TEST = TokenizerConfiguration(
 # Pinned released profiles provisioned by scripts/provision_test_tokenizers.py.
 PINNED_V7_IMAGE_TEST = _pinned(
     profile_id="v7-image",
-    filename="v7-image.tekken.json",
-    sha256="c604f35d1035f534519622c0ec83fed6184978d4fdee92a5bd2a50bc05438094",
+    sha256=_PINNED_V7_IMAGE_SHA256,
     mode=ValidationMode.test,
 )
 PINNED_V7_AUDIO_TEST = _pinned(
     profile_id="v7-audio",
-    filename="v7-audio.tekken.json",
-    sha256="4aaf3836c2a5332f029ce85a7a62255c966f47b6797ef81dedd0ade9c862e4a8",
+    sha256=_PINNED_V7_AUDIO_SHA256,
     mode=ValidationMode.test,
 )
 PINNED_V7_IMAGE_FINETUNING = _pinned(
     profile_id="v7-image",
-    filename="v7-image.tekken.json",
-    sha256="c604f35d1035f534519622c0ec83fed6184978d4fdee92a5bd2a50bc05438094",
+    sha256=_PINNED_V7_IMAGE_SHA256,
     mode=ValidationMode.finetuning,
 )
 PINNED_V7_IMAGE_SERVING = _pinned(
     profile_id="v7-image",
-    filename="v7-image.tekken.json",
-    sha256="c604f35d1035f534519622c0ec83fed6184978d4fdee92a5bd2a50bc05438094",
+    sha256=_PINNED_V7_IMAGE_SHA256,
     mode=ValidationMode.serving,
 )
 PINNED_V7_AUDIO_FINETUNING = _pinned(
     profile_id="v7-audio",
-    filename="v7-audio.tekken.json",
-    sha256="4aaf3836c2a5332f029ce85a7a62255c966f47b6797ef81dedd0ade9c862e4a8",
+    sha256=_PINNED_V7_AUDIO_SHA256,
     mode=ValidationMode.finetuning,
 )
 PINNED_V7_AUDIO_SERVING = _pinned(
     profile_id="v7-audio",
-    filename="v7-audio.tekken.json",
-    sha256="4aaf3836c2a5332f029ce85a7a62255c966f47b6797ef81dedd0ade9c862e4a8",
+    sha256=_PINNED_V7_AUDIO_SHA256,
     mode=ValidationMode.serving,
 )
 PINNED_V11_IMAGE_TEST = _pinned(
     profile_id="v11-image",
-    filename="v11-image.tekken.json",
-    sha256="6e2501687ccd0e1f30f36319eaf2b46958b897811e246cd8eb5d385b9e3de7d1",
+    sha256=_PINNED_V11_IMAGE_SHA256,
     mode=ValidationMode.test,
 )
 PINNED_V11_IMAGE_FINETUNING = _pinned(
     profile_id="v11-image",
-    filename="v11-image.tekken.json",
-    sha256="6e2501687ccd0e1f30f36319eaf2b46958b897811e246cd8eb5d385b9e3de7d1",
+    sha256=_PINNED_V11_IMAGE_SHA256,
     mode=ValidationMode.finetuning,
 )
 PINNED_V13_TEXT_TEST = _pinned(
     profile_id="v13-text",
-    filename="v13-text.tekken.json",
-    sha256="93a2d5af491c61f0b8f5233a1c0b91e5edb7332bf6000038f06a9b3ab92bfe8d",
+    sha256=_PINNED_V13_TEXT_SHA256,
     mode=ValidationMode.test,
 )
 PINNED_V13_TEXT_FINETUNING = _pinned(
     profile_id="v13-text",
-    filename="v13-text.tekken.json",
-    sha256="93a2d5af491c61f0b8f5233a1c0b91e5edb7332bf6000038f06a9b3ab92bfe8d",
+    sha256=_PINNED_V13_TEXT_SHA256,
     mode=ValidationMode.finetuning,
 )
 PINNED_V13_IMAGE_TEST = _pinned(
     profile_id="v13-image",
-    filename="v13-image.tekken.json",
-    sha256="600bb27946565481ecf51ba8aee252e49b9a68507866080ac9c30185bb312843",
+    sha256=_PINNED_V13_IMAGE_SHA256,
     mode=ValidationMode.test,
 )
 PINNED_V15_IMAGE_SETTINGS_TEST = _pinned(
     profile_id="v15-image-settings",
-    filename="v15-image-settings.tekken.json",
-    sha256="b1272b956bd6edd2d2c674c76896c7661308c9e723997b0afb55ecb429cb5dc7",
+    sha256=_PINNED_V15_IMAGE_SETTINGS_SHA256,
     mode=ValidationMode.test,
 )
 PINNED_V15_IMAGE_SETTINGS_FINETUNING = _pinned(
     profile_id="v15-image-settings",
-    filename="v15-image-settings.tekken.json",
-    sha256="b1272b956bd6edd2d2c674c76896c7661308c9e723997b0afb55ecb429cb5dc7",
+    sha256=_PINNED_V15_IMAGE_SETTINGS_SHA256,
     mode=ValidationMode.finetuning,
 )
 
