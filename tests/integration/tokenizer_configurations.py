@@ -129,12 +129,6 @@ BUNDLED_SPM_V2_FINETUNING = _bundled_spm(
     sha256=_BUNDLED_SPM_V2_SHA256,
     mode=ValidationMode.finetuning,
 )
-BUNDLED_SPM_V2_AGNOSTIC = _bundled_spm(
-    profile_id="v2",
-    filename=_BUNDLED_SPM_V2_FILENAME,
-    sha256=_BUNDLED_SPM_V2_SHA256,
-    mode=ValidationMode.agnostic,
-)
 BUNDLED_SPM_V3_TEST = _bundled_spm(
     profile_id="v3", filename=_BUNDLED_SPM_V3_FILENAME, sha256=_BUNDLED_SPM_V3_SHA256, mode=ValidationMode.test
 )
