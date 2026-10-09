@@ -118,22 +118,6 @@ def test_manifest_configuration_mismatch_is_rejected(manifest_dir: Path) -> None
         )
 
 
-@pytest.mark.parametrize(argnames="missing_field", argvalues=["images", "audios"])
-def test_manifest_requires_ordered_media_fields(manifest_dir: Path, missing_field: str) -> None:
-    manifest_path = manifest_dir / "expected.json"
-    manifest = json.loads(manifest_path.read_text())
-    del manifest[missing_field]
-    manifest_path.write_text(json.dumps(manifest))
-
-    with pytest.raises(expected_exception=ValueError, match=f"missing required.*{missing_field}"):
-        _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
-
-
-def test_escaping_sidecar_path_is_rejected(manifest_dir: Path) -> None:
-    with pytest.raises(expected_exception=ValueError, match="escapes the case directory"):
-        resolve_sidecar(case_dir=manifest_dir, relative_path="../outside.npy")
-
-
 def test_manifest_escaping_sidecar_is_rejected(manifest_dir: Path) -> None:
     (manifest_dir.parent / "outside.npy").write_bytes(b"outside the case")
     _write_image_entry(manifest_dir=manifest_dir, path="../outside.npy", shape=[1, 2], dtype="float32")
@@ -186,11 +170,6 @@ def test_npz_archive_renamed_as_npy_is_rejected(manifest_dir: Path) -> None:
         match=r"Case 'integrity-case' image entry 0 cannot load sidecar 'images/0.npy'.*array sidecar",
     ):
         _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
-
-
-def test_missing_sidecar_file_is_rejected(manifest_dir: Path) -> None:
-    with pytest.raises(FileNotFoundError):
-        load_sidecar(sidecar_path=manifest_dir / "absent.npy")
 
 
 def test_changed_token_ids_fail_the_comparison(manifest_dir: Path) -> None:

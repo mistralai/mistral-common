@@ -33,7 +33,6 @@ RTOL: float = 0.0
 class ExpectedImage:
     """One expected returned image sidecar."""
 
-    path: str
     shape: tuple[int, ...]
     dtype: str
     array: np.ndarray
@@ -43,7 +42,6 @@ class ExpectedImage:
 class ExpectedAudio:
     """One expected returned audio waveform sidecar."""
 
-    path: str
     shape: tuple[int, ...]
     dtype: str
     sampling_rate: int
@@ -61,7 +59,6 @@ class ExpectedSuccess:
     decoded_text: str
     images: tuple[ExpectedImage, ...]
     audios: tuple[ExpectedAudio, ...]
-    root: Path
 
 
 @dataclass(frozen=True)
@@ -88,11 +85,6 @@ class _ValidatedManifest:
     decoded_text: str
     images: list[_ImageManifestEntry]
     audios: list[_AudioManifestEntry]
-
-
-def case_directory(expected_root: Path, case_id: str) -> Path:
-    """Directory holding one case's manifest and sidecars."""
-    return expected_root / case_id
 
 
 def resolve_sidecar(case_dir: Path, relative_path: str) -> Path:
@@ -312,7 +304,6 @@ def _validate_manifest_schema(*, value: Any, case_id: str) -> _ValidatedManifest
 
 def _parse_image(entry: _ImageManifestEntry, *, case_dir: Path, case_id: str, entry_index: int) -> ExpectedImage:
     return ExpectedImage(
-        path=entry.path,
         shape=entry.shape,
         dtype=entry.dtype,
         array=_load_manifest_sidecar(
@@ -329,7 +320,6 @@ def _parse_image(entry: _ImageManifestEntry, *, case_dir: Path, case_id: str, en
 
 def _parse_audio(entry: _AudioManifestEntry, *, case_dir: Path, case_id: str, entry_index: int) -> ExpectedAudio:
     return ExpectedAudio(
-        path=entry.path,
         shape=entry.shape,
         dtype=entry.dtype,
         sampling_rate=entry.sampling_rate,
@@ -365,7 +355,7 @@ def load_expected_success(
             requested case, or a media reference is invalid.
     """
     root = expected_root if expected_root is not None else _EXPECTED_ROOT
-    case_dir = case_directory(expected_root=root, case_id=case_id)
+    case_dir = root / case_id
     manifest_path = case_dir / "expected.json"
     if not manifest_path.is_file():
         raise ValueError(f"Missing expected manifest: {manifest_path}")
@@ -398,7 +388,6 @@ def load_expected_success(
         decoded_text=manifest.decoded_text,
         images=images,
         audios=audios,
-        root=root,
     )
 
 

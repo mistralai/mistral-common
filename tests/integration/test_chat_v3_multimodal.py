@@ -11,6 +11,7 @@ from collections.abc import Callable
 
 import pytest
 
+from mistral_common.tokens.tokenizers.base import Tokenized
 from mistral_common.tokens.tokenizers.image import SpecialImageIDs
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.integration.chat_cases import PublicChatSuccessCase
@@ -34,7 +35,7 @@ def test_public_chat_agreement_pair(
 ) -> None:
     _, first, _ = encode_and_verify(case=pair.first, public_tokenizer=public_tokenizer)
     _, second, _ = encode_and_verify(case=pair.second, public_tokenizer=public_tokenizer)
-    assert first.tokens == second.tokens, "Text-only and multimodal outputs differ for the same request"
+    _assert_token_relation(pair=pair, first=first, second=second)
 
 
 @pytest.mark.parametrize(argnames="pair", argvalues=SWAP_PAIRS, ids=lambda pair: pair.pair_id)
@@ -43,10 +44,14 @@ def test_public_chat_swap_pair(
 ) -> None:
     _, first, _ = encode_and_verify(case=pair.first, public_tokenizer=public_tokenizer)
     _, second, _ = encode_and_verify(case=pair.second, public_tokenizer=public_tokenizer)
+    _assert_token_relation(pair=pair, first=first, second=second)
+
+
+def _assert_token_relation(*, pair: PairedChatCase, first: Tokenized, second: Tokenized) -> None:
     if pair.token_relation == EQUAL_TOKENS:
-        assert first.tokens == second.tokens, "Image-first and text-first outputs were expected to agree"
+        assert first.tokens == second.tokens, f"Pair {pair.pair_id!r}: expected equal token sequences"
     else:
-        assert first.tokens != second.tokens, "Appending text was expected to break the swap agreement"
+        assert first.tokens != second.tokens, f"Pair {pair.pair_id!r}: expected different token sequences"
 
 
 @pytest.mark.parametrize(argnames="case", argvalues=IMAGE_CASES, ids=lambda case: case.case_id)
