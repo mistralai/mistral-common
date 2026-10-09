@@ -29,7 +29,7 @@ from tests.integration.chat_v7_cases import V7_DIRECT_EQUALITY_CASES, V7_SUCCESS
 from tests.integration.chat_v13_cases import V13_SUCCESS_CASES
 from tests.integration.chat_v15_cases import V15_ERROR_CASES, V15_SUCCESS_CASES
 from tests.integration.tokenizer_configurations import TokenizerConfiguration
-from tests.integration.utils import encode_and_verify
+from tests.integration.utils import encode_and_expect_error, encode_and_verify
 
 _ALL_PUBLIC_CASES: tuple[PublicChatSuccessCase | PublicChatErrorCase, ...] = (
     *SAMPLE_SUCCESS_CASES,
@@ -135,11 +135,7 @@ def test_released_profile_public_chat_error(
     case: PublicChatErrorCase,
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
 ) -> None:
-    request = case.recipe.build()
-    tokenizer = public_tokenizer(case.configuration)
-
-    with pytest.raises(expected_exception=case.expected_exception, match=case.message_pattern):
-        tokenizer.encode_chat_completion(request)
+    encode_and_expect_error(case=case, public_tokenizer=public_tokenizer)
 
 
 def test_public_chat_case_ids_are_globally_unique() -> None:
