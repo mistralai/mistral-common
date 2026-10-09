@@ -14,35 +14,17 @@ from mistral_common.protocol.instruct.chunk import AudioURLType
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.fixtures.audio import get_dummy_audio_url_chunk
 from tests.integration.chat_cases import (
-    SAMPLE_ERROR_CASES,
-    SAMPLE_SUCCESS_CASES,
     PublicChatErrorCase,
     PublicChatSuccessCase,
 )
 from tests.integration.chat_recipes import ChatRecipe
-from tests.integration.chat_released_cases import (
-    RELEASED_ERROR_CASES,
-    RELEASED_SUCCESS_CASES,
-)
-from tests.integration.chat_v3_cases import V3_SUCCESS_CASES
-from tests.integration.chat_v7_cases import V7_DIRECT_EQUALITY_CASES, V7_SUCCESS_CASES, V7DirectEqualityCase
-from tests.integration.chat_v13_cases import V13_SUCCESS_CASES
-from tests.integration.chat_v15_cases import V15_ERROR_CASES, V15_SUCCESS_CASES
+from tests.integration.chat_registry import ALL_PUBLIC_CASES
+from tests.integration.chat_released_cases import RELEASED_ERROR_CASES, RELEASED_SUCCESS_CASES
+from tests.integration.chat_v7_cases import V7_DIRECT_EQUALITY_CASES, V7DirectEqualityCase
 from tests.integration.tokenizer_configurations import TokenizerConfiguration
 from tests.integration.utils import encode_and_expect_error, encode_and_verify
 
-_ALL_PUBLIC_CASES: tuple[PublicChatSuccessCase | PublicChatErrorCase, ...] = (
-    *SAMPLE_SUCCESS_CASES,
-    *SAMPLE_ERROR_CASES,
-    *V3_SUCCESS_CASES,
-    *V7_SUCCESS_CASES,
-    *V13_SUCCESS_CASES,
-    *V15_SUCCESS_CASES,
-    *V15_ERROR_CASES,
-    *RELEASED_SUCCESS_CASES,
-    *RELEASED_ERROR_CASES,
-)
-_REGISTERED_RECIPES = tuple({case.recipe.recipe_id: case.recipe for case in _ALL_PUBLIC_CASES}.values())
+_REGISTERED_RECIPES = tuple({case.recipe.recipe_id: case.recipe for case in ALL_PUBLIC_CASES}.values())
 
 
 def _mutable_containers(
@@ -139,15 +121,6 @@ def test_released_profile_public_chat_error(
 
 
 def test_public_chat_case_ids_are_globally_unique() -> None:
-    success_cases = (
-        *SAMPLE_SUCCESS_CASES,
-        *V3_SUCCESS_CASES,
-        *V7_SUCCESS_CASES,
-        *V13_SUCCESS_CASES,
-        *V15_SUCCESS_CASES,
-        *RELEASED_SUCCESS_CASES,
-    )
-    error_cases = (*SAMPLE_ERROR_CASES, *V15_ERROR_CASES, *RELEASED_ERROR_CASES)
-    case_ids = [case.case_id for case in success_cases] + [case.case_id for case in error_cases]
+    case_ids = [case.case_id for case in ALL_PUBLIC_CASES]
 
     assert len(case_ids) == len(set(case_ids))

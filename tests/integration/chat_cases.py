@@ -128,5 +128,3 @@ SAMPLE_ERROR_CASES: tuple[PublicChatErrorCase, ...] = (
         message_pattern=r"Not the same number of function calls and responses",
     ),
 )
-
-ALL_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = SAMPLE_SUCCESS_CASES
