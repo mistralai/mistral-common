@@ -1,4 +1,5 @@
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
@@ -34,7 +35,8 @@ from .test_tokenizer_v7_audio import (
     SyntheticV7AudioProfile,
     build_synthetic_v7_audio_tokenizer,
     get_tekkenizer_with_audio,
-    load_bundled_v7_no_audio_tokenizer,
+    load_v7_audio_error_tokenizer,
+    v7_audio_error_configuration_id,
     valid_reference_audio,
 )
 
@@ -202,7 +204,10 @@ def test_encode_speech_request_no_audio_encoder_fails() -> None:
     tokenizer_no_encoder = InstructTokenizerV7(tokenizer=mm_tekkenizer, audio_encoder=None)
 
     request = SpeechRequest(input="Hello world", voice="female")
-    with pytest.raises(UnsupportedTokenizerFeatureException, match="audio encoder.*speech"):
+    with pytest.raises(
+        UnsupportedTokenizerFeatureException,
+        match=r"Tokenizer v7 does not provide an audio encoder for speech",
+    ):
         tokenizer_no_encoder.encode_speech_request(request)
 
 
@@ -248,7 +253,7 @@ PUBLIC_SPEECH_ERROR_CASES = (
         profile=None,
         request_recipe="speech-no-source",
         exception_type=UnsupportedTokenizerFeatureException,
-        message=r"audio encoder.*speech",
+        message=r"Tokenizer v7 does not provide an audio encoder for speech",
     ),
     PublicSpeechErrorCase(
         case_id="audio-v7-speech-no-marker-test",
@@ -257,7 +262,7 @@ PUBLIC_SPEECH_ERROR_CASES = (
         profile=SYNTHETIC_V7_SPEECH_NO_MARKER,
         request_recipe="speech-reference",
         exception_type=UnsupportedTokenizerFeatureException,
-        message=r"text_to_audio marker.*speech",
+        message=r"the text_to_audio marker required for speech",
     ),
     PublicSpeechErrorCase(
         case_id="audio-v7-speech-no-voice-map-test",
@@ -275,7 +280,7 @@ PUBLIC_SPEECH_ERROR_CASES = (
         profile=SYNTHETIC_V7_SPEECH_NO_AUDIO,
         request_recipe="speech-reference",
         exception_type=UnsupportedTokenizerFeatureException,
-        message=r"audio marker.*speech",
+        message=r"the audio marker required for speech",
     ),
     PublicSpeechErrorCase(
         case_id="audio-v7-speech-no-begin-audio-test",
@@ -284,7 +289,7 @@ PUBLIC_SPEECH_ERROR_CASES = (
         profile=SYNTHETIC_V7_SPEECH_NO_BEGIN_AUDIO,
         request_recipe="speech-reference",
         exception_type=UnsupportedTokenizerFeatureException,
-        message=r"begin_audio marker.*speech",
+        message=r"the begin_audio marker required for speech",
     ),
     PublicSpeechErrorCase(
         case_id="audio-v7-speech-source-required-test",
@@ -302,7 +307,7 @@ PUBLIC_SPEECH_ERROR_CASES = (
         profile=SYNTHETIC_V7_SPEECH,
         request_recipe="speech-unknown-voice",
         exception_type=InvalidRequestException,
-        message=r"Unknown voice.*expected one of \['preset'\]",
+        message=r"Unknown voice 'not-configured', expected one of \['preset'\]",
     ),
 )
 
@@ -322,15 +327,11 @@ def _build_speech_error_request(
 
 @pytest.mark.parametrize("case", PUBLIC_SPEECH_ERROR_CASES, ids=lambda case: case.case_id)
 def test_public_speech_error(case: PublicSpeechErrorCase) -> None:
-    if case.profile is None:
-        assert case.configuration_id == BUNDLED_V7_NO_AUDIO_CONFIGURATION_ID
-        tokenizer = load_bundled_v7_no_audio_tokenizer(mode=case.mode)
-    else:
-        assert case.configuration_id == case.profile.configuration_id
-        tokenizer = build_synthetic_v7_audio_tokenizer(profile=case.profile, mode=case.mode)
+    assert case.configuration_id == v7_audio_error_configuration_id(profile=case.profile)
+    tokenizer = load_v7_audio_error_tokenizer(profile=case.profile, mode=case.mode)
     assert tokenizer.mode == case.mode
 
-    request = _build_speech_error_request(case.request_recipe)
+    request = _build_speech_error_request(recipe=case.request_recipe)
     with pytest.raises(case.exception_type, match=case.message):
         tokenizer.encode_speech_request(request)
 
@@ -341,31 +342,31 @@ def test_public_speech_error(case: PublicSpeechErrorCase) -> None:
         pytest.param(
             None,
             "speech-no-source",
-            r"audio encoder.*speech",
+            r"Tokenizer v7 does not provide an audio encoder for speech",
             id="v7-speech-without-encoder-takes-priority-over-missing-source",
         ),
         pytest.param(
             SYNTHETIC_V7_SPEECH_NO_MARKER,
             "speech-reference",
-            r"text_to_audio marker.*speech",
+            r"the text_to_audio marker required for speech",
             id="v7-speech-profile-without-required-marker",
         ),
         pytest.param(
             SYNTHETIC_V7_SPEECH_NO_AUDIO_TO_TEXT,
             "speech-reference",
-            r"audio_to_text marker.*speech",
+            r"the audio_to_text marker required for speech",
             id="v7-speech-profile-without-audio-to-text-marker",
         ),
         pytest.param(
             SYNTHETIC_V7_SPEECH_NO_AUDIO,
             "speech-reference",
-            r"audio marker.*speech",
+            r"the audio marker required for speech",
             id="v7-speech-profile-without-audio-marker",
         ),
         pytest.param(
             SYNTHETIC_V7_SPEECH_NO_BEGIN_AUDIO,
             "speech-reference",
-            r"begin_audio marker.*speech",
+            r"the begin_audio marker required for speech",
             id="v7-speech-profile-without-begin-audio-marker",
         ),
         pytest.param(
@@ -381,12 +382,9 @@ def test_direct_unsupported_speech_capability(
     request_recipe: Literal["speech-no-source", "speech-reference", "speech-preset", "speech-unknown-voice"],
     message: str,
 ) -> None:
-    if profile is None:
-        tokenizer = load_bundled_v7_no_audio_tokenizer(mode=ValidationMode.test)
-    else:
-        tokenizer = build_synthetic_v7_audio_tokenizer(profile=profile, mode=ValidationMode.test)
+    tokenizer = load_v7_audio_error_tokenizer(profile=profile, mode=ValidationMode.test)
 
-    request = _build_speech_error_request(request_recipe)
+    request = _build_speech_error_request(recipe=request_recipe)
     with pytest.raises(UnsupportedTokenizerFeatureException, match=message):
         tokenizer.instruct_tokenizer.encode_speech_request(request)
 
@@ -395,44 +393,30 @@ def test_direct_unsupported_speech_capability(
     ("request_recipe", "message"),
     [
         pytest.param(
-            "speech-no-source",
-            r"Either ref_audio or voice must be defined",
-            id="speech-source-required",
-        ),
-        pytest.param(
             "speech-unknown-voice",
-            r"Unknown voice.*expected one of \['preset'\]",
+            r"Unknown voice 'not-configured', expected one of \['preset'\]",
             id="speech-unknown-configured-voice",
         ),
     ],
 )
-def test_direct_invalid_speech_request(
-    request_recipe: Literal["speech-no-source", "speech-unknown-voice"], message: str
-) -> None:
+def test_direct_invalid_speech_request(request_recipe: Literal["speech-unknown-voice"], message: str) -> None:
     tokenizer = build_synthetic_v7_audio_tokenizer(profile=SYNTHETIC_V7_SPEECH, mode=ValidationMode.test)
-    request = _build_speech_error_request(request_recipe)
+    request = _build_speech_error_request(recipe=request_recipe)
 
     with pytest.raises(InvalidRequestException, match=message):
         tokenizer.instruct_tokenizer.encode_speech_request(request)
 
 
 @pytest.mark.parametrize(
-    ("version", "message"),
+    ("factory", "message"),
     [
-        pytest.param("v1", r"Speech request not available for tokenizer v1", id="v1-speech"),
-        pytest.param("v2", r"Speech request not available for tokenizer v2", id="v2-speech"),
-        pytest.param("v3", r"Speech request not available for tokenizer v3", id="v3-speech"),
+        pytest.param(MistralTokenizer.v1, r"Speech request not available for tokenizer v1", id="v1-speech"),
+        pytest.param(MistralTokenizer.v2, r"Speech request not available for tokenizer v2", id="v2-speech"),
+        pytest.param(MistralTokenizer.v3, r"Speech request not available for tokenizer v3", id="v3-speech"),
     ],
 )
-def test_pre_v7_speech_remains_tokenizer_error(version: str, message: str) -> None:
-    if version == "v1":
-        tokenizer = MistralTokenizer.v1()
-    elif version == "v2":
-        tokenizer = MistralTokenizer.v2()
-    else:
-        assert version == "v3"
-        tokenizer = MistralTokenizer.v3()
-
+def test_pre_v7_speech_remains_tokenizer_error(factory: Callable[[], MistralTokenizer], message: str) -> None:
+    tokenizer = factory()
     request = SpeechRequest(input="hello")
     with pytest.raises(TokenizerException, match=message):
         tokenizer.instruct_tokenizer.encode_speech_request(request)

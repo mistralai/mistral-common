@@ -59,6 +59,12 @@ class SyntheticV7AudioProfile:
     transcription_format: TranscriptionFormat = TranscriptionFormat.INSTRUCT
 
 
+def v7_audio_error_configuration_id(profile: SyntheticV7AudioProfile | None) -> str:
+    if profile is None:
+        return BUNDLED_V7_NO_AUDIO_CONFIGURATION_ID
+    return profile.configuration_id
+
+
 SYNTHETIC_V7_INSTRUCT_NO_TRANSCRIBE = SyntheticV7AudioProfile(
     configuration_id="synthetic-v7-instruct-no-transcribe-test",
     unavailable_instruct_markers=(SpecialTokens.transcribe.value,),
@@ -140,7 +146,7 @@ def load_bundled_v7_no_audio_tokenizer(mode: ValidationMode) -> MistralTokenizer
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     assert digest == BUNDLED_V7_NO_AUDIO_SHA256
 
-    tokenizer = MistralTokenizer.from_file(path, mode=mode)
+    tokenizer = MistralTokenizer.from_file(tokenizer_filename=path, mode=mode)
     assert tokenizer.version == TokenizerVersion.v7
     assert tokenizer.mode == mode
     assert tokenizer.instruct_tokenizer.audio_encoder is None
@@ -203,6 +209,12 @@ def build_synthetic_v7_audio_tokenizer(profile: SyntheticV7AudioProfile, mode: V
         validator=get_validator(version=TokenizerVersion.v7, mode=mode),
         request_normalizer=get_normalizer(version=TokenizerVersion.v7),
     )
+
+
+def load_v7_audio_error_tokenizer(profile: SyntheticV7AudioProfile | None, mode: ValidationMode) -> MistralTokenizer:
+    if profile is None:
+        return load_bundled_v7_no_audio_tokenizer(mode=mode)
+    return build_synthetic_v7_audio_tokenizer(profile=profile, mode=mode)
 
 
 def valid_reference_audio() -> str:

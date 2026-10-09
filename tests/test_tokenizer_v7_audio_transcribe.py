@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
@@ -24,9 +25,9 @@ from tests.test_tokenizer_v7_audio import (
     SyntheticV7AudioProfile,
     _get_audio_chunk,
     _get_specials,
-    build_synthetic_v7_audio_tokenizer,
     get_tekkenizer_with_audio,
-    load_bundled_v7_no_audio_tokenizer,
+    load_v7_audio_error_tokenizer,
+    v7_audio_error_configuration_id,
     valid_reference_audio,
 )
 from tests.utils import decode_keep
@@ -127,7 +128,7 @@ TRANSCRIPTION_ERROR_CASES = (
         profile=None,
         request_recipe="unparsed-audio",
         error_type=UnsupportedTokenizerFeatureException,
-        message=r"audio encoder.*transcription",
+        message=r"Tokenizer v7 does not provide an audio encoder for transcription",
     ),
     TranscriptionErrorCase(
         case_id="audio-v7-transcription-no-marker-test",
@@ -136,7 +137,7 @@ TRANSCRIPTION_ERROR_CASES = (
         profile=SYNTHETIC_V7_INSTRUCT_NO_TRANSCRIBE,
         request_recipe="unparsed-audio",
         error_type=UnsupportedTokenizerFeatureException,
-        message=r"TRANSCRIBE marker.*transcription",
+        message=r"the TRANSCRIBE marker required for transcription",
     ),
     TranscriptionErrorCase(
         case_id="audio-v7-instruct-transcription-no-audio-test",
@@ -145,7 +146,7 @@ TRANSCRIPTION_ERROR_CASES = (
         profile=SYNTHETIC_V7_INSTRUCT_NO_AUDIO,
         request_recipe="valid-audio",
         error_type=UnsupportedTokenizerFeatureException,
-        message=r"audio marker.*transcription",
+        message=r"the audio marker required for transcription",
     ),
     TranscriptionErrorCase(
         case_id="audio-v7-instruct-transcription-no-begin-audio-test",
@@ -154,7 +155,7 @@ TRANSCRIPTION_ERROR_CASES = (
         profile=SYNTHETIC_V7_INSTRUCT_NO_BEGIN_AUDIO,
         request_recipe="valid-audio",
         error_type=UnsupportedTokenizerFeatureException,
-        message=r"begin_audio marker.*transcription",
+        message=r"the begin_audio marker required for transcription",
     ),
     TranscriptionErrorCase(
         case_id="audio-v7-instruct-offline-rejected-test",
@@ -175,15 +176,6 @@ TRANSCRIPTION_ERROR_CASES = (
         message=r"Instruct transcription.*DISABLED.*ONLINE",
     ),
 )
-
-
-def _load_transcription_error_tokenizer(case: TranscriptionErrorCase) -> MistralTokenizer:
-    if case.profile is None:
-        assert case.configuration_id == BUNDLED_V7_NO_AUDIO_CONFIGURATION_ID
-        return load_bundled_v7_no_audio_tokenizer(mode=case.mode)
-
-    assert case.configuration_id == case.profile.configuration_id
-    return build_synthetic_v7_audio_tokenizer(profile=case.profile, mode=case.mode)
 
 
 def _build_transcription_error_request(
@@ -214,7 +206,8 @@ def _build_transcription_error_request(
 
 @pytest.mark.parametrize("case", TRANSCRIPTION_ERROR_CASES, ids=lambda case: case.case_id)
 def test_public_transcription_errors(case: TranscriptionErrorCase) -> None:
-    tokenizer = _load_transcription_error_tokenizer(case=case)
+    assert case.configuration_id == v7_audio_error_configuration_id(profile=case.profile)
+    tokenizer = load_v7_audio_error_tokenizer(profile=case.profile, mode=case.mode)
     assert tokenizer.mode == case.mode
     request = _build_transcription_error_request(recipe=case.request_recipe)
 
@@ -224,7 +217,8 @@ def test_public_transcription_errors(case: TranscriptionErrorCase) -> None:
 
 @pytest.mark.parametrize("case", TRANSCRIPTION_ERROR_CASES, ids=lambda case: case.case_id)
 def test_direct_transcription_errors(case: TranscriptionErrorCase) -> None:
-    tokenizer = _load_transcription_error_tokenizer(case=case)
+    assert case.configuration_id == v7_audio_error_configuration_id(profile=case.profile)
+    tokenizer = load_v7_audio_error_tokenizer(profile=case.profile, mode=case.mode)
     assert tokenizer.mode == case.mode
     request = _build_transcription_error_request(recipe=case.request_recipe)
 
@@ -233,22 +227,27 @@ def test_direct_transcription_errors(case: TranscriptionErrorCase) -> None:
 
 
 @pytest.mark.parametrize(
-    ("version", "message"),
+    ("factory", "message"),
     [
-        pytest.param("v1", r"^Transcription not available for (?:TokenizerVersion\.)?v1$", id="v1-transcription"),
-        pytest.param("v2", r"^Transcription not available for (?:TokenizerVersion\.)?v2$", id="v2-transcription"),
-        pytest.param("v3", r"^Transcription not available for (?:TokenizerVersion\.)?v3$", id="v3-transcription"),
+        pytest.param(
+            MistralTokenizer.v1,
+            r"^Transcription not available for (?:TokenizerVersion\.)?v1$",
+            id="v1-transcription",
+        ),
+        pytest.param(
+            MistralTokenizer.v2,
+            r"^Transcription not available for (?:TokenizerVersion\.)?v2$",
+            id="v2-transcription",
+        ),
+        pytest.param(
+            MistralTokenizer.v3,
+            r"^Transcription not available for (?:TokenizerVersion\.)?v3$",
+            id="v3-transcription",
+        ),
     ],
 )
-def test_pre_v7_transcription_remains_tokenizer_error(version: str, message: str) -> None:
-    if version == "v1":
-        tokenizer = MistralTokenizer.v1()
-    elif version == "v2":
-        tokenizer = MistralTokenizer.v2()
-    else:
-        assert version == "v3"
-        tokenizer = MistralTokenizer.v3()
-
+def test_pre_v7_transcription_remains_tokenizer_error(factory: Callable[[], MistralTokenizer], message: str) -> None:
+    tokenizer = factory()
     request = TranscriptionRequest(audio=b"audio", language=None, target_streaming_delay_ms=None)
     with pytest.raises(TokenizerException, match=message):
         tokenizer.instruct_tokenizer.encode_transcription(request)

@@ -226,7 +226,7 @@ def test_audio_config_delay(rate: float, delay: int, num_delay_tokens: int) -> N
             "",
             StreamingMode.ONLINE,
             UnsupportedTokenizerFeatureException,
-            r"streaming_pad marker.*transcription",
+            r"the streaming_pad marker required for transcription",
             id="audio-v7-streaming-transcription-no-streaming-pad-test",
         ),
         pytest.param(
@@ -282,7 +282,7 @@ def test_public_streaming_transcription_errors(
             "",
             StreamingMode.ONLINE,
             UnsupportedTokenizerFeatureException,
-            r"streaming_pad marker.*transcription",
+            r"the streaming_pad marker required for transcription",
             id="v7-streaming-profile-without-streaming-pad-marker",
         ),
         pytest.param(
