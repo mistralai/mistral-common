@@ -39,6 +39,17 @@ from .test_tokenizer_v7_audio import (
 )
 
 
+def test_audio_encoder_speech_request_requires_source() -> None:
+    tokenizer = build_synthetic_v7_audio_tokenizer(profile=SYNTHETIC_V7_SPEECH, mode=ValidationMode.test)
+    assert isinstance(tokenizer.instruct_tokenizer.audio_encoder, AudioEncoder)
+
+    with pytest.raises(
+        InvalidRequestException,
+        match=r"^Either audio or voice must be defined to encode speech\.$",
+    ):
+        tokenizer.instruct_tokenizer.audio_encoder.encode_audio_for_speech_request(audio=None, voice=None)
+
+
 @pytest.fixture(scope="session")
 def tts_tokenizer() -> InstructTokenizerV7:
     mm_tekkenizer = get_tekkenizer_with_audio().tokenizer

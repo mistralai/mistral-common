@@ -844,9 +844,8 @@ class AudioEncoder:
         Returns:
             AudioEncoding containing the token sequence and optional audio data.
         """
-        assert audio is not None or voice is not None, (
-            f"Either audio or voice must be defined to encode audio, got {audio=} and {voice=}"
-        )
+        if audio is None and voice is None:
+            raise InvalidRequestException("Either audio or voice must be defined to encode speech.")
 
         if audio is not None:
             audio.resample(self.audio_config.sampling_rate)
