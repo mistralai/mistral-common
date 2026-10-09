@@ -35,15 +35,6 @@ class PinnedTokenizer:
         self.size = size
         self.sha256 = sha256
 
-    @property
-    def local_name(self) -> str:
-        """File name used in the provisioned directory."""
-        return f"{self.profile_id}.tekken.json"
-
-    def local_path(self) -> Path:
-        """Absolute path of this tokenizer in the provisioned cache."""
-        return _CACHE_DIRECTORY / self.local_name
-
 
 # Selection recorded in the approved public-chat child plan (2026-09-28):
 # one representative per distinct released version/capability profile.
@@ -127,7 +118,7 @@ def provision(pinned: PinnedTokenizer) -> None:
     Args:
         pinned: The artifact to provision.
     """
-    target = pinned.local_path()
+    target = _CACHE_DIRECTORY / f"{pinned.profile_id}.tekken.json"
     if target.exists():
         data = target.read_bytes()
         _verify_pinned(pinned=pinned, data=data, source=f"{target} (delete it to re-provision)")

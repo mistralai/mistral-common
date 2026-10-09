@@ -11,7 +11,6 @@ from collections.abc import Callable
 
 import pytest
 
-from mistral_common.tokens.tokenizers.base import Tokenized
 from mistral_common.tokens.tokenizers.image import SpecialImageIDs
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.integration.chat_cases import PublicChatSuccessCase
@@ -29,25 +28,16 @@ from tests.integration.tokenizer_configurations import TokenizerConfiguration
 from tests.integration.utils import encode_and_verify
 
 
-@pytest.mark.parametrize(argnames="pair", argvalues=AGREEMENT_PAIRS, ids=lambda pair: pair.pair_id)
-def test_public_chat_agreement_pair(
+@pytest.mark.parametrize(
+    argnames="pair",
+    argvalues=(*AGREEMENT_PAIRS, *SWAP_PAIRS),
+    ids=lambda pair: pair.pair_id,
+)
+def test_public_chat_pair(
     pair: PairedChatCase, public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer]
 ) -> None:
     _, first, _ = encode_and_verify(case=pair.first, public_tokenizer=public_tokenizer)
     _, second, _ = encode_and_verify(case=pair.second, public_tokenizer=public_tokenizer)
-    _assert_token_relation(pair=pair, first=first, second=second)
-
-
-@pytest.mark.parametrize(argnames="pair", argvalues=SWAP_PAIRS, ids=lambda pair: pair.pair_id)
-def test_public_chat_swap_pair(
-    pair: PairedChatCase, public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer]
-) -> None:
-    _, first, _ = encode_and_verify(case=pair.first, public_tokenizer=public_tokenizer)
-    _, second, _ = encode_and_verify(case=pair.second, public_tokenizer=public_tokenizer)
-    _assert_token_relation(pair=pair, first=first, second=second)
-
-
-def _assert_token_relation(*, pair: PairedChatCase, first: Tokenized, second: Tokenized) -> None:
     if pair.token_relation == EQUAL_TOKENS:
         assert first.tokens == second.tokens, f"Pair {pair.pair_id!r}: expected equal token sequences"
     else:
