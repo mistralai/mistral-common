@@ -706,7 +706,7 @@ def _emit_argument_normalization(indent: str) -> list[str]:
     """
     return [
         f"{indent}{{%- if arguments is not string %}}",
-        f"{indent}    {{%- set arguments = arguments|tojson|safe %}}",
+        f"{indent}    {{%- set arguments = ((arguments|tojson)~'')~'' %}}",
         f"{indent}{{%- elif arguments == '' %}}",
         f"{indent}    {{%- set arguments = '{{}}' %}}",
         f"{indent}{{%- endif %}}",
