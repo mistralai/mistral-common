@@ -333,7 +333,7 @@ class GrammarFactory:
         _validate_mode_and_tools(mode=mode, tools=tools)
 
         fcall = _convert_tool_calls(tools, mode, parallel_tool_calls, self._special_token_lark)
-        json_schema_str = json.dumps(json_schema, ensure_ascii=False) if json_schema else None
+        json_schema_str = json.dumps(json_schema, ensure_ascii=False) if json_schema is not None else None
         # NamedToolChoice forces a specific tool, which maps to "required" grammar.
         template_mode = ToolChoiceEnum.required if isinstance(mode, NamedToolChoice) else ToolChoiceEnum(mode)
         think_with_json = self._tokenizer.version.supports_model_settings
