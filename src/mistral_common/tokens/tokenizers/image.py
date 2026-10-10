@@ -1,3 +1,4 @@
+from mistral_common.image import apply_exif_orientation
 import base64
 import logging
 from dataclasses import dataclass
@@ -74,21 +75,21 @@ def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
             scheme is unsupported.
     """
     if isinstance(chunk, ImageChunk):
-        return chunk.image
+        return apply_exif_orientation(chunk.image)
     url = chunk.get_url()
     if url.startswith("data:image"):
         _, _, data = url.partition(",")
         if not data:
             raise ValueError(f"Invalid image data URL {url[:64]}: expected a base64 payload after a comma.")
         image_data = base64.b64decode(data)
-        return Image.open(BytesIO(image_data))
+        return apply_exif_orientation(Image.open(BytesIO(image_data)))
     if url.startswith("file://"):
         with open(url.removeprefix("file://"), "rb") as file:
             image = Image.open(file)
             image.load()
-        return image
+        return apply_exif_orientation(image)
     if url.startswith("http"):
-        return download_image(url=url, timeout=None)
+        return apply_exif_orientation(download_image(url=url, timeout=None))
 
     raise ValueError(f"Unsupported image url scheme {url}")
 
@@ -216,7 +217,7 @@ def transform_image(image: Image.Image, new_size: tuple[int, int]) -> np.ndarray
     assert_opencv_installed()
 
     np_image = cv2.resize(np.array(_convert_to_rgb(image), dtype=np.float32), new_size, interpolation=cv2.INTER_CUBIC)
-    return normalize(np_image, DATASET_MEAN, DATASET_STD)
+    return apply_exif_orientation(normalize(np_image, DATASET_MEAN, DATASET_STD))
 
 
 class ImageEncoder:
