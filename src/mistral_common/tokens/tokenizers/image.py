@@ -1,3 +1,4 @@
+from mistral_common.image import apply_exif_orientation
 import base64
 import logging
 from dataclasses import dataclass
@@ -74,7 +75,7 @@ def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
             scheme is unsupported.
     """
     if isinstance(chunk, ImageChunk):
-        return chunk.image
+        return apply_exif_orientation(chunk.image)
     url = chunk.get_url()
     if url.startswith("data:image"):
         _, _, data = url.partition(",")
