@@ -1,3 +1,5 @@
+import contextlib
+from PIL import ImageOps
 import base64
 import io
 import math
@@ -10,6 +12,15 @@ from pydantic import BeforeValidator, PlainSerializer, SerializationInfo
 
 from mistral_common import __version__
 from mistral_common.exceptions import ImageDecodeException
+
+def apply_exif_orientation(image: Image.Image) -> Image.Image:
+    """Normalizza l'orientamento dell'immagine basandosi sui metadati EXIF."""
+    with contextlib.suppress(Exception):
+        transposed = ImageOps.exif_transpose(image)
+        if transposed is not None:
+            return transposed
+    return image
+
 
 _IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY = "MISTRAL_COMMON_IMAGE_DOWNLOAD_TIMEOUT"
 _DEFAULT_IMAGE_DOWNLOAD_TIMEOUT_S = 10.0
