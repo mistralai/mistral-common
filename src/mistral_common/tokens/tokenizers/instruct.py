@@ -205,17 +205,17 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
             request: The request to encode.
 
         Returns:
-            The tokenized request, with all images and audio collected across
-            the messages.
+            The tokenized request, with the images and audio of the messages that
+            were kept, in message order.
 
         Raises:
             TokenizerException: If a message has an unknown type.
         """
         # init at bos
-        images: list[np.ndarray] = []
-        audios: list[Audio] = []
         prefix_ids: list[int] | None = None
         tokens_list: list[list[int] | None] = []
+        images_list: list[list[np.ndarray]] = []
+        audios_list: list[list[Audio]] = []
 
         # validate messages
         self.validate_messages(request.messages)
@@ -223,6 +223,8 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
         # find last user message
         first_user_idx, last_user_idx = self.find_first_last_user(request)
         for msg_idx, msg in enumerate(request.messages):
+            new_images: list[np.ndarray] = []
+            new_audios: list[Audio] = []
             if isinstance(msg, UserMessage):
                 new_tokens, new_images, new_audios = self.encode_user_message(
                     msg,
@@ -233,12 +235,8 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
                     force_img_first=True,  # img is always first when providing text/img chunk pair
                     settings=request.settings,
                 )
-                images.extend(new_images)
-                audios.extend(new_audios)
             elif isinstance(msg, ToolMessage):
                 new_tokens, new_images, new_audios = self.encode_tool_message(msg, msg_idx < last_user_idx)
-                images.extend(new_images)
-                audios.extend(new_audios)
             elif isinstance(msg, AssistantMessage):
                 new_tokens = self.encode_assistant_message(
                     message=msg, is_before_last_user_message=msg_idx < last_user_idx
@@ -248,11 +246,12 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
                     prefix_ids = new_tokens
             elif isinstance(msg, SystemMessage):
                 new_tokens, new_audios = self.encode_system_message(msg)
-                audios.extend(new_audios)
             else:
                 raise TokenizerException(f"Unknown message type {type(msg)}")
 
             tokens_list.append(new_tokens)
+            images_list.append(new_images)
+            audios_list.append(new_audios)
 
         if request.truncate_at_max_tokens is not None:
             self._truncate_for_max_tokens(
@@ -262,10 +261,18 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
                 last_user_idx,
             )
         tokens = self.start()
+        images: list[np.ndarray] = []
+        audios: list[Audio] = []
 
-        for tok in tokens_list:
-            if tok is not None:
-                tokens.extend(tok)
+        # Media is collected per message and flattened afterwards so that a
+        # message truncation removed does not leave an image or an audio that no
+        # token references.
+        for kept_tokens, kept_images, kept_audios in zip(tokens_list, images_list, audios_list):
+            if kept_tokens is None:
+                continue
+            tokens.extend(kept_tokens)
+            images.extend(kept_images)
+            audios.extend(kept_audios)
 
         tokenized = Tokenized(
             tokens=tokens,
