@@ -67,7 +67,7 @@ def download_image(url: str, timeout: float | None) -> Image.Image:
 
         # Convert the image content to a PIL Image
         img = Image.open(io.BytesIO(response.content))
-        return img
+        return apply_exif_orientation(img)
 
     except requests.exceptions.Timeout as e:
         raise requests.exceptions.Timeout(
@@ -100,16 +100,16 @@ def maybe_load_image_from_str_or_bytes(x: Image.Image | str | bytes) -> Image.Im
         RuntimeError: If the input cannot be decoded into an image.
     """
     if isinstance(x, Image.Image):
-        return x
+        return apply_exif_orientation(x)
     if isinstance(x, bytes):
         try:
-            return Image.open(io.BytesIO(x))
+            return apply_exif_orientation(Image.open(io.BytesIO(x)))
         except Exception:
             raise RuntimeError("Encountered an error when loading image from bytes.")
 
     try:
         image = Image.open(io.BytesIO(base64.b64decode(x.encode("ascii"))))
-        return image
+        return apply_exif_orientation(image)
     except Exception as e:
         raise RuntimeError(
             f"Encountered an error when loading image from bytes starting "
@@ -155,3 +155,13 @@ SerializableImage = Annotated[
     PlainSerializer(serialize_image_to_byte_str),
     "A normal PIL image that supports serialization to b64 bytes string.",
 ]
+
+
+import contextlib
+from PIL import ImageOps
+
+def apply_exif_orientation(image):
+    with contextlib.suppress(Exception):
+        # exif_transpose scarta le rotazioni se assenti, rendendo l'operazione idempotente e sicura
+        return ImageOps.exif_transpose(image) or image
+    return image
