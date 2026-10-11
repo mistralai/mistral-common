@@ -968,22 +968,27 @@ class InstructTokenizerV7(InstructTokenizerV3):
             if isinstance(messages[idx], SystemMessage):
                 # never drop system messages
                 return
-            if idx == last_user_message_index:
-                # never drop the last user message
+            if last_user_message_index != -1 and idx >= last_user_message_index:
+                # never drop the last user message and any subsequent messages in the final turn
+                return
+            if idx == len(messages) - 1:
+                # never drop the last message
                 return
             tok = tokenized_messages[idx]
-            assert tok is not None
+            if tok is None:
+                return
             to_drop -= len(tok)
             tokenized_messages[idx] = None
 
         current_idx = 0
-        while to_drop > 0 and current_idx < len(messages):
+        limit = last_user_message_index if last_user_message_index != -1 else len(messages) - 1
+        while to_drop > 0 and current_idx < limit:
             drop(current_idx)
             current_idx += 1
-            if isinstance(messages[current_idx - 1], UserMessage):
+            if tokenized_messages[current_idx - 1] is None and isinstance(messages[current_idx - 1], UserMessage):
                 # if we just dropped a UserMessage,
                 # also drop everything until the next user message
-                while current_idx < len(messages) and not isinstance(messages[current_idx], UserMessage):
+                while current_idx < limit and not isinstance(messages[current_idx], UserMessage):
                     drop(current_idx)
                     current_idx += 1
 
