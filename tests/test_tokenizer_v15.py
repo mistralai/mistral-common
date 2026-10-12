@@ -528,8 +528,16 @@ def test_v15_encodes_json_schema_into_model_settings(
 ) -> None:
     request = ChatCompletionRequest(messages=[UserMessage(content="hi")], response_format=response_format)
     tokenized = v15_json_schema_mistral_tokenizer.encode_chat_completion(request)
-    text = decode_keep(v15_json_schema_mistral_tokenizer, tokenized)
+    text = decode_keep(tokenizer=v15_json_schema_mistral_tokenizer, tokenized=tokenized)
     assert text == expected_text, text
+
+
+def test_v15_rejects_invalid_json_schema_settings(messages: list[ChatMessage]) -> None:
+    tokenizer = get_v15_tekkenizer(ModelSettingsBuilder(json_schema=JSONSchemaBuilder()))
+    request: InstructRequest = InstructRequest(messages=messages, settings=ModelSettings(json_schema={"type": 123}))
+
+    with pytest.raises(InvalidRequestException, match="json_schema is not a valid JSON schema"):
+        tokenizer.encode_instruct(request)
 
 
 @pytest.fixture
@@ -590,7 +598,7 @@ def test_v15_encodes_reasoning_effort_and_json_schema_into_model_settings(
         reasoning_effort=reasoning_effort,
     )
     tokenized = v15_reasoning_and_json_schema_mistral_tokenizer.encode_chat_completion(request)
-    text = decode_keep(v15_reasoning_and_json_schema_mistral_tokenizer, tokenized)
+    text = decode_keep(tokenizer=v15_reasoning_and_json_schema_mistral_tokenizer, tokenized=tokenized)
     assert text == expected_text, text
 
 

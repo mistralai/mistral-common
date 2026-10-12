@@ -3,7 +3,6 @@ from collections.abc import Sequence
 from enum import Enum
 from typing import Generic
 
-from jsonschema import Draft7Validator, SchemaError
 from typing_extensions import assert_never
 
 from mistral_common.exceptions import (
@@ -47,6 +46,7 @@ from mistral_common.protocol.instruct.tool_calls import (
     ToolCall,
 )
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
+from mistral_common.utils.json_utils import validate_json_schema_by_draft7
 
 _NULL_TOOL_CALL_ID = "null"
 _TOOL_CALL_ID_REGEX = re.compile(r"^[a-zA-Z0-9]{9}$")
@@ -221,9 +221,9 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
             InvalidToolException: If the function name is invalid.
         """
         try:
-            Draft7Validator.check_schema(function.parameters)
-        except SchemaError as e:
-            raise InvalidToolSchemaException(f"Invalid tool schema: {e.message}")
+            validate_json_schema_by_draft7(value=function.parameters)
+        except ValueError as e:
+            raise InvalidToolSchemaException(f"Invalid tool schema: {e}") from e
 
         if not re.match(r"^[a-zA-Z0-9_-]{1,64}$", function.name):
             raise InvalidToolException(

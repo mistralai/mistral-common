@@ -298,14 +298,11 @@ def test_builder_without_json_schema_ignores_response_format() -> None:
     assert ModelSettingsBuilder().build_settings(_req(ResponseFormat(type=ResponseFormats.json))).json_schema is None
 
 
-def test_model_settings_json_schema_field() -> None:
-    s = ModelSettings(json_schema={"type": "object"})
-    assert s.json_schema == {"type": "object"}
-    assert s.model_dump(exclude_none=True) == {"json_schema": {"type": "object"}}
+def test_validate_settings_rejects_invalid_json_schema() -> None:
+    builder = ModelSettingsBuilder(json_schema=JSONSchemaBuilder())
 
-
-def test_model_settings_none_excludes_json_schema() -> None:
-    assert ModelSettings.none().model_dump(exclude_none=True) == {}
+    with pytest.raises(InvalidRequestException, match="json_schema is not a valid JSON schema"):
+        builder.validate_settings(settings=ModelSettings(json_schema={"type": 123}))
 
 
 def test_all_model_settings_and_builder_fields_match() -> None:

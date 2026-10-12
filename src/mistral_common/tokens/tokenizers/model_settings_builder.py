@@ -192,14 +192,14 @@ class JSONSchemaBuilder(FieldBuilder[ResponseFormat, JSONSchemaDict]):
     accepts_none: Literal[False] = False
     default: None = None
 
-    def validate_built_value(self, field_name: str, value: JSONSchemaDict | None) -> None:
+    def validate_built_value(self, field_name: str, value: JSONSchemaDict) -> None:
         r"""Validate a built schema value, allowing `None`.
 
         Unlike the base implementation, `None` skips validation: a response
         format without a schema (e.g. `text`) legitimately builds to `None`.
 
         Raises:
-            ValueError: If the built schema is not a valid Draft 7 JSON schema.
+            InvalidRequestException: If the built schema is not a valid Draft 7 JSON schema.
         """
         self._validate_built_value(field_name=field_name, value=value)
 
@@ -211,10 +211,14 @@ class JSONSchemaBuilder(FieldBuilder[ResponseFormat, JSONSchemaDict]):
         r"""Validate the built schema against Draft 7 when present.
 
         Raises:
-            ValueError: If the schema is not a valid Draft 7 JSON schema.
+            InvalidRequestException: If the schema is not a valid Draft 7 JSON schema.
         """
-        if value is not None:
-            validate_json_schema_by_draft7(value)
+        if value is None:
+            return
+        try:
+            validate_json_schema_by_draft7(value=value)
+        except ValueError as e:
+            raise InvalidRequestException(f"{field_name} is not a valid JSON schema: {e}") from e
 
 
 class ModelSettingsBuilder(MistralBase):
@@ -275,9 +279,7 @@ class ModelSettingsBuilder(MistralBase):
             if field_builder is not None:
                 dict_settings[field_name] = field_builder.build_value(field_name, value)
 
-        settings = ModelSettings.model_validate(dict_settings)
-        self.validate_settings(settings=settings)
-        return settings
+        return ModelSettings.model_validate(dict_settings)
 
     def validate_settings(self, settings: ModelSettings) -> None:
         r"""Validate that all fields in a ModelSettings instance match the configured builders.

@@ -140,7 +140,12 @@ class JsonSchema(MistralBase):
 
 
 class SchemaRenderingMode(str, Enum):
-    r"""Select how a response-format schema is applied."""
+    r"""Select how a response-format schema is applied.
+
+    Attributes:
+        grammar: The schema constrains decoding; non-strict schemas fall back to any JSON object.
+        model_settings: The schema is encoded in model settings unchanged.
+    """
 
     grammar = "grammar"
     model_settings = "model_settings"
@@ -178,7 +183,6 @@ class ResponseFormat(MistralBase):
 
         Returns:
             The schema selected for this purpose, or None for `text`.
-
         """
         if self.type == ResponseFormats.json_schema:
             assert self.json_schema is not None
