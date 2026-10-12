@@ -306,7 +306,7 @@ class TestV2ToolResultParsing:
         ]
 
         with pytest.raises(ValueError, match=r"v2 does not support multiple tool results for one assistant turn"):
-            render_template(template, messages, tools=tools)
+            render_template(template=template, messages=messages, tools=tools)
 
 
 class TestV3ToolResultParsing:
