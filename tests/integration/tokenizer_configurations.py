@@ -43,10 +43,19 @@ class TokenizerConfiguration:
 
     def __post_init__(self) -> None:
         if self.provenance == "synthetic":
-            if self.tokenizer_path is not None or self.sha256 is not None or self.synthetic_loader is None:
+            if self.tokenizer_path is not None:
                 raise ValueError(f"Synthetic tokenizer configuration is incomplete: {self.configuration_id}")
-        elif self.tokenizer_path is None or self.sha256 is None or self.synthetic_loader is not None:
-            raise ValueError(f"File-backed tokenizer configuration is incomplete: {self.configuration_id}")
+            if self.sha256 is not None:
+                raise ValueError(f"Synthetic tokenizer configuration is incomplete: {self.configuration_id}")
+            if self.synthetic_loader is None:
+                raise ValueError(f"Synthetic tokenizer configuration is incomplete: {self.configuration_id}")
+        else:
+            if self.tokenizer_path is None:
+                raise ValueError(f"File-backed tokenizer configuration is incomplete: {self.configuration_id}")
+            if self.sha256 is None:
+                raise ValueError(f"File-backed tokenizer configuration is incomplete: {self.configuration_id}")
+            if self.synthetic_loader is not None:
+                raise ValueError(f"File-backed tokenizer configuration is incomplete: {self.configuration_id}")
 
     def load(self) -> MistralTokenizer:
         r"""Load the public tokenizer after verifying the artifact bytes.

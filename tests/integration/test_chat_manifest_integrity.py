@@ -511,12 +511,17 @@ def test_media_metadata_mismatch_fails_the_comparison(field: str, message: str) 
 
 
 @pytest.mark.parametrize(
-    argnames=("media_kind", "offset"),
-    argvalues=[("image", 0.5e-4), ("image", 2e-4), ("audio", 0.5e-4), ("audio", 2e-4)],
+    argnames=("media_kind", "offset", "expect_failure"),
+    argvalues=[
+        ("image", 0.9e-4, False),
+        ("image", 1.1e-4, True),
+        ("audio", 0.9e-4, False),
+        ("audio", 1.1e-4, True),
+    ],
     ids=["image-within-tolerance", "image-beyond-tolerance", "audio-within-tolerance", "audio-beyond-tolerance"],
 )
-def test_shared_tolerance_boundary(media_kind: str, offset: float) -> None:
-    expected_array = np.full(shape=(2,), fill_value=100.0, dtype=np.float64)
+def test_shared_tolerance_boundary(media_kind: str, offset: float, expect_failure: bool) -> None:
+    expected_array = np.full(shape=(2,), fill_value=1e4, dtype=np.float64)
     expected = ExpectedSuccess(
         token_ids=[1],
         decoded_text="<s></s>",
@@ -531,7 +536,7 @@ def test_shared_tolerance_boundary(media_kind: str, offset: float) -> None:
             ),
         ),
     )
-    changed_array = np.full(shape=(2,), fill_value=100.0 + offset, dtype=np.float64)
+    changed_array = np.full(shape=(2,), fill_value=1e4 + offset, dtype=np.float64)
     image_array = changed_array if media_kind == "image" else expected_array
     audio_array = changed_array if media_kind == "audio" else expected_array
     tokenized = Tokenized(
@@ -540,11 +545,11 @@ def test_shared_tolerance_boundary(media_kind: str, offset: float) -> None:
         audios=[Audio(audio_array=audio_array, sampling_rate=16000, format="wav")],
     )
 
-    if offset == 0.5e-4:
-        assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s></s>")
-    else:
+    if expect_failure:
         with pytest.raises(expected_exception=AssertionError, match="array differs"):
             assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s></s>")
+    else:
+        assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s></s>")
 
 
 @pytest.mark.parametrize(

@@ -4,16 +4,17 @@ from collections.abc import Callable
 from dataclasses import replace
 from enum import Enum
 from pathlib import Path
-from typing import Any
 from unittest.mock import patch
 
-import numpy as np
 import pytest
 from PIL import Image
 from pydantic import BaseModel
 
 from mistral_common.protocol.instruct.chunk import AudioURLType, ImageChunk
-from mistral_common.protocol.instruct.messages import UserMessage
+from mistral_common.protocol.instruct.messages import ChatMessage, UserMessage
+from mistral_common.protocol.instruct.request import ChatCompletionRequest
+from mistral_common.protocol.instruct.tool_calls import Function, Tool
+from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.fixtures.audio import get_dummy_audio_url_chunk
 from tests.integration.chat_cases import (
@@ -34,6 +35,7 @@ from tests.integration.tokenizer_configurations import (
     BUNDLED_TEKKEN_V3_MM_TEST,
     PINNED_V7_IMAGE_TEST,
     SYNTHETIC_V13_AUDIO_TEST,
+    SYNTHETIC_V15_AUDIO_TEST,
     TokenizerConfiguration,
 )
 from tests.integration.utils import encode_and_expect_error, encode_and_verify
@@ -48,38 +50,21 @@ _RELEASED_SUCCESS_CASES_WITHOUT_AUDIO_URL = tuple(
 )
 
 
-def _mutable_containers(
-    value: object, *, path: tuple[str | int, ...]
-) -> list[tuple[tuple[str | int, ...], dict[Any, Any] | list[Any]]]:
-    containers: list[tuple[tuple[str | int, ...], dict[Any, Any] | list[Any]]] = []
+def _mutable_object_ids(value: object) -> set[int]:
+    object_ids: set[int] = set()
+    if isinstance(value, (BaseModel, dict, list, Image.Image)):
+        object_ids.add(id(value))
     if isinstance(value, BaseModel):
         for field_name in type(value).model_fields:
-            containers.extend(_mutable_containers(value=getattr(value, field_name), path=(*path, field_name)))
+            object_ids.update(_mutable_object_ids(getattr(value, field_name)))
     elif isinstance(value, dict):
-        containers.append((path, value))
         for key, item in value.items():
-            containers.extend(_mutable_containers(value=item, path=(*path, key)))
-    elif isinstance(value, list):
-        containers.append((path, value))
-        for index, item in enumerate(value):
-            containers.extend(_mutable_containers(value=item, path=(*path, index)))
-    return containers
-
-
-def _mutable_media_object_ids(value: object) -> set[int]:
-    if isinstance(value, (np.ndarray, Image.Image)):
-        return {id(value)}
-    if isinstance(value, BaseModel):
-        return {
-            object_id
-            for field_name in type(value).model_fields
-            for object_id in _mutable_media_object_ids(getattr(value, field_name))
-        }
-    if isinstance(value, dict):
-        return {object_id for item in value.values() for object_id in _mutable_media_object_ids(item)}
-    if isinstance(value, (list, tuple)):
-        return {object_id for item in value for object_id in _mutable_media_object_ids(item)}
-    return set()
+            object_ids.update(_mutable_object_ids(key))
+            object_ids.update(_mutable_object_ids(item))
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            object_ids.update(_mutable_object_ids(item))
+    return object_ids
 
 
 def _structure(value: object) -> object:
@@ -88,8 +73,6 @@ def _structure(value: object) -> object:
             type(value),
             tuple((field_name, _structure(getattr(value, field_name))) for field_name in type(value).model_fields),
         )
-    if isinstance(value, np.ndarray):
-        return (type(value), value.dtype.str, value.shape, value.tobytes())
     if isinstance(value, Image.Image):
         return (type(value), value.mode, value.size, value.tobytes())
     if isinstance(value, dict):
@@ -117,14 +100,40 @@ def test_registered_v7_direct_recipes_build_deeply_fresh_requests(
     _assert_fresh_request_graph(recipe_id=build_direct_request.__name__, build=build_direct_request)
 
 
-def test_freshness_check_rejects_shared_image() -> None:
+@pytest.mark.parametrize(
+    argnames="shared_kind",
+    argvalues=["image", "user-message", "content-list", "dictionary"],
+    ids=["shared-image", "shared-user-message", "shared-content-list", "shared-dictionary"],
+)
+def test_freshness_check_rejects_shared_mutable_object(shared_kind: str) -> None:
     shared_image = Image.new(mode="RGB", size=(1, 1))
+    shared_message = UserMessage(content="shared")
+    shared_content: list[object] = []
+    shared_parameters = {"type": "object", "properties": {}}
 
     def build_shared_image_request() -> BaseModel:
-        return UserMessage(content=[ImageChunk(image=shared_image)])
+        return ChatCompletionRequest[ChatMessage](messages=[UserMessage(content=[ImageChunk(image=shared_image)])])
 
-    with pytest.raises(expected_exception=AssertionError, match="reuses mutable image or array objects"):
-        _assert_fresh_request_graph(recipe_id="shared-image", build=build_shared_image_request)
+    def build_shared_user_message_request() -> BaseModel:
+        return ChatCompletionRequest[ChatMessage](messages=[shared_message])
+
+    def build_shared_content_list_request() -> BaseModel:
+        message = UserMessage.model_construct(role="user", content=shared_content)
+        return ChatCompletionRequest[ChatMessage].model_construct(messages=[message])
+
+    def build_shared_dictionary_request() -> BaseModel:
+        function = Function.model_construct(name="lookup", parameters=shared_parameters)
+        tool = Tool.model_construct(function=function)
+        return ChatCompletionRequest[ChatMessage](messages=[UserMessage(content="query")], tools=[tool])
+
+    builders = {
+        "image": build_shared_image_request,
+        "user-message": build_shared_user_message_request,
+        "content-list": build_shared_content_list_request,
+        "dictionary": build_shared_dictionary_request,
+    }
+    with pytest.raises(expected_exception=AssertionError, match="reuses mutable objects"):
+        _assert_fresh_request_graph(recipe_id=shared_kind, build=builders[shared_kind])
 
 
 def _assert_fresh_request_graph(*, recipe_id: str, build: Callable[[], BaseModel]) -> None:
@@ -132,23 +141,8 @@ def _assert_fresh_request_graph(*, recipe_id: str, build: Callable[[], BaseModel
     second = build()
     expected_structure = _structure(second)
     assert _structure(first) == expected_structure
-    shared_media_ids = _mutable_media_object_ids(first) & _mutable_media_object_ids(second)
-    assert not shared_media_ids, f"Recipe {recipe_id} reuses mutable image or array objects across builds"
-
-    first_containers = _mutable_containers(value=first, path=())
-    second_container_ids = {id(container) for _, container in _mutable_containers(value=second, path=())}
-    shared_containers = [
-        (len(path), container) for path, container in first_containers if id(container) in second_container_ids
-    ]
-    candidates = shared_containers or [(len(path), container) for path, container in first_containers]
-    _, target = max(candidates, key=lambda item: item[0])
-    if isinstance(target, dict):
-        target["__freshness_probe__"] = recipe_id
-    else:
-        target.append(("freshness-probe", recipe_id))
-
-    third = build()
-    assert (_structure(second), _structure(third)) == (expected_structure, expected_structure)
+    shared_object_ids = _mutable_object_ids(first) & _mutable_object_ids(second)
+    assert not shared_object_ids, f"Recipe {recipe_id} reuses mutable objects across builds"
 
 
 @pytest.mark.parametrize(
@@ -171,23 +165,42 @@ def test_tokenizer_artifact_digest_mismatch_is_rejected() -> None:
 
 
 @pytest.mark.parametrize(
-    argnames="invalid_configuration",
-    argvalues=["synthetic-path", "file-missing-digest", "file-synthetic-loader"],
-    ids=["synthetic-with-path", "file-backed-without-digest", "file-backed-with-synthetic-loader"],
+    argnames="invalid_field",
+    argvalues=[
+        pytest.param("synthetic-path", id="synthetic-with-path"),
+        pytest.param("synthetic-digest", id="synthetic-with-digest"),
+        pytest.param("synthetic-loader", id="synthetic-without-loader"),
+        pytest.param("file-path", id="file-backed-without-path"),
+        pytest.param("file-digest", id="file-backed-without-digest"),
+        pytest.param("file-loader", id="file-backed-with-synthetic-loader"),
+    ],
 )
-def test_incomplete_tokenizer_configuration_is_rejected(invalid_configuration: str) -> None:
+def test_incomplete_tokenizer_configuration_is_rejected(invalid_field: str) -> None:
     with pytest.raises(expected_exception=ValueError, match="incomplete"):
-        match invalid_configuration:
+        match invalid_field:
             case "synthetic-path":
-                replace(
-                    BUNDLED_SPM_V1_TEST,
-                    provenance="synthetic",
-                    synthetic_loader=SYNTHETIC_V13_AUDIO_TEST.synthetic_loader,
-                )
-            case "file-missing-digest":
+                replace(SYNTHETIC_V13_AUDIO_TEST, tokenizer_path=Path("unused"))
+            case "synthetic-digest":
+                replace(SYNTHETIC_V13_AUDIO_TEST, sha256="0" * 64)
+            case "synthetic-loader":
+                replace(SYNTHETIC_V13_AUDIO_TEST, synthetic_loader=None)
+            case "file-path":
+                replace(BUNDLED_SPM_V1_TEST, tokenizer_path=None)
+            case "file-digest":
                 replace(BUNDLED_SPM_V1_TEST, sha256=None)
-            case "file-synthetic-loader":
+            case "file-loader":
                 replace(BUNDLED_SPM_V1_TEST, synthetic_loader=SYNTHETIC_V13_AUDIO_TEST.synthetic_loader)
+
+
+@pytest.mark.parametrize(
+    argnames=("configuration", "mode"),
+    argvalues=[
+        pytest.param(SYNTHETIC_V13_AUDIO_TEST, ValidationMode.finetuning, id="v13-finetuning"),
+        pytest.param(SYNTHETIC_V15_AUDIO_TEST, ValidationMode.serving, id="v15-serving"),
+    ],
+)
+def test_synthetic_loaders_apply_the_declared_mode(configuration: TokenizerConfiguration, mode: ValidationMode) -> None:
+    assert replace(configuration, mode=mode).load().mode == mode
 
 
 def test_public_tokenizer_cache_isolates_configurations(
