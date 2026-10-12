@@ -3,7 +3,7 @@ import copy
 import io
 import warnings
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 import pytest
@@ -109,6 +109,13 @@ DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX = AudioURLChunk(
     audio_url=AudioURL(url=f"data:audio/wav;base64,{DUMMY_AUDIO_CHUNK.input_audio}")
 )
 DUMMY_AUDIO_URL_CHUNK_URL = AudioURLChunk(audio_url=AudioURL(url=AUDIO_SAMPLE_URL))
+
+assert isinstance(DUMMY_AUDIO_URL_CHUNK_URL.audio_url, AudioURL)
+DUMMY_AUDIO_URL_CHUNK_URL_URL = DUMMY_AUDIO_URL_CHUNK_URL.audio_url.url
+assert isinstance(DUMMY_AUDIO_URL_CHUNK_BASE64.audio_url, AudioURL)
+DUMMY_AUDIO_URL_CHUNK_BASE64_URL = DUMMY_AUDIO_URL_CHUNK_BASE64.audio_url.url
+assert isinstance(DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX.audio_url, AudioURL)
+DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX_URL = DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX.audio_url.url
 
 
 def test_convert_image_chunk() -> None:
@@ -1054,19 +1061,19 @@ def test_request_to_openai_derives_continuation_flag(messages: list[ChatMessage]
                         {
                             "type": "audio_url",
                             "audio_url": {
-                                "url": cast(AudioURL, DUMMY_AUDIO_URL_CHUNK_URL.audio_url).url,
+                                "url": DUMMY_AUDIO_URL_CHUNK_URL_URL,
                             },
                         },
                         {
                             "type": "audio_url",
                             "audio_url": {
-                                "url": cast(AudioURL, DUMMY_AUDIO_URL_CHUNK_BASE64.audio_url).url,
+                                "url": DUMMY_AUDIO_URL_CHUNK_BASE64_URL,
                             },
                         },
                         {
                             "type": "audio_url",
                             "audio_url": {
-                                "url": cast(AudioURL, DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX.audio_url).url,
+                                "url": DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX_URL,
                             },
                         },
                     ],
