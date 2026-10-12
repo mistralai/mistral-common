@@ -178,7 +178,7 @@ def render_template(
         raise ValueError(msg)
 
     def tojson(value: Any) -> str:
-        return json.dumps(value, ensure_ascii=False)
+        return json.dumps(obj=value, ensure_ascii=False)
 
     env = ImmutableSandboxedEnvironment(loader=BaseLoader())
     env.globals["raise_exception"] = raise_exception
