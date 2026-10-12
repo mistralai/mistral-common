@@ -39,7 +39,14 @@ class TokenizerConfiguration:
     sha256: str | None
     provenance: str
     post_load: Callable[[MistralTokenizer], None] | None = None
-    synthetic_loader: Callable[[], MistralTokenizer] | None = None
+    synthetic_loader: Callable[[ValidationMode], MistralTokenizer] | None = None
+
+    def __post_init__(self) -> None:
+        if self.provenance == "synthetic":
+            if self.tokenizer_path is not None or self.sha256 is not None or self.synthetic_loader is None:
+                raise ValueError(f"Synthetic tokenizer configuration is incomplete: {self.configuration_id}")
+        elif self.tokenizer_path is None or self.sha256 is None or self.synthetic_loader is not None:
+            raise ValueError(f"File-backed tokenizer configuration is incomplete: {self.configuration_id}")
 
     def load(self) -> MistralTokenizer:
         r"""Load the public tokenizer after verifying the artifact bytes.
@@ -48,12 +55,11 @@ class TokenizerConfiguration:
             The tokenizer loaded from the verified file in this configuration's mode.
         """
         if self.provenance == "synthetic":
-            if self.tokenizer_path is not None or self.sha256 is not None or self.synthetic_loader is None:
-                raise ValueError(f"Synthetic tokenizer configuration is incomplete: {self.configuration_id}")
-            return self.synthetic_loader()
+            assert self.synthetic_loader is not None
+            return self.synthetic_loader(self.mode)
 
-        if self.tokenizer_path is None or self.sha256 is None or self.synthetic_loader is not None:
-            raise ValueError(f"File-backed tokenizer configuration is incomplete: {self.configuration_id}")
+        assert self.tokenizer_path is not None
+        assert self.sha256 is not None
         if self.provenance == "pinned-released" and not self.tokenizer_path.is_file():
             raise FileNotFoundError(
                 f"Pinned tokenizer configuration {self.configuration_id} is missing at {self.tokenizer_path}; "
@@ -275,7 +281,7 @@ def _synthetic_audio_encoder(*, tekkenizer: Tekkenizer) -> AudioEncoder:
     return AudioEncoder(audio_config=audio_config, special_ids=special_audio_ids)
 
 
-def _load_synthetic_v13_audio() -> MistralTokenizer:
+def _load_synthetic_v13_audio(mode: ValidationMode) -> MistralTokenizer:
     special_tokens = get_special_tokens(tokenizer_version=TokenizerVersion.v13, add_think=False, add_audio=True)
     tekkenizer = Tekkenizer(
         vocab=quick_vocab(extra_toks=[b"a", b"b", b"c", b"f", b"de"]),
@@ -289,13 +295,14 @@ def _load_synthetic_v13_audio() -> MistralTokenizer:
     instruct_tokenizer = InstructTokenizerV13(tokenizer=tekkenizer, audio_encoder=audio_encoder)
     return MistralTokenizer(
         instruct_tokenizer=instruct_tokenizer,
-        validator=MistralRequestValidatorV13(),
+        validator=MistralRequestValidatorV13(mode=mode),
         request_normalizer=InstructRequestNormalizerV13.normalizer(),
     )
 
 
 def _load_synthetic_v15(
     *,
+    mode: ValidationMode,
     allowed_reasoning_effort: tuple[ReasoningEffort, ...] | None,
     default_reasoning_effort: ReasoningEffort | None,
     add_audio: bool,
@@ -342,7 +349,7 @@ def _load_synthetic_v15(
     instruct_tokenizer = InstructTokenizerV15(tokenizer=tekkenizer, audio_encoder=audio_encoder)
     return MistralTokenizer(
         instruct_tokenizer=instruct_tokenizer,
-        validator=get_validator(version=TokenizerVersion.v15, mode=ValidationMode.test),
+        validator=get_validator(version=TokenizerVersion.v15, mode=mode),
         request_normalizer=get_normalizer(version=TokenizerVersion.v15, model_settings_builder=settings_builder),
     )
 
@@ -352,7 +359,7 @@ def _synthetic_v15_loader(
     allowed_reasoning_effort: tuple[ReasoningEffort, ...] | None,
     default_reasoning_effort: ReasoningEffort | None,
     add_audio: bool,
-) -> Callable[[], MistralTokenizer]:
+) -> Callable[[ValidationMode], MistralTokenizer]:
     r"""Capture immutable v15 settings for a lazy synthetic configuration.
 
     Args:
@@ -361,11 +368,12 @@ def _synthetic_v15_loader(
         add_audio: Whether to attach the legacy-compatible audio encoder.
 
     Returns:
-        A zero-argument loader creating the synthetic tokenizer.
+        A loader creating the synthetic tokenizer in the requested mode.
     """
 
-    def load() -> MistralTokenizer:
+    def load(mode: ValidationMode) -> MistralTokenizer:
         return _load_synthetic_v15(
+            mode=mode,
             allowed_reasoning_effort=allowed_reasoning_effort,
             default_reasoning_effort=default_reasoning_effort,
             add_audio=add_audio,
