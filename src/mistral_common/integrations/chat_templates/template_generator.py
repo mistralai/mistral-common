@@ -537,18 +537,11 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
                 "{%- set json_schema = none %}",
                 "{%- if response_format is defined and response_format is not none %}",
                 "    {%- if response_format['type'] == 'json_schema' %}",
-                "        {%- if 'json_schema' in response_format and response_format['json_schema'] is not none %}",
-                "            {%- if 'schema' in response_format['json_schema'] %}",
-                "                {%- if response_format['json_schema']['schema'] is not none %}",
-                "                    {%- set json_schema = response_format['json_schema']['schema'] %}",
-                "                {%- else %}",
-                "                    {{- raise_exception('Response format `json_schema` must define the schema') }}",
-                "                {%- endif %}",
-                "            {%- else %}",
-                "                {{- raise_exception('Response format `json_schema` must define the schema') }}",
-                "            {%- endif %}",
-                "        {%- else %}",
+                "        {%- set response_json_schema = response_format.get('json_schema') %}",
+                "        {%- if response_json_schema is none or response_json_schema.get('schema') is none %}",
                 "            {{- raise_exception('Response format `json_schema` must define the schema') }}",
+                "        {%- else %}",
+                "            {%- set json_schema = response_json_schema['schema'] %}",
                 "        {%- endif %}",
                 "    {%- elif response_format['type'] == 'json_object' %}",
                 "        {%- set json_schema = {'anyOf': [{'type': 'object'}, {'type': 'array'}]} %}",
@@ -569,32 +562,34 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
             ]
         )
 
-    if has_json_schema and has_reasoning_effort:
+    if has_json_schema:
+        lines.append("{%- set model_settings_payload = '' %}")
         lines.extend(
             [
                 "{%- if json_schema is not none %}",
-                "    {%- set model_settings = '"
-                + _BEGIN_MODEL_SETTINGS
-                + '{"json_schema": \' + (json_schema|tojson) + \', "reasoning_effort": "\' + reasoning_effort + \'"}'
-                + _END_MODEL_SETTINGS
-                + "' %}",
-                "{%- else %}",
-                "    {%- set model_settings = '"
-                + _BEGIN_MODEL_SETTINGS
-                + '{"reasoning_effort": "\' ~ reasoning_effort ~ \'"}'
-                + _END_MODEL_SETTINGS
-                + "' %}",
+                "    {%- set model_settings_payload = '\"json_schema\": ' ~ (json_schema|tojson) %}",
                 "{%- endif %}",
             ]
         )
-    elif has_json_schema:
+        if has_reasoning_effort:
+            lines.extend(
+                [
+                    "{%- if model_settings_payload %}",
+                    "    {%- set model_settings_payload = model_settings_payload ~ ', ' %}",
+                    "{%- endif %}",
+                    "    {%- set model_settings_payload = model_settings_payload ~ "
+                    "'\"reasoning_effort\": \"' ~ reasoning_effort ~ '\"' %}",
+                ]
+            )
         lines.extend(
             [
                 "{%- set model_settings = '' %}",
-                "{%- if json_schema is not none %}",
+                "{%- if model_settings_payload %}",
                 "    {%- set model_settings = '"
                 + _BEGIN_MODEL_SETTINGS
-                + "{\"json_schema\": ' + (json_schema|tojson) + '}"
+                + "{"
+                + "' ~ model_settings_payload ~ '"
+                + "}"
                 + _END_MODEL_SETTINGS
                 + "' %}",
                 "{%- endif %}",
@@ -604,7 +599,7 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
         lines.append(
             "{%- set model_settings = '"
             + _BEGIN_MODEL_SETTINGS
-            + '{"reasoning_effort": "\' + reasoning_effort + \'"}'
+            + '{"reasoning_effort": "\' ~ reasoning_effort ~ \'"}'
             + _END_MODEL_SETTINGS
             + "' %}"
         )

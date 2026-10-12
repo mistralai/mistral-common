@@ -17,6 +17,7 @@ from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from tests.integrations.chat_templates.helpers import DUMMY_IMAGE, TestConfig
 
 # All configurations for output comparison tests (including SPM).
+# Keep audio goldens only for released tokenizer versions; v11 and v15 audio templates are unreleased.
 ALL_CONFIGS: list[TestConfig] = [
     # Non-SPM
     TestConfig(version=TokenizerVersion.v1),
@@ -28,7 +29,6 @@ ALL_CONFIGS: list[TestConfig] = [
     TestConfig(version=TokenizerVersion.v7, audio=True),
     TestConfig(version=TokenizerVersion.v11),
     TestConfig(version=TokenizerVersion.v11, image=True),
-    TestConfig(version=TokenizerVersion.v11, audio=True),
     TestConfig(version=TokenizerVersion.v13),
     TestConfig(version=TokenizerVersion.v13, image=True),
     TestConfig(version=TokenizerVersion.v13, audio=True),
@@ -36,7 +36,6 @@ ALL_CONFIGS: list[TestConfig] = [
     TestConfig(version=TokenizerVersion.v13, image=True, think=True),
     TestConfig(version=TokenizerVersion.v15),
     TestConfig(version=TokenizerVersion.v15, image=True),
-    TestConfig(version=TokenizerVersion.v15, audio=True),
     TestConfig(version=TokenizerVersion.v15, think=True),
     TestConfig(version=TokenizerVersion.v15, image=True, think=True),
     # SPM
@@ -56,11 +55,6 @@ ALL_CONFIGS: list[TestConfig] = [
     TestConfig(
         version=TokenizerVersion.v15,
         image=True,
-        model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
-    ),
-    TestConfig(
-        version=TokenizerVersion.v15,
-        audio=True,
         model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
     ),
     TestConfig(

@@ -106,8 +106,8 @@ def convert_tokenizer_to_chat_template(
     forcing the feature on.
 
     For tokenizer versions that support model settings, selected fields are
-    derived from configured builders in the tokenizer file. Files without a
-    configured model settings builder cannot produce a matching template.
+    derived from configured builders in the tokenizer file. The tokenizer must
+    have a builder with at least one configured field to produce a matching template.
 
     Args:
         tokenizer_file: Path to the tokenizer file (tekken JSON or SentencePiece `.model.vX`).
@@ -126,7 +126,7 @@ def convert_tokenizer_to_chat_template(
         TokenizerException: If the tokenizer file is not recognized or invalid.
         ValueError: If `plain_thinking_support` is forced to a value incompatible
             with the detected version, audio support, or thinking support, or if
-            a model-settings-capable tokenizer has no configured model settings builder.
+            a model-settings-capable tokenizer has no configured builder fields.
     """
     mistral_tokenizer = MistralTokenizer.from_file(tokenizer_file)
     instruct_tokenizer = mistral_tokenizer.instruct_tokenizer
@@ -143,14 +143,14 @@ def convert_tokenizer_to_chat_template(
     if version.supports_model_settings:
         model_settings_builder = getattr(tokenizer, "model_settings_builder", None)
         if model_settings_builder is None:
-            raise ValueError("v15 and above tokenizers require at least one model settings builder")
+            raise ValueError("Model-settings-capable tokenizer has no model settings builder")
         model_settings_fields = frozenset(
             field_name
             for field_name in ModelSettingsBuilder.model_fields
             if getattr(model_settings_builder, field_name) is not None
         )
         if not model_settings_fields:
-            raise ValueError("v15 and above tokenizers require at least one model settings builder")
+            raise ValueError("Model settings builder must configure at least one field")
 
     if plain_thinking_support is None:
         plain_thinking_support = version == TokenizerVersion.v11 and not audio_support
