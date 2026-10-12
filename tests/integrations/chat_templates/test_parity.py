@@ -109,8 +109,10 @@ def test_dynamic_template_comprehensive(config: TestConfig) -> None:
     for mode in (ValidationMode.finetuning, ValidationMode.test):
         conversations = _get_conversations(config.version, mode, config.image, config.audio, config.think)
         if config.version == TokenizerVersion.v2 and mode == ValidationMode.finetuning:
-            # v2 rejects multiple tool results for one assistant turn; the
-            # dedicated parallel-results tests cover both outcomes.
+            # Generated v2 templates reject this two-result turn, so exclude it from
+            # finetuning parity; test_dynamic_matches_static keeps static and generated
+            # templates byte-identical, and TestV2ToolResultParsing.test_parallel_tool_results_rejected
+            # covers the rejection.
             conversations = [
                 conversation
                 for conversation in conversations
