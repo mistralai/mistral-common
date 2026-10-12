@@ -40,16 +40,13 @@
 {%- endif %}
 {%- set model_settings_payload = '' %}
 {%- if json_schema is not none %}
-    {%- set model_settings_payload = '"json_schema": ' + (json_schema|tojson) %}
+    {%- set model_settings_payload = '"json_schema": ' ~ (json_schema|tojson) %}
 {%- endif %}
 {%- if model_settings_payload %}
-    {%- set model_settings_payload = model_settings_payload + ', ' %}
+    {%- set model_settings_payload = model_settings_payload ~ ', ' %}
 {%- endif %}
-    {%- set model_settings_payload = model_settings_payload + '"reasoning_effort": "' + reasoning_effort + '"' %}
-{%- set model_settings = '' %}
-{%- if model_settings_payload %}
-    {%- set model_settings = '[MODEL_SETTINGS]{' + model_settings_payload + '}[/MODEL_SETTINGS]' %}
-{%- endif %}
+{%- set model_settings_payload = model_settings_payload ~ '"reasoning_effort": "' ~ reasoning_effort ~ '"' %}
+{%- set model_settings = '[MODEL_SETTINGS]{' ~ model_settings_payload ~ '}[/MODEL_SETTINGS]' %}
 
 {#- Macros #}
 {%- macro render_content(content, context_name, supported_types_desc, support_thinking) -%}

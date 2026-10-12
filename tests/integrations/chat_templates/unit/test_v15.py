@@ -2,6 +2,8 @@ import json
 from typing import Any
 
 import pytest
+from jinja2 import BaseLoader
+from jinja2.sandbox import ImmutableSandboxedEnvironment
 
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.integrations.chat_templates.template_generator import TemplateConfig, build_chat_template
@@ -365,7 +367,12 @@ class TestV15ModelSettings:
 
         assert "[MODEL_SETTINGS]" not in output
 
-    def test_v15_json_schema_missing_schema_raises(self) -> None:
+    @pytest.mark.parametrize(
+        "json_schema",
+        [{"name": "answer"}, {"name": "answer", "schema": None}, None],
+        ids=["missing_schema", "null_schema", "null_json_schema"],
+    )
+    def test_v15_json_schema_missing_schema_raises(self, json_schema: dict[str, Any] | None) -> None:
         template = build_chat_template(
             config=TemplateConfig(
                 version=TokenizerVersion.v15,
@@ -378,8 +385,28 @@ class TestV15ModelSettings:
             render_template(
                 template=template,
                 messages=messages,
-                response_format={"type": "json_schema", "json_schema": {"name": "answer"}},
+                response_format={"type": "json_schema", "json_schema": json_schema},
             )
+
+    @pytest.mark.parametrize(
+        "model_settings_fields",
+        [frozenset({"json_schema"}), frozenset({"reasoning_effort", "json_schema"})],
+        ids=["json_schema", "both"],
+    )
+    def test_v15_json_schema_renders_with_stock_jinja_tojson(self, model_settings_fields: frozenset[str]) -> None:
+        template = build_chat_template(
+            config=TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields)
+        )
+        environment = ImmutableSandboxedEnvironment(loader=BaseLoader())
+
+        output = environment.from_string(template).render(
+            messages=[{"role": "user", "content": "Hello"}],
+            bos_token="<s>",
+            eos_token="</s>",
+            response_format={"type": "json_object"},
+        )
+
+        assert '[MODEL_SETTINGS]{"json_schema": {"anyOf": ' in output
 
     def test_v15_both_fields_sorted_keys(self) -> None:
         template = build_chat_template(

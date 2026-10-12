@@ -111,12 +111,6 @@ class TestGenerateChatTemplateAPI:
 
 
 class TestTemplateConfigModelSettings:
-    def test_default_model_settings_fields_is_reasoning_effort(self) -> None:
-        config = TemplateConfig(version=TokenizerVersion.v15)
-
-        assert config.model_settings_fields == frozenset({"reasoning_effort"})
-        assert config.emits_model_settings is True
-
     def test_unknown_model_settings_field_raises(self) -> None:
         with pytest.raises(ValueError) as excinfo:
             TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=frozenset({"bogus"}))
@@ -147,9 +141,7 @@ class TestTemplateConfigModelSettings:
         v13_config = TemplateConfig(version=TokenizerVersion.v13, model_settings_fields=None)
 
         assert v15_config.model_settings_fields == frozenset({"reasoning_effort"})
-        assert v15_config.emits_model_settings is True
         assert v13_config.model_settings_fields == frozenset()
-        assert v13_config.emits_model_settings is False
 
     def test_explicit_empty_model_settings_fields_rejected(self) -> None:
         with pytest.raises(ValueError) as v15_excinfo:

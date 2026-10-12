@@ -105,7 +105,7 @@ def test_cli_model_settings_fields_empty_value_rejected(tmp_path: Path) -> None:
     )
 
     assert result.returncode != 0
-    assert "Model settings fields must be None (automatic) or a non-empty set" in result.stderr
+    assert "--model_settings_fields must list at least one field" in result.stderr
 
 
 def test_cli_model_settings_fields_invalid_choice(tmp_path: Path) -> None:

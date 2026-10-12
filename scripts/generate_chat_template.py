@@ -4,6 +4,7 @@ from mistral_common.integrations.chat_templates.chat_templates import (
     convert_tokenizer_to_chat_template,
     generate_chat_template,
 )
+from mistral_common.integrations.chat_templates.template_generator import MODEL_SETTINGS_FIELD_CHOICES
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 
 
@@ -26,7 +27,8 @@ def main() -> None:
         type=str,
         default=None,
         help=(
-            "Comma-separated model settings fields to render (choices: reasoning_effort, json_schema). "
+            "Comma-separated model settings fields to render "
+            f"(choices: {', '.join(MODEL_SETTINGS_FIELD_CHOICES)}). "
             "Default when omitted: automatic (reasoning_effort at v15+, no fields below v15). "
             "An empty value is rejected."
         ),
@@ -95,11 +97,13 @@ def main() -> None:
         if args.version is None:
             parser.error("--version is required when --tokenizer_file is not provided")
 
-        model_settings_fields = (
-            None
-            if args.model_settings_fields is None
-            else frozenset(item.strip() for item in args.model_settings_fields.split(",") if item.strip())
-        )
+        model_settings_fields = None
+        if args.model_settings_fields is not None:
+            model_settings_fields = frozenset(
+                item.strip() for item in args.model_settings_fields.split(",") if item.strip()
+            )
+            if not model_settings_fields:
+                parser.error("--model_settings_fields must list at least one field")
 
         try:
             template = generate_chat_template(
