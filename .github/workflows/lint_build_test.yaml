@@ -32,6 +32,7 @@ jobs:
           "3.12",
           "3.13",
           "3.14",
+          "3.15",
         ]
     steps:
       - name: Checkout
@@ -41,7 +42,7 @@ jobs:
         uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           python-version: ${{ matrix.python-version }}
-      
+
       - name: Check uv lock
         run: |
           uv lock --check
@@ -108,6 +109,7 @@ jobs:
           "3.12",
           "3.13",
           "3.14",
+          "3.15",
         ]
     steps:
       - name: Checkout

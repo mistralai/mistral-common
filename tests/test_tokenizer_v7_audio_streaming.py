@@ -174,7 +174,7 @@ def test_tokenize_streaming_request(
             + (config.n_left_pad_tokens + config.n_right_pad_tokens(target_streaming_delay_ms))
             * config.raw_audio_length_per_tok,
         )
-        audio_len_in_tokens = tokenizer.audio_encoder.audio_config.num_audio_tokens(audio_array.shape[0])
+        audio_len_in_tokens = tokenizer.audio_encoder.audio_config.num_audio_tokens(int(audio_array.shape[0]))
         assert audio_len_in_tokens == (
             rounded_duration * tokenizer.audio_encoder.audio_config.frame_rate
             + len(tokenized.tokens)
