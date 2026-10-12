@@ -1,3 +1,4 @@
+import copy
 from pathlib import Path
 from typing import Any
 
@@ -5,6 +6,7 @@ import pytest
 from jinja2.exceptions import TemplateError
 
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
+from mistral_common.integrations.chat_templates.template_generator import build_chat_template
 from mistral_common.protocol.instruct.chunk import TextChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage, UserMessage
 from mistral_common.protocol.instruct.validator import ValidationMode
@@ -17,11 +19,14 @@ from tests.integrations.chat_templates.conftest import (
 from tests.integrations.chat_templates.fixtures_data import (
     REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
     _get_conversations,
+    _iter_render_args,
+    _with_dict_tool_arguments,
 )
 from tests.integrations.chat_templates.helpers import (
     TestConfig,
     _build_spm_path,
     _build_tekken_json,
+    _make_config,
     encode_mistral_common,
 )
 from tests.integrations.chat_templates.hf_utils import (
@@ -107,6 +112,25 @@ class TestTransformersMistralCommonParity:
 
             mistral_common_encoded = encode_mistral_common(mistral_tokenizer, conversation, config.spm)
             assert mistral_common_encoded == transformers_encoded
+
+    @pytest.mark.parametrize(
+        "config",
+        ALL_TRANSFORMERS_CONFIGS,
+        ids=[_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
+    )
+    def test_dict_tool_arguments_render_like_string_arguments(self, config: TestConfig) -> None:
+        # Even with Transformers' `tojson`, `|safe` returns Markup and `str + Markup` HTML-escapes.
+        template = build_chat_template(config=_make_config(config))
+
+        for mode, idx, render_args in _iter_render_args(config=config):
+            string_output = encode_transformers_from_openai(
+                chat_template=template, openai_request=copy.deepcopy(render_args)
+            )
+            dict_output = encode_transformers_from_openai(
+                chat_template=template, openai_request=_with_dict_tool_arguments(render_args=render_args)
+            )
+
+            assert dict_output == string_output, f"Output mismatch for {config}, mode={mode}, conversation={idx}"
 
     @pytest.mark.parametrize(
         "config",

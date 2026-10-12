@@ -81,6 +81,42 @@ def _load_golden_template(config: TemplateConfig) -> str:
     return path.read_text()
 
 
+def _request_to_render_args(request: ChatCompletionRequest) -> dict[str, Any]:
+    r"""Convert a ChatCompletionRequest to render_template kwargs.
+
+    Enriches tool messages with the `name` field resolved from the preceding
+    assistant's `tool_calls`, which the v2 Jinja template requires but
+    `ToolMessage.to_openai()` omits.
+    """
+    openai = request.to_openai()
+    messages = openai["messages"]
+
+    # Build a mapping from tool_call_id -> function name so tool messages
+    # can carry the `name` field expected by v2 templates.
+    tool_call_names: dict[str, str] = {}
+    for msg in messages:
+        for tc in msg.get("tool_calls", []):
+            tc_id = tc.get("id")
+            fn_name = tc.get("function", {}).get("name")
+            if tc_id and fn_name:
+                tool_call_names[tc_id] = fn_name
+
+    for msg in messages:
+        if msg.get("role") == "tool" and "name" not in msg:
+            tc_id = msg.get("tool_call_id")
+            if tc_id and tc_id in tool_call_names:
+                msg["name"] = tool_call_names[tc_id]
+
+    kwargs: dict[str, Any] = {
+        "messages": messages,
+    }
+    if "tools" in openai and openai["tools"]:
+        kwargs["tools"] = openai["tools"]
+    if (reasoning := openai.get("reasoning_effort")) is not None:
+        kwargs["reasoning_effort"] = reasoning
+    return kwargs
+
+
 def render_template(
     template: str, messages: list[Any], tools: list[Any] | None = None, reasoning_effort: str | None = None
 ) -> str:
