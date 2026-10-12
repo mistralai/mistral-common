@@ -1,6 +1,6 @@
 from collections.abc import Iterable, Mapping
 from enum import Enum
-from typing import Any, Generic, cast
+from typing import Any, Generic
 
 from pydantic import ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
@@ -170,7 +170,8 @@ class ResponseFormat(MistralBase):
 
         """
         if self.type == ResponseFormats.json_schema:
-            return cast(JsonSchema, self.json_schema).custom_schema
+            assert self.json_schema is not None
+            return self.json_schema.custom_schema
         if self.type == ResponseFormats.json:
             return {"anyOf": [{"type": "object"}, {"type": "array"}]}
         return None
