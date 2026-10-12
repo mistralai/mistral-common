@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
@@ -10,6 +12,7 @@ from mistral_common.protocol.instruct.request import (
     ReasoningEffort,
     ResponseFormat,
     ResponseFormats,
+    SchemaRenderingMode,
 )
 from mistral_common.tokens.tokenizers.model_settings_builder import (
     EnumBuilder,
@@ -249,7 +252,7 @@ def _req(rf: ResponseFormat) -> ChatCompletionRequest:
 def test_builder_text_yields_none() -> None:
     b = ModelSettingsBuilder(json_schema=JSONSchemaBuilder())
     response_format = ResponseFormat(type=ResponseFormats.text)
-    assert response_format.get_schema() is None
+    assert response_format.get_schema(purpose=SchemaRenderingMode.model_settings) is None
     assert b.build_settings(_req(response_format)).json_schema is None
 
 
@@ -257,7 +260,7 @@ def test_builder_json_yields_anyof() -> None:
     b = ModelSettingsBuilder(json_schema=JSONSchemaBuilder())
     response_format = ResponseFormat(type=ResponseFormats.json)
     expected_schema = {"anyOf": [{"type": "object"}, {"type": "array"}]}
-    assert response_format.get_schema() == expected_schema
+    assert response_format.get_schema(purpose=SchemaRenderingMode.model_settings) == expected_schema
     assert b.build_settings(_req(response_format)).json_schema == expected_schema
 
 
@@ -268,8 +271,22 @@ def test_builder_json_schema_yields_custom_schema(strict: bool) -> None:
         type=ResponseFormats.json_schema,
         json_schema=JsonSchema(name="x", schema=JSON_SCHEMA_DICT, strict=strict),
     )
-    assert response_format.get_schema() == JSON_SCHEMA_DICT
+    assert response_format.get_schema(purpose=SchemaRenderingMode.model_settings) == JSON_SCHEMA_DICT
     assert b.build_settings(_req(response_format)).json_schema == JSON_SCHEMA_DICT
+
+
+@pytest.mark.parametrize(
+    ("strict", "expected_grammar_schema"),
+    [(False, {"type": "object"}), (True, JSON_SCHEMA_DICT)],
+)
+def test_response_format_grammar_schema_respects_strict(strict: bool, expected_grammar_schema: dict[str, Any]) -> None:
+    response_format = ResponseFormat(
+        type=ResponseFormats.json_schema,
+        json_schema=JsonSchema(name="x", schema=JSON_SCHEMA_DICT, strict=strict),
+    )
+
+    assert response_format.get_schema(purpose=SchemaRenderingMode.grammar) == expected_grammar_schema
+    assert response_format.get_schema(purpose=SchemaRenderingMode.model_settings) == JSON_SCHEMA_DICT
 
 
 def test_json_schema_missing_schema_raises() -> None:
