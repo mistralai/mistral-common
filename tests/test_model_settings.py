@@ -247,14 +247,14 @@ def _req(rf: ResponseFormat) -> ChatCompletionRequest:
 
 
 def test_builder_text_yields_none() -> None:
-    b = ModelSettingsBuilder(json_schema=JSONSchemaBuilder(accepts_none=False, default=None))
+    b = ModelSettingsBuilder(json_schema=JSONSchemaBuilder())
     response_format = ResponseFormat(type=ResponseFormats.text)
     assert response_format.get_schema() is None
     assert b.build_settings(_req(response_format)).json_schema is None
 
 
 def test_builder_json_yields_anyof() -> None:
-    b = ModelSettingsBuilder(json_schema=JSONSchemaBuilder(accepts_none=False, default=None))
+    b = ModelSettingsBuilder(json_schema=JSONSchemaBuilder())
     response_format = ResponseFormat(type=ResponseFormats.json)
     expected_schema = {"anyOf": [{"type": "object"}, {"type": "array"}]}
     assert response_format.get_schema() == expected_schema
@@ -263,7 +263,7 @@ def test_builder_json_yields_anyof() -> None:
 
 @pytest.mark.parametrize("strict", [False, True])
 def test_builder_json_schema_yields_custom_schema(strict: bool) -> None:
-    b = ModelSettingsBuilder(json_schema=JSONSchemaBuilder(accepts_none=False, default=None))
+    b = ModelSettingsBuilder(json_schema=JSONSchemaBuilder())
     response_format = ResponseFormat(
         type=ResponseFormats.json_schema,
         json_schema=JsonSchema(name="x", schema=JSON_SCHEMA_DICT, strict=strict),
@@ -273,8 +273,8 @@ def test_builder_json_schema_yields_custom_schema(strict: bool) -> None:
 
 
 def test_json_schema_missing_schema_raises() -> None:
-    with pytest.raises(InvalidRequestException, match="must define the schema"):
-        ResponseFormat(type=ResponseFormats.json_schema).get_schema()
+    with pytest.raises(ValidationError, match="Response format `json_schema` must define the schema"):
+        ResponseFormat(type=ResponseFormats.json_schema)
 
 
 def test_builder_without_json_schema_ignores_response_format() -> None:

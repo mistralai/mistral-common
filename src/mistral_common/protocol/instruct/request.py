@@ -1,12 +1,12 @@
 from collections.abc import Iterable, Mapping
 from enum import Enum
-from typing import Any, Generic, Protocol, runtime_checkable
+from typing import Any, Generic, cast
 
 from pydantic import ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
 from mistral_common.base import MistralBase
 from mistral_common.deprecation import warn_once
-from mistral_common.exceptions import InvalidMessageStructureException, InvalidRequestException
+from mistral_common.exceptions import InvalidMessageStructureException
 from mistral_common.protocol.base import BaseCompletionRequest
 from mistral_common.protocol.instruct.converters import (
     convert_openai_messages,
@@ -154,6 +154,13 @@ class ResponseFormat(MistralBase):
     type: ResponseFormats = ResponseFormats.text
     json_schema: JsonSchema | None = None
 
+    @model_validator(mode="after")
+    def validate_schema_presence(self) -> "ResponseFormat":
+        r"""Require a schema when the response format selects `json_schema`."""
+        if self.type == ResponseFormats.json_schema and self.json_schema is None:
+            raise ValueError("Response format `json_schema` must define the schema")
+        return self
+
     def get_schema(self) -> dict[str, Any] | None:
         r"""Resolve the JSON schema to enforce on the response.
 
@@ -161,25 +168,12 @@ class ResponseFormat(MistralBase):
             The custom schema for `json_schema`, a generic object/array `anyOf`
             for `json_object`, and None for `text`.
 
-        Raises:
-            InvalidRequestException: If the response format requires a schema
-                but none is set.
         """
         if self.type == ResponseFormats.json_schema:
-            if self.json_schema is None:
-                raise InvalidRequestException("Response format `json_schema` must define the schema")
-            return self.json_schema.custom_schema
+            return cast(JsonSchema, self.json_schema).custom_schema
         if self.type == ResponseFormats.json:
             return {"anyOf": [{"type": "object"}, {"type": "array"}]}
         return None
-
-
-@runtime_checkable
-class ModelSettingsConv(Protocol):
-    r"""Information required from a chat request to build model settings."""
-
-    reasoning_effort: ReasoningEffort | None
-    response_format: ResponseFormat
 
 
 class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
