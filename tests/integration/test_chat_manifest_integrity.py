@@ -23,8 +23,8 @@ from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from tests.integration.chat_cases import SAMPLE_ERROR_CASES
-from tests.integration.chat_v15_cases import V15_SUCCESS_CASES
+from tests.integration.chat_cases import SAMPLE_V1_TOOLS_REJECTED_CASE
+from tests.integration.chat_v15_cases import V15_USER_IMAGE_URL_CASE
 from tests.integration.expected_results import (
     ExpectedAudio,
     ExpectedImage,
@@ -525,8 +525,6 @@ def test_media_metadata_mismatch_fails_the_comparison(field: str, message: str) 
     expected_image_array = np.zeros(shape=(1, 2), dtype=np.float32)
     expected_audio_array = np.zeros(shape=(4,), dtype=np.float32)
     expected = ExpectedSuccess(
-        case_id="integrity-case",
-        tokenizer_configuration_id="integrity-configuration",
         token_ids=[1],
         decoded_text="<s></s>",
         images=(ExpectedImage(shape=(1, 2), dtype="float32", array=expected_image_array),),
@@ -577,8 +575,6 @@ def test_media_metadata_mismatch_fails_the_comparison(field: str, message: str) 
 def test_shared_tolerance_boundary(media_kind: str, offset: float) -> None:
     expected_array = np.full(shape=(2,), fill_value=100.0, dtype=np.float64)
     expected = ExpectedSuccess(
-        case_id="integrity-case",
-        tokenizer_configuration_id="integrity-configuration",
         token_ids=[1],
         decoded_text="<s></s>",
         images=(ExpectedImage(shape=(2,), dtype="float64", array=expected_array),),
@@ -635,7 +631,7 @@ def test_sidecar_shape_mismatch_is_rejected_before_values(manifest_dir: Path) ->
 def test_changed_media_input_fails_public_encode_comparison(
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
 ) -> None:
-    case = next(case for case in V15_SUCCESS_CASES if case.case_id == "chat-v15-user-image-url")
+    case = V15_USER_IMAGE_URL_CASE
     tokenizer = public_tokenizer(case.configuration)
     expected = load_expected_success(
         case_id=case.case_id,
@@ -666,7 +662,7 @@ def test_changed_media_input_fails_public_encode_comparison(
 def test_construction_failure_fails_expected_error_case(
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
 ) -> None:
-    case = next(case for case in SAMPLE_ERROR_CASES if case.case_id == "chat-sample-v1-tools-rejected-test")
+    case = SAMPLE_V1_TOOLS_REJECTED_CASE
     encode_and_expect_error(case=case, public_tokenizer=public_tokenizer)
 
     def fail_request_construction() -> ChatCompletionRequest[ChatMessage]:

@@ -9,9 +9,9 @@ from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
 from tests.integration.chat_cases import PublicChatErrorCase, PublicChatSuccessCase
 from tests.integration.chat_recipes import (
+    PREFIXED_FINAL,
     WEATHER_FULL,
     ChatRecipe,
-    build_prefixed_final_request,
     build_red_image,
     build_user_content_request,
     build_user_media_request,
@@ -75,7 +75,12 @@ _USER_AUDIO = ChatRecipe(recipe_id="released-user-audio", build=_build_user_audi
 _USER_AUDIO_URL = ChatRecipe(recipe_id="released-user-audio-url", build=_build_user_audio_url)
 _TWO_USER_IMAGES = ChatRecipe(recipe_id="released-two-user-images", build=_build_two_user_images)
 _SYSTEM_THINK = ChatRecipe(recipe_id="released-system-think", build=_build_system_think)
-_PREFIXED_FINAL = ChatRecipe(recipe_id="released-prefixed-final", build=build_prefixed_final_request)
+
+RELEASED_USER_AUDIO_URL_CASE = PublicChatSuccessCase(
+    case_id="chat-v7-released-user-audio-url",
+    recipe=_USER_AUDIO_URL,
+    configuration=PINNED_V7_AUDIO_TEST,
+)
 
 
 RELEASED_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
@@ -105,14 +110,12 @@ RELEASED_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
     PublicChatSuccessCase(
         case_id="chat-v7-released-user-audio", recipe=_USER_AUDIO, configuration=PINNED_V7_AUDIO_TEST
     ),
-    PublicChatSuccessCase(
-        case_id="chat-v7-released-user-audio-url", recipe=_USER_AUDIO_URL, configuration=PINNED_V7_AUDIO_TEST
-    ),
+    RELEASED_USER_AUDIO_URL_CASE,
     PublicChatSuccessCase(
         case_id="chat-v11-released-image-order", recipe=_TWO_USER_IMAGES, configuration=PINNED_V11_IMAGE_TEST
     ),
     PublicChatSuccessCase(
-        case_id="chat-v11-released-prefixed-final", recipe=_PREFIXED_FINAL, configuration=PINNED_V11_IMAGE_TEST
+        case_id="chat-v11-released-prefixed-final", recipe=PREFIXED_FINAL, configuration=PINNED_V11_IMAGE_TEST
     ),
     PublicChatSuccessCase(
         case_id="chat-v13-released-user-image", recipe=_USER_IMAGE, configuration=PINNED_V13_IMAGE_TEST

@@ -16,13 +16,13 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.integration.chat_cases import PublicChatSuccessCase
 from tests.integration.chat_v3_cases import (
     AGREEMENT_PAIRS,
-    EQUAL_TOKENS,
     IMAGE_CASES,
     LEADING_IMAGE_CASE,
     MULTI_IMAGE_ORDER_CASES,
     SWAP_PAIRS,
     TRAILING_IMAGE_CASE,
     PairedChatCase,
+    TokenRelation,
 )
 from tests.integration.tokenizer_configurations import TokenizerConfiguration
 from tests.integration.utils import encode_and_verify
@@ -36,12 +36,13 @@ from tests.integration.utils import encode_and_verify
 def test_public_chat_pair(
     pair: PairedChatCase, public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer]
 ) -> None:
-    _, first, _ = encode_and_verify(case=pair.first, public_tokenizer=public_tokenizer)
-    _, second, _ = encode_and_verify(case=pair.second, public_tokenizer=public_tokenizer)
-    if pair.token_relation == EQUAL_TOKENS:
-        assert first.tokens == second.tokens, f"Pair {pair.pair_id!r}: expected equal token sequences"
-    else:
-        assert first.tokens != second.tokens, f"Pair {pair.pair_id!r}: expected different token sequences"
+    _, first = encode_and_verify(case=pair.first, public_tokenizer=public_tokenizer)
+    _, second = encode_and_verify(case=pair.second, public_tokenizer=public_tokenizer)
+    match pair.token_relation:
+        case TokenRelation.EQUAL:
+            assert first.tokens == second.tokens, f"Pair {pair.pair_id!r}: expected equal token sequences"
+        case TokenRelation.DIFFERENT:
+            assert first.tokens != second.tokens, f"Pair {pair.pair_id!r}: expected different token sequences"
 
 
 @pytest.mark.parametrize(argnames="case", argvalues=IMAGE_CASES, ids=lambda case: case.case_id)
@@ -80,7 +81,7 @@ def _patch2_special_ids(tokenizer: MistralTokenizer) -> SpecialImageIDs:
 def test_public_chat_multi_image_order(
     case: PublicChatSuccessCase, public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer]
 ) -> None:
-    tokenizer, tokenized, _ = encode_and_verify(case=case, public_tokenizer=public_tokenizer)
+    tokenizer, tokenized = encode_and_verify(case=case, public_tokenizer=public_tokenizer)
     special_ids = _patch2_special_ids(tokenizer=tokenizer)
     assert _image_tokenizer_spans(tokens=tokenized.tokens, special_ids=special_ids) == [
         _image_tokens(width=2, height=2, special_ids=special_ids),
@@ -91,7 +92,7 @@ def test_public_chat_multi_image_order(
 def test_public_chat_trailing_image_moves_first(
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
 ) -> None:
-    tokenizer, tokenized, _ = encode_and_verify(case=TRAILING_IMAGE_CASE, public_tokenizer=public_tokenizer)
+    tokenizer, tokenized = encode_and_verify(case=TRAILING_IMAGE_CASE, public_tokenizer=public_tokenizer)
     special_ids = _patch2_special_ids(tokenizer=tokenizer)
     assert _image_tokenizer_spans(tokens=tokenized.tokens, special_ids=special_ids) == [
         _image_tokens(width=2, height=2, special_ids=special_ids)
@@ -103,7 +104,7 @@ def test_public_chat_trailing_image_moves_first(
 def test_public_chat_leading_image_remains_first(
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
 ) -> None:
-    tokenizer, tokenized, _ = encode_and_verify(case=LEADING_IMAGE_CASE, public_tokenizer=public_tokenizer)
+    tokenizer, tokenized = encode_and_verify(case=LEADING_IMAGE_CASE, public_tokenizer=public_tokenizer)
     special_ids = _patch2_special_ids(tokenizer=tokenizer)
     assert _image_tokenizer_spans(tokens=tokenized.tokens, special_ids=special_ids) == [
         _image_tokens(width=2, height=2, special_ids=special_ids)

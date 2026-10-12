@@ -18,14 +18,15 @@ from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
 from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
 from tests.integration.chat_cases import PublicChatErrorCase, PublicChatSuccessCase
 from tests.integration.chat_recipes import (
+    CALL_ID_SLASH,
+    CALL_ID_X,
+    PREFIXED_FINAL,
     ChatRecipe,
     build_function_tool,
     build_math_interpreter_tool,
-    build_prefixed_final_request,
     build_red_image,
     build_two_tool_call_messages,
     build_user_media_request,
-    call_id_recipe,
 )
 from tests.integration.tokenizer_configurations import (
     PINNED_V15_IMAGE_SETTINGS_TEST,
@@ -35,11 +36,6 @@ from tests.integration.tokenizer_configurations import (
     SYNTHETIC_V15_REASONING_EMPTY_TEST,
     SYNTHETIC_V15_REASONING_NONE_ONLY_TEST,
 )
-
-
-def _messages() -> list[ChatMessage]:
-    r"""Build fresh ordered tool-call messages for v15 settings selectors."""
-    return build_two_tool_call_messages(tool_results=(("R1", "123456789"), ("R2", "999999999")))
 
 
 def _build_settings_request(
@@ -55,7 +51,7 @@ def _build_settings_request(
         A fresh public chat request.
     """
     return ChatCompletionRequest[ChatMessage](
-        messages=_messages(),
+        messages=build_two_tool_call_messages(tool_results=(("R1", "123456789"), ("R2", "999999999"))),
         tools=[build_math_interpreter_tool()] if include_tools else None,
         reasoning_effort=reasoning_effort,
     )
@@ -141,23 +137,6 @@ def _build_system_audio() -> ChatCompletionRequest[ChatMessage]:
     )
 
 
-def _build_user_multimodal_request(
-    *, content_chunk: AudioChunk | AudioURLChunk | ImageURLChunk
-) -> ChatCompletionRequest[ChatMessage]:
-    r"""Build the legacy user-media request with the supplied fresh chunk.
-
-    Args:
-        content_chunk: Audio or image content appended to the user message.
-
-    Returns:
-        A fresh public request containing the media chunk.
-    """
-    return build_user_media_request(
-        prompt="Here is content",
-        content_chunk=content_chunk,
-    )
-
-
 def _user_media_recipe(
     *, recipe_id: str, content_factory: Callable[[], AudioChunk | AudioURLChunk | ImageURLChunk]
 ) -> ChatRecipe:
@@ -172,32 +151,29 @@ def _user_media_recipe(
     """
 
     def build() -> ChatCompletionRequest[ChatMessage]:
-        return _build_user_multimodal_request(content_chunk=content_factory())
+        return build_user_media_request(prompt="Here is content", content_chunk=content_factory())
 
     return ChatRecipe(recipe_id=recipe_id, build=build)
 
 
-_CALL_ID_X = call_id_recipe(recipe_id="v15-call-id-x", tool_call_id="x")
-_CALL_ID_SLASH = call_id_recipe(recipe_id="v15-call-id-slash", tool_call_id="call/id-1")
+_V15_SETTINGS_ABSENT = _settings_recipe(recipe_id="v15-settings-absent", reasoning_effort=None, include_tools=False)
+_V15_SETTINGS_NONE = _settings_recipe(
+    recipe_id="v15-settings-none", reasoning_effort=ReasoningEffort.none, include_tools=False
+)
+_V15_SETTINGS_HIGH = _settings_recipe(
+    recipe_id="v15-settings-high", reasoning_effort=ReasoningEffort.high, include_tools=False
+)
 _POLICY_ABSENT = _settings_recipe(recipe_id="v15-policy-absent", reasoning_effort=None, include_tools=True)
 _POLICY_NONE = _settings_recipe(recipe_id="v15-policy-none", reasoning_effort=ReasoningEffort.none, include_tools=True)
 _POLICY_HIGH = _settings_recipe(recipe_id="v15-policy-high", reasoning_effort=ReasoningEffort.high, include_tools=True)
-_IGNORE_ABSENT = _settings_recipe(recipe_id="v15-ignore-absent", reasoning_effort=None, include_tools=False)
-_IGNORE_NONE = _settings_recipe(recipe_id="v15-ignore-none", reasoning_effort=ReasoningEffort.none, include_tools=False)
-_DEFAULT_ABSENT = _settings_recipe(recipe_id="v15-default-absent", reasoning_effort=None, include_tools=False)
-_DEFAULT_NONE = _settings_recipe(
-    recipe_id="v15-default-none", reasoning_effort=ReasoningEffort.none, include_tools=False
-)
-_DEFAULT_HIGH = _settings_recipe(
-    recipe_id="v15-default-high", reasoning_effort=ReasoningEffort.high, include_tools=False
-)
-_NO_DEFAULT_ABSENT = _settings_recipe(recipe_id="v15-no-default-absent", reasoning_effort=None, include_tools=False)
-_NO_DEFAULT_NONE = _settings_recipe(
-    recipe_id="v15-no-default-none", reasoning_effort=ReasoningEffort.none, include_tools=False
-)
-_NO_DEFAULT_HIGH = _settings_recipe(
-    recipe_id="v15-no-default-high", reasoning_effort=ReasoningEffort.high, include_tools=False
-)
+_IGNORE_ABSENT = _V15_SETTINGS_ABSENT
+_IGNORE_NONE = _V15_SETTINGS_NONE
+_DEFAULT_ABSENT = _V15_SETTINGS_ABSENT
+_DEFAULT_NONE = _V15_SETTINGS_NONE
+_DEFAULT_HIGH = _V15_SETTINGS_HIGH
+_NO_DEFAULT_ABSENT = _V15_SETTINGS_ABSENT
+_NO_DEFAULT_NONE = _V15_SETTINGS_NONE
+_NO_DEFAULT_HIGH = _V15_SETTINGS_HIGH
 _TOOL_AUDIO = _tool_media_recipe(recipe_id="v15-tool-audio", content_factory=get_dummy_audio_chunk)
 _TOOL_AUDIO_URL = _tool_media_recipe(recipe_id="v15-tool-audio-url", content_factory=get_dummy_audio_url_chunk)
 _TOOL_IMAGE_URL = _tool_media_recipe(recipe_id="v15-tool-image-url", content_factory=_dummy_image_url_chunk)
@@ -205,14 +181,16 @@ _SYSTEM_AUDIO = ChatRecipe(recipe_id="v15-system-audio", build=_build_system_aud
 _USER_AUDIO = _user_media_recipe(recipe_id="v15-user-audio", content_factory=get_dummy_audio_chunk)
 _USER_AUDIO_URL = _user_media_recipe(recipe_id="v15-user-audio-url", content_factory=get_dummy_audio_url_chunk)
 _USER_IMAGE_URL = _user_media_recipe(recipe_id="v15-user-image-url", content_factory=_dummy_image_url_chunk)
-_PREFIXED_FINAL = ChatRecipe(recipe_id="v15-prefixed-final", build=build_prefixed_final_request)
+V15_USER_IMAGE_URL_CASE = PublicChatSuccessCase(
+    case_id="chat-v15-user-image-url",
+    recipe=_USER_IMAGE_URL,
+    configuration=PINNED_V15_IMAGE_SETTINGS_TEST,
+)
 
 V15_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
+    PublicChatSuccessCase(case_id="chat-v15-call-id-x", recipe=CALL_ID_X, configuration=PINNED_V15_IMAGE_SETTINGS_TEST),
     PublicChatSuccessCase(
-        case_id="chat-v15-call-id-x", recipe=_CALL_ID_X, configuration=PINNED_V15_IMAGE_SETTINGS_TEST
-    ),
-    PublicChatSuccessCase(
-        case_id="chat-v15-call-id-slash", recipe=_CALL_ID_SLASH, configuration=PINNED_V15_IMAGE_SETTINGS_TEST
+        case_id="chat-v15-call-id-slash", recipe=CALL_ID_SLASH, configuration=PINNED_V15_IMAGE_SETTINGS_TEST
     ),
     PublicChatSuccessCase(
         case_id="chat-v15-policy-absent-both", recipe=_POLICY_ABSENT, configuration=PINNED_V15_IMAGE_SETTINGS_TEST
@@ -257,7 +235,7 @@ V15_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
         case_id="chat-v15-no-default-high", recipe=_NO_DEFAULT_HIGH, configuration=SYNTHETIC_V15_NO_DEFAULT_TEST
     ),
     PublicChatSuccessCase(
-        case_id="chat-v15-prefixed-final", recipe=_PREFIXED_FINAL, configuration=PINNED_V15_IMAGE_SETTINGS_TEST
+        case_id="chat-v15-prefixed-final", recipe=PREFIXED_FINAL, configuration=PINNED_V15_IMAGE_SETTINGS_TEST
     ),
     PublicChatSuccessCase(case_id="chat-v15-tool-audio", recipe=_TOOL_AUDIO, configuration=SYNTHETIC_V15_AUDIO_TEST),
     PublicChatSuccessCase(
@@ -273,9 +251,7 @@ V15_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
     PublicChatSuccessCase(
         case_id="chat-v15-user-audio-url", recipe=_USER_AUDIO_URL, configuration=SYNTHETIC_V15_AUDIO_TEST
     ),
-    PublicChatSuccessCase(
-        case_id="chat-v15-user-image-url", recipe=_USER_IMAGE_URL, configuration=PINNED_V15_IMAGE_SETTINGS_TEST
-    ),
+    V15_USER_IMAGE_URL_CASE,
 )
 
 V15_ERROR_CASES: tuple[PublicChatErrorCase, ...] = (

@@ -22,8 +22,12 @@ from tests.integration.chat_cases import (
 )
 from tests.integration.chat_recipes import ChatRecipe
 from tests.integration.chat_registry import ALL_PUBLIC_CASES, ALL_SUCCESS_CASES
-from tests.integration.chat_released_cases import RELEASED_ERROR_CASES, RELEASED_SUCCESS_CASES
-from tests.integration.chat_v7_cases import V7_DIRECT_EQUALITY_CASES, V7DirectEqualityCase
+from tests.integration.chat_released_cases import (
+    RELEASED_ERROR_CASES,
+    RELEASED_SUCCESS_CASES,
+    RELEASED_USER_AUDIO_URL_CASE,
+)
+from tests.integration.chat_v7_cases import V7_DIRECT_EQUALITY_CASES
 from tests.integration.tokenizer_configurations import (
     BUNDLED_SPM_V1_TEST,
     BUNDLED_TEKKEN_V3_MM_PATCH2_TEST,
@@ -37,6 +41,10 @@ from tests.integration.utils import encode_and_expect_error, encode_and_verify
 _REGISTERED_RECIPES = tuple({case.recipe.recipe_id: case.recipe for case in ALL_PUBLIC_CASES}.values())
 _REGISTERED_CONFIGURATIONS = tuple(
     {case.configuration.configuration_id: case.configuration for case in ALL_PUBLIC_CASES}.values()
+)
+_V7_DIRECT_BUILDERS = tuple(dict.fromkeys(case.build_direct_request for case in V7_DIRECT_EQUALITY_CASES))
+_RELEASED_SUCCESS_CASES_WITHOUT_AUDIO_URL = tuple(
+    case for case in RELEASED_SUCCESS_CASES if case is not RELEASED_USER_AUDIO_URL_CASE
 )
 
 
@@ -98,9 +106,15 @@ def test_registered_chat_recipes_build_deeply_fresh_requests(recipe: ChatRecipe)
     _assert_fresh_request_graph(recipe_id=recipe.recipe_id, build=recipe.build)
 
 
-@pytest.mark.parametrize(argnames="case", argvalues=V7_DIRECT_EQUALITY_CASES, ids=lambda case: f"{case.case_id}-direct")
-def test_registered_v7_direct_recipes_build_deeply_fresh_requests(case: V7DirectEqualityCase) -> None:
-    _assert_fresh_request_graph(recipe_id=case.case_id, build=case.build_direct_request)
+@pytest.mark.parametrize(
+    argnames="build_direct_request",
+    argvalues=_V7_DIRECT_BUILDERS,
+    ids=lambda build_direct_request: build_direct_request.__name__,
+)
+def test_registered_v7_direct_recipes_build_deeply_fresh_requests(
+    build_direct_request: Callable[[], BaseModel],
+) -> None:
+    _assert_fresh_request_graph(recipe_id=build_direct_request.__name__, build=build_direct_request)
 
 
 def test_freshness_check_rejects_shared_image() -> None:
@@ -219,20 +233,27 @@ def test_expected_manifest_directories_match_success_cases() -> None:
     assert manifest_directories == success_case_ids
 
 
-@pytest.mark.parametrize(argnames="case", argvalues=RELEASED_SUCCESS_CASES, ids=lambda case: case.case_id)
+@pytest.mark.parametrize(
+    argnames="case",
+    argvalues=_RELEASED_SUCCESS_CASES_WITHOUT_AUDIO_URL,
+    ids=lambda case: case.case_id,
+)
 def test_released_profile_public_chat_success(
     case: PublicChatSuccessCase,
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
 ) -> None:
-    if case.case_id == "chat-v7-released-user-audio-url":
-        assert get_dummy_audio_url_chunk().get_url_type() == AudioURLType.base64
-        with patch(
-            target="mistral_common.tokens.tokenizers.audio._requests_lib.get",
-            side_effect=AssertionError("network used"),
-        ):
-            encode_and_verify(case=case, public_tokenizer=public_tokenizer)
-    else:
-        encode_and_verify(case=case, public_tokenizer=public_tokenizer)
+    encode_and_verify(case=case, public_tokenizer=public_tokenizer)
+
+
+def test_released_user_audio_url_uses_no_network(
+    public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
+) -> None:
+    assert get_dummy_audio_url_chunk().get_url_type() == AudioURLType.base64
+    with patch(
+        target="mistral_common.tokens.tokenizers.audio._requests_lib.get",
+        side_effect=AssertionError("network used"),
+    ):
+        encode_and_verify(case=RELEASED_USER_AUDIO_URL_CASE, public_tokenizer=public_tokenizer)
 
 
 @pytest.mark.parametrize(argnames="case", argvalues=RELEASED_ERROR_CASES, ids=lambda case: case.case_id)

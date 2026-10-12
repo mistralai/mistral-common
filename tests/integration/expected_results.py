@@ -53,8 +53,6 @@ class ExpectedAudio:
 class ExpectedSuccess:
     """The reviewed full public result of one success case."""
 
-    case_id: str
-    tokenizer_configuration_id: str
     token_ids: list[int]
     decoded_text: str
     images: tuple[ExpectedImage, ...]
@@ -382,8 +380,6 @@ def load_expected_success(
         for index, entry in enumerate(manifest.audios)
     )
     return ExpectedSuccess(
-        case_id=manifest.case_id,
-        tokenizer_configuration_id=manifest.tokenizer_configuration_id,
         token_ids=manifest.token_ids,
         decoded_text=manifest.decoded_text,
         images=images,

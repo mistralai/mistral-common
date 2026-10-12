@@ -112,24 +112,6 @@ def build_two_tool_call_messages(*, tool_results: tuple[tuple[str, str], tuple[s
     ]
 
 
-def build_call_id_request(*, tool_call_id: str) -> ChatCompletionRequest[ChatMessage]:
-    r"""Build a fresh request whose call and result share an arbitrary id.
-
-    Args:
-        tool_call_id: Identifier paired between the call and result.
-
-    Returns:
-        A request containing the call and its result.
-    """
-    return ChatCompletionRequest[ChatMessage](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(tool_calls=[ToolCall(id=tool_call_id, function=FunctionCall(name="f", arguments="{}"))]),
-            ToolMessage(content="b", tool_call_id=tool_call_id),
-        ]
-    )
-
-
 def call_id_recipe(*, recipe_id: str, tool_call_id: str) -> ChatRecipe:
     r"""Bind a call id to a recipe that creates a fresh request each time.
 
@@ -142,7 +124,15 @@ def call_id_recipe(*, recipe_id: str, tool_call_id: str) -> ChatRecipe:
     """
 
     def build() -> ChatCompletionRequest[ChatMessage]:
-        return build_call_id_request(tool_call_id=tool_call_id)
+        return ChatCompletionRequest[ChatMessage](
+            messages=[
+                UserMessage(content="a"),
+                AssistantMessage(
+                    tool_calls=[ToolCall(id=tool_call_id, function=FunctionCall(name="f", arguments="{}"))]
+                ),
+                ToolMessage(content="b", tool_call_id=tool_call_id),
+            ]
+        )
 
     return ChatRecipe(recipe_id=recipe_id, build=build)
 
@@ -151,22 +141,6 @@ def build_prefixed_final_request() -> ChatCompletionRequest[ChatMessage]:
     r"""Build the shared user message followed by a prefixed assistant turn."""
     return ChatCompletionRequest[ChatMessage](
         messages=[UserMessage(content="a"), AssistantMessage(content="b", prefix=True)]
-    )
-
-
-def build_system_audio_request(
-    *, audio_chunk_factory: Callable[[], AudioChunk | AudioURLChunk]
-) -> ChatCompletionRequest[ChatMessage]:
-    r"""Build the v13 system/user scaffold with a fresh user audio chunk.
-
-    Args:
-        audio_chunk_factory: Factory for the user message's audio chunk.
-
-    Returns:
-        A fresh request with the selected audio representation.
-    """
-    return ChatCompletionRequest[ChatMessage](
-        messages=[SystemMessage(content="hello"), UserMessage(content=[audio_chunk_factory()])]
     )
 
 
@@ -572,9 +546,7 @@ def _build_parallel_calls() -> ChatCompletionRequest[ChatMessage]:
     )
 
 
-def _build_tool_results_request(
-    *, call_count: int, result_count: int, terminal_assistant: bool
-) -> ChatCompletionRequest[ChatMessage]:
+def _build_tool_results_request(*, call_count: int, terminal_assistant: bool) -> ChatCompletionRequest[ChatMessage]:
     tool_calls = [
         ToolCall(id=f"call0000{index}", function=FunctionCall(name=f"tool_{index}", arguments="{}"))
         for index in range(1, call_count + 1)
@@ -585,7 +557,7 @@ def _build_tool_results_request(
     ]
     messages.extend(
         ToolMessage(name=f"tool_{index}", content=f"result {index}", tool_call_id=f"call0000{index}")
-        for index in range(1, result_count + 1)
+        for index in (1, 2)
     )
     if terminal_assistant:
         messages.append(AssistantMessage(content="The tool work is complete."))
@@ -594,15 +566,15 @@ def _build_tool_results_request(
 
 
 def _build_parallel_tool_results() -> ChatCompletionRequest[ChatMessage]:
-    return _build_tool_results_request(call_count=2, result_count=2, terminal_assistant=False)
+    return _build_tool_results_request(call_count=2, terminal_assistant=False)
 
 
 def _build_mismatched_tool_results() -> ChatCompletionRequest[ChatMessage]:
-    return _build_tool_results_request(call_count=1, result_count=2, terminal_assistant=False)
+    return _build_tool_results_request(call_count=1, terminal_assistant=False)
 
 
 def _build_mismatched_tool_results_finetuning() -> ChatCompletionRequest[ChatMessage]:
-    return _build_tool_results_request(call_count=1, result_count=2, terminal_assistant=True)
+    return _build_tool_results_request(call_count=1, terminal_assistant=True)
 
 
 NO_TOOLS = ChatRecipe(recipe_id="sample-no-tools", build=_build_no_tools)
@@ -616,3 +588,6 @@ MISMATCHED_TOOL_RESULTS = ChatRecipe(recipe_id="mismatched-tool-results", build=
 MISMATCHED_TOOL_RESULTS_FINETUNING = ChatRecipe(
     recipe_id="mismatched-tool-results-finetuning", build=_build_mismatched_tool_results_finetuning
 )
+PREFIXED_FINAL = ChatRecipe(recipe_id="prefixed-final", build=build_prefixed_final_request)
+CALL_ID_X = call_id_recipe(recipe_id="call-id-x", tool_call_id="x")
+CALL_ID_SLASH = call_id_recipe(recipe_id="call-id-slash", tool_call_id="call/id-1")

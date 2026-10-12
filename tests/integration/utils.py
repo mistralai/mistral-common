@@ -31,7 +31,7 @@ def encode_and_verify(
     *,
     case: PublicChatSuccessCase,
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
-) -> tuple[MistralTokenizer, Tokenized, str]:
+) -> tuple[MistralTokenizer, Tokenized]:
     r"""Encode a fresh public chat request and check its reviewed full result.
 
     Args:
@@ -39,8 +39,7 @@ def encode_and_verify(
         public_tokenizer: Session-cached loader for verified configurations.
 
     Returns:
-        The loaded tokenizer, tokenized result and decoded text for additional
-        case-specific assertions.
+        The loaded tokenizer and tokenized result for additional case-specific assertions.
     """
     request = case.recipe.build()
     tokenizer = public_tokenizer(case.configuration)
@@ -51,4 +50,4 @@ def encode_and_verify(
         tokenizer_configuration_id=case.configuration.configuration_id,
     )
     assert_public_success(expected=expected, tokenized=tokenized, decoded_text=decoded_text)
-    return tokenizer, tokenized, decoded_text
+    return tokenizer, tokenized

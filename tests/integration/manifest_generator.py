@@ -43,22 +43,20 @@ def _write_sidecars(case_dir: Path, prefix: str, arrays: list[np.ndarray]) -> li
     return entries
 
 
-def propose_manifest(case: PublicChatSuccessCase, *, force: bool) -> Path:
+def propose_manifest(case: PublicChatSuccessCase, *, force: bool) -> None:
     r"""Generate one case's manifest and sidecars from the current tokenizer.
 
     Args:
         case: The success case to propose.
         force: Overwrite an existing manifest.
 
-    Returns:
-        The written manifest path.
     """
     case_dir = _EXPECTED_ROOT / case.case_id
     manifest_path = case_dir / "expected.json"
     if manifest_path.exists():
         if not force:
             print(f"exists {case.case_id}: {manifest_path} (pass --force to regenerate)")
-            return manifest_path
+            return
 
     tokenizer = case.configuration.load()
     request = case.recipe.build()
@@ -86,24 +84,23 @@ def propose_manifest(case: PublicChatSuccessCase, *, force: bool) -> Path:
     case_dir.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(obj=manifest, indent=2) + "\n")
     print(f"proposed {case.case_id}: {manifest_path}")
-    return manifest_path
 
 
-def main(argv: list[str] | None = None) -> int:
+def main() -> int:
     """Propose manifests for the selected public chat success cases."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--case-id", action="append", required=False, help="Case id to propose; repeatable.")
     parser.add_argument("--force", action="store_true", help="Overwrite existing manifests.")
-    args = parser.parse_args(argv)
+    args = parser.parse_args()
 
     selected = ALL_SUCCESS_CASES
     if args.case_id:
         wanted = set(args.case_id)
-        known = {case.case_id for case in ALL_SUCCESS_CASES}
-        unknown = wanted - known
+        cases_by_id = {success.case_id: success for success in ALL_SUCCESS_CASES}
+        unknown = wanted - cases_by_id.keys()
         if unknown:
             raise SystemExit(f"Unknown case ids: {sorted(unknown)}")
-        selected = tuple(case for case in ALL_SUCCESS_CASES if case.case_id in wanted)
+        selected = tuple(success for success in ALL_SUCCESS_CASES if success.case_id in wanted)
 
     for case in selected:
         propose_manifest(case=case, force=args.force)

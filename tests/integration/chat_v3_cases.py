@@ -9,6 +9,7 @@ relational assertion after the exact comparisons.
 """
 
 from dataclasses import dataclass
+from enum import Enum
 
 from PIL import Image
 
@@ -23,9 +24,12 @@ from tests.integration.tokenizer_configurations import (
     BUNDLED_TEKKEN_V3_TEXT_TEST,
 )
 
-# Expected relation between the complete token sequences of a paired case.
-EQUAL_TOKENS = "equal"
-DIFFERENT_TOKENS = "different"
+
+class TokenRelation(Enum):
+    """Expected relation between paired public token sequences."""
+
+    EQUAL = "equal"
+    DIFFERENT = "different"
 
 
 @dataclass(frozen=True)
@@ -35,7 +39,7 @@ class PairedChatCase:
     pair_id: str
     first: PublicChatSuccessCase
     second: PublicChatSuccessCase
-    token_relation: str
+    token_relation: TokenRelation
 
 
 def _blue_6x4() -> Image.Image:
@@ -195,7 +199,7 @@ AGREEMENT_PAIRS: tuple[PairedChatCase, ...] = (
         second=PublicChatSuccessCase(
             case_id="chat-mm3-agree-multiturn-image", recipe=_MULTITURN_TEXT, configuration=_M3
         ),
-        token_relation=EQUAL_TOKENS,
+        token_relation=TokenRelation.EQUAL,
     ),
     PairedChatCase(
         pair_id="single-user",
@@ -203,13 +207,13 @@ AGREEMENT_PAIRS: tuple[PairedChatCase, ...] = (
         second=PublicChatSuccessCase(
             case_id="chat-mm3-agree-single-image", recipe=_SINGLE_USER_TEXT, configuration=_M3
         ),
-        token_relation=EQUAL_TOKENS,
+        token_relation=TokenRelation.EQUAL,
     ),
     PairedChatCase(
         pair_id="empty-text",
         first=PublicChatSuccessCase(case_id="chat-mm3-agree-empty-text", recipe=_EMPTY_TEXT, configuration=_T3),
         second=PublicChatSuccessCase(case_id="chat-mm3-agree-empty-image", recipe=_EMPTY_TEXT, configuration=_M3),
-        token_relation=EQUAL_TOKENS,
+        token_relation=TokenRelation.EQUAL,
     ),
     PairedChatCase(
         pair_id="system-adjacent",
@@ -219,7 +223,7 @@ AGREEMENT_PAIRS: tuple[PairedChatCase, ...] = (
         second=PublicChatSuccessCase(
             case_id="chat-mm3-agree-system-image", recipe=_SYSTEM_ADJACENT_TEXT, configuration=_M3
         ),
-        token_relation=EQUAL_TOKENS,
+        token_relation=TokenRelation.EQUAL,
     ),
 )
 
@@ -236,7 +240,7 @@ SWAP_PAIRS: tuple[PairedChatCase, ...] = (
             recipe=ChatRecipe(recipe_id="v3-swap-text-first", build=_build_swap_text_first),
             configuration=_M3,
         ),
-        token_relation=EQUAL_TOKENS,
+        token_relation=TokenRelation.EQUAL,
     ),
     PairedChatCase(
         pair_id="swap-appended",
@@ -250,7 +254,7 @@ SWAP_PAIRS: tuple[PairedChatCase, ...] = (
             recipe=ChatRecipe(recipe_id="v3-swap-appended-text-first", build=_build_swap_appended_text_first),
             configuration=_M3,
         ),
-        token_relation=DIFFERENT_TOKENS,
+        token_relation=TokenRelation.DIFFERENT,
     ),
 )
 

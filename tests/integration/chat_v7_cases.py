@@ -15,9 +15,9 @@ from mistral_common.protocol.instruct.request import ChatCompletionRequest, Inst
 from mistral_common.protocol.instruct.tool_calls import FunctionCall, Tool, ToolCall
 from tests.integration.chat_cases import PublicChatSuccessCase
 from tests.integration.chat_recipes import (
+    PREFIXED_FINAL,
     ChatRecipe,
     build_function_tool,
-    build_prefixed_final_request,
     build_red_image,
 )
 from tests.integration.tokenizer_configurations import (
@@ -31,9 +31,9 @@ from tests.integration.tokenizer_configurations import (
 
 @dataclass(frozen=True)
 class V7DirectEqualityCase:
-    """Direct instruct recipe paired with its public success case ID."""
+    """Direct instruct recipe paired with its public success case."""
 
-    case_id: str
+    case: PublicChatSuccessCase
     build_direct_request: Callable[[], InstructRequest]
 
 
@@ -115,56 +115,61 @@ def _build_tool_results() -> ChatCompletionRequest[ChatMessage]:
 _SYSTEM_TOOLS_IMAGE = ChatRecipe(recipe_id="v7-system-tools-image", build=_build_system_tools_image)
 _TOOL_CONTENT = ChatRecipe(recipe_id="v7-tool-content", build=_build_tool_content)
 _TOOL_RESULTS = ChatRecipe(recipe_id="v7-tool-results", build=_build_tool_results)
-_PREFIXED_FINAL = ChatRecipe(recipe_id="v7-prefixed-final", build=build_prefixed_final_request)
+_SYSTEM_TOOLS_IMAGE_CASE = PublicChatSuccessCase(
+    case_id="chat-v7-system-tools-image",
+    recipe=_SYSTEM_TOOLS_IMAGE,
+    configuration=BUNDLED_SPM_V7_MM_TEST,
+)
+_TOOL_CONTENT_NO_AUDIO_CASE = PublicChatSuccessCase(
+    case_id="chat-v7-tool-content-no-audio-ft",
+    recipe=_TOOL_CONTENT,
+    configuration=PINNED_V7_IMAGE_FINETUNING,
+)
+_TOOL_CONTENT_AUDIO_CASE = PublicChatSuccessCase(
+    case_id="chat-v7-tool-content-audio-ft",
+    recipe=_TOOL_CONTENT,
+    configuration=PINNED_V7_AUDIO_FINETUNING,
+)
+_TOOL_RESULTS_NO_AUDIO_CASE = PublicChatSuccessCase(
+    case_id="chat-v7-tool-results-no-audio-serving",
+    recipe=_TOOL_RESULTS,
+    configuration=PINNED_V7_IMAGE_SERVING,
+)
+_TOOL_RESULTS_AUDIO_CASE = PublicChatSuccessCase(
+    case_id="chat-v7-tool-results-audio-serving",
+    recipe=_TOOL_RESULTS,
+    configuration=PINNED_V7_AUDIO_SERVING,
+)
+V7_PREFIXED_FINAL_CASE = PublicChatSuccessCase(
+    case_id="chat-v7-prefixed-final",
+    recipe=PREFIXED_FINAL,
+    configuration=BUNDLED_SPM_V7_MM_TEST,
+)
 
 V7_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
-    PublicChatSuccessCase(
-        case_id="chat-v7-system-tools-image",
-        recipe=_SYSTEM_TOOLS_IMAGE,
-        configuration=BUNDLED_SPM_V7_MM_TEST,
-    ),
-    PublicChatSuccessCase(
-        case_id="chat-v7-tool-content-no-audio-ft",
-        recipe=_TOOL_CONTENT,
-        configuration=PINNED_V7_IMAGE_FINETUNING,
-    ),
-    PublicChatSuccessCase(
-        case_id="chat-v7-tool-content-audio-ft",
-        recipe=_TOOL_CONTENT,
-        configuration=PINNED_V7_AUDIO_FINETUNING,
-    ),
-    PublicChatSuccessCase(
-        case_id="chat-v7-tool-results-no-audio-serving",
-        recipe=_TOOL_RESULTS,
-        configuration=PINNED_V7_IMAGE_SERVING,
-    ),
-    PublicChatSuccessCase(
-        case_id="chat-v7-tool-results-audio-serving",
-        recipe=_TOOL_RESULTS,
-        configuration=PINNED_V7_AUDIO_SERVING,
-    ),
-    PublicChatSuccessCase(
-        case_id="chat-v7-prefixed-final",
-        recipe=_PREFIXED_FINAL,
-        configuration=BUNDLED_SPM_V7_MM_TEST,
-    ),
+    _SYSTEM_TOOLS_IMAGE_CASE,
+    _TOOL_CONTENT_NO_AUDIO_CASE,
+    _TOOL_CONTENT_AUDIO_CASE,
+    _TOOL_RESULTS_NO_AUDIO_CASE,
+    _TOOL_RESULTS_AUDIO_CASE,
+    V7_PREFIXED_FINAL_CASE,
 )
 
 V7_DIRECT_EQUALITY_CASES: tuple[V7DirectEqualityCase, ...] = (
     V7DirectEqualityCase(
-        case_id="chat-v7-tool-content-no-audio-ft",
+        case=_TOOL_CONTENT_NO_AUDIO_CASE,
         build_direct_request=_build_tool_content_instruct_request,
     ),
     V7DirectEqualityCase(
-        case_id="chat-v7-tool-content-audio-ft",
+        case=_TOOL_CONTENT_AUDIO_CASE,
         build_direct_request=_build_tool_content_instruct_request,
     ),
     V7DirectEqualityCase(
-        case_id="chat-v7-tool-results-no-audio-serving",
+        case=_TOOL_RESULTS_NO_AUDIO_CASE,
         build_direct_request=_build_tool_results_instruct_request,
     ),
     V7DirectEqualityCase(
-        case_id="chat-v7-tool-results-audio-serving",
+        case=_TOOL_RESULTS_AUDIO_CASE,
         build_direct_request=_build_tool_results_instruct_request,
     ),
 )

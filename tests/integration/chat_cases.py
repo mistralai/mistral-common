@@ -98,14 +98,16 @@ SAMPLE_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
     ),
 )
 
+SAMPLE_V1_TOOLS_REJECTED_CASE = PublicChatErrorCase(
+    case_id="chat-sample-v1-tools-rejected-test",
+    recipe=WEATHER_FULL,
+    configuration=BUNDLED_SPM_V1_TEST,
+    expected_exception=TokenizerException,
+    message_pattern=r"Tools not implemented for tokenizer V1",
+)
+
 SAMPLE_ERROR_CASES: tuple[PublicChatErrorCase, ...] = (
-    PublicChatErrorCase(
-        case_id="chat-sample-v1-tools-rejected-test",
-        recipe=WEATHER_FULL,
-        configuration=BUNDLED_SPM_V1_TEST,
-        expected_exception=TokenizerException,
-        message_pattern=r"Tools not implemented for tokenizer V1",
-    ),
+    SAMPLE_V1_TOOLS_REJECTED_CASE,
     PublicChatErrorCase(
         case_id="chat-v2-parallel-results-rejected-test",
         recipe=PARALLEL_TOOL_RESULTS,

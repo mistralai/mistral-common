@@ -300,60 +300,6 @@ def _load_synthetic_v13_audio(mode: ValidationMode) -> MistralTokenizer:
     )
 
 
-def _load_synthetic_v15(
-    *,
-    mode: ValidationMode,
-    allowed_reasoning_effort: tuple[ReasoningEffort, ...] | None,
-    default_reasoning_effort: ReasoningEffort | None,
-    add_audio: bool,
-) -> MistralTokenizer:
-    r"""Construct a v15 quick-vocabulary tokenizer for synthetic claims.
-
-    Args:
-        allowed_reasoning_effort: Allowed effort values, or `None` for no settings builder.
-        default_reasoning_effort: Builder default, or `None` for no default.
-        add_audio: Whether to attach the legacy-compatible audio encoder.
-
-    Returns:
-        A v15 tokenizer using synthetic quick-vocabulary bytes.
-    """
-    if allowed_reasoning_effort is None:
-        settings_builder = ModelSettingsBuilder.none()
-    else:
-        settings_builder = ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder[ReasoningEffort](
-                values=list(allowed_reasoning_effort),
-                accepts_none=True,
-                default=default_reasoning_effort,
-            )
-        )
-
-    tekkenizer = Tekkenizer(
-        vocab=quick_vocab(extra_toks=[b"a", b"b", b"c", b"f", b"de"]),
-        special_tokens=get_special_tokens(
-            tokenizer_version=TokenizerVersion.v15,
-            add_audio=add_audio,
-            add_think=not add_audio,
-        ),
-        pattern=r".+",
-        vocab_size=256 + 100,
-        num_special_tokens=100,
-        version=TokenizerVersion.v15,
-        model_settings_builder=settings_builder,
-    )
-
-    audio_encoder: AudioEncoder | None = None
-    if add_audio:
-        audio_encoder = _synthetic_audio_encoder(tekkenizer=tekkenizer)
-
-    instruct_tokenizer = InstructTokenizerV15(tokenizer=tekkenizer, audio_encoder=audio_encoder)
-    return MistralTokenizer(
-        instruct_tokenizer=instruct_tokenizer,
-        validator=get_validator(version=TokenizerVersion.v15, mode=mode),
-        request_normalizer=get_normalizer(version=TokenizerVersion.v15, model_settings_builder=settings_builder),
-    )
-
-
 def _synthetic_v15_loader(
     *,
     allowed_reasoning_effort: tuple[ReasoningEffort, ...] | None,
@@ -372,11 +318,40 @@ def _synthetic_v15_loader(
     """
 
     def load(mode: ValidationMode) -> MistralTokenizer:
-        return _load_synthetic_v15(
-            mode=mode,
-            allowed_reasoning_effort=allowed_reasoning_effort,
-            default_reasoning_effort=default_reasoning_effort,
-            add_audio=add_audio,
+        if allowed_reasoning_effort is None:
+            settings_builder = ModelSettingsBuilder.none()
+        else:
+            settings_builder = ModelSettingsBuilder(
+                reasoning_effort=EnumBuilder[ReasoningEffort](
+                    values=list(allowed_reasoning_effort),
+                    accepts_none=True,
+                    default=default_reasoning_effort,
+                )
+            )
+
+        tekkenizer = Tekkenizer(
+            vocab=quick_vocab(extra_toks=[b"a", b"b", b"c", b"f", b"de"]),
+            special_tokens=get_special_tokens(
+                tokenizer_version=TokenizerVersion.v15,
+                add_audio=add_audio,
+                add_think=not add_audio,
+            ),
+            pattern=r".+",
+            vocab_size=256 + 100,
+            num_special_tokens=100,
+            version=TokenizerVersion.v15,
+            model_settings_builder=settings_builder,
+        )
+
+        audio_encoder: AudioEncoder | None = None
+        if add_audio:
+            audio_encoder = _synthetic_audio_encoder(tekkenizer=tekkenizer)
+
+        instruct_tokenizer = InstructTokenizerV15(tokenizer=tekkenizer, audio_encoder=audio_encoder)
+        return MistralTokenizer(
+            instruct_tokenizer=instruct_tokenizer,
+            validator=get_validator(version=TokenizerVersion.v15, mode=mode),
+            request_normalizer=get_normalizer(version=TokenizerVersion.v15, model_settings_builder=settings_builder),
         )
 
     return load
