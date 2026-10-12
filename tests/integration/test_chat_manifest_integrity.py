@@ -26,6 +26,8 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.integration.chat_cases import SAMPLE_ERROR_CASES
 from tests.integration.chat_v15_cases import V15_SUCCESS_CASES
 from tests.integration.expected_results import (
+    ExpectedAudio,
+    ExpectedImage,
     ExpectedSuccess,
     assert_public_success,
     load_expected_success,
@@ -496,81 +498,114 @@ def test_changed_decoded_text_fails_the_comparison(manifest_dir: Path) -> None:
         assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s>hello there</s>")
 
 
-def test_changed_media_values_fail_under_the_shared_tolerance(tmp_path: Path) -> None:
-    case_dir = tmp_path / "integrity-media-case"
-    case_dir.mkdir()
-    (case_dir / "images").mkdir()
-    np.save(file=case_dir / "images" / "0.npy", arr=np.zeros(shape=(1, 2), dtype=np.float32))
-    (case_dir / "audios").mkdir()
-    np.save(file=case_dir / "audios" / "0.npy", arr=np.zeros(shape=(4,), dtype=np.float32))
-    (case_dir / "expected.json").write_text(
-        json.dumps(
-            {
-                "case_id": "integrity-media-case",
-                "tokenizer_configuration_id": "integrity-configuration",
-                "token_ids": [1],
-                "decoded_text": "<s></s>",
-                "images": [{"path": "images/0.npy", "shape": [1, 2], "dtype": "float32"}],
-                "audios": [
-                    {
-                        "path": "audios/0.npy",
-                        "shape": [4],
-                        "dtype": "float32",
-                        "sampling_rate": 16000,
-                        "format": "wav",
-                    }
-                ],
-            }
-        )
-    )
-    expected = load_expected_success(
-        case_id="integrity-media-case",
+@pytest.mark.parametrize(
+    argnames=("field", "message"),
+    argvalues=[
+        ("image-count", "Expected 1 returned images"),
+        ("image-shape", "Image shape"),
+        ("image-dtype", "Image dtype"),
+        ("audio-count", "Expected 1 returned audios"),
+        ("audio-sampling-rate", "Audio sampling rate"),
+        ("audio-format", "Audio format"),
+        ("audio-shape", "Audio shape"),
+        ("audio-dtype", "Audio dtype"),
+    ],
+    ids=[
+        "image-count",
+        "image-shape",
+        "image-dtype",
+        "audio-count",
+        "audio-sampling-rate",
+        "audio-format",
+        "audio-shape",
+        "audio-dtype",
+    ],
+)
+def test_media_metadata_mismatch_fails_the_comparison(field: str, message: str) -> None:
+    expected_image_array = np.zeros(shape=(1, 2), dtype=np.float32)
+    expected_audio_array = np.zeros(shape=(4,), dtype=np.float32)
+    expected = ExpectedSuccess(
+        case_id="integrity-case",
         tokenizer_configuration_id="integrity-configuration",
-        expected_root=tmp_path,
+        token_ids=[1],
+        decoded_text="<s></s>",
+        images=(ExpectedImage(shape=(1, 2), dtype="float32", array=expected_image_array),),
+        audios=(
+            ExpectedAudio(
+                shape=(4,),
+                dtype="float32",
+                sampling_rate=16000,
+                format="wav",
+                array=expected_audio_array,
+            ),
+        ),
     )
+    image_array = expected_image_array
+    if field == "image-shape":
+        image_array = np.zeros(shape=(2, 1), dtype=np.float32)
+    elif field == "image-dtype":
+        image_array = np.zeros(shape=(1, 2), dtype=np.float64)
+    images = [] if field == "image-count" else [image_array]
 
-    changed_image = np.full(shape=(1, 2), fill_value=1.0, dtype=np.float32)
-    changed_audio = Audio(
-        audio_array=np.full(shape=(4,), fill_value=1.0, dtype=np.float32), sampling_rate=16000, format="wav"
+    audio_array = expected_audio_array
+    sampling_rate = 16000
+    audio_format = "wav"
+    if field == "audio-shape":
+        audio_array = np.zeros(shape=(3,), dtype=np.float32)
+    elif field == "audio-dtype":
+        audio_array = np.zeros(shape=(4,), dtype=np.float64)
+    elif field == "audio-sampling-rate":
+        sampling_rate = 8000
+    elif field == "audio-format":
+        audio_format = "mp3"
+    audios = (
+        []
+        if field == "audio-count"
+        else [Audio(audio_array=audio_array, sampling_rate=sampling_rate, format=audio_format)]
     )
-    tokenized = Tokenized(tokens=[1], images=[changed_image], audios=[changed_audio])
-    with pytest.raises(expected_exception=AssertionError, match="Image array differs"):
+    tokenized = Tokenized(tokens=[1], images=images, audios=audios)
+
+    with pytest.raises(expected_exception=AssertionError, match=message):
         assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s></s>")
 
+
+@pytest.mark.parametrize(
+    argnames=("media_kind", "offset"),
+    argvalues=[("image", 0.5e-4), ("image", 2e-4), ("audio", 0.5e-4), ("audio", 2e-4)],
+    ids=["image-within-tolerance", "image-beyond-tolerance", "audio-within-tolerance", "audio-beyond-tolerance"],
+)
+def test_shared_tolerance_boundary(media_kind: str, offset: float) -> None:
+    expected_array = np.full(shape=(2,), fill_value=100.0, dtype=np.float64)
+    expected = ExpectedSuccess(
+        case_id="integrity-case",
+        tokenizer_configuration_id="integrity-configuration",
+        token_ids=[1],
+        decoded_text="<s></s>",
+        images=(ExpectedImage(shape=(2,), dtype="float64", array=expected_array),),
+        audios=(
+            ExpectedAudio(
+                shape=(2,),
+                dtype="float64",
+                sampling_rate=16000,
+                format="wav",
+                array=expected_array,
+            ),
+        ),
+    )
+    changed_array = np.full(shape=(2,), fill_value=100.0 + offset, dtype=np.float64)
+    image_array = changed_array if media_kind == "image" else expected_array
+    audio_array = changed_array if media_kind == "audio" else expected_array
     tokenized = Tokenized(
         tokens=[1],
-        images=[np.zeros(shape=(1, 2), dtype=np.float32)],
-        audios=[changed_audio],
+        images=[image_array],
+        audios=[Audio(audio_array=audio_array, sampling_rate=16000, format="wav")],
     )
-    with pytest.raises(expected_exception=AssertionError, match="Audio array differs"):
-        assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s></s>")
 
-
-def test_media_metadata_mismatches_fail_before_values(tmp_path: Path) -> None:
-    case_dir = tmp_path / "integrity-metadata-case"
-    case_dir.mkdir()
-    (case_dir / "images").mkdir()
-    np.save(file=case_dir / "images" / "0.npy", arr=np.zeros(shape=(2, 1), dtype=np.float32))
-    (case_dir / "expected.json").write_text(
-        json.dumps(
-            {
-                "case_id": "integrity-metadata-case",
-                "tokenizer_configuration_id": "integrity-configuration",
-                "token_ids": [1],
-                "decoded_text": "<s></s>",
-                "images": [{"path": "images/0.npy", "shape": [2, 1], "dtype": "float32"}],
-                "audios": [],
-            }
-        )
-    )
-    expected = load_expected_success(
-        case_id="integrity-metadata-case",
-        tokenizer_configuration_id="integrity-configuration",
-        expected_root=tmp_path,
-    )
-    tokenized = Tokenized(tokens=[1], images=[np.zeros(shape=(1, 2), dtype=np.float32)])
-    with pytest.raises(expected_exception=AssertionError, match="Image shape"):
+    if offset == 0.5e-4:
         assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s></s>")
+    else:
+        with pytest.raises(expected_exception=AssertionError, match="array differs"):
+            assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s></s>")
 
 
 def test_sidecar_dtype_mismatch_is_rejected_before_values(manifest_dir: Path) -> None:
