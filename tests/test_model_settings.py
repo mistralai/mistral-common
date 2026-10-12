@@ -289,6 +289,11 @@ def test_response_format_grammar_schema_respects_strict(strict: bool, expected_g
     assert response_format.get_schema(purpose=SchemaRenderingMode.model_settings) == JSON_SCHEMA_DICT
 
 
+def test_json_schema_rejects_invalid_schema() -> None:
+    with pytest.raises(ValidationError, match="123 is not valid under any of the given schemas"):
+        JsonSchema(name="x", schema={"type": 123})
+
+
 def test_json_schema_missing_schema_raises() -> None:
     with pytest.raises(ValidationError, match="Response format `json_schema` must define the schema"):
         ResponseFormat(type=ResponseFormats.json_schema)
