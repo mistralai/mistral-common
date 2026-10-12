@@ -265,6 +265,15 @@ PUBLIC_SPEECH_ERROR_CASES = (
         message=r"the text_to_audio marker required for speech",
     ),
     PublicSpeechErrorCase(
+        case_id="audio-v7-speech-no-audio-to-text-test",
+        configuration_id=SYNTHETIC_V7_SPEECH_NO_AUDIO_TO_TEXT.configuration_id,
+        mode=ValidationMode.test,
+        profile=SYNTHETIC_V7_SPEECH_NO_AUDIO_TO_TEXT,
+        request_recipe="speech-reference",
+        exception_type=UnsupportedTokenizerFeatureException,
+        message=r"the audio_to_text marker required for speech",
+    ),
+    PublicSpeechErrorCase(
         case_id="audio-v7-speech-no-voice-map-test",
         configuration_id=SYNTHETIC_V7_SPEECH_NO_VOICE_MAP.configuration_id,
         mode=ValidationMode.test,
@@ -374,6 +383,12 @@ def test_public_speech_error(case: PublicSpeechErrorCase) -> None:
             "speech-preset",
             r"(?i)preset voices.*not configured",
             id="v7-speech-profile-without-voice-map",
+        ),
+        pytest.param(
+            SYNTHETIC_V7_SPEECH_NO_VOICE_MAP,
+            "speech-unknown-voice",
+            r"(?i)preset voices.*not configured",
+            id="v7-speech-absent-voice-map-precedes-unknown-voice",
         ),
     ],
 )

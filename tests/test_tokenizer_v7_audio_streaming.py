@@ -295,6 +295,14 @@ def test_public_streaming_transcription_errors(
         ),
         pytest.param(
             SYNTHETIC_V7_STREAMING,
+            b"not decodable audio",
+            StreamingMode.DISABLED,
+            InvalidRequestException,
+            r"^Streaming transcription requires mode OFFLINE or ONLINE, got DISABLED\.$",
+            id="streaming-disabled-undecodable-media",
+        ),
+        pytest.param(
+            SYNTHETIC_V7_STREAMING,
             valid_reference_audio_bytes(),
             StreamingMode.ONLINE,
             InvalidRequestException,
