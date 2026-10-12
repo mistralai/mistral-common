@@ -75,7 +75,7 @@ docs = [
 ]
 
 test-integrations = [
-    "transformers>=4.0.0",
+    "transformers>=5.0.0",
     "regex>=2025.10.22",
 ]
 
