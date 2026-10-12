@@ -1,13 +1,13 @@
 from enum import Enum
-from typing import Any, ClassVar, Generic, Literal, TypeAlias, TypeVar, cast, final
+from typing import Any, ClassVar, Generic, Literal, TypeAlias, TypeVar, final
 
 from pydantic import model_validator
 
 from mistral_common.base import MistralBase
 from mistral_common.exceptions import InvalidRequestException
 from mistral_common.protocol.instruct.request import (
+    ChatCompletionRequest,
     ModelSettings,
-    ModelSettingsConv,
     ReasoningEffort,
     ResponseFormat,
 )
@@ -188,8 +188,8 @@ class JSONSchemaBuilder(FieldBuilder[ResponseFormat, JSONSchemaDict]):
     """
 
     type: ValidatorType = ValidatorType.JSON_SCHEMA
-    accepts_none: Literal[False]
-    default: None
+    accepts_none: Literal[False] = False
+    default: None = None
 
     def validate_built_value(self, field_name: str, value: JSONSchemaDict | None) -> None:
         r"""Validate a built schema value, allowing `None`.
@@ -216,10 +216,6 @@ class JSONSchemaBuilder(FieldBuilder[ResponseFormat, JSONSchemaDict]):
             validate_json_schema_by_draft7(value)
 
 
-class ReasoningEffortEnumBuilder(EnumBuilder[ReasoningEffort]):
-    r"""Concrete enum builder with a stable pickleable class path."""
-
-
 class ModelSettingsBuilder(MistralBase):
     r"""Builder for ModelSettings to ensure only authorized values are used.
 
@@ -240,29 +236,8 @@ class ModelSettingsBuilder(MistralBase):
         "json_schema": "response_format",
     }
 
-    reasoning_effort: ReasoningEffortEnumBuilder | None = None
+    reasoning_effort: EnumBuilder[ReasoningEffort] | None = None
     json_schema: JSONSchemaBuilder | None = None
-
-    def __init__(
-        self,
-        *,
-        reasoning_effort: ReasoningEffortEnumBuilder | EnumBuilder[ReasoningEffort] | None = None,
-        json_schema: JSONSchemaBuilder | None = None,
-    ) -> None:
-        cast(Any, super()).__init__(reasoning_effort=reasoning_effort, json_schema=json_schema)
-
-    @model_validator(mode="before")
-    @classmethod
-    def _coerce_reasoning_effort_builder(cls, value: Any) -> Any:
-        if not isinstance(value, dict):
-            return value
-        reasoning_effort_builder = value.get("reasoning_effort")
-        if isinstance(reasoning_effort_builder, EnumBuilder) and not isinstance(
-            reasoning_effort_builder, ReasoningEffortEnumBuilder
-        ):
-            value = value.copy()
-            value["reasoning_effort"] = ReasoningEffortEnumBuilder.model_validate(reasoning_effort_builder.model_dump())
-        return value
 
     @staticmethod
     def none() -> "ModelSettingsBuilder":
@@ -276,7 +251,7 @@ class ModelSettingsBuilder(MistralBase):
         """
         return ModelSettingsBuilder()
 
-    def build_settings(self, request: ModelSettingsConv) -> ModelSettings:
+    def build_settings(self, request: ChatCompletionRequest) -> ModelSettings:
         r"""Build and validate a ModelSettings instance from a raw request.
 
         Iterates over all known fields, applies the corresponding builder, and
