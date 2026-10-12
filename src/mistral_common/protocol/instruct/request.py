@@ -116,8 +116,9 @@ class JsonSchema(MistralBase):
         name: The schema name.
         description: An optional description of the schema.
         custom_schema: The JSON schema (aliased `schema`).
-        strict: Whether the model must strictly adhere to the schema. Preserved
-            for OpenAI API compatibility; not consulted by `ResponseFormat.get_schema()`.
+        strict: Whether grammar generation uses the custom schema. When `False`,
+            grammar generation uses a generic object schema; model settings always
+            retain the custom schema. The value is also preserved for OpenAI compatibility.
 
     Examples:
         >>> schema = JsonSchema(name="obj", schema={"type": "object"})
@@ -136,6 +137,13 @@ class JsonSchema(MistralBase):
         r"""Validate the schema against JSON Schema Draft 7."""
         validate_json_schema_by_draft7(value=value)
         return value
+
+
+class SchemaRenderingMode(str, Enum):
+    r"""Select how a response-format schema is applied."""
+
+    grammar = "grammar"
+    model_settings = "model_settings"
 
 
 class ResponseFormat(MistralBase):
@@ -161,16 +169,21 @@ class ResponseFormat(MistralBase):
             raise ValueError("Response format `json_schema` must define the schema")
         return self
 
-    def get_schema(self) -> dict[str, Any] | None:
-        r"""Resolve the JSON schema to enforce on the response.
+    def get_schema(self, purpose: SchemaRenderingMode) -> dict[str, Any] | None:
+        r"""Resolve the response schema for grammar generation or model settings.
+
+        Args:
+            purpose: Whether the schema is used to constrain a grammar or encode
+                model settings.
 
         Returns:
-            The custom schema for `json_schema`, a generic object/array `anyOf`
-            for `json_object`, and None for `text`.
+            The schema selected for this purpose, or None for `text`.
 
         """
         if self.type == ResponseFormats.json_schema:
             assert self.json_schema is not None
+            if purpose == SchemaRenderingMode.grammar and not self.json_schema.strict:
+                return {"type": "object"}
             return self.json_schema.custom_schema
         if self.type == ResponseFormats.json:
             return {"anyOf": [{"type": "object"}, {"type": "array"}]}
