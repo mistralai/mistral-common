@@ -67,7 +67,7 @@ def _cached_get_lark_from_jinja(
         begin_think_token=begin_think_token,
         end_think_token=end_think_token,
     )
-    return lark_grammar
+    return str(lark_grammar)
 
 
 class _GrammarVariant(str, Enum):
