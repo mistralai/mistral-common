@@ -73,20 +73,17 @@ def _assert_full_path(manifest_dir: Path, tokenized: Tokenized) -> None:
 
 
 def _write_image_entry(manifest_dir: Path, *, path: str, shape: list[int], dtype: str) -> None:
-    manifest_path = manifest_dir / "expected.json"
-    manifest = json.loads(manifest_path.read_text())
+    manifest = _read_manifest(manifest_dir)
     manifest["images"] = [{"path": path, "shape": shape, "dtype": dtype}]
-    manifest_path.write_text(json.dumps(manifest))
+    _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
 
 
-def _write_manifest(manifest_dir: Path, manifest: dict[str, object]) -> None:
+def _write_manifest(manifest_dir: Path, manifest: object) -> None:
     (manifest_dir / "expected.json").write_text(json.dumps(manifest))
 
 
 def _read_manifest(manifest_dir: Path) -> dict[str, Any]:
-    manifest = json.loads((manifest_dir / "expected.json").read_text())
-    if not isinstance(manifest, dict):
-        raise ValueError("Manifest must be an object")
+    manifest: dict[str, Any] = json.loads((manifest_dir / "expected.json").read_text())
     return manifest
 
 
@@ -174,31 +171,15 @@ def test_npz_archive_renamed_as_npy_is_rejected(manifest_dir: Path) -> None:
         _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
 
 
-def test_changed_token_ids_fail_the_comparison(manifest_dir: Path) -> None:
-    expected = _load(manifest_dir)
-    tokenized = Tokenized(tokens=[1, 2, 4])
-    with pytest.raises(expected_exception=AssertionError, match="Token ids differ"):
-        assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s>hello</s>")
-
-
-def test_non_integer_token_id_is_rejected_before_public_comparison(manifest_dir: Path) -> None:
-    manifest_path = manifest_dir / "expected.json"
-    manifest = json.loads(manifest_path.read_text())
-    manifest["token_ids"] = [1.9, 2, 3]
-    manifest_path.write_text(json.dumps(manifest))
-
-    with pytest.raises(expected_exception=ValueError, match=r"Case 'integrity-case'.*token_ids\[0\].*1\.9"):
-        _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
-
-
 @pytest.mark.parametrize(
     argnames=("token_ids", "message"),
     argvalues=[
         ({}, "field 'token_ids' must be an array"),
         ("123", "field 'token_ids' must be an array"),
         ([True, 2, 3], r"token_ids\[0\].*must be an integer"),
+        ([1.9, 2, 3], r"Case 'integrity-case'.*token_ids\[0\].*1\.9"),
     ],
-    ids=["object", "string", "boolean-item"],
+    ids=["object", "string", "boolean-item", "float-item"],
 )
 def test_token_ids_must_be_an_array_of_exact_integers(manifest_dir: Path, token_ids: object, message: str) -> None:
     manifest = _read_manifest(manifest_dir)
@@ -302,6 +283,26 @@ def test_media_entries_must_be_objects(manifest_dir: Path, field: str) -> None:
             },
             r"audio entry 0.*sampling_rate.*must be an integer",
         ),
+        (
+            "images",
+            {"path": "images/0.npy", "shape": [1.9, 2], "dtype": "float32"},
+            r"image entry 0.*shape\[0\].*1\.9",
+        ),
+        (
+            "audios",
+            {"path": "audios/0.npy", "shape": [4.9], "dtype": "float32", "sampling_rate": 16000, "format": "wav"},
+            r"audio entry 0.*shape\[0\].*4\.9",
+        ),
+        (
+            "audios",
+            {"path": "audios/0.npy", "shape": [4], "dtype": "float32", "sampling_rate": 16000.9, "format": "wav"},
+            r"audio entry 0.*sampling_rate.*16000\.9",
+        ),
+        (
+            "audios",
+            {"path": "audios/0.npy", "shape": [4], "dtype": "float32", "sampling_rate": 16000, "format": 7},
+            r"audio entry 0.*field 'format'.*must be a string",
+        ),
     ],
     ids=[
         "image-path",
@@ -310,6 +311,10 @@ def test_media_entries_must_be_objects(manifest_dir: Path, field: str) -> None:
         "audio-shape",
         "boolean-shape",
         "boolean-sampling-rate",
+        "non-integer-image-shape",
+        "non-integer-audio-shape",
+        "non-integer-audio-sampling-rate",
+        "numeric-audio-format",
     ],
 )
 def test_media_entry_fields_have_the_declared_types(
@@ -396,27 +401,6 @@ def test_media_entries_require_all_schema_fields(manifest_dir: Path, field: str,
         _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
 
 
-def test_audio_format_must_be_a_string(manifest_dir: Path) -> None:
-    audio_array = np.zeros(shape=(4,), dtype=np.float32)
-    (manifest_dir / "audios").mkdir()
-    np.save(file=manifest_dir / "audios" / "0.npy", arr=audio_array)
-    manifest = _read_manifest(manifest_dir)
-    manifest["audios"] = [
-        {
-            "path": "audios/0.npy",
-            "shape": [4],
-            "dtype": "float32",
-            "sampling_rate": 16000,
-            "format": 7,
-        }
-    ]
-    _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
-    tokenized = Tokenized(tokens=[1, 2, 3], audios=[Audio(audio_array=audio_array, sampling_rate=16000, format="wav")])
-
-    with pytest.raises(expected_exception=ValueError, match=r"audio entry 0.*field 'format'.*must be a string"):
-        _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
-
-
 @pytest.mark.parametrize(
     argnames="field",
     argvalues=["case_id", "tokenizer_configuration_id", "token_ids", "decoded_text", "images", "audios"],
@@ -433,69 +417,28 @@ def test_manifest_requires_all_top_level_fields(manifest_dir: Path, field: str) 
 
 
 def test_manifest_root_must_be_an_object(manifest_dir: Path) -> None:
-    (manifest_dir / "expected.json").write_text(json.dumps(["not", "an", "object"]))
+    _write_manifest(manifest_dir=manifest_dir, manifest=["not", "an", "object"])
 
     with pytest.raises(expected_exception=ValueError, match=r"Case 'integrity-case'.*manifest.*must be an object"):
         _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
 
 
-def test_non_integer_image_shape_dimension_is_rejected_before_comparison(manifest_dir: Path) -> None:
-    (manifest_dir / "images").mkdir()
-    np.save(file=manifest_dir / "images" / "0.npy", arr=np.zeros(shape=(1, 2), dtype=np.float32))
-    _write_image_entry(manifest_dir=manifest_dir, path="images/0.npy", shape=[1, 2], dtype="float32")
-    manifest_path = manifest_dir / "expected.json"
-    manifest = json.loads(manifest_path.read_text())
-    manifest["images"][0]["shape"] = [1.9, 2]
-    manifest_path.write_text(json.dumps(manifest))
-    tokenized = Tokenized(tokens=[1, 2, 3], images=[np.zeros(shape=(1, 2), dtype=np.float32)])
-
-    with pytest.raises(expected_exception=ValueError, match=r"Case 'integrity-case' image entry 0.*shape\[0\].*1\.9"):
-        _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
-
-
-def test_non_integer_audio_shape_dimension_is_rejected_before_comparison(manifest_dir: Path) -> None:
-    (manifest_dir / "audios").mkdir()
-    np.save(file=manifest_dir / "audios" / "0.npy", arr=np.zeros(shape=(4,), dtype=np.float32))
-    manifest_path = manifest_dir / "expected.json"
-    manifest = json.loads(manifest_path.read_text())
-    manifest["audios"] = [
-        {"path": "audios/0.npy", "shape": [4.9], "dtype": "float32", "sampling_rate": 16000, "format": "wav"}
-    ]
-    manifest_path.write_text(json.dumps(manifest))
-    tokenized = Tokenized(
-        tokens=[1, 2, 3],
-        audios=[Audio(audio_array=np.zeros(shape=(4,), dtype=np.float32), sampling_rate=16000, format="wav")],
-    )
-
-    with pytest.raises(expected_exception=ValueError, match=r"Case 'integrity-case' audio entry 0.*shape\[0\].*4\.9"):
-        _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
-
-
-def test_non_integer_audio_sampling_rate_is_rejected_before_comparison(manifest_dir: Path) -> None:
-    (manifest_dir / "audios").mkdir()
-    np.save(file=manifest_dir / "audios" / "0.npy", arr=np.zeros(shape=(4,), dtype=np.float32))
-    manifest_path = manifest_dir / "expected.json"
-    manifest = json.loads(manifest_path.read_text())
-    manifest["audios"] = [
-        {"path": "audios/0.npy", "shape": [4], "dtype": "float32", "sampling_rate": 16000.9, "format": "wav"}
-    ]
-    manifest_path.write_text(json.dumps(manifest))
-    tokenized = Tokenized(
-        tokens=[1, 2, 3],
-        audios=[Audio(audio_array=np.zeros(shape=(4,), dtype=np.float32), sampling_rate=16000, format="wav")],
-    )
-
-    with pytest.raises(
-        expected_exception=ValueError, match=r"Case 'integrity-case' audio entry 0.*sampling_rate.*16000\.9"
-    ):
-        _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
-
-
-def test_changed_decoded_text_fails_the_comparison(manifest_dir: Path) -> None:
+@pytest.mark.parametrize(
+    argnames=("token_ids", "decoded_text", "message"),
+    argvalues=[
+        ([1, 2, 4], "<s>hello</s>", "Token ids differ"),
+        ([1, 2, 3], "<s>hello there</s>", "Decoded text differs"),
+    ],
+    ids=["token-ids", "decoded-text"],
+)
+def test_changed_public_result_fails_the_comparison(
+    manifest_dir: Path, token_ids: list[int], decoded_text: str, message: str
+) -> None:
     expected = _load(manifest_dir)
-    tokenized = Tokenized(tokens=[1, 2, 3])
-    with pytest.raises(expected_exception=AssertionError, match="Decoded text differs"):
-        assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s>hello there</s>")
+    tokenized = Tokenized(tokens=token_ids)
+
+    with pytest.raises(expected_exception=AssertionError, match=message):
+        assert_public_success(expected=expected, tokenized=tokenized, decoded_text=decoded_text)
 
 
 @pytest.mark.parametrize(
@@ -604,27 +547,23 @@ def test_shared_tolerance_boundary(media_kind: str, offset: float) -> None:
             assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s></s>")
 
 
-def test_sidecar_dtype_mismatch_is_rejected_before_values(manifest_dir: Path) -> None:
+@pytest.mark.parametrize(
+    argnames=("sidecar_shape", "sidecar_dtype", "message"),
+    argvalues=[
+        ((1, 2), "float64", "sidecar dtype.*does not match manifest declared dtype float32"),
+        ((2, 1), "float32", r"sidecar shape.*does not match manifest declared shape \(1, 2\)"),
+    ],
+    ids=["dtype", "shape"],
+)
+def test_sidecar_metadata_mismatch_is_rejected_before_values(
+    manifest_dir: Path, sidecar_shape: tuple[int, ...], sidecar_dtype: str, message: str
+) -> None:
     (manifest_dir / "images").mkdir()
-    np.save(file=manifest_dir / "images" / "0.npy", arr=np.zeros(shape=(1, 2), dtype=np.float64))
+    np.save(file=manifest_dir / "images" / "0.npy", arr=np.zeros(shape=sidecar_shape, dtype=sidecar_dtype))
     _write_image_entry(manifest_dir=manifest_dir, path="images/0.npy", shape=[1, 2], dtype="float32")
     tokenized = Tokenized(tokens=[1, 2, 3], images=[np.zeros(shape=(1, 2), dtype=np.float32)])
 
-    with pytest.raises(
-        expected_exception=ValueError, match="sidecar dtype.*does not match manifest declared dtype float32"
-    ):
-        _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
-
-
-def test_sidecar_shape_mismatch_is_rejected_before_values(manifest_dir: Path) -> None:
-    (manifest_dir / "images").mkdir()
-    np.save(file=manifest_dir / "images" / "0.npy", arr=np.zeros(shape=(2, 1), dtype=np.float32))
-    _write_image_entry(manifest_dir=manifest_dir, path="images/0.npy", shape=[1, 2], dtype="float32")
-    tokenized = Tokenized(tokens=[1, 2, 3], images=[np.zeros(shape=(1, 2), dtype=np.float32)])
-
-    with pytest.raises(
-        expected_exception=ValueError, match=r"sidecar shape.*does not match manifest declared shape \(1, 2\)"
-    ):
+    with pytest.raises(expected_exception=ValueError, match=message):
         _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
 
 
@@ -663,7 +602,6 @@ def test_construction_failure_fails_expected_error_case(
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
 ) -> None:
     case = SAMPLE_V1_TOOLS_REJECTED_CASE
-    encode_and_expect_error(case=case, public_tokenizer=public_tokenizer)
 
     def fail_request_construction() -> ChatCompletionRequest[ChatMessage]:
         raise case.expected_exception("request construction: Tools not implemented for tokenizer V1")
