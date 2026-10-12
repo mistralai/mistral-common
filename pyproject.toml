@@ -82,6 +82,7 @@ test-integrations = [
 
 [tool.uv]
 required-version = "==0.12.6"
+exclude-newer = "2 days"
 
 [tool.ruff]
 lint.select = ["E", "F", "W", "Q", "I"]
