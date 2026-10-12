@@ -4,7 +4,7 @@
 
 Mistral-Common is a preprocessing library for Mistral's Large Language Models (LLMs).
 It encodes requests for Instruct, Transcription or Fill-In-The-Middle (FIM) tasks to tokens and optionally processed images or audios.
-- Language: Python 3.10 to 3.14
+- Language: Python 3.10 to 3.15
 - Package Manager: uv
 - Testing: pytest
 - Formatting and Linting: Ruff
