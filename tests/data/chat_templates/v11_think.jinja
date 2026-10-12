@@ -17,7 +17,7 @@
 {%- set has_tools = false %}
 {%- if tools is defined and tools is not none and tools|length > 0 %}
     {%- set has_tools = true %}
-    {%- set available_tools = '[AVAILABLE_TOOLS]' + (tools| tojson) + '[/AVAILABLE_TOOLS]' %}
+    {%- set available_tools = '[AVAILABLE_TOOLS]' ~ (tools| tojson) ~ '[/AVAILABLE_TOOLS]' %}
 {%- endif %}
 
 {#- Macros #}
@@ -161,7 +161,7 @@
             {{- available_tools }}
         {%- endif %}
         {{- '[INST]' -}}
-        {{- render_content(message['content'], 'user message content', supported_types_desc='text', support_thinking=false) -}}
+        {{- render_content(content=message['content'], context_name='user message content', supported_types_desc='text', support_thinking=false) -}}
         {{- '[/INST]' }}
 
     {#- Assistant messages supports text and thinking content. #}
@@ -171,7 +171,7 @@
         {%- endif %}
 
         {%- if message['content'] %}
-            {{- render_content(message['content'], 'assistant message contents', supported_types_desc='text and thinking', support_thinking=true) -}}
+            {{- render_content(content=message['content'], context_name='assistant message contents', supported_types_desc='text and thinking', support_thinking=true) -}}
         {%- endif %}
 
         {%- if message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}
@@ -188,7 +188,7 @@
                 {%- elif arguments == '' %}
                     {%- set arguments = '{}' %}
                 {%- endif %}
-                {{- name + '[CALL_ID]' + id + '[ARGS]' + arguments }}
+                {{- name ~ '[CALL_ID]' ~ id ~ '[ARGS]' ~ arguments }}
             {%- endfor %}
         {%- endif %}
 
@@ -208,7 +208,7 @@
     {#- System messages. #}
     {%- elif message['role'] == 'system' %}
         {{- '[SYSTEM_PROMPT]' -}}
-        {{- render_content(message['content'], 'system message contents', supported_types_desc='text and thinking', support_thinking=true) -}}
+        {{- render_content(content=message['content'], context_name='system message contents', supported_types_desc='text and thinking', support_thinking=true) -}}
         {{- '[/SYSTEM_PROMPT]' -}}
 
     {#- Raise exception for unsupported roles. #}

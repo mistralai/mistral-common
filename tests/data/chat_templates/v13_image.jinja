@@ -17,7 +17,7 @@
 {%- set has_tools = false %}
 {%- if tools is defined and tools is not none and tools|length > 0 %}
     {%- set has_tools = true %}
-    {%- set available_tools = '[AVAILABLE_TOOLS]' + (tools| tojson) + '[/AVAILABLE_TOOLS]' %}
+    {%- set available_tools = '[AVAILABLE_TOOLS]' ~ (tools| tojson) ~ '[/AVAILABLE_TOOLS]' %}
 {%- endif %}
 
 {#- Macros #}
@@ -166,7 +166,7 @@
                 {%- elif arguments == '' %}
                     {%- set arguments = '{}' %}
                 {%- endif %}
-                {{- name + '[ARGS]' + arguments }}
+                {{- name ~ '[ARGS]' ~ arguments }}
             {%- endfor %}
         {%- endif %}
 

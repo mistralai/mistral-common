@@ -38,7 +38,7 @@
 {%- set has_tools = false %}
 {%- if tools is defined and tools is not none and tools|length > 0 %}
     {%- set has_tools = true %}
-    {%- set available_tools = '[AVAILABLE_TOOLS]' + (tools| tojson) + '[/AVAILABLE_TOOLS]' %}
+    {%- set available_tools = '[AVAILABLE_TOOLS]' ~ (tools| tojson) ~ '[/AVAILABLE_TOOLS]' %}
 {%- endif %}
 
 {#- Macros #}
@@ -199,7 +199,7 @@
                 {%- elif arguments == '' %}
                     {%- set arguments = '{}' %}
                 {%- endif %}
-                {{- '{"name": "' + name + '", "arguments": ' + arguments + ', "id": "' + id + '"}' }}
+                {{- '{"name": "' ~ name ~ '", "arguments": ' ~ arguments ~ ', "id": "' ~ id ~ '"}' }}
                 {%- if loop.length > 1 and loop.index < loop.length %}
                     {{- ', ' }}
                 {%- endif %}
@@ -235,7 +235,7 @@
 
         {%- set tool_message = {'content': tool_content, 'call_id': tool_id} %}
         
-        {{- '[TOOL_RESULTS]' + (tool_message|tojson) + '[/TOOL_RESULTS]' }}
+        {{- '[TOOL_RESULTS]' ~ (tool_message|tojson) ~ '[/TOOL_RESULTS]' }}
 
 
     {#- Raise exception for unsupported roles. #}

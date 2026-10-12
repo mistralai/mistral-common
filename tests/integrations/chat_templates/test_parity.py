@@ -1,3 +1,4 @@
+import json
 from typing import Any
 
 import pytest
@@ -127,3 +128,31 @@ def test_dynamic_template_comprehensive(config: TestConfig) -> None:
                 f"Static output: {static_output}\n"
                 f"Dynamic output: {dynamic_output}"
             )
+
+
+@pytest.mark.parametrize(
+    "config",
+    [c for c in ALL_CONFIGS if not c.plain_think],
+    ids=[_config_id(c) for c in ALL_CONFIGS if not c.plain_think],
+)
+def test_tojson_values_are_not_html_escaped(config: TestConfig) -> None:
+    # Stock Jinja's `tojson` (and `|safe`) return Markup, and `str + Markup` HTML-escapes the string side.
+    template = build_chat_template(_make_config(config))
+
+    for mode in (ValidationMode.finetuning, ValidationMode.test):
+        conversations = _get_conversations(config.version, mode, config.image, config.audio, config.think)
+        if config.version == TokenizerVersion.v2 and mode == ValidationMode.finetuning:
+            conversations = [
+                conversation
+                for conversation in conversations
+                if conversation != REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2
+            ]
+        for idx, request in enumerate(conversations):
+            render_args = _request_to_render_args(request)
+            for message in render_args["messages"]:
+                for tool_call in message.get("tool_calls") or []:
+                    tool_call["function"]["arguments"] = json.loads(tool_call["function"]["arguments"] or "{}")
+
+            output = render_template(template, **render_args)
+
+            assert "&#" not in output, f"HTML-escaped output for {config}, mode={mode}, conversation={idx}: {output}"

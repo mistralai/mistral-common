@@ -485,11 +485,11 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
         lines.append("    {%- set has_tools = true %}")
         if config.spm:
             lines.append(
-                "    {%- set available_tools = '" + _BEGIN_TOOLS + " ' + (tools| tojson) + '" + _END_TOOLS + "' %}"
+                "    {%- set available_tools = '" + _BEGIN_TOOLS + " ' ~ (tools| tojson) ~ '" + _END_TOOLS + "' %}"
             )
         else:
             lines.append(
-                "    {%- set available_tools = '" + _BEGIN_TOOLS + "' + (tools| tojson) + '" + _END_TOOLS + "' %}"
+                "    {%- set available_tools = '" + _BEGIN_TOOLS + "' ~ (tools| tojson) ~ '" + _END_TOOLS + "' %}"
             )
         lines.append("{%- endif %}")
 
@@ -1438,13 +1438,13 @@ def _generate_tool_calls_elif_v2_v3(config: TemplateConfig) -> str:
     if config.uses_v2_tool_format:
         # v2: no ID in tool calls
         lines.extend(_emit_argument_normalization("                "))
-        lines.append("                {{- '{\"name\": \"' + name + '\", \"arguments\": ' + arguments + '}' }}")
+        lines.append("                {{- '{\"name\": \"' ~ name ~ '\", \"arguments\": ' ~ arguments ~ '}' }}")
     else:
         # v3_spm: has ID in tool calls
         lines.extend(_emit_call_id_validation("                "))
         lines.extend(_emit_argument_normalization("                "))
         lines.append(
-            '                {{- \'{"name": "\' + name + \'", "arguments": \' + arguments + \', "id": "\' + id + \'"}\' }}'  # noqa: E501
+            '                {{- \'{"name": "\' ~ name ~ \'", "arguments": \' ~ arguments ~ \', "id": "\' ~ id ~ \'"}\' }}'  # noqa: E501
         )
 
     lines.append("                {%- if loop.length > 1 and loop.index < loop.length %}")
@@ -1490,7 +1490,7 @@ def _generate_tool_calls_block(config: TemplateConfig) -> str:
         lines.append("                {%- set name = tool['function']['name'] %}")
         lines.append("                {%- set arguments = tool['function']['arguments'] %}")
         lines.extend(_emit_argument_normalization("                "))
-        lines.append("                {{- name + '" + _ARGS + "' + arguments }}")
+        lines.append("                {{- name ~ '" + _ARGS + "' ~ arguments }}")
         lines.append("            {%- endfor %}")
     elif config.uses_call_id_in_tool_calls:
         lines.append("            {%- for tool in message['tool_calls'] %}")
@@ -1499,7 +1499,7 @@ def _generate_tool_calls_block(config: TemplateConfig) -> str:
         lines.append("                {%- set arguments = tool['function']['arguments'] %}")
         lines.extend(_emit_call_id_validation("                "))
         lines.extend(_emit_argument_normalization("                "))
-        lines.append("                {{- name + '" + _CALL_ID + "' + id + '" + _ARGS + "' + arguments }}")
+        lines.append("                {{- name ~ '" + _CALL_ID + "' ~ id ~ '" + _ARGS + "' ~ arguments }}")
         lines.append("            {%- endfor %}")
     else:
         if config.spm:
@@ -1512,7 +1512,7 @@ def _generate_tool_calls_block(config: TemplateConfig) -> str:
         lines.extend(_emit_call_id_validation("                "))
         lines.extend(_emit_argument_normalization("                "))
         lines.append(
-            '                {{- \'{"name": "\' + name + \'", "arguments": \' + arguments + \', "id": "\' + id + \'"}\' }}'  # noqa: E501
+            '                {{- \'{"name": "\' ~ name ~ \'", "arguments": \' ~ arguments ~ \', "id": "\' ~ id ~ \'"}\' }}'  # noqa: E501
         )
         lines.append("                {%- if loop.length > 1 and loop.index < loop.length %}")
         lines.append("                    {{- ', ' }}")
@@ -1574,11 +1574,11 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         lines.append("        ")
         if config.spm:
             lines.append(
-                "        {{- '" + _BEGIN_TOOL_RESULTS + " [' + (tool_message|tojson) + ']" + _END_TOOL_RESULTS + "' }}"
+                "        {{- '" + _BEGIN_TOOL_RESULTS + " [' ~ (tool_message|tojson) ~ ']" + _END_TOOL_RESULTS + "' }}"
             )  # noqa: E501
         else:
             lines.append(
-                "        {{- '" + _BEGIN_TOOL_RESULTS + "[' + (tool_message|tojson) + ']" + _END_TOOL_RESULTS + "' }}"
+                "        {{- '" + _BEGIN_TOOL_RESULTS + "[' ~ (tool_message|tojson) ~ ']" + _END_TOOL_RESULTS + "' }}"
             )  # noqa: E501
     elif config.uses_json_tool_results:
         lines.extend(_emit_int_float_parsing("        "))
@@ -1588,7 +1588,7 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         lines.append("        {%- set tool_message = {'content': tool_content, 'call_id': tool_id} %}")
         lines.append("        ")
         lines.append(
-            "        {{- '" + _BEGIN_TOOL_RESULTS + " ' + (tool_message|tojson) + '" + _END_TOOL_RESULTS + "' }}"
+            "        {{- '" + _BEGIN_TOOL_RESULTS + " ' ~ (tool_message|tojson) ~ '" + _END_TOOL_RESULTS + "' }}"
         )  # noqa: E501
     elif config.uses_tool_content_format:
         lines.extend(_emit_call_id_resolution("        "))
@@ -1646,7 +1646,7 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         lines.append("        {%- set tool_message = {'content': tool_content, 'call_id': tool_id} %}")
         lines.append("        ")
         lines.append(
-            "        {{- '" + _BEGIN_TOOL_RESULTS + "' + (tool_message|tojson) + '" + _END_TOOL_RESULTS + "' }}"
+            "        {{- '" + _BEGIN_TOOL_RESULTS + "' ~ (tool_message|tojson) ~ '" + _END_TOOL_RESULTS + "' }}"
         )  # noqa: E501
 
     # SPM tracking
