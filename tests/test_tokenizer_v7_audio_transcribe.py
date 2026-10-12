@@ -164,7 +164,7 @@ TRANSCRIPTION_ERROR_CASES = (
         profile=SYNTHETIC_V7_INSTRUCT,
         request_recipe="instruct-offline",
         error_type=InvalidRequestException,
-        message=r"Instruct transcription.*DISABLED.*OFFLINE",
+        message=r"^Instruct transcription requires streaming mode DISABLED, got OFFLINE\.$",
     ),
     TranscriptionErrorCase(
         case_id="audio-v7-instruct-online-rejected-test",
@@ -189,7 +189,7 @@ def _build_transcription_error_request(
         return TranscriptionRequest(audio=valid_reference_audio(), language=None, target_streaming_delay_ms=None)
     if recipe == "instruct-offline":
         return TranscriptionRequest(
-            audio=valid_reference_audio(),
+            audio=b"not decodable audio",
             streaming=StreamingMode.OFFLINE,
             language=None,
             target_streaming_delay_ms=None,
@@ -224,22 +224,6 @@ def test_direct_transcription_errors(case: TranscriptionErrorCase) -> None:
 
     with pytest.raises(case.error_type, match=case.message):
         tokenizer.instruct_tokenizer.encode_transcription(request)
-
-
-def test_direct_instruct_wrong_mode_rejects_before_media_decoding() -> None:
-    tokenizer = load_v7_audio_error_tokenizer(profile=SYNTHETIC_V7_INSTRUCT, mode=ValidationMode.test)
-    request = TranscriptionRequest(
-        audio=b"not decodable audio",
-        streaming=StreamingMode.OFFLINE,
-        language=None,
-        target_streaming_delay_ms=None,
-    )
-
-    with pytest.raises(
-        expected_exception=InvalidRequestException,
-        match=r"^Instruct transcription requires streaming mode DISABLED, got OFFLINE\.$",
-    ):
-        tokenizer.instruct_tokenizer.encode_transcription(request=request)
 
 
 @pytest.mark.parametrize(

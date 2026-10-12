@@ -31,7 +31,6 @@ from tests.test_tokenizer_v7_audio import (
     SYNTHETIC_V7_STREAMING_NO_PAD,
     SyntheticV7AudioProfile,
     build_synthetic_v7_audio_tokenizer,
-    valid_reference_audio,
     valid_reference_audio_bytes,
 )
 from tests.utils import decode_keep
@@ -233,10 +232,10 @@ def test_audio_config_delay(rate: float, delay: int, num_delay_tokens: int) -> N
             SYNTHETIC_V7_STREAMING.configuration_id,
             SYNTHETIC_V7_STREAMING,
             ValidationMode.test,
-            valid_reference_audio(),
+            b"not decodable audio",
             StreamingMode.DISABLED,
             InvalidRequestException,
-            r"Streaming transcription.*OFFLINE.*ONLINE.*DISABLED",
+            r"^Streaming transcription requires mode OFFLINE or ONLINE, got DISABLED\.$",
             id="audio-v7-streaming-disabled-rejected-test",
         ),
         pytest.param(
@@ -287,19 +286,11 @@ def test_public_streaming_transcription_errors(
         ),
         pytest.param(
             SYNTHETIC_V7_STREAMING,
-            valid_reference_audio(),
-            StreamingMode.DISABLED,
-            InvalidRequestException,
-            r"Streaming transcription.*OFFLINE.*ONLINE.*DISABLED",
-            id="streaming-disabled-mode",
-        ),
-        pytest.param(
-            SYNTHETIC_V7_STREAMING,
             b"not decodable audio",
             StreamingMode.DISABLED,
             InvalidRequestException,
             r"^Streaming transcription requires mode OFFLINE or ONLINE, got DISABLED\.$",
-            id="streaming-disabled-undecodable-media",
+            id="streaming-disabled-mode",
         ),
         pytest.param(
             SYNTHETIC_V7_STREAMING,
