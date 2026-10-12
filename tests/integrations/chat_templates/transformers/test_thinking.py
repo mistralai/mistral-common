@@ -8,8 +8,8 @@ from mistral_common.protocol.instruct.messages import AssistantMessage, SystemMe
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.fixtures_data import _get_conversations
-from tests.integrations.chat_templates.helpers import _get_mistral_tokenizer, encode_mistral_common
+from tests.integrations.chat_templates.fixtures_data import get_conversations
+from tests.integrations.chat_templates.helpers import encode_mistral_common, get_mistral_tokenizer
 from tests.integrations.chat_templates.hf_utils import encode_transformers
 
 
@@ -42,9 +42,9 @@ class TestPlainThinkParity:
     )
     def test_plain_think_vs_mistral_common_baseline(self, image: bool, mode: ValidationMode, tmp_path: Path) -> None:
         version = TokenizerVersion.v11
-        conversations = _get_conversations(version, mode, image, audio=False, think=False)
+        conversations = get_conversations(version, mode, image, audio=False, think=False)
 
-        mistral_tok = _get_mistral_tokenizer(
+        mistral_tok = get_mistral_tokenizer(
             spm=False,
             tokenizer_version=version,
             validation_mode=mode,
@@ -74,7 +74,7 @@ class TestPlainThinkParity:
     def test_plain_think_vs_mistral_common_with_thinking(self, image: bool, tmp_path: Path) -> None:
         version = TokenizerVersion.v11
 
-        mistral_tok = _get_mistral_tokenizer(
+        mistral_tok = get_mistral_tokenizer(
             spm=False,
             tokenizer_version=version,
             validation_mode=ValidationMode.finetuning,
@@ -150,9 +150,9 @@ class TestPlainThinkParity:
     def test_plain_think_comprehensive(self, image: bool, mode: ValidationMode, tmp_path: Path) -> None:
         version = TokenizerVersion.v11
         # Use non-thinking conversations (plain think uses same base conversations)
-        conversations = _get_conversations(version, mode, image, audio=False, think=False)
+        conversations = get_conversations(version, mode, image, audio=False, think=False)
 
-        mistral_tok = _get_mistral_tokenizer(
+        mistral_tok = get_mistral_tokenizer(
             spm=False,
             tokenizer_version=version,
             validation_mode=mode,
