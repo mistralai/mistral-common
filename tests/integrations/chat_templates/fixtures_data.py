@@ -24,12 +24,11 @@ from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, 
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from tests.integrations.chat_templates.helpers import (
-    AUDIO,
-    AUDIO_URL,
-    IMAGE,
-    IMAGE_URL,
+    DUMMY_AUDIO_BASE64,
+    DUMMY_IMAGE,
+    DUMMY_IMAGE_URL,
     TestConfig,
-    request_to_render_args,
+    build_render_args,
 )
 
 _TOOLS = [
@@ -546,8 +545,8 @@ REQUEST_MULTI_TURN_IMAGE_URL_TEST = ChatCompletionRequest(  # type: ignore[type-
         UserMessage(
             content=[
                 TextChunk(text="User asks what is this image ?"),
-                ImageURLChunk(image_url=IMAGE_URL),
-                ImageURLChunk(image_url=IMAGE_URL),
+                ImageURLChunk(image_url=DUMMY_IMAGE_URL),
+                ImageURLChunk(image_url=DUMMY_IMAGE_URL),
             ]
         ),
         AssistantMessage(content="Assistant answers It is a red square."),
@@ -561,8 +560,8 @@ REQUEST_MULTI_TURN_IMAGE_URL_TRAIN = ChatCompletionRequest(  # type: ignore[type
         UserMessage(
             content=[
                 TextChunk(text="User asks what is this image ?"),
-                ImageURLChunk(image_url=IMAGE_URL),
-                ImageURLChunk(image_url=IMAGE_URL),
+                ImageURLChunk(image_url=DUMMY_IMAGE_URL),
+                ImageURLChunk(image_url=DUMMY_IMAGE_URL),
             ]
         ),
         AssistantMessage(content="Assistant answers It is a red square."),
@@ -577,7 +576,7 @@ REQUEST_MULTI_TURN_IMAGE_TEST = ChatCompletionRequest(  # type: ignore[type-var]
         UserMessage(
             content=[
                 TextChunk(text="User asks what is this image ?"),
-                ImageChunk(image=IMAGE),
+                ImageChunk(image=DUMMY_IMAGE),
             ]
         ),
         AssistantMessage(content="Assistant answers It is a red square."),
@@ -591,7 +590,7 @@ REQUEST_MULTI_TURN_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[type-var
         UserMessage(
             content=[
                 TextChunk(text="User asks what is this image ?"),
-                ImageChunk(image=IMAGE),
+                ImageChunk(image=DUMMY_IMAGE),
             ]
         ),
         AssistantMessage(content="Assistant answers It is a red square."),
@@ -605,8 +604,8 @@ REQUEST_MULTI_TURN_AUDIO_URL_TEST = ChatCompletionRequest(  # type: ignore[type-
         UserMessage(
             content=[
                 TextChunk(text="Users asks what is this audio ?"),
-                AudioURLChunk(audio_url=AUDIO_URL),
-                AudioURLChunk(audio_url=AUDIO_URL),
+                AudioURLChunk(audio_url=DUMMY_AUDIO_BASE64),
+                AudioURLChunk(audio_url=DUMMY_AUDIO_BASE64),
             ]
         ),
         AssistantMessage(content="Assistant answers it is a music."),
@@ -619,7 +618,7 @@ REQUEST_MULTI_TURN_AUDIO_URL_TRAIN = ChatCompletionRequest(  # type: ignore[type
         UserMessage(
             content=[
                 TextChunk(text="Users asks what is this audio ?"),
-                AudioURLChunk(audio_url=AUDIO_URL),
+                AudioURLChunk(audio_url=DUMMY_AUDIO_BASE64),
             ]
         ),
         AssistantMessage(content="Assistant answers it is a music."),
@@ -633,7 +632,7 @@ REQUEST_MULTI_TURN_AUDIO_TEST = ChatCompletionRequest(  # type: ignore[type-var]
         UserMessage(
             content=[
                 TextChunk(text="Users asks what is this audio ?"),
-                AudioChunk(input_audio=AUDIO),
+                AudioChunk(input_audio=DUMMY_AUDIO_BASE64),
             ]
         ),
         AssistantMessage(content="Assistant answers it is a music."),
@@ -646,8 +645,8 @@ REQUEST_MULTI_TURN_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var
         UserMessage(
             content=[
                 TextChunk(text="Users asks what is this audio ?"),
-                AudioChunk(input_audio=AUDIO),
-                AudioChunk(input_audio=AUDIO),
+                AudioChunk(input_audio=DUMMY_AUDIO_BASE64),
+                AudioChunk(input_audio=DUMMY_AUDIO_BASE64),
             ]
         ),
         AssistantMessage(content="Assistant answers it is a music."),
@@ -668,7 +667,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TEST = ChatCompletionRequest(  # type: ign
         UserMessage(
             content=[
                 TextChunk(text="User asks what is this image ?"),
-                ImageURLChunk(image_url=IMAGE_URL),
+                ImageURLChunk(image_url=DUMMY_IMAGE_URL),
             ]
         ),
         AssistantMessage(
@@ -748,7 +747,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
         UserMessage(
             content=[
                 TextChunk(text="User asks what is this image ?"),
-                ImageURLChunk(image_url=IMAGE_URL),
+                ImageURLChunk(image_url=DUMMY_IMAGE_URL),
             ]
         ),
         AssistantMessage(
@@ -815,7 +814,7 @@ REQUEST_CONSECUTIVE_USERS_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[t
         UserMessage(content="What is this?"),
         UserMessage(
             content=[
-                ImageChunk(image=IMAGE),
+                ImageChunk(image=DUMMY_IMAGE),
                 TextChunk(text="Describe it"),
             ]
         ),
@@ -847,8 +846,12 @@ REQUEST_CONSECUTIVE_ASSISTANTS_TEXT_CHUNKS_TRAIN = ChatCompletionRequest(  # typ
 
 REQUEST_CONSECUTIVE_USERS_MULTI_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
-        UserMessage(content=[TextChunk(text="Describe this"), ImageChunk(image=IMAGE), TextChunk(text="What color?")]),
-        UserMessage(content=[TextChunk(text="Also this"), ImageChunk(image=IMAGE), TextChunk(text="What shape?")]),
+        UserMessage(
+            content=[TextChunk(text="Describe this"), ImageChunk(image=DUMMY_IMAGE), TextChunk(text="What color?")]
+        ),
+        UserMessage(
+            content=[TextChunk(text="Also this"), ImageChunk(image=DUMMY_IMAGE), TextChunk(text="What shape?")]
+        ),
         AssistantMessage(content="Both are red squares."),
     ]
 )
@@ -858,14 +861,14 @@ REQUEST_CONSECUTIVE_USERS_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[t
         UserMessage(
             content=[
                 TextChunk(text="Listen to this"),
-                AudioURLChunk(audio_url=AUDIO_URL),
+                AudioURLChunk(audio_url=DUMMY_AUDIO_BASE64),
                 TextChunk(text="What language?"),
             ]
         ),
         UserMessage(
             content=[
                 TextChunk(text="And this"),
-                AudioURLChunk(audio_url=AUDIO_URL),
+                AudioURLChunk(audio_url=DUMMY_AUDIO_BASE64),
                 TextChunk(text="Transcribe it"),
             ]
         ),
@@ -984,7 +987,7 @@ REQUEST_TOOL_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
         ToolMessage(
             content=[
                 TextChunk(text="Here is the result."),
-                ImageURLChunk(image_url=IMAGE_URL),
+                ImageURLChunk(image_url=DUMMY_IMAGE_URL),
             ],
             tool_call_id="tl1mg2345",
         ),
@@ -1011,7 +1014,7 @@ REQUEST_TOOL_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
         ToolMessage(
             content=[
                 TextChunk(text="Here is the audio result."),
-                AudioChunk(input_audio=AUDIO),
+                AudioChunk(input_audio=DUMMY_AUDIO_BASE64),
             ],
             tool_call_id="tl1mg2345",
         ),
@@ -1025,7 +1028,7 @@ REQUEST_SYSTEM_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
         SystemMessage(
             content=[
                 TextChunk(text="You are an audio assistant."),
-                AudioChunk(input_audio=AUDIO),
+                AudioChunk(input_audio=DUMMY_AUDIO_BASE64),
             ],
         ),
         UserMessage(content="What was that sound?"),
@@ -1236,10 +1239,10 @@ def iter_render_args(config: TestConfig) -> Iterator[tuple[ValidationMode, int, 
                 if conversation != REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2
             ]
         for idx, request in enumerate(conversations):
-            yield mode, idx, request_to_render_args(request)
+            yield mode, idx, build_render_args(request)
 
 
-def with_dict_tool_arguments(render_args: dict[str, Any]) -> dict[str, Any]:
+def parse_tool_call_arguments(render_args: dict[str, Any]) -> dict[str, Any]:
     r"""Copy render kwargs with every tool-call `arguments` JSON string parsed into a dict."""
     dict_render_args = copy.deepcopy(render_args)
     for message in dict_render_args["messages"]:

@@ -4,7 +4,12 @@ import pytest
 
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.helpers import TestConfig, load_golden_template, make_config, render_template
+from tests.integrations.chat_templates.helpers import (
+    TestConfig,
+    build_template_config,
+    load_golden_template,
+    render_template,
+)
 
 
 class TestV15ModelSettings:
@@ -41,7 +46,7 @@ class TestV15ModelSettings:
         assert f'[MODEL_SETTINGS]{{"reasoning_effort": "{expected_value}"}}[/MODEL_SETTINGS]' in output
 
     def test_v15_static_dynamic_parity(self, v15_template: str) -> None:
-        config = make_config(TestConfig(version=TokenizerVersion.v15))
+        config = build_template_config(TestConfig(version=TokenizerVersion.v15))
         static_template = load_golden_template(config)
 
         messages = [

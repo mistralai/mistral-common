@@ -48,7 +48,7 @@ class TestConfig:
     plain_think: bool = False
 
 
-def make_config(c: TestConfig) -> TemplateConfig:
+def build_template_config(c: TestConfig) -> TemplateConfig:
     r"""Create a `TemplateConfig` from a test config."""
     return TemplateConfig(
         version=c.version,
@@ -81,7 +81,7 @@ def load_golden_template(config: TemplateConfig) -> str:
     return path.read_text()
 
 
-def request_to_render_args(request: ChatCompletionRequest) -> dict[str, Any]:
+def build_render_args(request: ChatCompletionRequest) -> dict[str, Any]:
     r"""Convert a ChatCompletionRequest to render_template kwargs.
 
     Enriches tool messages with the `name` field resolved from the preceding
@@ -190,10 +190,9 @@ def _sample_audio() -> Audio:
     )
 
 
-IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/7/78/Red_Square_%282x2_Pixel%29.png"
-IMAGE = _create_dummy_image()
-AUDIO_URL = _sample_audio().to_base64("wav")
-AUDIO = AUDIO_URL
+DUMMY_IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/7/78/Red_Square_%282x2_Pixel%29.png"
+DUMMY_IMAGE = _create_dummy_image()
+DUMMY_AUDIO_BASE64 = _sample_audio().to_base64("wav")
 
 
 def build_tekken_json(config: TestConfig, output_dir: Path) -> Path:

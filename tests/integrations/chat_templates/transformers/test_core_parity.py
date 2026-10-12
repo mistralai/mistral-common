@@ -14,20 +14,20 @@ from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.integrations.chat_templates.conftest import (
     ALL_TRANSFORMERS_CONFIGS,
-    config_id,
+    format_config_id,
 )
 from tests.integrations.chat_templates.fixtures_data import (
     REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
     get_conversations,
     iter_render_args,
-    with_dict_tool_arguments,
+    parse_tool_call_arguments,
 )
 from tests.integrations.chat_templates.helpers import (
     TestConfig,
     build_spm_path,
     build_tekken_json,
+    build_template_config,
     encode_mistral_common,
-    make_config,
 )
 from tests.integrations.chat_templates.hf_utils import (
     build_hf_tokenizer,
@@ -41,7 +41,7 @@ class TestTransformersMistralCommonParity:
     @pytest.mark.parametrize(
         "config",
         ALL_TRANSFORMERS_CONFIGS,
-        ids=[config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
+        ids=[format_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
     )
     @pytest.mark.parametrize("mode", [ValidationMode.test, ValidationMode.finetuning])
     def test_chat_template(self, config: TestConfig, mode: ValidationMode, tmp_path: Path) -> None:
@@ -116,18 +116,18 @@ class TestTransformersMistralCommonParity:
     @pytest.mark.parametrize(
         "config",
         ALL_TRANSFORMERS_CONFIGS,
-        ids=[config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
+        ids=[format_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
     )
     def test_dict_tool_arguments_render_like_string_arguments(self, config: TestConfig) -> None:
         # Even with Transformers' `tojson`, `|safe` returns Markup and `str + Markup` HTML-escapes.
-        template = build_chat_template(config=make_config(config))
+        template = build_chat_template(config=build_template_config(config))
 
         for mode, idx, render_args in iter_render_args(config=config):
             string_output = encode_transformers_from_openai(
                 chat_template=template, openai_request=copy.deepcopy(render_args)
             )
             dict_output = encode_transformers_from_openai(
-                chat_template=template, openai_request=with_dict_tool_arguments(render_args=render_args)
+                chat_template=template, openai_request=parse_tool_call_arguments(render_args=render_args)
             )
 
             assert dict_output == string_output, f"Output mismatch for {config}, mode={mode}, conversation={idx}"
@@ -135,7 +135,7 @@ class TestTransformersMistralCommonParity:
     @pytest.mark.parametrize(
         "config",
         ALL_TRANSFORMERS_CONFIGS,
-        ids=[config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
+        ids=[format_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
     )
     def test_role_error(self, config: TestConfig) -> None:
         chat_template = generate_chat_template(
@@ -203,7 +203,7 @@ class TestTransformersMistralCommonParity:
     @pytest.mark.parametrize(
         "config",
         ALL_TRANSFORMERS_CONFIGS,
-        ids=[config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
+        ids=[format_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
     )
     def test_invalid_chunks(
         self,
