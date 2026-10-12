@@ -3,7 +3,7 @@ import copy
 import io
 import warnings
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -1054,19 +1054,19 @@ def test_request_to_openai_derives_continuation_flag(messages: list[ChatMessage]
                         {
                             "type": "audio_url",
                             "audio_url": {
-                                "url": DUMMY_AUDIO_URL_CHUNK_URL.audio_url.url,
+                                "url": cast(AudioURL, DUMMY_AUDIO_URL_CHUNK_URL.audio_url).url,
                             },
                         },
                         {
                             "type": "audio_url",
                             "audio_url": {
-                                "url": DUMMY_AUDIO_URL_CHUNK_BASE64.audio_url.url,
+                                "url": cast(AudioURL, DUMMY_AUDIO_URL_CHUNK_BASE64.audio_url).url,
                             },
                         },
                         {
                             "type": "audio_url",
                             "audio_url": {
-                                "url": DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX.audio_url.url,
+                                "url": cast(AudioURL, DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX.audio_url).url,
                             },
                         },
                     ],
