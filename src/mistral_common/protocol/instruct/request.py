@@ -116,7 +116,8 @@ class JsonSchema(MistralBase):
         name: The schema name.
         description: An optional description of the schema.
         custom_schema: The JSON schema (aliased `schema`).
-        strict: Whether the model must strictly adhere to the schema.
+        strict: Whether the model must strictly adhere to the schema. Preserved
+            for OpenAI API compatibility; not consulted by `ResponseFormat.get_schema()`.
 
     Examples:
         >>> schema = JsonSchema(name="obj", schema={"type": "object"})
