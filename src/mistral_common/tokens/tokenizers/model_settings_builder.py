@@ -200,8 +200,7 @@ class JSONSchemaBuilder(FieldBuilder[ResponseFormat, JSONSchemaDict]):
         Raises:
             ValueError: If the built schema is not a valid Draft 7 JSON schema.
         """
-        if value is not None:
-            self._validate_built_value(field_name=field_name, value=value)
+        self._validate_built_value(field_name=field_name, value=value)
 
     def _convert(self, input_value: ResponseFormat) -> JSONSchemaDict:
         r"""Render the response format's schema for model-settings encoding."""

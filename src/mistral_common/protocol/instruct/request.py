@@ -1,6 +1,6 @@
 from collections.abc import Iterable, Mapping
 from enum import Enum
-from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
+from typing import Any, Generic, Protocol, runtime_checkable
 
 from pydantic import ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
@@ -174,14 +174,11 @@ class ResponseFormat(MistralBase):
         return None
 
 
-ReasoningEffortType = TypeVar("ReasoningEffortType", ReasoningEffort, "ReasoningEffort | None")
-
-
 @runtime_checkable
-class ModelSettingsConv(Protocol[ReasoningEffortType]):
+class ModelSettingsConv(Protocol):
     r"""Information required from a chat request to build model settings."""
 
-    reasoning_effort: ReasoningEffortType
+    reasoning_effort: ReasoningEffort | None
     response_format: ResponseFormat
 
 
