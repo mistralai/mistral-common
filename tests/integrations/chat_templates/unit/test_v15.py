@@ -272,7 +272,7 @@ class TestV15ModelSettings:
 
         output = render_template(template=template, messages=messages, response_format=response_format)
 
-        expected_settings = f'[MODEL_SETTINGS]{{"json_schema": {json.dumps(PARITY_JSON_SCHEMA)}}}[/MODEL_SETTINGS]'
+        expected_settings = f'[MODEL_SETTINGS]{{"json_schema": {json.dumps(obj=PARITY_JSON_SCHEMA)}}}[/MODEL_SETTINGS]'
         assert expected_settings in output
 
     def test_v15_json_schema_non_ascii_html_specials_full_parity(self) -> None:
@@ -292,7 +292,7 @@ class TestV15ModelSettings:
 
         expected_settings = (
             f'[MODEL_SETTINGS]{{"json_schema": '
-            f"{json.dumps(PARITY_JSON_SCHEMA_NON_ASCII, ensure_ascii=False)}}}[/MODEL_SETTINGS]"
+            f"{json.dumps(obj=PARITY_JSON_SCHEMA_NON_ASCII, ensure_ascii=False)}}}[/MODEL_SETTINGS]"
         )
         assert expected_settings in output
         assert "\\u00e9" not in output
@@ -429,7 +429,7 @@ class TestV15ModelSettings:
         )
 
         expected_settings = (
-            f'[MODEL_SETTINGS]{{"json_schema": {json.dumps(PARITY_JSON_SCHEMA)}, '
+            f'[MODEL_SETTINGS]{{"json_schema": {json.dumps(obj=PARITY_JSON_SCHEMA)}, '
             '"reasoning_effort": "high"}[/MODEL_SETTINGS]'
         )
         assert expected_settings in output

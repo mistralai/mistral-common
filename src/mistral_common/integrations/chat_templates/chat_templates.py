@@ -141,7 +141,7 @@ def convert_tokenizer_to_chat_template(
     )
     model_settings_fields: frozenset[str] | None = None
     if version.supports_model_settings:
-        model_settings_builder = getattr(tokenizer, "model_settings_builder", None)
+        model_settings_builder = tokenizer.model_settings_builder
         if model_settings_builder is None:
             raise ValueError("Model-settings-capable tokenizer has no model settings builder")
         model_settings_fields = frozenset(
