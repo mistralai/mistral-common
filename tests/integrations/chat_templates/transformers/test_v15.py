@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import pytest
 from jinja2.exceptions import TemplateError
@@ -121,154 +121,101 @@ class TestV15ReasoningEffort:
             encode_transformers_from_openai(chat_template, conv)
 
 
+_BOTH_FIELDS = frozenset({"reasoning_effort", "json_schema"})
+_JSON_SCHEMA_ONLY = frozenset({"json_schema"})
+
+
+def _json_schema_request(schema: dict[str, Any], reasoning_effort: ReasoningEffort | None) -> ChatCompletionRequest:
+    return ChatCompletionRequest(
+        messages=[UserMessage(content="Hello")],
+        reasoning_effort=reasoning_effort,
+        response_format=ResponseFormat(
+            type=ResponseFormats.json_schema,
+            json_schema=JsonSchema(name="answer", schema=schema),
+        ),
+    )
+
+
+_PARITY_CASES = [
+    pytest.param(
+        _BOTH_FIELDS,
+        _json_schema_request(schema=PARITY_JSON_SCHEMA, reasoning_effort=ReasoningEffort.high),
+        id="json_schema",
+    ),
+    pytest.param(
+        _BOTH_FIELDS,
+        _json_schema_request(schema=PARITY_JSON_SCHEMA_NON_ASCII, reasoning_effort=ReasoningEffort.high),
+        id="json_schema_non_ascii",
+    ),
+    pytest.param(
+        _BOTH_FIELDS,
+        ChatCompletionRequest(
+            messages=[UserMessage(content="Hello")], response_format=ResponseFormat(type=ResponseFormats.json)
+        ),
+        id="json_object",
+    ),
+    pytest.param(
+        _BOTH_FIELDS,
+        ChatCompletionRequest(
+            messages=[UserMessage(content="Hello")], response_format=ResponseFormat(type=ResponseFormats.text)
+        ),
+        id="text",
+    ),
+    pytest.param(
+        _JSON_SCHEMA_ONLY,
+        _json_schema_request(schema=PARITY_JSON_SCHEMA, reasoning_effort=None),
+        id="json_schema_only_field",
+    ),
+]
+
+
+def _build_v15_parity_setup(
+    tmp_path: Path, model_settings_fields: frozenset[str]
+) -> tuple[Path, MistralTokenizer, str]:
+    tokenizer_path = build_tekken_json(
+        config=TestConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields),
+        output_dir=tmp_path,
+    )
+    mistral_tokenizer = MistralTokenizer.from_file(tokenizer_filename=str(tokenizer_path), mode=ValidationMode.test)
+    template = generate_chat_template(
+        spm=False,
+        tokenizer_version=TokenizerVersion.v15,
+        image_support=False,
+        audio_support=False,
+        thinking_support=False,
+        default_system_prompt=None,
+        plain_thinking_support=False,
+        use_special_token_variables=True,
+        model_settings_fields=model_settings_fields,
+    )
+    return tokenizer_path, mistral_tokenizer, template
+
+
 class TestV15ResponseFormat:
-    def test_response_format_json_schema_parity(self, tmp_path: Path) -> None:
-        model_settings_fields = frozenset({"reasoning_effort", "json_schema"})
-        tokenizer_path = build_tekken_json(
-            config=TestConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields),
-            output_dir=tmp_path,
-        )
-        mistral_tokenizer = MistralTokenizer.from_file(tokenizer_filename=str(tokenizer_path), mode=ValidationMode.test)
-        request = ChatCompletionRequest(
-            messages=[UserMessage(content="Hello")],
-            reasoning_effort=ReasoningEffort.high,
-            response_format=ResponseFormat(
-                type=ResponseFormats.json_schema,
-                json_schema=JsonSchema(name="answer", schema=PARITY_JSON_SCHEMA),
-            ),
-        )
-        template = generate_chat_template(
-            spm=False,
-            tokenizer_version=TokenizerVersion.v15,
-            image_support=False,
-            audio_support=False,
-            thinking_support=False,
-            default_system_prompt=None,
-            plain_thinking_support=False,
-            use_special_token_variables=True,
-            model_settings_fields=model_settings_fields,
+    @pytest.mark.parametrize(("model_settings_fields", "request_"), _PARITY_CASES)
+    def test_response_format_text_parity(
+        self, tmp_path: Path, model_settings_fields: frozenset[str], request_: ChatCompletionRequest
+    ) -> None:
+        _, mistral_tokenizer, template = _build_v15_parity_setup(
+            tmp_path=tmp_path, model_settings_fields=model_settings_fields
         )
 
-        assert encode_transformers(chat_template=template, chat_request=request) == encode_mistral_common(
-            mistral_tokenizer=mistral_tokenizer, chat_request=request, spm=False
+        assert encode_transformers(chat_template=template, chat_request=request_) == encode_mistral_common(
+            mistral_tokenizer=mistral_tokenizer, chat_request=request_, spm=False
         )
 
-    def test_response_format_json_schema_non_ascii_parity(self, tmp_path: Path) -> None:
-        model_settings_fields = frozenset({"reasoning_effort", "json_schema"})
-        tokenizer_path = build_tekken_json(
-            config=TestConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields),
-            output_dir=tmp_path,
-        )
-        mistral_tokenizer = MistralTokenizer.from_file(tokenizer_filename=str(tokenizer_path), mode=ValidationMode.test)
-        request = ChatCompletionRequest(
-            messages=[UserMessage(content="Hello")],
-            reasoning_effort=ReasoningEffort.high,
-            response_format=ResponseFormat(
-                type=ResponseFormats.json_schema,
-                json_schema=JsonSchema(name="answer", schema=PARITY_JSON_SCHEMA_NON_ASCII),
-            ),
-        )
-        template = generate_chat_template(
-            spm=False,
-            tokenizer_version=TokenizerVersion.v15,
-            image_support=False,
-            audio_support=False,
-            thinking_support=False,
-            default_system_prompt=None,
-            plain_thinking_support=False,
-            use_special_token_variables=True,
-            model_settings_fields=model_settings_fields,
-        )
-
-        assert encode_transformers(chat_template=template, chat_request=request) == encode_mistral_common(
-            mistral_tokenizer=mistral_tokenizer, chat_request=request, spm=False
-        )
-
-    def test_response_format_json_object_parity(self, tmp_path: Path) -> None:
-        model_settings_fields = frozenset({"reasoning_effort", "json_schema"})
-        tokenizer_path = build_tekken_json(
-            config=TestConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields),
-            output_dir=tmp_path,
-        )
-        mistral_tokenizer = MistralTokenizer.from_file(tokenizer_filename=str(tokenizer_path), mode=ValidationMode.test)
-        request = ChatCompletionRequest(
-            messages=[UserMessage(content="Hello")],
-            response_format=ResponseFormat(type=ResponseFormats.json),
-        )
-        template = generate_chat_template(
-            spm=False,
-            tokenizer_version=TokenizerVersion.v15,
-            image_support=False,
-            audio_support=False,
-            thinking_support=False,
-            default_system_prompt=None,
-            plain_thinking_support=False,
-            use_special_token_variables=True,
-            model_settings_fields=model_settings_fields,
-        )
-
-        assert encode_transformers(chat_template=template, chat_request=request) == encode_mistral_common(
-            mistral_tokenizer=mistral_tokenizer, chat_request=request, spm=False
-        )
-
-    def test_response_format_text_parity(self, tmp_path: Path) -> None:
-        model_settings_fields = frozenset({"reasoning_effort", "json_schema"})
-        tokenizer_path = build_tekken_json(
-            config=TestConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields),
-            output_dir=tmp_path,
-        )
-        mistral_tokenizer = MistralTokenizer.from_file(tokenizer_filename=str(tokenizer_path), mode=ValidationMode.test)
-        request = ChatCompletionRequest(
-            messages=[UserMessage(content="Hello")],
-            response_format=ResponseFormat(type=ResponseFormats.text),
-        )
-        template = generate_chat_template(
-            spm=False,
-            tokenizer_version=TokenizerVersion.v15,
-            image_support=False,
-            audio_support=False,
-            thinking_support=False,
-            default_system_prompt=None,
-            plain_thinking_support=False,
-            use_special_token_variables=True,
-            model_settings_fields=model_settings_fields,
-        )
-
-        assert encode_transformers(chat_template=template, chat_request=request) == encode_mistral_common(
-            mistral_tokenizer=mistral_tokenizer, chat_request=request, spm=False
-        )
-
-    def test_response_format_json_schema_token_ids_parity(self, tmp_path: Path) -> None:
-        model_settings_fields = frozenset({"reasoning_effort", "json_schema"})
-        tokenizer_path = build_tekken_json(
-            config=TestConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields),
-            output_dir=tmp_path,
-        )
-        mistral_tokenizer = MistralTokenizer.from_file(tokenizer_filename=str(tokenizer_path), mode=ValidationMode.test)
-        request = ChatCompletionRequest(
-            messages=[UserMessage(content="Hello")],
-            reasoning_effort=ReasoningEffort.high,
-            response_format=ResponseFormat(
-                type=ResponseFormats.json_schema,
-                json_schema=JsonSchema(name="answer", schema=PARITY_JSON_SCHEMA),
-            ),
-        )
-        template = generate_chat_template(
-            spm=False,
-            tokenizer_version=TokenizerVersion.v15,
-            image_support=False,
-            audio_support=False,
-            thinking_support=False,
-            default_system_prompt=None,
-            plain_thinking_support=False,
-            use_special_token_variables=True,
-            model_settings_fields=model_settings_fields,
+    @pytest.mark.parametrize(("model_settings_fields", "request_"), _PARITY_CASES)
+    def test_response_format_token_ids_parity(
+        self, tmp_path: Path, model_settings_fields: frozenset[str], request_: ChatCompletionRequest
+    ) -> None:
+        tokenizer_path, mistral_tokenizer, template = _build_v15_parity_setup(
+            tmp_path=tmp_path, model_settings_fields=model_settings_fields
         )
         hf_tokenizer = build_hf_tokenizer(tekken_path=tokenizer_path, chat_template=template)
 
         assert (
-            encode_hf_tokens(hf_tokenizer=hf_tokenizer, chat_request=request)
-            == mistral_tokenizer.encode_chat_completion(request=request).tokens
+            encode_hf_tokens(hf_tokenizer=hf_tokenizer, chat_request=request_)
+            == mistral_tokenizer.encode_chat_completion(request=request_).tokens
         )
 
     def test_response_format_missing_schema_raises_in_transformers(self) -> None:

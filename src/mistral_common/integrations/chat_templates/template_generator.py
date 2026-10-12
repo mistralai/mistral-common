@@ -216,15 +216,6 @@ class TemplateConfig:
         return self.version >= TokenizerVersion.v15
 
     @property
-    def emits_model_settings(self) -> bool:
-        r"""Whether any selected model settings fields can be emitted."""
-        return (
-            self.supports_model_settings
-            and self.model_settings_fields is not None
-            and len(self.model_settings_fields) > 0
-        )
-
-    @property
     def is_v1(self) -> bool:
         r"""Whether this is a v1 template with minimal features."""
         return self.version == TokenizerVersion.v1
@@ -499,7 +490,7 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
     Returns:
         The tools and settings definition section of the chat template.
     """
-    if config.emits_model_settings:
+    if config.supports_model_settings:
         comment = "{#- Tools and model settings definition #}"
     else:
         comment = "{#- Tools definition #}"
@@ -525,11 +516,9 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
             )
         lines.append("{%- endif %}")
 
-    selected_fields = tuple(
-        field for field in MODEL_SETTINGS_FIELD_CHOICES if field in (config.model_settings_fields or frozenset())
-    )
-    has_reasoning_effort = "reasoning_effort" in selected_fields
-    has_json_schema = "json_schema" in selected_fields
+    assert config.model_settings_fields is not None
+    has_reasoning_effort = "reasoning_effort" in config.model_settings_fields
+    has_json_schema = "json_schema" in config.model_settings_fields
 
     if has_json_schema:
         lines.extend(
@@ -562,39 +551,38 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
             ]
         )
 
+    # `~` instead of `+`: stock Jinja's `tojson` returns Markup, and `str + Markup` HTML-escapes the string.
+    wrap_model_settings = "'" + _BEGIN_MODEL_SETTINGS + "{' ~ model_settings_payload ~ '}" + _END_MODEL_SETTINGS + "'"
     if has_json_schema:
-        lines.append("{%- set model_settings_payload = '' %}")
         lines.extend(
             [
+                "{%- set model_settings_payload = '' %}",
                 "{%- if json_schema is not none %}",
                 "    {%- set model_settings_payload = '\"json_schema\": ' ~ (json_schema|tojson) %}",
                 "{%- endif %}",
             ]
         )
         if has_reasoning_effort:
+            # reasoning_effort always resolves, so the block is always emitted.
             lines.extend(
                 [
                     "{%- if model_settings_payload %}",
                     "    {%- set model_settings_payload = model_settings_payload ~ ', ' %}",
                     "{%- endif %}",
-                    "    {%- set model_settings_payload = model_settings_payload ~ "
+                    "{%- set model_settings_payload = model_settings_payload ~ "
                     "'\"reasoning_effort\": \"' ~ reasoning_effort ~ '\"' %}",
+                    "{%- set model_settings = " + wrap_model_settings + " %}",
                 ]
             )
-        lines.extend(
-            [
-                "{%- set model_settings = '' %}",
-                "{%- if model_settings_payload %}",
-                "    {%- set model_settings = '"
-                + _BEGIN_MODEL_SETTINGS
-                + "{"
-                + "' ~ model_settings_payload ~ '"
-                + "}"
-                + _END_MODEL_SETTINGS
-                + "' %}",
-                "{%- endif %}",
-            ]
-        )
+        else:
+            lines.extend(
+                [
+                    "{%- set model_settings = '' %}",
+                    "{%- if model_settings_payload %}",
+                    "    {%- set model_settings = " + wrap_model_settings + " %}",
+                    "{%- endif %}",
+                ]
+            )
     elif has_reasoning_effort:
         lines.append(
             "{%- set model_settings = '"
@@ -1124,7 +1112,7 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
         ns_vars.append("prev_tool=false")
     if config.tools_at_beginning:
         emitted_var = (
-            "available_tools_and_settings_emitted" if config.emits_model_settings else "available_tools_emitted"
+            "available_tools_and_settings_emitted" if config.supports_model_settings else "available_tools_emitted"
         )
         ns_vars.append(f"{emitted_var}=false")
 
@@ -1221,11 +1209,11 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
     elif config.tools_at_beginning:
         # v13+: emit tools and settings before the first user message
         emitted_var = (
-            "available_tools_and_settings_emitted" if config.emits_model_settings else "available_tools_emitted"
+            "available_tools_and_settings_emitted" if config.supports_model_settings else "available_tools_emitted"
         )
         lines.append(f"        {{%- if not ns.{emitted_var} %}}")
         lines.append("            {{- available_tools }}")
-        if config.emits_model_settings:
+        if config.supports_model_settings:
             lines.append("            {{- model_settings }}")
         lines.append(f"            {{%- set ns.{emitted_var} = true %}}")
         lines.append("        {%- endif %}")
