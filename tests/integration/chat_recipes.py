@@ -6,9 +6,11 @@ and never carry expectations; the case registry binds a recipe to one
 tokenizer configuration and one expected outcome.
 """
 
+import base64
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass
+from io import BytesIO
 from typing import Any
 
 from PIL import Image
@@ -37,6 +39,21 @@ class ChatRecipe:
 def build_red_image() -> Image.Image:
     r"""Create a fresh 4x4 RGB red image for image-bearing recipes."""
     return Image.new(mode="RGB", size=(4, 4), color="red")
+
+
+def build_image_url_chunk(*, image: Image.Image) -> ImageURLChunk:
+    r"""Encode an image as a PNG data URL chunk.
+
+    Args:
+        image: Image to encode.
+
+    Returns:
+        The image chunk containing the encoded PNG data URL.
+    """
+    buffer = BytesIO()
+    image.save(fp=buffer, format="PNG")
+    image_url = f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode(encoding='ascii')}"
+    return ImageURLChunk(image_url=image_url)
 
 
 def build_math_interpreter_tool() -> Tool:

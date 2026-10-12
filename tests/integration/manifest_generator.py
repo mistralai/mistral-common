@@ -49,7 +49,6 @@ def propose_manifest(case: PublicChatSuccessCase, *, force: bool) -> None:
     Args:
         case: The success case to propose.
         force: Overwrite an existing manifest.
-
     """
     case_dir = _EXPECTED_ROOT / case.case_id
     manifest_path = case_dir / "expected.json"
@@ -96,8 +95,8 @@ def main() -> int:
     selected = ALL_SUCCESS_CASES
     if args.case_id:
         wanted = set(args.case_id)
-        cases_by_id = {success.case_id: success for success in ALL_SUCCESS_CASES}
-        unknown = wanted - cases_by_id.keys()
+        success_case_ids = {success.case_id for success in ALL_SUCCESS_CASES}
+        unknown = wanted - success_case_ids
         if unknown:
             raise SystemExit(f"Unknown case ids: {sorted(unknown)}")
         selected = tuple(success for success in ALL_SUCCESS_CASES if success.case_id in wanted)

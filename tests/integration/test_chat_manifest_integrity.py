@@ -5,11 +5,9 @@ escaping or missing sidecar, a pickle-based array, or a changed token/text
 value must fail loudly instead of silently comparing an unrelated golden.
 """
 
-import base64
 import json
 from collections.abc import Callable
 from dataclasses import replace
-from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +22,7 @@ from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.integration.chat_cases import SAMPLE_V1_TOOLS_REJECTED_CASE
+from tests.integration.chat_recipes import build_image_url_chunk
 from tests.integration.chat_v15_cases import V15_USER_IMAGE_URL_CASE
 from tests.integration.expected_results import (
     ExpectedAudio,
@@ -193,38 +192,21 @@ def test_token_ids_must_be_an_array_of_exact_integers(manifest_dir: Path, token_
 @pytest.mark.parametrize(
     argnames=("field", "value", "message"),
     argvalues=[
-        ("case_id", 42, "field 'case_id' must be a string"),
-        (
+        pytest.param("case_id", 42, "field 'case_id' must be a string", id="case-id"),
+        pytest.param(
             "tokenizer_configuration_id",
             None,
             "field 'tokenizer_configuration_id' must be a string",
+            id="configuration-id",
         ),
-        ("decoded_text", 17, "field 'decoded_text' must be a string"),
+        pytest.param("decoded_text", 17, "field 'decoded_text' must be a string", id="decoded-text"),
+        pytest.param("images", {}, "field 'images' must be an array", id="images-object"),
+        pytest.param("images", "none", "field 'images' must be an array", id="images-string"),
+        pytest.param("audios", {}, "field 'audios' must be an array", id="audios-object"),
+        pytest.param("audios", "none", "field 'audios' must be an array", id="audios-string"),
     ],
-    ids=["case-id", "configuration-id", "decoded-text"],
 )
-def test_manifest_string_fields_reject_other_json_types(
-    manifest_dir: Path, field: str, value: object, message: str
-) -> None:
-    manifest = _read_manifest(manifest_dir)
-    manifest[field] = value
-    _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
-
-    with pytest.raises(expected_exception=ValueError, match=message):
-        _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
-
-
-@pytest.mark.parametrize(
-    argnames=("field", "value", "message"),
-    argvalues=[
-        ("images", {}, "field 'images' must be an array"),
-        ("images", "none", "field 'images' must be an array"),
-        ("audios", {}, "field 'audios' must be an array"),
-        ("audios", "none", "field 'audios' must be an array"),
-    ],
-    ids=["images-object", "images-string", "audios-object", "audios-string"],
-)
-def test_manifest_media_fields_must_be_arrays(manifest_dir: Path, field: str, value: object, message: str) -> None:
+def test_manifest_fields_reject_other_json_types(manifest_dir: Path, field: str, value: object, message: str) -> None:
     manifest = _read_manifest(manifest_dir)
     manifest[field] = value
     _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
@@ -442,29 +424,75 @@ def test_changed_public_result_fails_the_comparison(
 
 
 @pytest.mark.parametrize(
-    argnames=("field", "message"),
+    argnames=("mutation", "message"),
     argvalues=[
-        ("image-count", "Expected 1 returned images"),
-        ("image-shape", "Image shape"),
-        ("image-dtype", "Image dtype"),
-        ("audio-count", "Expected 1 returned audios"),
-        ("audio-sampling-rate", "Audio sampling rate"),
-        ("audio-format", "Audio format"),
-        ("audio-shape", "Audio shape"),
-        ("audio-dtype", "Audio dtype"),
-    ],
-    ids=[
-        "image-count",
-        "image-shape",
-        "image-dtype",
-        "audio-count",
-        "audio-sampling-rate",
-        "audio-format",
-        "audio-shape",
-        "audio-dtype",
+        pytest.param(
+            lambda tokenized: tokenized.model_copy(update={"images": []}),
+            "Expected 1 returned images",
+            id="image-count",
+        ),
+        pytest.param(
+            lambda tokenized: tokenized.model_copy(update={"images": [np.zeros(shape=(2, 1), dtype=np.float32)]}),
+            "Image shape",
+            id="image-shape",
+        ),
+        pytest.param(
+            lambda tokenized: tokenized.model_copy(update={"images": [np.zeros(shape=(1, 2), dtype=np.float64)]}),
+            "Image dtype",
+            id="image-dtype",
+        ),
+        pytest.param(
+            lambda tokenized: tokenized.model_copy(update={"audios": []}),
+            "Expected 1 returned audios",
+            id="audio-count",
+        ),
+        pytest.param(
+            lambda tokenized: tokenized.model_copy(
+                update={
+                    "audios": [
+                        Audio(audio_array=np.zeros(shape=(4,), dtype=np.float32), sampling_rate=8000, format="wav")
+                    ]
+                }
+            ),
+            "Audio sampling rate",
+            id="audio-sampling-rate",
+        ),
+        pytest.param(
+            lambda tokenized: tokenized.model_copy(
+                update={
+                    "audios": [
+                        Audio(audio_array=np.zeros(shape=(4,), dtype=np.float32), sampling_rate=16000, format="mp3")
+                    ]
+                }
+            ),
+            "Audio format",
+            id="audio-format",
+        ),
+        pytest.param(
+            lambda tokenized: tokenized.model_copy(
+                update={
+                    "audios": [
+                        Audio(audio_array=np.zeros(shape=(3,), dtype=np.float32), sampling_rate=16000, format="wav")
+                    ]
+                }
+            ),
+            "Audio shape",
+            id="audio-shape",
+        ),
+        pytest.param(
+            lambda tokenized: tokenized.model_copy(
+                update={
+                    "audios": [
+                        Audio(audio_array=np.zeros(shape=(4,), dtype=np.float64), sampling_rate=16000, format="wav")
+                    ]
+                }
+            ),
+            "Audio dtype",
+            id="audio-dtype",
+        ),
     ],
 )
-def test_media_metadata_mismatch_fails_the_comparison(field: str, message: str) -> None:
+def test_media_metadata_mismatch_fails_the_comparison(mutation: Callable[[Tokenized], Tokenized], message: str) -> None:
     expected_image_array = np.zeros(shape=(1, 2), dtype=np.float32)
     expected_audio_array = np.zeros(shape=(4,), dtype=np.float32)
     expected = ExpectedSuccess(
@@ -481,33 +509,15 @@ def test_media_metadata_mismatch_fails_the_comparison(field: str, message: str) 
             ),
         ),
     )
-    image_array = expected_image_array
-    if field == "image-shape":
-        image_array = np.zeros(shape=(2, 1), dtype=np.float32)
-    elif field == "image-dtype":
-        image_array = np.zeros(shape=(1, 2), dtype=np.float64)
-    images = [] if field == "image-count" else [image_array]
-
-    audio_array = expected_audio_array
-    sampling_rate = 16000
-    audio_format = "wav"
-    if field == "audio-shape":
-        audio_array = np.zeros(shape=(3,), dtype=np.float32)
-    elif field == "audio-dtype":
-        audio_array = np.zeros(shape=(4,), dtype=np.float64)
-    elif field == "audio-sampling-rate":
-        sampling_rate = 8000
-    elif field == "audio-format":
-        audio_format = "mp3"
-    audios = (
-        []
-        if field == "audio-count"
-        else [Audio(audio_array=audio_array, sampling_rate=sampling_rate, format=audio_format)]
+    tokenized = Tokenized(
+        tokens=[1],
+        images=[expected_image_array],
+        audios=[Audio(audio_array=expected_audio_array, sampling_rate=16000, format="wav")],
     )
-    tokenized = Tokenized(tokens=[1], images=images, audios=audios)
+    changed_tokenized = mutation(tokenized)
 
     with pytest.raises(expected_exception=AssertionError, match=message):
-        assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s></s>")
+        assert_public_success(expected=expected, tokenized=changed_tokenized, decoded_text="<s></s>")
 
 
 @pytest.mark.parametrize(
@@ -581,21 +591,13 @@ def test_changed_media_input_fails_public_encode_comparison(
         case_id=case.case_id,
         tokenizer_configuration_id=case.configuration.configuration_id,
     )
-    original_tokenized = tokenizer.encode_chat_completion(case.recipe.build())
-    original_decoded_text = decode_keep(tokenizer=tokenizer, tokenized=original_tokenized)
-    assert_public_success(expected=expected, tokenized=original_tokenized, decoded_text=original_decoded_text)
-
     request = case.recipe.build()
     user_message = request.messages[0]
     assert isinstance(user_message, UserMessage)
     assert isinstance(user_message.content, list)
     image_chunk = user_message.content[1]
     assert isinstance(image_chunk, ImageURLChunk)
-    image_buffer = BytesIO()
-    Image.new(mode="RGB", size=(4, 4), color="blue").save(fp=image_buffer, format="PNG")
-    image_chunk.image_url = (
-        f"data:image/png;base64,{base64.b64encode(image_buffer.getvalue()).decode(encoding='ascii')}"
-    )
+    user_message.content[1] = build_image_url_chunk(image=Image.new(mode="RGB", size=(4, 4), color="blue"))
     changed_tokenized = tokenizer.encode_chat_completion(request)
     changed_decoded_text = decode_keep(tokenizer=tokenizer, tokenized=changed_tokenized)
 

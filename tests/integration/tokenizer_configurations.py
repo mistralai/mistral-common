@@ -9,6 +9,7 @@ entry point so cases exercise the same path production users take.
 
 import hashlib
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Callable
 
@@ -29,6 +30,15 @@ _BUNDLED_DATA = _REPO_ROOT / "src" / "mistral_common" / "data"
 _PINNED_CACHE = _REPO_ROOT / ".cache" / "test-tokenizers"
 
 
+class Provenance(str, Enum):
+    """Artifact source identity for one tokenizer configuration."""
+
+    BUNDLED = "bundled"
+    MODIFIED_BUNDLED = "modified-bundled"
+    PINNED_RELEASED = "pinned-released"
+    SYNTHETIC = "synthetic"
+
+
 @dataclass(frozen=True)
 class TokenizerConfiguration:
     """One identified tokenizer artifact bound to a validation mode."""
@@ -37,12 +47,12 @@ class TokenizerConfiguration:
     tokenizer_path: Path | None
     mode: ValidationMode
     sha256: str | None
-    provenance: str
+    provenance: Provenance
     post_load: Callable[[MistralTokenizer], None] | None = None
     synthetic_loader: Callable[[ValidationMode], MistralTokenizer] | None = None
 
     def __post_init__(self) -> None:
-        if self.provenance == "synthetic":
+        if self.provenance is Provenance.SYNTHETIC:
             if self.tokenizer_path is not None:
                 raise ValueError(f"Synthetic tokenizer configuration is incomplete: {self.configuration_id}")
             if self.sha256 is not None:
@@ -63,13 +73,13 @@ class TokenizerConfiguration:
         Returns:
             The tokenizer loaded from the verified file in this configuration's mode.
         """
-        if self.provenance == "synthetic":
+        if self.provenance is Provenance.SYNTHETIC:
             assert self.synthetic_loader is not None
             return self.synthetic_loader(self.mode)
 
         assert self.tokenizer_path is not None
         assert self.sha256 is not None
-        if self.provenance == "pinned-released" and not self.tokenizer_path.is_file():
+        if self.provenance is Provenance.PINNED_RELEASED and not self.tokenizer_path.is_file():
             raise FileNotFoundError(
                 f"Pinned tokenizer configuration {self.configuration_id} is missing at {self.tokenizer_path}; "
                 "run `uv run python scripts/provision_test_tokenizers.py` first"
@@ -114,7 +124,7 @@ def _bundled_spm(*, profile_id: str, filename: str, sha256: str, mode: Validatio
         tokenizer_path=_BUNDLED_DATA / filename,
         mode=mode,
         sha256=sha256,
-        provenance="bundled",
+        provenance=Provenance.BUNDLED,
     )
 
 
@@ -124,7 +134,7 @@ def _pinned(*, profile_id: str, sha256: str, mode: ValidationMode) -> TokenizerC
         tokenizer_path=_PINNED_CACHE / f"{profile_id}.tekken.json",
         mode=mode,
         sha256=sha256,
-        provenance="pinned-released",
+        provenance=Provenance.PINNED_RELEASED,
     )
 
 
@@ -177,14 +187,14 @@ BUNDLED_TEKKEN_V3_TEXT_TEST = TokenizerConfiguration(
     tokenizer_path=_BUNDLED_DATA / "tekken_240718.json",
     mode=ValidationMode.test,
     sha256="eccd1665d2e477697c33cb7f0daa6f6dfefc57a0a6bceb66d4be52952f827516",
-    provenance="bundled",
+    provenance=Provenance.BUNDLED,
 )
 BUNDLED_TEKKEN_V3_MM_TEST = TokenizerConfiguration(
     configuration_id="bundled-tekken-v3-mm-test",
     tokenizer_path=_BUNDLED_DATA / "tekken_240911.json",
     mode=ValidationMode.test,
     sha256="1948e2d48b0e7377f1bb5f1210f1ae5f984934e75713fc07e2452729b8365316",
-    provenance="bundled",
+    provenance=Provenance.BUNDLED,
 )
 # Bundled v3 multimodal bytes with a test-only image patch-size override; the
 # mutation belongs to this configuration's own loaded instance, never to a
@@ -194,7 +204,7 @@ BUNDLED_TEKKEN_V3_MM_PATCH2_TEST = TokenizerConfiguration(
     tokenizer_path=_BUNDLED_DATA / "tekken_240911.json",
     mode=ValidationMode.test,
     sha256="1948e2d48b0e7377f1bb5f1210f1ae5f984934e75713fc07e2452729b8365316",
-    provenance="modified-bundled",
+    provenance=Provenance.MODIFIED_BUNDLED,
     post_load=_set_test_image_patch_size_2,
 )
 
@@ -371,7 +381,7 @@ SYNTHETIC_V13_AUDIO_TEST = TokenizerConfiguration(
     tokenizer_path=None,
     mode=ValidationMode.test,
     sha256=None,
-    provenance="synthetic",
+    provenance=Provenance.SYNTHETIC,
     synthetic_loader=_load_synthetic_v13_audio,
 )
 
@@ -381,7 +391,7 @@ SYNTHETIC_V15_REASONING_NONE_ONLY_TEST = TokenizerConfiguration(
     tokenizer_path=None,
     mode=ValidationMode.test,
     sha256=None,
-    provenance="synthetic",
+    provenance=Provenance.SYNTHETIC,
     synthetic_loader=_synthetic_v15_loader(
         allowed_reasoning_effort=(ReasoningEffort.none,),
         default_reasoning_effort=ReasoningEffort.none,
@@ -393,7 +403,7 @@ SYNTHETIC_V15_REASONING_EMPTY_TEST = TokenizerConfiguration(
     tokenizer_path=None,
     mode=ValidationMode.test,
     sha256=None,
-    provenance="synthetic",
+    provenance=Provenance.SYNTHETIC,
     synthetic_loader=_synthetic_v15_loader(allowed_reasoning_effort=(), default_reasoning_effort=None, add_audio=False),
 )
 SYNTHETIC_V15_NO_SETTINGS_TEST = TokenizerConfiguration(
@@ -401,17 +411,17 @@ SYNTHETIC_V15_NO_SETTINGS_TEST = TokenizerConfiguration(
     tokenizer_path=None,
     mode=ValidationMode.test,
     sha256=None,
-    provenance="synthetic",
+    provenance=Provenance.SYNTHETIC,
     synthetic_loader=_synthetic_v15_loader(
         allowed_reasoning_effort=None, default_reasoning_effort=None, add_audio=False
     ),
 )
-SYNTHETIC_V15_NO_DEFAULT_TEST = TokenizerConfiguration(
+SYNTHETIC_V15_WITHOUT_DEFAULT_TEST = TokenizerConfiguration(
     configuration_id="synthetic-v15-no-default-test",
     tokenizer_path=None,
     mode=ValidationMode.test,
     sha256=None,
-    provenance="synthetic",
+    provenance=Provenance.SYNTHETIC,
     synthetic_loader=_synthetic_v15_loader(
         allowed_reasoning_effort=tuple(ReasoningEffort), default_reasoning_effort=None, add_audio=False
     ),
@@ -421,7 +431,7 @@ SYNTHETIC_V15_AUDIO_TEST = TokenizerConfiguration(
     tokenizer_path=None,
     mode=ValidationMode.test,
     sha256=None,
-    provenance="synthetic",
+    provenance=Provenance.SYNTHETIC,
     synthetic_loader=_synthetic_v15_loader(
         allowed_reasoning_effort=tuple(ReasoningEffort),
         default_reasoning_effort=ReasoningEffort.none,

@@ -1,8 +1,6 @@
 r"""Public v15 chat recipes and cases from the legacy v15 selectors."""
 
-import base64
 from collections.abc import Callable
-from io import BytesIO
 
 from mistral_common.exceptions import InvalidRequestException
 from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk, ImageURLChunk, TextChunk
@@ -23,6 +21,7 @@ from tests.integration.chat_recipes import (
     PREFIXED_FINAL,
     ChatRecipe,
     build_function_tool,
+    build_image_url_chunk,
     build_math_interpreter_tool,
     build_red_image,
     build_two_tool_call_messages,
@@ -31,10 +30,10 @@ from tests.integration.chat_recipes import (
 from tests.integration.tokenizer_configurations import (
     PINNED_V15_IMAGE_SETTINGS_TEST,
     SYNTHETIC_V15_AUDIO_TEST,
-    SYNTHETIC_V15_NO_DEFAULT_TEST,
     SYNTHETIC_V15_NO_SETTINGS_TEST,
     SYNTHETIC_V15_REASONING_EMPTY_TEST,
     SYNTHETIC_V15_REASONING_NONE_ONLY_TEST,
+    SYNTHETIC_V15_WITHOUT_DEFAULT_TEST,
 )
 
 
@@ -77,11 +76,7 @@ def _settings_recipe(*, recipe_id: str, reasoning_effort: ReasoningEffort | None
 
 def _dummy_image_url_chunk() -> ImageURLChunk:
     r"""Build a fresh 4x4 red PNG data URL for an image request."""
-    image = build_red_image()
-    buffer = BytesIO()
-    image.save(fp=buffer, format="PNG")
-    image_url = f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}"
-    return ImageURLChunk(image_url=image_url)
+    return build_image_url_chunk(image=build_red_image())
 
 
 def _build_tool_multimodal_request(
@@ -166,14 +161,6 @@ _V15_SETTINGS_HIGH = _settings_recipe(
 _POLICY_ABSENT = _settings_recipe(recipe_id="v15-policy-absent", reasoning_effort=None, include_tools=True)
 _POLICY_NONE = _settings_recipe(recipe_id="v15-policy-none", reasoning_effort=ReasoningEffort.none, include_tools=True)
 _POLICY_HIGH = _settings_recipe(recipe_id="v15-policy-high", reasoning_effort=ReasoningEffort.high, include_tools=True)
-_IGNORE_ABSENT = _V15_SETTINGS_ABSENT
-_IGNORE_NONE = _V15_SETTINGS_NONE
-_DEFAULT_ABSENT = _V15_SETTINGS_ABSENT
-_DEFAULT_NONE = _V15_SETTINGS_NONE
-_DEFAULT_HIGH = _V15_SETTINGS_HIGH
-_NO_DEFAULT_ABSENT = _V15_SETTINGS_ABSENT
-_NO_DEFAULT_NONE = _V15_SETTINGS_NONE
-_NO_DEFAULT_HIGH = _V15_SETTINGS_HIGH
 _TOOL_AUDIO = _tool_media_recipe(recipe_id="v15-tool-audio", content_factory=get_dummy_audio_chunk)
 _TOOL_AUDIO_URL = _tool_media_recipe(recipe_id="v15-tool-audio-url", content_factory=get_dummy_audio_url_chunk)
 _TOOL_IMAGE_URL = _tool_media_recipe(recipe_id="v15-tool-image-url", content_factory=_dummy_image_url_chunk)
@@ -206,33 +193,33 @@ V15_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
     ),
     PublicChatSuccessCase(
         case_id="chat-v15-ignore-absent-empty",
-        recipe=_IGNORE_ABSENT,
+        recipe=_V15_SETTINGS_ABSENT,
         configuration=SYNTHETIC_V15_REASONING_EMPTY_TEST,
     ),
     PublicChatSuccessCase(
         case_id="chat-v15-ignore-none-no-builder",
-        recipe=_IGNORE_NONE,
+        recipe=_V15_SETTINGS_NONE,
         configuration=SYNTHETIC_V15_NO_SETTINGS_TEST,
     ),
     PublicChatSuccessCase(
-        case_id="chat-v15-default-absent", recipe=_DEFAULT_ABSENT, configuration=PINNED_V15_IMAGE_SETTINGS_TEST
+        case_id="chat-v15-default-absent", recipe=_V15_SETTINGS_ABSENT, configuration=PINNED_V15_IMAGE_SETTINGS_TEST
     ),
     PublicChatSuccessCase(
-        case_id="chat-v15-default-none", recipe=_DEFAULT_NONE, configuration=PINNED_V15_IMAGE_SETTINGS_TEST
+        case_id="chat-v15-default-none", recipe=_V15_SETTINGS_NONE, configuration=PINNED_V15_IMAGE_SETTINGS_TEST
     ),
     PublicChatSuccessCase(
-        case_id="chat-v15-default-high", recipe=_DEFAULT_HIGH, configuration=PINNED_V15_IMAGE_SETTINGS_TEST
+        case_id="chat-v15-default-high", recipe=_V15_SETTINGS_HIGH, configuration=PINNED_V15_IMAGE_SETTINGS_TEST
     ),
     PublicChatSuccessCase(
         case_id="chat-v15-no-default-absent",
-        recipe=_NO_DEFAULT_ABSENT,
-        configuration=SYNTHETIC_V15_NO_DEFAULT_TEST,
+        recipe=_V15_SETTINGS_ABSENT,
+        configuration=SYNTHETIC_V15_WITHOUT_DEFAULT_TEST,
     ),
     PublicChatSuccessCase(
-        case_id="chat-v15-no-default-none", recipe=_NO_DEFAULT_NONE, configuration=SYNTHETIC_V15_NO_DEFAULT_TEST
+        case_id="chat-v15-no-default-none", recipe=_V15_SETTINGS_NONE, configuration=SYNTHETIC_V15_WITHOUT_DEFAULT_TEST
     ),
     PublicChatSuccessCase(
-        case_id="chat-v15-no-default-high", recipe=_NO_DEFAULT_HIGH, configuration=SYNTHETIC_V15_NO_DEFAULT_TEST
+        case_id="chat-v15-no-default-high", recipe=_V15_SETTINGS_HIGH, configuration=SYNTHETIC_V15_WITHOUT_DEFAULT_TEST
     ),
     PublicChatSuccessCase(
         case_id="chat-v15-prefixed-final", recipe=PREFIXED_FINAL, configuration=PINNED_V15_IMAGE_SETTINGS_TEST

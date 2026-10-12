@@ -29,6 +29,7 @@ from tests.integration.chat_released_cases import (
     RELEASED_USER_AUDIO_URL_CASE,
 )
 from tests.integration.chat_v7_cases import V7_DIRECT_EQUALITY_CASES
+from tests.integration.expected_results import _EXPECTED_ROOT
 from tests.integration.tokenizer_configurations import (
     BUNDLED_SPM_V1_TEST,
     BUNDLED_TEKKEN_V3_MM_PATCH2_TEST,
@@ -218,7 +219,6 @@ def test_public_tokenizer_cache_isolates_configurations(
     assert patch2_encoder.image_config.image_patch_size == 2
     assert unmodified_encoder.image_config.image_patch_size == 16
     assert public_tokenizer(BUNDLED_TEKKEN_V3_MM_PATCH2_TEST) is patch2_tokenizer
-    assert unmodified_encoder.image_config.image_patch_size == 16
 
 
 def test_registry_identities_are_unique() -> None:
@@ -237,10 +237,18 @@ def test_registry_identities_are_unique() -> None:
         else:
             assert recipe is case.recipe
 
+    recipe_structures: list[tuple[str, object]] = []
+    for recipe_id, recipe in recipes.items():
+        request_structure = _structure(recipe.build())
+        for other_recipe_id, other_structure in recipe_structures:
+            assert request_structure != other_structure, (
+                f"Recipes {recipe_id!r} and {other_recipe_id!r} build structurally identical requests"
+            )
+        recipe_structures.append((recipe_id, request_structure))
+
 
 def test_expected_manifest_directories_match_success_cases() -> None:
-    expected_root = Path(__file__).resolve().parents[1] / "data" / "expected"
-    manifest_directories = {path.name for path in expected_root.iterdir() if path.is_dir()}
+    manifest_directories = {path.name for path in _EXPECTED_ROOT.iterdir() if path.is_dir()}
     success_case_ids = {case.case_id for case in ALL_SUCCESS_CASES}
 
     assert manifest_directories == success_case_ids
