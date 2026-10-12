@@ -34,7 +34,7 @@ def tekken_v15_json_schema_path(tmp_path_factory: pytest.TempPathFactory) -> Pat
         version=TokenizerVersion.v15,
         model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
     )
-    return _build_tekken_json(config=config, output_dir=build_dir)
+    return build_tekken_json(config=config, output_dir=build_dir)
 
 
 def test_cli_generates_template(tmp_path: Path) -> None:

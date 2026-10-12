@@ -30,7 +30,7 @@ class TestConvertTokenizerToChatTemplate:
         assert "[THINK]" in result
 
     def test_tekken_v15_derives_reasoning_effort_only(self, tmp_path: Path) -> None:
-        path = _build_tekken_json(config=TestConfig(version=TokenizerVersion.v15), output_dir=tmp_path)
+        path = build_tekken_json(config=TestConfig(version=TokenizerVersion.v15), output_dir=tmp_path)
 
         result = convert_tokenizer_to_chat_template(tokenizer_file=path)
         expected = generate_chat_template(
@@ -48,7 +48,7 @@ class TestConvertTokenizerToChatTemplate:
         assert result == expected
 
     def test_tekken_v15_json_schema_builder_derives_both_fields(self, tmp_path: Path) -> None:
-        path = _build_tekken_json(
+        path = build_tekken_json(
             config=TestConfig(
                 version=TokenizerVersion.v15,
                 model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
@@ -71,15 +71,15 @@ class TestConvertTokenizerToChatTemplate:
 
         assert result == expected
 
-    def test_tekken_v15_no_builders_raises(self, tmp_path: Path) -> None:
-        path = _build_tekken_json(
+    def test_tekken_v15_builder_without_configured_fields_raises(self, tmp_path: Path) -> None:
+        path = build_tekken_json(
             config=TestConfig(version=TokenizerVersion.v15, model_settings_fields=frozenset()),
             output_dir=tmp_path,
         )
 
         with pytest.raises(
             ValueError,
-            match="v15 and above tokenizers require at least one model settings builder",
+            match="Model settings builder must configure at least one field",
         ):
             convert_tokenizer_to_chat_template(tokenizer_file=path)
 

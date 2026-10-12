@@ -20,9 +20,9 @@ from tests.integrations.chat_templates.fixtures_data import (
     PARITY_JSON_SCHEMA,
     PARITY_JSON_SCHEMA_NON_ASCII,
 )
-from tests.integrations.chat_templates.helpers import TestConfig, _build_tekken_json, encode_mistral_common
+from tests.integrations.chat_templates.helpers import TestConfig, build_tekken_json, encode_mistral_common
 from tests.integrations.chat_templates.hf_utils import (
-    _build_hf_tokenizer,
+    build_hf_tokenizer,
     encode_hf_tokens,
     encode_transformers,
     encode_transformers_from_openai,
@@ -124,7 +124,7 @@ class TestV15ReasoningEffort:
 class TestV15ResponseFormat:
     def test_response_format_json_schema_parity(self, tmp_path: Path) -> None:
         model_settings_fields = frozenset({"reasoning_effort", "json_schema"})
-        tokenizer_path = _build_tekken_json(
+        tokenizer_path = build_tekken_json(
             config=TestConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields),
             output_dir=tmp_path,
         )
@@ -155,7 +155,7 @@ class TestV15ResponseFormat:
 
     def test_response_format_json_schema_non_ascii_parity(self, tmp_path: Path) -> None:
         model_settings_fields = frozenset({"reasoning_effort", "json_schema"})
-        tokenizer_path = _build_tekken_json(
+        tokenizer_path = build_tekken_json(
             config=TestConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields),
             output_dir=tmp_path,
         )
@@ -186,7 +186,7 @@ class TestV15ResponseFormat:
 
     def test_response_format_json_object_parity(self, tmp_path: Path) -> None:
         model_settings_fields = frozenset({"reasoning_effort", "json_schema"})
-        tokenizer_path = _build_tekken_json(
+        tokenizer_path = build_tekken_json(
             config=TestConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields),
             output_dir=tmp_path,
         )
@@ -213,7 +213,7 @@ class TestV15ResponseFormat:
 
     def test_response_format_text_parity(self, tmp_path: Path) -> None:
         model_settings_fields = frozenset({"reasoning_effort", "json_schema"})
-        tokenizer_path = _build_tekken_json(
+        tokenizer_path = build_tekken_json(
             config=TestConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields),
             output_dir=tmp_path,
         )
@@ -240,7 +240,7 @@ class TestV15ResponseFormat:
 
     def test_response_format_json_schema_token_ids_parity(self, tmp_path: Path) -> None:
         model_settings_fields = frozenset({"reasoning_effort", "json_schema"})
-        tokenizer_path = _build_tekken_json(
+        tokenizer_path = build_tekken_json(
             config=TestConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields),
             output_dir=tmp_path,
         )
@@ -264,7 +264,7 @@ class TestV15ResponseFormat:
             use_special_token_variables=True,
             model_settings_fields=model_settings_fields,
         )
-        hf_tokenizer = _build_hf_tokenizer(tekken_path=tokenizer_path, chat_template=template)
+        hf_tokenizer = build_hf_tokenizer(tekken_path=tokenizer_path, chat_template=template)
 
         assert (
             encode_hf_tokens(hf_tokenizer=hf_tokenizer, chat_request=request)
