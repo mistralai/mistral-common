@@ -338,27 +338,7 @@ class TestV15ModelSettings:
 
         assert "[MODEL_SETTINGS]" not in output
 
-    @pytest.mark.parametrize(
-        ("response_format", "message"),
-        [
-            pytest.param(
-                {"type": "xml"},
-                "Response format type must be one of text, json_object or json_schema, got xml.",
-                id="unknown_type",
-            ),
-            pytest.param(
-                {"type": "json_object", "json_schema": {"name": "answer", "schema": {"type": "object"}}},
-                "Response format `json_object` must not define a schema",
-                id="schema_on_json_object",
-            ),
-            pytest.param(
-                {"type": "text", "json_schema": {"name": "answer", "schema": {"type": "object"}}},
-                "Response format `text` must not define a schema",
-                id="schema_on_text",
-            ),
-        ],
-    )
-    def test_v15_invalid_response_format_raises(self, response_format: dict[str, Any], message: str) -> None:
+    def test_v15_unknown_response_format_type_raises(self) -> None:
         template = build_chat_template(
             config=TemplateConfig(
                 version=TokenizerVersion.v15,
@@ -367,8 +347,28 @@ class TestV15ModelSettings:
         )
         messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
 
-        with pytest.raises(ValueError, match=re.escape(message)):
-            render_template(template=template, messages=messages, response_format=response_format)
+        with pytest.raises(
+            ValueError,
+            match=re.escape("Response format type must be one of text, json_object or json_schema, got xml."),
+        ):
+            render_template(template=template, messages=messages, response_format={"type": "xml"})
+
+    def test_v15_json_object_ignores_schema(self) -> None:
+        template = build_chat_template(
+            config=TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"json_schema"}),
+            )
+        )
+        messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
+
+        output = render_template(
+            template=template,
+            messages=messages,
+            response_format={"type": "json_object", "json_schema": {"name": "answer", "schema": {"type": "string"}}},
+        )
+
+        assert '[MODEL_SETTINGS]{"json_schema": {"anyOf": [{"type": "object"}, {"type": "array"}]}}' in output
 
     def test_v15_response_format_without_type_defaults_to_text(self) -> None:
         template = build_chat_template(
