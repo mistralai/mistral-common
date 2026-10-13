@@ -42,7 +42,9 @@ class TestPlainThinkParity:
     )
     def test_plain_think_vs_mistral_common_baseline(self, image: bool, mode: ValidationMode, tmp_path: Path) -> None:
         version = TokenizerVersion.v11
-        conversations = get_conversations(version, mode, image, audio=False, think=False)
+        conversations = get_conversations(
+            tokenizer_version=version, validation_mode=mode, image=image, audio=False, think=False
+        )
 
         mistral_tok = get_mistral_tokenizer(
             spm=False,
@@ -150,7 +152,9 @@ class TestPlainThinkParity:
     def test_plain_think_comprehensive(self, image: bool, mode: ValidationMode, tmp_path: Path) -> None:
         version = TokenizerVersion.v11
         # Use non-thinking conversations (plain think uses same base conversations)
-        conversations = get_conversations(version, mode, image, audio=False, think=False)
+        conversations = get_conversations(
+            tokenizer_version=version, validation_mode=mode, image=image, audio=False, think=False
+        )
 
         mistral_tok = get_mistral_tokenizer(
             spm=False,

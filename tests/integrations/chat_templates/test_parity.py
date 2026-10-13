@@ -78,10 +78,10 @@ def test_dynamic_template_comprehensive(config: TestConfig) -> None:
 @pytest.mark.parametrize("config", ALL_CONFIGS, ids=[format_config_id(c) for c in ALL_CONFIGS])
 def test_dict_tool_arguments_render_like_string_arguments(config: TestConfig) -> None:
     # Stock Jinja's `tojson` and `safe` return Markup, and `str + Markup` HTML-escapes the string side.
-    template = build_chat_template(build_template_config(config))
+    template = build_chat_template(config=build_template_config(config=config))
 
-    for mode, idx, render_args in iter_render_args(config):
-        string_output = render_template(template, **render_args)
-        dict_output = render_template(template, **parse_tool_call_arguments(render_args))
+    for mode, idx, render_args in iter_render_args(config=config):
+        string_output = render_template(template=template, **render_args)
+        dict_output = render_template(template=template, **parse_tool_call_arguments(render_args=render_args))
 
         assert dict_output == string_output, f"Output mismatch for {config}, mode={mode}, conversation={idx}"

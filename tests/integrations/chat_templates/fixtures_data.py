@@ -1211,12 +1211,38 @@ def get_conversations(
     return conversations
 
 
+def get_parity_conversations(config: TestConfig, mode: ValidationMode) -> list[ChatCompletionRequest]:
+    r"""Return the conversations a config is parity-tested on in a validation mode.
+
+    v2 rejects the two-result turn in `REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2`, both when
+    encoding and in the generated template, so it is skipped in finetuning mode;
+    `TestV2ToolResultParsing.test_parallel_tool_results_rejected` covers the rejection.
+
+    Args:
+        config: Test configuration selecting the conversations.
+        mode: Validation mode selecting the conversations.
+
+    Returns:
+        The conversations to compare.
+    """
+    conversations = get_conversations(
+        tokenizer_version=config.version,
+        validation_mode=mode,
+        image=config.image,
+        audio=config.audio,
+        think=config.think,
+    )
+    if config.version == TokenizerVersion.v2 and mode == ValidationMode.finetuning:
+        return [
+            conversation
+            for conversation in conversations
+            if conversation != REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2
+        ]
+    return conversations
+
+
 def iter_render_args(config: TestConfig) -> Iterator[tuple[ValidationMode, int, dict[str, Any]]]:
     r"""Yield render kwargs for every conversation a config is parity-tested on.
-
-    Generated v2 templates reject the two-result turn in
-    `REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2`, so it is skipped in finetuning mode;
-    `TestV2ToolResultParsing.test_parallel_tool_results_rejected` covers the rejection.
 
     Args:
         config: Test configuration selecting the conversations.
@@ -1225,21 +1251,8 @@ def iter_render_args(config: TestConfig) -> Iterator[tuple[ValidationMode, int, 
         The validation mode, the conversation index, and the render kwargs.
     """
     for mode in (ValidationMode.finetuning, ValidationMode.test):
-        conversations = get_conversations(
-            tokenizer_version=config.version,
-            validation_mode=mode,
-            image=config.image,
-            audio=config.audio,
-            think=config.think,
-        )
-        if config.version == TokenizerVersion.v2 and mode == ValidationMode.finetuning:
-            conversations = [
-                conversation
-                for conversation in conversations
-                if conversation != REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2
-            ]
-        for idx, request in enumerate(conversations):
-            yield mode, idx, build_render_args(request)
+        for idx, request in enumerate(get_parity_conversations(config=config, mode=mode)):
+            yield mode, idx, build_render_args(request=request)
 
 
 def parse_tool_call_arguments(render_args: dict[str, Any]) -> dict[str, Any]:

@@ -17,8 +17,7 @@ from tests.integrations.chat_templates.conftest import (
     format_config_id,
 )
 from tests.integrations.chat_templates.fixtures_data import (
-    REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
-    get_conversations,
+    get_parity_conversations,
     iter_render_args,
     parse_tool_call_arguments,
 )
@@ -45,21 +44,12 @@ class TestTransformersMistralCommonParity:
     )
     @pytest.mark.parametrize("mode", [ValidationMode.test, ValidationMode.finetuning])
     def test_chat_template(self, config: TestConfig, mode: ValidationMode, tmp_path: Path) -> None:
-        conversations = get_conversations(config.version, mode, config.image, config.audio, config.think)
-        if config.version == TokenizerVersion.v2 and mode == ValidationMode.finetuning:
-            # v2 rejects multiple tool results for one assistant turn, both at
-            # encoding time and in the generated chat template, so this shared
-            # fixture cannot be parity-tested for v2.
-            conversations = [
-                conversation
-                for conversation in conversations
-                if conversation != REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2
-            ]
+        conversations = get_parity_conversations(config=config, mode=mode)
 
         if config.spm:
-            tokenizer_path = build_spm_path(config, tmp_path)
+            tokenizer_path = build_spm_path(config=config, output_dir=tmp_path)
         else:
-            tokenizer_path = build_tekken_json(config, tmp_path)
+            tokenizer_path = build_tekken_json(config=config, output_dir=tmp_path)
 
         mistral_tokenizer = MistralTokenizer.from_file(str(tokenizer_path), mode=mode)
 
@@ -77,7 +67,7 @@ class TestTransformersMistralCommonParity:
         # Build HF tokenizer for Tekken-based token ID comparison
         hf_tokenizer = None
         if not config.spm:
-            hf_tokenizer = build_hf_tokenizer(tokenizer_path, chat_template)
+            hf_tokenizer = build_hf_tokenizer(tekken_path=tokenizer_path, chat_template=chat_template)
 
         if config.version <= TokenizerVersion.v2:
             for conv in conversations:

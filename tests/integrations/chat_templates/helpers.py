@@ -48,15 +48,15 @@ class TestConfig:
     plain_think: bool = False
 
 
-def build_template_config(c: TestConfig) -> TemplateConfig:
+def build_template_config(config: TestConfig) -> TemplateConfig:
     r"""Create a `TemplateConfig` from a test config."""
     return TemplateConfig(
-        version=c.version,
-        spm=c.spm,
-        image_support=c.image,
-        audio_support=c.audio,
-        thinking_support=c.think,
-        plain_thinking_support=c.plain_think,
+        version=config.version,
+        spm=config.spm,
+        image_support=config.image,
+        audio_support=config.audio,
+        thinking_support=config.think,
+        plain_thinking_support=config.plain_think,
         use_special_token_variables=True,
     )
 
@@ -303,7 +303,7 @@ def _get_mistral_tekkenizer(config: TestConfig, output_dir: Path, validation_mod
     Returns:
         A configured `MistralTokenizer` instance.
     """
-    tekken_path = build_tekken_json(config, output_dir)
+    tekken_path = build_tekken_json(config=config, output_dir=output_dir)
     return MistralTokenizer.from_file(str(tekken_path), mode=validation_mode)
 
 
@@ -324,7 +324,7 @@ def _get_mistral_sentencepiece(
     Returns:
         A configured `MistralTokenizer` instance.
     """
-    spm_path = build_spm_path(config, output_dir)
+    spm_path = build_spm_path(config=config, output_dir=output_dir)
     return MistralTokenizer.from_file(str(spm_path), mode=validation_mode)
 
 
