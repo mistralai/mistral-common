@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 import httpx
 import huggingface_hub as huggingface_hub
 import pytest
-import requests
 
 from mistral_common.tokens.tokenizers.utils import (
     download_tokenizer_from_hf_hub,
@@ -152,9 +151,6 @@ def test_download_tokenizer_from_hf_hub(files: list[str], expected: str | None) 
 def test_download_tokenizer_from_hf_hub_falls_back_to_cache_on_real_connection_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Regression: the fallback only caught `requests` exceptions while `huggingface_hub>=1.0` raises `httpx` ones,
-    # so a cached tokenizer could not be loaded without network access.
-    # No mock of the Hub client here: point it at a closed local port so that the real client fails to connect.
     hf_cache = _create_temporary_hf_model_cache("mistralai/Mistral-7B-v0.1")
     monkeypatch.setattr("huggingface_hub.constants.ENDPOINT", "http://127.0.0.1:9")
     monkeypatch.setattr("huggingface_hub.constants.HF_HUB_CACHE", hf_cache)
@@ -167,11 +163,8 @@ def test_download_tokenizer_from_hf_hub_falls_back_to_cache_on_real_connection_e
 @pytest.mark.parametrize(
     "error",
     [
-        # `huggingface_hub>=1.0` uses `httpx`: these are what the Hub client actually raises.
         httpx.ConnectError("No connection with force_download=True"),
         httpx.ReadTimeout("No connection with force_download=True"),
-        # Legacy `requests` exceptions raised by `huggingface_hub<1.0`.
-        requests.ConnectionError("No connection with force_download=True"),
     ],
 )
 @patch("huggingface_hub.HfApi.list_repo_files")

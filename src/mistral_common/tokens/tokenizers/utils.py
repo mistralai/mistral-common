@@ -3,13 +3,12 @@ import os
 from pathlib import Path
 from typing import Iterator
 
-import requests
-
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.image import MultiModalVersion
 
 _hub_installed: bool
 try:
+    import httpx
     import huggingface_hub
     import huggingface_hub.constants
     import huggingface_hub.errors
@@ -17,23 +16,6 @@ try:
     _hub_installed = True
 except ImportError:
     _hub_installed = False
-
-# `huggingface_hub>=1.0` talks to the Hub through `httpx`, so connection, timeout and HTTP status failures
-# (`HfHubHTTPError` included) all derive from `httpx.HTTPError`. Older releases raised the `requests` equivalents.
-_httpx_errors: tuple[type[Exception], ...]
-try:
-    import httpx
-
-    _httpx_errors = (httpx.HTTPError,)
-except ImportError:
-    _httpx_errors = ()
-
-_HUB_CONNECTION_ERRORS: tuple[type[Exception], ...] = (
-    requests.ConnectionError,
-    requests.HTTPError,
-    requests.Timeout,
-    *_httpx_errors,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +197,7 @@ def download_tokenizer_from_hf_hub(
             hf_api = huggingface_hub.HfApi()
             repo_files = hf_api.list_repo_files(repo_id, revision=revision, token=token)
             local_files_only = False
-        except _HUB_CONNECTION_ERRORS + (huggingface_hub.errors.OfflineModeIsEnabled,) as e:
+        except (httpx.HTTPError, huggingface_hub.errors.OfflineModeIsEnabled) as e:
             if force_download:
                 raise e
 
