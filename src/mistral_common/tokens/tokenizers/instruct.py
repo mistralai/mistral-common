@@ -1324,8 +1324,6 @@ class InstructTokenizerV7(InstructTokenizerV3):
         Returns:
             Tokenized object with audio tokens and optional audio data.
         """
-        if ref_audio is None and voice is None:
-            raise InvalidRequestException("Either ref_audio or voice must be defined to encode speech.")
         assert self.audio_encoder is not None, (
             f"Audio encoder must be defined to encode audio, got {self.audio_encoder=}"
         )
