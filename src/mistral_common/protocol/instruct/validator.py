@@ -89,9 +89,9 @@ class ValidationMode(str, Enum):
         finetuning: Validation for finetuning scenarios. May allow some fields
             that are not allowed in serving mode.
         test: Lenient validation for testing. Skips some production constraints.
-        agnostic: Pipeline-agnostic validation. Applies all content checks
-            without assuming a downstream pipeline, so no terminal-role rule is
-            enforced.
+        agnostic: Pipeline-agnostic validation, used by default. Applies all
+            content checks without assuming a downstream pipeline, so no
+            terminal-role rule is enforced.
 
     Examples:
         >>> mode = ValidationMode.serving
@@ -118,14 +118,15 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
 
     _allow_tool_call_and_content: bool = False
 
-    def __init__(self, mode: ValidationMode = ValidationMode.test):
+    def __init__(self, mode: ValidationMode = ValidationMode.agnostic):
         r"""Initialize the MistralRequestValidator.
 
         Args:
-            mode: The validation mode to use. Options:
+            mode: The validation mode to use (default: `ValidationMode.agnostic`).
+                Options:
                 - `ValidationMode.serving`: Strict production validation
                 - `ValidationMode.finetuning`: Finetuning-specific validation
-                - `ValidationMode.test`: Lenient testing validation (default)
+                - `ValidationMode.test`: Lenient testing validation
                 - `ValidationMode.agnostic`: Pipeline-agnostic validation that
                     applies all content checks without terminal-role rules
         """

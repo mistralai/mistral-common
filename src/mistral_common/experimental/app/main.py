@@ -21,7 +21,7 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 def create_app(
     tokenizer: str | Path | MistralTokenizer,
-    validation_mode: ValidationMode = ValidationMode.test,
+    validation_mode: ValidationMode = ValidationMode.agnostic,
     engine_url: str = "127.0.0.1",
     engine_backend: EngineBackend = EngineBackend.llama_cpp,
     timeout: int = 60,
@@ -84,7 +84,7 @@ def cli() -> None:
 @click.argument(
     "validation_mode",
     type=click.Choice([mode.value for mode in ValidationMode], case_sensitive=False),
-    default=ValidationMode.test.value,
+    default=ValidationMode.agnostic.value,
 )
 @click.option(
     "--host",
@@ -123,7 +123,7 @@ def cli() -> None:
 )
 def serve(
     tokenizer_path: str | Path,
-    validation_mode: ValidationMode | str = ValidationMode.test,
+    validation_mode: ValidationMode | str = ValidationMode.agnostic,
     host: str = "127.0.0.1",
     port: int = 0,
     engine_url: str = "http://127.0.0.1:8080",

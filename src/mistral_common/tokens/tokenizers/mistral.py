@@ -144,7 +144,7 @@ class MistralTokenizer(
         Args:
             instruct_tokenizer: Versioned tokenizer that performs the actual tokenization.
             validator: Validator applied to requests before normalization. Its mode
-                (serving/finetuning/test) controls which constraints are enforced.
+                (serving/finetuning/test/agnostic) controls which constraints are enforced.
             request_normalizer: Normalizer converting validated ChatCompletionRequests
                 into InstructRequests ready for tokenization.
         """
@@ -172,7 +172,7 @@ class MistralTokenizer(
         r"""The validation mode of the tokenizer.
 
         Returns:
-            The ValidationMode (serving, finetuning, or test) used by this tokenizer's validator.
+            The ValidationMode (serving, finetuning, test, or agnostic) used by this tokenizer's validator.
         """
         return self._chat_completion_request_validator.mode
 
@@ -193,14 +193,12 @@ class MistralTokenizer(
     @classmethod
     def v1(cls) -> "MistralTokenizer":
         r"""Get the Mistral tokenizer v1."""
-        return cls.from_file(str(cls._data_path() / "tokenizer.model.v1"), mode=ValidationMode.test)
+        return cls.from_file(str(cls._data_path() / "tokenizer.model.v1"))
 
     @classmethod
     def v2(cls) -> "MistralTokenizer":
         r"""Get the Mistral tokenizer v2."""
-        return cls.from_file(
-            str(cls._data_path() / "mistral_instruct_tokenizer_240216.model.v2"), mode=ValidationMode.test
-        )
+        return cls.from_file(str(cls._data_path() / "mistral_instruct_tokenizer_240216.model.v2"))
 
     @classmethod
     def v3(cls, is_tekken: bool = False, is_mm: bool = False) -> "MistralTokenizer":
@@ -213,7 +211,7 @@ class MistralTokenizer(
                 Only supported together with `is_tekken=True`.
 
         Returns:
-            The Mistral tokenizer v3, in test validation mode.
+            The Mistral tokenizer v3, in agnostic validation mode.
 
         Raises:
             ValueError: If `is_mm` is `True` and `is_tekken` is `False` (multimodal requires tekken).
@@ -227,7 +225,7 @@ class MistralTokenizer(
         else:
             tokenizer_name = "mistral_instruct_tokenizer_240323.model.v3"
 
-        return cls.from_file(str(cls._data_path() / tokenizer_name), mode=ValidationMode.test)
+        return cls.from_file(str(cls._data_path() / tokenizer_name))
 
     @classmethod
     def v7(cls, is_mm: bool = False) -> "MistralTokenizer":
@@ -238,16 +236,12 @@ class MistralTokenizer(
                 otherwise loads the text-only variant.
 
         Returns:
-            The Mistral tokenizer v7, in test validation mode.
+            The Mistral tokenizer v7, in agnostic validation mode.
         """
         if is_mm:
-            return cls.from_file(
-                str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7m1"), mode=ValidationMode.test
-            )
+            return cls.from_file(str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7m1"))
         else:
-            return cls.from_file(
-                str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7"), mode=ValidationMode.test
-            )
+            return cls.from_file(str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7"))
 
     @classmethod
     def from_model(cls, model: str, strict: bool = True) -> "MistralTokenizer":
@@ -290,7 +284,7 @@ class MistralTokenizer(
         revision: str | None = None,
         force_download: bool = False,
         local_files_only: bool = False,
-        mode: ValidationMode = ValidationMode.test,
+        mode: ValidationMode = ValidationMode.agnostic,
     ) -> "MistralTokenizer":
         r"""Download the Mistral tokenizer for a given Hugging Face repository ID.
 
@@ -324,7 +318,7 @@ class MistralTokenizer(
     def from_file(
         cls,
         tokenizer_filename: str | Path,
-        mode: ValidationMode = ValidationMode.test,
+        mode: ValidationMode = ValidationMode.agnostic,
     ) -> "MistralTokenizer":
         r"""Load a tokenizer from a file.
 
