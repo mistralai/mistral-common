@@ -17,6 +17,18 @@ try:
 except ImportError:
     _hub_installed = False
 
+_http_error_types: tuple[type[BaseException], ...] = ()
+if _hub_installed:
+    # huggingface_hub >= 2.0 raises network errors from httpx2, whose exception
+    # types are not httpx subclasses, so the offline fallback must catch both.
+    _http_error_types = (httpx.HTTPError,)
+    try:
+        import httpx2
+
+        _http_error_types = (*_http_error_types, httpx2.HTTPError)
+    except ImportError:
+        pass
+
 logger = logging.getLogger(__name__)
 
 
@@ -197,7 +209,7 @@ def download_tokenizer_from_hf_hub(
             hf_api = huggingface_hub.HfApi()
             repo_files = hf_api.list_repo_files(repo_id, revision=revision, token=token)
             local_files_only = False
-        except (httpx.HTTPError, huggingface_hub.errors.OfflineModeIsEnabled) as e:
+        except (*_http_error_types, huggingface_hub.errors.OfflineModeIsEnabled) as e:
             if force_download:
                 raise e
 
