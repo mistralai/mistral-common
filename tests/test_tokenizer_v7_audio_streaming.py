@@ -31,6 +31,7 @@ from tests.test_tokenizer_v7_audio import (
     SYNTHETIC_V7_STREAMING_NO_PAD,
     SyntheticV7AudioProfile,
     build_synthetic_v7_audio_tokenizer,
+    valid_reference_audio,
     valid_reference_audio_bytes,
 )
 from tests.utils import decode_keep
@@ -283,6 +284,14 @@ def test_public_streaming_transcription_errors(
             UnsupportedTokenizerFeatureException,
             r"the streaming_pad marker required for transcription",
             id="v7-streaming-profile-without-streaming-pad-marker",
+        ),
+        pytest.param(
+            SYNTHETIC_V7_STREAMING_NO_PAD,
+            valid_reference_audio(),
+            StreamingMode.OFFLINE,
+            UnsupportedTokenizerFeatureException,
+            r"^Audio encoder does not provide the streaming_pad marker required for transcription\.$",
+            id="v7-streaming-profile-without-streaming-pad-marker-offline",
         ),
         pytest.param(
             SYNTHETIC_V7_STREAMING,
