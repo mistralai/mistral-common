@@ -515,39 +515,65 @@ def test_media_metadata_mismatch_fails_the_comparison(mutation: Callable[[Tokeni
 
 
 @pytest.mark.parametrize(
-    argnames=("image_offset", "audio_offset", "expect_failure"),
+    argnames=("atol_patch", "rtol_patch", "image_offset", "audio_offset", "expect_failure"),
     argvalues=[
-        pytest.param(0.9e-4, 0.0, False, id="image-within-tolerance"),
-        pytest.param(1.1e-4, 0.0, True, id="image-beyond-tolerance"),
-        pytest.param(0.0, 0.9e-4, False, id="audio-within-tolerance"),
-        pytest.param(0.0, 1.1e-4, True, id="audio-beyond-tolerance"),
+        pytest.param(None, None, 0.9e-4, 0.0, False, id="image-within-tolerance"),
+        pytest.param(None, None, 1.1e-4, 0.0, True, id="image-beyond-tolerance"),
+        pytest.param(None, None, 0.0, 0.9e-4, False, id="audio-within-tolerance"),
+        pytest.param(None, None, 0.0, 1.1e-4, True, id="audio-beyond-tolerance"),
+        pytest.param(2e-4, None, 1.5e-4, 0.0, False, id="patched-atol-image"),
+        pytest.param(2e-4, None, 0.0, 1.5e-4, False, id="patched-atol-audio"),
+        pytest.param(None, 1e-6, 1e-3, 0.0, False, id="patched-rtol-image"),
+        pytest.param(None, 1e-6, 0.0, 1e-3, False, id="patched-rtol-audio"),
     ],
 )
-def test_shared_tolerance_boundary(image_offset: float, audio_offset: float, expect_failure: bool) -> None:
-    expected_array = np.full(shape=(2,), fill_value=1e4, dtype=np.float64)
+def test_shared_tolerance_pair_bounds_every_array(
+    atol_patch: float | None,
+    rtol_patch: float | None,
+    image_offset: float,
+    audio_offset: float,
+    expect_failure: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if atol_patch is not None:
+        monkeypatch.setattr(expected_results, "ATOL", atol_patch)
+    if rtol_patch is not None:
+        monkeypatch.setattr(expected_results, "RTOL", rtol_patch)
+
+    expected_image_arrays = tuple(np.full(shape=(2,), fill_value=1e4, dtype=np.float64) for _ in range(2))
+    expected_audio_arrays = tuple(np.full(shape=(2,), fill_value=1e4, dtype=np.float64) for _ in range(2))
     expected = ExpectedSuccess(
         token_ids=[1],
         decoded_text="<s></s>",
-        images=(ExpectedImage(shape=(2,), dtype="float64", array=expected_array),),
-        audios=(
+        images=tuple(ExpectedImage(shape=(2,), dtype="float64", array=array) for array in expected_image_arrays),
+        audios=tuple(
             ExpectedAudio(
                 shape=(2,),
                 dtype="float64",
                 sampling_rate=16000,
                 format="wav",
-                array=expected_array,
-            ),
+                array=array,
+            )
+            for array in expected_audio_arrays
         ),
     )
     tokenized = Tokenized(
         tokens=[1],
-        images=[np.full(shape=(2,), fill_value=1e4 + image_offset, dtype=np.float64)],
+        images=[
+            expected_image_arrays[0],
+            np.full(shape=(2,), fill_value=1e4 + image_offset, dtype=np.float64),
+        ],
         audios=[
+            Audio(
+                audio_array=expected_audio_arrays[0],
+                sampling_rate=16000,
+                format="wav",
+            ),
             Audio(
                 audio_array=np.full(shape=(2,), fill_value=1e4 + audio_offset, dtype=np.float64),
                 sampling_rate=16000,
                 format="wav",
-            )
+            ),
         ],
     )
 
@@ -560,52 +586,6 @@ def test_shared_tolerance_boundary(image_offset: float, audio_offset: float, exp
 
 def test_suite_tolerance_pair_is_the_approved_pair() -> None:
     assert (ATOL, RTOL) == (1e-4, 0.0)
-
-
-@pytest.mark.parametrize(
-    argnames=("atol", "rtol", "image_offset", "audio_offset"),
-    argvalues=[
-        pytest.param(2e-4, 0.0, 1.5e-4, 1.5e-4, id="patched-atol"),
-        pytest.param(1e-4, 1e-6, 1e-3, 1e-3, id="patched-rtol"),
-    ],
-)
-def test_comparator_uses_the_shared_pair(
-    atol: float,
-    rtol: float,
-    image_offset: float,
-    audio_offset: float,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(expected_results, "ATOL", atol)
-    monkeypatch.setattr(expected_results, "RTOL", rtol)
-    expected_array = np.full(shape=(2,), fill_value=1e4, dtype=np.float64)
-    expected = ExpectedSuccess(
-        token_ids=[1],
-        decoded_text="<s></s>",
-        images=(ExpectedImage(shape=(2,), dtype="float64", array=expected_array),),
-        audios=(
-            ExpectedAudio(
-                shape=(2,),
-                dtype="float64",
-                sampling_rate=16000,
-                format="wav",
-                array=expected_array,
-            ),
-        ),
-    )
-    tokenized = Tokenized(
-        tokens=[1],
-        images=[np.full(shape=(2,), fill_value=1e4 + image_offset, dtype=np.float64)],
-        audios=[
-            Audio(
-                audio_array=np.full(shape=(2,), fill_value=1e4 + audio_offset, dtype=np.float64),
-                sampling_rate=16000,
-                format="wav",
-            )
-        ],
-    )
-
-    assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s></s>")
 
 
 @pytest.mark.parametrize(
@@ -648,6 +628,18 @@ def test_sidecar_metadata_mismatch_is_rejected_before_values(
             lambda *, manifest: manifest.update(token_ids=[*manifest["token_ids"][:-1], manifest["token_ids"][-1] + 1]),
             "Token ids differ",
             id="token-ids",
+        ),
+        pytest.param(
+            V15_USER_IMAGE_URL_CASE,
+            lambda *, manifest: manifest.update(token_ids=manifest["token_ids"][:-1]),
+            "Token ids differ",
+            id="token-ids-truncated",
+        ),
+        pytest.param(
+            V15_USER_IMAGE_URL_CASE,
+            lambda *, manifest: manifest.update(token_ids=[*manifest["token_ids"], manifest["token_ids"][-1] + 1]),
+            "Token ids differ",
+            id="token-ids-extended",
         ),
         pytest.param(
             V15_USER_IMAGE_URL_CASE,
