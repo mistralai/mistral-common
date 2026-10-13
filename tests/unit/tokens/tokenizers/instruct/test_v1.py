@@ -8,9 +8,9 @@ from mistral_common.exceptions import TokenizerException
 from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, ToolMessage, UserMessage
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import FunctionCall, Tool, ToolCall
-from mistral_common.tokens.tokenizers.base import InstructTokenizer
+from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from tests.utils import decode_keep
+from tests.utils import assert_tokenized_equal, decode_keep
 
 # fmt: off
 _NORMAL_TOKENS = [
@@ -26,8 +26,12 @@ _PREFIXED_FINAL_MESSAGE_TOKENS = [
     1, 733, 16289, 28793, 17121, 22526, 13, 13, 28708, 733, 28748, 16289, 28793, 287, 2, 733, 16289, 28793, 277, 733,
     28748, 16289, 28793, 281
 ]
-_PREFIXED_FINAL_MESSAGE_PREFIX_IDS = [281]
 # fmt: on
+
+_NORMAL_EXPECTED = Tokenized(tokens=_NORMAL_TOKENS)
+_SYSTEM_SINGLETURN_EXPECTED = Tokenized(tokens=_SYSTEM_SINGLETURN_TOKENS)
+_SYSTEM_MULTITURN_EXPECTED = Tokenized(tokens=_SYSTEM_MULTITURN_TOKENS)
+_PREFIXED_FINAL_MESSAGE_EXPECTED = Tokenized(tokens=_PREFIXED_FINAL_MESSAGE_TOKENS, prefix_ids=[281])
 
 _TOOLS_NOT_IMPLEMENTED_MESSAGE = r"^Tools not implemented for tokenizer V1$"
 _NORMAL_TEXT = "<s>▁[INST]▁a▁[/INST]▁b</s>▁[INST]▁c▁[/INST]▁d</s>"
@@ -113,30 +117,27 @@ def _build_prefixed_final_message_request() -> InstructRequest[ChatMessage, Tool
 
 
 @pytest.mark.parametrize(
-    argnames="request_builder, expected_text, expected_tokens, expected_prefix_ids, expected_raw_decode",
+    argnames="request_builder, expected, expected_text, expected_raw_decode",
     argvalues=[
-        pytest.param(_build_normal_request, _NORMAL_TEXT, _NORMAL_TOKENS, None, _NORMAL_RAW_DECODE, id="normal"),
+        pytest.param(_build_normal_request, _NORMAL_EXPECTED, _NORMAL_TEXT, _NORMAL_RAW_DECODE, id="normal"),
         pytest.param(
             _build_system_singleturn_request,
+            _SYSTEM_SINGLETURN_EXPECTED,
             _SYSTEM_SINGLETURN_TEXT,
-            _SYSTEM_SINGLETURN_TOKENS,
-            None,
             _SYSTEM_SINGLETURN_RAW_DECODE,
             id="system-singleturn",
         ),
         pytest.param(
             _build_system_multiturn_request,
+            _SYSTEM_MULTITURN_EXPECTED,
             _SYSTEM_MULTITURN_TEXT,
-            _SYSTEM_MULTITURN_TOKENS,
-            None,
             _SYSTEM_MULTITURN_RAW_DECODE,
             id="system-multiturn",
         ),
         pytest.param(
             _build_prefixed_final_message_request,
+            _PREFIXED_FINAL_MESSAGE_EXPECTED,
             _PREFIXED_FINAL_MESSAGE_TEXT,
-            _PREFIXED_FINAL_MESSAGE_TOKENS,
-            _PREFIXED_FINAL_MESSAGE_PREFIX_IDS,
             _PREFIXED_FINAL_MESSAGE_RAW_DECODE,
             id="prefixed-final-message",
         ),
@@ -145,19 +146,15 @@ def _build_prefixed_final_message_request() -> InstructRequest[ChatMessage, Tool
 def test_encode_instruct(
     tokenizer: InstructTokenizer,
     request_builder: Callable[[], InstructRequest[ChatMessage, Tool]],
+    expected: Tokenized,
     expected_text: str,
-    expected_tokens: list[int],
-    expected_prefix_ids: list[int] | None,
     expected_raw_decode: str,
 ) -> None:
     r"""Preserve the complete v1 instruct encoding for each request shape."""
     tokenized = tokenizer.encode_instruct(request=request_builder())
-    raw_decode = tokenizer.tokenizer.decode(tokens=tokenized.tokens)
-
+    assert_tokenized_equal(actual=tokenized, expected=expected)
     assert decode_keep(tokenizer=tokenizer, tokenized=tokenized) == expected_text
-    assert tokenized.tokens == expected_tokens
-    assert tokenized.prefix_ids == expected_prefix_ids
-    assert raw_decode == expected_raw_decode
+    assert tokenizer.tokenizer.decode(tokens=tokenized.tokens) == expected_raw_decode
 
 
 @pytest.mark.parametrize(

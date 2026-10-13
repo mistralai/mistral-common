@@ -9,9 +9,9 @@ from mistral_common.protocol.instruct.chunk import ContentChunk, TextChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, ToolMessage, UserMessage
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
-from mistral_common.tokens.tokenizers.base import InstructTokenizer
+from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from tests.utils import decode_keep
+from tests.utils import assert_tokenized_equal, decode_keep
 
 # fmt: off
 _SPM_TOOLS_SINGLETURN_TOKENS = [
@@ -47,9 +47,7 @@ _TEKKEN_SYSTEM_TOOLS_MULTITURN_TOKENS = [
     101289, 58343, 1267, 1099, 4, 1100, 2
 ]
 _SPM_PREFIXED_FINAL_MESSAGE_TOKENS = [1, 3, 1032, 4, 1055, 2, 3, 17889, 23294, 781, 781, 29485, 4, 1049]
-_SPM_PREFIXED_FINAL_MESSAGE_PREFIX_IDS = [1049]
 _TEKKEN_PREFIXED_FINAL_MESSAGE_TOKENS = [1, 3, 1097, 4, 1098, 2, 3, 101289, 58343, 1267, 1099, 4, 1100]
-_TEKKEN_PREFIXED_FINAL_MESSAGE_PREFIX_IDS = [1100]
 _SPM_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_TOKENS = [
     1, 3, 1032, 4, 5, 1501, 7567, 1629, 2032, 1113, 29494, 1316, 1113, 17452, 2032, 13450, 1113, 1081, 2032, 1113,
     29502, 29507, 10925, 2, 8, 10598, 4557, 2032, 1113, 29483, 1316, 1113, 3613, 29498, 1081, 2032, 1113, 29502,
@@ -128,6 +126,33 @@ _TEKKEN_TOOL_CALL_WITHOUT_ID_TOKENS = [
     1, 3, 1097, 4, 9, 1091, 19227, 2391, 2811, 1429, 1098, 1897, 1429, 61906, 2811, 1445, 2821, 1093, 2
 ]
 # fmt: on
+
+_SPM_TOOLS_SINGLETURN_EXPECTED = Tokenized(tokens=_SPM_TOOLS_SINGLETURN_TOKENS)
+_TEKKEN_TOOLS_SINGLETURN_EXPECTED = Tokenized(tokens=_TEKKEN_TOOLS_SINGLETURN_TOKENS)
+_SPM_TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_SPM_TOOLS_MULTITURN_TOKENS)
+_TEKKEN_TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_TEKKEN_TOOLS_MULTITURN_TOKENS)
+_SPM_SYSTEM_TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_SPM_SYSTEM_TOOLS_MULTITURN_TOKENS)
+_TEKKEN_SYSTEM_TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_TEKKEN_SYSTEM_TOOLS_MULTITURN_TOKENS)
+_SPM_PREFIXED_FINAL_MESSAGE_EXPECTED = Tokenized(tokens=_SPM_PREFIXED_FINAL_MESSAGE_TOKENS, prefix_ids=[1049])
+_TEKKEN_PREFIXED_FINAL_MESSAGE_EXPECTED = Tokenized(tokens=_TEKKEN_PREFIXED_FINAL_MESSAGE_TOKENS, prefix_ids=[1100])
+_SPM_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_EXPECTED = Tokenized(
+    tokens=_SPM_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_TOKENS
+)
+_TEKKEN_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_EXPECTED = Tokenized(
+    tokens=_TEKKEN_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_TOKENS
+)
+_SPM_TOOL_MESSAGE_MULTIPLE_CALLS_EXPECTED = Tokenized(tokens=_SPM_TOOL_MESSAGE_MULTIPLE_CALLS_TOKENS)
+_TEKKEN_TOOL_MESSAGE_MULTIPLE_CALLS_EXPECTED = Tokenized(tokens=_TEKKEN_TOOL_MESSAGE_MULTIPLE_CALLS_TOKENS)
+_SPM_TOOL_MESSAGE_PLAIN_STRING_EXPECTED = Tokenized(tokens=_SPM_TOOL_MESSAGE_PLAIN_STRING_TOKENS)
+_TEKKEN_TOOL_MESSAGE_PLAIN_STRING_EXPECTED = Tokenized(tokens=_TEKKEN_TOOL_MESSAGE_PLAIN_STRING_TOKENS)
+_SPM_TOOL_MESSAGE_JSON_OBJECT_STRING_EXPECTED = Tokenized(tokens=_SPM_TOOL_MESSAGE_JSON_OBJECT_STRING_TOKENS)
+_TEKKEN_TOOL_MESSAGE_JSON_OBJECT_STRING_EXPECTED = Tokenized(tokens=_TEKKEN_TOOL_MESSAGE_JSON_OBJECT_STRING_TOKENS)
+_SPM_TOOL_MESSAGE_TEXT_CHUNK_LIST_EXPECTED = Tokenized(tokens=_SPM_TOOL_MESSAGE_TEXT_CHUNK_LIST_TOKENS)
+_TEKKEN_TOOL_MESSAGE_TEXT_CHUNK_LIST_EXPECTED = Tokenized(tokens=_TEKKEN_TOOL_MESSAGE_TEXT_CHUNK_LIST_TOKENS)
+_SPM_TOOL_CALL_EXPLICIT_NULL_ID_EXPECTED = Tokenized(tokens=_SPM_TOOL_CALL_WITHOUT_ID_TOKENS)
+_TEKKEN_TOOL_CALL_EXPLICIT_NULL_ID_EXPECTED = Tokenized(tokens=_TEKKEN_TOOL_CALL_WITHOUT_ID_TOKENS)
+_SPM_TOOL_CALL_DEFAULT_ID_EXPECTED = Tokenized(tokens=_SPM_TOOL_CALL_WITHOUT_ID_TOKENS)
+_TEKKEN_TOOL_CALL_DEFAULT_ID_EXPECTED = Tokenized(tokens=_TEKKEN_TOOL_CALL_WITHOUT_ID_TOKENS)
 
 _TOOL_CALL_AND_CONTENT_MESSAGE = "Cannot have tool calls and content defined in the same assistant message"
 _INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
@@ -456,203 +481,181 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
 
 
 @pytest.mark.parametrize(
-    argnames="backend, request_builder, expected_text, expected_tokens, expected_prefix_ids, expected_raw_decode",
+    argnames="backend, request_builder, expected, expected_text, expected_raw_decode",
     argvalues=[
         pytest.param(
             "spm",
             _build_tools_singleturn_request,
+            _SPM_TOOLS_SINGLETURN_EXPECTED,
             _SPM_TOOLS_SINGLETURN_TEXT,
-            _SPM_TOOLS_SINGLETURN_TOKENS,
-            None,
             _SPM_TOOLS_SINGLETURN_RAW_DECODE,
             id="spm-tools-singleturn",
         ),
         pytest.param(
             "tekken",
             _build_tools_singleturn_request,
+            _TEKKEN_TOOLS_SINGLETURN_EXPECTED,
             _TEKKEN_TOOLS_SINGLETURN_TEXT,
-            _TEKKEN_TOOLS_SINGLETURN_TOKENS,
-            None,
             _TEKKEN_TOOLS_SINGLETURN_RAW_DECODE,
             id="tekken-tools-singleturn",
         ),
         pytest.param(
             "spm",
             _build_tools_multiturn_request,
+            _SPM_TOOLS_MULTITURN_EXPECTED,
             _SPM_TOOLS_MULTITURN_TEXT,
-            _SPM_TOOLS_MULTITURN_TOKENS,
-            None,
             _SPM_TOOLS_MULTITURN_RAW_DECODE,
             id="spm-tools-multiturn",
         ),
         pytest.param(
             "tekken",
             _build_tools_multiturn_request,
+            _TEKKEN_TOOLS_MULTITURN_EXPECTED,
             _TEKKEN_TOOLS_MULTITURN_TEXT,
-            _TEKKEN_TOOLS_MULTITURN_TOKENS,
-            None,
             _TEKKEN_TOOLS_MULTITURN_RAW_DECODE,
             id="tekken-tools-multiturn",
         ),
         pytest.param(
             "spm",
             _build_system_tools_multiturn_request,
+            _SPM_SYSTEM_TOOLS_MULTITURN_EXPECTED,
             _SPM_SYSTEM_TOOLS_MULTITURN_TEXT,
-            _SPM_SYSTEM_TOOLS_MULTITURN_TOKENS,
-            None,
             _SPM_SYSTEM_TOOLS_MULTITURN_RAW_DECODE,
             id="spm-system-tools-multiturn",
         ),
         pytest.param(
             "tekken",
             _build_system_tools_multiturn_request,
+            _TEKKEN_SYSTEM_TOOLS_MULTITURN_EXPECTED,
             _TEKKEN_SYSTEM_TOOLS_MULTITURN_TEXT,
-            _TEKKEN_SYSTEM_TOOLS_MULTITURN_TOKENS,
-            None,
             _TEKKEN_SYSTEM_TOOLS_MULTITURN_RAW_DECODE,
             id="tekken-system-tools-multiturn",
         ),
         pytest.param(
             "spm",
             _build_prefixed_final_message_request,
+            _SPM_PREFIXED_FINAL_MESSAGE_EXPECTED,
             _SPM_PREFIXED_FINAL_MESSAGE_TEXT,
-            _SPM_PREFIXED_FINAL_MESSAGE_TOKENS,
-            _SPM_PREFIXED_FINAL_MESSAGE_PREFIX_IDS,
             _SPM_PREFIXED_FINAL_MESSAGE_RAW_DECODE,
             id="spm-prefixed-final-message",
         ),
         pytest.param(
             "tekken",
             _build_prefixed_final_message_request,
+            _TEKKEN_PREFIXED_FINAL_MESSAGE_EXPECTED,
             _TEKKEN_PREFIXED_FINAL_MESSAGE_TEXT,
-            _TEKKEN_PREFIXED_FINAL_MESSAGE_TOKENS,
-            _TEKKEN_PREFIXED_FINAL_MESSAGE_PREFIX_IDS,
             _TEKKEN_PREFIXED_FINAL_MESSAGE_RAW_DECODE,
             id="tekken-prefixed-final-message",
         ),
         pytest.param(
             "spm",
             _build_tool_message_multiple_shots_with_history_request,
+            _SPM_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_EXPECTED,
             _SPM_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_TEXT,
-            _SPM_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_TOKENS,
-            None,
             _SPM_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_RAW_DECODE,
             id="spm-tool-message-multiple-shots-with-history",
         ),
         pytest.param(
             "tekken",
             _build_tool_message_multiple_shots_with_history_request,
+            _TEKKEN_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_EXPECTED,
             _TEKKEN_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_TEXT,
-            _TEKKEN_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_TOKENS,
-            None,
             _TEKKEN_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_RAW_DECODE,
             id="tekken-tool-message-multiple-shots-with-history",
         ),
         pytest.param(
             "spm",
             _build_tool_message_multiple_calls_request,
+            _SPM_TOOL_MESSAGE_MULTIPLE_CALLS_EXPECTED,
             _SPM_TOOL_MESSAGE_MULTIPLE_CALLS_TEXT,
-            _SPM_TOOL_MESSAGE_MULTIPLE_CALLS_TOKENS,
-            None,
             _SPM_TOOL_MESSAGE_MULTIPLE_CALLS_RAW_DECODE,
             id="spm-tool-message-multiple-calls",
         ),
         pytest.param(
             "tekken",
             _build_tool_message_multiple_calls_request,
+            _TEKKEN_TOOL_MESSAGE_MULTIPLE_CALLS_EXPECTED,
             _TEKKEN_TOOL_MESSAGE_MULTIPLE_CALLS_TEXT,
-            _TEKKEN_TOOL_MESSAGE_MULTIPLE_CALLS_TOKENS,
-            None,
             _TEKKEN_TOOL_MESSAGE_MULTIPLE_CALLS_RAW_DECODE,
             id="tekken-tool-message-multiple-calls",
         ),
         pytest.param(
             "spm",
             _build_tool_message_plain_string_request,
+            _SPM_TOOL_MESSAGE_PLAIN_STRING_EXPECTED,
             _SPM_TOOL_MESSAGE_PLAIN_STRING_TEXT,
-            _SPM_TOOL_MESSAGE_PLAIN_STRING_TOKENS,
-            None,
             _SPM_TOOL_MESSAGE_PLAIN_STRING_RAW_DECODE,
             id="spm-tool-message-plain-string",
         ),
         pytest.param(
             "tekken",
             _build_tool_message_plain_string_request,
+            _TEKKEN_TOOL_MESSAGE_PLAIN_STRING_EXPECTED,
             _TEKKEN_TOOL_MESSAGE_PLAIN_STRING_TEXT,
-            _TEKKEN_TOOL_MESSAGE_PLAIN_STRING_TOKENS,
-            None,
             _TEKKEN_TOOL_MESSAGE_PLAIN_STRING_RAW_DECODE,
             id="tekken-tool-message-plain-string",
         ),
         pytest.param(
             "spm",
             _build_tool_message_json_object_string_request,
+            _SPM_TOOL_MESSAGE_JSON_OBJECT_STRING_EXPECTED,
             _SPM_TOOL_MESSAGE_JSON_OBJECT_STRING_TEXT,
-            _SPM_TOOL_MESSAGE_JSON_OBJECT_STRING_TOKENS,
-            None,
             _SPM_TOOL_MESSAGE_JSON_OBJECT_STRING_RAW_DECODE,
             id="spm-tool-message-json-object-string",
         ),
         pytest.param(
             "tekken",
             _build_tool_message_json_object_string_request,
+            _TEKKEN_TOOL_MESSAGE_JSON_OBJECT_STRING_EXPECTED,
             _TEKKEN_TOOL_MESSAGE_JSON_OBJECT_STRING_TEXT,
-            _TEKKEN_TOOL_MESSAGE_JSON_OBJECT_STRING_TOKENS,
-            None,
             _TEKKEN_TOOL_MESSAGE_JSON_OBJECT_STRING_RAW_DECODE,
             id="tekken-tool-message-json-object-string",
         ),
         pytest.param(
             "spm",
             _build_tool_message_text_chunk_list_request,
+            _SPM_TOOL_MESSAGE_TEXT_CHUNK_LIST_EXPECTED,
             _SPM_TOOL_MESSAGE_TEXT_CHUNK_LIST_TEXT,
-            _SPM_TOOL_MESSAGE_TEXT_CHUNK_LIST_TOKENS,
-            None,
             _SPM_TOOL_MESSAGE_TEXT_CHUNK_LIST_RAW_DECODE,
             id="spm-tool-message-text-chunk-list",
         ),
         pytest.param(
             "tekken",
             _build_tool_message_text_chunk_list_request,
+            _TEKKEN_TOOL_MESSAGE_TEXT_CHUNK_LIST_EXPECTED,
             _TEKKEN_TOOL_MESSAGE_TEXT_CHUNK_LIST_TEXT,
-            _TEKKEN_TOOL_MESSAGE_TEXT_CHUNK_LIST_TOKENS,
-            None,
             _TEKKEN_TOOL_MESSAGE_TEXT_CHUNK_LIST_RAW_DECODE,
             id="tekken-tool-message-text-chunk-list",
         ),
         pytest.param(
             "spm",
             _build_explicit_null_id_request,
+            _SPM_TOOL_CALL_EXPLICIT_NULL_ID_EXPECTED,
             _SPM_TOOL_CALL_WITHOUT_ID_TEXT,
-            _SPM_TOOL_CALL_WITHOUT_ID_TOKENS,
-            None,
             _SPM_TOOL_CALL_WITHOUT_ID_RAW_DECODE,
             id="spm-tool-call-explicit-null-id",
         ),
         pytest.param(
             "tekken",
             _build_explicit_null_id_request,
+            _TEKKEN_TOOL_CALL_EXPLICIT_NULL_ID_EXPECTED,
             _TEKKEN_TOOL_CALL_WITHOUT_ID_TEXT,
-            _TEKKEN_TOOL_CALL_WITHOUT_ID_TOKENS,
-            None,
             _TEKKEN_TOOL_CALL_WITHOUT_ID_RAW_DECODE,
             id="tekken-tool-call-explicit-null-id",
         ),
         pytest.param(
             "spm",
             _build_default_id_request,
+            _SPM_TOOL_CALL_DEFAULT_ID_EXPECTED,
             _SPM_TOOL_CALL_WITHOUT_ID_TEXT,
-            _SPM_TOOL_CALL_WITHOUT_ID_TOKENS,
-            None,
             _SPM_TOOL_CALL_WITHOUT_ID_RAW_DECODE,
             id="spm-tool-call-default-id",
         ),
         pytest.param(
             "tekken",
             _build_default_id_request,
+            _TEKKEN_TOOL_CALL_DEFAULT_ID_EXPECTED,
             _TEKKEN_TOOL_CALL_WITHOUT_ID_TEXT,
-            _TEKKEN_TOOL_CALL_WITHOUT_ID_TOKENS,
-            None,
             _TEKKEN_TOOL_CALL_WITHOUT_ID_RAW_DECODE,
             id="tekken-tool-call-default-id",
         ),
@@ -662,20 +665,16 @@ def test_encode_instruct(
     request: pytest.FixtureRequest,
     backend: str,
     request_builder: Callable[[], InstructRequest[ChatMessage, Tool]],
+    expected: Tokenized,
     expected_text: str,
-    expected_tokens: list[int],
-    expected_prefix_ids: list[int] | None,
     expected_raw_decode: str,
 ) -> None:
     r"""Preserve complete v3 instruct encodings for each backend and request."""
     tokenizer: InstructTokenizer = request.getfixturevalue(argname=f"{backend}_tokenizer")
     tokenized = tokenizer.encode_instruct(request=request_builder())
-    raw_decode = tokenizer.tokenizer.decode(tokens=tokenized.tokens)
-
+    assert_tokenized_equal(actual=tokenized, expected=expected)
     assert decode_keep(tokenizer=tokenizer, tokenized=tokenized) == expected_text
-    assert tokenized.tokens == expected_tokens
-    assert tokenized.prefix_ids == expected_prefix_ids
-    assert raw_decode == expected_raw_decode
+    assert tokenizer.tokenizer.decode(tokens=tokenized.tokens) == expected_raw_decode
 
 
 @pytest.mark.parametrize(
