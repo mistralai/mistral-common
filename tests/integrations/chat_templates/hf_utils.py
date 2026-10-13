@@ -61,7 +61,7 @@ def encode_transformers_from_openai(chat_template: str, openai_request: dict[str
     return _render_via_transformers(chat_template, openai_request)
 
 
-def _build_hf_tokenizer(tekken_path: Path, chat_template: str) -> "PreTrainedTokenizerFast":
+def build_hf_tokenizer(tekken_path: Path, chat_template: str) -> "PreTrainedTokenizerFast":
     r"""Build a `PreTrainedTokenizerFast` from a tekken.json file.
 
     Converts the Tekken BPE vocabulary to a HuggingFace tokenizers format,

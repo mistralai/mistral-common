@@ -14,7 +14,7 @@ from unittest.mock import patch
 import pytest
 
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.helpers import _IMAGE, TestConfig
+from tests.integrations.chat_templates.helpers import DUMMY_IMAGE, TestConfig
 
 # All configurations for output comparison tests (including SPM).
 ALL_CONFIGS: list[TestConfig] = [
@@ -179,7 +179,7 @@ def invalid_user_random() -> dict[str, Any]:
     }
 
 
-def _config_id(c: TestConfig) -> str:
+def format_config_id(c: TestConfig) -> str:
     r"""Generate a human-readable test ID for a config."""
     parts = [c.version.value]
     if c.spm:
@@ -199,7 +199,7 @@ def _config_id(c: TestConfig) -> str:
 def mock_download_image() -> Generator[None, None, None]:
     r"""Mock `download_image` to return a dummy image for all tests."""
     with patch("mistral_common.image.download_image") as mock_download:
-        mock_download.return_value = _IMAGE
+        mock_download.return_value = DUMMY_IMAGE
         with patch("mistral_common.tokens.tokenizers.image.download_image") as mock_download2:
-            mock_download2.return_value = _IMAGE
+            mock_download2.return_value = DUMMY_IMAGE
             yield

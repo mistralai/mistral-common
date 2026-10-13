@@ -8,13 +8,13 @@ from mistral_common.integrations.chat_templates.chat_templates import (
     generate_chat_template,
 )
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.helpers import TestConfig, _build_spm_path, _build_tekken_json
+from tests.integrations.chat_templates.helpers import TestConfig, build_spm_path, build_tekken_json
 
 
 class TestConvertTokenizerToChatTemplate:
     def test_tekken_v13_thinking(self, tmp_path: Path) -> None:
         config = TestConfig(version=TokenizerVersion.v13, think=True)
-        path = _build_tekken_json(config=config, output_dir=tmp_path)
+        path = build_tekken_json(config=config, output_dir=tmp_path)
         result = convert_tokenizer_to_chat_template(tokenizer_file=path)
         expected = generate_chat_template(
             spm=False,
@@ -31,7 +31,7 @@ class TestConvertTokenizerToChatTemplate:
 
     def test_tekken_v3_image(self, tmp_path: Path) -> None:
         config = TestConfig(version=TokenizerVersion.v3, image=True)
-        path = _build_tekken_json(config=config, output_dir=tmp_path)
+        path = build_tekken_json(config=config, output_dir=tmp_path)
         result = convert_tokenizer_to_chat_template(tokenizer_file=path)
         expected = generate_chat_template(
             spm=False,
@@ -47,7 +47,7 @@ class TestConvertTokenizerToChatTemplate:
 
     def test_tekken_v7_audio(self, tmp_path: Path) -> None:
         config = TestConfig(version=TokenizerVersion.v7, audio=True)
-        path = _build_tekken_json(config=config, output_dir=tmp_path)
+        path = build_tekken_json(config=config, output_dir=tmp_path)
         result = convert_tokenizer_to_chat_template(tokenizer_file=path)
         expected = generate_chat_template(
             spm=False,
@@ -63,7 +63,7 @@ class TestConvertTokenizerToChatTemplate:
 
     def test_tekken_v11_plain_thinking(self, tmp_path: Path) -> None:
         config = TestConfig(version=TokenizerVersion.v11)
-        path = _build_tekken_json(config=config, output_dir=tmp_path)
+        path = build_tekken_json(config=config, output_dir=tmp_path)
         result = convert_tokenizer_to_chat_template(tokenizer_file=path)
         expected = generate_chat_template(
             spm=False,
@@ -81,7 +81,7 @@ class TestConvertTokenizerToChatTemplate:
 
     def test_tekken_v11_plain_thinking_override_false(self, tmp_path: Path) -> None:
         config = TestConfig(version=TokenizerVersion.v11)
-        path = _build_tekken_json(config=config, output_dir=tmp_path)
+        path = build_tekken_json(config=config, output_dir=tmp_path)
         result = convert_tokenizer_to_chat_template(tokenizer_file=path, plain_thinking_support=False)
         expected = generate_chat_template(
             spm=False,
@@ -101,20 +101,20 @@ class TestConvertTokenizerToChatTemplate:
         # Forcing `True` cannot widen what is producible: `TemplateConfig` only accepts plain
         # thinking where the heuristic already returns `True`, so it restates the default.
         config = TestConfig(version=TokenizerVersion.v11)
-        path = _build_tekken_json(config=config, output_dir=tmp_path)
+        path = build_tekken_json(config=config, output_dir=tmp_path)
         forced = convert_tokenizer_to_chat_template(tokenizer_file=path, plain_thinking_support=True)
         autodetected = convert_tokenizer_to_chat_template(tokenizer_file=path)
         assert forced == autodetected
 
     def test_tekken_v11_plain_thinking_override_true_with_audio_raises(self, tmp_path: Path) -> None:
         config = TestConfig(version=TokenizerVersion.v11, audio=True)
-        path = _build_tekken_json(config=config, output_dir=tmp_path)
+        path = build_tekken_json(config=config, output_dir=tmp_path)
         with pytest.raises(ValueError, match="Audio and plain thinking support are mutually exclusive"):
             convert_tokenizer_to_chat_template(tokenizer_file=path, plain_thinking_support=True)
 
     def test_spm_v7(self, tmp_path: Path) -> None:
         config = TestConfig(version=TokenizerVersion.v7, spm=True)
-        path = _build_spm_path(config=config, output_dir=tmp_path)
+        path = build_spm_path(config=config, output_dir=tmp_path)
         result = convert_tokenizer_to_chat_template(tokenizer_file=path)
         expected = generate_chat_template(
             spm=True,
@@ -130,7 +130,7 @@ class TestConvertTokenizerToChatTemplate:
 
     def test_system_prompt_embedded(self, tmp_path: Path) -> None:
         config = TestConfig(version=TokenizerVersion.v7)
-        path = _build_tekken_json(config=config, output_dir=tmp_path)
+        path = build_tekken_json(config=config, output_dir=tmp_path)
         result = convert_tokenizer_to_chat_template(
             tokenizer_file=path,
             system_prompt="You are helpful.",
@@ -139,7 +139,7 @@ class TestConvertTokenizerToChatTemplate:
 
     def test_use_special_token_variables_true(self, tmp_path: Path) -> None:
         config = TestConfig(version=TokenizerVersion.v7)
-        path = _build_tekken_json(config=config, output_dir=tmp_path)
+        path = build_tekken_json(config=config, output_dir=tmp_path)
         result = convert_tokenizer_to_chat_template(
             tokenizer_file=path,
             use_special_token_variables=True,
@@ -149,7 +149,7 @@ class TestConvertTokenizerToChatTemplate:
 
     def test_use_special_token_variables_false(self, tmp_path: Path) -> None:
         config = TestConfig(version=TokenizerVersion.v7)
-        path = _build_tekken_json(config=config, output_dir=tmp_path)
+        path = build_tekken_json(config=config, output_dir=tmp_path)
         result = convert_tokenizer_to_chat_template(
             tokenizer_file=path,
             use_special_token_variables=False,
@@ -159,7 +159,7 @@ class TestConvertTokenizerToChatTemplate:
 
     def test_tekken_v11_audio_no_plain_thinking(self, tmp_path: Path) -> None:
         config = TestConfig(version=TokenizerVersion.v11, audio=True)
-        path = _build_tekken_json(config=config, output_dir=tmp_path)
+        path = build_tekken_json(config=config, output_dir=tmp_path)
         result = convert_tokenizer_to_chat_template(tokenizer_file=path)
         expected = generate_chat_template(
             spm=False,
