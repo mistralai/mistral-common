@@ -3,21 +3,26 @@ r"""Registry, recipe and tokenizer-configuration invariants for public chat case
 from collections.abc import Callable
 from dataclasses import replace
 from enum import Enum
+from importlib import import_module
 from pathlib import Path
+from pkgutil import iter_modules
 
 import pytest
 from PIL import Image
 from pydantic import BaseModel
 
+import tests.integration
 from mistral_common.protocol.instruct.chunk import ImageChunk
 from mistral_common.protocol.instruct.messages import ChatMessage, UserMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.tool_calls import Function, Tool
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from tests.integration.chat_cases import PublicChatErrorCase, PublicChatSuccessCase
 from tests.integration.chat_recipes import ChatRecipe
 from tests.integration.chat_registry import ALL_PUBLIC_CASES, ALL_SUCCESS_CASES
-from tests.integration.chat_v7_cases import V7_DIRECT_EQUALITY_CASES
+from tests.integration.chat_v3_cases import PairedChatCase
+from tests.integration.chat_v7_cases import V7_DIRECT_EQUALITY_CASES, V7DirectEqualityCase
 from tests.integration.expected_results import _EXPECTED_ROOT
 from tests.integration.tokenizer_configurations import (
     BUNDLED_SPM_V1_TEST,
@@ -88,14 +93,21 @@ def test_registered_v7_direct_recipes_build_deeply_fresh_requests(
 
 @pytest.mark.parametrize(
     argnames="shared_kind",
-    argvalues=["image", "user-message", "content-list", "dictionary"],
-    ids=["shared-image", "shared-user-message", "shared-content-list", "shared-dictionary"],
+    argvalues=["image", "user-message", "content-list", "dictionary", "nondeterministic-structure"],
+    ids=[
+        "shared-image",
+        "shared-user-message",
+        "shared-content-list",
+        "shared-dictionary",
+        "nondeterministic-structure",
+    ],
 )
-def test_freshness_check_rejects_shared_mutable_object(shared_kind: str) -> None:
+def test_freshness_check_rejects_unfresh_builds(shared_kind: str) -> None:
     shared_image = Image.new(mode="RGB", size=(1, 1))
     shared_message = UserMessage(content="shared")
     shared_content: list[object] = []
     shared_parameters = {"type": "object", "properties": {}}
+    contents = iter(("first request", "second request"))
 
     def build_shared_image_request() -> BaseModel:
         return ChatCompletionRequest[ChatMessage](messages=[UserMessage(content=[ImageChunk(image=shared_image)])])
@@ -112,13 +124,17 @@ def test_freshness_check_rejects_shared_mutable_object(shared_kind: str) -> None
         tool = Tool.model_construct(function=function)
         return ChatCompletionRequest[ChatMessage](messages=[UserMessage(content="query")], tools=[tool])
 
+    def build_nondeterministic_request() -> BaseModel:
+        return ChatCompletionRequest[ChatMessage](messages=[UserMessage(content=next(contents))])
+
     builders = {
         "image": build_shared_image_request,
         "user-message": build_shared_user_message_request,
         "content-list": build_shared_content_list_request,
         "dictionary": build_shared_dictionary_request,
+        "nondeterministic-structure": build_nondeterministic_request,
     }
-    with pytest.raises(expected_exception=AssertionError, match="reuses mutable objects"):
+    with pytest.raises(expected_exception=AssertionError):
         _assert_fresh_request_graph(recipe_id=shared_kind, build=builders[shared_kind])
 
 
@@ -253,3 +269,35 @@ def test_public_chat_case_ids_are_globally_unique() -> None:
     case_ids = [case.case_id for case in ALL_PUBLIC_CASES]
 
     assert len(case_ids) == len(set(case_ids))
+
+
+def test_registry_contains_every_defined_case() -> None:
+    defined_cases: list[PublicChatSuccessCase | PublicChatErrorCase] = []
+
+    def collect(value: object) -> None:
+        if isinstance(value, (PublicChatSuccessCase, PublicChatErrorCase)):
+            defined_cases.append(value)
+        elif isinstance(value, PairedChatCase):
+            collect(value.first)
+            collect(value.second)
+        elif isinstance(value, V7DirectEqualityCase):
+            collect(value.case)
+        elif isinstance(value, tuple):
+            for item in value:
+                collect(item)
+
+    case_module_names = (
+        module_info.name
+        for module_info in iter_modules(path=tests.integration.__path__)
+        if module_info.name == "chat_cases"
+        or (module_info.name.startswith("chat_") and module_info.name.endswith("_cases"))
+    )
+    for module_name in case_module_names:
+        module = import_module(name=f"tests.integration.{module_name}")
+        for value in vars(module).values():
+            collect(value)
+
+    registered_identities = {id(case) for case in ALL_PUBLIC_CASES}
+    missing_case_ids = {case.case_id for case in defined_cases if id(case) not in registered_identities}
+
+    assert not missing_case_ids, f"Defined public chat cases missing from ALL_PUBLIC_CASES: {sorted(missing_case_ids)}"

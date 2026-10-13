@@ -15,16 +15,18 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from mistral_common.protocol.instruct.chunk import ImageURLChunk
-from mistral_common.protocol.instruct.messages import ChatMessage, UserMessage
+from mistral_common.exceptions import InvalidMessageStructureException, TokenizerException
+from mistral_common.protocol.instruct.messages import ChatMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from tests.integration.chat_cases import SAMPLE_V1_TOOLS_REJECTED_CASE
-from tests.integration.chat_recipes import build_image_url_chunk
+from tests.integration.chat_cases import SAMPLE_V1_TOOLS_REJECTED_CASE, PublicChatErrorCase
+from tests.integration.chat_recipes import build_image_url_chunk, build_user_media_request
 from tests.integration.chat_v15_cases import V15_USER_IMAGE_URL_CASE
 from tests.integration.expected_results import (
+    ATOL,
+    RTOL,
     ExpectedAudio,
     ExpectedImage,
     ExpectedSuccess,
@@ -34,8 +36,7 @@ from tests.integration.expected_results import (
     resolve_sidecar,
 )
 from tests.integration.tokenizer_configurations import TokenizerConfiguration
-from tests.integration.utils import encode_and_expect_error
-from tests.utils import decode_keep
+from tests.integration.utils import encode_and_expect_error, encode_and_verify
 
 
 @pytest.fixture()
@@ -531,6 +532,8 @@ def test_media_metadata_mismatch_fails_the_comparison(mutation: Callable[[Tokeni
     ids=["image-within-tolerance", "image-beyond-tolerance", "audio-within-tolerance", "audio-beyond-tolerance"],
 )
 def test_shared_tolerance_boundary(media_kind: str, offset: float, expect_failure: bool) -> None:
+    assert (ATOL, RTOL) == (1e-4, 0.0)
+
     expected_array = np.full(shape=(2,), fill_value=1e4, dtype=np.float64)
     expected = ExpectedSuccess(
         token_ids=[1],
@@ -585,24 +588,40 @@ def test_sidecar_metadata_mismatch_is_rejected_before_values(
 def test_changed_media_input_fails_public_encode_comparison(
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
 ) -> None:
-    case = V15_USER_IMAGE_URL_CASE
-    tokenizer = public_tokenizer(case.configuration)
-    expected = load_expected_success(
-        case_id=case.case_id,
-        tokenizer_configuration_id=case.configuration.configuration_id,
+    changed_recipe = replace(
+        V15_USER_IMAGE_URL_CASE.recipe,
+        build=lambda: build_user_media_request(
+            prompt="Here is content",
+            content_chunk=build_image_url_chunk(
+                image=Image.new(mode="RGB", size=(4, 4), color="blue"),
+            ),
+        ),
     )
-    request = case.recipe.build()
-    user_message = request.messages[0]
-    assert isinstance(user_message, UserMessage)
-    assert isinstance(user_message.content, list)
-    image_chunk = user_message.content[1]
-    assert isinstance(image_chunk, ImageURLChunk)
-    user_message.content[1] = build_image_url_chunk(image=Image.new(mode="RGB", size=(4, 4), color="blue"))
-    changed_tokenized = tokenizer.encode_chat_completion(request)
-    changed_decoded_text = decode_keep(tokenizer=tokenizer, tokenized=changed_tokenized)
+    changed_case = replace(V15_USER_IMAGE_URL_CASE, recipe=changed_recipe)
 
     with pytest.raises(expected_exception=AssertionError, match="Image array differs"):
-        assert_public_success(expected=expected, tokenized=changed_tokenized, decoded_text=changed_decoded_text)
+        encode_and_verify(case=changed_case, public_tokenizer=public_tokenizer)
+
+
+@pytest.mark.parametrize(
+    argnames="case",
+    argvalues=[
+        pytest.param(replace(SAMPLE_V1_TOOLS_REJECTED_CASE, message_pattern=r"not the v1 error"), id="wrong-message"),
+        pytest.param(
+            replace(SAMPLE_V1_TOOLS_REJECTED_CASE, expected_exception=InvalidMessageStructureException),
+            id="wrong-exception-type",
+        ),
+    ],
+)
+def test_encode_and_expect_error_requires_type_and_message(
+    case: PublicChatErrorCase,
+    public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
+) -> None:
+    with pytest.raises(
+        expected_exception=(pytest.fail.Exception, AssertionError, TokenizerException),
+        match=r"(Tools not implemented for tokenizer V1|Regex pattern did not match)",
+    ):
+        encode_and_expect_error(case=case, public_tokenizer=public_tokenizer)
 
 
 def test_construction_failure_fails_expected_error_case(
