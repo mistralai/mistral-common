@@ -21,6 +21,7 @@ from mistral_common.protocol.instruct.messages import (
     ChatMessage,
     SystemMessage,
     TextChunk,
+    ThinkChunk,
     ToolMessage,
     UserMessage,
 )
@@ -158,6 +159,12 @@ def _build_prefixed_final_request() -> ChatCompletionRequest[ChatMessage]:
     r"""Build the shared user message followed by a prefixed assistant turn."""
     return ChatCompletionRequest[ChatMessage](
         messages=[UserMessage(content="a"), AssistantMessage(content="b", prefix=True)]
+    )
+
+
+def _build_system_think() -> ChatCompletionRequest[ChatMessage]:
+    return ChatCompletionRequest[ChatMessage](
+        messages=[SystemMessage(content=[ThinkChunk(thinking="Hi")]), UserMessage(content="Hello")]
     )
 
 
@@ -606,5 +613,6 @@ MISMATCHED_TOOL_RESULTS_FINETUNING = ChatRecipe(
     recipe_id="mismatched-tool-results-finetuning", build=_build_mismatched_tool_results_finetuning
 )
 PREFIXED_FINAL = ChatRecipe(recipe_id="prefixed-final", build=_build_prefixed_final_request)
+SYSTEM_THINK = ChatRecipe(recipe_id="released-system-think", build=_build_system_think)
 CALL_ID_X = _call_id_recipe(recipe_id="call-id-x", tool_call_id="x")
 CALL_ID_SLASH = _call_id_recipe(recipe_id="call-id-slash", tool_call_id="call/id-1")

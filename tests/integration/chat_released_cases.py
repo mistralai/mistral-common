@@ -3,13 +3,14 @@ r"""Public chat cases that close behavior cells on the six pinned profiles."""
 from PIL import Image
 
 from mistral_common.exceptions import InvalidMessageStructureException, InvalidSystemPromptException, TokenizerException
-from mistral_common.protocol.instruct.chunk import ImageChunk, TextChunk, ThinkChunk
-from mistral_common.protocol.instruct.messages import ChatMessage, SystemMessage, UserMessage
+from mistral_common.protocol.instruct.chunk import ImageChunk, TextChunk
+from mistral_common.protocol.instruct.messages import ChatMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
 from tests.integration.chat_cases import PublicChatErrorCase, PublicChatSuccessCase
 from tests.integration.chat_recipes import (
     PREFIXED_FINAL,
+    SYSTEM_THINK,
     WEATHER_FULL,
     ChatRecipe,
     build_red_image,
@@ -64,17 +65,10 @@ def _build_two_user_images() -> ChatCompletionRequest[ChatMessage]:
     )
 
 
-def _build_system_think() -> ChatCompletionRequest[ChatMessage]:
-    return ChatCompletionRequest[ChatMessage](
-        messages=[SystemMessage(content=[ThinkChunk(thinking="Hi")]), UserMessage(content="Hello")]
-    )
-
-
 _USER_IMAGE = ChatRecipe(recipe_id="released-user-image", build=_build_user_image)
 _USER_AUDIO = ChatRecipe(recipe_id="released-user-audio", build=_build_user_audio)
 _USER_AUDIO_URL = ChatRecipe(recipe_id="released-user-audio-url", build=_build_user_audio_url)
 _TWO_USER_IMAGES = ChatRecipe(recipe_id="released-two-user-images", build=_build_two_user_images)
-_SYSTEM_THINK = ChatRecipe(recipe_id="released-system-think", build=_build_system_think)
 
 RELEASED_USER_AUDIO_URL_CASE = PublicChatSuccessCase(
     case_id="chat-v7-released-user-audio-url",
@@ -121,28 +115,28 @@ RELEASED_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
         case_id="chat-v13-released-user-image", recipe=_USER_IMAGE, configuration=PINNED_V13_IMAGE_TEST
     ),
     PublicChatSuccessCase(
-        case_id="chat-v13-released-system-think", recipe=_SYSTEM_THINK, configuration=PINNED_V13_TEXT_TEST
+        case_id="chat-v13-released-system-think", recipe=SYSTEM_THINK, configuration=PINNED_V13_TEXT_TEST
     ),
 )
 
 RELEASED_ERROR_CASES: tuple[PublicChatErrorCase, ...] = (
     PublicChatErrorCase(
         case_id="chat-v7-released-system-think-rejected",
-        recipe=_SYSTEM_THINK,
+        recipe=SYSTEM_THINK,
         configuration=PINNED_V7_IMAGE_TEST,
         expected_exception=TokenizerException,
         message_pattern=r"Think not implemented for tokenizer < V13\.",
     ),
     PublicChatErrorCase(
         case_id="chat-v11-released-system-think-rejected",
-        recipe=_SYSTEM_THINK,
+        recipe=SYSTEM_THINK,
         configuration=PINNED_V11_IMAGE_TEST,
         expected_exception=TokenizerException,
         message_pattern=r"Think not implemented for tokenizer < V13\.",
     ),
     PublicChatErrorCase(
         case_id="chat-v15-released-system-think-rejected",
-        recipe=_SYSTEM_THINK,
+        recipe=SYSTEM_THINK,
         configuration=PINNED_V15_IMAGE_SETTINGS_TEST,
         expected_exception=InvalidSystemPromptException,
         message_pattern=r"Unexpected content chunk types in system message: \['ThinkChunk'\]",

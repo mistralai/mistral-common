@@ -149,6 +149,12 @@ _PINNED_V15_IMAGE_SETTINGS_SHA256 = "b1272b956bd6edd2d2c674c76896c7661308c9e7239
 BUNDLED_SPM_V1_TEST = _bundled_spm(
     profile_id="v1", filename=_BUNDLED_SPM_V1_FILENAME, sha256=_BUNDLED_SPM_V1_SHA256, mode=ValidationMode.test
 )
+BUNDLED_SPM_V1_FINETUNING = _bundled_spm(
+    profile_id="v1",
+    filename=_BUNDLED_SPM_V1_FILENAME,
+    sha256=_BUNDLED_SPM_V1_SHA256,
+    mode=ValidationMode.finetuning,
+)
 BUNDLED_SPM_V2_TEST = _bundled_spm(
     profile_id="v2", filename=_BUNDLED_SPM_V2_FILENAME, sha256=_BUNDLED_SPM_V2_SHA256, mode=ValidationMode.test
 )
@@ -166,6 +172,12 @@ BUNDLED_SPM_V2_FINETUNING = _bundled_spm(
 )
 BUNDLED_SPM_V3_TEST = _bundled_spm(
     profile_id="v3", filename=_BUNDLED_SPM_V3_FILENAME, sha256=_BUNDLED_SPM_V3_SHA256, mode=ValidationMode.test
+)
+BUNDLED_SPM_V3_FINETUNING = _bundled_spm(
+    profile_id="v3",
+    filename=_BUNDLED_SPM_V3_FILENAME,
+    sha256=_BUNDLED_SPM_V3_SHA256,
+    mode=ValidationMode.finetuning,
 )
 BUNDLED_SPM_V7_MM_TEST = _bundled_spm(
     profile_id="v7-mm",

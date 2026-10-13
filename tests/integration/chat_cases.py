@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from mistral_common.exceptions import (
     InvalidMessageStructureException,
+    InvalidSystemPromptException,
     MistralCommonException,
     TokenizerException,
     UnsupportedTokenizerFeatureException,
@@ -22,16 +23,19 @@ from tests.integration.chat_recipes import (
     PARALLEL_CALLS,
     PARALLEL_TOOL_RESULTS,
     SEVERAL_CALLS,
+    SYSTEM_THINK,
     WEATHER_FULL,
     WEATHER_NO_HISTORY,
     WEATHER_NO_SYSTEM,
     ChatRecipe,
 )
 from tests.integration.tokenizer_configurations import (
+    BUNDLED_SPM_V1_FINETUNING,
     BUNDLED_SPM_V1_TEST,
     BUNDLED_SPM_V2_FINETUNING,
     BUNDLED_SPM_V2_SERVING,
     BUNDLED_SPM_V2_TEST,
+    BUNDLED_SPM_V3_FINETUNING,
     BUNDLED_SPM_V3_TEST,
     TokenizerConfiguration,
 )
@@ -128,5 +132,47 @@ SAMPLE_ERROR_CASES: tuple[PublicChatErrorCase, ...] = (
         configuration=BUNDLED_SPM_V2_FINETUNING,
         expected_exception=InvalidMessageStructureException,
         message_pattern=r"Not the same number of function calls and responses",
+    ),
+    PublicChatErrorCase(
+        case_id="chat-v1-system-think-rejected",
+        recipe=SYSTEM_THINK,
+        configuration=BUNDLED_SPM_V1_TEST,
+        expected_exception=InvalidSystemPromptException,
+        message_pattern=r"Unexpected content chunk types in system message",
+    ),
+    PublicChatErrorCase(
+        case_id="chat-v2-system-think-rejected",
+        recipe=SYSTEM_THINK,
+        configuration=BUNDLED_SPM_V2_TEST,
+        expected_exception=InvalidSystemPromptException,
+        message_pattern=r"Unexpected content chunk types in system message",
+    ),
+    PublicChatErrorCase(
+        case_id="chat-v3-system-think-rejected",
+        recipe=SYSTEM_THINK,
+        configuration=BUNDLED_SPM_V3_TEST,
+        expected_exception=InvalidSystemPromptException,
+        message_pattern=r"Unexpected content chunk types in system message",
+    ),
+    PublicChatErrorCase(
+        case_id="chat-v1-finetuning-terminal-rejected",
+        recipe=WEATHER_FULL,
+        configuration=BUNDLED_SPM_V1_FINETUNING,
+        expected_exception=InvalidMessageStructureException,
+        message_pattern=r"Expected last role Assistant for finetuning but got tool",
+    ),
+    PublicChatErrorCase(
+        case_id="chat-v2-finetuning-terminal-rejected",
+        recipe=WEATHER_FULL,
+        configuration=BUNDLED_SPM_V2_FINETUNING,
+        expected_exception=InvalidMessageStructureException,
+        message_pattern=r"Expected last role Assistant for finetuning but got tool",
+    ),
+    PublicChatErrorCase(
+        case_id="chat-v3-finetuning-terminal-rejected",
+        recipe=WEATHER_FULL,
+        configuration=BUNDLED_SPM_V3_FINETUNING,
+        expected_exception=InvalidMessageStructureException,
+        message_pattern=r"Expected last role Assistant for finetuning but got tool",
     ),
 )
