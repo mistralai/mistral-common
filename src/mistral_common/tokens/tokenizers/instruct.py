@@ -1175,10 +1175,6 @@ class InstructTokenizerV7(InstructTokenizerV3):
             audios = tokenized.audios
         elif request.streaming == StreamingMode.ONLINE:
             assert self.audio_encoder is not None
-            if request.audio and not isinstance(request.audio, str):
-                raise InvalidRequestException(
-                    "ONLINE streaming audio must be a base64 text value or empty prefill; received bytes."
-                )
             if self.audio_encoder.special_ids.streaming_pad is None:
                 raise UnsupportedTokenizerFeatureException(
                     "Audio encoder does not provide the streaming_pad marker required for transcription."

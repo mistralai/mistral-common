@@ -1,8 +1,10 @@
+import io
 import math
 from typing import Any
 
 import numpy as np
 import pytest
+from pydantic import ValidationError
 
 from mistral_common.exceptions import InvalidRequestException, UnsupportedTokenizerFeatureException
 from mistral_common.protocol.instruct.validator import ValidationMode
@@ -239,16 +241,6 @@ def test_audio_config_delay(rate: float, delay: int, num_delay_tokens: int) -> N
             r"^Streaming transcription requires mode OFFLINE or ONLINE, got DISABLED\.$",
             id="audio-v7-streaming-disabled-rejected-test",
         ),
-        pytest.param(
-            SYNTHETIC_V7_STREAMING.configuration_id,
-            SYNTHETIC_V7_STREAMING,
-            ValidationMode.test,
-            valid_reference_audio_bytes(),
-            StreamingMode.ONLINE,
-            InvalidRequestException,
-            r"ONLINE streaming audio.*base64 text.*bytes",
-            id="audio-v7-online-bytes-rejected-test",
-        ),
     ],
 )
 def test_public_streaming_transcription_errors(
@@ -301,14 +293,6 @@ def test_public_streaming_transcription_errors(
             r"^Streaming transcription requires mode OFFLINE or ONLINE, got DISABLED\.$",
             id="streaming-disabled-mode",
         ),
-        pytest.param(
-            SYNTHETIC_V7_STREAMING,
-            valid_reference_audio_bytes(),
-            StreamingMode.ONLINE,
-            InvalidRequestException,
-            r"ONLINE streaming audio.*base64 text.*bytes",
-            id="online-nonempty-wav-bytes",
-        ),
     ],
 )
 def test_direct_streaming_transcription_errors(
@@ -328,6 +312,47 @@ def test_direct_streaming_transcription_errors(
 
     with pytest.raises(error_type, match=message):
         tokenizer.instruct_tokenizer.encode_transcription(request)
+
+
+@pytest.mark.parametrize(
+    argnames="audio",
+    argvalues=[pytest.param(valid_reference_audio_bytes(), id="audio-v7-online-bytes-rejected-test")],
+)
+def test_online_nonempty_bytes_rejected_at_construction(audio: bytes) -> None:
+    with pytest.raises(
+        ValidationError,
+        match=(
+            r"Value error, ONLINE streaming audio must be a base64 text value or empty prefill; received bytes\. "
+            r"\[type=value_error"
+        ),
+    ):
+        TranscriptionRequest(
+            audio=audio,
+            streaming=StreamingMode.ONLINE,
+            language=None,
+            target_streaming_delay_ms=None,
+        )
+
+
+def test_online_empty_bytes_prefill_still_constructs() -> None:
+    request = TranscriptionRequest(
+        audio=b"",
+        streaming=StreamingMode.ONLINE,
+        language=None,
+        target_streaming_delay_ms=None,
+    )
+
+    assert request.audio == b""
+
+
+def test_online_from_openai_request_still_constructs() -> None:
+    request = TranscriptionRequest.from_openai(
+        openai_request={"file": io.BytesIO(valid_reference_audio_bytes()), "streaming": "online"}
+    )
+
+    assert isinstance(request.audio, str)
+    assert request.audio
+    assert request.streaming == StreamingMode.ONLINE
 
 
 def test_online_base64_audio_keeps_direct_warning_and_combine_path() -> None:

@@ -38,7 +38,8 @@ class TranscriptionRequest(BaseCompletionRequest):
         model: The model to use for transcription. If `None`, the serving side
             default transcription model is used.
         audio: Audio data to transcribe. Either raw audio bytes or a base64-encoded
-            string (decoded automatically).
+            string (decoded automatically). With `ONLINE` streaming, nonempty
+            audio must be base64 text; nonempty bytes are rejected.
         language: Language of the input audio in ISO-639-1 format (e.g., "en").
             If provided, improves language adherence of the transcript.
         strict_audio_validation: If `True` (default), audio data is validated against
@@ -102,6 +103,20 @@ class TranscriptionRequest(BaseCompletionRequest):
         if isinstance(raw, dict) and "data" in raw:
             values["audio"] = raw["data"]
         return values
+
+    @model_validator(mode="after")
+    def _validate_online_audio(self) -> "TranscriptionRequest":
+        r"""Reject nonempty byte audio for online streaming.
+
+        Returns:
+            The validated transcription request.
+
+        Raises:
+            ValueError: If online streaming receives nonempty byte audio.
+        """
+        if self.streaming == StreamingMode.ONLINE and isinstance(self.audio, bytes) and self.audio:
+            raise ValueError("ONLINE streaming audio must be a base64 text value or empty prefill; received bytes.")
+        return self
 
     def to_openai(self, exclude: tuple = (), **kwargs: Any) -> dict[str, list[dict[str, Any]]]:
         r"""Convert the transcription request into the OpenAI format.
