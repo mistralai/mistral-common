@@ -13,8 +13,10 @@ from mistral_common.tokens.tokenizers.utils import (
 
 
 def _create_temporary_hf_model_cache(repo_id: str) -> Path:
-    tmp_dir = tempfile.mkdtemp()
-    hub_folder = Path(tmp_dir) / "hf_hub"
+    # Resolve the temporary dir so comparisons against paths returned by
+    # huggingface_hub hold on platforms where TMPDIR is a symlink (e.g. macOS /var -> /private/var).
+    tmp_dir = Path(tempfile.mkdtemp()).resolve()
+    hub_folder = tmp_dir / "hf_hub"
     model_folder = huggingface_hub.constants.REPO_ID_SEPARATOR.join(["models", *repo_id.split("/")])
 
     revision_file = hub_folder / model_folder / "refs" / huggingface_hub.constants.DEFAULT_REVISION
