@@ -532,9 +532,6 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
                 "    {%- if response_format_type not in ['text', 'json_object', 'json_schema'] %}",
                 "        {{- raise_exception('Response format type must be one of text, json_object or json_schema, "
                 "got ' ~ response_format_type ~ '.') }}",
-                "    {%- elif response_format_type != 'json_schema' and response_json_schema is not none %}",
-                "        {{- raise_exception('Response format `' ~ response_format_type ~ '` must not define "
-                "a schema') }}",
                 "    {%- elif response_format_type == 'json_schema' %}",
                 "        {%- if response_json_schema is none or response_json_schema.get('schema') is none %}",
                 "            {{- raise_exception('Response format `json_schema` must define the schema') }}",
