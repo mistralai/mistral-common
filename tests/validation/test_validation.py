@@ -71,3 +71,7 @@ def test_get_validator_version_mapping(version: TokenizerVersion, expected_class
 def test_get_validator_mode_passed_correctly(mode: ValidationMode) -> None:
     validator = get_validator(TokenizerVersion.v2, mode)
     assert validator._mode == validator.mode == mode
+
+
+def test_validator_defaults_to_agnostic_mode() -> None:
+    assert MistralRequestValidator().mode == ValidationMode.agnostic
