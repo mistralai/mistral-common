@@ -46,7 +46,6 @@ from mistral_common.tokens.tokenizers.tekken import SpecialTokenInfo, Tekkenizer
 from tests.test_tekken import get_special_tokens, quick_vocab
 from tests.utils import decode_keep
 
-BUNDLED_V7_NO_AUDIO_CONFIGURATION_ID = "bundled-spm-v7-no-audio-test"
 BUNDLED_V7_NO_AUDIO_SHA256 = "1b968b8dc352f42192367337c78ccc61e1eaddc6d641a579372d4f20694beb7a"
 
 
