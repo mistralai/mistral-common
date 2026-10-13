@@ -6,9 +6,9 @@ import pytest
 
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.integration.chat_v7_cases import (
-    _SYSTEM_TOOLS_IMAGE_CASE,
     V7_DIRECT_EQUALITY_CASES,
     V7_PREFIXED_FINAL_CASE,
+    V7_SYSTEM_TOOLS_IMAGE_CASE,
     V7DirectEqualityCase,
 )
 from tests.integration.tokenizer_configurations import TokenizerConfiguration
@@ -18,7 +18,7 @@ from tests.integration.utils import encode_and_verify
 def test_public_chat_v7_system_tools_image(
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
 ) -> None:
-    encode_and_verify(case=_SYSTEM_TOOLS_IMAGE_CASE, public_tokenizer=public_tokenizer)
+    encode_and_verify(case=V7_SYSTEM_TOOLS_IMAGE_CASE, public_tokenizer=public_tokenizer)
 
 
 @pytest.mark.parametrize(

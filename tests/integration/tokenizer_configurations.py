@@ -30,7 +30,7 @@ _BUNDLED_DATA = _REPO_ROOT / "src" / "mistral_common" / "data"
 _PINNED_CACHE = _REPO_ROOT / ".cache" / "test-tokenizers"
 
 
-class Provenance(str, Enum):
+class Provenance(Enum):
     """Artifact source identity for one tokenizer configuration."""
 
     BUNDLED = "bundled"

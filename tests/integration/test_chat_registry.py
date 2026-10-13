@@ -6,6 +6,7 @@ from enum import Enum
 from importlib import import_module
 from pathlib import Path
 from pkgutil import iter_modules
+from typing import Any
 
 import pytest
 from PIL import Image
@@ -39,6 +40,54 @@ _REGISTERED_CONFIGURATIONS = tuple(
     {case.configuration.configuration_id: case.configuration for case in ALL_PUBLIC_CASES}.values()
 )
 _V7_DIRECT_BUILDERS = tuple(dict.fromkeys(case.build_direct_request for case in V7_DIRECT_EQUALITY_CASES))
+
+
+def _shared_image_builder() -> Callable[[], BaseModel]:
+    image = Image.new(mode="RGB", size=(1, 1))
+
+    def build() -> BaseModel:
+        return ChatCompletionRequest[ChatMessage](messages=[UserMessage(content=[ImageChunk(image=image)])])
+
+    return build
+
+
+def _shared_user_message_builder() -> Callable[[], BaseModel]:
+    message = UserMessage(content="shared")
+
+    def build() -> BaseModel:
+        return ChatCompletionRequest[ChatMessage](messages=[message])
+
+    return build
+
+
+def _shared_content_list_builder() -> Callable[[], BaseModel]:
+    content: list[object] = []
+
+    def build() -> BaseModel:
+        message = UserMessage.model_construct(role="user", content=content)
+        return ChatCompletionRequest[ChatMessage].model_construct(messages=[message])
+
+    return build
+
+
+def _shared_dictionary_builder() -> Callable[[], BaseModel]:
+    parameters = {"type": "object", "properties": {}}
+
+    def build() -> BaseModel:
+        function = Function.model_construct(name="lookup", parameters=parameters)
+        tool = Tool.model_construct(function=function)
+        return ChatCompletionRequest[ChatMessage](messages=[UserMessage(content="query")], tools=[tool])
+
+    return build
+
+
+def _nondeterministic_structure_builder() -> Callable[[], BaseModel]:
+    contents = iter(("first request", "second request"))
+
+    def build() -> BaseModel:
+        return ChatCompletionRequest[ChatMessage](messages=[UserMessage(content=next(contents))])
+
+    return build
 
 
 def _mutable_object_ids(value: object) -> set[int]:
@@ -92,50 +141,18 @@ def test_registered_v7_direct_recipes_build_deeply_fresh_requests(
 
 
 @pytest.mark.parametrize(
-    argnames="shared_kind",
-    argvalues=["image", "user-message", "content-list", "dictionary", "nondeterministic-structure"],
-    ids=[
-        "shared-image",
-        "shared-user-message",
-        "shared-content-list",
-        "shared-dictionary",
-        "nondeterministic-structure",
+    argnames="build",
+    argvalues=[
+        pytest.param(_shared_image_builder(), id="shared-image"),
+        pytest.param(_shared_user_message_builder(), id="shared-user-message"),
+        pytest.param(_shared_content_list_builder(), id="shared-content-list"),
+        pytest.param(_shared_dictionary_builder(), id="shared-dictionary"),
+        pytest.param(_nondeterministic_structure_builder(), id="nondeterministic-structure"),
     ],
 )
-def test_freshness_check_rejects_unfresh_builds(shared_kind: str) -> None:
-    shared_image = Image.new(mode="RGB", size=(1, 1))
-    shared_message = UserMessage(content="shared")
-    shared_content: list[object] = []
-    shared_parameters = {"type": "object", "properties": {}}
-    contents = iter(("first request", "second request"))
-
-    def build_shared_image_request() -> BaseModel:
-        return ChatCompletionRequest[ChatMessage](messages=[UserMessage(content=[ImageChunk(image=shared_image)])])
-
-    def build_shared_user_message_request() -> BaseModel:
-        return ChatCompletionRequest[ChatMessage](messages=[shared_message])
-
-    def build_shared_content_list_request() -> BaseModel:
-        message = UserMessage.model_construct(role="user", content=shared_content)
-        return ChatCompletionRequest[ChatMessage].model_construct(messages=[message])
-
-    def build_shared_dictionary_request() -> BaseModel:
-        function = Function.model_construct(name="lookup", parameters=shared_parameters)
-        tool = Tool.model_construct(function=function)
-        return ChatCompletionRequest[ChatMessage](messages=[UserMessage(content="query")], tools=[tool])
-
-    def build_nondeterministic_request() -> BaseModel:
-        return ChatCompletionRequest[ChatMessage](messages=[UserMessage(content=next(contents))])
-
-    builders = {
-        "image": build_shared_image_request,
-        "user-message": build_shared_user_message_request,
-        "content-list": build_shared_content_list_request,
-        "dictionary": build_shared_dictionary_request,
-        "nondeterministic-structure": build_nondeterministic_request,
-    }
+def test_freshness_check_rejects_unfresh_builds(build: Callable[[], BaseModel]) -> None:
     with pytest.raises(expected_exception=AssertionError):
-        _assert_fresh_request_graph(recipe_id=shared_kind, build=builders[shared_kind])
+        _assert_fresh_request_graph(recipe_id="freshness-test", build=build)
 
 
 def _assert_fresh_request_graph(*, recipe_id: str, build: Callable[[], BaseModel]) -> None:
@@ -167,31 +184,25 @@ def test_tokenizer_artifact_digest_mismatch_is_rejected() -> None:
 
 
 @pytest.mark.parametrize(
-    argnames="invalid_field",
+    argnames=("configuration", "field_overrides"),
     argvalues=[
-        pytest.param("synthetic-path", id="synthetic-with-path"),
-        pytest.param("synthetic-digest", id="synthetic-with-digest"),
-        pytest.param("synthetic-loader", id="synthetic-without-loader"),
-        pytest.param("file-path", id="file-backed-without-path"),
-        pytest.param("file-digest", id="file-backed-without-digest"),
-        pytest.param("file-loader", id="file-backed-with-synthetic-loader"),
+        pytest.param(SYNTHETIC_V13_AUDIO_TEST, {"tokenizer_path": Path("unused")}, id="synthetic-with-path"),
+        pytest.param(SYNTHETIC_V13_AUDIO_TEST, {"sha256": "0" * 64}, id="synthetic-with-digest"),
+        pytest.param(SYNTHETIC_V13_AUDIO_TEST, {"synthetic_loader": None}, id="synthetic-without-loader"),
+        pytest.param(BUNDLED_SPM_V1_TEST, {"tokenizer_path": None}, id="file-backed-without-path"),
+        pytest.param(BUNDLED_SPM_V1_TEST, {"sha256": None}, id="file-backed-without-digest"),
+        pytest.param(
+            BUNDLED_SPM_V1_TEST,
+            {"synthetic_loader": SYNTHETIC_V13_AUDIO_TEST.synthetic_loader},
+            id="file-backed-with-synthetic-loader",
+        ),
     ],
 )
-def test_incomplete_tokenizer_configuration_is_rejected(invalid_field: str) -> None:
+def test_incomplete_tokenizer_configuration_is_rejected(
+    configuration: TokenizerConfiguration, field_overrides: dict[str, Any]
+) -> None:
     with pytest.raises(expected_exception=ValueError, match="incomplete"):
-        match invalid_field:
-            case "synthetic-path":
-                replace(SYNTHETIC_V13_AUDIO_TEST, tokenizer_path=Path("unused"))
-            case "synthetic-digest":
-                replace(SYNTHETIC_V13_AUDIO_TEST, sha256="0" * 64)
-            case "synthetic-loader":
-                replace(SYNTHETIC_V13_AUDIO_TEST, synthetic_loader=None)
-            case "file-path":
-                replace(BUNDLED_SPM_V1_TEST, tokenizer_path=None)
-            case "file-digest":
-                replace(BUNDLED_SPM_V1_TEST, sha256=None)
-            case "file-loader":
-                replace(BUNDLED_SPM_V1_TEST, synthetic_loader=SYNTHETIC_V13_AUDIO_TEST.synthetic_loader)
+        replace(configuration, **field_overrides)
 
 
 @pytest.mark.parametrize(

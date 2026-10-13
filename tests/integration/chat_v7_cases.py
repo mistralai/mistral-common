@@ -115,7 +115,7 @@ def _build_tool_results() -> ChatCompletionRequest[ChatMessage]:
 _SYSTEM_TOOLS_IMAGE = ChatRecipe(recipe_id="v7-system-tools-image", build=_build_system_tools_image)
 _TOOL_CONTENT = ChatRecipe(recipe_id="v7-tool-content", build=_build_tool_content)
 _TOOL_RESULTS = ChatRecipe(recipe_id="v7-tool-results", build=_build_tool_results)
-_SYSTEM_TOOLS_IMAGE_CASE = PublicChatSuccessCase(
+V7_SYSTEM_TOOLS_IMAGE_CASE = PublicChatSuccessCase(
     case_id="chat-v7-system-tools-image",
     recipe=_SYSTEM_TOOLS_IMAGE,
     configuration=BUNDLED_SPM_V7_MM_TEST,
@@ -147,7 +147,7 @@ V7_PREFIXED_FINAL_CASE = PublicChatSuccessCase(
 )
 
 V7_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
-    _SYSTEM_TOOLS_IMAGE_CASE,
+    V7_SYSTEM_TOOLS_IMAGE_CASE,
     _TOOL_CONTENT_NO_AUDIO_CASE,
     _TOOL_CONTENT_AUDIO_CASE,
     _TOOL_RESULTS_NO_AUDIO_CASE,

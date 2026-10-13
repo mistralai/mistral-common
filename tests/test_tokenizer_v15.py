@@ -47,29 +47,21 @@ EXPECTED_TEXT_V15_NO_TOOLS: str = (
 )
 
 
-def _build_v15_tekkenizer(model_settings_builder: ModelSettingsBuilder | None) -> Tekkenizer:
-    r"""Build a v15 Tekkenizer with the given model settings builder.
-
-    Args:
-        model_settings_builder: The model settings builder, or None to create
-            a tekkenizer without model settings support.
-    """
-    return Tekkenizer(
-        vocab=quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
-        special_tokens=get_special_tokens(tokenizer_version=TokenizerVersion.v15, add_think=True),
-        pattern=r".+",
-        vocab_size=256 + 100,
-        num_special_tokens=100,
-        version=TokenizerVersion.v15,
-        model_settings_builder=model_settings_builder,
-    )
-
-
 def get_v15_tekkenizer(
     model_settings_builder: ModelSettingsBuilder | None,
 ) -> InstructTokenizerV15:
     """Build an InstructTokenizerV15 with the given model settings builder."""
-    return InstructTokenizerV15(_build_v15_tekkenizer(model_settings_builder))
+    return InstructTokenizerV15(
+        Tekkenizer(
+            vocab=quick_vocab([b"a", b"b", b"c", b"f", b"de"]),
+            special_tokens=get_special_tokens(tokenizer_version=TokenizerVersion.v15, add_think=True),
+            pattern=r".+",
+            vocab_size=256 + 100,
+            num_special_tokens=100,
+            version=TokenizerVersion.v15,
+            model_settings_builder=model_settings_builder,
+        )
+    )
 
 
 def _build_model_settings_builder(
