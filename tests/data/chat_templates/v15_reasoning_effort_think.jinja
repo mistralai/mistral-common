@@ -25,7 +25,12 @@
 {%- if reasoning_effort not in ['none', 'high'] %}
     {{- raise_exception('reasoning_effort must be either "none" or "high"') }}
 {%- endif %}
-{%- set model_settings = '[MODEL_SETTINGS]{"reasoning_effort": "' ~ reasoning_effort ~ '"}[/MODEL_SETTINGS]' %}
+{%- set model_settings_parts = [] %}
+{%- set model_settings_parts = model_settings_parts + ['"reasoning_effort": "' ~ reasoning_effort ~ '"'] %}
+{%- set model_settings = '' %}
+{%- if model_settings_parts %}
+    {%- set model_settings = '[MODEL_SETTINGS]{' ~ model_settings_parts|join(', ') ~ '}[/MODEL_SETTINGS]' %}
+{%- endif %}
 
 {#- Macros #}
 {%- macro render_content(content, context_name, supported_types_desc, support_thinking) -%}
