@@ -25,6 +25,8 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.normalize import get_normalizer
 from mistral_common.protocol.instruct.validator import ValidationMode, get_validator
+from mistral_common.protocol.speech.request import SpeechRequest
+from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import (
     Audio,
     AudioConfig,
@@ -215,6 +217,28 @@ def valid_reference_audio() -> str:
 
 def valid_reference_audio_bytes() -> bytes:
     return base64.b64decode(valid_reference_audio(), validate=True)
+
+
+def reference_speech_request() -> SpeechRequest:
+    return SpeechRequest(input="hello", ref_audio=valid_reference_audio())
+
+
+def preset_speech_request() -> SpeechRequest:
+    return SpeechRequest(input="hello", voice="preset")
+
+
+def unknown_voice_speech_request() -> SpeechRequest:
+    return SpeechRequest(input="hello", voice="not-configured")
+
+
+def undecodable_transcription_request() -> TranscriptionRequest:
+    return TranscriptionRequest(
+        audio=b"not decoded before capability check", language=None, target_streaming_delay_ms=None
+    )
+
+
+def valid_transcription_request() -> TranscriptionRequest:
+    return TranscriptionRequest(audio=valid_reference_audio(), language=None, target_streaming_delay_ms=None)
 
 
 def get_tekkenizer_with_audio() -> InstructTokenizerV7:

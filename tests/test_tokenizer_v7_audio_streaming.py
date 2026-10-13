@@ -44,6 +44,25 @@ _audio_spectrogram_config = {
     "window_size": 400,
 }
 
+STREAMING_TRANSCRIPTION_ERROR_CASES = (
+    pytest.param(
+        SYNTHETIC_V7_STREAMING_NO_PAD,
+        "",
+        StreamingMode.ONLINE,
+        UnsupportedTokenizerFeatureException,
+        r"the streaming_pad marker required for transcription",
+        id="audio-v7-streaming-transcription-no-streaming-pad-test",
+    ),
+    pytest.param(
+        SYNTHETIC_V7_STREAMING,
+        b"not decodable audio",
+        StreamingMode.DISABLED,
+        InvalidRequestException,
+        r"^Streaming transcription requires mode OFFLINE or ONLINE, got DISABLED\.$",
+        id="audio-v7-streaming-disabled-rejected-test",
+    ),
+)
+
 
 def add_special_tokens(
     special_tokens: list[dict[str, Any]], tokens: list[str], start_idx: int, is_control: bool = True
@@ -220,24 +239,7 @@ def test_audio_config_delay(rate: float, delay: int, num_delay_tokens: int) -> N
 
 @pytest.mark.parametrize(
     ("profile", "audio", "streaming", "error_type", "message"),
-    [
-        pytest.param(
-            SYNTHETIC_V7_STREAMING_NO_PAD,
-            "",
-            StreamingMode.ONLINE,
-            UnsupportedTokenizerFeatureException,
-            r"the streaming_pad marker required for transcription",
-            id="audio-v7-streaming-transcription-no-streaming-pad-test",
-        ),
-        pytest.param(
-            SYNTHETIC_V7_STREAMING,
-            b"not decodable audio",
-            StreamingMode.DISABLED,
-            InvalidRequestException,
-            r"^Streaming transcription requires mode OFFLINE or ONLINE, got DISABLED\.$",
-            id="audio-v7-streaming-disabled-rejected-test",
-        ),
-    ],
+    STREAMING_TRANSCRIPTION_ERROR_CASES,
 )
 def test_public_streaming_transcription_errors(
     profile: SyntheticV7AudioProfile,
@@ -261,15 +263,8 @@ def test_public_streaming_transcription_errors(
 
 @pytest.mark.parametrize(
     ("profile", "audio", "streaming", "error_type", "message"),
-    [
-        pytest.param(
-            SYNTHETIC_V7_STREAMING_NO_PAD,
-            "",
-            StreamingMode.ONLINE,
-            UnsupportedTokenizerFeatureException,
-            r"the streaming_pad marker required for transcription",
-            id="v7-streaming-profile-without-streaming-pad-marker",
-        ),
+    STREAMING_TRANSCRIPTION_ERROR_CASES
+    + (
         pytest.param(
             SYNTHETIC_V7_STREAMING_NO_PAD,
             valid_reference_audio(),
@@ -278,15 +273,7 @@ def test_public_streaming_transcription_errors(
             r"^Audio encoder does not provide the streaming_pad marker required for transcription\.$",
             id="v7-streaming-profile-without-streaming-pad-marker-offline",
         ),
-        pytest.param(
-            SYNTHETIC_V7_STREAMING,
-            b"not decodable audio",
-            StreamingMode.DISABLED,
-            InvalidRequestException,
-            r"^Streaming transcription requires mode OFFLINE or ONLINE, got DISABLED\.$",
-            id="streaming-disabled-mode",
-        ),
-    ],
+    ),
 )
 def test_direct_streaming_transcription_errors(
     profile: SyntheticV7AudioProfile,

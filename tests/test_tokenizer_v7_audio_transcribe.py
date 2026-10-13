@@ -24,7 +24,9 @@ from tests.test_tokenizer_v7_audio import (
     _get_specials,
     get_tekkenizer_with_audio,
     load_v7_audio_error_tokenizer,
+    undecodable_transcription_request,
     valid_reference_audio,
+    valid_transcription_request,
 )
 from tests.utils import decode_keep
 
@@ -108,32 +110,28 @@ def test_tokenize_transcribe_with_lang(tekkenizer: InstructTokenizerV7) -> None:
 TRANSCRIPTION_ERROR_CASES = (
     pytest.param(
         None,
-        lambda: TranscriptionRequest(
-            audio=b"not decoded before capability check", language=None, target_streaming_delay_ms=None
-        ),
+        undecodable_transcription_request,
         UnsupportedTokenizerFeatureException,
         r"Tokenizer v7 does not provide an audio encoder for transcription",
         id="audio-v7-transcription-no-encoder-test",
     ),
     pytest.param(
         SYNTHETIC_V7_INSTRUCT_NO_TRANSCRIBE,
-        lambda: TranscriptionRequest(
-            audio=b"not decoded before capability check", language=None, target_streaming_delay_ms=None
-        ),
+        undecodable_transcription_request,
         UnsupportedTokenizerFeatureException,
         r"the TRANSCRIBE marker required for transcription",
         id="audio-v7-transcription-no-marker-test",
     ),
     pytest.param(
         SYNTHETIC_V7_INSTRUCT_NO_AUDIO,
-        lambda: TranscriptionRequest(audio=valid_reference_audio(), language=None, target_streaming_delay_ms=None),
+        valid_transcription_request,
         UnsupportedTokenizerFeatureException,
         r"the audio marker required for transcription",
         id="audio-v7-instruct-transcription-no-audio-test",
     ),
     pytest.param(
         SYNTHETIC_V7_INSTRUCT_NO_BEGIN_AUDIO,
-        lambda: TranscriptionRequest(audio=valid_reference_audio(), language=None, target_streaming_delay_ms=None),
+        valid_transcription_request,
         UnsupportedTokenizerFeatureException,
         r"the begin_audio marker required for transcription",
         id="audio-v7-instruct-transcription-no-begin-audio-test",
