@@ -294,6 +294,13 @@ def test_json_schema_rejects_invalid_schema() -> None:
         JsonSchema(name="x", schema={"type": 123})
 
 
+@pytest.mark.parametrize("response_format_type", [ResponseFormats.text, ResponseFormats.json])
+def test_response_format_rejects_schema_for_other_types(response_format_type: ResponseFormats) -> None:
+    expected_message = f"Response format `{response_format_type.value}` must not define a schema"
+    with pytest.raises(ValidationError, match=expected_message):
+        ResponseFormat(type=response_format_type, json_schema=JsonSchema(name="x", schema=JSON_SCHEMA_DICT))
+
+
 def test_json_schema_missing_schema_raises() -> None:
     with pytest.raises(ValidationError, match="Response format `json_schema` must define the schema"):
         ResponseFormat(type=ResponseFormats.json_schema)
