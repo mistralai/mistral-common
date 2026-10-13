@@ -219,12 +219,10 @@ def test_audio_config_delay(rate: float, delay: int, num_delay_tokens: int) -> N
 
 
 @pytest.mark.parametrize(
-    ("configuration_id", "profile", "mode", "audio", "streaming", "error_type", "message"),
+    ("profile", "audio", "streaming", "error_type", "message"),
     [
         pytest.param(
-            SYNTHETIC_V7_STREAMING_NO_PAD.configuration_id,
             SYNTHETIC_V7_STREAMING_NO_PAD,
-            ValidationMode.test,
             "",
             StreamingMode.ONLINE,
             UnsupportedTokenizerFeatureException,
@@ -232,9 +230,7 @@ def test_audio_config_delay(rate: float, delay: int, num_delay_tokens: int) -> N
             id="audio-v7-streaming-transcription-no-streaming-pad-test",
         ),
         pytest.param(
-            SYNTHETIC_V7_STREAMING.configuration_id,
             SYNTHETIC_V7_STREAMING,
-            ValidationMode.test,
             b"not decodable audio",
             StreamingMode.DISABLED,
             InvalidRequestException,
@@ -244,17 +240,14 @@ def test_audio_config_delay(rate: float, delay: int, num_delay_tokens: int) -> N
     ],
 )
 def test_public_streaming_transcription_errors(
-    configuration_id: str,
     profile: SyntheticV7AudioProfile,
-    mode: ValidationMode,
     audio: str | bytes,
     streaming: StreamingMode,
     error_type: type[Exception],
     message: str,
 ) -> None:
-    assert configuration_id == profile.configuration_id
-    tokenizer = build_synthetic_v7_audio_tokenizer(profile=profile, mode=mode)
-    assert tokenizer.mode == mode
+    tokenizer = build_synthetic_v7_audio_tokenizer(profile=profile)
+    assert tokenizer.mode == ValidationMode.test
 
     request = TranscriptionRequest(
         audio=audio,
@@ -302,7 +295,7 @@ def test_direct_streaming_transcription_errors(
     error_type: type[Exception],
     message: str,
 ) -> None:
-    tokenizer = build_synthetic_v7_audio_tokenizer(profile=profile, mode=ValidationMode.test)
+    tokenizer = build_synthetic_v7_audio_tokenizer(profile=profile)
     request = TranscriptionRequest(
         audio=audio,
         streaming=streaming,
@@ -356,7 +349,7 @@ def test_online_from_openai_request_still_constructs() -> None:
 
 
 def test_online_base64_audio_keeps_direct_warning_and_combine_path() -> None:
-    tokenizer = build_synthetic_v7_audio_tokenizer(profile=SYNTHETIC_V7_STREAMING, mode=ValidationMode.test)
+    tokenizer = build_synthetic_v7_audio_tokenizer(profile=SYNTHETIC_V7_STREAMING)
     input_audio = Audio(
         audio_array=np.linspace(-0.75, 0.75, 2_400, dtype=np.float32),
         sampling_rate=24_000,

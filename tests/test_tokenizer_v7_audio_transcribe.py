@@ -1,6 +1,4 @@
 from collections.abc import Callable
-from dataclasses import dataclass
-from typing import Literal
 
 import numpy as np
 import pytest
@@ -17,7 +15,6 @@ from mistral_common.tokens.tokenizers.instruct import (
 )
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.test_tokenizer_v7_audio import (
-    BUNDLED_V7_NO_AUDIO_CONFIGURATION_ID,
     SYNTHETIC_V7_INSTRUCT,
     SYNTHETIC_V7_INSTRUCT_NO_AUDIO,
     SYNTHETIC_V7_INSTRUCT_NO_BEGIN_AUDIO,
@@ -27,7 +24,6 @@ from tests.test_tokenizer_v7_audio import (
     _get_specials,
     get_tekkenizer_with_audio,
     load_v7_audio_error_tokenizer,
-    v7_audio_error_configuration_id,
     valid_reference_audio,
 )
 from tests.utils import decode_keep
@@ -109,120 +105,93 @@ def test_tokenize_transcribe_with_lang(tekkenizer: InstructTokenizerV7) -> None:
     assert np.allclose(tokenized.audios[0].audio_array, audio_array, atol=1e-3)
 
 
-@dataclass(frozen=True)
-class TranscriptionErrorCase:
-    case_id: str
-    configuration_id: str
-    mode: ValidationMode
-    profile: SyntheticV7AudioProfile | None
-    request_recipe: Literal["unparsed-audio", "valid-audio", "instruct-offline", "instruct-online"]
-    error_type: type[Exception]
-    message: str
-
-
 TRANSCRIPTION_ERROR_CASES = (
-    TranscriptionErrorCase(
-        case_id="audio-v7-transcription-no-encoder-test",
-        configuration_id=BUNDLED_V7_NO_AUDIO_CONFIGURATION_ID,
-        mode=ValidationMode.test,
-        profile=None,
-        request_recipe="unparsed-audio",
-        error_type=UnsupportedTokenizerFeatureException,
-        message=r"Tokenizer v7 does not provide an audio encoder for transcription",
-    ),
-    TranscriptionErrorCase(
-        case_id="audio-v7-transcription-no-marker-test",
-        configuration_id=SYNTHETIC_V7_INSTRUCT_NO_TRANSCRIBE.configuration_id,
-        mode=ValidationMode.test,
-        profile=SYNTHETIC_V7_INSTRUCT_NO_TRANSCRIBE,
-        request_recipe="unparsed-audio",
-        error_type=UnsupportedTokenizerFeatureException,
-        message=r"the TRANSCRIBE marker required for transcription",
-    ),
-    TranscriptionErrorCase(
-        case_id="audio-v7-instruct-transcription-no-audio-test",
-        configuration_id=SYNTHETIC_V7_INSTRUCT_NO_AUDIO.configuration_id,
-        mode=ValidationMode.test,
-        profile=SYNTHETIC_V7_INSTRUCT_NO_AUDIO,
-        request_recipe="valid-audio",
-        error_type=UnsupportedTokenizerFeatureException,
-        message=r"the audio marker required for transcription",
-    ),
-    TranscriptionErrorCase(
-        case_id="audio-v7-instruct-transcription-no-begin-audio-test",
-        configuration_id=SYNTHETIC_V7_INSTRUCT_NO_BEGIN_AUDIO.configuration_id,
-        mode=ValidationMode.test,
-        profile=SYNTHETIC_V7_INSTRUCT_NO_BEGIN_AUDIO,
-        request_recipe="valid-audio",
-        error_type=UnsupportedTokenizerFeatureException,
-        message=r"the begin_audio marker required for transcription",
-    ),
-    TranscriptionErrorCase(
-        case_id="audio-v7-instruct-offline-rejected-test",
-        configuration_id=SYNTHETIC_V7_INSTRUCT.configuration_id,
-        mode=ValidationMode.test,
-        profile=SYNTHETIC_V7_INSTRUCT,
-        request_recipe="instruct-offline",
-        error_type=InvalidRequestException,
-        message=r"^Instruct transcription requires streaming mode DISABLED, got OFFLINE\.$",
-    ),
-    TranscriptionErrorCase(
-        case_id="audio-v7-instruct-online-rejected-test",
-        configuration_id=SYNTHETIC_V7_INSTRUCT.configuration_id,
-        mode=ValidationMode.test,
-        profile=SYNTHETIC_V7_INSTRUCT,
-        request_recipe="instruct-online",
-        error_type=InvalidRequestException,
-        message=r"Instruct transcription.*DISABLED.*ONLINE",
-    ),
-)
-
-
-def _build_transcription_error_request(
-    recipe: Literal["unparsed-audio", "valid-audio", "instruct-offline", "instruct-online"],
-) -> TranscriptionRequest:
-    if recipe == "unparsed-audio":
-        return TranscriptionRequest(
+    pytest.param(
+        None,
+        lambda: TranscriptionRequest(
             audio=b"not decoded before capability check", language=None, target_streaming_delay_ms=None
-        )
-    if recipe == "valid-audio":
-        return TranscriptionRequest(audio=valid_reference_audio(), language=None, target_streaming_delay_ms=None)
-    if recipe == "instruct-offline":
-        return TranscriptionRequest(
+        ),
+        UnsupportedTokenizerFeatureException,
+        r"Tokenizer v7 does not provide an audio encoder for transcription",
+        id="audio-v7-transcription-no-encoder-test",
+    ),
+    pytest.param(
+        SYNTHETIC_V7_INSTRUCT_NO_TRANSCRIBE,
+        lambda: TranscriptionRequest(
+            audio=b"not decoded before capability check", language=None, target_streaming_delay_ms=None
+        ),
+        UnsupportedTokenizerFeatureException,
+        r"the TRANSCRIBE marker required for transcription",
+        id="audio-v7-transcription-no-marker-test",
+    ),
+    pytest.param(
+        SYNTHETIC_V7_INSTRUCT_NO_AUDIO,
+        lambda: TranscriptionRequest(audio=valid_reference_audio(), language=None, target_streaming_delay_ms=None),
+        UnsupportedTokenizerFeatureException,
+        r"the audio marker required for transcription",
+        id="audio-v7-instruct-transcription-no-audio-test",
+    ),
+    pytest.param(
+        SYNTHETIC_V7_INSTRUCT_NO_BEGIN_AUDIO,
+        lambda: TranscriptionRequest(audio=valid_reference_audio(), language=None, target_streaming_delay_ms=None),
+        UnsupportedTokenizerFeatureException,
+        r"the begin_audio marker required for transcription",
+        id="audio-v7-instruct-transcription-no-begin-audio-test",
+    ),
+    pytest.param(
+        SYNTHETIC_V7_INSTRUCT,
+        lambda: TranscriptionRequest(
             audio=b"not decodable audio",
             streaming=StreamingMode.OFFLINE,
             language=None,
             target_streaming_delay_ms=None,
-        )
+        ),
+        InvalidRequestException,
+        r"^Instruct transcription requires streaming mode DISABLED, got OFFLINE\.$",
+        id="audio-v7-instruct-offline-rejected-test",
+    ),
+    pytest.param(
+        SYNTHETIC_V7_INSTRUCT,
+        lambda: TranscriptionRequest(
+            audio=valid_reference_audio(),
+            streaming=StreamingMode.ONLINE,
+            language=None,
+            target_streaming_delay_ms=None,
+        ),
+        InvalidRequestException,
+        r"Instruct transcription.*DISABLED.*ONLINE",
+        id="audio-v7-instruct-online-rejected-test",
+    ),
+)
 
-    assert recipe == "instruct-online"
-    return TranscriptionRequest(
-        audio=valid_reference_audio(),
-        streaming=StreamingMode.ONLINE,
-        language=None,
-        target_streaming_delay_ms=None,
-    )
 
+@pytest.mark.parametrize(("profile", "request_factory", "error_type", "message"), TRANSCRIPTION_ERROR_CASES)
+def test_public_transcription_errors(
+    profile: SyntheticV7AudioProfile | None,
+    request_factory: Callable[[], TranscriptionRequest],
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    tokenizer = load_v7_audio_error_tokenizer(profile=profile)
+    assert tokenizer.mode == ValidationMode.test
+    request = request_factory()
 
-@pytest.mark.parametrize("case", TRANSCRIPTION_ERROR_CASES, ids=lambda case: case.case_id)
-def test_public_transcription_errors(case: TranscriptionErrorCase) -> None:
-    assert case.configuration_id == v7_audio_error_configuration_id(profile=case.profile)
-    tokenizer = load_v7_audio_error_tokenizer(profile=case.profile, mode=case.mode)
-    assert tokenizer.mode == case.mode
-    request = _build_transcription_error_request(recipe=case.request_recipe)
-
-    with pytest.raises(case.error_type, match=case.message):
+    with pytest.raises(error_type, match=message):
         tokenizer.encode_transcription(request)
 
 
-@pytest.mark.parametrize("case", TRANSCRIPTION_ERROR_CASES, ids=lambda case: case.case_id)
-def test_direct_transcription_errors(case: TranscriptionErrorCase) -> None:
-    assert case.configuration_id == v7_audio_error_configuration_id(profile=case.profile)
-    tokenizer = load_v7_audio_error_tokenizer(profile=case.profile, mode=case.mode)
-    assert tokenizer.mode == case.mode
-    request = _build_transcription_error_request(recipe=case.request_recipe)
+@pytest.mark.parametrize(("profile", "request_factory", "error_type", "message"), TRANSCRIPTION_ERROR_CASES)
+def test_direct_transcription_errors(
+    profile: SyntheticV7AudioProfile | None,
+    request_factory: Callable[[], TranscriptionRequest],
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    tokenizer = load_v7_audio_error_tokenizer(profile=profile)
+    assert tokenizer.mode == ValidationMode.test
+    request = request_factory()
 
-    with pytest.raises(case.error_type, match=case.message):
+    with pytest.raises(error_type, match=message):
         tokenizer.instruct_tokenizer.encode_transcription(request)
 
 
