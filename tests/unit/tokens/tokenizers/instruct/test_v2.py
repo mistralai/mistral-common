@@ -9,16 +9,15 @@ from mistral_common.protocol.instruct.chunk import ContentChunk, TextChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, ToolMessage, UserMessage
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
-from mistral_common.tokens.tokenizers.base import InstructTokenizer
+from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from tests.utils import decode_keep
+from tests.utils import assert_tokenized_equal, decode_keep
 
 # fmt: off
 _NORMAL_TOKENS = [1, 3, 1032, 4, 1055, 2, 3, 1045, 4, 1049, 2]
 _SYSTEM_SINGLETURN_TOKENS = [1, 3, 17889, 23294, 781, 781, 29476, 4]
 _SYSTEM_MULTITURN_TOKENS = [1, 3, 1032, 4, 1055, 2, 3, 17889, 23294, 781, 781, 29485, 4, 1049, 2]
 _PREFIXED_FINAL_MESSAGE_TOKENS = [1, 3, 1032, 4, 1055, 2, 3, 17889, 23294, 781, 781, 29485, 4, 1049]
-_PREFIXED_FINAL_MESSAGE_PREFIX_IDS = [1049]
 _TOOLS_SINGLETURN_TOKENS = [
     1, 6, 1501, 7567, 1891, 2032, 1113, 3396, 1316, 1113, 3396, 2032, 10598, 1629, 2032, 1113, 7230, 29508, 1316,
     1113, 7286, 2032, 1113, 29508, 1316, 1113, 12206, 2032, 1139, 1743, 10925, 7, 3, 1032, 4
@@ -58,6 +57,22 @@ _TOOL_RESULT_WITHOUT_CALL_TURN_TOKENS = [
 ]
 _MULTIPLE_RESULTS_IN_HISTORY_TOKENS = [1, 3, 1032, 4, 1053, 2, 3, 1087, 4]
 # fmt: on
+
+_NORMAL_EXPECTED = Tokenized(tokens=_NORMAL_TOKENS)
+_SYSTEM_SINGLETURN_EXPECTED = Tokenized(tokens=_SYSTEM_SINGLETURN_TOKENS)
+_SYSTEM_MULTITURN_EXPECTED = Tokenized(tokens=_SYSTEM_MULTITURN_TOKENS)
+_PREFIXED_FINAL_MESSAGE_EXPECTED = Tokenized(tokens=_PREFIXED_FINAL_MESSAGE_TOKENS, prefix_ids=[1049])
+_TOOLS_SINGLETURN_EXPECTED = Tokenized(tokens=_TOOLS_SINGLETURN_TOKENS)
+_TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_TOOLS_MULTITURN_TOKENS)
+_SYSTEM_TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_SYSTEM_TOOLS_MULTITURN_TOKENS)
+_TOOL_MESSAGE_MULTIPLE_SHOTS_WITHOUT_HISTORY_EXPECTED = Tokenized(
+    tokens=_TOOL_MESSAGE_MULTIPLE_SHOTS_WITHOUT_HISTORY_TOKENS
+)
+_TOOL_RESULT_PLAIN_STRING_EXPECTED = Tokenized(tokens=_TOOL_RESULT_PLAIN_STRING_TOKENS)
+_TOOL_RESULT_JSON_OBJECT_STRING_EXPECTED = Tokenized(tokens=_TOOL_RESULT_JSON_OBJECT_STRING_TOKENS)
+_TOOL_RESULT_TEXT_CHUNK_LIST_EXPECTED = Tokenized(tokens=_TOOL_RESULT_TEXT_CHUNK_LIST_TOKENS)
+_TOOL_RESULT_WITHOUT_CALL_TURN_EXPECTED = Tokenized(tokens=_TOOL_RESULT_WITHOUT_CALL_TURN_TOKENS)
+_MULTIPLE_RESULTS_IN_HISTORY_EXPECTED = Tokenized(tokens=_MULTIPLE_RESULTS_IN_HISTORY_TOKENS)
 
 _PARALLEL_RESULTS_MESSAGE = r"v2.*multiple tool results.*assistant turn"
 _INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
@@ -324,102 +339,90 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
 
 
 @pytest.mark.parametrize(
-    argnames="request_builder, expected_text, expected_tokens, expected_prefix_ids, expected_raw_decode",
+    argnames="request_builder, expected, expected_text, expected_raw_decode",
     argvalues=[
-        pytest.param(_build_normal_request, _NORMAL_TEXT, _NORMAL_TOKENS, None, _NORMAL_RAW_DECODE, id="normal"),
+        pytest.param(_build_normal_request, _NORMAL_EXPECTED, _NORMAL_TEXT, _NORMAL_RAW_DECODE, id="normal"),
         pytest.param(
             _build_system_singleturn_request,
+            _SYSTEM_SINGLETURN_EXPECTED,
             _SYSTEM_SINGLETURN_TEXT,
-            _SYSTEM_SINGLETURN_TOKENS,
-            None,
             _SYSTEM_SINGLETURN_RAW_DECODE,
             id="system-singleturn",
         ),
         pytest.param(
             _build_system_multiturn_request,
+            _SYSTEM_MULTITURN_EXPECTED,
             _SYSTEM_MULTITURN_TEXT,
-            _SYSTEM_MULTITURN_TOKENS,
-            None,
             _SYSTEM_MULTITURN_RAW_DECODE,
             id="system-multiturn",
         ),
         pytest.param(
             _build_prefixed_final_message_request,
+            _PREFIXED_FINAL_MESSAGE_EXPECTED,
             _PREFIXED_FINAL_MESSAGE_TEXT,
-            _PREFIXED_FINAL_MESSAGE_TOKENS,
-            _PREFIXED_FINAL_MESSAGE_PREFIX_IDS,
             _PREFIXED_FINAL_MESSAGE_RAW_DECODE,
             id="prefixed-final-message",
         ),
         pytest.param(
             _build_tools_singleturn_request,
+            _TOOLS_SINGLETURN_EXPECTED,
             _TOOLS_SINGLETURN_TEXT,
-            _TOOLS_SINGLETURN_TOKENS,
-            None,
             _TOOLS_SINGLETURN_RAW_DECODE,
             id="tools-singleturn",
         ),
         pytest.param(
             _build_tools_multiturn_request,
+            _TOOLS_MULTITURN_EXPECTED,
             _TOOLS_MULTITURN_TEXT,
-            _TOOLS_MULTITURN_TOKENS,
-            None,
             _TOOLS_MULTITURN_RAW_DECODE,
             id="tools-multiturn",
         ),
         pytest.param(
             _build_system_tools_multiturn_request,
+            _SYSTEM_TOOLS_MULTITURN_EXPECTED,
             _SYSTEM_TOOLS_MULTITURN_TEXT,
-            _SYSTEM_TOOLS_MULTITURN_TOKENS,
-            None,
             _SYSTEM_TOOLS_MULTITURN_RAW_DECODE,
             id="system-tools-multiturn",
         ),
         pytest.param(
             _build_tool_message_multiple_shots_without_history_request,
+            _TOOL_MESSAGE_MULTIPLE_SHOTS_WITHOUT_HISTORY_EXPECTED,
             _TOOL_MESSAGE_MULTIPLE_SHOTS_WITHOUT_HISTORY_TEXT,
-            _TOOL_MESSAGE_MULTIPLE_SHOTS_WITHOUT_HISTORY_TOKENS,
-            None,
             _TOOL_MESSAGE_MULTIPLE_SHOTS_WITHOUT_HISTORY_RAW_DECODE,
             id="tool-message-multiple-shots-without-history",
         ),
         pytest.param(
             _build_tool_result_plain_string_request,
+            _TOOL_RESULT_PLAIN_STRING_EXPECTED,
             _TOOL_RESULT_PLAIN_STRING_TEXT,
-            _TOOL_RESULT_PLAIN_STRING_TOKENS,
-            None,
             _TOOL_RESULT_PLAIN_STRING_RAW_DECODE,
             id="tool-result-plain-string",
         ),
         pytest.param(
             _build_tool_result_json_object_string_request,
+            _TOOL_RESULT_JSON_OBJECT_STRING_EXPECTED,
             _TOOL_RESULT_JSON_OBJECT_STRING_TEXT,
-            _TOOL_RESULT_JSON_OBJECT_STRING_TOKENS,
-            None,
             _TOOL_RESULT_JSON_OBJECT_STRING_RAW_DECODE,
             id="tool-result-json-object-string",
         ),
         pytest.param(
             _build_tool_result_text_chunk_list_request,
+            _TOOL_RESULT_TEXT_CHUNK_LIST_EXPECTED,
             _TOOL_RESULT_TEXT_CHUNK_LIST_TEXT,
-            _TOOL_RESULT_TEXT_CHUNK_LIST_TOKENS,
-            None,
             _TOOL_RESULT_TEXT_CHUNK_LIST_RAW_DECODE,
             id="tool-result-text-chunk-list",
         ),
         pytest.param(
             _build_tool_result_without_call_turn_request,
+            _TOOL_RESULT_WITHOUT_CALL_TURN_EXPECTED,
             _TOOL_RESULT_WITHOUT_CALL_TURN_TEXT,
-            _TOOL_RESULT_WITHOUT_CALL_TURN_TOKENS,
-            None,
             _TOOL_RESULT_WITHOUT_CALL_TURN_RAW_DECODE,
             id="tool-result-without-call-turn",
         ),
         pytest.param(
             _build_multiple_results_in_history_request,
+            _MULTIPLE_RESULTS_IN_HISTORY_EXPECTED,
             _MULTIPLE_RESULTS_IN_HISTORY_TEXT,
-            _MULTIPLE_RESULTS_IN_HISTORY_TOKENS,
-            None,
             _MULTIPLE_RESULTS_IN_HISTORY_RAW_DECODE,
             id="multiple-results-in-history",
         ),
@@ -428,19 +431,15 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
 def test_encode_instruct(
     tokenizer: InstructTokenizer,
     request_builder: Callable[[], InstructRequest[ChatMessage, Tool]],
+    expected: Tokenized,
     expected_text: str,
-    expected_tokens: list[int],
-    expected_prefix_ids: list[int] | None,
     expected_raw_decode: str,
 ) -> None:
     r"""Preserve complete v2 instruct encodings for each request shape."""
     tokenized = tokenizer.encode_instruct(request=request_builder())
-    raw_decode = tokenizer.tokenizer.decode(tokens=tokenized.tokens)
-
+    assert_tokenized_equal(actual=tokenized, expected=expected)
     assert decode_keep(tokenizer=tokenizer, tokenized=tokenized) == expected_text
-    assert tokenized.tokens == expected_tokens
-    assert tokenized.prefix_ids == expected_prefix_ids
-    assert raw_decode == expected_raw_decode
+    assert tokenizer.tokenizer.decode(tokens=tokenized.tokens) == expected_raw_decode
 
 
 @pytest.mark.parametrize(
