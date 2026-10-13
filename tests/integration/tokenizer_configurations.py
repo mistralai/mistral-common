@@ -8,10 +8,10 @@ entry point so cases exercise the same path production users take.
 """
 
 import hashlib
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Callable
 
 from mistral_common.protocol.instruct.normalize import InstructRequestNormalizerV13, get_normalizer
 from mistral_common.protocol.instruct.request import ReasoningEffort

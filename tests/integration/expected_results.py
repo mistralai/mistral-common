@@ -100,7 +100,7 @@ def resolve_sidecar(case_dir: Path, relative_path: str) -> Path:
             resolves outside the case directory.
     """
     candidate = Path(relative_path)
-    if candidate.is_absolute() or candidate.drive or candidate.root:
+    if candidate.is_absolute():
         raise ValueError(f"Sidecar path must be relative, got {relative_path!r}")
     if candidate.suffix != ".npy":
         raise ValueError(f"Sidecar path must reference a .npy file, got {relative_path!r}")

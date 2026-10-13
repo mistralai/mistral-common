@@ -129,7 +129,7 @@ def build_two_tool_call_messages(*, tool_results: tuple[tuple[str, str], tuple[s
     ]
 
 
-def call_id_recipe(*, recipe_id: str, tool_call_id: str) -> ChatRecipe:
+def _call_id_recipe(*, recipe_id: str, tool_call_id: str) -> ChatRecipe:
     r"""Bind a call id to a recipe that creates a fresh request each time.
 
     Args:
@@ -154,7 +154,7 @@ def call_id_recipe(*, recipe_id: str, tool_call_id: str) -> ChatRecipe:
     return ChatRecipe(recipe_id=recipe_id, build=build)
 
 
-def build_prefixed_final_request() -> ChatCompletionRequest[ChatMessage]:
+def _build_prefixed_final_request() -> ChatCompletionRequest[ChatMessage]:
     r"""Build the shared user message followed by a prefixed assistant turn."""
     return ChatCompletionRequest[ChatMessage](
         messages=[UserMessage(content="a"), AssistantMessage(content="b", prefix=True)]
@@ -605,6 +605,6 @@ MISMATCHED_TOOL_RESULTS = ChatRecipe(recipe_id="mismatched-tool-results", build=
 MISMATCHED_TOOL_RESULTS_FINETUNING = ChatRecipe(
     recipe_id="mismatched-tool-results-finetuning", build=_build_mismatched_tool_results_finetuning
 )
-PREFIXED_FINAL = ChatRecipe(recipe_id="prefixed-final", build=build_prefixed_final_request)
-CALL_ID_X = call_id_recipe(recipe_id="call-id-x", tool_call_id="x")
-CALL_ID_SLASH = call_id_recipe(recipe_id="call-id-slash", tool_call_id="call/id-1")
+PREFIXED_FINAL = ChatRecipe(recipe_id="prefixed-final", build=_build_prefixed_final_request)
+CALL_ID_X = _call_id_recipe(recipe_id="call-id-x", tool_call_id="x")
+CALL_ID_SLASH = _call_id_recipe(recipe_id="call-id-slash", tool_call_id="call/id-1")

@@ -2,7 +2,6 @@ r"""Registry, recipe and tokenizer-configuration invariants for public chat case
 
 from collections.abc import Callable
 from dataclasses import replace
-from enum import Enum
 from importlib import import_module
 from pathlib import Path
 from pkgutil import iter_modules
@@ -119,8 +118,6 @@ def _structure(value: object) -> object:
         return tuple((key, _structure(item)) for key, item in value.items())
     if isinstance(value, (list, tuple)):
         return tuple(_structure(item) for item in value)
-    if isinstance(value, Enum):
-        return (type(value), value.value)
     return value
 
 
@@ -307,8 +304,7 @@ def test_registry_contains_every_defined_case() -> None:
     case_module_names = (
         module_info.name
         for module_info in iter_modules(path=tests.integration.__path__)
-        if module_info.name == "chat_cases"
-        or (module_info.name.startswith("chat_") and module_info.name.endswith("_cases"))
+        if module_info.name.startswith("chat_") and module_info.name.endswith("_cases")
     )
     for module_name in case_module_names:
         module = import_module(name=f"tests.integration.{module_name}")

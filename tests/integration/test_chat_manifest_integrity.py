@@ -10,7 +10,7 @@ from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 from shutil import copytree
-from typing import Any, Protocol
+from typing import Any
 from unittest.mock import patch
 
 import numpy as np
@@ -48,14 +48,6 @@ from tests.integration.expected_results import (
 )
 from tests.integration.tokenizer_configurations import TokenizerConfiguration
 from tests.integration.utils import encode_and_expect_error, encode_and_verify
-
-
-class _ToleranceResultBuilder(Protocol):
-    def __call__(self, *, expected_array: np.ndarray, changed_array: np.ndarray) -> Tokenized: ...
-
-
-class _DtypeCaseBuilder(Protocol):
-    def __call__(self, *, manifest_dir: Path, declared_dtype: object) -> tuple[Tokenized, str]: ...
 
 
 @pytest.fixture()
@@ -191,246 +183,198 @@ def test_npz_archive_renamed_as_npy_is_rejected(manifest_dir: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    argnames=("token_ids", "message"),
-    argvalues=[
-        ({}, "field 'token_ids' must be an array"),
-        ("123", "field 'token_ids' must be an array"),
-        ([True, 2, 3], r"token_ids\[0\].*must be an integer"),
-        ([1.9, 2, 3], r"Case 'integrity-case'.*token_ids\[0\].*1\.9"),
-    ],
-    ids=["object", "string", "boolean-item", "float-item"],
-)
-def test_token_ids_must_be_an_array_of_exact_integers(manifest_dir: Path, token_ids: object, message: str) -> None:
-    manifest = _read_manifest(manifest_dir)
-    manifest["token_ids"] = token_ids
-    _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
-
-    with pytest.raises(expected_exception=ValueError, match=message):
-        _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[]))
-
-
-@pytest.mark.parametrize(
-    argnames=("field", "value", "message"),
-    argvalues=[
-        pytest.param("case_id", 42, "field 'case_id' must be a string", id="case-id"),
-        pytest.param(
-            "tokenizer_configuration_id",
-            None,
-            "field 'tokenizer_configuration_id' must be a string",
-            id="configuration-id",
-        ),
-        pytest.param("decoded_text", 17, "field 'decoded_text' must be a string", id="decoded-text"),
-        pytest.param("images", {}, "field 'images' must be an array", id="images-object"),
-        pytest.param("images", "none", "field 'images' must be an array", id="images-string"),
-        pytest.param("audios", {}, "field 'audios' must be an array", id="audios-object"),
-        pytest.param("audios", "none", "field 'audios' must be an array", id="audios-string"),
-    ],
-)
-def test_manifest_fields_reject_other_json_types(manifest_dir: Path, field: str, value: object, message: str) -> None:
-    manifest = _read_manifest(manifest_dir)
-    manifest[field] = value
-    _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
-
-    with pytest.raises(expected_exception=ValueError, match=message):
-        _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
-
-
-@pytest.mark.parametrize(
     argnames=("payload", "message"),
     argvalues=[
-        pytest.param({"images": ["not-an-object"]}, r"image entry 0.*must be an object", id="object-image"),
-        pytest.param({"audios": ["not-an-object"]}, r"audio entry 0.*must be an object", id="object-audio"),
+        pytest.param({"token_ids": {}}, "field 'token_ids' must be an array", id="token-ids-object"),
+        pytest.param({"token_ids": "123"}, "field 'token_ids' must be an array", id="token-ids-string"),
+        pytest.param(
+            {"token_ids": [True, 2, 3]},
+            r"token_ids\[0\].*must be an integer",
+            id="token-ids-boolean-item",
+        ),
+        pytest.param(
+            {"token_ids": [1.9, 2, 3]},
+            r"Case 'integrity-case'.*token_ids\[0\].*1\.9",
+            id="token-ids-float-item",
+        ),
+        pytest.param({"case_id": 42}, "field 'case_id' must be a string", id="field-case-id"),
+        pytest.param(
+            {"tokenizer_configuration_id": None},
+            "field 'tokenizer_configuration_id' must be a string",
+            id="field-configuration-id",
+        ),
+        pytest.param({"decoded_text": 17}, "field 'decoded_text' must be a string", id="field-decoded-text"),
+        pytest.param({"images": {}}, "field 'images' must be an array", id="field-images-object"),
+        pytest.param({"images": "none"}, "field 'images' must be an array", id="field-images-string"),
+        pytest.param({"audios": {}}, "field 'audios' must be an array", id="field-audios-object"),
+        pytest.param({"audios": "none"}, "field 'audios' must be an array", id="field-audios-string"),
+        pytest.param({"images": ["not-an-object"]}, r"image entry 0.*must be an object", id="entry-object-image"),
+        pytest.param({"audios": ["not-an-object"]}, r"audio entry 0.*must be an object", id="entry-object-audio"),
         pytest.param(
             {"images": [{"shape": [1], "dtype": "float32"}]},
             r"image entry 0.*missing required field 'path'",
-            id="missing-images-path",
+            id="entry-missing-image-path",
         ),
         pytest.param(
             {"images": [{"path": "images/0.npy", "dtype": "float32"}]},
             r"image entry 0.*missing required field 'shape'",
-            id="missing-images-shape",
+            id="entry-missing-image-shape",
         ),
         pytest.param(
             {"images": [{"path": "images/0.npy", "shape": [1]}]},
             r"image entry 0.*missing required field 'dtype'",
-            id="missing-images-dtype",
+            id="entry-missing-image-dtype",
         ),
         pytest.param(
             {"audios": [{"shape": [1], "dtype": "float32", "sampling_rate": 16000, "format": "wav"}]},
             r"audio entry 0.*missing required field 'path'",
-            id="missing-audios-path",
+            id="entry-missing-audio-path",
         ),
         pytest.param(
             {"audios": [{"path": "audios/0.npy", "dtype": "float32", "sampling_rate": 16000, "format": "wav"}]},
             r"audio entry 0.*missing required field 'shape'",
-            id="missing-audios-shape",
+            id="entry-missing-audio-shape",
         ),
         pytest.param(
             {"audios": [{"path": "audios/0.npy", "shape": [1], "sampling_rate": 16000, "format": "wav"}]},
             r"audio entry 0.*missing required field 'dtype'",
-            id="missing-audios-dtype",
+            id="entry-missing-audio-dtype",
         ),
         pytest.param(
             {"audios": [{"path": "audios/0.npy", "shape": [1], "dtype": "float32", "format": "wav"}]},
             r"audio entry 0.*missing required field 'sampling_rate'",
-            id="missing-audios-sampling_rate",
+            id="entry-missing-audio-sampling-rate",
         ),
         pytest.param(
             {"audios": [{"path": "audios/0.npy", "shape": [1], "dtype": "float32", "sampling_rate": 16000}]},
             r"audio entry 0.*missing required field 'format'",
-            id="missing-audios-format",
+            id="entry-missing-audio-format",
+        ),
+        pytest.param(
+            {"images": [{"path": 5, "shape": [1], "dtype": "float32"}]},
+            r"image entry 0.*field 'path'.*must be a string",
+            id="entry-type-image-path",
+        ),
+        pytest.param(
+            {"audios": [{"path": None, "shape": [1], "dtype": "float32", "sampling_rate": 16000, "format": "wav"}]},
+            r"audio entry 0.*field 'path'.*must be a string",
+            id="entry-type-audio-path",
+        ),
+        pytest.param(
+            {"images": [{"path": "images/0.npy", "shape": 1, "dtype": "float32"}]},
+            r"image entry 0.*field 'shape'.*must be an array",
+            id="entry-type-image-shape",
+        ),
+        pytest.param(
+            {
+                "audios": [
+                    {"path": "audios/0.npy", "shape": "4", "dtype": "float32", "sampling_rate": 16000, "format": "wav"}
+                ]
+            },
+            r"audio entry 0.*field 'shape'.*must be an array",
+            id="entry-type-audio-shape",
+        ),
+        pytest.param(
+            {"images": [{"path": "images/0.npy", "shape": [True], "dtype": "float32"}]},
+            r"image entry 0.*shape\[0\].*must be an integer",
+            id="entry-type-boolean-image-shape",
+        ),
+        pytest.param(
+            {
+                "audios": [
+                    {"path": "audios/0.npy", "shape": [4], "dtype": "float32", "sampling_rate": True, "format": "wav"}
+                ]
+            },
+            r"audio entry 0.*sampling_rate.*must be an integer",
+            id="entry-type-boolean-audio-sampling-rate",
+        ),
+        pytest.param(
+            {"images": [{"path": "images/0.npy", "shape": [1.9, 2], "dtype": "float32"}]},
+            r"image entry 0.*shape\[0\].*1\.9",
+            id="entry-type-non-integer-image-shape",
+        ),
+        pytest.param(
+            {
+                "audios": [
+                    {
+                        "path": "audios/0.npy",
+                        "shape": [4.9],
+                        "dtype": "float32",
+                        "sampling_rate": 16000,
+                        "format": "wav",
+                    }
+                ]
+            },
+            r"audio entry 0.*shape\[0\].*4\.9",
+            id="entry-type-non-integer-audio-shape",
+        ),
+        pytest.param(
+            {
+                "audios": [
+                    {
+                        "path": "audios/0.npy",
+                        "shape": [4],
+                        "dtype": "float32",
+                        "sampling_rate": 16000.9,
+                        "format": "wav",
+                    }
+                ]
+            },
+            r"audio entry 0.*sampling_rate.*16000\.9",
+            id="entry-type-non-integer-audio-sampling-rate",
+        ),
+        pytest.param(
+            {
+                "audios": [
+                    {"path": "audios/0.npy", "shape": [4], "dtype": "float32", "sampling_rate": 16000, "format": 7}
+                ]
+            },
+            r"audio entry 0.*field 'format'.*must be a string",
+            id="entry-type-audio-format",
+        ),
+        pytest.param(
+            {"images": [{"path": "images/0.npy", "shape": [4], "dtype": None}]},
+            r"image entry 0.*field 'dtype'.*must be a non-empty string",
+            id="dtype-image-null",
+        ),
+        pytest.param(
+            {"images": [{"path": "images/0.npy", "shape": [4], "dtype": 7}]},
+            r"image entry 0.*field 'dtype'.*must be a non-empty string",
+            id="dtype-image-number",
+        ),
+        pytest.param(
+            {"images": [{"path": "images/0.npy", "shape": [4], "dtype": ""}]},
+            r"image entry 0.*field 'dtype'.*must be a non-empty string",
+            id="dtype-image-empty",
+        ),
+        pytest.param(
+            {
+                "audios": [
+                    {"path": "audios/0.npy", "shape": [4], "dtype": None, "sampling_rate": 16000, "format": "wav"}
+                ]
+            },
+            r"audio entry 0.*field 'dtype'.*must be a non-empty string",
+            id="dtype-audio-null",
+        ),
+        pytest.param(
+            {"audios": [{"path": "audios/0.npy", "shape": [4], "dtype": 7, "sampling_rate": 16000, "format": "wav"}]},
+            r"audio entry 0.*field 'dtype'.*must be a non-empty string",
+            id="dtype-audio-number",
+        ),
+        pytest.param(
+            {"audios": [{"path": "audios/0.npy", "shape": [4], "dtype": "", "sampling_rate": 16000, "format": "wav"}]},
+            r"audio entry 0.*field 'dtype'.*must be a non-empty string",
+            id="dtype-audio-empty",
         ),
     ],
 )
-def test_media_entries_reject_invalid_payloads(
-    manifest_dir: Path, payload: dict[str, list[object]], message: str
-) -> None:
+def test_manifest_rejects_invalid_payload(manifest_dir: Path, payload: dict[str, Any], message: str) -> None:
     manifest = _read_manifest(manifest_dir)
     manifest.update(payload)
     _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
 
     with pytest.raises(expected_exception=ValueError, match=message):
         _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
-
-
-@pytest.mark.parametrize(
-    argnames=("field", "entry", "message"),
-    argvalues=[
-        (
-            "images",
-            {"path": 5, "shape": [1], "dtype": "float32"},
-            r"image entry 0.*field 'path'.*must be a string",
-        ),
-        (
-            "audios",
-            {"path": None, "shape": [1], "dtype": "float32", "sampling_rate": 16000, "format": "wav"},
-            r"audio entry 0.*field 'path'.*must be a string",
-        ),
-        (
-            "images",
-            {"path": "images/0.npy", "shape": 1, "dtype": "float32"},
-            r"image entry 0.*field 'shape'.*must be an array",
-        ),
-        (
-            "audios",
-            {"path": "audios/0.npy", "shape": "4", "dtype": "float32", "sampling_rate": 16000, "format": "wav"},
-            r"audio entry 0.*field 'shape'.*must be an array",
-        ),
-        (
-            "images",
-            {"path": "images/0.npy", "shape": [True], "dtype": "float32"},
-            r"image entry 0.*shape\[0\].*must be an integer",
-        ),
-        (
-            "audios",
-            {
-                "path": "audios/0.npy",
-                "shape": [4],
-                "dtype": "float32",
-                "sampling_rate": True,
-                "format": "wav",
-            },
-            r"audio entry 0.*sampling_rate.*must be an integer",
-        ),
-        (
-            "images",
-            {"path": "images/0.npy", "shape": [1.9, 2], "dtype": "float32"},
-            r"image entry 0.*shape\[0\].*1\.9",
-        ),
-        (
-            "audios",
-            {"path": "audios/0.npy", "shape": [4.9], "dtype": "float32", "sampling_rate": 16000, "format": "wav"},
-            r"audio entry 0.*shape\[0\].*4\.9",
-        ),
-        (
-            "audios",
-            {"path": "audios/0.npy", "shape": [4], "dtype": "float32", "sampling_rate": 16000.9, "format": "wav"},
-            r"audio entry 0.*sampling_rate.*16000\.9",
-        ),
-        (
-            "audios",
-            {"path": "audios/0.npy", "shape": [4], "dtype": "float32", "sampling_rate": 16000, "format": 7},
-            r"audio entry 0.*field 'format'.*must be a string",
-        ),
-    ],
-    ids=[
-        "image-path",
-        "audio-path",
-        "image-shape",
-        "audio-shape",
-        "boolean-shape",
-        "boolean-sampling-rate",
-        "non-integer-image-shape",
-        "non-integer-audio-shape",
-        "non-integer-audio-sampling-rate",
-        "numeric-audio-format",
-    ],
-)
-def test_media_entry_fields_have_the_declared_types(
-    manifest_dir: Path, field: str, entry: dict[str, object], message: str
-) -> None:
-    manifest = _read_manifest(manifest_dir)
-    manifest[field] = [entry]
-    _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
-
-    with pytest.raises(expected_exception=ValueError, match=message):
-        _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
-
-
-def _build_image_dtype_case(*, manifest_dir: Path, declared_dtype: object) -> tuple[Tokenized, str]:
-    array = np.zeros(shape=(4,), dtype=np.float64)
-    media_dir = manifest_dir / "images"
-    media_dir.mkdir()
-    np.save(file=media_dir / "0.npy", arr=array)
-    manifest = _read_manifest(manifest_dir)
-    manifest["images"] = [{"path": "images/0.npy", "shape": [4], "dtype": declared_dtype}]
-    _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
-    return Tokenized(tokens=[1, 2, 3], images=[array]), r"image entry 0.*field 'dtype'.*must be a non-empty string"
-
-
-def _build_audio_dtype_case(*, manifest_dir: Path, declared_dtype: object) -> tuple[Tokenized, str]:
-    array = np.zeros(shape=(4,), dtype=np.float64)
-    media_dir = manifest_dir / "audios"
-    media_dir.mkdir()
-    np.save(file=media_dir / "0.npy", arr=array)
-    manifest = _read_manifest(manifest_dir)
-    manifest["audios"] = [
-        {
-            "path": "audios/0.npy",
-            "shape": [4],
-            "dtype": declared_dtype,
-            "sampling_rate": 16000,
-            "format": "wav",
-        }
-    ]
-    _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
-    return (
-        Tokenized(tokens=[1, 2, 3], audios=[Audio(audio_array=array, sampling_rate=16000, format="wav")]),
-        r"audio entry 0.*field 'dtype'.*must be a non-empty string",
-    )
-
-
-@pytest.mark.parametrize(
-    argnames=("build_case", "declared_dtype"),
-    argvalues=[
-        pytest.param(_build_image_dtype_case, None, id="image-null"),
-        pytest.param(_build_image_dtype_case, 7, id="image-number"),
-        pytest.param(_build_image_dtype_case, "", id="image-empty"),
-        pytest.param(_build_audio_dtype_case, None, id="audio-null"),
-        pytest.param(_build_audio_dtype_case, 7, id="audio-number"),
-        pytest.param(_build_audio_dtype_case, "", id="audio-empty"),
-    ],
-)
-def test_media_dtype_must_be_a_non_empty_string(
-    manifest_dir: Path, build_case: _DtypeCaseBuilder, declared_dtype: object
-) -> None:
-    tokenized, message = build_case(manifest_dir=manifest_dir, declared_dtype=declared_dtype)
-
-    with pytest.raises(
-        expected_exception=ValueError,
-        match=message,
-    ):
-        _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
 
 
 @pytest.mark.parametrize(
@@ -570,34 +514,16 @@ def test_media_metadata_mismatch_fails_the_comparison(mutation: Callable[[Tokeni
         assert_public_success(expected=expected, tokenized=changed_tokenized, decoded_text="<s></s>")
 
 
-def _build_image_tolerance_result(*, expected_array: np.ndarray, changed_array: np.ndarray) -> Tokenized:
-    return Tokenized(
-        tokens=[1],
-        images=[changed_array],
-        audios=[Audio(audio_array=expected_array, sampling_rate=16000, format="wav")],
-    )
-
-
-def _build_audio_tolerance_result(*, expected_array: np.ndarray, changed_array: np.ndarray) -> Tokenized:
-    return Tokenized(
-        tokens=[1],
-        images=[expected_array],
-        audios=[Audio(audio_array=changed_array, sampling_rate=16000, format="wav")],
-    )
-
-
 @pytest.mark.parametrize(
-    argnames=("build_result", "offset", "expect_failure"),
+    argnames=("image_offset", "audio_offset", "expect_failure"),
     argvalues=[
-        pytest.param(_build_image_tolerance_result, 0.9e-4, False, id="image-within-tolerance"),
-        pytest.param(_build_image_tolerance_result, 1.1e-4, True, id="image-beyond-tolerance"),
-        pytest.param(_build_audio_tolerance_result, 0.9e-4, False, id="audio-within-tolerance"),
-        pytest.param(_build_audio_tolerance_result, 1.1e-4, True, id="audio-beyond-tolerance"),
+        pytest.param(0.9e-4, 0.0, False, id="image-within-tolerance"),
+        pytest.param(1.1e-4, 0.0, True, id="image-beyond-tolerance"),
+        pytest.param(0.0, 0.9e-4, False, id="audio-within-tolerance"),
+        pytest.param(0.0, 1.1e-4, True, id="audio-beyond-tolerance"),
     ],
 )
-def test_shared_tolerance_boundary(build_result: _ToleranceResultBuilder, offset: float, expect_failure: bool) -> None:
-    assert (ATOL, RTOL) == (1e-4, 0.0)
-
+def test_shared_tolerance_boundary(image_offset: float, audio_offset: float, expect_failure: bool) -> None:
     expected_array = np.full(shape=(2,), fill_value=1e4, dtype=np.float64)
     expected = ExpectedSuccess(
         token_ids=[1],
@@ -613,14 +539,27 @@ def test_shared_tolerance_boundary(build_result: _ToleranceResultBuilder, offset
             ),
         ),
     )
-    changed_array = np.full(shape=(2,), fill_value=1e4 + offset, dtype=np.float64)
-    tokenized = build_result(expected_array=expected_array, changed_array=changed_array)
+    tokenized = Tokenized(
+        tokens=[1],
+        images=[np.full(shape=(2,), fill_value=1e4 + image_offset, dtype=np.float64)],
+        audios=[
+            Audio(
+                audio_array=np.full(shape=(2,), fill_value=1e4 + audio_offset, dtype=np.float64),
+                sampling_rate=16000,
+                format="wav",
+            )
+        ],
+    )
 
     if expect_failure:
         with pytest.raises(expected_exception=AssertionError, match="array differs"):
             assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s></s>")
     else:
         assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s></s>")
+
+
+def test_suite_tolerance_pair_is_the_approved_pair() -> None:
+    assert (ATOL, RTOL) == (1e-4, 0.0)
 
 
 @pytest.mark.parametrize(
@@ -670,19 +609,31 @@ def test_comparator_uses_the_shared_pair(
 
 
 @pytest.mark.parametrize(
-    argnames=("sidecar_shape", "sidecar_dtype", "message"),
+    argnames=("sidecar_shape", "sidecar_dtype", "declared_dtype", "message"),
     argvalues=[
-        ((1, 2), "float64", "sidecar dtype.*does not match manifest declared dtype float32"),
-        ((2, 1), "float32", r"sidecar shape.*does not match manifest declared shape \(1, 2\)"),
+        pytest.param(
+            (1, 2),
+            "float64",
+            "float32",
+            "sidecar dtype.*does not match manifest declared dtype float32",
+            id="dtype",
+        ),
+        pytest.param(
+            (2, 1),
+            "float32",
+            "float32",
+            r"sidecar shape.*does not match manifest declared shape \(1, 2\)",
+            id="shape",
+        ),
+        pytest.param((1, 2), "float32", "float33", "invalid manifest dtype", id="invalid-dtype"),
     ],
-    ids=["dtype", "shape"],
 )
 def test_sidecar_metadata_mismatch_is_rejected_before_values(
-    manifest_dir: Path, sidecar_shape: tuple[int, ...], sidecar_dtype: str, message: str
+    manifest_dir: Path, sidecar_shape: tuple[int, ...], sidecar_dtype: str, declared_dtype: str, message: str
 ) -> None:
     (manifest_dir / "images").mkdir()
     np.save(file=manifest_dir / "images" / "0.npy", arr=np.zeros(shape=sidecar_shape, dtype=sidecar_dtype))
-    _write_image_entry(manifest_dir=manifest_dir, path="images/0.npy", shape=[1, 2], dtype="float32")
+    _write_image_entry(manifest_dir=manifest_dir, path="images/0.npy", shape=[1, 2], dtype=declared_dtype)
     tokenized = Tokenized(tokens=[1, 2, 3], images=[np.zeros(shape=(1, 2), dtype=np.float32)])
 
     with pytest.raises(expected_exception=ValueError, match=message):
