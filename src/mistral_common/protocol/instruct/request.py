@@ -168,12 +168,10 @@ class ResponseFormat(MistralBase):
     json_schema: JsonSchema | None = None
 
     @model_validator(mode="after")
-    def validate_schema_matches_type(self) -> "ResponseFormat":
-        r"""Require a schema for `json_schema` and reject one for every other type."""
+    def validate_schema_presence(self) -> "ResponseFormat":
+        r"""Require a schema when the response format selects `json_schema`."""
         if self.type == ResponseFormats.json_schema and self.json_schema is None:
             raise ValueError("Response format `json_schema` must define the schema")
-        if self.type != ResponseFormats.json_schema and self.json_schema is not None:
-            raise ValueError(f"Response format `{self.type}` must not define a schema")
         return self
 
     def get_schema(self, purpose: SchemaRenderingMode) -> dict[str, Any] | None:
