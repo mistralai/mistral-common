@@ -8,8 +8,21 @@ import pytest
 
 from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hub, list_local_hf_repo_files
 
+try:
+    import httpx2
+except ImportError:
+    httpx2 = None  # type: ignore[assignment]
+
 _REPO_ID = "mistralai/Mistral-7B-v0.1"
 _COMMIT = "RANDOM_REVISION"
+
+_NETWORK_ERRORS: list[Exception] = [
+    httpx.ConnectError("no connection"),
+    httpx.ReadTimeout("timed out"),
+    huggingface_hub.errors.OfflineModeIsEnabled("offline mode is enabled"),
+]
+if httpx2 is not None:
+    _NETWORK_ERRORS += [httpx2.ConnectError("no connection"), httpx2.ReadTimeout("timed out")]
 
 
 def _cached_tokenizer_path(cache_dir: Path) -> Path:
@@ -63,14 +76,7 @@ def test_download_tokenizer_from_hf_hub_local_files_only_uses_cache_dir(custom_c
 
 
 @pytest.mark.usefixtures("empty_default_cache")
-@pytest.mark.parametrize(
-    "network_error",
-    [
-        httpx.ConnectError("no connection"),
-        httpx.ReadTimeout("timed out"),
-        huggingface_hub.errors.OfflineModeIsEnabled("offline mode is enabled"),
-    ],
-)
+@pytest.mark.parametrize("network_error", _NETWORK_ERRORS)
 @patch("huggingface_hub.HfApi.list_repo_files")
 def test_download_tokenizer_from_hf_hub_offline_fallback_uses_cache_dir(
     mock_list_repo_files: MagicMock, network_error: Exception, custom_cache: Path
