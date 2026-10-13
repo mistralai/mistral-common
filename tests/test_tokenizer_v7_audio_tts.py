@@ -291,18 +291,18 @@ PUBLIC_SPEECH_ERROR_CASES = (
 )
 
 
-@pytest.mark.parametrize(("profile", "request_factory", "exception_type", "message"), PUBLIC_SPEECH_ERROR_CASES)
+@pytest.mark.parametrize(("profile", "request_factory", "error_type", "message"), PUBLIC_SPEECH_ERROR_CASES)
 def test_public_speech_error(
     profile: SyntheticV7AudioProfile | None,
     request_factory: Callable[[], SpeechRequest],
-    exception_type: type[Exception],
+    error_type: type[Exception],
     message: str,
 ) -> None:
     tokenizer = load_v7_audio_error_tokenizer(profile=profile)
     assert tokenizer.mode == ValidationMode.test
 
     request = request_factory()
-    with pytest.raises(exception_type, match=message):
+    with pytest.raises(error_type, match=message):
         tokenizer.encode_speech_request(request)
 
 
