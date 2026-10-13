@@ -225,17 +225,57 @@ def test_manifest_fields_reject_other_json_types(manifest_dir: Path, field: str,
 
 
 @pytest.mark.parametrize(
-    argnames=("invalid_entries_payload", "message"),
+    argnames=("payload", "message"),
     argvalues=[
-        pytest.param({"images": ["not-an-object"]}, r"image entry 0.*must be an object", id="image"),
-        pytest.param({"audios": ["not-an-object"]}, r"audio entry 0.*must be an object", id="audio"),
+        pytest.param({"images": ["not-an-object"]}, r"image entry 0.*must be an object", id="object-image"),
+        pytest.param({"audios": ["not-an-object"]}, r"audio entry 0.*must be an object", id="object-audio"),
+        pytest.param(
+            {"images": [{"shape": [1], "dtype": "float32"}]},
+            r"image entry 0.*missing required field 'path'",
+            id="missing-images-path",
+        ),
+        pytest.param(
+            {"images": [{"path": "images/0.npy", "dtype": "float32"}]},
+            r"image entry 0.*missing required field 'shape'",
+            id="missing-images-shape",
+        ),
+        pytest.param(
+            {"images": [{"path": "images/0.npy", "shape": [1]}]},
+            r"image entry 0.*missing required field 'dtype'",
+            id="missing-images-dtype",
+        ),
+        pytest.param(
+            {"audios": [{"shape": [1], "dtype": "float32", "sampling_rate": 16000, "format": "wav"}]},
+            r"audio entry 0.*missing required field 'path'",
+            id="missing-audios-path",
+        ),
+        pytest.param(
+            {"audios": [{"path": "audios/0.npy", "dtype": "float32", "sampling_rate": 16000, "format": "wav"}]},
+            r"audio entry 0.*missing required field 'shape'",
+            id="missing-audios-shape",
+        ),
+        pytest.param(
+            {"audios": [{"path": "audios/0.npy", "shape": [1], "sampling_rate": 16000, "format": "wav"}]},
+            r"audio entry 0.*missing required field 'dtype'",
+            id="missing-audios-dtype",
+        ),
+        pytest.param(
+            {"audios": [{"path": "audios/0.npy", "shape": [1], "dtype": "float32", "format": "wav"}]},
+            r"audio entry 0.*missing required field 'sampling_rate'",
+            id="missing-audios-sampling_rate",
+        ),
+        pytest.param(
+            {"audios": [{"path": "audios/0.npy", "shape": [1], "dtype": "float32", "sampling_rate": 16000}]},
+            r"audio entry 0.*missing required field 'format'",
+            id="missing-audios-format",
+        ),
     ],
 )
-def test_media_entries_must_be_objects(
-    manifest_dir: Path, invalid_entries_payload: dict[str, list[object]], message: str
+def test_media_entries_reject_invalid_payloads(
+    manifest_dir: Path, payload: dict[str, list[object]], message: str
 ) -> None:
     manifest = _read_manifest(manifest_dir)
-    manifest.update(invalid_entries_payload)
+    manifest.update(payload)
     _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
 
     with pytest.raises(expected_exception=ValueError, match=message):
@@ -380,62 +420,6 @@ def test_media_dtype_must_be_a_non_empty_string(
         match=message,
     ):
         _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
-
-
-@pytest.mark.parametrize(
-    argnames=("incomplete_entries_payload", "message"),
-    argvalues=[
-        pytest.param(
-            {"images": [{"shape": [1], "dtype": "float32"}]},
-            r"image entry 0.*missing required field 'path'",
-            id="images-path",
-        ),
-        pytest.param(
-            {"images": [{"path": "images/0.npy", "dtype": "float32"}]},
-            r"image entry 0.*missing required field 'shape'",
-            id="images-shape",
-        ),
-        pytest.param(
-            {"images": [{"path": "images/0.npy", "shape": [1]}]},
-            r"image entry 0.*missing required field 'dtype'",
-            id="images-dtype",
-        ),
-        pytest.param(
-            {"audios": [{"shape": [1], "dtype": "float32", "sampling_rate": 16000, "format": "wav"}]},
-            r"audio entry 0.*missing required field 'path'",
-            id="audios-path",
-        ),
-        pytest.param(
-            {"audios": [{"path": "audios/0.npy", "dtype": "float32", "sampling_rate": 16000, "format": "wav"}]},
-            r"audio entry 0.*missing required field 'shape'",
-            id="audios-shape",
-        ),
-        pytest.param(
-            {"audios": [{"path": "audios/0.npy", "shape": [1], "sampling_rate": 16000, "format": "wav"}]},
-            r"audio entry 0.*missing required field 'dtype'",
-            id="audios-dtype",
-        ),
-        pytest.param(
-            {"audios": [{"path": "audios/0.npy", "shape": [1], "dtype": "float32", "format": "wav"}]},
-            r"audio entry 0.*missing required field 'sampling_rate'",
-            id="audios-sampling_rate",
-        ),
-        pytest.param(
-            {"audios": [{"path": "audios/0.npy", "shape": [1], "dtype": "float32", "sampling_rate": 16000}]},
-            r"audio entry 0.*missing required field 'format'",
-            id="audios-format",
-        ),
-    ],
-)
-def test_media_entries_require_all_schema_fields(
-    manifest_dir: Path, incomplete_entries_payload: dict[str, list[dict[str, object]]], message: str
-) -> None:
-    manifest = _read_manifest(manifest_dir)
-    manifest.update(incomplete_entries_payload)
-    _write_manifest(manifest_dir=manifest_dir, manifest=manifest)
-
-    with pytest.raises(expected_exception=ValueError, match=message):
-        _assert_full_path(manifest_dir=manifest_dir, tokenized=Tokenized(tokens=[1, 2, 3]))
 
 
 @pytest.mark.parametrize(
