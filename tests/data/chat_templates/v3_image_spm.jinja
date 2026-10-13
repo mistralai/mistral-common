@@ -58,11 +58,11 @@
                 {{- '[IMG]' -}}
                 {%- set _ns.prev_img = true -%}
             {%- else -%}
-                {{- raise_exception('Only ' + supported_types_desc + ' chunks are supported in ' + context_name + '.') -}}
+                {{- raise_exception('Only ' ~ supported_types_desc ~ ' chunks are supported in ' ~ context_name ~ '.') -}}
             {%- endif -%}
         {%- endfor -%}
     {%- else -%}
-        {{- raise_exception(context_name + ' must have non-empty content.') -}}
+        {{- raise_exception(context_name ~ ' must have non-empty content.') -}}
     {%- endif -%}
 {%- endmacro -%}
 
@@ -123,7 +123,7 @@
 {#- Validates message ordering. #}
 {%- set ns = namespace(max_idx_user=-1, add_space=false) %}
 {%- if loop_messages | length > 0 and loop_messages[0]['role'] != 'user' %}
-    {{- raise_exception('Conversation must start with a user message, got ' + loop_messages[0]['role'] + '.') }}
+    {{- raise_exception('Conversation must start with a user message, got ' ~ loop_messages[0]['role'] ~ '.') }}
 {%- endif %}
 {%- set ns_order = namespace(previous_role=none) %}
 {%- for message in loop_messages %}
@@ -131,15 +131,15 @@
     {%- if ns_order.previous_role is not none %}
         {%- if ns_order.previous_role == 'user' %}
             {%- if current_role not in ['assistant', 'user'] %}
-                {{- raise_exception('Unexpected role \'' + current_role + '\' after role \'' + ns_order.previous_role + '\'') }}
+                {{- raise_exception('Unexpected role \'' ~ current_role ~ '\' after role \'' ~ ns_order.previous_role ~ '\'') }}
             {%- endif %}
         {%- elif ns_order.previous_role == 'assistant' %}
             {%- if current_role not in ['assistant', 'user', 'tool'] %}
-                {{- raise_exception('Unexpected role \'' + current_role + '\' after role \'' + ns_order.previous_role + '\'') }}
+                {{- raise_exception('Unexpected role \'' ~ current_role ~ '\' after role \'' ~ ns_order.previous_role ~ '\'') }}
             {%- endif %}
         {%- elif ns_order.previous_role == 'tool' %}
             {%- if current_role not in ['assistant', 'tool', 'user'] %}
-                {{- raise_exception('Unexpected role \'' + current_role + '\' after role \'' + ns_order.previous_role + '\'') }}
+                {{- raise_exception('Unexpected role \'' ~ current_role ~ '\' after role \'' ~ ns_order.previous_role ~ '\'') }}
             {%- endif %}
         {%- endif %}
     {%- endif %}
@@ -162,7 +162,7 @@
         {%- set added_sp = false %}
         {%- if (ns.index == ns.max_idx_user) and system_message != '' %}
             {%- set added_sp = true %}
-            {{- ' ' + system_message + '\n\n' }}
+            {{- ' ' ~ system_message ~ '\n\n' }}
         {%- elif message['content'] is string %}
             {{- ' '  }}
         {%- endif %}
@@ -268,7 +268,7 @@
 
     {#- Raise exception for unsupported roles. #}
     {%- elif message['role'] != 'tool' or ns.index > ns.max_idx_user %}
-        {{- raise_exception('Only user, assistant and tool roles are supported, got ' + message['role'] + '.') }}
+        {{- raise_exception('Only user, assistant and tool roles are supported, got ' ~ message['role'] ~ '.') }}
     {%- endif %}
     {%- if message['role'] == 'user' %}
         {%- set ns.index = ns.index + 1 %}

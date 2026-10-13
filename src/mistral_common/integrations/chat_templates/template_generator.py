@@ -2,6 +2,9 @@ from dataclasses import dataclass
 
 from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
 
+# Generated templates join text with Jinja `~`, never `+`: stock Jinja's `tojson` and `safe` return Markup,
+# and `+` with a Markup operand HTML-escapes the other one.
+
 # Module-level constants derived from SpecialTokens enum
 _BOS = SpecialTokens.bos.value
 _EOS = SpecialTokens.eos.value
@@ -432,7 +435,7 @@ def _generate_system_prompt_handling_v7_plus(config: TemplateConfig) -> list[str
     lines = [
         "{%- set loop_messages = messages %}",
         "{%- if messages[0]['role'] != 'system' and default_system_message != '' %}",
-        "    {{- '" + _BEGIN_SYSTEM + "' + default_system_message + '" + _END_SYSTEM + "' }}",
+        "    {{- '" + _BEGIN_SYSTEM + "' ~ default_system_message ~ '" + _END_SYSTEM + "' }}",
         "{%- endif %}",
     ]
 
@@ -504,7 +507,7 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
                 "{%- endif %}",
                 "{%- set model_settings = '"
                 + _BEGIN_MODEL_SETTINGS
-                + '{"reasoning_effort": "\' + reasoning_effort + \'"}'
+                + '{"reasoning_effort": "\' ~ reasoning_effort ~ \'"}'
                 + _END_MODEL_SETTINGS
                 + "' %}",  # noqa: E501
             ]
@@ -589,7 +592,7 @@ def _generate_macros(config: TemplateConfig) -> str:
         lines.extend(
             [
                 "            {%- elif support_thinking and block['type'] == 'thinking' -%}",
-                "                {{- '" + begin_tag + "' + block['thinking'] -}}",
+                "                {{- '" + begin_tag + "' ~ block['thinking'] -}}",
                 "                {%- if block.get('closed', true) -%}{{- '" + end_tag + "' -}}{%- endif -%}",
             ]
         )
@@ -616,12 +619,12 @@ def _generate_macros(config: TemplateConfig) -> str:
     if has_extra_types:
         lines.append("            {%- else -%}")
         lines.append(
-            "                {{- raise_exception('Only ' + supported_types_desc + ' chunks are supported in ' + context_name + '.') -}}"  # noqa: E501
+            "                {{- raise_exception('Only ' ~ supported_types_desc ~ ' chunks are supported in ' ~ context_name ~ '.') -}}"  # noqa: E501
         )
     else:
         lines.append("            {%- else -%}")
         lines.append(
-            "                {{- raise_exception('Only text chunks are supported in ' + context_name + '.') -}}"
+            "                {{- raise_exception('Only text chunks are supported in ' ~ context_name ~ '.') -}}"
         )
 
     lines.extend(
@@ -629,7 +632,7 @@ def _generate_macros(config: TemplateConfig) -> str:
             "            {%- endif -%}",
             "        {%- endfor -%}",
             "    {%- else -%}",
-            "        {{- raise_exception(context_name + ' must have non-empty content.') -}}",
+            "        {{- raise_exception(context_name ~ ' must have non-empty content.') -}}",
             "    {%- endif -%}",
             "{%- endmacro -%}",
         ]
@@ -1040,11 +1043,11 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
     if config.uses_system_prompt_tokens:
         # v7+: system messages remain in loop_messages, so first message can be user or system
         first_msg_cond = "{%- if loop_messages | length > 0 and loop_messages[0]['role'] not in ['user', 'system'] %}"
-        first_msg_err = "    {{- raise_exception('Conversation must start with a user or system message, got ' + loop_messages[0]['role'] + '.') }}"  # noqa: E501
+        first_msg_err = "    {{- raise_exception('Conversation must start with a user or system message, got ' ~ loop_messages[0]['role'] ~ '.') }}"  # noqa: E501
     else:
         # pre-v7: system messages are extracted, so first message must be user
         first_msg_cond = "{%- if loop_messages | length > 0 and loop_messages[0]['role'] != 'user' %}"
-        first_msg_err = "    {{- raise_exception('Conversation must start with a user message, got ' + loop_messages[0]['role'] + '.') }}"  # noqa: E501
+        first_msg_err = "    {{- raise_exception('Conversation must start with a user message, got ' ~ loop_messages[0]['role'] ~ '.') }}"  # noqa: E501
     lines.append(first_msg_cond)
     lines.append(first_msg_err)
     lines.append("{%- endif %}")
@@ -1055,7 +1058,7 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
     lines.append("    {%- set current_role = message['role'] %}")
     lines.append("    {%- if ns_order.previous_role is not none %}")
 
-    transition_error = "                {{- raise_exception('Unexpected role \\'' + current_role + '\\' after role \\'' + ns_order.previous_role + '\\'') }}"  # noqa: E501
+    transition_error = "                {{- raise_exception('Unexpected role \\'' ~ current_role ~ '\\' after role \\'' ~ ns_order.previous_role ~ '\\'') }}"  # noqa: E501
 
     if config.uses_system_prompt_tokens:
         # v7+: full transition table including system
@@ -1226,7 +1229,7 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
             lines.append("        {%- set added_sp = false %}")
             lines.append("        {%- if (ns.index == ns.max_idx_user) and system_message != '' %}")
             lines.append("            {%- set added_sp = true %}")
-            lines.append("            {{- ' ' + system_message + '\\n\\n' }}")
+            lines.append("            {{- ' ' ~ system_message ~ '\\n\\n' }}")
             lines.append("        {%- elif message['content'] is string %}")
             lines.append("            {{- ' '  }}")
             lines.append("        {%- endif %}")
@@ -1253,7 +1256,7 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
                 lines.append("        {%- if loop.index0 == 0 and system_message != '' %}")
             else:
                 lines.append("        {%- if (ns.index == ns.max_idx_user) and system_message != '' %}")
-            lines.append("            {{- system_message + '\\n\\n' }}")
+            lines.append("            {{- system_message ~ '\\n\\n' }}")
             lines.append("        {%- endif %}")
             lines.append("        {%- if message['content'] is string %}")
             # Pre-v7 plain string branch (call site 2 for non-SPM): simple text-only
@@ -1596,9 +1599,9 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
             lines.append(
                 "        {{- '"
                 + _BEGIN_TOOL_RESULTS
-                + " ' + tool_id + '"
+                + " ' ~ tool_id ~ '"
                 + _BEGIN_TOOL_CONTENT
-                + " ' + message['content']|string + '"
+                + " ' ~ message['content']|string ~ '"
                 + _END_TOOL_RESULTS
                 + "' }}"  # noqa: E501
             )
@@ -1606,9 +1609,9 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
             lines.append(
                 "        {{- '"
                 + _BEGIN_TOOL_RESULTS
-                + "' + tool_id + '"
+                + "' ~ tool_id ~ '"
                 + _BEGIN_TOOL_CONTENT
-                + "' + message['content']|string + '"
+                + "' ~ message['content']|string ~ '"
                 + _END_TOOL_RESULTS
                 + "' }}"  # noqa: E501
             )
@@ -1635,7 +1638,7 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
             lines.append("        {{- '" + _END_TOOL_RESULTS + "' }}")
         else:
             lines.append(
-                "        {{- '" + _BEGIN_TOOL_RESULTS + "' + message['content']|string + '" + _END_TOOL_RESULTS + "' }}"
+                "        {{- '" + _BEGIN_TOOL_RESULTS + "' ~ message['content']|string ~ '" + _END_TOOL_RESULTS + "' }}"
             )  # noqa: E501
     else:
         # v3 non-spm style
@@ -1677,11 +1680,11 @@ def _generate_else_role_block(config: TemplateConfig) -> str:
         lines.append("    {%- else %}")
         if config.has_tools:
             lines.append(
-                "        {{- raise_exception('Only user, assistant, system and tool roles are supported, got ' + message['role'] + '.') }}"  # noqa: E501
+                "        {{- raise_exception('Only user, assistant, system and tool roles are supported, got ' ~ message['role'] ~ '.') }}"  # noqa: E501
             )
         else:
             lines.append(
-                "        {{- raise_exception('Only user, assistant and system roles are supported, got ' + message['role'] + '.') }}"  # noqa: E501
+                "        {{- raise_exception('Only user, assistant and system roles are supported, got ' ~ message['role'] ~ '.') }}"  # noqa: E501
             )
     else:
         # pre-v7: system messages are already filtered out
@@ -1691,12 +1694,12 @@ def _generate_else_role_block(config: TemplateConfig) -> str:
             else:
                 lines.append("    {%- else %}")
             lines.append(
-                "        {{- raise_exception('Only user, assistant and tool roles are supported, got ' + message['role'] + '.') }}"  # noqa: E501
+                "        {{- raise_exception('Only user, assistant and tool roles are supported, got ' ~ message['role'] ~ '.') }}"  # noqa: E501
             )
         else:
             lines.append("    {%- else %}")
             lines.append(
-                "        {{- raise_exception('Only user and assistant roles are supported, got ' + message['role'] + '.') }}"  # noqa: E501
+                "        {{- raise_exception('Only user and assistant roles are supported, got ' ~ message['role'] ~ '.') }}"  # noqa: E501
             )
 
     lines.append("    {%- endif %}")
@@ -1756,7 +1759,7 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("{#- Validates message ordering. #}")
     lines.append("{%- if loop_messages | length > 0 and loop_messages[0]['role'] != 'user' %}")
     lines.append(
-        "    {{- raise_exception('Conversation must start with a user message, got ' + loop_messages[0]['role'] + '.') }}"  # noqa: E501
+        "    {{- raise_exception('Conversation must start with a user message, got ' ~ loop_messages[0]['role'] ~ '.') }}"  # noqa: E501
     )
     lines.append("{%- endif %}")
     lines.append("{%- set ns_order = namespace(previous_role=none) %}")
@@ -1766,13 +1769,13 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("        {%- if ns_order.previous_role == 'user' %}")
     lines.append("            {%- if current_role not in ['assistant', 'user'] %}")
     lines.append(
-        "                {{- raise_exception('Unexpected role \\'' + current_role + '\\' after role \\'' + ns_order.previous_role + '\\'') }}"  # noqa: E501
+        "                {{- raise_exception('Unexpected role \\'' ~ current_role ~ '\\' after role \\'' ~ ns_order.previous_role ~ '\\'') }}"  # noqa: E501
     )
     lines.append("            {%- endif %}")
     lines.append("        {%- elif ns_order.previous_role == 'assistant' %}")
     lines.append("            {%- if current_role not in ['assistant', 'user'] %}")
     lines.append(
-        "                {{- raise_exception('Unexpected role \\'' + current_role + '\\' after role \\'' + ns_order.previous_role + '\\'') }}"  # noqa: E501
+        "                {{- raise_exception('Unexpected role \\'' ~ current_role ~ '\\' after role \\'' ~ ns_order.previous_role ~ '\\'') }}"  # noqa: E501
     )
     lines.append("            {%- endif %}")
     lines.append("        {%- endif %}")
@@ -1789,7 +1792,7 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     else:
         lines.append("        {{- '" + _BEGIN_INST + " ' }}")
     lines.append("        {%- if loop.index0 == 0 and system_message != '' %}")
-    lines.append("            {{- system_message + '\\n\\n' }}")
+    lines.append("            {{- system_message ~ '\\n\\n' }}")
     lines.append("        {%- endif %}")
     lines.append("        {%- if message['content'] is string %}")
     lines.append("            {{- message['content']}}")
@@ -1836,7 +1839,7 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("    {#- Raise exception for unsupported roles. #}")
     lines.append("    {%- else %}")
     lines.append(
-        "        {{- raise_exception('Only user and assistant roles are supported, got ' + message['role'] + '.') }}"
+        "        {{- raise_exception('Only user and assistant roles are supported, got ' ~ message['role'] ~ '.') }}"
     )
     lines.append("    {%- endif %}")
     lines.append("{%- endfor %}")
