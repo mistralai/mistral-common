@@ -41,15 +41,15 @@
 {%- if reasoning_effort not in ['none', 'high'] %}
     {{- raise_exception('reasoning_effort must be either "none" or "high"') }}
 {%- endif %}
-{%- set model_settings_payload = '' %}
+{%- set model_settings_parts = [] %}
 {%- if json_schema is not none %}
-    {%- set model_settings_payload = '"json_schema": ' ~ (json_schema|tojson) %}
+    {%- set model_settings_parts = model_settings_parts + ['"json_schema": ' ~ (json_schema|tojson)] %}
 {%- endif %}
-{%- if model_settings_payload %}
-    {%- set model_settings_payload = model_settings_payload ~ ', ' %}
+{%- set model_settings_parts = model_settings_parts + ['"reasoning_effort": "' ~ reasoning_effort ~ '"'] %}
+{%- set model_settings = '' %}
+{%- if model_settings_parts %}
+    {%- set model_settings = '[MODEL_SETTINGS]{' ~ model_settings_parts|join(', ') ~ '}[/MODEL_SETTINGS]' %}
 {%- endif %}
-{%- set model_settings_payload = model_settings_payload ~ '"reasoning_effort": "' ~ reasoning_effort ~ '"' %}
-{%- set model_settings = '[MODEL_SETTINGS]{' ~ model_settings_payload ~ '}[/MODEL_SETTINGS]' %}
 
 {#- Macros #}
 {%- macro render_content(content, context_name) -%}

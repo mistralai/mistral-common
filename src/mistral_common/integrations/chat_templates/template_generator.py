@@ -28,6 +28,18 @@ _BEGIN_MODEL_SETTINGS = SpecialTokens.begin_model_settings.value
 _END_MODEL_SETTINGS = SpecialTokens.end_model_settings.value
 
 MODEL_SETTINGS_FIELD_CHOICES: tuple[str, ...] = ("reasoning_effort", "json_schema")
+# Jinja lines that append each field's `"name": value` JSON fragment to `model_settings_parts`.
+_MODEL_SETTINGS_FRAGMENTS: dict[str, list[str]] = {
+    "json_schema": [
+        "{%- if json_schema is not none %}",
+        "    {%- set model_settings_parts = model_settings_parts + ['\"json_schema\": ' ~ (json_schema|tojson)] %}",
+        "{%- endif %}",
+    ],
+    "reasoning_effort": [
+        "{%- set model_settings_parts = model_settings_parts + "
+        "['\"reasoning_effort\": \"' ~ reasoning_effort ~ '\"'] %}",
+    ],
+}
 
 
 @dataclass
@@ -557,45 +569,22 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
             ]
         )
 
-    # `~` instead of `+`: stock Jinja's `tojson` returns Markup, and `str + Markup` HTML-escapes the string.
-    wrap_model_settings = "'" + _BEGIN_MODEL_SETTINGS + "{' ~ model_settings_payload ~ '}" + _END_MODEL_SETTINGS + "'"
-    if has_json_schema:
+    if config.model_settings_fields:
+        lines.append("{%- set model_settings_parts = [] %}")
+        # Sorted like the tokenizer, which orders top-level setting names alphabetically.
+        for field in sorted(config.model_settings_fields):
+            lines.extend(_MODEL_SETTINGS_FRAGMENTS[field])
         lines.extend(
             [
-                "{%- set model_settings_payload = '' %}",
-                "{%- if json_schema is not none %}",
-                "    {%- set model_settings_payload = '\"json_schema\": ' ~ (json_schema|tojson) %}",
+                "{%- set model_settings = '' %}",
+                "{%- if model_settings_parts %}",
+                "    {%- set model_settings = '"
+                + _BEGIN_MODEL_SETTINGS
+                + "{' ~ model_settings_parts|join(', ') ~ '}"
+                + _END_MODEL_SETTINGS
+                + "' %}",
                 "{%- endif %}",
             ]
-        )
-        if has_reasoning_effort:
-            # reasoning_effort always resolves, so the block is always emitted.
-            lines.extend(
-                [
-                    "{%- if model_settings_payload %}",
-                    "    {%- set model_settings_payload = model_settings_payload ~ ', ' %}",
-                    "{%- endif %}",
-                    "{%- set model_settings_payload = model_settings_payload ~ "
-                    "'\"reasoning_effort\": \"' ~ reasoning_effort ~ '\"' %}",
-                    "{%- set model_settings = " + wrap_model_settings + " %}",
-                ]
-            )
-        else:
-            lines.extend(
-                [
-                    "{%- set model_settings = '' %}",
-                    "{%- if model_settings_payload %}",
-                    "    {%- set model_settings = " + wrap_model_settings + " %}",
-                    "{%- endif %}",
-                ]
-            )
-    elif has_reasoning_effort:
-        lines.append(
-            "{%- set model_settings = '"
-            + _BEGIN_MODEL_SETTINGS
-            + '{"reasoning_effort": "\' ~ reasoning_effort ~ \'"}'
-            + _END_MODEL_SETTINGS
-            + "' %}"
         )
 
     return "\n".join(lines)
