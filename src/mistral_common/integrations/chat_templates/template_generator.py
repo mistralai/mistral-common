@@ -57,7 +57,9 @@ class TemplateConfig:
             When `True`, the template expects `bos_token` and `eos_token`
             to be passed as render kwargs.
         model_settings_fields: Model settings fields to render. `None` selects the
-            automatic fields for the tokenizer version.
+            automatic fields for the tokenizer version (`reasoning_effort` for v15 and
+            above, none below). An explicit set must be non-empty, requires v15 or above,
+            and may only contain values from `MODEL_SETTINGS_FIELD_CHOICES`.
 
     Raises:
         ValueError: If the configuration is invalid (e.g., conflicting options like
