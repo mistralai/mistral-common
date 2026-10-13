@@ -15,13 +15,18 @@ from typing import Any
 
 from PIL import Image
 
-from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk, ContentChunk, ImageURLChunk
+from mistral_common.protocol.instruct.chunk import (
+    AudioChunk,
+    AudioURLChunk,
+    ContentChunk,
+    ImageURLChunk,
+    TextChunk,
+    ThinkChunk,
+)
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
     SystemMessage,
-    TextChunk,
-    ThinkChunk,
     ToolMessage,
     UserMessage,
 )
@@ -163,6 +168,7 @@ def _build_prefixed_final_request() -> ChatCompletionRequest[ChatMessage]:
 
 
 def _build_system_think() -> ChatCompletionRequest[ChatMessage]:
+    r"""Build the shared system-think request."""
     return ChatCompletionRequest[ChatMessage](
         messages=[SystemMessage(content=[ThinkChunk(thinking="Hi")]), UserMessage(content="Hello")]
     )
