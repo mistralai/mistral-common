@@ -2,9 +2,9 @@ from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import httpx
 import huggingface_hub
 import pytest
-import requests
 
 from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hub, list_local_hf_repo_files
 
@@ -66,7 +66,7 @@ def test_download_tokenizer_from_hf_hub_local_files_only_uses_cache_dir(custom_c
 @pytest.mark.parametrize(
     "network_error",
     [
-        requests.ConnectionError("no connection"),
+        httpx.ConnectError("no connection"),
         huggingface_hub.errors.OfflineModeIsEnabled("offline mode is enabled"),
     ],
 )
