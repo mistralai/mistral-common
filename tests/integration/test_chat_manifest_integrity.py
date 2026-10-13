@@ -9,22 +9,33 @@ import json
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
+from shutil import copytree
 from typing import Any, Protocol
+from unittest.mock import patch
 
 import numpy as np
 import pytest
 from PIL import Image
 
+import tests.integration.expected_results as expected_results
 from mistral_common.exceptions import InvalidMessageStructureException, TokenizerException
+from mistral_common.protocol.instruct.chunk import AudioURLType
 from mistral_common.protocol.instruct.messages import ChatMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from tests.integration.chat_cases import SAMPLE_V1_TOOLS_REJECTED_CASE, PublicChatErrorCase
-from tests.integration.chat_recipes import build_image_url_chunk, build_user_media_request
+from tests.fixtures.audio import get_dummy_audio_url_chunk
+from tests.integration.chat_cases import (
+    SAMPLE_V1_TOOLS_REJECTED_CASE,
+    PublicChatErrorCase,
+    PublicChatSuccessCase,
+)
+from tests.integration.chat_recipes import NO_TOOLS, build_image_url_chunk, build_user_media_request
+from tests.integration.chat_released_cases import RELEASED_USER_AUDIO_URL_CASE
 from tests.integration.chat_v15_cases import V15_USER_IMAGE_URL_CASE
 from tests.integration.expected_results import (
+    _EXPECTED_ROOT,
     ATOL,
     RTOL,
     ExpectedAudio,
@@ -613,6 +624,52 @@ def test_shared_tolerance_boundary(build_result: _ToleranceResultBuilder, offset
 
 
 @pytest.mark.parametrize(
+    argnames=("atol", "rtol", "image_offset", "audio_offset"),
+    argvalues=[
+        pytest.param(2e-4, 0.0, 1.5e-4, 1.5e-4, id="patched-atol"),
+        pytest.param(1e-4, 1e-6, 1e-3, 1e-3, id="patched-rtol"),
+    ],
+)
+def test_comparator_uses_the_shared_pair(
+    atol: float,
+    rtol: float,
+    image_offset: float,
+    audio_offset: float,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(expected_results, "ATOL", atol)
+    monkeypatch.setattr(expected_results, "RTOL", rtol)
+    expected_array = np.full(shape=(2,), fill_value=1e4, dtype=np.float64)
+    expected = ExpectedSuccess(
+        token_ids=[1],
+        decoded_text="<s></s>",
+        images=(ExpectedImage(shape=(2,), dtype="float64", array=expected_array),),
+        audios=(
+            ExpectedAudio(
+                shape=(2,),
+                dtype="float64",
+                sampling_rate=16000,
+                format="wav",
+                array=expected_array,
+            ),
+        ),
+    )
+    tokenized = Tokenized(
+        tokens=[1],
+        images=[np.full(shape=(2,), fill_value=1e4 + image_offset, dtype=np.float64)],
+        audios=[
+            Audio(
+                audio_array=np.full(shape=(2,), fill_value=1e4 + audio_offset, dtype=np.float64),
+                sampling_rate=16000,
+                format="wav",
+            )
+        ],
+    )
+
+    assert_public_success(expected=expected, tokenized=tokenized, decoded_text="<s></s>")
+
+
+@pytest.mark.parametrize(
     argnames=("sidecar_shape", "sidecar_dtype", "message"),
     argvalues=[
         ((1, 2), "float64", "sidecar dtype.*does not match manifest declared dtype float32"),
@@ -630,6 +687,74 @@ def test_sidecar_metadata_mismatch_is_rejected_before_values(
 
     with pytest.raises(expected_exception=ValueError, match=message):
         _assert_full_path(manifest_dir=manifest_dir, tokenized=tokenized)
+
+
+@pytest.mark.parametrize(
+    argnames=("case", "change_manifest", "message"),
+    argvalues=[
+        pytest.param(
+            V15_USER_IMAGE_URL_CASE,
+            lambda *, manifest: manifest.update(token_ids=[*manifest["token_ids"][:-1], manifest["token_ids"][-1] + 1]),
+            "Token ids differ",
+            id="token-ids",
+        ),
+        pytest.param(
+            V15_USER_IMAGE_URL_CASE,
+            lambda *, manifest: manifest.update(decoded_text=manifest["decoded_text"] + "!"),
+            "Decoded text differs",
+            id="decoded-text",
+        ),
+        pytest.param(
+            V15_USER_IMAGE_URL_CASE,
+            lambda *, manifest: np.save(
+                file=expected_results._EXPECTED_ROOT / manifest["case_id"] / manifest["images"][0]["path"],
+                arr=np.load(
+                    file=expected_results._EXPECTED_ROOT / manifest["case_id"] / manifest["images"][0]["path"],
+                    allow_pickle=False,
+                )
+                + 1.0,
+            ),
+            "Image array differs",
+            id="image-values",
+        ),
+        pytest.param(
+            RELEASED_USER_AUDIO_URL_CASE,
+            lambda *, manifest: np.save(
+                file=expected_results._EXPECTED_ROOT / manifest["case_id"] / manifest["audios"][0]["path"],
+                arr=np.load(
+                    file=expected_results._EXPECTED_ROOT / manifest["case_id"] / manifest["audios"][0]["path"],
+                    allow_pickle=False,
+                )
+                + 1.0,
+            ),
+            "Audio array differs",
+            id="audio-values",
+        ),
+    ],
+)
+def test_encode_and_verify_rejects_a_changed_manifest(
+    case: PublicChatSuccessCase,
+    change_manifest: Callable[..., None],
+    message: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
+) -> None:
+    case_dir = tmp_path / case.case_id
+    copytree(src=_EXPECTED_ROOT / case.case_id, dst=case_dir)
+    manifest_path = case_dir / "expected.json"
+    manifest = json.loads(manifest_path.read_text())
+    monkeypatch.setattr(expected_results, "_EXPECTED_ROOT", tmp_path)
+    change_manifest(manifest=manifest)
+    manifest_path.write_text(json.dumps(obj=manifest, ensure_ascii=False))
+
+    assert get_dummy_audio_url_chunk().get_url_type() == AudioURLType.base64
+    with patch(
+        target="mistral_common.tokens.tokenizers.audio._requests_lib.get",
+        side_effect=AssertionError("network used"),
+    ):
+        with pytest.raises(expected_exception=AssertionError, match=message):
+            encode_and_verify(case=case, public_tokenizer=public_tokenizer)
 
 
 def test_changed_media_input_fails_public_encode_comparison(
@@ -651,22 +776,37 @@ def test_changed_media_input_fails_public_encode_comparison(
 
 
 @pytest.mark.parametrize(
-    argnames="case",
+    argnames=("case", "outer_exception", "outer_match"),
     argvalues=[
-        pytest.param(replace(SAMPLE_V1_TOOLS_REJECTED_CASE, message_pattern=r"not the v1 error"), id="wrong-message"),
+        pytest.param(
+            replace(SAMPLE_V1_TOOLS_REJECTED_CASE, message_pattern=r"not the v1 error"),
+            AssertionError,
+            "Regex pattern did not match",
+            id="wrong-message",
+        ),
         pytest.param(
             replace(SAMPLE_V1_TOOLS_REJECTED_CASE, expected_exception=InvalidMessageStructureException),
+            TokenizerException,
+            "Tools not implemented for tokenizer V1",
             id="wrong-exception-type",
+        ),
+        pytest.param(
+            replace(SAMPLE_V1_TOOLS_REJECTED_CASE, recipe=NO_TOOLS),
+            pytest.fail.Exception,
+            "DID NOT RAISE",
+            id="encode-succeeds",
         ),
     ],
 )
-def test_encode_and_expect_error_requires_type_and_message(
+def test_encode_and_expect_error_rejects_wrong_outcomes(
     case: PublicChatErrorCase,
+    outer_exception: type[BaseException],
+    outer_match: str,
     public_tokenizer: Callable[[TokenizerConfiguration], MistralTokenizer],
 ) -> None:
     with pytest.raises(
-        expected_exception=(pytest.fail.Exception, AssertionError, TokenizerException),
-        match=r"(Tools not implemented for tokenizer V1|Regex pattern did not match)",
+        expected_exception=outer_exception,
+        match=outer_match,
     ):
         encode_and_expect_error(case=case, public_tokenizer=public_tokenizer)
 

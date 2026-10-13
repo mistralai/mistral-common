@@ -176,8 +176,15 @@ def test_registered_configurations_load_in_their_mode(
     assert public_tokenizer(configuration).mode == configuration.mode
 
 
-def test_tokenizer_artifact_digest_mismatch_is_rejected() -> None:
-    configuration = replace(BUNDLED_SPM_V1_TEST, sha256="0" * 64)
+@pytest.mark.parametrize(
+    argnames="configuration",
+    argvalues=[
+        pytest.param(BUNDLED_SPM_V1_TEST, id="bundled"),
+        pytest.param(PINNED_V7_IMAGE_TEST, id="pinned-released"),
+    ],
+)
+def test_tokenizer_artifact_digest_mismatch_is_rejected(configuration: TokenizerConfiguration) -> None:
+    configuration = replace(configuration, sha256="0" * 64)
 
     with pytest.raises(expected_exception=ValueError, match="Tokenizer artifact mismatch"):
         configuration.load()
