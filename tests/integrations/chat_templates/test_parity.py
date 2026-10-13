@@ -14,11 +14,7 @@ from tests.integrations.chat_templates.helpers import (
 )
 
 
-@pytest.mark.parametrize(
-    "config",
-    [c for c in ALL_CONFIGS if not c.plain_think],
-    ids=[format_config_id(c) for c in ALL_CONFIGS if not c.plain_think],
-)
+@pytest.mark.parametrize("config", ALL_CONFIGS, ids=[format_config_id(c) for c in ALL_CONFIGS])
 def test_dynamic_matches_static(config: TestConfig) -> None:
     template_config = build_template_config(config)
     dynamic = build_chat_template(template_config)
@@ -53,8 +49,8 @@ def test_dynamic_template_produces_same_output(config: TestConfig) -> None:
     )
 
 
-# Comprehensive functional tests — covers all configs except plain_think
-# (plain think template parity is tested separately in test_unit.py::test_plain_think_static_dynamic_parity)
+# Comprehensive functional tests — covers all configs except plain_think (plain think rendering parity is
+# tested in unit/test_thinking.py::test_plain_think_static_dynamic_parity)
 @pytest.mark.parametrize(
     "config",
     [c for c in ALL_CONFIGS if not c.plain_think],
