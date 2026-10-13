@@ -236,7 +236,7 @@ class ModelSettingsBuilder(MistralBase):
         json_schema: Builder for the response-format JSON schema, or `None` if unsupported.
     """
 
-    _SETTINGS_TO_CONV_FIELDS_MAP: ClassVar[dict[str, str]] = {
+    _SETTINGS_TO_REQUEST_FIELDS: ClassVar[dict[str, str]] = {
         "reasoning_effort": "reasoning_effort",
         "json_schema": "response_format",
     }
@@ -273,8 +273,8 @@ class ModelSettingsBuilder(MistralBase):
         """
         dict_settings = {}
         for field_name in ModelSettingsBuilder.model_fields:
-            # We have a CI test to ensure all fields match between ModelSettings and ModelSettingsBuilder.
-            value = getattr(request, self._SETTINGS_TO_CONV_FIELDS_MAP[field_name])
+            # test_all_model_settings_and_builder_fields_match keeps these fields and the request mapping in sync.
+            value = getattr(request, self._SETTINGS_TO_REQUEST_FIELDS[field_name])
             field_builder: FieldBuilder | None = getattr(self, field_name)
             if field_builder is not None:
                 dict_settings[field_name] = field_builder.build_value(field_name, value)

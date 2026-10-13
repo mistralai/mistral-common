@@ -519,6 +519,15 @@ def v15_json_schema_mistral_tokenizer() -> MistralTokenizer:
             '<s>[MODEL_SETTINGS]{"json_schema": {"type": "object"}}[/MODEL_SETTINGS][INST]hi[/INST]',
             id="json_schema",
         ),
+        pytest.param(
+            ResponseFormat(
+                type=ResponseFormats.json_schema,
+                json_schema=JsonSchema(name="x", schema={"type": "object", "description": "réponse"}),
+            ),
+            '<s>[MODEL_SETTINGS]{"json_schema": {"type": "object", "description": "réponse"}}'
+            "[/MODEL_SETTINGS][INST]hi[/INST]",
+            id="json_schema_non_ascii",
+        ),
     ],
 )
 def test_v15_encodes_json_schema_into_model_settings(

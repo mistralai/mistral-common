@@ -315,3 +315,5 @@ def test_all_model_settings_and_builder_fields_match() -> None:
     builder_fields = set(ModelSettingsBuilder.model_fields.keys())
 
     assert model_fields == builder_fields
+    assert set(ModelSettingsBuilder._SETTINGS_TO_REQUEST_FIELDS) == builder_fields
+    assert set(ModelSettingsBuilder._SETTINGS_TO_REQUEST_FIELDS.values()) <= set(ChatCompletionRequest.model_fields)
