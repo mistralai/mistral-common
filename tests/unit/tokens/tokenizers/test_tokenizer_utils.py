@@ -2,9 +2,9 @@ from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import httpx
 import huggingface_hub
 import pytest
-import requests
 
 from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hub, list_local_hf_repo_files
 
@@ -66,7 +66,8 @@ def test_download_tokenizer_from_hf_hub_local_files_only_uses_cache_dir(custom_c
 @pytest.mark.parametrize(
     "network_error",
     [
-        requests.ConnectionError("no connection"),
+        httpx.ConnectError("no connection"),
+        httpx.ReadTimeout("timed out"),
         huggingface_hub.errors.OfflineModeIsEnabled("offline mode is enabled"),
     ],
 )
@@ -78,3 +79,36 @@ def test_download_tokenizer_from_hf_hub_offline_fallback_uses_cache_dir(
 
     tokenizer_path = download_tokenizer_from_hf_hub(repo_id=_REPO_ID, cache_dir=custom_cache)
     assert Path(tokenizer_path) == _cached_tokenizer_path(cache_dir=custom_cache)
+
+
+@pytest.mark.usefixtures("empty_default_cache")
+def test_download_tokenizer_from_hf_hub_falls_back_to_cache_on_real_connection_error(
+    custom_cache: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("huggingface_hub.constants.ENDPOINT", "http://127.0.0.1:9")
+
+    tokenizer_path = download_tokenizer_from_hf_hub(repo_id=_REPO_ID, cache_dir=custom_cache)
+    assert Path(tokenizer_path) == _cached_tokenizer_path(cache_dir=custom_cache)
+
+
+@pytest.mark.parametrize("network_error", [httpx.ConnectError("no connection"), httpx.ReadTimeout("timed out")])
+@patch("huggingface_hub.HfApi.list_repo_files")
+def test_download_tokenizer_from_hf_hub_force_download_raises_network_error(
+    mock_list_repo_files: MagicMock, network_error: Exception
+) -> None:
+    mock_list_repo_files.side_effect = network_error
+
+    with pytest.raises(type(network_error), match=str(network_error)):
+        download_tokenizer_from_hf_hub(repo_id=_REPO_ID, force_download=True)
+
+
+@pytest.mark.usefixtures("empty_default_cache")
+@patch("huggingface_hub.HfApi.list_repo_files")
+def test_download_tokenizer_from_hf_hub_offline_without_cache_raises(mock_list_repo_files: MagicMock) -> None:
+    mock_list_repo_files.side_effect = httpx.ConnectError("no connection")
+
+    with pytest.raises(FileNotFoundError, match="Could not connect to the Hugging Face Hub and no local files"):
+        download_tokenizer_from_hf_hub(repo_id=_REPO_ID)
+
+    with pytest.raises(FileNotFoundError, match="No local files found for the repo ID"):
+        download_tokenizer_from_hf_hub(repo_id=_REPO_ID, local_files_only=True)

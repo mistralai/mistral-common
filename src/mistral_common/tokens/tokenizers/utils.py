@@ -3,13 +3,12 @@ import os
 from pathlib import Path
 from typing import Iterator
 
-import requests
-
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.image import MultiModalVersion
 
 _hub_installed: bool
 try:
+    import httpx
     import huggingface_hub
     import huggingface_hub.constants
     import huggingface_hub.errors
@@ -198,12 +197,7 @@ def download_tokenizer_from_hf_hub(
             hf_api = huggingface_hub.HfApi()
             repo_files = hf_api.list_repo_files(repo_id, revision=revision, token=token)
             local_files_only = False
-        except (
-            requests.ConnectionError,
-            requests.HTTPError,
-            requests.Timeout,
-            huggingface_hub.errors.OfflineModeIsEnabled,
-        ) as e:
+        except (httpx.HTTPError, huggingface_hub.errors.OfflineModeIsEnabled) as e:
             if force_download:
                 raise e
 
