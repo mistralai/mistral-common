@@ -2,6 +2,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import httpx
 import huggingface_hub as huggingface_hub
 import pytest
 import requests
@@ -148,9 +149,34 @@ def test_download_tokenizer_from_hf_hub(files: list[str], expected: str | None) 
         )
 
 
+def test_download_tokenizer_from_hf_hub_falls_back_to_cache_on_real_connection_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Regression: the fallback only caught `requests` exceptions while `huggingface_hub>=1.0` raises `httpx` ones,
+    # so a cached tokenizer could not be loaded without network access.
+    # No mock of the Hub client here: point it at a closed local port so that the real client fails to connect.
+    hf_cache = _create_temporary_hf_model_cache("mistralai/Mistral-7B-v0.1")
+    monkeypatch.setattr("huggingface_hub.constants.ENDPOINT", "http://127.0.0.1:9")
+    monkeypatch.setattr("huggingface_hub.constants.HF_HUB_CACHE", hf_cache)
+
+    tokenizer = download_tokenizer_from_hf_hub(repo_id="mistralai/Mistral-7B-v0.1", token=None, revision=None)
+    expected = (hf_cache / "models--mistralai--Mistral-7B-v0.1/snapshots/RANDOM_REVISION/tekken.json").resolve()
+    assert tokenizer == str(expected)
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        # `huggingface_hub>=1.0` uses `httpx`: these are what the Hub client actually raises.
+        httpx.ConnectError("No connection with force_download=True"),
+        httpx.ReadTimeout("No connection with force_download=True"),
+        # Legacy `requests` exceptions raised by `huggingface_hub<1.0`.
+        requests.ConnectionError("No connection with force_download=True"),
+    ],
+)
 @patch("huggingface_hub.HfApi.list_repo_files")
-def test_download_tokenizer_from_hf_hub_without_connection(mock_list_repo_files: MagicMock) -> None:
-    mock_list_repo_files.side_effect = requests.ConnectionError("No connection with force_download=True")
+def test_download_tokenizer_from_hf_hub_without_connection(mock_list_repo_files: MagicMock, error: Exception) -> None:
+    mock_list_repo_files.side_effect = error
 
     hf_cache = _create_temporary_hf_model_cache("mistralai/Mistral-7B-v0.1")
 
@@ -161,7 +187,7 @@ def test_download_tokenizer_from_hf_hub_without_connection(mock_list_repo_files:
         assert tokenizer == str(expected)
 
     # Test with force download
-    with pytest.raises(requests.ConnectionError, match="No connection with force_download=True"):
+    with pytest.raises(type(error), match="No connection with force_download=True"):
         download_tokenizer_from_hf_hub(
             repo_id="mistralai/Mistral-7B-v0.1", token=None, revision=None, force_download=True
         )
