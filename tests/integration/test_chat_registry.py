@@ -287,11 +287,11 @@ def test_public_chat_case_ids_are_globally_unique() -> None:
 
 
 def test_registry_contains_every_defined_case() -> None:
-    defined_cases: list[PublicChatSuccessCase | PublicChatErrorCase] = []
+    discovered_cases: dict[int, PublicChatSuccessCase | PublicChatErrorCase] = {}
 
     def collect(value: object) -> None:
         if isinstance(value, (PublicChatSuccessCase, PublicChatErrorCase)):
-            defined_cases.append(value)
+            discovered_cases[id(value)] = value
         elif isinstance(value, PairedChatCase):
             collect(value.first)
             collect(value.second)
@@ -311,7 +311,11 @@ def test_registry_contains_every_defined_case() -> None:
         for value in vars(module).values():
             collect(value)
 
-    registered_identities = {id(case) for case in ALL_PUBLIC_CASES}
-    missing_case_ids = {case.case_id for case in defined_cases if id(case) not in registered_identities}
+    registered_cases = {id(case): case for case in ALL_PUBLIC_CASES}
+    missing_case_ids = {case.case_id for identity, case in discovered_cases.items() if identity not in registered_cases}
+    extra_case_ids = {case.case_id for identity, case in registered_cases.items() if identity not in discovered_cases}
 
-    assert not missing_case_ids, f"Defined public chat cases missing from ALL_PUBLIC_CASES: {sorted(missing_case_ids)}"
+    assert not missing_case_ids and not extra_case_ids, (
+        f"Defined public chat cases differ from ALL_PUBLIC_CASES: missing case IDs {sorted(missing_case_ids)}, "
+        f"extra case IDs {sorted(extra_case_ids)}"
+    )
