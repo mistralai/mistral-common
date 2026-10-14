@@ -1,3 +1,4 @@
+import io
 import subprocess
 import sys
 import tempfile
@@ -15,7 +16,13 @@ from pydantic import ValidationError
 from mistral_common.audio import hertz_to_mel, mel_filter_bank
 from mistral_common.protocol.instruct.chunk import AudioChunk, RawAudio
 from mistral_common.protocol.transcription.request import TranscriptionRequest
-from mistral_common.tokens.tokenizers.audio import Audio, AudioConfig, AudioSpectrogramConfig
+from mistral_common.tokens.tokenizers.audio import (
+    _AUDIO_DOWNLOAD_TIMEOUT_ENV_KEY,
+    Audio,
+    AudioConfig,
+    AudioSpectrogramConfig,
+    _resolve_env_audio_download_timeout,
+)
 
 
 def _make_dummy_base64() -> str:
@@ -116,6 +123,90 @@ def test_from_url() -> None:
         mock_get.return_value = mock_response
         audio_url = Audio.from_url("https://fake-audio-url.com/sample.wav", strict=False)
         assert isinstance(audio_url, Audio)
+
+
+def _wav_bytes(num_samples: int = 1600, sampling_rate: int = 16000) -> bytes:
+    buffer = io.BytesIO()
+    sf.write(buffer, np.zeros(num_samples, dtype=np.float32), sampling_rate, format="WAV")
+    return buffer.getvalue()
+
+
+def _mock_wav_response() -> MagicMock:
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.content = _wav_bytes()
+    return mock_response
+
+
+def test_audio_download_timeout_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(_AUDIO_DOWNLOAD_TIMEOUT_ENV_KEY, raising=False)
+    assert _resolve_env_audio_download_timeout() == 10.0
+
+
+@pytest.mark.parametrize("value", ["invalid", "0", "-1", "inf", "-inf", "nan"])
+def test_audio_download_timeout_rejects_invalid_env(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv(_AUDIO_DOWNLOAD_TIMEOUT_ENV_KEY, value)
+
+    with pytest.raises(ValueError, match="expected a positive finite number of seconds"):
+        _resolve_env_audio_download_timeout()
+
+
+def test_from_url_passes_default_timeout_and_user_agent(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(_AUDIO_DOWNLOAD_TIMEOUT_ENV_KEY, raising=False)
+
+    with patch(
+        "mistral_common.tokens.tokenizers.audio._requests_lib.get", return_value=_mock_wav_response()
+    ) as mock_get:
+        audio = Audio.from_url("https://example.com/sample.wav")
+
+    assert audio.sampling_rate == 16000
+    assert mock_get.call_args.kwargs["timeout"] == 10.0
+    assert mock_get.call_args.kwargs["headers"]["User-Agent"].startswith("mistral-common/")
+
+
+def test_from_url_uses_env_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(_AUDIO_DOWNLOAD_TIMEOUT_ENV_KEY, "2.5")
+
+    with patch(
+        "mistral_common.tokens.tokenizers.audio._requests_lib.get", return_value=_mock_wav_response()
+    ) as mock_get:
+        Audio.from_url("https://example.com/sample.wav")
+
+    assert mock_get.call_args.kwargs["timeout"] == 2.5
+
+
+def test_from_url_explicit_timeout_overrides_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(_AUDIO_DOWNLOAD_TIMEOUT_ENV_KEY, "2.5")
+
+    with patch(
+        "mistral_common.tokens.tokenizers.audio._requests_lib.get", return_value=_mock_wav_response()
+    ) as mock_get:
+        Audio.from_url("https://example.com/sample.wav", timeout=0.5)
+
+    assert mock_get.call_args.kwargs["timeout"] == 0.5
+
+
+@pytest.mark.parametrize("timeout", [0.0, -1.0, float("inf"), float("nan")])
+def test_from_url_rejects_invalid_timeout(timeout: float) -> None:
+    with patch("mistral_common.tokens.tokenizers.audio._requests_lib.get") as mock_get:
+        with pytest.raises(ValueError, match="timeout must be a positive finite float"):
+            Audio.from_url("https://example.com/sample.wav", timeout=timeout)
+
+    mock_get.assert_not_called()
+
+
+def test_from_url_timeout_error_is_actionable(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(_AUDIO_DOWNLOAD_TIMEOUT_ENV_KEY, raising=False)
+
+    with patch(
+        "mistral_common.tokens.tokenizers.audio._requests_lib.get",
+        side_effect=requests.Timeout("too slow"),
+    ):
+        with pytest.raises(ValueError, match=r"timed out after 10\.0 seconds") as exc_info:
+            Audio.from_url("https://example.com/sample.wav")
+
+    assert _AUDIO_DOWNLOAD_TIMEOUT_ENV_KEY in str(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, requests.Timeout)
 
 
 @pytest.mark.parametrize("prefix", [True, False])
