@@ -13,6 +13,7 @@ import numpy as np
 import requests as _requests_lib
 
 from mistral_common.deprecation import warn_once
+from mistral_common.exceptions import InvalidRequestException, UnsupportedTokenizerFeatureException
 from mistral_common.imports import (
     assert_soundfile_installed,
     assert_soxr_installed,
@@ -832,21 +833,30 @@ class AudioEncoder:
         Returns:
             AudioEncoding containing the token sequence and optional audio data.
         """
-        assert audio is not None or voice is not None, (
-            f"Either audio or voice must be defined to encode audio, got {audio=} and {voice=}"
-        )
+        if audio is None and voice is None:
+            raise InvalidRequestException("Either audio or voice must be defined to encode speech.")
 
         if audio is not None:
             audio.resample(self.audio_config.sampling_rate)
             num_audio_tokens = self._get_num_audio_token_for_speech_request(len(audio.audio_array))
         else:
-            assert self.audio_config.voice_num_audio_tokens is not None, (
-                "voice_num_audio_tokens must be set in audio config to use voice-based speech requests"
-            )
-            assert voice is not None and voice in self.audio_config.voice_num_audio_tokens, (
-                f"Unknown voice {voice!r}, expected one of {list(self.audio_config.voice_num_audio_tokens)}"
-            )
+            if self.audio_config.voice_num_audio_tokens is None:
+                raise UnsupportedTokenizerFeatureException(
+                    "Preset voices are not configured for this audio configuration."
+                )
+            if voice not in self.audio_config.voice_num_audio_tokens:
+                raise InvalidRequestException(
+                    f"Unknown voice {voice!r}, expected one of {list(self.audio_config.voice_num_audio_tokens)}."
+                )
             num_audio_tokens = self.audio_config.voice_num_audio_tokens[voice]
+        if self.special_ids.begin_audio is None:
+            raise UnsupportedTokenizerFeatureException(
+                "Audio encoder does not provide the begin_audio marker required for speech."
+            )
+        if self.special_ids.audio is None:
+            raise UnsupportedTokenizerFeatureException(
+                "Audio encoder does not provide the audio marker required for speech."
+            )
         tokens = self._encode_audio_tokens_for_speech_request(num_audio_tokens)
 
         return AudioEncoding(
