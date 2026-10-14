@@ -4,11 +4,13 @@ import pytest
 
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.integrations.chat_templates.template_generator import (
+    MODEL_SETTINGS_FIELD_CHOICES,
     TemplateConfig,
     _render_content_call,
     build_chat_template,
 )
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
+from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
 from tests.integrations.chat_templates.helpers import (
     TestConfig,
     build_template_config,
@@ -111,6 +113,17 @@ class TestGenerateChatTemplateAPI:
 
 
 class TestTemplateConfigModelSettings:
+    def test_field_choices_match_model_settings_builder_fields(self) -> None:
+        assert set(MODEL_SETTINGS_FIELD_CHOICES) == set(ModelSettingsBuilder.model_fields)
+
+    @pytest.mark.parametrize("field", MODEL_SETTINGS_FIELD_CHOICES)
+    def test_each_field_choice_builds_a_template(self, field: str) -> None:
+        template = build_chat_template(
+            config=TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=frozenset({field}))
+        )
+
+        assert f'"{field}": ' in template
+
     def test_unknown_model_settings_field_raises(self) -> None:
         with pytest.raises(ValueError) as excinfo:
             TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=frozenset({"bogus"}))
