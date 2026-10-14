@@ -1560,6 +1560,27 @@ class TestSelectJinjaTemplate:
             assert matcher.consume_token(token)
         assert matcher.is_stopped()
 
+    def test_empty_json_schema_grammar(self, v11_tekken: MistralTokenizer) -> None:
+        factory = GrammarFactory(v11_tekken)
+        template = factory.select_jinja_template()
+        grammar = factory.get_lark_for_json_schema(template=template, json_schema={})
+        assert "%json {}" in grammar
+        assert "start: SAFE_WS? %json {}" in grammar
+
+    def test_empty_json_schema_with_mode_none(self, v11_tekken: MistralTokenizer) -> None:
+        factory = GrammarFactory(v11_tekken)
+        template = factory.select_jinja_template()
+        grammar = factory.get_lark_from_jinja(
+            template=template,
+            mode=ToolChoiceEnum.none,
+            tools=None,
+            json_schema={},
+            parallel_tool_calls=False,
+            json_only=False,
+        )
+        assert "%json {}" in grammar
+
+
 
 def _stub_get_special_token_id(token_name: str) -> str:
     r"""Returns a stub lark grammar token for testing."""
