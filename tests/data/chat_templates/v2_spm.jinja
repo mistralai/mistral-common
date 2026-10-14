@@ -189,7 +189,7 @@
                 {%- set name = tool['function']['name'] %}
                 {%- set arguments = tool['function']['arguments'] %}
                 {%- if arguments is not string %}
-                    {%- set arguments = arguments|tojson|safe %}
+                    {%- set arguments = arguments|tojson ~ '' %}
                 {%- elif arguments == '' %}
                     {%- set arguments = '{}' %}
                 {%- endif %}
