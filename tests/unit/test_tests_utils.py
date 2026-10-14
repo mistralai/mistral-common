@@ -7,7 +7,7 @@ import pytest
 
 from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import Tokenized
-from tests.utils import assert_tokenized_equal
+from tests.utils import _TOKENIZED_FIELDS, assert_tokenized_equal
 
 _TOKEN_VALUE_MESSAGE = r"tokens.*index 1.*9.*2"
 _TOKEN_LENGTH_MESSAGE = r"tokens.*index 2.*<end>.*3"
@@ -28,6 +28,7 @@ _AUDIO_SHAPE_MESSAGE = r"audios.*index 0.*shape"
 _AUDIO_DTYPE_MESSAGE = r"audios.*index 0.*dtype"
 _AUDIO_VALUE_MESSAGE = r"audios.*index 0.*values"
 _AUDIO_SECOND_VALUE_MESSAGE = r"audios.*index 1.*values"
+_AUDIO_ATTRIBUTE_SETS_MESSAGE = r"audios.*index 0.*extra"
 
 
 def _build_tokenized_pair(
@@ -482,6 +483,68 @@ def _build_audio_second_value_pair() -> tuple[Tokenized, Tokenized]:
     )
 
 
+def _build_audio_attribute_sets_pair() -> tuple[Tokenized, Tokenized]:
+    r"""Build equal audios where only actual has an extra attribute."""
+    actual_audio = _build_audio(dtype=np.float32, sampling_rate=16000, format="wav")
+    setattr(actual_audio, "extra", 1)
+    return _build_tokenized_pair(
+        actual_tokens=[1],
+        expected_tokens=[1],
+        actual_prefix_ids=None,
+        expected_prefix_ids=None,
+        actual_images=[],
+        expected_images=[],
+        actual_audios=[actual_audio],
+        expected_audios=[_build_audio(dtype=np.float32, sampling_rate=16000, format="wav")],
+    )
+
+
+def _build_audio_attribute_sets_expected_extra_pair() -> tuple[Tokenized, Tokenized]:
+    r"""Build equal audios where only expected has an extra attribute."""
+    expected_audio = _build_audio(dtype=np.float32, sampling_rate=16000, format="wav")
+    setattr(expected_audio, "extra", 1)
+    return _build_tokenized_pair(
+        actual_tokens=[1],
+        expected_tokens=[1],
+        actual_prefix_ids=None,
+        expected_prefix_ids=None,
+        actual_images=[],
+        expected_images=[],
+        actual_audios=[_build_audio(dtype=np.float32, sampling_rate=16000, format="wav")],
+        expected_audios=[expected_audio],
+    )
+
+
+def _build_image_dtype_before_values_pair() -> tuple[Tokenized, Tokenized]:
+    r"""Build images whose dtype and values both differ."""
+    return _build_tokenized_pair(
+        actual_tokens=[1],
+        expected_tokens=[1],
+        actual_prefix_ids=None,
+        expected_prefix_ids=None,
+        actual_images=[np.zeros(shape=(2, 2, 3), dtype=np.float32)],
+        expected_images=[np.ones(shape=(2, 2, 3), dtype=np.float64)],
+        actual_audios=[],
+        expected_audios=[],
+    )
+
+
+def _build_audio_sampling_rate_before_values_pair() -> tuple[Tokenized, Tokenized]:
+    r"""Build audios whose sampling rate and samples both differ."""
+    actual_audio = Audio(audio_array=np.zeros(shape=(8,), dtype=np.float32), sampling_rate=8000, format="wav")
+    expected_audio = Audio(audio_array=np.ones(shape=(8,), dtype=np.float32), sampling_rate=16000, format="wav")
+    return _build_tokenized_pair(
+        actual_tokens=[1],
+        expected_tokens=[1],
+        actual_prefix_ids=None,
+        expected_prefix_ids=None,
+        actual_images=[],
+        expected_images=[],
+        actual_audios=[actual_audio],
+        expected_audios=[expected_audio],
+    )
+
+
 @pytest.mark.parametrize(
     argnames="pair_builder",
     argvalues=[
@@ -526,6 +589,18 @@ def test_assert_tokenized_equal_accepts(pair_builder: Callable[[], tuple[Tokeniz
         pytest.param(_build_audio_dtype_pair, _AUDIO_DTYPE_MESSAGE, id="audio-dtype"),
         pytest.param(_build_audio_value_pair, _AUDIO_VALUE_MESSAGE, id="audio-value"),
         pytest.param(_build_audio_second_value_pair, _AUDIO_SECOND_VALUE_MESSAGE, id="audio-second-value"),
+        pytest.param(_build_audio_attribute_sets_pair, _AUDIO_ATTRIBUTE_SETS_MESSAGE, id="audio-attribute-sets-differ"),
+        pytest.param(
+            _build_audio_attribute_sets_expected_extra_pair,
+            _AUDIO_ATTRIBUTE_SETS_MESSAGE,
+            id="audio-attribute-sets-differ-expected-extra",
+        ),
+        pytest.param(_build_image_dtype_before_values_pair, _IMAGE_DTYPE_MESSAGE, id="image-dtype-before-values"),
+        pytest.param(
+            _build_audio_sampling_rate_before_values_pair,
+            _AUDIO_SAMPLING_RATE_MESSAGE,
+            id="audio-sampling-rate-before-values",
+        ),
     ],
 )
 def test_assert_tokenized_equal_rejects(pair_builder: Callable[[], tuple[Tokenized, Tokenized]], message: str) -> None:
@@ -534,3 +609,12 @@ def test_assert_tokenized_equal_rejects(pair_builder: Callable[[], tuple[Tokeniz
 
     with pytest.raises(expected_exception=AssertionError, match=message):
         assert_tokenized_equal(actual=actual, expected=expected)
+
+
+def test_tokenized_fields_are_all_compared() -> None:
+    r"""Fail when `Tokenized` gains or loses a field.
+
+    A new field must be given a comparison in `assert_tokenized_equal` before the
+    constant is updated.
+    """
+    assert set(Tokenized.model_fields) == _TOKENIZED_FIELDS
