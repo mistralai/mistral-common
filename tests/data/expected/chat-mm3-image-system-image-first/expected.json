@@ -1,0 +1,32 @@
+{
+  "case_id": "chat-mm3-image-system-image-first",
+  "tokenizer_configuration_id": "bundled-tekken-v3-mm-patch2-test",
+  "token_ids": [
+    1,
+    3,
+    1065,
+    1398,
+    1267,
+    10,
+    10,
+    12,
+    10,
+    10,
+    13,
+    1067,
+    4
+  ],
+  "decoded_text": "<s>[INST]A B\n\n[IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]C[/INST]",
+  "images": [
+    {
+      "path": "images/0.npy",
+      "shape": [
+        3,
+        4,
+        4
+      ],
+      "dtype": "float32"
+    }
+  ],
+  "audios": []
+}
