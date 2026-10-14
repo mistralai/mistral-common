@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -28,6 +29,69 @@ class TestConvertTokenizerToChatTemplate:
         )
         assert result == expected
         assert "[THINK]" in result
+
+    def test_tekken_v15_derives_reasoning_effort_only(self, tmp_path: Path) -> None:
+        path = build_tekken_json(config=TestConfig(version=TokenizerVersion.v15), output_dir=tmp_path)
+
+        result = convert_tokenizer_to_chat_template(tokenizer_file=path)
+        expected = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v15,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+            model_settings_fields=frozenset({"reasoning_effort"}),
+        )
+
+        assert result == expected
+
+    def test_tekken_v15_json_schema_builder_derives_both_fields(self, tmp_path: Path) -> None:
+        path = build_tekken_json(
+            config=TestConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+            ),
+            output_dir=tmp_path,
+        )
+
+        result = convert_tokenizer_to_chat_template(tokenizer_file=path)
+        expected = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v15,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+            model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+        )
+
+        assert result == expected
+
+    def test_tekken_v15_without_model_settings_builder_raises(self, tmp_path: Path) -> None:
+        path = build_tekken_json(config=TestConfig(version=TokenizerVersion.v15), output_dir=tmp_path)
+        tekken_data = json.loads(path.read_text(encoding="utf-8"))
+        del tekken_data["model_settings_builder"]
+        path.write_text(json.dumps(obj=tekken_data, ensure_ascii=False), encoding="utf-8")
+
+        with pytest.raises(ValueError, match="Model-settings-capable tokenizer has no model settings builder"):
+            convert_tokenizer_to_chat_template(tokenizer_file=path)
+
+    def test_tekken_v15_builder_without_configured_fields_raises(self, tmp_path: Path) -> None:
+        path = build_tekken_json(
+            config=TestConfig(version=TokenizerVersion.v15, model_settings_fields=frozenset()),
+            output_dir=tmp_path,
+        )
+
+        with pytest.raises(
+            ValueError,
+            match="Model settings builder must configure at least one field",
+        ):
+            convert_tokenizer_to_chat_template(tokenizer_file=path)
 
     def test_tekken_v3_image(self, tmp_path: Path) -> None:
         config = TestConfig(version=TokenizerVersion.v3, image=True)
