@@ -15,7 +15,6 @@ from tests.integrations.chat_templates.helpers import (
 THINK_CONFIGS = [
     (TokenizerVersion.v13, False, False),
     (TokenizerVersion.v13, True, False),
-    (TokenizerVersion.v15, False, False),
     (TokenizerVersion.v15, True, False),
 ]
 

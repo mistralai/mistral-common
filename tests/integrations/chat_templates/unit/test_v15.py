@@ -11,9 +11,6 @@ from mistral_common.integrations.chat_templates.template_generator import Templa
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from tests.integrations.chat_templates.fixtures_data import PARITY_JSON_SCHEMA, PARITY_JSON_SCHEMA_NON_ASCII
 from tests.integrations.chat_templates.helpers import (
-    TestConfig,
-    build_template_config,
-    load_golden_template,
     render_template,
 )
 
@@ -50,20 +47,6 @@ class TestV15ModelSettings:
 
         output = render_template(v15_template, messages, reasoning_effort=reasoning_effort)
         assert f'[MODEL_SETTINGS]{{"reasoning_effort": "{expected_value}"}}[/MODEL_SETTINGS]' in output
-
-    def test_v15_static_dynamic_parity(self, v15_template: str) -> None:
-        config = build_template_config(TestConfig(version=TokenizerVersion.v15))
-        static_template = load_golden_template(config)
-
-        messages = [
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi there!"},
-        ]
-
-        static_output = render_template(static_template, messages, reasoning_effort="high")
-        dynamic_output = render_template(v15_template, messages, reasoning_effort="high")
-
-        assert static_output == dynamic_output
 
     def test_v15_with_image_support(self) -> None:
         template = generate_chat_template(

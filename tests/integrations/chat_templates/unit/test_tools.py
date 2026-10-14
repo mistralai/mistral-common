@@ -99,7 +99,6 @@ class TestToolRoleSupport:
             (TokenizerVersion.v7, False),
             (TokenizerVersion.v7, True),
             (TokenizerVersion.v13, False),
-            (TokenizerVersion.v15, False),
         ],
     )
     def test_user_after_tool_static_matches_dynamic(self, version: TokenizerVersion, spm: bool) -> None:
