@@ -1,10 +1,13 @@
 import pytest
 
 from mistral_common.exceptions import (
+    InvalidFunctionCallException,
     InvalidToolException,
+    InvalidToolMessageException,
     InvalidToolSchemaException,
 )
-from mistral_common.protocol.instruct.tool_calls import Function, Tool
+from mistral_common.protocol.instruct.messages import ToolMessage
+from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.protocol.instruct.validator import (
     MistralRequestValidator,
     MistralRequestValidatorV3,
@@ -71,3 +74,31 @@ def test_get_validator_version_mapping(version: TokenizerVersion, expected_class
 def test_get_validator_mode_passed_correctly(mode: ValidationMode) -> None:
     validator = get_validator(TokenizerVersion.v2, mode)
     assert validator._mode == validator.mode == mode
+
+
+def test_function_name_trailing_newline_rejected() -> None:
+    validator = get_validator(TokenizerVersion.v3, ValidationMode.serving)
+    with pytest.raises(InvalidToolException):
+        validator._validate_function(Function(name="get_weather\n", parameters={"type": "object"}))
+
+
+def test_tool_message_name_trailing_newline_rejected() -> None:
+    validator = get_validator(TokenizerVersion.v3, ValidationMode.serving)
+    with pytest.raises(InvalidToolMessageException):
+        validator._validate_tool_message(ToolMessage(content="weather data", name="get_weather\n", tool_call_id="abcDEF123"))
+
+
+def test_function_call_name_trailing_newline_rejected() -> None:
+    validator = get_validator(TokenizerVersion.v3, ValidationMode.serving)
+    with pytest.raises(InvalidFunctionCallException):
+        validator._validate_function_call(FunctionCall(name="get_weather\n", arguments="{}"))
+
+
+def test_tool_call_id_trailing_newline_rejected() -> None:
+    validator = get_validator(TokenizerVersion.v3, ValidationMode.serving)
+    with pytest.raises(InvalidFunctionCallException):
+        validator._validate_tool_call_id(
+            ToolCall(id="abcDEF123\n", function=FunctionCall(name="test_func", arguments="{}")),
+            is_last_message=False,
+        )
+
