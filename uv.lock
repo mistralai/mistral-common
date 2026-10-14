@@ -1788,7 +1788,7 @@ test-integrations = [
 requires-dist = [
     { name = "click", marker = "extra == 'server'", specifier = ">=8.1.0" },
     { name = "fastapi", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.118.3" },
-    { name = "huggingface-hub", marker = "extra == 'hf-hub'", specifier = ">=1.0" },
+    { name = "huggingface-hub", marker = "extra == 'hf-hub'", specifier = ">=1.31.0" },
     { name = "jinja2", marker = "extra == 'guidance'", specifier = ">=3.1.0" },
     { name = "jsonschema", specifier = ">=4.21.1" },
     { name = "llguidance", marker = "extra == 'guidance'", specifier = ">=1.3.0,<1.4.0" },
