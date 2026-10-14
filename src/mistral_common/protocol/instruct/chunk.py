@@ -22,8 +22,8 @@ if TYPE_CHECKING:
 
 def _strip_audio_data_url_prefix(data: str) -> str:
     r"""Remove the optional base64 audio data URL prefix."""
-    if re.match(r"^data:audio/\w+;base64,", data):
-        return data.split(",", 1)[1]
+    if data.startswith("data:audio") and "," in data:
+        return data.partition(",")[2]
     return data
 
 
@@ -182,8 +182,8 @@ class ImageChunk(BaseContentChunk):
         assert isinstance(image_url_dict, dict) and "url" in image_url_dict, image_url_dict
 
         url = image_url_dict["url"]
-        if re.match(r"^data:image/\w+;base64,", url):  # Remove the prefix if it exists
-            url = url.split(",")[1]
+        if url.startswith("data:image") and "," in url:  # Remove the prefix if it exists
+            url = url.partition(",")[2]
 
         return cls.model_validate({"image": url})
 

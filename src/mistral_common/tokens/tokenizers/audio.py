@@ -138,8 +138,8 @@ class Audio:
         """
         assert_soundfile_installed()
 
-        if re.match(r"^data:audio/\w+;base64,", audio_base64):
-            audio_base64 = audio_base64.split(",")[1]
+        if audio_base64.startswith("data:audio") and "," in audio_base64:
+            audio_base64 = audio_base64.partition(",")[2]
 
         try:
             audio_bytes = base64.b64decode(audio_base64)
