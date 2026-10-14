@@ -2,7 +2,7 @@ from collections.abc import Iterable, Mapping
 from enum import Enum
 from typing import Any, Generic
 
-from pydantic import Field, TypeAdapter, model_validator
+from pydantic import ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
 from mistral_common.base import MistralBase
 from mistral_common.deprecation import warn_once
@@ -19,6 +19,7 @@ from mistral_common.protocol.instruct.messages import (
     ReasoningFieldFormat,
 )
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolChoice, ToolChoiceEnum, ToolType
+from mistral_common.utils.json_utils import validate_json_schema_by_draft7
 
 _CONTINUE_FINAL_MESSAGE_KEY = "continue_final_message"
 _CONTINUE_FINAL_MESSAGE_ERROR = "continue_final_message=True requires final message to be an assistant."
@@ -55,6 +56,7 @@ class ResponseFormats(str, Enum):
     Attributes:
         text: Response will be plain text.
         json: Response will be a valid JSON object.
+        json_schema: Response will follow a custom JSON schema.
 
     Examples:
         >>> response_format = ResponseFormats.text
@@ -62,6 +64,7 @@ class ResponseFormats(str, Enum):
 
     text = "text"
     json = "json_object"
+    json_schema = "json_schema"
 
 
 class ReasoningEffort(str, Enum):
@@ -84,37 +87,111 @@ class ModelSettings(MistralBase):
     r"""Model configuration settings for instruct requests.
 
     Encapsulates model-specific settings that influence inference behavior.
-    Currently supports reasoning effort configuration.
+    Currently supports reasoning effort and response format configuration.
 
     Attributes:
-        reasoning_effort: Controls reasoning effort. If `None` (default), the model
+        reasoning_effort: Controls reasoning effort. If `None`, the model
             uses its default reasoning behavior. Requires tokenizer >= v15.
+        json_schema: The JSON schema to enforce on the response, derived from the request's
+            response format. If `None`, no schema is enforced. Requires tokenizer >= v15.
     """
 
     reasoning_effort: ReasoningEffort | None = None
+    json_schema: dict[str, Any] | None = None
 
     @staticmethod
     def none() -> "ModelSettings":
         r"""Create a ModelSettings instance with all fields set to `None`.
 
         Returns:
-            ModelSettings with `reasoning_effort=None`.
+            An instance with all fields set to `None`.
         """
         return ModelSettings()
+
+
+class JsonSchema(MistralBase):
+    r"""A named JSON schema for structured responses.
+
+    Attributes:
+        name: The schema name.
+        description: An optional description of the schema.
+        custom_schema: The JSON schema (aliased `schema`).
+        strict: Whether grammar generation uses the custom schema. When `False`,
+            grammar generation uses a generic object schema; model settings always
+            retain the custom schema. The value is also preserved for OpenAI compatibility.
+
+    Examples:
+        >>> schema = JsonSchema(name="obj", schema={"type": "object"})
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str
+    description: str | None = None
+    custom_schema: dict[str, Any] = Field(..., alias="schema")
+    strict: bool = False
+
+    @field_validator("custom_schema")
+    @classmethod
+    def validate_custom_schema(cls, value: dict[str, Any]) -> dict[str, Any]:
+        r"""Validate the schema against JSON Schema Draft 7."""
+        validate_json_schema_by_draft7(value=value)
+        return value
+
+
+class SchemaRenderingMode(str, Enum):
+    r"""Select how a response-format schema is applied.
+
+    Attributes:
+        grammar: The schema constrains decoding; non-strict schemas fall back to any JSON object.
+        model_settings: The schema is encoded in model settings unchanged.
+    """
+
+    grammar = "grammar"
+    model_settings = "model_settings"
 
 
 class ResponseFormat(MistralBase):
     r"""Configuration for the response format.
 
     Attributes:
-        type: The response format type. Use `ResponseFormats.text` for plain text
-            or `ResponseFormats.json` for JSON output.
+        type: The response format type. Use `ResponseFormats.text` for plain text,
+            `ResponseFormats.json` for JSON output, or `ResponseFormats.json_schema`
+            for a custom JSON schema.
+        json_schema: The JSON schema when `type` is `json_schema`.
 
     Examples:
         >>> response_format = ResponseFormat(type=ResponseFormats.text)
     """
 
     type: ResponseFormats = ResponseFormats.text
+    json_schema: JsonSchema | None = None
+
+    @model_validator(mode="after")
+    def validate_schema_presence(self) -> "ResponseFormat":
+        r"""Require a schema when the response format selects `json_schema`."""
+        if self.type == ResponseFormats.json_schema and self.json_schema is None:
+            raise ValueError("Response format `json_schema` must define the schema")
+        return self
+
+    def get_schema(self, purpose: SchemaRenderingMode) -> dict[str, Any] | None:
+        r"""Resolve the response schema for grammar generation or model settings.
+
+        Args:
+            purpose: Whether the schema is used to constrain a grammar or encode
+                model settings.
+
+        Returns:
+            The schema selected for this purpose, or None for `text`.
+        """
+        if self.type == ResponseFormats.json_schema:
+            assert self.json_schema is not None
+            if purpose == SchemaRenderingMode.grammar and not self.json_schema.strict:
+                return {"type": "object"}
+            return self.json_schema.custom_schema
+        if self.type == ResponseFormats.json:
+            return {"anyOf": [{"type": "object"}, {"type": "array"}]}
+        return None
 
 
 class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
@@ -247,7 +324,9 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
 
         # Handle messages and tools separately.
         openai_request: dict[str, Any] = self.model_dump(
-            exclude={"messages", "tools", "truncate_for_context_length", "tool_choice"}, exclude_none=True
+            exclude={"messages", "tools", "truncate_for_context_length", "tool_choice"},
+            exclude_none=True,
+            by_alias=True,
         )
 
         # Rename random_seed to seed.
