@@ -107,7 +107,6 @@ def _build_assistant_tool_calls_request() -> InstructRequest[ChatMessage, Tool]:
     )
 
 
-# The current " // None" message is a candidate defect and is deliberately not pinned.
 def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build a v1 request containing an empty assistant message."""
     return InstructRequest[ChatMessage, Tool](messages=[UserMessage(content="a"), AssistantMessage(content="")])
