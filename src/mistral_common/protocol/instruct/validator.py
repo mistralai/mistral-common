@@ -49,7 +49,9 @@ from mistral_common.protocol.instruct.tool_calls import (
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 
 _NULL_TOOL_CALL_ID = "null"
-_TOOL_CALL_ID_REGEX = re.compile(r"^[a-zA-Z0-9]{9}$")
+# Used with `fullmatch`: `re.match` with a `$` anchor would also accept a trailing newline.
+_TOOL_CALL_ID_REGEX = re.compile(r"[a-zA-Z0-9]{9}")
+_FUNCTION_NAME_REGEX = re.compile(r"[a-zA-Z0-9_-]{1,64}")
 _INVALID_TOOL_CALL_ID_MESSAGE = (
     f"Tool call id must be a non-empty string other than '{_NULL_TOOL_CALL_ID}' for tokenizer version 13 or newer."
 )
@@ -225,7 +227,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
         except SchemaError as e:
             raise InvalidToolSchemaException(f"Invalid tool schema: {e.message}")
 
-        if not re.match(r"^[a-zA-Z0-9_-]{1,64}$", function.name):
+        if not _FUNCTION_NAME_REGEX.fullmatch(function.name):
             raise InvalidToolException(
                 f"Function name was {function.name} but must be a-z, A-Z, 0-9, "
                 "or contain underscores and dashes, with a maximum length of 64."
@@ -272,7 +274,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
         """
         self._validate_tool_content_chunks(message.content)
         if message.name is not None:
-            if not re.match(r"^[a-zA-Z0-9_-]{1,64}$", message.name):
+            if not _FUNCTION_NAME_REGEX.fullmatch(message.name):
                 raise InvalidToolMessageException(
                     f"Function name was {message.name} but must be a-z, A-Z, 0-9, "
                     "or contain underscores and dashes, with a maximum length of 64."
@@ -300,7 +302,7 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
             InvalidFunctionCallException: If the name does not match
                 `^[a-zA-Z0-9_-]{1,64}$`.
         """
-        if not re.match(r"^[a-zA-Z0-9_-]{1,64}$", function_call.name):
+        if not _FUNCTION_NAME_REGEX.fullmatch(function_call.name):
             raise InvalidFunctionCallException(
                 f"Function name was {function_call.name} but must be a-z, A-Z, 0-9, "
                 "or contain underscores and dashes, with a maximum length of 64."
@@ -545,7 +547,7 @@ class MistralRequestValidatorV3(MistralRequestValidator):
         if message.tool_call_id is None:
             raise InvalidRequestException("Tool call id has to be defined.")
 
-        if not _TOOL_CALL_ID_REGEX.match(message.tool_call_id):
+        if not _TOOL_CALL_ID_REGEX.fullmatch(message.tool_call_id):
             raise InvalidToolMessageException(
                 f"Tool call id was {message.tool_call_id} but must be a-z, A-Z, 0-9, with a length of 9."
             )
@@ -582,7 +584,7 @@ class MistralRequestValidatorV3(MistralRequestValidator):
                         "in finetuning mode."
                     )
 
-        if not _TOOL_CALL_ID_REGEX.match(tool_call.id):
+        if not _TOOL_CALL_ID_REGEX.fullmatch(tool_call.id):
             raise InvalidFunctionCallException(
                 f"Tool call id was {tool_call.id} but must be a-z, A-Z, 0-9, with a length of 9."
             )
