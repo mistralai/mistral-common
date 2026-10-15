@@ -1,4 +1,4 @@
-"""Direct formatting tests for the bundled v1 instruct tokenizer."""
+r"""Direct formatting tests for the bundled v1 instruct tokenizer."""
 
 from collections.abc import Callable
 
@@ -33,40 +33,18 @@ _SYSTEM_SINGLETURN_EXPECTED = Tokenized(tokens=_SYSTEM_SINGLETURN_TOKENS)
 _SYSTEM_MULTITURN_EXPECTED = Tokenized(tokens=_SYSTEM_MULTITURN_TOKENS)
 _PREFIXED_FINAL_MESSAGE_EXPECTED = Tokenized(tokens=_PREFIXED_FINAL_MESSAGE_TOKENS, prefix_ids=[281])
 
-_TOOLS_NOT_IMPLEMENTED_MESSAGE = r"^Tools not implemented for tokenizer V1$"
 _NORMAL_TEXT = "<s>▁[INST]▁a▁[/INST]▁b</s>▁[INST]▁c▁[/INST]▁d</s>"
 _SYSTEM_SINGLETURN_TEXT = "<s>▁[INST]▁SYSTEM<0x0A><0x0A>a▁[/INST]"
 _SYSTEM_MULTITURN_TEXT = "<s>▁[INST]▁SYSTEM<0x0A><0x0A>a▁[/INST]▁b</s>▁[INST]▁c▁[/INST]▁d</s>"
 _PREFIXED_FINAL_MESSAGE_TEXT = "<s>▁[INST]▁SYSTEM<0x0A><0x0A>a▁[/INST]▁b</s>▁[INST]▁c▁[/INST]▁d"
+
+_TOOLS_NOT_IMPLEMENTED_MESSAGE = r"^Tools not implemented for tokenizer V1$"
 
 
 @pytest.fixture(scope="module")
 def tokenizer() -> InstructTokenizer:
     r"""Provide the bundled v1 instruct tokenizer for formatting cases."""
     return MistralTokenizer.v1().instruct_tokenizer
-
-
-def _build_tool_message_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a v1 request containing a tool result."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[UserMessage(content="a"), ToolMessage(content="d", tool_call_id="123456789")]
-    )
-
-
-def _build_assistant_tool_calls_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a v1 request containing an assistant tool call."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="b", arguments="{}"))]),
-        ]
-    )
-
-
-# The current " // None" message is a candidate defect and is deliberately not pinned.
-def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a v1 request containing an empty assistant message."""
-    return InstructRequest[ChatMessage, Tool](messages=[UserMessage(content="a"), AssistantMessage(content="")])
 
 
 def _build_normal_request() -> InstructRequest[ChatMessage, Tool]:
@@ -110,6 +88,29 @@ def _build_prefixed_final_message_request() -> InstructRequest[ChatMessage, Tool
         ],
         system_prompt="SYSTEM",
     )
+
+
+def _build_tool_message_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v1 request containing a tool result."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[UserMessage(content="a"), ToolMessage(content="d", tool_call_id="123456789")]
+    )
+
+
+def _build_assistant_tool_calls_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v1 request containing an assistant tool call."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="b", arguments="{}"))]),
+        ]
+    )
+
+
+# The current " // None" message is a candidate defect and is deliberately not pinned.
+def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v1 request containing an empty assistant message."""
+    return InstructRequest[ChatMessage, Tool](messages=[UserMessage(content="a"), AssistantMessage(content="")])
 
 
 @pytest.mark.parametrize(

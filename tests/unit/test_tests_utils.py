@@ -1,7 +1,8 @@
 r"""Test the comparison helpers shared by tests.
 
-Every case builds two copies of one reference `Tokenized` with every field set, applies a
-named change to each copy, and expects `assert_tokenized_equal` to accept or reject the pair.
+Most cases build two copies of one reference `Tokenized` with every field set, apply a named
+change to each copy, and expect `assert_tokenized_equal` to accept or reject the pair, with the
+default tolerances or caller-supplied ones. One guard test checks the list of compared fields.
 """
 
 from collections.abc import Callable
@@ -11,7 +12,7 @@ import pytest
 
 from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import Tokenized
-from tests.utils import _TOKENIZED_FIELDS, assert_tokenized_equal
+from tests.utils import TOKENIZED_FIELDS, assert_tokenized_equal
 
 _Change = Callable[[Tokenized], None]
 
@@ -69,17 +70,20 @@ def _set_prefix_ids_to_empty(tokenized: Tokenized) -> None:
 
 def _change_second_prefix_id(tokenized: Tokenized) -> None:
     r"""Replace the second prefix ID with 9."""
-    tokenized.prefix_ids = [2, 9]
+    assert tokenized.prefix_ids is not None
+    tokenized.prefix_ids[1] = 9
 
 
 def _drop_last_prefix_id(tokenized: Tokenized) -> None:
     r"""Remove the last prefix ID."""
-    tokenized.prefix_ids = [2]
+    assert tokenized.prefix_ids is not None
+    tokenized.prefix_ids.pop()
 
 
 def _append_prefix_id(tokenized: Tokenized) -> None:
     r"""Append the prefix ID 4."""
-    tokenized.prefix_ids = [2, 3, 4]
+    assert tokenized.prefix_ids is not None
+    tokenized.prefix_ids.append(4)
 
 
 def _drop_last_image(tokenized: Tokenized) -> None:
@@ -173,8 +177,19 @@ def _shift_second_audio_beyond_tolerance(tokenized: Tokenized) -> None:
     tokenized.audios[1].audio_array[0] = 1.1e-4
 
 
+def _set_first_audio_sample_to_1000(tokenized: Tokenized) -> None:
+    r"""Set the first sample of the first audio to 1000.0."""
+    tokenized.audios[0].audio_array[0] = 1000.0
+
+
+def _set_first_audio_sample_to_1000_005(tokenized: Tokenized) -> None:
+    r"""Set the first sample of the first audio to 1000.005, which only a relative tolerance would accept."""
+    tokenized.audios[0].audio_array[0] = 1000.005
+
+
 def _add_extra_attribute_to_first_audio(tokenized: Tokenized) -> None:
     r"""Set an attribute named `extra` on the first audio."""
+    # `Audio` declares no `extra` attribute, so a direct assignment fails mypy.
     setattr(tokenized.audios[0], "extra", 1)
 
 
@@ -297,10 +312,46 @@ def test_assert_tokenized_equal_rejects(actual_change: _Change, expected_change:
         assert_tokenized_equal(actual=actual, expected=expected)
 
 
+@pytest.mark.parametrize(
+    argnames="actual_change, expected_change",
+    argvalues=[
+        pytest.param(_set_first_image_to_1000, _set_first_image_to_1000_005, id="images-looser-rtol"),
+        pytest.param(_set_first_audio_sample_to_1000, _set_first_audio_sample_to_1000_005, id="audios-looser-rtol"),
+    ],
+)
+def test_assert_tokenized_equal_accepts_within_caller_tolerance(
+    actual_change: _Change, expected_change: _Change
+) -> None:
+    r"""Accept a relative difference that the default `rtol` of 0 rejects but the caller's `rtol` allows."""
+    actual = _build_reference()
+    expected = _build_reference()
+    actual_change(actual)
+    expected_change(expected)
+
+    assert_tokenized_equal(actual=actual, expected=expected, atol=1e-4, rtol=1e-5)
+
+
+@pytest.mark.parametrize(
+    argnames="actual_change, message",
+    argvalues=[
+        pytest.param(_shift_first_image_within_tolerance, r"images.*index 0.*values", id="images-tighter-atol"),
+        pytest.param(_shift_first_audio_within_tolerance, r"audios.*index 0.*values", id="audios-tighter-atol"),
+    ],
+)
+def test_assert_tokenized_equal_rejects_beyond_caller_tolerance(actual_change: _Change, message: str) -> None:
+    r"""Reject a difference that the default tolerance accepts but the caller's tighter `atol` does not."""
+    actual = _build_reference()
+    expected = _build_reference()
+    actual_change(actual)
+
+    with pytest.raises(expected_exception=AssertionError, match=message):
+        assert_tokenized_equal(actual=actual, expected=expected, atol=5e-5, rtol=0.0)
+
+
 def test_tokenized_fields_are_all_compared() -> None:
     r"""Fail when `Tokenized` gains or loses a field.
 
     A new field must be given a comparison in `assert_tokenized_equal` before the
     constant is updated.
     """
-    assert set(Tokenized.model_fields) == _TOKENIZED_FIELDS
+    assert set(Tokenized.model_fields) == TOKENIZED_FIELDS

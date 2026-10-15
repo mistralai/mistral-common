@@ -1,4 +1,4 @@
-"""Direct formatting tests for both bundled v3 instruct backends."""
+r"""Direct formatting tests for both bundled v3 instruct backends."""
 
 from collections.abc import Callable
 
@@ -149,13 +149,8 @@ _SPM_TOOL_MESSAGE_JSON_OBJECT_STRING_EXPECTED = Tokenized(tokens=_SPM_TOOL_MESSA
 _TEKKEN_TOOL_MESSAGE_JSON_OBJECT_STRING_EXPECTED = Tokenized(tokens=_TEKKEN_TOOL_MESSAGE_JSON_OBJECT_STRING_TOKENS)
 _SPM_TOOL_MESSAGE_TEXT_CHUNK_LIST_EXPECTED = Tokenized(tokens=_SPM_TOOL_MESSAGE_TEXT_CHUNK_LIST_TOKENS)
 _TEKKEN_TOOL_MESSAGE_TEXT_CHUNK_LIST_EXPECTED = Tokenized(tokens=_TEKKEN_TOOL_MESSAGE_TEXT_CHUNK_LIST_TOKENS)
-_SPM_TOOL_CALL_EXPLICIT_NULL_ID_EXPECTED = Tokenized(tokens=_SPM_TOOL_CALL_WITHOUT_ID_TOKENS)
-_TEKKEN_TOOL_CALL_EXPLICIT_NULL_ID_EXPECTED = Tokenized(tokens=_TEKKEN_TOOL_CALL_WITHOUT_ID_TOKENS)
-_SPM_TOOL_CALL_DEFAULT_ID_EXPECTED = Tokenized(tokens=_SPM_TOOL_CALL_WITHOUT_ID_TOKENS)
-_TEKKEN_TOOL_CALL_DEFAULT_ID_EXPECTED = Tokenized(tokens=_TEKKEN_TOOL_CALL_WITHOUT_ID_TOKENS)
-
-_TOOL_CALL_AND_CONTENT_MESSAGE = "Cannot have tool calls and content defined in the same assistant message"
-_INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
+_SPM_TOOL_CALL_WITHOUT_ID_EXPECTED = Tokenized(tokens=_SPM_TOOL_CALL_WITHOUT_ID_TOKENS)
+_TEKKEN_TOOL_CALL_WITHOUT_ID_EXPECTED = Tokenized(tokens=_TEKKEN_TOOL_CALL_WITHOUT_ID_TOKENS)
 
 _SPM_TOOLS_SINGLETURN_TEXT = (
     '<s>[AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":'
@@ -247,6 +242,9 @@ _TEKKEN_TOOL_MESSAGE_TEXT_CHUNK_LIST_TEXT = (
 )
 _SPM_TOOL_CALL_WITHOUT_ID_TEXT = '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>'
 _TEKKEN_TOOL_CALL_WITHOUT_ID_TEXT = '<s>[INST]a[/INST][TOOL_CALLS][{"name": "b", "arguments": {}}]</s>'
+
+_TOOL_CALL_AND_CONTENT_MESSAGE = r"^Cannot have tool calls and content defined in the same assistant message"
+_INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
 
 
 @pytest.fixture(scope="module")
@@ -548,28 +546,28 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
         pytest.param(
             "spm",
             _build_explicit_null_id_request,
-            _SPM_TOOL_CALL_EXPLICIT_NULL_ID_EXPECTED,
+            _SPM_TOOL_CALL_WITHOUT_ID_EXPECTED,
             _SPM_TOOL_CALL_WITHOUT_ID_TEXT,
             id="spm-tool-call-explicit-null-id",
         ),
         pytest.param(
             "tekken",
             _build_explicit_null_id_request,
-            _TEKKEN_TOOL_CALL_EXPLICIT_NULL_ID_EXPECTED,
+            _TEKKEN_TOOL_CALL_WITHOUT_ID_EXPECTED,
             _TEKKEN_TOOL_CALL_WITHOUT_ID_TEXT,
             id="tekken-tool-call-explicit-null-id",
         ),
         pytest.param(
             "spm",
             _build_default_id_request,
-            _SPM_TOOL_CALL_DEFAULT_ID_EXPECTED,
+            _SPM_TOOL_CALL_WITHOUT_ID_EXPECTED,
             _SPM_TOOL_CALL_WITHOUT_ID_TEXT,
             id="spm-tool-call-default-id",
         ),
         pytest.param(
             "tekken",
             _build_default_id_request,
-            _TEKKEN_TOOL_CALL_DEFAULT_ID_EXPECTED,
+            _TEKKEN_TOOL_CALL_WITHOUT_ID_EXPECTED,
             _TEKKEN_TOOL_CALL_WITHOUT_ID_TEXT,
             id="tekken-tool-call-default-id",
         ),
