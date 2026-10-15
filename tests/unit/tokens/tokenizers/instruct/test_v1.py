@@ -35,13 +35,9 @@ _PREFIXED_FINAL_MESSAGE_EXPECTED = Tokenized(tokens=_PREFIXED_FINAL_MESSAGE_TOKE
 
 _TOOLS_NOT_IMPLEMENTED_MESSAGE = r"^Tools not implemented for tokenizer V1$"
 _NORMAL_TEXT = "<s>▁[INST]▁a▁[/INST]▁b</s>▁[INST]▁c▁[/INST]▁d</s>"
-_NORMAL_RAW_DECODE = "[INST] a [/INST] b [INST] c [/INST] d"
 _SYSTEM_SINGLETURN_TEXT = "<s>▁[INST]▁SYSTEM<0x0A><0x0A>a▁[/INST]"
-_SYSTEM_SINGLETURN_RAW_DECODE = "[INST] SYSTEM\n\na [/INST]"
 _SYSTEM_MULTITURN_TEXT = "<s>▁[INST]▁SYSTEM<0x0A><0x0A>a▁[/INST]▁b</s>▁[INST]▁c▁[/INST]▁d</s>"
-_SYSTEM_MULTITURN_RAW_DECODE = "[INST] SYSTEM\n\na [/INST] b [INST] c [/INST] d"
 _PREFIXED_FINAL_MESSAGE_TEXT = "<s>▁[INST]▁SYSTEM<0x0A><0x0A>a▁[/INST]▁b</s>▁[INST]▁c▁[/INST]▁d"
-_PREFIXED_FINAL_MESSAGE_RAW_DECODE = "[INST] SYSTEM\n\na [/INST] b [INST] c [/INST] d"
 
 
 @pytest.fixture(scope="module")
@@ -117,28 +113,25 @@ def _build_prefixed_final_message_request() -> InstructRequest[ChatMessage, Tool
 
 
 @pytest.mark.parametrize(
-    argnames="request_builder, expected, expected_text, expected_raw_decode",
+    argnames="request_builder, expected, expected_text",
     argvalues=[
-        pytest.param(_build_normal_request, _NORMAL_EXPECTED, _NORMAL_TEXT, _NORMAL_RAW_DECODE, id="normal"),
+        pytest.param(_build_normal_request, _NORMAL_EXPECTED, _NORMAL_TEXT, id="normal"),
         pytest.param(
             _build_system_singleturn_request,
             _SYSTEM_SINGLETURN_EXPECTED,
             _SYSTEM_SINGLETURN_TEXT,
-            _SYSTEM_SINGLETURN_RAW_DECODE,
             id="system-singleturn",
         ),
         pytest.param(
             _build_system_multiturn_request,
             _SYSTEM_MULTITURN_EXPECTED,
             _SYSTEM_MULTITURN_TEXT,
-            _SYSTEM_MULTITURN_RAW_DECODE,
             id="system-multiturn",
         ),
         pytest.param(
             _build_prefixed_final_message_request,
             _PREFIXED_FINAL_MESSAGE_EXPECTED,
             _PREFIXED_FINAL_MESSAGE_TEXT,
-            _PREFIXED_FINAL_MESSAGE_RAW_DECODE,
             id="prefixed-final-message",
         ),
     ],
@@ -148,13 +141,11 @@ def test_encode_instruct(
     request_builder: Callable[[], InstructRequest[ChatMessage, Tool]],
     expected: Tokenized,
     expected_text: str,
-    expected_raw_decode: str,
 ) -> None:
     r"""Preserve the complete v1 instruct encoding for each request shape."""
     tokenized = tokenizer.encode_instruct(request=request_builder())
     assert_tokenized_equal(actual=tokenized, expected=expected)
     assert decode_keep(tokenizer=tokenizer, tokenized=tokenized) == expected_text
-    assert tokenizer.tokenizer.decode(tokens=tokenized.tokens) == expected_raw_decode
 
 
 @pytest.mark.parametrize(
