@@ -101,6 +101,54 @@ def _decode_tool_calls_v2_up_to_v7(tool_call_tokens: list[int], tokenizer: Token
     ]
 
 
+def _split_v11_tool_call_tokens(
+    tool_call_tokens: list[int], tokenizer: Tokenizer, control_token: str
+) -> tuple[list[int], list[int]]:
+    r"""Split v11+ tool call tokens around a control token that must occur exactly once.
+
+    Args:
+        tool_call_tokens: The token IDs to split.
+        tokenizer: The tokenizer used to resolve the control token.
+        control_token: The control token to split on, e.g. `[ARGS]`.
+
+    Returns:
+        A tuple of (`before`, `after`): the token IDs before and after the control token.
+
+    Raises:
+        InvalidToolCallError: If the control token is missing or appears more than once.
+    """
+    try:
+        return _split_tokens_by_one_occurrence_control_token(
+            list_=tool_call_tokens, tokenizer=tokenizer, control_token=control_token
+        )
+    except ValueError as e:
+        raise InvalidToolCallError(f"Invalid tool call tokenization. {e}") from e
+
+
+def _decode_v11_tool_call_arguments(args_tokens: list[int], tokenizer: Tokenizer) -> str:
+    r"""Decode v11+ tool call argument tokens and check they form a JSON object.
+
+    Args:
+        args_tokens: The token IDs following the `[ARGS]` control token.
+        tokenizer: The tokenizer to use for decoding.
+
+    Returns:
+        The arguments serialized as a JSON object string, as `FunctionCall` stores them.
+
+    Raises:
+        InvalidArgsToolCallError: If the arguments are not valid JSON or not a JSON object.
+    """
+    try:
+        arguments = json.loads(tokenizer.decode(args_tokens, special_token_policy=SpecialTokenPolicy.IGNORE))
+    except json.JSONDecodeError as e:
+        raise InvalidArgsToolCallError("Invalid tokenized tool call arguments.") from e
+    # Mirror the v2-v7 contract: FunctionCall would otherwise raise a pydantic error for lists/scalars
+    # and silently accept strings or null.
+    if not isinstance(arguments, dict):
+        raise InvalidArgsToolCallError("Invalid tool call arguments tokenization. Expected a dict.")
+    return json.dumps(arguments)
+
+
 def _decode_tool_call_v11_with_call_id(tool_call_tokens: list[int], tokenizer: Tokenizer) -> ToolCall:
     r"""Decode a list of tool call tokens into a tool call for tokenizer version v11 with call ID.
 
@@ -117,24 +165,24 @@ def _decode_tool_call_v11_with_call_id(tool_call_tokens: list[int], tokenizer: T
         The decoded tool call with its call ID.
 
     Raises:
-        ValueError: If [CALL_ID] or [ARGS] is missing or appears more than once.
-        InvalidArgsToolCallError: If the arguments are not valid JSON.
+        InvalidToolCallError: If [CALL_ID] or [ARGS] is missing or appears more than once.
+        InvalidArgsToolCallError: If the arguments are not valid JSON or not a JSON object.
     """
-    name, call_id_and_args = _split_tokens_by_one_occurrence_control_token(tool_call_tokens, tokenizer, "[CALL_ID]")
+    name, call_id_and_args = _split_v11_tool_call_tokens(
+        tool_call_tokens=tool_call_tokens, tokenizer=tokenizer, control_token="[CALL_ID]"
+    )
 
-    call_id, args = _split_tokens_by_one_occurrence_control_token(call_id_and_args, tokenizer, "[ARGS]")
+    call_id, args = _split_v11_tool_call_tokens(
+        tool_call_tokens=call_id_and_args, tokenizer=tokenizer, control_token="[ARGS]"
+    )
 
-    try:
-        tool_call = ToolCall(
-            id=tokenizer.decode(call_id),
-            function=FunctionCall(
-                name=tokenizer.decode(name),
-                arguments=json.loads(tokenizer.decode(args, special_token_policy=SpecialTokenPolicy.IGNORE)),
-            ),
-        )
-    except json.JSONDecodeError as e:
-        raise InvalidArgsToolCallError("Invalid tokenized tool call arguments.") from e
-    return tool_call
+    return ToolCall(
+        id=tokenizer.decode(call_id),
+        function=FunctionCall(
+            name=tokenizer.decode(name),
+            arguments=_decode_v11_tool_call_arguments(args_tokens=args, tokenizer=tokenizer),
+        ),
+    )
 
 
 def _decode_tool_call_v11(tool_call_tokens: list[int], tokenizer: Tokenizer) -> ToolCall:
@@ -153,20 +201,18 @@ def _decode_tool_call_v11(tool_call_tokens: list[int], tokenizer: Tokenizer) -> 
         The decoded tool call.
 
     Raises:
-        ValueError: If [ARGS] is missing or appears more than once.
-        InvalidArgsToolCallError: If the arguments are not valid JSON.
+        InvalidToolCallError: If [ARGS] is missing or appears more than once.
+        InvalidArgsToolCallError: If the arguments are not valid JSON or not a JSON object.
     """
-    name, args = _split_tokens_by_one_occurrence_control_token(tool_call_tokens, tokenizer, "[ARGS]")
-    try:
-        tool_call = ToolCall(
-            function=FunctionCall(
-                name=tokenizer.decode(name, special_token_policy=SpecialTokenPolicy.IGNORE),
-                arguments=json.loads(tokenizer.decode(args, special_token_policy=SpecialTokenPolicy.IGNORE)),
-            ),
-        )
-    except json.JSONDecodeError as e:
-        raise InvalidArgsToolCallError("Invalid tokenized tool call arguments.") from e
-    return tool_call
+    name, args = _split_v11_tool_call_tokens(
+        tool_call_tokens=tool_call_tokens, tokenizer=tokenizer, control_token="[ARGS]"
+    )
+    return ToolCall(
+        function=FunctionCall(
+            name=tokenizer.decode(name, special_token_policy=SpecialTokenPolicy.IGNORE),
+            arguments=_decode_v11_tool_call_arguments(args_tokens=args, tokenizer=tokenizer),
+        ),
+    )
 
 
 def _decode_tool_calls(tool_call_tokens: Sequence[list[int]], tokenizer: Tokenizer) -> list[ToolCall]:
