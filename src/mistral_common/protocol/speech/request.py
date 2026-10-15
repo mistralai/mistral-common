@@ -33,13 +33,15 @@ class SpeechRequest(BaseCompletionRequest):
     voice: str | None = None
     ref_audio: str | bytes | None = None
 
-    def to_openai(self, **kwargs: Any) -> dict[str, Any]:
+    def to_openai(self, exclude: tuple = (), **kwargs: Any) -> dict[str, Any]:
         r"""Convert this SpeechRequest to an OpenAI-compatible request dictionary.
 
         Reference audio is converted into an in-memory file buffer with the
         correct format extension, and `random_seed` is renamed to "seed".
 
         Args:
+            exclude: Fields to exclude from the conversion, in addition to the
+                mistral-specific fields that are always stripped.
             **kwargs: Additional key-value pairs merged into the output.
 
         Returns:
@@ -70,6 +72,13 @@ class SpeechRequest(BaseCompletionRequest):
 
         openai_request["seed"] = openai_request.pop("random_seed")
         openai_request.update(kwargs)
+
+        # remove mistral-specific fields, mirroring TranscriptionRequest.to_openai
+        # TODO: revisit which fields to expose in the OpenAI format
+        default_exclude = ("id", "max_tokens", "strict_audio_validation", "streaming")
+        default_exclude += exclude
+        for k in default_exclude:
+            openai_request.pop(k, None)
 
         return openai_request
 
