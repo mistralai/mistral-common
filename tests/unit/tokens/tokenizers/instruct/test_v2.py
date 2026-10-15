@@ -1,4 +1,4 @@
-"""Direct formatting tests for the bundled v2 instruct tokenizer."""
+r"""Direct formatting tests for the bundled v2 instruct tokenizer."""
 
 from collections.abc import Callable
 
@@ -74,9 +74,6 @@ _TOOL_RESULT_TEXT_CHUNK_LIST_EXPECTED = Tokenized(tokens=_TOOL_RESULT_TEXT_CHUNK
 _TOOL_RESULT_WITHOUT_CALL_TURN_EXPECTED = Tokenized(tokens=_TOOL_RESULT_WITHOUT_CALL_TURN_TOKENS)
 _MULTIPLE_RESULTS_IN_HISTORY_EXPECTED = Tokenized(tokens=_MULTIPLE_RESULTS_IN_HISTORY_TOKENS)
 
-_PARALLEL_RESULTS_MESSAGE = r"v2.*multiple tool results.*assistant turn"
-_INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
-
 _NORMAL_TEXT = "<s>[INST]▁a[/INST]▁b</s>[INST]▁c[/INST]▁d</s>"
 # SentencePiece adds its special-space marker before the system prompt.
 _SYSTEM_SINGLETURN_TEXT = "<s>[INST]▁SYSTEM<0x0A><0x0A>a[/INST]"
@@ -119,31 +116,14 @@ _TOOL_RESULT_WITHOUT_CALL_TURN_TEXT = (
 )
 _MULTIPLE_RESULTS_IN_HISTORY_TEXT = "<s>[INST]▁a[/INST]▁f</s>[INST]▁g[/INST]"
 
+_PARALLEL_RESULTS_MESSAGE = r"v2.*multiple tool results.*assistant turn"
+_INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
+
 
 @pytest.fixture(scope="module")
 def tokenizer() -> InstructTokenizer:
     r"""Provide the bundled v2 instruct tokenizer for formatting cases."""
     return MistralTokenizer.v2().instruct_tokenizer
-
-
-def _build_parallel_results_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build the v2 request with two results for one assistant turn."""
-    tool_calls = [
-        ToolCall(id=f"call0000{index}", function=FunctionCall(name=f"tool_{index}", arguments="{}")) for index in (1, 2)
-    ]
-    messages: list[ChatMessage] = [
-        UserMessage(content="Run these tools."),
-        AssistantMessage(content=None, tool_calls=tool_calls),
-    ]
-    messages.extend(
-        ToolMessage(
-            name=f"tool_{index}",
-            content=f"result {index}",
-            tool_call_id=f"call0000{index}",
-        )
-        for index in (1, 2)
-    )
-    return InstructRequest[ChatMessage, Tool](messages=messages)
 
 
 def _build_normal_request() -> InstructRequest[ChatMessage, Tool]:
@@ -312,6 +292,26 @@ def _build_non_final_prefixed_assistant_request() -> InstructRequest[ChatMessage
 def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build a v2 request containing an empty assistant message."""
     return InstructRequest[ChatMessage, Tool](messages=[UserMessage(content="a"), AssistantMessage(content="")])
+
+
+def _build_parallel_results_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build the v2 request with two results for one assistant turn."""
+    tool_calls = [
+        ToolCall(id=f"call0000{index}", function=FunctionCall(name=f"tool_{index}", arguments="{}")) for index in (1, 2)
+    ]
+    messages: list[ChatMessage] = [
+        UserMessage(content="Run these tools."),
+        AssistantMessage(content=None, tool_calls=tool_calls),
+    ]
+    messages.extend(
+        ToolMessage(
+            name=f"tool_{index}",
+            content=f"result {index}",
+            tool_call_id=f"call0000{index}",
+        )
+        for index in (1, 2)
+    )
+    return InstructRequest[ChatMessage, Tool](messages=messages)
 
 
 @pytest.mark.parametrize(

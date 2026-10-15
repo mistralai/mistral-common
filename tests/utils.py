@@ -9,7 +9,7 @@ TOKENIZED_ATOL: float = 1e-4
 TOKENIZED_RTOL: float = 0.0
 
 # Fields `assert_tokenized_equal` compares; a guard test fails when `Tokenized` gains or loses one.
-_TOKENIZED_FIELDS: frozenset[str] = frozenset({"tokens", "prefix_ids", "images", "audios"})
+TOKENIZED_FIELDS: frozenset[str] = frozenset({"tokens", "prefix_ids", "images", "audios"})
 
 
 def decode_keep(tokenizer: InstructTokenizer | MistralTokenizer, tokenized: Tokenized) -> str:
