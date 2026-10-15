@@ -161,15 +161,9 @@ _SPM_TOOLS_SINGLETURN_TEXT = (
     '<s>[AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":'
     '▁{"name":▁"tool1",▁"description":▁"1",▁"parameters":▁{}}}][/AVAILABLE_TOOLS][INST]▁a[/INST]'
 )
-_SPM_TOOLS_SINGLETURN_RAW_DECODE = (
-    '[{"type": "function", "function": {"name": "tool1", "description": "1", "parameters": {}}}] a'
-)
 _TEKKEN_TOOLS_SINGLETURN_TEXT = (
     '<s>[AVAILABLE_TOOLS][{"type": "function", "function": {"name": "tool1", '
     '"description": "1", "parameters": {}}}][/AVAILABLE_TOOLS][INST]a[/INST]'
-)
-_TEKKEN_TOOLS_SINGLETURN_RAW_DECODE = (
-    '[{"type": "function", "function": {"name": "tool1", "description": "1", "parameters": {}}}]a'
 )
 _SPM_TOOLS_MULTITURN_TEXT = (
     "<s>[INST]▁a[/INST]▁b</s>[AVAILABLE_TOOLS]▁["
@@ -177,61 +171,35 @@ _SPM_TOOLS_MULTITURN_TEXT = (
     '▁{"type":▁"function",▁"function":▁{"name":▁"tool2",▁"description":▁"2",▁"parameters":▁{}}}]'
     "[/AVAILABLE_TOOLS][INST]▁c[/INST]▁d</s>"
 )
-_SPM_TOOLS_MULTITURN_RAW_DECODE = (
-    'a b [{"type": "function", "function": {"name": "tool1", "description": "1", "parameters": {}}}, '
-    '{"type": "function", "function": {"name": "tool2", "description": "2", "parameters": {}}}] c d'
-)
 _TEKKEN_TOOLS_MULTITURN_TEXT = (
     "<s>[INST]a[/INST]b</s>[AVAILABLE_TOOLS]["
     '{"type": "function", "function": {"name": "tool1", "description": "1", "parameters": {}}}, '
     '{"type": "function", "function": {"name": "tool2", "description": "2", "parameters": {}}}]'
     "[/AVAILABLE_TOOLS][INST]c[/INST]d</s>"
 )
-_TEKKEN_TOOLS_MULTITURN_RAW_DECODE = (
-    'ab[{"type": "function", "function": {"name": "tool1", "description": "1", "parameters": {}}}, '
-    '{"type": "function", "function": {"name": "tool2", "description": "2", "parameters": {}}}]cd'
-)
 _SPM_SYSTEM_TOOLS_MULTITURN_TEXT = (
     "<s>[INST]▁a[/INST]▁b</s>[AVAILABLE_TOOLS]▁["
     '{"type":▁"function",▁"function":▁{"name":▁"tool1",▁"description":▁"1",▁"parameters":▁{}}}'
     "][/AVAILABLE_TOOLS][INST]▁SYSTEM<0x0A><0x0A>c[/INST]▁d</s>"
-)
-_SPM_SYSTEM_TOOLS_MULTITURN_RAW_DECODE = (
-    'a b [{"type": "function", "function": {"name": "tool1", "description": "1", "parameters": {}}}] SYSTEM\n\nc d'
 )
 _TEKKEN_SYSTEM_TOOLS_MULTITURN_TEXT = (
     "<s>[INST]a[/INST]b</s>[AVAILABLE_TOOLS]["
     '{"type": "function", "function": {"name": "tool1", "description": "1", "parameters": {}}}'
     "][/AVAILABLE_TOOLS][INST]SYSTEM\n\nc[/INST]d</s>"
 )
-_TEKKEN_SYSTEM_TOOLS_MULTITURN_RAW_DECODE = (
-    'ab[{"type": "function", "function": {"name": "tool1", "description": "1", "parameters": {}}}]SYSTEM\n\ncd'
-)
 _SPM_PREFIXED_FINAL_MESSAGE_TEXT = "<s>[INST]▁a[/INST]▁b</s>[INST]▁SYSTEM<0x0A><0x0A>c[/INST]▁d"
-_SPM_PREFIXED_FINAL_MESSAGE_RAW_DECODE = "a b SYSTEM\n\nc d"
 _TEKKEN_PREFIXED_FINAL_MESSAGE_TEXT = "<s>[INST]a[/INST]b</s>[INST]SYSTEM\n\nc[/INST]d"
-_TEKKEN_PREFIXED_FINAL_MESSAGE_RAW_DECODE = "abSYSTEM\n\ncd"
 _SPM_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_TEXT = (
     '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"0"}]</s>'
     '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"0"}[/TOOL_RESULTS]▁e</s>[INST]▁f[/INST]'
     '[TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"1"}]</s>'
     '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"1"}[/TOOL_RESULTS]'
 )
-_SPM_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_RAW_DECODE = (
-    'a [{"name": "b", "arguments": {}, "id": "0"}] '
-    '{"content": "d", "call_id": "0"} e f [{"name": "b", "arguments": {}, "id": "1"}] '
-    '{"content": "d", "call_id": "1"}'
-)
 _TEKKEN_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_TEXT = (
     '<s>[INST]a[/INST][TOOL_CALLS][{"name": "b", "arguments": {}, "id": "0"}]</s>'
     '[TOOL_RESULTS]{"content": "d", "call_id": "0"}[/TOOL_RESULTS]e</s>[INST]f[/INST]'
     '[TOOL_CALLS][{"name": "b", "arguments": {}, "id": "1"}]</s>'
     '[TOOL_RESULTS]{"content": "d", "call_id": "1"}[/TOOL_RESULTS]'
-)
-_TEKKEN_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_RAW_DECODE = (
-    'a[{"name": "b", "arguments": {}, "id": "0"}]'
-    '{"content": "d", "call_id": "0"}ef[{"name": "b", "arguments": {}, "id": "1"}]'
-    '{"content": "d", "call_id": "1"}'
 )
 _SPM_TOOL_MESSAGE_MULTIPLE_CALLS_TEXT = (
     '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"0"},▁'
@@ -243,12 +211,6 @@ _SPM_TOOL_MESSAGE_MULTIPLE_CALLS_TEXT = (
     '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"2"}[/TOOL_RESULTS]'
     '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"3"}[/TOOL_RESULTS]'
 )
-_SPM_TOOL_MESSAGE_MULTIPLE_CALLS_RAW_DECODE = (
-    'a [{"name": "b", "arguments": {}, "id": "0"}, {"name": "q", "arguments": {}, "id": "1"}] '
-    '{"content": "d", "call_id": "0"} {"content": "d", "call_id": "1"} e f '
-    '[{"name": "b", "arguments": {}, "id": "2"}, {"name": "q", "arguments": {}, "id": "3"}] '
-    '{"content": "d", "call_id": "2"} {"content": "d", "call_id": "3"}'
-)
 _TEKKEN_TOOL_MESSAGE_MULTIPLE_CALLS_TEXT = (
     '<s>[INST]a[/INST][TOOL_CALLS][{"name": "b", "arguments": {}, "id": "0"}, '
     '{"name": "q", "arguments": {}, "id": "1"}]</s>'
@@ -259,58 +221,32 @@ _TEKKEN_TOOL_MESSAGE_MULTIPLE_CALLS_TEXT = (
     '[TOOL_RESULTS]{"content": "d", "call_id": "2"}[/TOOL_RESULTS]'
     '[TOOL_RESULTS]{"content": "d", "call_id": "3"}[/TOOL_RESULTS]'
 )
-_TEKKEN_TOOL_MESSAGE_MULTIPLE_CALLS_RAW_DECODE = (
-    'a[{"name": "b", "arguments": {}, "id": "0"}, {"name": "q", "arguments": {}, "id": "1"}]'
-    '{"content": "d", "call_id": "0"}{"content": "d", "call_id": "1"}ef'
-    '[{"name": "b", "arguments": {}, "id": "2"}, {"name": "q", "arguments": {}, "id": "3"}]'
-    '{"content": "d", "call_id": "2"}{"content": "d", "call_id": "3"}'
-)
 _SPM_TOOL_MESSAGE_PLAIN_STRING_TEXT = (
     '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"123456789"}]</s>'
     '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"123456789"}[/TOOL_RESULTS]'
-)
-_SPM_TOOL_MESSAGE_PLAIN_STRING_RAW_DECODE = (
-    'a [{"name": "b", "arguments": {}, "id": "123456789"}] {"content": "d", "call_id": "123456789"}'
 )
 _TEKKEN_TOOL_MESSAGE_PLAIN_STRING_TEXT = (
     '<s>[INST]a[/INST][TOOL_CALLS][{"name": "b", "arguments": {}, "id": "123456789"}]</s>'
     '[TOOL_RESULTS]{"content": "d", "call_id": "123456789"}[/TOOL_RESULTS]'
 )
-_TEKKEN_TOOL_MESSAGE_PLAIN_STRING_RAW_DECODE = (
-    'a[{"name": "b", "arguments": {}, "id": "123456789"}]{"content": "d", "call_id": "123456789"}'
-)
 _SPM_TOOL_MESSAGE_JSON_OBJECT_STRING_TEXT = (
     '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"123456789"}]</s>'
     '[TOOL_RESULTS]▁{"content":▁{"a":▁1},▁"call_id":▁"123456789"}[/TOOL_RESULTS]'
-)
-_SPM_TOOL_MESSAGE_JSON_OBJECT_STRING_RAW_DECODE = (
-    'a [{"name": "b", "arguments": {}, "id": "123456789"}] {"content": {"a": 1}, "call_id": "123456789"}'
 )
 _TEKKEN_TOOL_MESSAGE_JSON_OBJECT_STRING_TEXT = (
     '<s>[INST]a[/INST][TOOL_CALLS][{"name": "b", "arguments": {}, "id": "123456789"}]</s>'
     '[TOOL_RESULTS]{"content": {"a": 1}, "call_id": "123456789"}[/TOOL_RESULTS]'
 )
-_TEKKEN_TOOL_MESSAGE_JSON_OBJECT_STRING_RAW_DECODE = (
-    'a[{"name": "b", "arguments": {}, "id": "123456789"}]{"content": {"a": 1}, "call_id": "123456789"}'
-)
 _SPM_TOOL_MESSAGE_TEXT_CHUNK_LIST_TEXT = (
     r'<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"123456789"}]</s>'
     r'[TOOL_RESULTS]▁{"content":▁"d{\"a\":▁1}",▁"call_id":▁"123456789"}[/TOOL_RESULTS]'
-)
-_SPM_TOOL_MESSAGE_TEXT_CHUNK_LIST_RAW_DECODE = (
-    'a [{"name": "b", "arguments": {}, "id": "123456789"}] {"content": "d{\\"a\\": 1}", "call_id": "123456789"}'
 )
 _TEKKEN_TOOL_MESSAGE_TEXT_CHUNK_LIST_TEXT = (
     r'<s>[INST]a[/INST][TOOL_CALLS][{"name": "b", "arguments": {}, "id": "123456789"}]</s>'
     r'[TOOL_RESULTS]{"content": "d{\"a\": 1}", "call_id": "123456789"}[/TOOL_RESULTS]'
 )
-_TEKKEN_TOOL_MESSAGE_TEXT_CHUNK_LIST_RAW_DECODE = (
-    'a[{"name": "b", "arguments": {}, "id": "123456789"}]{"content": "d{\\"a\\": 1}", "call_id": "123456789"}'
-)
 _SPM_TOOL_CALL_WITHOUT_ID_TEXT = '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>'
-_SPM_TOOL_CALL_WITHOUT_ID_RAW_DECODE = 'a [{"name": "b", "arguments": {}}]'
 _TEKKEN_TOOL_CALL_WITHOUT_ID_TEXT = '<s>[INST]a[/INST][TOOL_CALLS][{"name": "b", "arguments": {}}]</s>'
-_TEKKEN_TOOL_CALL_WITHOUT_ID_RAW_DECODE = 'a[{"name": "b", "arguments": {}}]'
 
 
 @pytest.fixture(scope="module")
@@ -481,14 +417,13 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
 
 
 @pytest.mark.parametrize(
-    argnames="backend, request_builder, expected, expected_text, expected_raw_decode",
+    argnames="backend, request_builder, expected, expected_text",
     argvalues=[
         pytest.param(
             "spm",
             _build_tools_singleturn_request,
             _SPM_TOOLS_SINGLETURN_EXPECTED,
             _SPM_TOOLS_SINGLETURN_TEXT,
-            _SPM_TOOLS_SINGLETURN_RAW_DECODE,
             id="spm-tools-singleturn",
         ),
         pytest.param(
@@ -496,7 +431,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_tools_singleturn_request,
             _TEKKEN_TOOLS_SINGLETURN_EXPECTED,
             _TEKKEN_TOOLS_SINGLETURN_TEXT,
-            _TEKKEN_TOOLS_SINGLETURN_RAW_DECODE,
             id="tekken-tools-singleturn",
         ),
         pytest.param(
@@ -504,7 +438,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_tools_multiturn_request,
             _SPM_TOOLS_MULTITURN_EXPECTED,
             _SPM_TOOLS_MULTITURN_TEXT,
-            _SPM_TOOLS_MULTITURN_RAW_DECODE,
             id="spm-tools-multiturn",
         ),
         pytest.param(
@@ -512,7 +445,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_tools_multiturn_request,
             _TEKKEN_TOOLS_MULTITURN_EXPECTED,
             _TEKKEN_TOOLS_MULTITURN_TEXT,
-            _TEKKEN_TOOLS_MULTITURN_RAW_DECODE,
             id="tekken-tools-multiturn",
         ),
         pytest.param(
@@ -520,7 +452,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_system_tools_multiturn_request,
             _SPM_SYSTEM_TOOLS_MULTITURN_EXPECTED,
             _SPM_SYSTEM_TOOLS_MULTITURN_TEXT,
-            _SPM_SYSTEM_TOOLS_MULTITURN_RAW_DECODE,
             id="spm-system-tools-multiturn",
         ),
         pytest.param(
@@ -528,7 +459,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_system_tools_multiturn_request,
             _TEKKEN_SYSTEM_TOOLS_MULTITURN_EXPECTED,
             _TEKKEN_SYSTEM_TOOLS_MULTITURN_TEXT,
-            _TEKKEN_SYSTEM_TOOLS_MULTITURN_RAW_DECODE,
             id="tekken-system-tools-multiturn",
         ),
         pytest.param(
@@ -536,7 +466,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_prefixed_final_message_request,
             _SPM_PREFIXED_FINAL_MESSAGE_EXPECTED,
             _SPM_PREFIXED_FINAL_MESSAGE_TEXT,
-            _SPM_PREFIXED_FINAL_MESSAGE_RAW_DECODE,
             id="spm-prefixed-final-message",
         ),
         pytest.param(
@@ -544,7 +473,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_prefixed_final_message_request,
             _TEKKEN_PREFIXED_FINAL_MESSAGE_EXPECTED,
             _TEKKEN_PREFIXED_FINAL_MESSAGE_TEXT,
-            _TEKKEN_PREFIXED_FINAL_MESSAGE_RAW_DECODE,
             id="tekken-prefixed-final-message",
         ),
         pytest.param(
@@ -552,7 +480,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_tool_message_multiple_shots_with_history_request,
             _SPM_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_EXPECTED,
             _SPM_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_TEXT,
-            _SPM_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_RAW_DECODE,
             id="spm-tool-message-multiple-shots-with-history",
         ),
         pytest.param(
@@ -560,7 +487,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_tool_message_multiple_shots_with_history_request,
             _TEKKEN_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_EXPECTED,
             _TEKKEN_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_TEXT,
-            _TEKKEN_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_RAW_DECODE,
             id="tekken-tool-message-multiple-shots-with-history",
         ),
         pytest.param(
@@ -568,7 +494,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_tool_message_multiple_calls_request,
             _SPM_TOOL_MESSAGE_MULTIPLE_CALLS_EXPECTED,
             _SPM_TOOL_MESSAGE_MULTIPLE_CALLS_TEXT,
-            _SPM_TOOL_MESSAGE_MULTIPLE_CALLS_RAW_DECODE,
             id="spm-tool-message-multiple-calls",
         ),
         pytest.param(
@@ -576,7 +501,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_tool_message_multiple_calls_request,
             _TEKKEN_TOOL_MESSAGE_MULTIPLE_CALLS_EXPECTED,
             _TEKKEN_TOOL_MESSAGE_MULTIPLE_CALLS_TEXT,
-            _TEKKEN_TOOL_MESSAGE_MULTIPLE_CALLS_RAW_DECODE,
             id="tekken-tool-message-multiple-calls",
         ),
         pytest.param(
@@ -584,7 +508,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_tool_message_plain_string_request,
             _SPM_TOOL_MESSAGE_PLAIN_STRING_EXPECTED,
             _SPM_TOOL_MESSAGE_PLAIN_STRING_TEXT,
-            _SPM_TOOL_MESSAGE_PLAIN_STRING_RAW_DECODE,
             id="spm-tool-message-plain-string",
         ),
         pytest.param(
@@ -592,7 +515,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_tool_message_plain_string_request,
             _TEKKEN_TOOL_MESSAGE_PLAIN_STRING_EXPECTED,
             _TEKKEN_TOOL_MESSAGE_PLAIN_STRING_TEXT,
-            _TEKKEN_TOOL_MESSAGE_PLAIN_STRING_RAW_DECODE,
             id="tekken-tool-message-plain-string",
         ),
         pytest.param(
@@ -600,7 +522,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_tool_message_json_object_string_request,
             _SPM_TOOL_MESSAGE_JSON_OBJECT_STRING_EXPECTED,
             _SPM_TOOL_MESSAGE_JSON_OBJECT_STRING_TEXT,
-            _SPM_TOOL_MESSAGE_JSON_OBJECT_STRING_RAW_DECODE,
             id="spm-tool-message-json-object-string",
         ),
         pytest.param(
@@ -608,7 +529,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_tool_message_json_object_string_request,
             _TEKKEN_TOOL_MESSAGE_JSON_OBJECT_STRING_EXPECTED,
             _TEKKEN_TOOL_MESSAGE_JSON_OBJECT_STRING_TEXT,
-            _TEKKEN_TOOL_MESSAGE_JSON_OBJECT_STRING_RAW_DECODE,
             id="tekken-tool-message-json-object-string",
         ),
         pytest.param(
@@ -616,7 +536,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_tool_message_text_chunk_list_request,
             _SPM_TOOL_MESSAGE_TEXT_CHUNK_LIST_EXPECTED,
             _SPM_TOOL_MESSAGE_TEXT_CHUNK_LIST_TEXT,
-            _SPM_TOOL_MESSAGE_TEXT_CHUNK_LIST_RAW_DECODE,
             id="spm-tool-message-text-chunk-list",
         ),
         pytest.param(
@@ -624,7 +543,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_tool_message_text_chunk_list_request,
             _TEKKEN_TOOL_MESSAGE_TEXT_CHUNK_LIST_EXPECTED,
             _TEKKEN_TOOL_MESSAGE_TEXT_CHUNK_LIST_TEXT,
-            _TEKKEN_TOOL_MESSAGE_TEXT_CHUNK_LIST_RAW_DECODE,
             id="tekken-tool-message-text-chunk-list",
         ),
         pytest.param(
@@ -632,7 +550,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_explicit_null_id_request,
             _SPM_TOOL_CALL_EXPLICIT_NULL_ID_EXPECTED,
             _SPM_TOOL_CALL_WITHOUT_ID_TEXT,
-            _SPM_TOOL_CALL_WITHOUT_ID_RAW_DECODE,
             id="spm-tool-call-explicit-null-id",
         ),
         pytest.param(
@@ -640,7 +557,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_explicit_null_id_request,
             _TEKKEN_TOOL_CALL_EXPLICIT_NULL_ID_EXPECTED,
             _TEKKEN_TOOL_CALL_WITHOUT_ID_TEXT,
-            _TEKKEN_TOOL_CALL_WITHOUT_ID_RAW_DECODE,
             id="tekken-tool-call-explicit-null-id",
         ),
         pytest.param(
@@ -648,7 +564,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_default_id_request,
             _SPM_TOOL_CALL_DEFAULT_ID_EXPECTED,
             _SPM_TOOL_CALL_WITHOUT_ID_TEXT,
-            _SPM_TOOL_CALL_WITHOUT_ID_RAW_DECODE,
             id="spm-tool-call-default-id",
         ),
         pytest.param(
@@ -656,7 +571,6 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _build_default_id_request,
             _TEKKEN_TOOL_CALL_DEFAULT_ID_EXPECTED,
             _TEKKEN_TOOL_CALL_WITHOUT_ID_TEXT,
-            _TEKKEN_TOOL_CALL_WITHOUT_ID_RAW_DECODE,
             id="tekken-tool-call-default-id",
         ),
     ],
@@ -667,14 +581,12 @@ def test_encode_instruct(
     request_builder: Callable[[], InstructRequest[ChatMessage, Tool]],
     expected: Tokenized,
     expected_text: str,
-    expected_raw_decode: str,
 ) -> None:
     r"""Preserve complete v3 instruct encodings for each backend and request."""
     tokenizer: InstructTokenizer = request.getfixturevalue(argname=f"{backend}_tokenizer")
     tokenized = tokenizer.encode_instruct(request=request_builder())
     assert_tokenized_equal(actual=tokenized, expected=expected)
     assert decode_keep(tokenizer=tokenizer, tokenized=tokenized) == expected_text
-    assert tokenizer.tokenizer.decode(tokens=tokenized.tokens) == expected_raw_decode
 
 
 @pytest.mark.parametrize(

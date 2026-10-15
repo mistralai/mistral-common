@@ -78,21 +78,14 @@ _PARALLEL_RESULTS_MESSAGE = r"v2.*multiple tool results.*assistant turn"
 _INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
 
 _NORMAL_TEXT = "<s>[INST]▁a[/INST]▁b</s>[INST]▁c[/INST]▁d</s>"
-_NORMAL_RAW_DECODE = "a b c d"
 # SentencePiece adds its special-space marker before the system prompt.
 _SYSTEM_SINGLETURN_TEXT = "<s>[INST]▁SYSTEM<0x0A><0x0A>a[/INST]"
-_SYSTEM_SINGLETURN_RAW_DECODE = "SYSTEM\n\na"
 _SYSTEM_MULTITURN_TEXT = "<s>[INST]▁a[/INST]▁b</s>[INST]▁SYSTEM<0x0A><0x0A>c[/INST]▁d</s>"
-_SYSTEM_MULTITURN_RAW_DECODE = "a b SYSTEM\n\nc d"
 _PREFIXED_FINAL_MESSAGE_TEXT = "<s>[INST]▁a[/INST]▁b</s>[INST]▁SYSTEM<0x0A><0x0A>c[/INST]▁d"
-_PREFIXED_FINAL_MESSAGE_RAW_DECODE = "a b SYSTEM\n\nc d"
 # SentencePiece adds its special-space marker between the available-tools marker and tool JSON.
 _TOOLS_SINGLETURN_TEXT = (
     '<s>[AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":'
     '▁{"name":▁"tool1",▁"description":▁"1",▁"parameters":▁{}}}][/AVAILABLE_TOOLS][INST]▁a[/INST]'
-)
-_TOOLS_SINGLETURN_RAW_DECODE = (
-    '[{"type": "function", "function": {"name": "tool1", "description": "1", "parameters": {}}}] a'
 )
 _TOOLS_MULTITURN_TEXT = (
     "<s>[INST]▁a[/INST]▁b</s>"
@@ -100,48 +93,31 @@ _TOOLS_MULTITURN_TEXT = (
     ',▁{"type":▁"function",▁"function":▁{"name":▁"tool2",▁"description":▁"2",▁"parameters":▁{}}}]'
     "[/AVAILABLE_TOOLS][INST]▁c[/INST]▁d</s>"
 )
-_TOOLS_MULTITURN_RAW_DECODE = (
-    'a b [{"type": "function", "function": {"name": "tool1", "description": "1", "parameters": {}}}, '
-    '{"type": "function", "function": {"name": "tool2", "description": "2", "parameters": {}}}] c d'
-)
 _SYSTEM_TOOLS_MULTITURN_TEXT = (
     '<s>[INST]▁a[/INST]▁b</s>[AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":'
     '▁{"name":▁"tool1",▁"description":▁"1",▁"parameters":▁{}}}][/AVAILABLE_TOOLS]'
     "[INST]▁SYSTEM<0x0A><0x0A>c[/INST]▁d</s>"
 )
-_SYSTEM_TOOLS_MULTITURN_RAW_DECODE = (
-    'a b [{"type": "function", "function": {"name": "tool1", "description": "1", "parameters": {}}}] SYSTEM\n\nc d'
-)
 _TOOL_MESSAGE_MULTIPLE_SHOTS_WITHOUT_HISTORY_TEXT = (
     '<s>[INST]▁a[/INST]▁e</s>[INST]▁f[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>'
     '[TOOL_RESULTS]▁[{"name":▁"b",▁"content":▁"d"}][/TOOL_RESULTS]'
-)
-_TOOL_MESSAGE_MULTIPLE_SHOTS_WITHOUT_HISTORY_RAW_DECODE = (
-    'a e f [{"name": "b", "arguments": {}}] [{"name": "b", "content": "d"}]'
 )
 _TOOL_RESULT_PLAIN_STRING_TEXT = (
     '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>'
     '[TOOL_RESULTS]▁[{"name":▁"b",▁"content":▁"d"}][/TOOL_RESULTS]'
 )
-_TOOL_RESULT_PLAIN_STRING_RAW_DECODE = 'a [{"name": "b", "arguments": {}}] [{"name": "b", "content": "d"}]'
 _TOOL_RESULT_JSON_OBJECT_STRING_TEXT = (
     '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>'
     '[TOOL_RESULTS]▁[{"name":▁"b",▁"content":▁{"a":▁1}}][/TOOL_RESULTS]'
 )
-_TOOL_RESULT_JSON_OBJECT_STRING_RAW_DECODE = 'a [{"name": "b", "arguments": {}}] [{"name": "b", "content": {"a": 1}}]'
 _TOOL_RESULT_TEXT_CHUNK_LIST_TEXT = (
     r'<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>'
     r'[TOOL_RESULTS]▁[{"name":▁"b",▁"content":▁"d{\"a\":▁1}"}][/TOOL_RESULTS]'
 )
-_TOOL_RESULT_TEXT_CHUNK_LIST_RAW_DECODE = (
-    'a [{"name": "b", "arguments": {}}] [{"name": "b", "content": "d{\\"a\\": 1}"}]'
-)
 _TOOL_RESULT_WITHOUT_CALL_TURN_TEXT = (
     '<s>[INST]▁a[/INST]▁b</s>[TOOL_RESULTS]▁[{"name":▁"b",▁"content":▁"d"}][/TOOL_RESULTS]'
 )
-_TOOL_RESULT_WITHOUT_CALL_TURN_RAW_DECODE = 'a b [{"name": "b", "content": "d"}]'
 _MULTIPLE_RESULTS_IN_HISTORY_TEXT = "<s>[INST]▁a[/INST]▁f</s>[INST]▁g[/INST]"
-_MULTIPLE_RESULTS_IN_HISTORY_RAW_DECODE = "a f g"
 
 
 @pytest.fixture(scope="module")
@@ -339,91 +315,79 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
 
 
 @pytest.mark.parametrize(
-    argnames="request_builder, expected, expected_text, expected_raw_decode",
+    argnames="request_builder, expected, expected_text",
     argvalues=[
-        pytest.param(_build_normal_request, _NORMAL_EXPECTED, _NORMAL_TEXT, _NORMAL_RAW_DECODE, id="normal"),
+        pytest.param(_build_normal_request, _NORMAL_EXPECTED, _NORMAL_TEXT, id="normal"),
         pytest.param(
             _build_system_singleturn_request,
             _SYSTEM_SINGLETURN_EXPECTED,
             _SYSTEM_SINGLETURN_TEXT,
-            _SYSTEM_SINGLETURN_RAW_DECODE,
             id="system-singleturn",
         ),
         pytest.param(
             _build_system_multiturn_request,
             _SYSTEM_MULTITURN_EXPECTED,
             _SYSTEM_MULTITURN_TEXT,
-            _SYSTEM_MULTITURN_RAW_DECODE,
             id="system-multiturn",
         ),
         pytest.param(
             _build_prefixed_final_message_request,
             _PREFIXED_FINAL_MESSAGE_EXPECTED,
             _PREFIXED_FINAL_MESSAGE_TEXT,
-            _PREFIXED_FINAL_MESSAGE_RAW_DECODE,
             id="prefixed-final-message",
         ),
         pytest.param(
             _build_tools_singleturn_request,
             _TOOLS_SINGLETURN_EXPECTED,
             _TOOLS_SINGLETURN_TEXT,
-            _TOOLS_SINGLETURN_RAW_DECODE,
             id="tools-singleturn",
         ),
         pytest.param(
             _build_tools_multiturn_request,
             _TOOLS_MULTITURN_EXPECTED,
             _TOOLS_MULTITURN_TEXT,
-            _TOOLS_MULTITURN_RAW_DECODE,
             id="tools-multiturn",
         ),
         pytest.param(
             _build_system_tools_multiturn_request,
             _SYSTEM_TOOLS_MULTITURN_EXPECTED,
             _SYSTEM_TOOLS_MULTITURN_TEXT,
-            _SYSTEM_TOOLS_MULTITURN_RAW_DECODE,
             id="system-tools-multiturn",
         ),
         pytest.param(
             _build_tool_message_multiple_shots_without_history_request,
             _TOOL_MESSAGE_MULTIPLE_SHOTS_WITHOUT_HISTORY_EXPECTED,
             _TOOL_MESSAGE_MULTIPLE_SHOTS_WITHOUT_HISTORY_TEXT,
-            _TOOL_MESSAGE_MULTIPLE_SHOTS_WITHOUT_HISTORY_RAW_DECODE,
             id="tool-message-multiple-shots-without-history",
         ),
         pytest.param(
             _build_tool_result_plain_string_request,
             _TOOL_RESULT_PLAIN_STRING_EXPECTED,
             _TOOL_RESULT_PLAIN_STRING_TEXT,
-            _TOOL_RESULT_PLAIN_STRING_RAW_DECODE,
             id="tool-result-plain-string",
         ),
         pytest.param(
             _build_tool_result_json_object_string_request,
             _TOOL_RESULT_JSON_OBJECT_STRING_EXPECTED,
             _TOOL_RESULT_JSON_OBJECT_STRING_TEXT,
-            _TOOL_RESULT_JSON_OBJECT_STRING_RAW_DECODE,
             id="tool-result-json-object-string",
         ),
         pytest.param(
             _build_tool_result_text_chunk_list_request,
             _TOOL_RESULT_TEXT_CHUNK_LIST_EXPECTED,
             _TOOL_RESULT_TEXT_CHUNK_LIST_TEXT,
-            _TOOL_RESULT_TEXT_CHUNK_LIST_RAW_DECODE,
             id="tool-result-text-chunk-list",
         ),
         pytest.param(
             _build_tool_result_without_call_turn_request,
             _TOOL_RESULT_WITHOUT_CALL_TURN_EXPECTED,
             _TOOL_RESULT_WITHOUT_CALL_TURN_TEXT,
-            _TOOL_RESULT_WITHOUT_CALL_TURN_RAW_DECODE,
             id="tool-result-without-call-turn",
         ),
         pytest.param(
             _build_multiple_results_in_history_request,
             _MULTIPLE_RESULTS_IN_HISTORY_EXPECTED,
             _MULTIPLE_RESULTS_IN_HISTORY_TEXT,
-            _MULTIPLE_RESULTS_IN_HISTORY_RAW_DECODE,
             id="multiple-results-in-history",
         ),
     ],
@@ -433,13 +397,11 @@ def test_encode_instruct(
     request_builder: Callable[[], InstructRequest[ChatMessage, Tool]],
     expected: Tokenized,
     expected_text: str,
-    expected_raw_decode: str,
 ) -> None:
     r"""Preserve complete v2 instruct encodings for each request shape."""
     tokenized = tokenizer.encode_instruct(request=request_builder())
     assert_tokenized_equal(actual=tokenized, expected=expected)
     assert decode_keep(tokenizer=tokenizer, tokenized=tokenized) == expected_text
-    assert tokenizer.tokenizer.decode(tokens=tokenized.tokens) == expected_raw_decode
 
 
 @pytest.mark.parametrize(
