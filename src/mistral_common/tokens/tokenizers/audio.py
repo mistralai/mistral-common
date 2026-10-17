@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import unquote
 
 import numpy as np
 import requests as _requests_lib
@@ -153,8 +154,8 @@ class Audio:
         r"""Create an Audio instance from an audio file.
 
         Args:
-            file: Path to the audio file. A file:// URI prefix is accepted
-                and stripped.
+            file: Path to the audio file. A file:// URI prefix is accepted and
+                stripped, and percent-encoded path components are decoded.
             strict: If `True`, strictly enforce mono audio; multi-channel audio
                 raises an error. If `False`, extra channels are dropped.
 
@@ -167,7 +168,7 @@ class Audio:
         assert_soundfile_installed()
 
         if isinstance(file, str) and file.startswith("file://"):
-            file = file[7:]
+            file = unquote(string=file[7:])
 
         if not Path(file).exists():
             raise FileNotFoundError(f"{file=} does not exist")
