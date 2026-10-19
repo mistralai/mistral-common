@@ -8,7 +8,7 @@ never a skipped test case.
 
 Usage:
 
-    uv run python scripts/provision_test_tokenizers.py
+    uv run python tests/integration/provision_tokenizers.py
 
 Tests load the provisioned files from local paths without network access.
 """
@@ -19,7 +19,7 @@ from pathlib import Path
 
 import requests
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 _CACHE_DIRECTORY = _REPO_ROOT / ".cache" / "test-tokenizers"
 _HUB_RESOLVE_URL = "https://huggingface.co/{repo}/resolve/{revision}/{filename}"
 

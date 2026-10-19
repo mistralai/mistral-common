@@ -156,7 +156,7 @@ jobs:
 
       - name: Provision Test Tokenizers
         run: |
-          uv run python scripts/provision_test_tokenizers.py
+          uv run python tests/integration/provision_tokenizers.py
 
       - name: Integration Tests
         run: |

@@ -2,7 +2,7 @@ r"""Tokenizer configurations for public chat workflow cases.
 
 Each configuration names one artifact with a verified identity: bundled
 files are checked against their recorded SHA-256, and pinned released files
-are provisioned by ``scripts/provision_test_tokenizers.py`` and re-verified
+are provisioned by ``tests/integration/provision_tokenizers.py`` and re-verified
 on load. Loading always goes through the public ``MistralTokenizer.from_file``
 entry point so cases exercise the same path production users take.
 """
@@ -82,7 +82,7 @@ class TokenizerConfiguration:
         if self.provenance is Provenance.PINNED_RELEASED and not self.tokenizer_path.is_file():
             raise FileNotFoundError(
                 f"Pinned tokenizer configuration {self.configuration_id} is missing at {self.tokenizer_path}; "
-                "run `uv run python scripts/provision_test_tokenizers.py` first"
+                "run `uv run python tests/integration/provision_tokenizers.py` first"
             )
         data = self.tokenizer_path.read_bytes()
         actual_sha256 = hashlib.sha256(data).hexdigest()
@@ -220,7 +220,7 @@ BUNDLED_TEKKEN_V3_MM_PATCH2_TEST = TokenizerConfiguration(
     post_load=_set_test_image_patch_size_2,
 )
 
-# Pinned released profiles provisioned by scripts/provision_test_tokenizers.py.
+# Pinned released profiles provisioned by tests/integration/provision_tokenizers.py.
 PINNED_V7_IMAGE_TEST = _pinned(
     profile_id="v7-image",
     sha256=_PINNED_V7_IMAGE_SHA256,

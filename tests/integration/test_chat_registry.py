@@ -276,7 +276,7 @@ def test_missing_pinned_tokenizer_names_provisioning_script(tmp_path: Path) -> N
         tokenizer_path=tmp_path / "v7-image.tekken.json",
     )
 
-    with pytest.raises(expected_exception=FileNotFoundError, match=r"scripts/provision_test_tokenizers\.py"):
+    with pytest.raises(expected_exception=FileNotFoundError, match=r"tests/integration/provision_tokenizers\.py"):
         configuration.load()
 
 
