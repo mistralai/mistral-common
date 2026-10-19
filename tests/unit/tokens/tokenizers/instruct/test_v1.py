@@ -5,7 +5,13 @@ from collections.abc import Callable
 import pytest
 
 from mistral_common.exceptions import TokenizerException
-from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, ToolMessage, UserMessage
+from mistral_common.protocol.instruct.messages import (
+    AssistantMessage,
+    ChatMessage,
+    SystemMessage,
+    ToolMessage,
+    UserMessage,
+)
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import FunctionCall, Tool, ToolCall
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized
@@ -39,6 +45,7 @@ _SYSTEM_MULTITURN_TEXT = "<s>▁[INST]▁SYSTEM<0x0A><0x0A>a▁[/INST]▁b</s>�
 _PREFIXED_FINAL_MESSAGE_TEXT = "<s>▁[INST]▁SYSTEM<0x0A><0x0A>a▁[/INST]▁b</s>▁[INST]▁c▁[/INST]▁d"
 
 _TOOLS_NOT_IMPLEMENTED_MESSAGE = r"^Tools not implemented for tokenizer V1$"
+_SYSTEM_MESSAGE_NOT_IMPLEMENTED_MESSAGE = r"^System message encoding not implemented for InstructTokenizerV1$"
 
 
 @pytest.fixture(scope="module")
@@ -112,6 +119,11 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
     return InstructRequest[ChatMessage, Tool](messages=[UserMessage(content="a"), AssistantMessage(content="")])
 
 
+def _build_system_message_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v1 request containing a system message."""
+    return InstructRequest[ChatMessage, Tool](messages=[SystemMessage(content="s"), UserMessage(content="a")])
+
+
 @pytest.mark.parametrize(
     argnames="request_builder, expected, expected_text",
     argvalues=[
@@ -164,6 +176,12 @@ def test_encode_instruct(
             id="assistant-tool-calls",
         ),
         pytest.param(_build_empty_assistant_request, TokenizerException, None, id="empty-assistant"),
+        pytest.param(
+            _build_system_message_request,
+            NotImplementedError,
+            _SYSTEM_MESSAGE_NOT_IMPLEMENTED_MESSAGE,
+            id="system-message",
+        ),
     ],
 )
 def test_encode_instruct_rejected(

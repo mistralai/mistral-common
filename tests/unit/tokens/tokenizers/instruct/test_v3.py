@@ -2,14 +2,23 @@ r"""Direct formatting tests for both bundled v3 instruct backends."""
 
 from collections.abc import Callable
 
+import numpy as np
 import pytest
+from PIL import Image
 
 from mistral_common.exceptions import TokenizerException
-from mistral_common.protocol.instruct.chunk import ContentChunk, TextChunk
-from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, ToolMessage, UserMessage
+from mistral_common.protocol.instruct.chunk import ContentChunk, ImageChunk, TextChunk
+from mistral_common.protocol.instruct.messages import (
+    AssistantMessage,
+    ChatMessage,
+    SystemMessage,
+    ToolMessage,
+    UserMessage,
+)
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized
+from mistral_common.tokens.tokenizers.image import DATASET_MEAN, DATASET_STD
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.utils import assert_tokenized_equal, decode_keep
 
@@ -121,7 +130,38 @@ _SPM_TOOL_CALL_WITHOUT_ID_TOKENS = [
 _TEKKEN_TOOL_CALL_WITHOUT_ID_TOKENS = [
     1, 3, 1097, 4, 9, 1091, 19227, 2391, 2811, 1429, 1098, 1897, 1429, 61906, 2811, 1445, 2821, 1093, 2
 ]
+_SPM_NON_ASCII_TOOLS_CALLS_AND_RESULTS_TOKENS = [
+    1, 6, 1501, 7567, 1891, 2032, 1113, 3396, 1316, 1113, 3396, 2032, 10598, 1629, 2032, 1113, 29490, 1316,
+    1113, 7286, 2032, 1113, 29485, 2783, 29565, 1316, 1113, 12206, 2032, 1139, 1743, 10925, 7, 3, 1032, 4, 5,
+    1501, 7567, 1629, 2032, 1113, 29490, 1316, 1113, 17452, 2032, 10598, 29512, 2032, 1113, 29565, 8474, 1113,
+    1081, 2032, 1113, 29508, 29518, 29538, 29549, 29550, 29552, 29555, 29551, 29542, 29507, 10925, 2, 8,
+    10598, 4557, 2032, 1113, 29565, 1316, 1113, 3613, 29498, 1081, 2032, 1113, 29508, 29518, 29538, 29549,
+    29550, 29552, 29555, 29551, 29542, 18163, 9
+]
+_TEKKEN_NON_ASCII_TOOLS_CALLS_AND_RESULTS_TOKENS = [
+    1, 5, 1091, 19227, 4994, 2811, 1429, 5165, 1897, 1429, 5165, 2811, 16753, 2391, 2811, 1429, 1102, 1897, 1429,
+    14653, 2811, 1429, 3173, 1102, 1337, 1897, 1429, 26204, 2811, 1445, 2821, 27028, 6, 3, 1097, 4, 9, 1091, 19227,
+    2391, 2811, 1429, 1102, 1897, 1429, 61906, 2811, 16753, 1120, 2811, 1429, 1337, 50666, 1429, 1327, 2811, 1429,
+    1049, 1050, 1051, 1052, 1053, 1054, 1055, 1056, 1057, 1034, 27028, 2, 7, 19227, 5431, 2811, 1429, 1337, 1897,
+    1429, 19881, 3384, 2811, 1429, 1049, 1050, 1051, 1052, 1053, 1054, 1055, 1056, 1057, 46005, 8
+]
+_TEKKEN_USER_TEXT_CHUNKS_TOKENS = [1, 3, 1097, 1098, 4]
+_TEKKEN_USER_TEXT_CHUNKS_SYSTEM_PROMPT_TOKENS = [1, 3, 1115, 1267, 1097, 1098, 4]
+_TEKKEN_SYSTEM_PROMPT_LAST_USER_ONLY_TOKENS = [1, 3, 1097, 4, 1098, 2, 3, 1115, 1267, 1099, 4]
+_TEKKEN_MM_TEXT_THEN_IMAGE_TOKENS = [1, 3, 10, 13, 1097, 4]
+_TEKKEN_MM_TEXT_THEN_IMAGE_SYSTEM_PROMPT_TOKENS = [1, 3, 1115, 1267, 10, 13, 1097, 4]
 # fmt: on
+
+_RED_16X16_IMAGE = np.broadcast_to(
+    array=(
+        (
+            np.array(object=(255, 0, 0), dtype=np.float32) / np.float32(255.0)
+            - np.array(object=DATASET_MEAN, dtype=np.float32)
+        )
+        / np.array(object=DATASET_STD, dtype=np.float32)
+    )[:, None, None],
+    shape=(3, 16, 16),
+)
 
 _SPM_TOOLS_SINGLETURN_EXPECTED = Tokenized(tokens=_SPM_TOOLS_SINGLETURN_TOKENS)
 _TEKKEN_TOOLS_SINGLETURN_EXPECTED = Tokenized(tokens=_TEKKEN_TOOLS_SINGLETURN_TOKENS)
@@ -147,6 +187,19 @@ _SPM_TOOL_MESSAGE_TEXT_CHUNK_LIST_EXPECTED = Tokenized(tokens=_SPM_TOOL_MESSAGE_
 _TEKKEN_TOOL_MESSAGE_TEXT_CHUNK_LIST_EXPECTED = Tokenized(tokens=_TEKKEN_TOOL_MESSAGE_TEXT_CHUNK_LIST_TOKENS)
 _SPM_TOOL_CALL_WITHOUT_ID_EXPECTED = Tokenized(tokens=_SPM_TOOL_CALL_WITHOUT_ID_TOKENS)
 _TEKKEN_TOOL_CALL_WITHOUT_ID_EXPECTED = Tokenized(tokens=_TEKKEN_TOOL_CALL_WITHOUT_ID_TOKENS)
+_SPM_NON_ASCII_TOOLS_CALLS_AND_RESULTS_EXPECTED = Tokenized(tokens=_SPM_NON_ASCII_TOOLS_CALLS_AND_RESULTS_TOKENS)
+_TEKKEN_NON_ASCII_TOOLS_CALLS_AND_RESULTS_EXPECTED = Tokenized(tokens=_TEKKEN_NON_ASCII_TOOLS_CALLS_AND_RESULTS_TOKENS)
+_TEKKEN_USER_TEXT_CHUNKS_EXPECTED = Tokenized(tokens=_TEKKEN_USER_TEXT_CHUNKS_TOKENS)
+_TEKKEN_USER_TEXT_CHUNKS_SYSTEM_PROMPT_EXPECTED = Tokenized(tokens=_TEKKEN_USER_TEXT_CHUNKS_SYSTEM_PROMPT_TOKENS)
+_TEKKEN_SYSTEM_PROMPT_LAST_USER_ONLY_EXPECTED = Tokenized(tokens=_TEKKEN_SYSTEM_PROMPT_LAST_USER_ONLY_TOKENS)
+_TEKKEN_MM_TEXT_THEN_IMAGE_EXPECTED = Tokenized(
+    tokens=_TEKKEN_MM_TEXT_THEN_IMAGE_TOKENS,
+    images=[_RED_16X16_IMAGE],
+)
+_TEKKEN_MM_TEXT_THEN_IMAGE_SYSTEM_PROMPT_EXPECTED = Tokenized(
+    tokens=_TEKKEN_MM_TEXT_THEN_IMAGE_SYSTEM_PROMPT_TOKENS,
+    images=[_RED_16X16_IMAGE],
+)
 
 _SPM_TOOLS_SINGLETURN_TEXT = (
     '<s>[AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":'
@@ -238,9 +291,25 @@ _TEKKEN_TOOL_MESSAGE_TEXT_CHUNK_LIST_TEXT = (
 )
 _SPM_TOOL_CALL_WITHOUT_ID_TEXT = '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>'
 _TEKKEN_TOOL_CALL_WITHOUT_ID_TEXT = '<s>[INST]a[/INST][TOOL_CALLS][{"name": "b", "arguments": {}}]</s>'
+_SPM_NON_ASCII_TOOLS_CALLS_AND_RESULTS_TEXT = (
+    '<s>[AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"f",▁"description":▁"café",▁"parameters":▁{}}}'
+    '][/AVAILABLE_TOOLS][INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"f",▁"arguments":▁{"x":▁"é"},▁"id":▁"123456789"}]</s>'
+    '[TOOL_RESULTS]▁{"content":▁"é",▁"call_id":▁"123456789"}[/TOOL_RESULTS]'
+)
+_TEKKEN_NON_ASCII_TOOLS_CALLS_AND_RESULTS_TEXT = (
+    '<s>[AVAILABLE_TOOLS][{"type": "function", "function": {"name": "f", "description": "café", '
+    '"parameters": {}}}][/AVAILABLE_TOOLS][INST]a[/INST][TOOL_CALLS][{"name": "f", "arguments": '
+    '{"x": "é"}, "id": "123456789"}]</s>[TOOL_RESULTS]{"content": "é", "call_id": "123456789"}[/TOOL_RESULTS]'
+)
+_TEKKEN_USER_TEXT_CHUNKS_TEXT = "<s>[INST]ab[/INST]"
+_TEKKEN_USER_TEXT_CHUNKS_SYSTEM_PROMPT_TEXT = "<s>[INST]s\n\nab[/INST]"
+_TEKKEN_SYSTEM_PROMPT_LAST_USER_ONLY_TEXT = "<s>[INST]a[/INST]b</s>[INST]s\n\nc[/INST]"
+_TEKKEN_MM_TEXT_THEN_IMAGE_TEXT = "<s>[INST][IMG][IMG_END]a[/INST]"
+_TEKKEN_MM_TEXT_THEN_IMAGE_SYSTEM_PROMPT_TEXT = "<s>[INST]s\n\n[IMG][IMG_END]a[/INST]"
 
 _TOOL_CALL_AND_CONTENT_MESSAGE = r"^Cannot have tool calls and content defined in the same assistant message"
 _INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
+_SYSTEM_MESSAGE_NOT_IMPLEMENTED_MESSAGE = r"^System message encoding not implemented for InstructTokenizerV3$"
 
 
 @pytest.fixture(scope="module")
@@ -253,6 +322,12 @@ def spm_tokenizer() -> InstructTokenizer:
 def tekken_tokenizer() -> InstructTokenizer:
     r"""Provide the bundled v3 Tekken instruct tokenizer."""
     return MistralTokenizer.v3(is_tekken=True).instruct_tokenizer
+
+
+@pytest.fixture(scope="module")
+def tekken_mm_tokenizer() -> InstructTokenizer:
+    r"""Provide the bundled v3 Tekken tokenizer with image encoding."""
+    return MistralTokenizer.v3(is_tekken=True, is_mm=True).instruct_tokenizer
 
 
 def _build_tools_singleturn_request() -> InstructRequest[ChatMessage, Tool]:
@@ -393,6 +468,76 @@ def _build_tool_call_without_id_request(tool_call: ToolCall) -> InstructRequest[
     )
 
 
+def _build_non_ascii_tools_calls_and_results_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v3 request with non-ASCII tool metadata, arguments and result."""
+    return InstructRequest[ChatMessage, Tool](
+        available_tools=[Tool(function=Function(name="f", description="café", parameters={}))],
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(
+                tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="f", arguments='{"x": "é"}'))]
+            ),
+            ToolMessage(name="f", content="é", tool_call_id="123456789"),
+        ],
+    )
+
+
+def _build_user_text_chunks_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v3 request with two user text chunks."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[UserMessage(content=[TextChunk(text="a"), TextChunk(text="b")])]
+    )
+
+
+def _build_user_text_chunks_system_prompt_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v3 request with two user text chunks and a system prompt."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[UserMessage(content=[TextChunk(text="a"), TextChunk(text="b")])],
+        system_prompt="s",
+    )
+
+
+def _build_system_prompt_last_user_only_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v3 request with list content before a prompted final user."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            UserMessage(content=[TextChunk(text="a")]),
+            AssistantMessage(content="b"),
+            UserMessage(content="c"),
+        ],
+        system_prompt="s",
+    )
+
+
+def _build_text_then_image_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v3 request with text followed by a red image chunk."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            UserMessage(
+                content=[
+                    TextChunk(text="a"),
+                    ImageChunk(image=Image.new(mode="RGB", size=(16, 16), color="red")),
+                ]
+            )
+        ]
+    )
+
+
+def _build_text_then_image_system_prompt_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v3 request with a prompt and text followed by a red image."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            UserMessage(
+                content=[
+                    TextChunk(text="a"),
+                    ImageChunk(image=Image.new(mode="RGB", size=(16, 16), color="red")),
+                ]
+            )
+        ],
+        system_prompt="s",
+    )
+
+
 def _build_tool_call_and_content_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build a v3 request combining assistant content and one tool call."""
     return InstructRequest[ChatMessage, Tool](
@@ -408,6 +553,11 @@ def _build_tool_call_and_content_request() -> InstructRequest[ChatMessage, Tool]
 def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build a v3 request containing an empty assistant message."""
     return InstructRequest[ChatMessage, Tool](messages=[UserMessage(content="a"), AssistantMessage(content="")])
+
+
+def _build_system_message_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v3 request containing a system message."""
+    return InstructRequest[ChatMessage, Tool](messages=[SystemMessage(content="s"), UserMessage(content="a")])
 
 
 @pytest.mark.parametrize(
@@ -567,6 +717,55 @@ def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
             _TEKKEN_TOOL_CALL_WITHOUT_ID_TEXT,
             id="tekken-tool-call-default-id",
         ),
+        pytest.param(
+            "spm",
+            _build_non_ascii_tools_calls_and_results_request,
+            _SPM_NON_ASCII_TOOLS_CALLS_AND_RESULTS_EXPECTED,
+            _SPM_NON_ASCII_TOOLS_CALLS_AND_RESULTS_TEXT,
+            id="spm-non-ascii-tools-calls-and-results",
+        ),
+        pytest.param(
+            "tekken",
+            _build_non_ascii_tools_calls_and_results_request,
+            _TEKKEN_NON_ASCII_TOOLS_CALLS_AND_RESULTS_EXPECTED,
+            _TEKKEN_NON_ASCII_TOOLS_CALLS_AND_RESULTS_TEXT,
+            id="tekken-non-ascii-tools-calls-and-results",
+        ),
+        pytest.param(
+            "tekken",
+            _build_user_text_chunks_request,
+            _TEKKEN_USER_TEXT_CHUNKS_EXPECTED,
+            _TEKKEN_USER_TEXT_CHUNKS_TEXT,
+            id="tekken-user-text-chunks",
+        ),
+        pytest.param(
+            "tekken",
+            _build_user_text_chunks_system_prompt_request,
+            _TEKKEN_USER_TEXT_CHUNKS_SYSTEM_PROMPT_EXPECTED,
+            _TEKKEN_USER_TEXT_CHUNKS_SYSTEM_PROMPT_TEXT,
+            id="tekken-user-text-chunks-system-prompt",
+        ),
+        pytest.param(
+            "tekken",
+            _build_system_prompt_last_user_only_request,
+            _TEKKEN_SYSTEM_PROMPT_LAST_USER_ONLY_EXPECTED,
+            _TEKKEN_SYSTEM_PROMPT_LAST_USER_ONLY_TEXT,
+            id="tekken-system-prompt-last-user-only",
+        ),
+        pytest.param(
+            "tekken_mm",
+            _build_text_then_image_request,
+            _TEKKEN_MM_TEXT_THEN_IMAGE_EXPECTED,
+            _TEKKEN_MM_TEXT_THEN_IMAGE_TEXT,
+            id="tekken-mm-text-then-image",
+        ),
+        pytest.param(
+            "tekken_mm",
+            _build_text_then_image_system_prompt_request,
+            _TEKKEN_MM_TEXT_THEN_IMAGE_SYSTEM_PROMPT_EXPECTED,
+            _TEKKEN_MM_TEXT_THEN_IMAGE_SYSTEM_PROMPT_TEXT,
+            id="tekken-mm-text-then-image-system-prompt",
+        ),
     ],
 )
 def test_encode_instruct(
@@ -613,6 +812,20 @@ def test_encode_instruct(
             TokenizerException,
             _INVALID_ASSISTANT_MESSAGE,
             id="tekken-empty-assistant",
+        ),
+        pytest.param(
+            "spm",
+            _build_system_message_request,
+            NotImplementedError,
+            _SYSTEM_MESSAGE_NOT_IMPLEMENTED_MESSAGE,
+            id="spm-system-message",
+        ),
+        pytest.param(
+            "tekken",
+            _build_system_message_request,
+            NotImplementedError,
+            _SYSTEM_MESSAGE_NOT_IMPLEMENTED_MESSAGE,
+            id="tekken-system-message",
         ),
     ],
 )

@@ -6,7 +6,13 @@ import pytest
 
 from mistral_common.exceptions import TokenizerException, UnsupportedTokenizerFeatureException
 from mistral_common.protocol.instruct.chunk import ContentChunk, TextChunk
-from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, ToolMessage, UserMessage
+from mistral_common.protocol.instruct.messages import (
+    AssistantMessage,
+    ChatMessage,
+    SystemMessage,
+    ToolMessage,
+    UserMessage,
+)
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized
@@ -55,6 +61,27 @@ _TOOL_RESULT_WITHOUT_CALL_TURN_TOKENS = [
     10925, 9
 ]
 _MULTIPLE_RESULTS_IN_HISTORY_TOKENS = [1, 3, 1032, 4, 1053, 2, 3, 1087, 4]
+_NON_ASCII_TOOLS_CALLS_AND_RESULTS_TOKENS = [
+    1, 6, 1501, 7567, 1891, 2032, 1113, 3396, 1316, 1113, 3396, 2032, 10598, 1629, 2032, 1113, 29490, 1316,
+    1113, 7286, 2032, 1113, 29485, 2783, 29565, 1316, 1113, 12206, 2032, 1139, 1743, 10925, 7, 3, 1032, 4, 5,
+    1501, 7567, 1629, 2032, 1113, 29490, 1316, 1113, 17452, 2032, 10598, 29512, 2032, 1113, 29565, 29507, 1743,
+    29561, 2, 8, 1501, 7567, 1629, 2032, 1113, 29490, 1316, 1113, 4557, 2032, 1113, 29565, 29507, 10925, 9
+]
+_TRAILING_SPACES_STRIPPED_TOKENS = [1, 3, 1032, 4, 1055, 2]
+_RESULTS_RESET_AT_CALL_TURN_TOKENS = [
+    1, 3, 1032, 4, 5, 1501, 7567, 1629, 2032, 1113, 29490, 1316, 1113, 17452, 2032, 1139, 1743, 29561, 2, 8,
+    1501, 7567, 1629, 2032, 1113, 29490, 1316, 1113, 4557, 2032, 1113, 29480, 29507, 10925, 9, 5, 1501, 7567,
+    1629, 2032, 1113, 29490, 1316, 1113, 17452, 2032, 1139, 1743, 29561, 2, 8, 1501, 7567, 1629, 2032, 1113,
+    29490, 1316, 1113, 4557, 2032, 1113, 29543, 29507, 10925, 9
+]
+_RESULTS_RESET_AT_USER_TOKENS = [
+    1, 3, 1032, 4, 3, 1055, 4, 8, 1501, 7567, 1629, 2032, 1113, 29490, 1316, 1113, 4557, 2032, 1113, 29543,
+    29507, 10925, 9, 8, 1501, 7567, 1629, 2032, 1113, 29490, 1316, 1113, 4557, 2032, 1113, 29532, 29507, 10925, 9
+]
+_RESULTS_WITHOUT_USER_TOKENS = [
+    1, 8, 1501, 7567, 1629, 2032, 1113, 29490, 1316, 1113, 4557, 2032, 1113, 29480, 29507, 10925, 9, 8, 1501,
+    7567, 1629, 2032, 1113, 29490, 1316, 1113, 4557, 2032, 1113, 29543, 29507, 10925, 9
+]
 # fmt: on
 
 _NORMAL_EXPECTED = Tokenized(tokens=_NORMAL_TOKENS)
@@ -72,6 +99,11 @@ _TOOL_RESULT_JSON_OBJECT_STRING_EXPECTED = Tokenized(tokens=_TOOL_RESULT_JSON_OB
 _TOOL_RESULT_TEXT_CHUNK_LIST_EXPECTED = Tokenized(tokens=_TOOL_RESULT_TEXT_CHUNK_LIST_TOKENS)
 _TOOL_RESULT_WITHOUT_CALL_TURN_EXPECTED = Tokenized(tokens=_TOOL_RESULT_WITHOUT_CALL_TURN_TOKENS)
 _MULTIPLE_RESULTS_IN_HISTORY_EXPECTED = Tokenized(tokens=_MULTIPLE_RESULTS_IN_HISTORY_TOKENS)
+_NON_ASCII_TOOLS_CALLS_AND_RESULTS_EXPECTED = Tokenized(tokens=_NON_ASCII_TOOLS_CALLS_AND_RESULTS_TOKENS)
+_TRAILING_SPACES_STRIPPED_EXPECTED = Tokenized(tokens=_TRAILING_SPACES_STRIPPED_TOKENS)
+_RESULTS_RESET_AT_CALL_TURN_EXPECTED = Tokenized(tokens=_RESULTS_RESET_AT_CALL_TURN_TOKENS)
+_RESULTS_RESET_AT_USER_EXPECTED = Tokenized(tokens=_RESULTS_RESET_AT_USER_TOKENS)
+_RESULTS_WITHOUT_USER_EXPECTED = Tokenized(tokens=_RESULTS_WITHOUT_USER_TOKENS)
 
 _NORMAL_TEXT = "<s>[INST]▁a[/INST]▁b</s>[INST]▁c[/INST]▁d</s>"
 _SYSTEM_SINGLETURN_TEXT = "<s>[INST]▁SYSTEM<0x0A><0x0A>a[/INST]"
@@ -112,9 +144,31 @@ _TOOL_RESULT_WITHOUT_CALL_TURN_TEXT = (
     '<s>[INST]▁a[/INST]▁b</s>[TOOL_RESULTS]▁[{"name":▁"b",▁"content":▁"d"}][/TOOL_RESULTS]'
 )
 _MULTIPLE_RESULTS_IN_HISTORY_TEXT = "<s>[INST]▁a[/INST]▁f</s>[INST]▁g[/INST]"
+_NON_ASCII_TOOLS_CALLS_AND_RESULTS_TEXT = (
+    '<s>[AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"f",▁"description":▁"café",▁"parameters":▁{}}}'
+    '][/AVAILABLE_TOOLS][INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"f",▁"arguments":▁{"x":▁"é"}}]</s>'
+    '[TOOL_RESULTS]▁[{"name":▁"f",▁"content":▁"é"}][/TOOL_RESULTS]'
+)
+_TRAILING_SPACES_STRIPPED_TEXT = "<s>[INST]▁a[/INST]▁b</s>"
+_RESULTS_RESET_AT_CALL_TURN_TEXT = (
+    '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"f",▁"arguments":▁{}}]</s>'
+    '[TOOL_RESULTS]▁[{"name":▁"f",▁"content":▁"r"}][/TOOL_RESULTS]'
+    '[TOOL_CALLS]▁[{"name":▁"f",▁"arguments":▁{}}]</s>'
+    '[TOOL_RESULTS]▁[{"name":▁"f",▁"content":▁"q"}][/TOOL_RESULTS]'
+)
+_RESULTS_RESET_AT_USER_TEXT = (
+    "<s>[INST]▁a[/INST][INST]▁b[/INST]"
+    '[TOOL_RESULTS]▁[{"name":▁"f",▁"content":▁"q"}][/TOOL_RESULTS]'
+    '[TOOL_RESULTS]▁[{"name":▁"f",▁"content":▁"z"}][/TOOL_RESULTS]'
+)
+_RESULTS_WITHOUT_USER_TEXT = (
+    '<s>[TOOL_RESULTS]▁[{"name":▁"f",▁"content":▁"r"}][/TOOL_RESULTS]'
+    '[TOOL_RESULTS]▁[{"name":▁"f",▁"content":▁"q"}][/TOOL_RESULTS]'
+)
 
 _PARALLEL_RESULTS_MESSAGE = r"v2.*multiple tool results.*assistant turn"
 _INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
+_SYSTEM_MESSAGE_NOT_IMPLEMENTED_MESSAGE = r"^System message encoding not implemented for InstructTokenizerV2$"
 
 
 @pytest.fixture(scope="module")
@@ -275,6 +329,57 @@ def _build_multiple_results_in_history_request() -> InstructRequest[ChatMessage,
     )
 
 
+def _build_non_ascii_tools_calls_and_results_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v2 request with non-ASCII tool metadata, arguments and result."""
+    return InstructRequest[ChatMessage, Tool](
+        available_tools=[Tool(function=Function(name="f", description="café", parameters={}))],
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="f", arguments='{"x": "é"}'))]),
+            ToolMessage(name="f", content="é"),
+        ],
+    )
+
+
+def _build_trailing_spaces_stripped_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v2 request with trailing assistant-content spaces."""
+    return InstructRequest[ChatMessage, Tool](messages=[UserMessage(content="a"), AssistantMessage(content="b  ")])
+
+
+def _build_results_reset_at_call_turn_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v2 request with one result after each of two call turns."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="f", arguments="{}"))]),
+            ToolMessage(name="f", content="r"),
+            AssistantMessage(tool_calls=[ToolCall(id="223456789", function=FunctionCall(name="f", arguments="{}"))]),
+            ToolMessage(name="f", content="q"),
+        ]
+    )
+
+
+def _build_results_reset_at_user_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v2 request with results separated by a new user message."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="f", arguments="{}"))]),
+            ToolMessage(name="f", content="r"),
+            UserMessage(content="b"),
+            ToolMessage(name="f", content="q"),
+            ToolMessage(name="f", content="z"),
+        ]
+    )
+
+
+def _build_results_without_user_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v2 request with two results and no user or assistant message."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[ToolMessage(name="f", content="r"), ToolMessage(name="f", content="q")]
+    )
+
+
 def _build_non_final_prefixed_assistant_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build a v2 request with a non-final prefixed assistant message."""
     return InstructRequest[ChatMessage, Tool](
@@ -309,6 +414,11 @@ def _build_parallel_results_request() -> InstructRequest[ChatMessage, Tool]:
         for index in (1, 2)
     )
     return InstructRequest[ChatMessage, Tool](messages=messages)
+
+
+def _build_system_message_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v2 request containing a system message."""
+    return InstructRequest[ChatMessage, Tool](messages=[SystemMessage(content="s"), UserMessage(content="a")])
 
 
 @pytest.mark.parametrize(
@@ -387,6 +497,36 @@ def _build_parallel_results_request() -> InstructRequest[ChatMessage, Tool]:
             _MULTIPLE_RESULTS_IN_HISTORY_TEXT,
             id="multiple-results-in-history",
         ),
+        pytest.param(
+            _build_non_ascii_tools_calls_and_results_request,
+            _NON_ASCII_TOOLS_CALLS_AND_RESULTS_EXPECTED,
+            _NON_ASCII_TOOLS_CALLS_AND_RESULTS_TEXT,
+            id="non-ascii-tools-calls-and-results",
+        ),
+        pytest.param(
+            _build_trailing_spaces_stripped_request,
+            _TRAILING_SPACES_STRIPPED_EXPECTED,
+            _TRAILING_SPACES_STRIPPED_TEXT,
+            id="trailing-spaces-stripped",
+        ),
+        pytest.param(
+            _build_results_reset_at_call_turn_request,
+            _RESULTS_RESET_AT_CALL_TURN_EXPECTED,
+            _RESULTS_RESET_AT_CALL_TURN_TEXT,
+            id="results-reset-at-call-turn",
+        ),
+        pytest.param(
+            _build_results_reset_at_user_request,
+            _RESULTS_RESET_AT_USER_EXPECTED,
+            _RESULTS_RESET_AT_USER_TEXT,
+            id="results-reset-at-user",
+        ),
+        pytest.param(
+            _build_results_without_user_request,
+            _RESULTS_WITHOUT_USER_EXPECTED,
+            _RESULTS_WITHOUT_USER_TEXT,
+            id="results-without-user",
+        ),
     ],
 )
 def test_encode_instruct(
@@ -412,6 +552,12 @@ def test_encode_instruct(
             TokenizerException,
             _INVALID_ASSISTANT_MESSAGE,
             id="empty-assistant",
+        ),
+        pytest.param(
+            _build_system_message_request,
+            NotImplementedError,
+            _SYSTEM_MESSAGE_NOT_IMPLEMENTED_MESSAGE,
+            id="system-message",
         ),
     ],
 )
