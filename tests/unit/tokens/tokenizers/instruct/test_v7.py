@@ -7,7 +7,7 @@ import pytest
 from PIL import Image
 
 from mistral_common.exceptions import TokenizerException
-from mistral_common.protocol.instruct.chunk import ContentChunk, ImageChunk, TextChunk
+from mistral_common.protocol.instruct.chunk import ContentChunk, ImageChunk, TextChunk, ThinkChunk
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
@@ -113,6 +113,8 @@ _TEXT_THEN_TWO_IMAGES_TOKENS = [1, 3, 2086, 10, 10, 14, 10, 10, 15, 10, 10, 10, 
 _ONE_IMAGE_WITH_TEXT_TOKENS = [1, 3, 10, 10, 14, 10, 10, 15, 2086, 4]
 _SYSTEM_LIST_CONTENT_TOKENS = [1, 16, 1036, 17, 3, 1032, 4]
 _ASSISTANT_LIST_CONTENT_TOKENS = [1, 3, 1032, 4, 1055, 2]
+_SYSTEM_AND_USER_WORDS_TOKENS = [1, 16, 7080, 29477, 2294, 17, 3, 1947, 2138, 4]
+_TRUNCATION_LAST_USER_AT_LIMIT_TOKENS = [1, 3, 197, 197, 197, 197, 197, 197, 197, 4]
 # fmt: on
 
 
@@ -154,6 +156,8 @@ _TEXT_THEN_TWO_IMAGES_EXPECTED = Tokenized(
 _ONE_IMAGE_WITH_TEXT_EXPECTED = Tokenized(tokens=_ONE_IMAGE_WITH_TEXT_TOKENS, images=[_RED_4X4_IMAGE])
 _SYSTEM_LIST_CONTENT_EXPECTED = Tokenized(tokens=_SYSTEM_LIST_CONTENT_TOKENS)
 _ASSISTANT_LIST_CONTENT_EXPECTED = Tokenized(tokens=_ASSISTANT_LIST_CONTENT_TOKENS)
+_SYSTEM_AND_USER_WORDS_EXPECTED = Tokenized(tokens=_SYSTEM_AND_USER_WORDS_TOKENS)
+_TRUNCATION_LAST_USER_AT_LIMIT_EXPECTED = Tokenized(tokens=_TRUNCATION_LAST_USER_AT_LIMIT_TOKENS)
 
 _IMAGE_AND_TOOL_RESULT_TEXT = (
     "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁a[/INST]▁b</s>[TOOL_RESULTS]▁b[TOOL_CONTENT]▁f[/TOOL_RESULTS]"
@@ -218,9 +222,12 @@ _TEXT_THEN_TWO_IMAGES_TEXT = (
 _ONE_IMAGE_WITH_TEXT_TEXT = "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁x[/INST]"
 _SYSTEM_LIST_CONTENT_TEXT = "<s>[SYSTEM_PROMPT]▁s[/SYSTEM_PROMPT][INST]▁a[/INST]"
 _ASSISTANT_LIST_CONTENT_TEXT = "<s>[INST]▁a[/INST]▁b</s>"
+_SYSTEM_AND_USER_WORDS_TEXT = "<s>[SYSTEM_PROMPT]▁hello▁world[/SYSTEM_PROMPT][INST]▁good▁day[/INST]"
+_TRUNCATION_LAST_USER_AT_LIMIT_TEXT = "<s>[INST]aaaaaaa[/INST]"
 
 _INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
 _TRUNCATION_FAILED_MESSAGE = r"^Input couldn't fit in truncate_at_max_token$"
+_THINK_NOT_IMPLEMENTED_MESSAGE = r"^Think not implemented for tokenizer < V13\.$"
 
 
 @pytest.fixture(scope="module")
@@ -537,6 +544,21 @@ def _build_assistant_list_content_request() -> InstructRequest[ChatMessage, Tool
     )
 
 
+def _build_system_and_user_words_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a request with multi-word system and user message content."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[SystemMessage(content="hello world"), UserMessage(content="good day")]
+    )
+
+
+def _build_truncation_last_user_at_limit_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a one-message request whose tokens, BOS excluded, equal the limit."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[UserMessage(content="a" * 7)],
+        truncate_at_max_tokens=9,
+    )
+
+
 def _build_none_content_no_calls_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build a request with a lone prefixed assistant message of `None` content and no calls."""
     return _build_prefixed_assistant_request(content=None, tool_calls=None)
@@ -565,6 +587,24 @@ def _build_truncation_system_prompt_too_long_request() -> InstructRequest[ChatMe
 def _build_truncation_last_user_too_long_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build a 9-token request whose only message is a last user message that does not fit."""
     return InstructRequest[ChatMessage, Tool](messages=[UserMessage(content="a" * 10)], truncate_at_max_tokens=9)
+
+
+def _build_truncation_last_user_one_over_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a one-message request whose tokens, BOS excluded, exceed the limit by one."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[UserMessage(content="a" * 8)],
+        truncate_at_max_tokens=9,
+    )
+
+
+def _build_assistant_think_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a request whose assistant message contains a think chunk."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(content=[ThinkChunk(thinking="t"), TextChunk(text="b")]),
+        ]
+    )
 
 
 @pytest.mark.parametrize(
@@ -787,6 +827,27 @@ def _build_truncation_last_user_too_long_request() -> InstructRequest[ChatMessag
             _ASSISTANT_LIST_CONTENT_TEXT,
             id="spm-assistant-list-content",
         ),
+        pytest.param(
+            "spm",
+            _build_system_and_user_words_request,
+            _SYSTEM_AND_USER_WORDS_EXPECTED,
+            _SYSTEM_AND_USER_WORDS_TEXT,
+            id="spm-system-and-user-words",
+        ),
+        pytest.param(
+            "no_audio",
+            _build_truncation_last_user_at_limit_request,
+            _TRUNCATION_LAST_USER_AT_LIMIT_EXPECTED,
+            _TRUNCATION_LAST_USER_AT_LIMIT_TEXT,
+            id="no-audio-truncation-last-user-at-limit",
+        ),
+        pytest.param(
+            "with_audio",
+            _build_truncation_last_user_at_limit_request,
+            _TRUNCATION_LAST_USER_AT_LIMIT_EXPECTED,
+            _TRUNCATION_LAST_USER_AT_LIMIT_TEXT,
+            id="with-audio-truncation-last-user-at-limit",
+        ),
     ],
 )
 def test_encode_instruct(
@@ -861,6 +922,27 @@ def test_encode_instruct(
             TokenizerException,
             _TRUNCATION_FAILED_MESSAGE,
             id="with-audio-truncation-last-user-too-long",
+        ),
+        pytest.param(
+            "no_audio",
+            _build_truncation_last_user_one_over_request,
+            TokenizerException,
+            _TRUNCATION_FAILED_MESSAGE,
+            id="no-audio-truncation-last-user-one-over",
+        ),
+        pytest.param(
+            "with_audio",
+            _build_truncation_last_user_one_over_request,
+            TokenizerException,
+            _TRUNCATION_FAILED_MESSAGE,
+            id="with-audio-truncation-last-user-one-over",
+        ),
+        pytest.param(
+            "spm",
+            _build_assistant_think_request,
+            TokenizerException,
+            _THINK_NOT_IMPLEMENTED_MESSAGE,
+            id="spm-assistant-think",
         ),
     ],
 )
