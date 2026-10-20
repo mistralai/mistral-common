@@ -81,6 +81,8 @@ class Function(FunctionName):
             filtered["parameters"] = {}
         if filtered.get("description") is None:
             filtered["description"] = ""
+        if filtered.get("strict") is None:
+            filtered.pop("strict", None)
         return cls.model_validate(filtered)
 
 
