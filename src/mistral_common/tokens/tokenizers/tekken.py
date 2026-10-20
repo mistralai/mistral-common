@@ -642,6 +642,10 @@ class Tekkenizer(Tokenizer):
                 or if `special_token_policy` is invalid.
         """
         if token_id < self.num_special_tokens:
+            try:
+                special_token_policy = SpecialTokenPolicy(special_token_policy)
+            except ValueError as e:
+                raise ValueError(f"Unknown special token policy {special_token_policy}") from e
             if special_token_policy == SpecialTokenPolicy.KEEP:
                 return self._all_special_tokens[token_id]["token_str"].encode("utf-8")
             elif special_token_policy == SpecialTokenPolicy.RAISE:

@@ -295,6 +295,12 @@ def test_id_to_byte_piece() -> None:
     assert tekkenizer.id_to_byte_piece(5, special_token_policy=SpecialTokenPolicy.IGNORE) == b""
     assert tekkenizer.id_to_byte_piece(5, special_token_policy=SpecialTokenPolicy.KEEP) == b"[AVAILABLE_TOOLS]"
 
+    # Legacy integer policies (0, 1, 2) map to IGNORE, KEEP, RAISE, as in `decode`.
+    assert tekkenizer.id_to_byte_piece(5, special_token_policy=0) == b""  # type: ignore[arg-type]
+    assert tekkenizer.id_to_byte_piece(5, special_token_policy=1) == b"[AVAILABLE_TOOLS]"  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="5 is a special token"):
+        tekkenizer.id_to_byte_piece(5, special_token_policy=2)  # type: ignore[arg-type]
+
     assert (
         tekkenizer.id_to_byte_piece(
             len(vocab) + len(_get_deprecated_special_tokens()) - 1, special_token_policy=SpecialTokenPolicy.KEEP
