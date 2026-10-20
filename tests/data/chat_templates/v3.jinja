@@ -203,16 +203,30 @@
 
     {#- Tool messages only supports text content. #}
     {%- elif message['role'] == 'tool' %}
+        {%- set tool_text = message['content'] %}
+        {%- if message['content'] is defined and message['content'] is not string and message['content'] is iterable and message['content'] is not mapping %}
+            {%- set ns_tool = namespace(parts=[]) %}
+            {%- for block in message['content'] %}
+                {%- if block['type'] == 'text' %}
+                    {%- if block['text'] %}
+                        {%- set ns_tool.parts = ns_tool.parts + [block['text']] %}
+                    {%- endif %}
+                {%- else %}
+                    {{- raise_exception('Only text chunks are supported in tool message content.') }}
+                {%- endif %}
+            {%- endfor %}
+            {%- set tool_text = ns_tool.parts | join('\n\n') %}
+        {%- endif %}
         {# Try to parse 'content' as int or float if possible #}
-        {%- set tool_content = message['content']|string %}
+        {%- set tool_content = tool_text|string %}
         {# Try to parse as int #}
-        {%- set parsed_int = message['content']|int %}
-        {% if parsed_int|string == message['content'] %}
+        {%- set parsed_int = tool_text|int %}
+        {% if parsed_int|string == tool_text %}
             {%- set tool_content = parsed_int %}
         {# If int fails, try to parse as float #}
         {%- else %}
-            {%- set parsed_float = message['content']|float %}
-            {%- if parsed_float|string == message['content'] %}
+            {%- set parsed_float = tool_text|float %}
+            {%- if parsed_float|string == tool_text %}
                 {%- set tool_content = parsed_float %}
             {%- endif %}
         {%- endif %}

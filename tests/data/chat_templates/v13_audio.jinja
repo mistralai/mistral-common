@@ -171,7 +171,21 @@
 
     {#- Tool messages only supports text content. #}
     {%- elif message['role'] == 'tool' %}
-        {{- '[TOOL_RESULTS]' ~ message['content']|string ~ '[/TOOL_RESULTS]' }}
+        {%- set tool_text = message['content'] %}
+        {%- if message['content'] is defined and message['content'] is not string and message['content'] is iterable and message['content'] is not mapping %}
+            {%- set ns_tool = namespace(parts=[]) %}
+            {%- for block in message['content'] %}
+                {%- if block['type'] == 'text' %}
+                    {%- if block['text'] %}
+                        {%- set ns_tool.parts = ns_tool.parts + [block['text']] %}
+                    {%- endif %}
+                {%- else %}
+                    {{- raise_exception('Only text chunks are supported in tool message content.') }}
+                {%- endif %}
+            {%- endfor %}
+            {%- set tool_text = ns_tool.parts | join('\n\n') %}
+        {%- endif %}
+        {{- '[TOOL_RESULTS]' ~ tool_text|string ~ '[/TOOL_RESULTS]' }}
 
     {#- System messages. #}
     {%- elif message['role'] == 'system' %}

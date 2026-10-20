@@ -206,6 +206,16 @@ class TestV2ToolResultParsing:
                 '"content": 3.14',
                 id="float",
             ),
+            pytest.param(
+                "add",
+                "What is 2+2?",
+                '{"a": 2, "b": 2}',
+                [{"type": "function", "function": {"name": "add", "parameters": {}}}],
+                [{"type": "text", "text": "4"}],
+                "4",
+                '"content": 4',
+                id="integer_text_chunk",
+            ),
         ],
     )
     def test_numeric_tool_result(
@@ -215,7 +225,7 @@ class TestV2ToolResultParsing:
         user_content: str,
         arguments: str,
         tools: list[dict[str, Any]],
-        content: str,
+        content: str | list[dict[str, Any]],
         assistant_content: str,
         expected: str,
     ) -> None:
@@ -351,6 +361,16 @@ class TestV3ToolResultParsing:
                 '"content": 3.14',
                 id="float",
             ),
+            pytest.param(
+                "add",
+                "What is 2+2?",
+                '{"a": 2, "b": 2}',
+                [{"type": "function", "function": {"name": "add", "parameters": {}}}],
+                [{"type": "text", "text": "4"}],
+                "4",
+                '"content": 4',
+                id="integer_text_chunk",
+            ),
         ],
     )
     def test_numeric_tool_result(
@@ -360,7 +380,7 @@ class TestV3ToolResultParsing:
         user_content: str,
         arguments: str,
         tools: list[dict[str, Any]],
-        content: str,
+        content: str | list[dict[str, Any]],
         assistant_content: str,
         expected: str,
     ) -> None:
@@ -728,3 +748,91 @@ class TestV13PlusToolCalls:
         )
         assert "greet" in output
         assert "Done" in output
+
+
+_PRE_V15_TOOL_CONFIGS = [
+    (TokenizerVersion.v2, False),
+    (TokenizerVersion.v2, True),
+    (TokenizerVersion.v3, False),
+    (TokenizerVersion.v3, True),
+    (TokenizerVersion.v7, False),
+    (TokenizerVersion.v7, True),
+    (TokenizerVersion.v11, False),
+    (TokenizerVersion.v13, False),
+]
+
+
+def _render_tool_content(version: TokenizerVersion, spm: bool, content: Any) -> str:
+    template = generate_chat_template(
+        spm=spm,
+        tokenizer_version=version,
+        image_support=False,
+        audio_support=False,
+        thinking_support=False,
+        default_system_prompt=None,
+        plain_thinking_support=False,
+        use_special_token_variables=True,
+    )
+
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "Use tool"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{"id": "test12345", "function": {"name": "fn", "arguments": "{}"}}],
+        },
+        {"role": "tool", "content": content, "tool_call_id": "test12345", "name": "fn"},
+    ]
+
+    tools: list[dict[str, Any]] = [{"type": "function", "function": {"name": "fn", "parameters": {}}}]
+
+    return render_template(template=template, messages=messages, tools=tools)
+
+
+class TestPreV15ToolTextChunks:
+    @pytest.mark.parametrize(("version", "spm"), _PRE_V15_TOOL_CONFIGS)
+    def test_non_text_chunk_rejected(self, version: TokenizerVersion, spm: bool) -> None:
+        content = [
+            {"type": "text", "text": "result"},
+            {"type": "image_url", "image_url": "http://example.com/img.png"},
+        ]
+
+        with pytest.raises(ValueError, match="Only text chunks are supported in tool message content"):
+            _render_tool_content(version=version, spm=spm, content=content)
+
+    @pytest.mark.parametrize(("version", "spm"), _PRE_V15_TOOL_CONFIGS)
+    def test_empty_text_chunks_skipped(self, version: TokenizerVersion, spm: bool) -> None:
+        # mistral-common drops empty text chunks before joining the others with two newlines.
+        content = [{"type": "text", "text": text} for text in ["", "a", "", "b", ""]]
+
+        assert _render_tool_content(version=version, spm=spm, content=content) == _render_tool_content(
+            version=version, spm=spm, content="a\n\nb"
+        )
+
+    @pytest.mark.parametrize(("version", "spm"), _PRE_V15_TOOL_CONFIGS)
+    @pytest.mark.parametrize("content", [None, True, {"temp": 22}])
+    def test_non_list_content_still_rendered_as_string(
+        self, version: TokenizerVersion, spm: bool, content: Any
+    ) -> None:
+        # Only list content is flattened; other values keep the `|string` rendering they had before.
+        assert _render_tool_content(version=version, spm=spm, content=content) == _render_tool_content(
+            version=version, spm=spm, content=str(content)
+        )
+
+    @pytest.mark.parametrize(
+        ("version", "spm"),
+        [
+            (TokenizerVersion.v7, False),
+            (TokenizerVersion.v7, True),
+            (TokenizerVersion.v11, False),
+            (TokenizerVersion.v13, False),
+        ],
+    )
+    @pytest.mark.parametrize("content", [4, 2.5])
+    def test_numeric_content_still_rendered_as_string(
+        self, version: TokenizerVersion, spm: bool, content: int | float
+    ) -> None:
+        # v2 and v3 turn numeric strings into JSON numbers, so only later versions render a number like its string.
+        assert _render_tool_content(version=version, spm=spm, content=content) == _render_tool_content(
+            version=version, spm=spm, content=str(content)
+        )

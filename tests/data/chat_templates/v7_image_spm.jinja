@@ -219,7 +219,21 @@
         {%- else %}
             {{- raise_exception('Tool message must have a call_id or tool_call_id of 9 characters or numbers.') }}
         {%- endif %}
-        {{- '[TOOL_RESULTS] ' ~ tool_id ~ '[TOOL_CONTENT] ' ~ message['content']|string ~ '[/TOOL_RESULTS]' }}
+        {%- set tool_text = message['content'] %}
+        {%- if message['content'] is defined and message['content'] is not string and message['content'] is iterable and message['content'] is not mapping %}
+            {%- set ns_tool = namespace(parts=[]) %}
+            {%- for block in message['content'] %}
+                {%- if block['type'] == 'text' %}
+                    {%- if block['text'] %}
+                        {%- set ns_tool.parts = ns_tool.parts + [block['text']] %}
+                    {%- endif %}
+                {%- else %}
+                    {{- raise_exception('Only text chunks are supported in tool message content.') }}
+                {%- endif %}
+            {%- endfor %}
+            {%- set tool_text = ns_tool.parts | join('\n\n') %}
+        {%- endif %}
+        {{- '[TOOL_RESULTS] ' ~ tool_id ~ '[TOOL_CONTENT] ' ~ tool_text|string ~ '[/TOOL_RESULTS]' }}
         {%- set ns.prev_tool=true %}
         {%- set ns.add_space=true %}
 
