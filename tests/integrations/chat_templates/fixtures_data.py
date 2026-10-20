@@ -539,6 +539,49 @@ REQUEST_TOOL_THEN_USER_WITH_CONTENT_TRAIN = ChatCompletionRequest(  # type: igno
     tools=_TOOLS,
 )
 
+REQUEST_TOOL_TEXT_CHUNKS_TEST = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are a helpful assistant."),
+        UserMessage(content="What is the weather in Paris?"),
+        AssistantMessage(
+            content=None,
+            tool_calls=[
+                ToolCall(
+                    id="123456789",
+                    function=FunctionCall(name="tool1", arguments={"location": "Paris"}),  # type: ignore[arg-type]
+                ),
+            ],
+        ),
+        ToolMessage(
+            content=[TextChunk(text="Sunny"), TextChunk(text=""), TextChunk(text="22 degrees")],
+            tool_call_id="123456789",
+        ),
+    ],
+    tools=_TOOLS,
+)
+
+REQUEST_TOOL_TEXT_CHUNKS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are a helpful assistant."),
+        UserMessage(content="What is the weather in Paris?"),
+        AssistantMessage(
+            content=None,
+            tool_calls=[
+                ToolCall(
+                    id="123456789",
+                    function=FunctionCall(name="tool1", arguments={"location": "Paris"}),  # type: ignore[arg-type]
+                ),
+            ],
+        ),
+        ToolMessage(
+            content=[TextChunk(text="Sunny"), TextChunk(text=""), TextChunk(text="22 degrees")],
+            tool_call_id="123456789",
+        ),
+        AssistantMessage(content="It is sunny and 22 degrees in Paris."),
+    ],
+    tools=_TOOLS,
+)
+
 REQUEST_MULTI_TURN_IMAGE_URL_TEST = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         SystemMessage(content="You are a helpful assistant."),
@@ -1087,6 +1130,7 @@ def get_conversations(
                     REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
                     REQUEST_TOOL_THEN_USER_TEST,
                     REQUEST_TOOL_THEN_USER_FULL_LOOP_TEST,
+                    REQUEST_TOOL_TEXT_CHUNKS_TEST,
                 ]
             )
         else:
@@ -1097,6 +1141,7 @@ def get_conversations(
                     REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2,
                     REQUEST_TOOL_THEN_USER_TRAIN,
                     REQUEST_TOOL_THEN_USER_FULL_LOOP_TRAIN,
+                    REQUEST_TOOL_TEXT_CHUNKS_TRAIN,
                 ]
             )
     if tokenizer_version > TokenizerVersion.v7:

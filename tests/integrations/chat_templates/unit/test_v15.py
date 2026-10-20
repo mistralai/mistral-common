@@ -528,7 +528,5 @@ class TestV15MultimodalContent:
         ]
 
         tools = [{"type": "function", "function": {"name": "fn", "description": "test", "parameters": {}}}]
-        # Pre-V15 uses message['content']|string which coerces list to string representation
-        # rather than rendering through render_content — no [IMG] token produced
-        output = render_template(template, messages, tools=tools)
-        assert "[IMG]" not in output
+        with pytest.raises(ValueError, match="Only text chunks are supported in tool message content"):
+            render_template(template=template, messages=messages, tools=tools)

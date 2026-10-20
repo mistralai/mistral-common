@@ -641,12 +641,45 @@ def _generate_macros(config: TemplateConfig) -> str:
     return "\n".join(lines)
 
 
-def _emit_int_float_parsing(indent: str) -> list[str]:
-    r"""Generate the Jinja2 block for parsing `message['content']` as int or float.
+def _emit_tool_text_flattening(indent: str) -> list[str]:
+    r"""Generate the Jinja2 block that sets `tool_text` from a pre-v15 tool message's content.
 
-    Attempts int parsing first, then float, falling back to the string
-    representation. Used in tool message handling to preserve numeric types
-    in JSON-serialized tool results.
+    Pre-v15 tokenizers only accept text chunks in tool results: they skip empty text chunks
+    and join the others with two newlines. List content is flattened the same way instead
+    of being printed as a Python list. Any other content is kept as is, so it still renders
+    as before.
+
+    Args:
+        indent: Whitespace prefix for each emitted line.
+
+    Returns:
+        Lines of Jinja2 template code that set `tool_text`.
+    """
+    return [
+        f"{indent}{{%- set tool_text = message['content'] %}}",
+        f"{indent}{{%- if message['content'] is defined and message['content'] is not string"
+        " and message['content'] is iterable and message['content'] is not mapping %}",
+        f"{indent}    {{%- set ns_tool = namespace(parts=[]) %}}",
+        f"{indent}    {{%- for block in message['content'] %}}",
+        f"{indent}        {{%- if block['type'] == 'text' %}}",
+        f"{indent}            {{%- if block['text'] %}}",
+        f"{indent}                {{%- set ns_tool.parts = ns_tool.parts + [block['text']] %}}",
+        f"{indent}            {{%- endif %}}",
+        f"{indent}        {{%- else %}}",
+        f"{indent}            {{{{- raise_exception('Only text chunks are supported in tool message content.') }}}}",
+        f"{indent}        {{%- endif %}}",
+        f"{indent}    {{%- endfor %}}",
+        f"{indent}    {{%- set tool_text = ns_tool.parts | join('\\n\\n') %}}",
+        f"{indent}{{%- endif %}}",
+    ]
+
+
+def _emit_int_float_parsing(indent: str) -> list[str]:
+    r"""Generate the Jinja2 block for parsing the tool message text as int or float.
+
+    Flattens the content into `tool_text`, then attempts int parsing first, then
+    float, falling back to the string representation. Used in tool message handling
+    to preserve numeric types in JSON-serialized tool results.
 
     Args:
         indent: Whitespace prefix for each emitted line.
@@ -655,16 +688,17 @@ def _emit_int_float_parsing(indent: str) -> list[str]:
         Lines of Jinja2 template code for int/float content parsing.
     """
     return [
+        *_emit_tool_text_flattening(indent=indent),
         f"{indent}{{# Try to parse 'content' as int or float if possible #}}",
-        f"{indent}{{%- set tool_content = message['content']|string %}}",
+        f"{indent}{{%- set tool_content = tool_text|string %}}",
         f"{indent}{{# Try to parse as int #}}",
-        f"{indent}{{%- set parsed_int = message['content']|int %}}",
-        f"{indent}{{% if parsed_int|string == message['content'] %}}",
+        f"{indent}{{%- set parsed_int = tool_text|int %}}",
+        f"{indent}{{% if parsed_int|string == tool_text %}}",
         f"{indent}    {{%- set tool_content = parsed_int %}}",
         f"{indent}{{# If int fails, try to parse as float #}}",
         f"{indent}{{%- else %}}",
-        f"{indent}    {{%- set parsed_float = message['content']|float %}}",
-        f"{indent}    {{%- if parsed_float|string == message['content'] %}}",
+        f"{indent}    {{%- set parsed_float = tool_text|float %}}",
+        f"{indent}    {{%- if parsed_float|string == tool_text %}}",
         f"{indent}        {{%- set tool_content = parsed_float %}}",
         f"{indent}    {{%- endif %}}",
         f"{indent}{{%- endif %}}",
@@ -1595,13 +1629,14 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         )  # noqa: E501
     elif config.uses_tool_content_format:
         lines.extend(_emit_call_id_resolution("        "))
+        lines.extend(_emit_tool_text_flattening(indent="        "))
         if config.spm:
             lines.append(
                 "        {{- '"
                 + _BEGIN_TOOL_RESULTS
                 + " ' ~ tool_id ~ '"
                 + _BEGIN_TOOL_CONTENT
-                + " ' ~ message['content']|string ~ '"
+                + " ' ~ tool_text|string ~ '"
                 + _END_TOOL_RESULTS
                 + "' }}"  # noqa: E501
             )
@@ -1611,7 +1646,7 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
                 + _BEGIN_TOOL_RESULTS
                 + "' ~ tool_id ~ '"
                 + _BEGIN_TOOL_CONTENT
-                + "' ~ message['content']|string ~ '"
+                + "' ~ tool_text|string ~ '"
                 + _END_TOOL_RESULTS
                 + "' }}"  # noqa: E501
             )
@@ -1637,9 +1672,10 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
             lines.append("        {{- " + tool_rc + " -}}")
             lines.append("        {{- '" + _END_TOOL_RESULTS + "' }}")
         else:
+            lines.extend(_emit_tool_text_flattening(indent="        "))
             lines.append(
-                "        {{- '" + _BEGIN_TOOL_RESULTS + "' ~ message['content']|string ~ '" + _END_TOOL_RESULTS + "' }}"
-            )  # noqa: E501
+                "        {{- '" + _BEGIN_TOOL_RESULTS + "' ~ tool_text|string ~ '" + _END_TOOL_RESULTS + "' }}"
+            )
     else:
         # v3 non-spm style
         lines.extend(_emit_int_float_parsing("        "))
