@@ -412,3 +412,17 @@ def test_transform_image_returns_float32() -> None:
     pil_img = _create_test_image((128, 128))
     transformed = transform_image(pil_img, (64, 64))
     assert transformed.dtype == np.float32, f"Expected float32 but got {transformed.dtype}"
+
+
+def test_image_chunk_round_trips_data_url_serialization() -> None:
+    chunk = ImageChunk(image=Image.new("RGB", (4, 4), "red"))
+    dumped = chunk.model_dump(context={"add_format_prefix": True})
+    assert dumped["image"].startswith("data:image/png;base64,")
+    assert ImageChunk.model_validate(dumped).image.size == (4, 4)
+
+
+def test_image_chunk_accepts_data_url_string() -> None:
+    buffer = BytesIO()
+    Image.new("RGB", (4, 4), "red").save(buffer, format="PNG")
+    data_url = "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode()
+    assert ImageChunk(image=data_url).image.size == (4, 4)

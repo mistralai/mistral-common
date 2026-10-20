@@ -107,6 +107,12 @@ def maybe_load_image_from_str_or_bytes(x: Image.Image | str | bytes) -> Image.Im
         except Exception:
             raise RuntimeError("Encountered an error when loading image from bytes.")
 
+    if x.startswith("data:"):
+        # Strip a `data:<mime>;base64,` prefix, e.g. as emitted by `serialize_image_to_byte_str`.
+        header, sep, payload = x.partition(",")
+        if sep and header.endswith(";base64"):
+            x = payload
+
     try:
         image = Image.open(io.BytesIO(base64.b64decode(x.encode("ascii"))))
         return image
