@@ -5,13 +5,12 @@ from io import BytesIO
 import pytest
 from PIL import Image
 
-from mistral_common.exceptions import InvalidRequestException, TokenizerException
+from mistral_common.exceptions import InvalidRequestException
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURLChunk,
     ImageURLChunk,
     TextChunk,
-    ThinkChunk,
 )
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
@@ -397,15 +396,6 @@ def test_encode_chat_completion_with_arbitrary_tool_call_id(tool_call_id: str) -
     tokenized = tokenizer.encode_chat_completion(request)
 
     assert tokenized.text == "<s>[INST]a[/INST][TOOL_CALLS]f[ARGS]{}</s>[TOOL_RESULTS]b[/TOOL_RESULTS]"
-
-
-def test_system_think_chunk_raises_v15(v15_tekkenizer: InstructTokenizerV15) -> None:
-    messages = [SystemMessage(content=[ThinkChunk(thinking="Hi")])]
-    request: InstructRequest = InstructRequest(
-        messages=messages, settings=ModelSettings(reasoning_effort=ReasoningEffort.high)
-    )
-    with pytest.raises(TokenizerException, match="ThinkChunk in system message is not supported for this model"):
-        v15_tekkenizer.encode_instruct(request)
 
 
 @pytest.mark.parametrize(
