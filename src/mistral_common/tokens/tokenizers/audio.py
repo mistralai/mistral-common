@@ -2,7 +2,6 @@ import base64
 import io
 import logging
 import math
-import re
 import warnings
 from dataclasses import dataclass
 from enum import Enum, StrEnum, auto
@@ -21,6 +20,7 @@ from mistral_common.imports import (
     is_soxr_installed,
 )
 from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk, AudioURLType
+from mistral_common.utils.data_url import maybe_strip_base64_data_url_prefix
 
 if is_soxr_installed():
     import soxr
@@ -139,8 +139,7 @@ class Audio:
         """
         assert_soundfile_installed()
 
-        if re.match(r"^data:audio/\w+;base64,", audio_base64):
-            audio_base64 = audio_base64.split(",")[1]
+        audio_base64 = maybe_strip_base64_data_url_prefix(audio_base64)
 
         try:
             audio_bytes = base64.b64decode(audio_base64)

@@ -1,6 +1,5 @@
 import base64
 import io
-import re
 from enum import StrEnum, auto
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal
@@ -12,18 +11,12 @@ from mistral_common.base import MistralBase
 from mistral_common.deprecation import warn_once
 from mistral_common.image import SerializableImage
 from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
+from mistral_common.utils.data_url import maybe_strip_base64_data_url_prefix
 
 if is_soundfile_installed():
     import soundfile as sf
 if TYPE_CHECKING:
     from mistral_common.tokens.tokenizers.audio import Audio
-
-
-def _strip_audio_data_url_prefix(data: str) -> str:
-    r"""Remove the optional base64 audio data URL prefix."""
-    if re.match(r"^data:audio/\w+;base64,", data):
-        return data.split(",", 1)[1]
-    return data
 
 
 def _detect_audio_format(data: str | bytes) -> str:
@@ -43,7 +36,7 @@ def _detect_audio_format(data: str | bytes) -> str:
     assert_soundfile_installed()
 
     if isinstance(data, str):
-        audio_bytes = base64.b64decode(_strip_audio_data_url_prefix(data))
+        audio_bytes = base64.b64decode(maybe_strip_base64_data_url_prefix(data))
     else:
         audio_bytes = data
 
@@ -180,9 +173,7 @@ class ImageChunk(BaseContentChunk):
         image_url_dict = openai_chunk["image_url"]
         assert isinstance(image_url_dict, dict) and "url" in image_url_dict, image_url_dict
 
-        url = image_url_dict["url"]
-        if re.match(r"^data:image/\w+;base64,", url):  # Remove the prefix if it exists
-            url = url.split(",")[1]
+        url = maybe_strip_base64_data_url_prefix(image_url_dict["url"])
 
         return cls.model_validate({"image": url})
 
@@ -484,7 +475,7 @@ class AudioChunk(BaseContentChunk):
         if isinstance(self.input_audio, bytes):
             content = base64.b64encode(self.input_audio).decode("utf-8")
         else:
-            content = _strip_audio_data_url_prefix(self.input_audio)
+            content = maybe_strip_base64_data_url_prefix(self.input_audio)
         fmt = _detect_audio_format(self.input_audio)
         return {
             "type": self.type,
