@@ -24,6 +24,8 @@ from mistral_common.utils.json_utils import validate_json_schema_by_draft7
 _CONTINUE_FINAL_MESSAGE_KEY = "continue_final_message"
 _CONTINUE_FINAL_MESSAGE_ERROR = "continue_final_message=True requires final message to be an assistant."
 
+_JSON_OBJECT_OR_ARRAY_SCHEMA: dict[str, Any] = {"anyOf": [{"type": "object"}, {"type": "array"}]}
+
 
 def _map_continue_final_message(
     messages: Iterable[dict[str, Any] | ChatMessageType], continue_final_message: bool
@@ -117,7 +119,7 @@ class JsonSchema(MistralBase):
         description: An optional description of the schema.
         custom_schema: The JSON schema (aliased `schema`).
         strict: Whether grammar generation uses the custom schema. When `False`,
-            grammar generation uses a generic object schema; model settings always
+            grammar generation falls back to any valid JSON; model settings always
             retain the custom schema. The value is also preserved for OpenAI compatibility.
 
     Examples:
@@ -143,7 +145,7 @@ class SchemaRenderingMode(str, Enum):
     r"""Select how a response-format schema is applied.
 
     Attributes:
-        grammar: The schema constrains decoding; non-strict schemas fall back to any JSON object.
+        grammar: The schema constrains decoding; non-strict schemas fall back to any valid JSON.
         model_settings: The schema is encoded in model settings unchanged.
     """
 
@@ -187,10 +189,10 @@ class ResponseFormat(MistralBase):
         if self.type == ResponseFormats.json_schema:
             assert self.json_schema is not None
             if purpose == SchemaRenderingMode.grammar and not self.json_schema.strict:
-                return {"type": "object"}
+                return _JSON_OBJECT_OR_ARRAY_SCHEMA
             return self.json_schema.custom_schema
         if self.type == ResponseFormats.json:
-            return {"anyOf": [{"type": "object"}, {"type": "array"}]}
+            return _JSON_OBJECT_OR_ARRAY_SCHEMA
         return None
 
 
