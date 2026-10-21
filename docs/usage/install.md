@@ -26,6 +26,15 @@ pip install "mistral-common[server]"
 pip install "mistral-common[image,audio,hf-hub,sentencepiece,guidance,server]"
 ```
 
+## Debian
+
+`mistral-common` is packaged for Debian as `python3-mistral-common`:
+```sh
+sudo apt install python3-mistral-common
+```
+
+This package is maintained by the Debian Deep Learning Team, not by Mistral AI, so packaging problems should be reported to Debian. It ships the base library only: none of the optional dependencies above are installed with it, and it may lag behind the latest release on PyPI. The [package page](https://packages.debian.org/sid/python3-mistral-common) lists the version available in each Debian suite.
+
 ## From source
 
 To build it for source, you can clone the repository and install it using [uv](https://github.com/astral-sh/uv) or pip. We recommend using uv for faster and more reliable dependency resolution:
