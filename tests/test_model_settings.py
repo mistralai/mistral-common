@@ -243,6 +243,7 @@ class TestModelSettingsBuilder:
 
 
 JSON_SCHEMA_DICT = {"type": "object", "properties": {"a": {"type": "string"}}}
+JSON_OBJECT_OR_ARRAY_SCHEMA = {"anyOf": [{"type": "object"}, {"type": "array"}]}
 
 
 def _req(rf: ResponseFormat) -> ChatCompletionRequest:
@@ -259,9 +260,8 @@ def test_builder_text_yields_none() -> None:
 def test_builder_json_yields_anyof() -> None:
     b = ModelSettingsBuilder(json_schema=JSONSchemaBuilder())
     response_format = ResponseFormat(type=ResponseFormats.json)
-    expected_schema = {"anyOf": [{"type": "object"}, {"type": "array"}]}
-    assert response_format.get_schema(purpose=SchemaRenderingMode.model_settings) == expected_schema
-    assert b.build_settings(_req(response_format)).json_schema == expected_schema
+    assert response_format.get_schema(purpose=SchemaRenderingMode.model_settings) == JSON_OBJECT_OR_ARRAY_SCHEMA
+    assert b.build_settings(_req(response_format)).json_schema == JSON_OBJECT_OR_ARRAY_SCHEMA
 
 
 @pytest.mark.parametrize("strict", [False, True])
@@ -277,7 +277,7 @@ def test_builder_json_schema_yields_custom_schema(strict: bool) -> None:
 
 @pytest.mark.parametrize(
     ("strict", "expected_grammar_schema"),
-    [(False, {"type": "object"}), (True, JSON_SCHEMA_DICT)],
+    [(False, JSON_OBJECT_OR_ARRAY_SCHEMA), (True, JSON_SCHEMA_DICT)],
 )
 def test_response_format_grammar_schema_respects_strict(strict: bool, expected_grammar_schema: dict[str, Any]) -> None:
     response_format = ResponseFormat(
