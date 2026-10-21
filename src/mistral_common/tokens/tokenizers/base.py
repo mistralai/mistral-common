@@ -2,7 +2,7 @@ import warnings
 from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import Any, Generic, TypeVar
+from typing import Generic, TypeVar
 
 import numpy as np
 from pydantic import ConfigDict, Field, PrivateAttr
@@ -117,10 +117,6 @@ class SpecialTokenPolicy(str, Enum):
         IGNORE: Drop special tokens from the output.
         KEEP: Include special token strings in the output.
         RAISE: Raise an error if special tokens are found.
-
-    Note:
-        Integer values 0, 1, 2 are still accepted for backward compatibility,
-        mapping to IGNORE, KEEP, RAISE respectively.
     """
 
     IGNORE = "ignore"
@@ -128,16 +124,24 @@ class SpecialTokenPolicy(str, Enum):
     RAISE = "raise"
 
     @classmethod
-    def _missing_(cls, value: Any) -> Any:
-        # Backward compatibility of int values.
-        match value:
-            case 0:
-                return SpecialTokenPolicy.IGNORE
-            case 1:
-                return SpecialTokenPolicy.KEEP
-            case 2:
-                return SpecialTokenPolicy.RAISE
-        return super()._missing_(value)
+    def validate(cls, policy: "SpecialTokenPolicy | str") -> "SpecialTokenPolicy":
+        r"""Validate and coerce a special token policy to a `SpecialTokenPolicy`.
+
+        Args:
+            policy: The policy to validate, either a `SpecialTokenPolicy` or one
+                of its string values ("ignore", "keep", "raise").
+
+        Returns:
+            The validated `SpecialTokenPolicy`.
+
+        Raises:
+            ValueError: If `policy` is not a valid special token policy.
+        """
+        try:
+            return cls(policy)
+        except ValueError as e:
+            valid = ", ".join(repr(p.value) for p in cls)
+            raise ValueError(f"Invalid `special_token_policy` {policy!r}. Expected one of: {valid}.") from e
 
 
 class TokenizerVersion(str, Enum):
