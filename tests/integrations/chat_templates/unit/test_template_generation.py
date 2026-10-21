@@ -31,6 +31,7 @@ class TestGenerateChatTemplateAPI:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
     def test_basic_generation(self, v13_template: str) -> None:
@@ -58,6 +59,7 @@ class TestGenerateChatTemplateAPI:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         assert "response_format" in selected_template
@@ -73,6 +75,7 @@ class TestGenerateChatTemplateAPI:
             default_system_prompt="You are a helpful assistant.",
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
         assert "You are a helpful assistant." in template_with_prompt
 
@@ -106,6 +109,7 @@ class TestGenerateChatTemplateAPI:
             default_system_prompt='You are "the best" assistant.',
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
         messages: list[dict[str, Any]] = [{"role": "user", "content": "Hello"}]
         result = render_template(template, messages=messages)
@@ -211,6 +215,7 @@ class TestMessageContentValidation:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -232,6 +237,7 @@ class TestMessageContentValidation:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -255,6 +261,7 @@ class TestMessageContentValidation:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -275,6 +282,7 @@ class TestMessageContentValidation:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [

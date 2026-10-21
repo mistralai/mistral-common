@@ -27,6 +27,7 @@ class TestV15ModelSettings:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
     def test_v15_template_contains_model_settings(self, v15_template: str) -> None:
@@ -58,6 +59,7 @@ class TestV15ModelSettings:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages = [
@@ -85,6 +87,7 @@ class TestV15ModelSettings:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages = [
@@ -112,6 +115,7 @@ class TestV15ModelSettings:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         tools = [
@@ -164,6 +168,7 @@ class TestV15ModelSettings:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = []
@@ -224,6 +229,7 @@ class TestV15ModelSettings:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -563,6 +569,7 @@ class TestV15MultimodalContent:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -600,6 +607,7 @@ class TestV15MultimodalContent:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -637,6 +645,7 @@ class TestV15MultimodalContent:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -667,6 +676,7 @@ class TestV15MultimodalContent:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -694,6 +704,7 @@ class TestV15MultimodalContent:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -721,6 +732,7 @@ class TestV15MultimodalContent:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -749,6 +761,7 @@ class TestV15MultimodalContent:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         tools = [{"type": "function", "function": {"name": "fn", "description": "test", "parameters": {}}}]
@@ -805,6 +818,7 @@ class TestV15MultimodalContent:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [

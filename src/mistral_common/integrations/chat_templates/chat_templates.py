@@ -21,7 +21,7 @@ def generate_chat_template(
     default_system_prompt: str | None,
     plain_thinking_support: bool,
     use_special_token_variables: bool,
-    model_settings_fields: frozenset[str] | None = None,
+    model_settings_fields: frozenset[str] | None,
 ) -> str:
     r"""Generate a chat template based on configuration.
 
@@ -42,7 +42,8 @@ def generate_chat_template(
         use_special_token_variables: Whether to emit BOS/EOS as Jinja variable
             references (`bos_token`/`eos_token`) or as literal values.
         model_settings_fields: Fields to render, or `None` to select automatically
-            based on the tokenizer version.
+            based on the tokenizer version. Required — pass `None` explicitly for
+            the automatic selection.
 
     Returns:
         The generated Jinja2 template as a string.

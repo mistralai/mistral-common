@@ -62,6 +62,7 @@ class TestV15ReasoningEffort:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         conv: dict = {
@@ -107,6 +108,7 @@ class TestV15ReasoningEffort:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         conv = {

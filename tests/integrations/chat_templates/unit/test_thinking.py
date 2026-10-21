@@ -38,6 +38,7 @@ class TestReasoningContentConversion:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -59,6 +60,7 @@ class TestReasoningContentConversion:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -82,6 +84,7 @@ class TestReasoningContentConversion:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -109,6 +112,7 @@ class TestReasoningContentConversion:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -130,6 +134,7 @@ class TestReasoningContentConversion:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -178,6 +183,7 @@ class TestReasoningContentConversion:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -207,6 +213,7 @@ class TestReasoningContentConversion:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -250,6 +257,7 @@ class TestReasoningContentConversion:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         reasoning_text = (
@@ -287,6 +295,7 @@ class TestReasoningEdgeCases:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -309,6 +318,7 @@ class TestReasoningEdgeCases:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -341,6 +351,7 @@ class TestClosedAttribute:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -376,6 +387,7 @@ class TestClosedAttribute:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -404,6 +416,7 @@ class TestPlainThink:
             default_system_prompt=None,
             plain_thinking_support=True,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -435,6 +448,7 @@ class TestPlainThink:
             default_system_prompt=None,
             plain_thinking_support=True,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -462,6 +476,7 @@ class TestPlainThink:
             default_system_prompt=None,
             plain_thinking_support=True,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -483,6 +498,7 @@ class TestPlainThink:
             default_system_prompt=None,
             plain_thinking_support=True,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -509,6 +525,7 @@ class TestPlainThink:
             default_system_prompt=None,
             plain_thinking_support=True,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -543,6 +560,7 @@ class TestPlainThink:
             default_system_prompt=None,
             plain_thinking_support=True,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
