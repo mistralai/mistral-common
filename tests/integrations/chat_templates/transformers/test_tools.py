@@ -52,6 +52,7 @@ class TestToolCallValidation:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
         with pytest.raises(TemplateError, match="Tool call must have an id of 9 characters or numbers."):
             encode_transformers_from_openai(chat_template, invalid_id_conv)
@@ -95,6 +96,7 @@ class TestToolCallValidation:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
         with pytest.raises(TemplateError, match="Assistant message cannot have both content and tool calls."):
             encode_transformers_from_openai(chat_template, invalid_message_conv)

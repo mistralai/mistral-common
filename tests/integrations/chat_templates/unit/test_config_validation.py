@@ -4,8 +4,8 @@ import pytest
 
 from mistral_common.integrations.chat_templates.template_generator import TemplateConfig
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.conftest import ALL_CONFIGS
-from tests.integrations.chat_templates.helpers import TestConfig
+from tests.integrations.chat_templates.conftest import ALL_CONFIGS, format_config_id
+from tests.integrations.chat_templates.helpers import TestConfig, build_template_config
 
 
 class TestInvalidConfigs:
@@ -44,15 +44,8 @@ class TestInvalidConfigs:
 
 
 class TestValidConfigs:
-    @pytest.mark.parametrize("config", ALL_CONFIGS)
+    @pytest.mark.parametrize("config", ALL_CONFIGS, ids=[format_config_id(c) for c in ALL_CONFIGS])
     def test_all_configs_are_valid(self, config: TestConfig) -> None:
-        template_config = TemplateConfig(
-            version=config.version,
-            spm=config.spm,
-            image_support=config.image,
-            audio_support=config.audio,
-            thinking_support=config.think,
-            plain_thinking_support=config.plain_think,
-        )
+        template_config = build_template_config(config=config)
         assert isinstance(template_config.has_tools, bool)
         assert isinstance(template_config.any_thinking_support, bool)

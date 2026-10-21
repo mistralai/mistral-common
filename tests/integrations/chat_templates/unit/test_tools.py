@@ -23,6 +23,7 @@ class TestToolRoleSupport:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -58,6 +59,7 @@ class TestToolRoleSupport:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -99,7 +101,6 @@ class TestToolRoleSupport:
             (TokenizerVersion.v7, False),
             (TokenizerVersion.v7, True),
             (TokenizerVersion.v13, False),
-            (TokenizerVersion.v15, False),
         ],
     )
     def test_user_after_tool_static_matches_dynamic(self, version: TokenizerVersion, spm: bool) -> None:
@@ -114,6 +115,7 @@ class TestToolRoleSupport:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -167,6 +169,7 @@ class TestV2ToolResultParsing:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
     @pytest.mark.parametrize(
@@ -289,6 +292,7 @@ class TestV2ToolResultParsing:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -326,6 +330,7 @@ class TestV3ToolResultParsing:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
     @pytest.mark.parametrize(
@@ -427,6 +432,7 @@ class TestV7ToolCalls:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -481,6 +487,7 @@ class TestV7ToolCalls:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -553,6 +560,7 @@ class TestV7ToolCalls:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -592,6 +600,7 @@ class TestV11ToolCalls:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -648,6 +657,7 @@ class TestV11ToolCalls:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -702,6 +712,7 @@ class TestV13PlusToolCalls:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [

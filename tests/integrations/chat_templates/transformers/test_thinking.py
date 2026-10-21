@@ -24,6 +24,7 @@ class TestPlainThinkingValidation:
             default_system_prompt=None,
             plain_thinking_support=True,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
         assert "<think>" in template
         assert "</think>" in template
@@ -64,6 +65,7 @@ class TestPlainThinkParity:
             default_system_prompt=None,
             plain_thinking_support=True,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         for conversation in conversations:
@@ -94,6 +96,7 @@ class TestPlainThinkParity:
             default_system_prompt=None,
             plain_thinking_support=True,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         # Build a conversation with thinking chunks
@@ -174,6 +177,7 @@ class TestPlainThinkParity:
             default_system_prompt=None,
             plain_thinking_support=True,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         for conversation in conversations:

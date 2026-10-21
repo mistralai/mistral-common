@@ -19,24 +19,53 @@
     {%- set has_tools = true %}
     {%- set available_tools = '[AVAILABLE_TOOLS]' ~ (tools| tojson) ~ '[/AVAILABLE_TOOLS]' %}
 {%- endif %}
+{%- set json_schema = none %}
+{%- if response_format is defined and response_format is not none %}
+    {%- set response_format_type = response_format.get('type', 'text') %}
+    {%- set response_json_schema = response_format.get('json_schema') %}
+    {%- if response_format_type not in ['text', 'json_object', 'json_schema'] %}
+        {{- raise_exception('Response format type must be one of text, json_object or json_schema, got ' ~ response_format_type ~ '.') }}
+    {%- elif response_format_type == 'json_schema' %}
+        {%- if response_json_schema is none or response_json_schema.get('schema') is none %}
+            {{- raise_exception('Response format `json_schema` must define the schema') }}
+        {%- else %}
+            {%- set json_schema = response_json_schema['schema'] %}
+        {%- endif %}
+    {%- elif response_format_type == 'json_object' %}
+        {%- set json_schema = {'anyOf': [{'type': 'object'}, {'type': 'array'}]} %}
+    {%- endif %}
+{%- endif %}
 {%- if reasoning_effort is not defined or reasoning_effort is none %}
     {%- set reasoning_effort = 'none' %}
 {%- endif %}
 {%- if reasoning_effort not in ['none', 'high'] %}
     {{- raise_exception('reasoning_effort must be either "none" or "high"') }}
 {%- endif %}
-{%- set model_settings = '[MODEL_SETTINGS]{"reasoning_effort": "' ~ reasoning_effort ~ '"}[/MODEL_SETTINGS]' %}
+{%- set model_settings_parts = [] %}
+{%- if json_schema is not none %}
+    {%- set model_settings_parts = model_settings_parts + ['"json_schema": ' ~ (json_schema|tojson)] %}
+{%- endif %}
+{%- set model_settings_parts = model_settings_parts + ['"reasoning_effort": "' ~ reasoning_effort ~ '"'] %}
+{%- set model_settings = '' %}
+{%- if model_settings_parts %}
+    {%- set model_settings = '[MODEL_SETTINGS]{' ~ model_settings_parts|join(', ') ~ '}[/MODEL_SETTINGS]' %}
+{%- endif %}
 
 {#- Macros #}
-{%- macro render_content(content, context_name) -%}
+{%- macro render_content(content, context_name, supported_types_desc, support_thinking, support_images) -%}
     {%- if content is string -%}
         {{- content -}}
     {%- elif content -%}
         {%- for block in content -%}
             {%- if block['type'] == 'text' -%}
                 {{- block['text'] -}}
+            {%- elif support_thinking and block['type'] == 'thinking' -%}
+                {{- '[THINK]' ~ block['thinking'] -}}
+                {%- if block.get('closed', true) -%}{{- '[/THINK]' -}}{%- endif -%}
+            {%- elif support_images and block['type'] in ['image', 'image_url'] -%}
+                {{- '[IMG]' -}}
             {%- else -%}
-                {{- raise_exception('Only text chunks are supported in ' ~ context_name ~ '.') -}}
+                {{- raise_exception('Only ' ~ supported_types_desc ~ ' chunks are supported in ' ~ context_name ~ '.') -}}
             {%- endif -%}
         {%- endfor -%}
     {%- else -%}
@@ -54,6 +83,30 @@
         {%- elif ns_agg.current_role is not none %}
             {%- set ns_c = namespace(text_parts=[], chunks=[], has_non_text=false, tool_calls=[]) %}
             {%- for msg in ns_agg.current_group %}
+                {#- Convert reasoning / reasoning_content to a leading thinking chunk. #}
+                {%- set reasoning = msg.get('reasoning_content', msg.get('reasoning', none)) %}
+                {%- if reasoning is not none and reasoning != '' %}
+                    {%- if msg['content'] is not none and msg['content'] is not string %}
+                        {%- for block in msg['content'] %}
+                            {%- if block['type'] == 'thinking' %}
+                                {{- raise_exception('Message cannot have both thinking chunks in content and a top-level `reasoning` or `reasoning_content` field.') }}
+                            {%- endif %}
+                        {%- endfor %}
+                    {%- endif %}
+                    {%- set think_chunk = {'type': 'thinking', 'thinking': reasoning} %}
+                    {%- if msg['content'] is string and msg['content'] != '' %}
+                        {%- set new_content = [think_chunk, {'type': 'text', 'text': msg['content']}] %}
+                    {%- elif msg['content'] is not none and msg['content'] is not string and msg['content'] | length > 0 %}
+                        {%- set new_content = [think_chunk] + msg['content'] | list %}
+                    {%- else %}
+                        {%- set new_content = [think_chunk] %}
+                    {%- endif %}
+                    {%- if msg['tool_calls'] is defined and msg['tool_calls'] is not none %}
+                        {%- set msg = {'role': msg['role'], 'content': new_content, 'tool_calls': msg['tool_calls']} %}
+                    {%- else %}
+                        {%- set msg = {'role': msg['role'], 'content': new_content} %}
+                    {%- endif %}
+                {%- endif %}
                 {%- if msg['content'] is string %}
                     {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}
                 {%- elif msg['content'] is not none %}
@@ -138,7 +191,7 @@
 
 {#- Handle conversation messages. #}
 {%- for message in loop_messages %}
-    {#- User messages supports text content. #}
+    {#- User messages supports text, image and image_url content. #}
     {%- if message['role'] == 'user' %}
         {%- if not ns.available_tools_and_settings_emitted %}
             {{- available_tools }}
@@ -146,22 +199,28 @@
             {%- set ns.available_tools_and_settings_emitted = true %}
         {%- endif %}
         {%- if message['content'] is not string and message['content'] %}
-            {%- set user_content = message['content'] | sort(attribute='type') %}
+            {#- When content has exactly one image and one text block, put image first. #}
+            {%- if message['content'] | length == 2 and message['content'][0]['type'] == 'text' and message['content'][1]['type'] in ['image', 'image_url'] %}
+                {%- set blocks = [message['content'][1], message['content'][0]] %}
+            {%- else %}
+                {%- set blocks = message['content'] %}
+            {%- endif %}
+            {%- set user_content = blocks %}
         {%- else %}
             {%- set user_content = message['content'] %}
         {%- endif %}
         {{- '[INST]' -}}
-        {{- render_content(content=user_content, context_name='user message content') -}}
+        {{- render_content(content=user_content, context_name='user message content', supported_types_desc='text, image and image_url', support_thinking=false, support_images=true) -}}
         {{- '[/INST]' }}
 
-    {#- Assistant messages supports text content. #}
+    {#- Assistant messages supports text and thinking content. #}
     {%- elif message['role'] == 'assistant' %}
         {%- if (message['content'] is none or message['content'] == '' or message['content']|length == 0) and (message['tool_calls'] is not defined or message['tool_calls'] is none or message['tool_calls']|length == 0) %}
             {{- raise_exception('Assistant message must have a string or a list of chunks in content or a list of tool calls.') }}
         {%- endif %}
 
         {%- if message['content'] %}
-            {{- render_content(content=message['content'], context_name='assistant message contents') -}}
+            {{- render_content(content=message['content'], context_name='assistant message contents', supported_types_desc='text and thinking', support_thinking=true, support_images=false) -}}
         {%- endif %}
 
         {%- if message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}
@@ -183,13 +242,13 @@
     {#- Tool messages (multimodal). #}
     {%- elif message['role'] == 'tool' %}
         {{- '[TOOL_RESULTS]' -}}
-        {{- render_content(content=message['content'], context_name='tool message contents') -}}
+        {{- render_content(content=message['content'], context_name='tool message contents', supported_types_desc='text and image', support_thinking=false, support_images=true) -}}
         {{- '[/TOOL_RESULTS]' }}
 
     {#- System messages. #}
     {%- elif message['role'] == 'system' %}
         {{- '[SYSTEM_PROMPT]' -}}
-        {{- render_content(content=message['content'], context_name='system message contents') -}}
+        {{- render_content(content=message['content'], context_name='system message contents', supported_types_desc='text', support_thinking=false, support_images=false) -}}
         {{- '[/SYSTEM_PROMPT]' -}}
 
     {#- Raise exception for unsupported roles. #}

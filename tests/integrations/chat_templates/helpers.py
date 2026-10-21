@@ -18,13 +18,20 @@ from jinja2 import BaseLoader
 from jinja2.sandbox import ImmutableSandboxedEnvironment
 from PIL import Image
 
-from mistral_common.integrations.chat_templates.template_generator import TemplateConfig
+from mistral_common.integrations.chat_templates.template_generator import (
+    MODEL_SETTINGS_FIELD_CHOICES,
+    TemplateConfig,
+)
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, ReasoningEffort
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
+from mistral_common.tokens.tokenizers.model_settings_builder import (
+    EnumBuilder,
+    JSONSchemaBuilder,
+    ModelSettingsBuilder,
+)
 from tests.test_tekken import get_special_tokens
 from tests.utils import decode_keep
 
@@ -46,6 +53,7 @@ class TestConfig:
     audio: bool = False
     think: bool = False
     plain_think: bool = False
+    model_settings_fields: frozenset[str] | None = None
 
 
 def build_template_config(config: TestConfig) -> TemplateConfig:
@@ -58,12 +66,22 @@ def build_template_config(config: TestConfig) -> TemplateConfig:
         thinking_support=config.think,
         plain_thinking_support=config.plain_think,
         use_special_token_variables=True,
+        model_settings_fields=config.model_settings_fields,
     )
 
 
 def load_golden_template(config: TemplateConfig) -> str:
     r"""Load the static golden template for a config."""
     parts = [config.version.value]
+    if config.supports_model_settings:
+        model_settings_fields = config.model_settings_fields
+        assert model_settings_fields is not None
+        settings_part = "_".join(
+            "response_format" if field == "json_schema" else field
+            for field in MODEL_SETTINGS_FIELD_CHOICES
+            if field in model_settings_fields
+        )
+        parts.append(settings_part)
     if config.image_support and config.any_thinking_support:
         parts.append("image_think")
     elif config.image_support:
@@ -117,8 +135,36 @@ def build_render_args(request: ChatCompletionRequest) -> dict[str, Any]:
     return kwargs
 
 
+def _build_model_settings_builder(config: TestConfig) -> ModelSettingsBuilder | None:
+    r"""Build the settings builders represented by a test configuration."""
+    if not config.version.supports_model_settings:
+        return None
+
+    selected_fields = config.model_settings_fields
+    if selected_fields is None:
+        selected_fields = TemplateConfig(version=config.version).model_settings_fields
+        assert selected_fields is not None
+
+    return ModelSettingsBuilder(
+        reasoning_effort=(
+            EnumBuilder(
+                accepts_none=True,
+                default=ReasoningEffort.none,
+                values=[ReasoningEffort.none, ReasoningEffort.high],
+            )
+            if "reasoning_effort" in selected_fields
+            else None
+        ),
+        json_schema=JSONSchemaBuilder() if "json_schema" in selected_fields else None,
+    )
+
+
 def render_template(
-    template: str, messages: list[Any], tools: list[Any] | None = None, reasoning_effort: str | None = None
+    template: str,
+    messages: list[Any],
+    tools: list[Any] | None = None,
+    reasoning_effort: str | None = None,
+    response_format: dict[str, Any] | None = None,
 ) -> str:
     r"""Render a Jinja2 template with the given messages using a pure Jinja2 sandbox.
 
@@ -131,8 +177,12 @@ def render_template(
     def raise_exception(msg: str) -> None:
         raise ValueError(msg)
 
+    def tojson(value: Any) -> str:
+        return json.dumps(obj=value, ensure_ascii=False)
+
     env = ImmutableSandboxedEnvironment(loader=BaseLoader())
     env.globals["raise_exception"] = raise_exception
+    env.filters["tojson"] = tojson
     jinja_template = env.from_string(template)
 
     render_kwargs: dict[str, Any] = {
@@ -145,6 +195,8 @@ def render_template(
     # Only add reasoning_effort for v15+ templates that support it
     if reasoning_effort is not None:
         render_kwargs["reasoning_effort"] = reasoning_effort
+    if response_format is not None:
+        render_kwargs["response_format"] = response_format
 
     return jinja_template.render(**render_kwargs)
 
@@ -247,14 +299,8 @@ def build_tekken_json(config: TestConfig, output_dir: Path) -> Path:
             },
         }
 
-    if config.version.supports_model_settings:
-        model_settings_builder = ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder(
-                accepts_none=True,
-                default=ReasoningEffort.none,
-                values=[ReasoningEffort.none, ReasoningEffort.high],
-            )
-        )
+    model_settings_builder = _build_model_settings_builder(config)
+    if model_settings_builder is not None:
         tekken_data["model_settings_builder"] = model_settings_builder.model_dump(mode="json")
 
     tekken_path = output_dir / "tekken.json"
