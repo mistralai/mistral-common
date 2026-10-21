@@ -484,7 +484,7 @@ class TestChatValidationV11:
         with pytest.raises(InvalidFunctionCallException, match="Tool call id"):
             validator.validate_request(request)
 
-    @pytest.mark.parametrize("tool_call_id", ["x", "call/id-1"])
+    @pytest.mark.parametrize("tool_call_id", ["x", "call/id-1", "abcDEF123\n"])
     def test_rejects_non_nine_character_alphanumeric_tool_call_id(self, tool_call_id: str) -> None:
         request = ChatCompletionRequest[ChatMessage](
             messages=[
