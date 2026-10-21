@@ -1546,3 +1546,16 @@ def test_from_openai_drops_extra_fields(from_openai_call: Any, expected: Any) ->
 def test_direct_construction_still_strict(constructor: Any) -> None:
     with pytest.raises(Exception):
         constructor()
+
+
+def test_convert_function_from_openai_null_strict() -> None:
+    openai_function: dict[str, Any] = {"name": "get_weather", "parameters": {"type": "object"}, "strict": None}
+    assert Function.from_openai(openai_function) == Function(name="get_weather", parameters={"type": "object"})
+
+
+def test_convert_tool_from_openai_null_strict() -> None:
+    openai_tool: dict[str, Any] = {
+        "type": "function",
+        "function": {"name": "get_weather", "parameters": {"type": "object"}, "strict": None},
+    }
+    assert Tool.from_openai(openai_tool) == Tool(function=Function(name="get_weather", parameters={"type": "object"}))
