@@ -283,9 +283,9 @@ class InstructRequestNormalizer(
         return tool_messages
 
     def _normalize_tool_call(self, tool_call: ToolCall) -> ToolCall:
-        normalized_function_aruments = self._normalize_json_content(tool_call.function.arguments)
+        normalized_function_arguments = self._normalize_json_content(tool_call.function.arguments)
         return ToolCall(
-            function=FunctionCall(name=tool_call.function.name, arguments=normalized_function_aruments),
+            function=FunctionCall(name=tool_call.function.name, arguments=normalized_function_arguments),
             id=tool_call.id,
         )
 

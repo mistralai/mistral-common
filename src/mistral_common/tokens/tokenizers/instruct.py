@@ -82,7 +82,7 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
         Returns:
             The image encoder, or `None` if image support is not configured.
         """
-        # this funtion is deprecated, use image_encoder instead
+        # this function is deprecated, use image_encoder instead
         # TODO(Patrick) - throw a deprecation warning once
         # changes applied to vllm and transformers
         return self.image_encoder
