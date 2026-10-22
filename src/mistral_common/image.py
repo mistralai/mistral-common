@@ -10,6 +10,7 @@ from pydantic import BeforeValidator, PlainSerializer, SerializationInfo
 
 from mistral_common import __version__
 from mistral_common.exceptions import ImageDecodeException
+from mistral_common.utils.data_url import maybe_strip_base64_data_url_prefix
 
 _IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY = "MISTRAL_COMMON_IMAGE_DOWNLOAD_TIMEOUT"
 _DEFAULT_IMAGE_DOWNLOAD_TIMEOUT_S = 10.0
@@ -91,7 +92,8 @@ def maybe_load_image_from_str_or_bytes(x: Image.Image | str | bytes) -> Image.Im
     Args:
         x: The input to load the image from. Can be a PIL Image, a string, or
             bytes. If it's a string, it's assumed to be a base64 encoded string
-            of bytes; if it's bytes, raw encoded image data (e.g., PNG).
+            of bytes, optionally with a `data:<mime>;base64,` prefix; if it's
+            bytes, raw encoded image data (e.g., PNG).
 
     Returns:
        The loaded image as a PIL Image object.
@@ -107,6 +109,7 @@ def maybe_load_image_from_str_or_bytes(x: Image.Image | str | bytes) -> Image.Im
         except Exception:
             raise RuntimeError("Encountered an error when loading image from bytes.")
 
+    x = maybe_strip_base64_data_url_prefix(x)
     try:
         image = Image.open(io.BytesIO(base64.b64decode(x.encode("ascii"))))
         return image
