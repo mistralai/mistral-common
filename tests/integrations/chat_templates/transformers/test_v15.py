@@ -152,7 +152,7 @@ _PARITY_CASES = [
     pytest.param(
         _BOTH_FIELDS,
         ChatCompletionRequest(
-            messages=[UserMessage(content="Hello")], response_format=ResponseFormat(type=ResponseFormats.json)
+            messages=[UserMessage(content="Hello")], response_format=ResponseFormat(type=ResponseFormats.json_object)
         ),
         id="json_object",
     ),

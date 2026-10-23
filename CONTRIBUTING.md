@@ -31,7 +31,7 @@ Use the pull request template to confirm these expectations. Maintainers may ask
 
 ## Local development
 
-The project uses Python 3.10–3.15, [uv](https://docs.astral.sh/uv/), pytest, Ruff, and mypy. A typical setup is:
+The project uses Python 3.11–3.15, [uv](https://docs.astral.sh/uv/), pytest, Ruff, and mypy. A typical setup is:
 
 ```bash
 uv venv

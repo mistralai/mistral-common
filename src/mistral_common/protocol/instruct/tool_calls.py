@@ -1,5 +1,5 @@
 import json
-from enum import Enum
+from enum import StrEnum, auto
 from typing import Any, TypeAlias, TypeVar
 
 from pydantic import field_validator
@@ -76,17 +76,17 @@ class Function(FunctionName):
             Function instance with parameters and description defaulted to
             empty dict and empty string respectively if not provided.
         """
-        filtered = cls._filter_cls_fields(openai_function)
-        if filtered.get("parameters") is None:
-            filtered["parameters"] = {}
-        if filtered.get("description") is None:
-            filtered["description"] = ""
-        if filtered.get("strict") is None:
-            filtered.pop("strict", None)
-        return cls.model_validate(filtered)
+        function = dict(openai_function)
+        if function.get("parameters") is None:
+            function["parameters"] = {}
+        if function.get("description") is None:
+            function["description"] = ""
+        if function.get("strict") is None:
+            function.pop("strict", None)
+        return cls.model_validate(function, extra="ignore")
 
 
-class ToolTypes(str, Enum):
+class ToolTypes(StrEnum):
     r"""Enum of supported tool types.
 
     Attributes:
@@ -96,10 +96,10 @@ class ToolTypes(str, Enum):
         >>> tool_type = ToolTypes.function
     """
 
-    function = "function"
+    function = auto()
 
 
-class ToolChoiceEnum(str, Enum):
+class ToolChoiceEnum(StrEnum):
     r"""Enum controlling how the model selects tools.
 
     Attributes:
@@ -204,7 +204,7 @@ class Tool(MistralBase):
         openai_tool = openai_tool.copy()
         if function := openai_tool.get("function"):
             openai_tool["function"] = Function.from_openai(function)
-        return cls.model_validate_ignore_extra(openai_tool)
+        return cls.model_validate(openai_tool, extra="ignore")
 
 
 class FunctionCall(MistralBase):
@@ -289,7 +289,7 @@ class ToolCall(MistralBase):
         Returns:
             ToolCall instance with fields parsed from the OpenAI format.
         """
-        return cls.model_validate_ignore_extra(tool_call)
+        return cls.model_validate(tool_call, extra="ignore")
 
 
 ToolType = TypeVar("ToolType", bound=Tool)

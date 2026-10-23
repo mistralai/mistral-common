@@ -259,7 +259,7 @@ def test_builder_text_yields_none() -> None:
 
 def test_builder_json_yields_anyof() -> None:
     b = ModelSettingsBuilder(json_schema=JSONSchemaBuilder())
-    response_format = ResponseFormat(type=ResponseFormats.json)
+    response_format = ResponseFormat(type=ResponseFormats.json_object)
     assert response_format.get_schema(purpose=SchemaRenderingMode.model_settings) == JSON_OBJECT_OR_ARRAY_SCHEMA
     assert b.build_settings(_req(response_format)).json_schema == JSON_OBJECT_OR_ARRAY_SCHEMA
 
@@ -300,7 +300,8 @@ def test_json_schema_missing_schema_raises() -> None:
 
 
 def test_builder_without_json_schema_ignores_response_format() -> None:
-    assert ModelSettingsBuilder().build_settings(_req(ResponseFormat(type=ResponseFormats.json))).json_schema is None
+    settings = ModelSettingsBuilder().build_settings(_req(ResponseFormat(type=ResponseFormats.json_object)))
+    assert settings.json_schema is None
 
 
 def test_validate_settings_rejects_invalid_json_schema() -> None:

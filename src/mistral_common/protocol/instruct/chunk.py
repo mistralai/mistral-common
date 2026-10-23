@@ -1,13 +1,12 @@
 import base64
 import io
 import re
-from enum import Enum
+from enum import StrEnum, auto
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 from urllib.parse import urlparse
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
-from typing_extensions import Annotated
 
 from mistral_common.base import MistralBase
 from mistral_common.deprecation import warn_once
@@ -56,7 +55,7 @@ def _detect_audio_format(data: str | bytes) -> str:
     return fmt
 
 
-class ChunkTypes(str, Enum):
+class ChunkTypes(StrEnum):
     r"""Enum of the types of content chunks that can be sent to the model.
 
     Attributes:
@@ -72,12 +71,12 @@ class ChunkTypes(str, Enum):
         >>> chunk_type = ChunkTypes.text
     """
 
-    text = "text"
-    image = "image"
-    image_url = "image_url"
-    input_audio = "input_audio"
-    audio_url = "audio_url"
-    thinking = "thinking"
+    text = auto()
+    image = auto()
+    image_url = auto()
+    input_audio = auto()
+    audio_url = auto()
+    thinking = auto()
 
 
 class BaseContentChunk(MistralBase):
@@ -326,7 +325,7 @@ class AudioURL(MistralBase):
     url: str
 
 
-class AudioURLType(str, Enum):
+class AudioURLType(StrEnum):
     r"""Enum for the kinds of audio URL references.
 
     Attributes:
@@ -337,10 +336,10 @@ class AudioURLType(str, Enum):
         file_uri: A file URI (e.g., `file:///path/to/file`).
     """
 
-    url = "url"
-    base64 = "base64"
-    file = "file"
-    file_uri = "file_uri"
+    url = auto()
+    base64 = auto()
+    file = auto()
+    file_uri = auto()
 
 
 class AudioURLChunk(BaseContentChunk):
@@ -413,7 +412,7 @@ class AudioURLChunk(BaseContentChunk):
     @classmethod
     def from_openai(cls, openai_chunk: dict[str, Any]) -> "AudioURLChunk":
         r"""Converts the OpenAI chunk to the Mistral format."""
-        return cls.model_validate_ignore_extra(openai_chunk)
+        return cls.model_validate(openai_chunk, extra="ignore")
 
 
 class AudioChunk(BaseContentChunk):
@@ -451,7 +450,7 @@ class AudioChunk(BaseContentChunk):
         if isinstance(raw, MistralBase):
             raw = raw.model_dump()
         if isinstance(raw, dict) and "data" in raw:
-            values["input_audio"] = raw["data"]
+            return {**values, "input_audio": raw["data"]}
         return values
 
     @field_validator("input_audio")
@@ -505,7 +504,7 @@ class AudioChunk(BaseContentChunk):
         Returns:
             An AudioChunk instance initialized with the data from the OpenAI chunk.
         """
-        return cls.model_validate_ignore_extra(openai_chunk)
+        return cls.model_validate(openai_chunk, extra="ignore")
 
 
 class TextChunk(BaseContentChunk):
@@ -528,7 +527,7 @@ class TextChunk(BaseContentChunk):
     @classmethod
     def from_openai(cls, openai_chunk: dict[str, Any]) -> "TextChunk":
         r"""Converts the OpenAI chunk to the Mistral format."""
-        return cls.model_validate_ignore_extra(openai_chunk)
+        return cls.model_validate(openai_chunk, extra="ignore")
 
 
 class ThinkChunk(BaseContentChunk):
@@ -555,7 +554,7 @@ class ThinkChunk(BaseContentChunk):
     @classmethod
     def from_openai(cls, openai_chunk: dict[str, Any]) -> "ThinkChunk":
         r"""Converts the OpenAI chunk to the Mistral format."""
-        return cls.model_validate_ignore_extra(openai_chunk)
+        return cls.model_validate(openai_chunk, extra="ignore")
 
 
 ContentChunk = Annotated[

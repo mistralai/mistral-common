@@ -1,9 +1,7 @@
 import re
 from collections.abc import Sequence
-from enum import Enum
-from typing import Generic
-
-from typing_extensions import assert_never
+from enum import StrEnum, auto
+from typing import Generic, assert_never
 
 from mistral_common.exceptions import (
     InvalidAssistantMessageException,
@@ -80,7 +78,7 @@ def _validate_content_chunk_types(
         raise exception_cls(f"Unexpected content chunk types in {role} message: {invalid}")
 
 
-class ValidationMode(str, Enum):
+class ValidationMode(StrEnum):
     r"""Validation mode controlling which validation rules are applied.
 
     Attributes:
@@ -97,10 +95,10 @@ class ValidationMode(str, Enum):
         >>> mode = ValidationMode.serving
     """
 
-    serving = "serving"
-    finetuning = "finetuning"
-    test = "test"
-    agnostic = "agnostic"
+    serving = auto()
+    finetuning = auto()
+    test = auto()
+    agnostic = auto()
 
 
 class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType]):
