@@ -36,11 +36,14 @@
     {%- endif %}
 {%- endif %}
 {%- if reasoning_effort is not defined or reasoning_effort is none %}
-    {%- set reasoning_effort = 'none' %}
+    {%- set reasoning_effort = 'high' %}
 {%- endif %}
-{%- if reasoning_effort not in ['none', 'high'] %}
-    {{- raise_exception('reasoning_effort must be either "none" or "high"') }}
+{#- Exposed reasoning efforts are remapped onto the values the model was trained on. -#}
+{%- set reasoning_effort_mapping = {'low': 'low', 'high': 'medium', 'max': 'high'} %}
+{%- if reasoning_effort not in reasoning_effort_mapping %}
+    {{- raise_exception('reasoning_effort must be one of "low", "high", "max"') }}
 {%- endif %}
+{%- set reasoning_effort = reasoning_effort_mapping[reasoning_effort] %}
 {%- set model_settings_parts = [] %}
 {%- if json_schema is not none %}
     {%- set model_settings_parts = model_settings_parts + ['"json_schema": ' ~ (json_schema|tojson)] %}

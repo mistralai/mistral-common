@@ -1,18 +1,43 @@
 import json
 import re
+from pathlib import Path
 from typing import Any
 
 import pytest
 from jinja2 import BaseLoader
 from jinja2.sandbox import ImmutableSandboxedEnvironment
 
-from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
+from mistral_common.integrations.chat_templates.chat_templates import (
+    convert_tokenizer_to_chat_template,
+    generate_chat_template,
+)
 from mistral_common.integrations.chat_templates.template_generator import TemplateConfig, build_chat_template
+from mistral_common.protocol.instruct.messages import UserMessage
+from mistral_common.protocol.instruct.request import ChatCompletionRequest, ReasoningEffort
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.integrations.chat_templates.fixtures_data import PARITY_JSON_SCHEMA, PARITY_JSON_SCHEMA_NON_ASCII
 from tests.integrations.chat_templates.helpers import (
+    LOW_HIGH_MAX_REASONING_EFFORT_DEFAULT,
+    LOW_HIGH_MAX_REASONING_EFFORT_MAPPED_DEFAULT,
+    LOW_HIGH_MAX_REASONING_EFFORT_MAPPING,
+    LOW_HIGH_MAX_REASONING_EFFORT_VALUES,
+    NONE_HIGH_REASONING_EFFORT_DEFAULT,
+    NONE_HIGH_REASONING_EFFORT_VALUES,
+    build_reasoning_effort_tekken_json,
+    build_reasoning_effort_template,
+    build_render_args,
+    encode_mistral_common,
     render_template,
 )
+from tests.utils import decode_keep
+
+_MESSAGES = [{"role": "user", "content": "Hello"}]
+
+
+def _reasoning_effort_settings(reasoning_effort: str) -> str:
+    r"""The `[MODEL_SETTINGS]` block emitted for a reasoning effort value."""
+    return f'[MODEL_SETTINGS]{{"reasoning_effort": "{reasoning_effort}"}}[/MODEL_SETTINGS]'
 
 
 class TestV15ModelSettings:
@@ -28,6 +53,7 @@ class TestV15ModelSettings:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
         )
 
     def test_v15_template_contains_model_settings(self, v15_template: str) -> None:
@@ -36,7 +62,14 @@ class TestV15ModelSettings:
 
     @pytest.mark.parametrize(
         ("reasoning_effort", "expected_value"),
-        [(None, "none"), ("high", "high"), ("none", "none")],
+        [
+            (None, "none"),
+            ("low", "low"),
+            ("medium", "medium"),
+            ("high", "high"),
+            ("xhigh", "xhigh"),
+            ("max", "max"),
+        ],
     )
     def test_v15_reasoning_effort_rendering(
         self, v15_template: str, reasoning_effort: str | None, expected_value: str
@@ -60,6 +93,7 @@ class TestV15ModelSettings:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
         )
 
         messages = [
@@ -88,6 +122,7 @@ class TestV15ModelSettings:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
         )
 
         messages = [
@@ -116,6 +151,7 @@ class TestV15ModelSettings:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
         )
 
         tools = [
@@ -169,6 +205,7 @@ class TestV15ModelSettings:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
         )
 
         messages: list[dict[str, Any]] = []
@@ -230,6 +267,7 @@ class TestV15ModelSettings:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
         )
 
         messages: list[dict[str, Any]] = [
@@ -413,7 +451,11 @@ class TestV15ModelSettings:
     )
     def test_v15_json_schema_renders_with_stock_jinja_tojson(self, model_settings_fields: frozenset[str]) -> None:
         template = build_chat_template(
-            config=TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields)
+            config=TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=model_settings_fields,
+                reasoning_effort_default="none" if "reasoning_effort" in model_settings_fields else None,
+            )
         )
         environment = ImmutableSandboxedEnvironment(loader=BaseLoader())
 
@@ -431,6 +473,7 @@ class TestV15ModelSettings:
             config=TemplateConfig(
                 version=TokenizerVersion.v15,
                 model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+                reasoning_effort_default="none",
             )
         )
         messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
@@ -457,6 +500,7 @@ class TestV15ModelSettings:
             config=TemplateConfig(
                 version=TokenizerVersion.v15,
                 model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+                reasoning_effort_default="none",
             )
         )
         messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
@@ -477,6 +521,7 @@ class TestV15ModelSettings:
             config=TemplateConfig(
                 version=TokenizerVersion.v15,
                 model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+                reasoning_effort_default="none",
             )
         )
         messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
@@ -496,19 +541,22 @@ class TestV15ModelSettings:
             config=TemplateConfig(
                 version=TokenizerVersion.v15,
                 model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+                reasoning_effort_default="none",
             )
         )
         messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
 
-        with pytest.raises(ValueError, match='reasoning_effort must be either "none" or "high"'):
+        with pytest.raises(ValueError, match="reasoning_effort must be one of"):
             render_template(
                 template=template,
                 messages=messages,
-                reasoning_effort="medium",
+                reasoning_effort="minimal",
             )
 
     def test_v15_reasoning_effort_only_ignores_response_format(self) -> None:
-        template = build_chat_template(config=TemplateConfig(version=TokenizerVersion.v15))
+        template = build_chat_template(
+            config=TemplateConfig(version=TokenizerVersion.v15, reasoning_effort_default="none")
+        )
         messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
         response_format = {
             "type": "json_schema",
@@ -525,6 +573,7 @@ class TestV15ModelSettings:
             config=TemplateConfig(
                 version=TokenizerVersion.v15,
                 model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+                reasoning_effort_default="none",
             )
         )
         tools = [
@@ -557,6 +606,209 @@ class TestV15ModelSettings:
         assert tools_position < settings_position < first_user_position
 
 
+class TestGeneratedTemplateMapping:
+    def test_mapping_is_baked_into_template(self) -> None:
+        template = build_reasoning_effort_template(
+            reasoning_effort_mapping=LOW_HIGH_MAX_REASONING_EFFORT_MAPPING,
+            reasoning_effort_default=LOW_HIGH_MAX_REASONING_EFFORT_DEFAULT,
+        )
+        assert "{%- set reasoning_effort_mapping = {'low': 'low', 'high': 'medium', 'max': 'high'} %}" in template
+        assert "{%- if reasoning_effort not in reasoning_effort_mapping %}" in template
+        assert "{%- set reasoning_effort = reasoning_effort_mapping[reasoning_effort] %}" in template
+
+    def test_template_without_mapping_validates_the_full_ladder(self) -> None:
+        template = build_reasoning_effort_template(reasoning_effort_default="none")
+        assert "reasoning_effort_mapping" not in template
+        assert "{#- The model was trained" not in template
+        assert "{%- if reasoning_effort not in ['none', 'low', 'medium', 'high', 'xhigh', 'max'] %}" in template
+
+    def test_template_without_mapping_validates_exposed_values(self) -> None:
+        template = build_reasoning_effort_template(
+            reasoning_effort_values=NONE_HIGH_REASONING_EFFORT_VALUES,
+            reasoning_effort_default=NONE_HIGH_REASONING_EFFORT_DEFAULT,
+        )
+        assert "reasoning_effort_mapping" not in template
+        assert "{#- The model was trained" not in template
+        assert "{%- if reasoning_effort not in ['none', 'high'] %}" in template
+        assert 'reasoning_effort must be either "none" or "high"' in template
+
+    def test_mapping_comment_explains_the_remap(self) -> None:
+        template = build_reasoning_effort_template(
+            reasoning_effort_mapping=LOW_HIGH_MAX_REASONING_EFFORT_MAPPING,
+            reasoning_effort_default=LOW_HIGH_MAX_REASONING_EFFORT_DEFAULT,
+        )
+        comment = "{#- Exposed reasoning efforts are remapped onto the values the model was trained on. -#}"
+        assert comment in template
+        assert template.index(comment) < template.index("{%- set reasoning_effort_mapping")
+
+    def test_default_is_baked_into_template(self) -> None:
+        template = build_reasoning_effort_template(
+            reasoning_effort_mapping=LOW_HIGH_MAX_REASONING_EFFORT_MAPPING,
+            reasoning_effort_default=LOW_HIGH_MAX_REASONING_EFFORT_DEFAULT,
+        )
+        assert "{%- set reasoning_effort = 'high' %}" in template
+
+    def test_template_without_default_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="Reasoning effort default is required"):
+            build_reasoning_effort_template()
+
+    @pytest.mark.parametrize("reasoning_effort", NONE_HIGH_REASONING_EFFORT_VALUES)
+    def test_render_without_mapping_keeps_exposed_value(self, reasoning_effort: str) -> None:
+        template = build_reasoning_effort_template(
+            reasoning_effort_values=NONE_HIGH_REASONING_EFFORT_VALUES,
+            reasoning_effort_default=NONE_HIGH_REASONING_EFFORT_DEFAULT,
+        )
+        rendered = render_template(template, messages=_MESSAGES, reasoning_effort=reasoning_effort)
+        assert _reasoning_effort_settings(reasoning_effort) in rendered
+
+    def test_render_unset_effort_uses_default(self) -> None:
+        template = build_reasoning_effort_template(
+            reasoning_effort_values=NONE_HIGH_REASONING_EFFORT_VALUES,
+            reasoning_effort_default=NONE_HIGH_REASONING_EFFORT_DEFAULT,
+        )
+        rendered = render_template(template, messages=_MESSAGES)
+        assert _reasoning_effort_settings(NONE_HIGH_REASONING_EFFORT_DEFAULT) in rendered
+
+    def test_render_rejects_value_outside_exposed_values(self) -> None:
+        template = build_reasoning_effort_template(
+            reasoning_effort_values=NONE_HIGH_REASONING_EFFORT_VALUES,
+            reasoning_effort_default=NONE_HIGH_REASONING_EFFORT_DEFAULT,
+        )
+        with pytest.raises(ValueError, match='reasoning_effort must be either "none" or "high"'):
+            render_template(template, messages=_MESSAGES, reasoning_effort="low")
+
+
+class TestNoneHighReasoningEffortWithoutRemapping:
+    r"""The v15 configuration exposing `none` and `high`, both supported as-is."""
+
+    @pytest.mark.parametrize("reasoning_effort", [ReasoningEffort.none, ReasoningEffort.high])
+    def test_exposed_values_encode_as_is(self, tmp_path: Path, reasoning_effort: ReasoningEffort) -> None:
+        tekken_path = build_reasoning_effort_tekken_json(
+            output_dir=tmp_path,
+            reasoning_effort_values=NONE_HIGH_REASONING_EFFORT_VALUES,
+            reasoning_effort_default=NONE_HIGH_REASONING_EFFORT_DEFAULT,
+        )
+        tokenizer = MistralTokenizer.from_file(str(tekken_path))
+        request = ChatCompletionRequest(messages=[UserMessage(content="Hello")], reasoning_effort=reasoning_effort)
+        text = decode_keep(tokenizer, tokenizer.encode_chat_completion(request))
+        assert _reasoning_effort_settings(reasoning_effort.value) in text
+
+    def test_unset_effort_encodes_default(self, tmp_path: Path) -> None:
+        tekken_path = build_reasoning_effort_tekken_json(
+            output_dir=tmp_path,
+            reasoning_effort_values=NONE_HIGH_REASONING_EFFORT_VALUES,
+            reasoning_effort_default=NONE_HIGH_REASONING_EFFORT_DEFAULT,
+        )
+        tokenizer = MistralTokenizer.from_file(str(tekken_path))
+        request = ChatCompletionRequest(messages=[UserMessage(content="Hello")])
+        text = decode_keep(tokenizer, tokenizer.encode_chat_completion(request))
+        assert _reasoning_effort_settings(NONE_HIGH_REASONING_EFFORT_DEFAULT) in text
+
+    @pytest.mark.parametrize(
+        "reasoning_effort",
+        [ReasoningEffort.none, ReasoningEffort.high, None],
+        ids=["none", "high", "unset"],
+    )
+    def test_template_and_tokenizer_agree(self, tmp_path: Path, reasoning_effort: ReasoningEffort | None) -> None:
+        tekken_path = build_reasoning_effort_tekken_json(
+            output_dir=tmp_path,
+            reasoning_effort_values=NONE_HIGH_REASONING_EFFORT_VALUES,
+            reasoning_effort_default=NONE_HIGH_REASONING_EFFORT_DEFAULT,
+        )
+        tokenizer = MistralTokenizer.from_file(str(tekken_path))
+        template = convert_tokenizer_to_chat_template(tokenizer_file=tekken_path)
+        request = ChatCompletionRequest(messages=[UserMessage(content="Hello")], reasoning_effort=reasoning_effort)
+
+        tokenized = encode_mistral_common(mistral_tokenizer=tokenizer, chat_request=request, spm=False)
+        rendered = render_template(template, **build_render_args(request))
+
+        expected = _reasoning_effort_settings(
+            reasoning_effort.value if reasoning_effort is not None else NONE_HIGH_REASONING_EFFORT_DEFAULT
+        )
+        assert expected in tokenized
+        assert tokenized == rendered
+
+
+class TestLowHighMaxReasoningEffortRemapping:
+    r"""The v15 configuration exposing `low`, `high` and `max`, remapped onto `low`, `medium` and `high`."""
+
+    @pytest.mark.parametrize("reasoning_effort", LOW_HIGH_MAX_REASONING_EFFORT_VALUES)
+    def test_render_maps_exposed_values(self, reasoning_effort: str) -> None:
+        template = build_reasoning_effort_template(
+            reasoning_effort_mapping=LOW_HIGH_MAX_REASONING_EFFORT_MAPPING,
+            reasoning_effort_default=LOW_HIGH_MAX_REASONING_EFFORT_DEFAULT,
+        )
+        rendered = render_template(template, messages=_MESSAGES, reasoning_effort=reasoning_effort)
+        model_side_value = LOW_HIGH_MAX_REASONING_EFFORT_MAPPING[reasoning_effort]
+        assert _reasoning_effort_settings(model_side_value) in rendered
+
+    def test_render_unset_effort_maps_default(self) -> None:
+        template = build_reasoning_effort_template(
+            reasoning_effort_mapping=LOW_HIGH_MAX_REASONING_EFFORT_MAPPING,
+            reasoning_effort_default=LOW_HIGH_MAX_REASONING_EFFORT_DEFAULT,
+        )
+        rendered = render_template(template, messages=_MESSAGES)
+        assert _reasoning_effort_settings(LOW_HIGH_MAX_REASONING_EFFORT_MAPPED_DEFAULT) in rendered
+
+    def test_render_rejects_value_outside_mapping(self) -> None:
+        template = build_reasoning_effort_template(
+            reasoning_effort_mapping=LOW_HIGH_MAX_REASONING_EFFORT_MAPPING,
+            reasoning_effort_default=LOW_HIGH_MAX_REASONING_EFFORT_DEFAULT,
+        )
+        with pytest.raises(ValueError, match='reasoning_effort must be one of "low", "high", "max"'):
+            render_template(template, messages=_MESSAGES, reasoning_effort="none")
+
+    @pytest.mark.parametrize("reasoning_effort", [ReasoningEffort.low, ReasoningEffort.high, ReasoningEffort.max])
+    def test_exposed_values_encode_as_model_side_value(self, tmp_path: Path, reasoning_effort: ReasoningEffort) -> None:
+        tekken_path = build_reasoning_effort_tekken_json(
+            output_dir=tmp_path,
+            reasoning_effort_mapping=LOW_HIGH_MAX_REASONING_EFFORT_MAPPING,
+            reasoning_effort_default=LOW_HIGH_MAX_REASONING_EFFORT_DEFAULT,
+        )
+        tokenizer = MistralTokenizer.from_file(str(tekken_path))
+        request = ChatCompletionRequest(messages=[UserMessage(content="Hello")], reasoning_effort=reasoning_effort)
+        text = decode_keep(tokenizer, tokenizer.encode_chat_completion(request))
+        model_side_value = LOW_HIGH_MAX_REASONING_EFFORT_MAPPING[reasoning_effort.value]
+        assert _reasoning_effort_settings(model_side_value) in text
+
+    def test_unset_effort_encodes_mapped_default(self, tmp_path: Path) -> None:
+        # An unset effort resolves to the exposed default "high", remapped to "medium".
+        tekken_path = build_reasoning_effort_tekken_json(
+            output_dir=tmp_path,
+            reasoning_effort_mapping=LOW_HIGH_MAX_REASONING_EFFORT_MAPPING,
+            reasoning_effort_default=LOW_HIGH_MAX_REASONING_EFFORT_DEFAULT,
+        )
+        tokenizer = MistralTokenizer.from_file(str(tekken_path))
+        request = ChatCompletionRequest(messages=[UserMessage(content="Hello")])
+        text = decode_keep(tokenizer, tokenizer.encode_chat_completion(request))
+        assert _reasoning_effort_settings(LOW_HIGH_MAX_REASONING_EFFORT_MAPPED_DEFAULT) in text
+
+    @pytest.mark.parametrize(
+        "reasoning_effort",
+        [ReasoningEffort.low, ReasoningEffort.high, ReasoningEffort.max, None],
+        ids=["low", "high", "max", "unset"],
+    )
+    def test_template_and_tokenizer_agree(self, tmp_path: Path, reasoning_effort: ReasoningEffort | None) -> None:
+        tekken_path = build_reasoning_effort_tekken_json(
+            output_dir=tmp_path,
+            reasoning_effort_mapping=LOW_HIGH_MAX_REASONING_EFFORT_MAPPING,
+            reasoning_effort_default=LOW_HIGH_MAX_REASONING_EFFORT_DEFAULT,
+        )
+        tokenizer = MistralTokenizer.from_file(str(tekken_path))
+        template = convert_tokenizer_to_chat_template(tokenizer_file=tekken_path)
+        request = ChatCompletionRequest(messages=[UserMessage(content="Hello")], reasoning_effort=reasoning_effort)
+
+        tokenized = encode_mistral_common(mistral_tokenizer=tokenizer, chat_request=request, spm=False)
+        rendered = render_template(template, **build_render_args(request))
+
+        if reasoning_effort is None:
+            assert _reasoning_effort_settings(LOW_HIGH_MAX_REASONING_EFFORT_MAPPED_DEFAULT) in tokenized
+        else:
+            model_side_value = LOW_HIGH_MAX_REASONING_EFFORT_MAPPING[reasoning_effort.value]
+            assert _reasoning_effort_settings(model_side_value) in tokenized
+        assert tokenized == rendered
+
+
 class TestV15MultimodalContent:
     def test_v15_tool_message_with_image_content(self) -> None:
         r"""V15 image template renders tool message with image content using render_content."""
@@ -570,6 +822,7 @@ class TestV15MultimodalContent:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
         )
 
         messages: list[dict[str, Any]] = [
@@ -608,6 +861,7 @@ class TestV15MultimodalContent:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
         )
 
         messages: list[dict[str, Any]] = [
@@ -646,6 +900,7 @@ class TestV15MultimodalContent:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
         )
 
         messages: list[dict[str, Any]] = [
@@ -762,6 +1017,7 @@ class TestV15MultimodalContent:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
         )
 
         tools = [{"type": "function", "function": {"name": "fn", "description": "test", "parameters": {}}}]

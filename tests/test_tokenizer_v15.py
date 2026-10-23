@@ -38,9 +38,9 @@ from mistral_common.tokens.tokenizers.image import ImageConfig, ImageEncoder, Sp
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV15
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import (
-    EnumBuilder,
     JSONSchemaBuilder,
     ModelSettingsBuilder,
+    ReasoningEffortBuilder,
 )
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
@@ -161,10 +161,10 @@ def _build_model_settings_builder(
     if allowed_reasoning_effort is None:
         return ModelSettingsBuilder.none()
     return ModelSettingsBuilder(
-        reasoning_effort=EnumBuilder[ReasoningEffort](
+        reasoning_effort=ReasoningEffortBuilder(
             values=[ReasoningEffort(v) for v in allowed_reasoning_effort],
             accepts_none=True,
-            default=ReasoningEffort(allowed_reasoning_effort[0]) if allowed_reasoning_effort else None,
+            default=ReasoningEffort(allowed_reasoning_effort[0]),
         )
     )
 
@@ -416,7 +416,6 @@ def test_system_think_chunk_raises_v15(v15_tekkenizer: InstructTokenizerV15) -> 
         ("high", ("none", "high"), None, None),
         ("high", ("none",), InvalidRequestException, "should be one of"),
         ("none", ("none",), None, None),
-        ("none", (), InvalidRequestException, "not supported for this model"),
     ],
 )
 def test_forbidden_reasoning_effort_raises(
@@ -443,7 +442,7 @@ def test_forbidden_reasoning_effort_raises(
         tokenizer_v15.encode_chat_completion(request)
 
 
-@pytest.mark.parametrize(("reasoning_effort", "allowed_reasoning_effort"), [(None, ()), ("none", None)])
+@pytest.mark.parametrize(("reasoning_effort", "allowed_reasoning_effort"), [("none", None)])
 def test_encode_ignore_one_model_settings(
     messages: list[ChatMessage],
     reasoning_effort: str | None,
@@ -460,35 +459,13 @@ def test_encode_ignore_one_model_settings(
 @pytest.mark.parametrize("reasoning_effort", [None, *list(ReasoningEffort)])
 def test_end_to_end_with_default(messages: list[ChatMessage], reasoning_effort: ReasoningEffort | None) -> None:
     """When the builder has a default, None reasoning_effort resolves to the default."""
-    builder = _build_model_settings_builder(("none", "high"))
+    builder = _build_model_settings_builder(tuple(ReasoningEffort))
     tokenizer_v15 = get_v15_mistral_tokenizer(builder)
     request = ChatCompletionRequest(messages=messages, reasoning_effort=reasoning_effort)
     tokenized = tokenizer_v15.encode_chat_completion(request)
     text = decode_keep(tokenizer_v15, tokenized)
-    if reasoning_effort == ReasoningEffort.high:
-        assert '[MODEL_SETTINGS]{"reasoning_effort": "high"}[/MODEL_SETTINGS]' in text
-    else:
-        # Both None (default applied) and explicit "none" resolve to the default "none"
-        assert '[MODEL_SETTINGS]{"reasoning_effort": "none"}[/MODEL_SETTINGS]' in text
-
-
-@pytest.mark.parametrize("reasoning_effort", [None, *list(ReasoningEffort)])
-def test_end_to_end_no_default(messages: list[ChatMessage], reasoning_effort: ReasoningEffort | None) -> None:
-    """When the builder has no default, None reasoning_effort means no model settings."""
-    builder = ModelSettingsBuilder(
-        reasoning_effort=EnumBuilder[ReasoningEffort](values=list(ReasoningEffort), accepts_none=True, default=None)
-    )
-    tokenizer_v15 = get_v15_mistral_tokenizer(builder)
-    request = ChatCompletionRequest(messages=messages, reasoning_effort=reasoning_effort)
-    tokenized = tokenizer_v15.encode_chat_completion(request)
-    text = decode_keep(tokenizer_v15, tokenized)
-    if reasoning_effort == ReasoningEffort.high:
-        assert '[MODEL_SETTINGS]{"reasoning_effort": "high"}[/MODEL_SETTINGS]' in text
-    elif reasoning_effort == ReasoningEffort.none:
-        assert '[MODEL_SETTINGS]{"reasoning_effort": "none"}[/MODEL_SETTINGS]' in text
-    else:
-        # None with no default -> no model settings encoded
-        assert "[MODEL_SETTINGS]" not in text
+    expected_effort = ReasoningEffort.none if reasoning_effort is None else reasoning_effort
+    assert f'[MODEL_SETTINGS]{{"reasoning_effort": "{expected_effort.value}"}}[/MODEL_SETTINGS]' in text
 
 
 @pytest.fixture
@@ -552,7 +529,9 @@ def test_v15_rejects_invalid_json_schema_settings(messages: list[ChatMessage]) -
 @pytest.fixture
 def v15_reasoning_and_json_schema_mistral_tokenizer() -> MistralTokenizer:
     builder = ModelSettingsBuilder(
-        reasoning_effort=EnumBuilder[ReasoningEffort](values=list(ReasoningEffort), accepts_none=True, default=None),
+        reasoning_effort=ReasoningEffortBuilder(
+            values=list(ReasoningEffort), accepts_none=True, default=ReasoningEffort.none
+        ),
         json_schema=JSONSchemaBuilder(),
     )
     return get_v15_mistral_tokenizer(builder)
@@ -609,6 +588,74 @@ def test_v15_encodes_reasoning_effort_and_json_schema_into_model_settings(
     tokenized = v15_reasoning_and_json_schema_mistral_tokenizer.encode_chat_completion(request)
     text = decode_keep(tokenizer=v15_reasoning_and_json_schema_mistral_tokenizer, tokenized=tokenized)
     assert text == expected_text, text
+
+
+@pytest.fixture
+def v15_reasoning_remapping_and_json_schema_mistral_tokenizer() -> MistralTokenizer:
+    r"""V15 tokenizer exposing low, high and max, remapped onto low, medium and high.
+
+    The default is the exposed `high`, which the model receives as `medium`.
+    """
+    builder = ModelSettingsBuilder(
+        reasoning_effort=ReasoningEffortBuilder(
+            values=[ReasoningEffort.low, ReasoningEffort.high, ReasoningEffort.max],
+            mapping={
+                ReasoningEffort.low: ReasoningEffort.low,
+                ReasoningEffort.high: ReasoningEffort.medium,
+                ReasoningEffort.max: ReasoningEffort.high,
+            },
+            accepts_none=True,
+            default=ReasoningEffort.high,
+        ),
+        json_schema=JSONSchemaBuilder(),
+    )
+    return get_v15_mistral_tokenizer(builder)
+
+
+@pytest.mark.parametrize(
+    ("reasoning_effort", "expected_model_side_effort"),
+    [
+        pytest.param(ReasoningEffort.low, "low", id="low"),
+        pytest.param(ReasoningEffort.high, "medium", id="high"),
+        pytest.param(ReasoningEffort.max, "high", id="max"),
+        pytest.param(None, "medium", id="unset_resolves_to_mapped_default"),
+    ],
+)
+def test_v15_encode_chat_completion_applies_reasoning_effort_remapping(
+    v15_reasoning_remapping_and_json_schema_mistral_tokenizer: MistralTokenizer,
+    reasoning_effort: ReasoningEffort | None,
+    expected_model_side_effort: str,
+) -> None:
+    r"""`encode_chat_completion` encodes the model-side value of the exposed reasoning effort."""
+    request = ChatCompletionRequest(messages=[UserMessage(content="hi")], reasoning_effort=reasoning_effort)
+    tokenized = v15_reasoning_remapping_and_json_schema_mistral_tokenizer.encode_chat_completion(request)
+    text = decode_keep(tokenizer=v15_reasoning_remapping_and_json_schema_mistral_tokenizer, tokenized=tokenized)
+    assert f'[MODEL_SETTINGS]{{"reasoning_effort": "{expected_model_side_effort}"}}[/MODEL_SETTINGS]' in text
+
+
+def test_v15_encode_chat_completion_remapping_with_json_schema(
+    v15_reasoning_remapping_and_json_schema_mistral_tokenizer: MistralTokenizer,
+) -> None:
+    r"""The remapped effort is encoded together with the JSON schema in the model settings."""
+    request = ChatCompletionRequest(
+        messages=[UserMessage(content="hi")],
+        response_format=ResponseFormat(type=ResponseFormats.json_object),
+        reasoning_effort=ReasoningEffort.high,
+    )
+    tokenized = v15_reasoning_remapping_and_json_schema_mistral_tokenizer.encode_chat_completion(request)
+    text = decode_keep(tokenizer=v15_reasoning_remapping_and_json_schema_mistral_tokenizer, tokenized=tokenized)
+    assert (
+        '<s>[MODEL_SETTINGS]{"json_schema": {"anyOf": [{"type": "object"}, {"type": "array"}]}, '
+        '"reasoning_effort": "medium"}[/MODEL_SETTINGS][INST]hi[/INST]' == text
+    )
+
+
+def test_v15_encode_chat_completion_rejects_unexposed_reasoning_effort(
+    v15_reasoning_remapping_and_json_schema_mistral_tokenizer: MistralTokenizer,
+) -> None:
+    request = ChatCompletionRequest(messages=[UserMessage(content="hi")], reasoning_effort=ReasoningEffort.none)
+    with pytest.raises(InvalidRequestException, match="should be one of"):
+        v15_reasoning_remapping_and_json_schema_mistral_tokenizer.encode_chat_completion(request)
 
 
 def test_encode_chat_completion_prefixed_final_message() -> None:

@@ -21,6 +21,7 @@ from PIL import Image
 from mistral_common.integrations.chat_templates.template_generator import (
     MODEL_SETTINGS_FIELD_CHOICES,
     TemplateConfig,
+    build_chat_template,
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, ReasoningEffort
 from mistral_common.protocol.instruct.validator import ValidationMode
@@ -28,9 +29,9 @@ from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import (
-    EnumBuilder,
     JSONSchemaBuilder,
     ModelSettingsBuilder,
+    ReasoningEffortBuilder,
 )
 from tests.test_tekken import get_special_tokens
 from tests.utils import decode_keep
@@ -54,6 +55,76 @@ class TestConfig:
     think: bool = False
     plain_think: bool = False
     model_settings_fields: frozenset[str] | None = None
+    reasoning_effort_mapping: dict[str, str] | None = None
+    reasoning_effort_values: tuple[str, ...] | None = None
+    reasoning_effort_default: str | None = None
+
+    @property
+    def exposed_reasoning_effort_values(self) -> tuple[str, ...]:
+        r"""Reasoning effort values exposed by this configuration.
+
+        The explicit values when set, else the mapping keys when a mapping is
+        set, else the full standard ladder.
+        """
+        if self.reasoning_effort_values is not None:
+            return self.reasoning_effort_values
+        if self.reasoning_effort_mapping is not None:
+            return tuple(self.reasoning_effort_mapping)
+        return tuple(effort.value for effort in ReasoningEffort)
+
+
+# Reasoning effort showcase configurations for v15: one exposing "none" and
+# "high" as-is, and one exposing "low", "high" and "max" while the model only
+# supports "low", "medium" and "high".
+NONE_HIGH_REASONING_EFFORT_VALUES: tuple[str, ...] = ("none", "high")
+NONE_HIGH_REASONING_EFFORT_DEFAULT = "none"
+LOW_HIGH_MAX_REASONING_EFFORT_VALUES: tuple[str, ...] = ("low", "high", "max")
+LOW_HIGH_MAX_REASONING_EFFORT_MAPPING: dict[str, str] = {"low": "low", "high": "medium", "max": "high"}
+LOW_HIGH_MAX_REASONING_EFFORT_DEFAULT = "high"
+LOW_HIGH_MAX_REASONING_EFFORT_MAPPED_DEFAULT = LOW_HIGH_MAX_REASONING_EFFORT_MAPPING[
+    LOW_HIGH_MAX_REASONING_EFFORT_DEFAULT
+]
+
+
+def _reasoning_effort_config(
+    reasoning_effort_values: tuple[str, ...] | None,
+    reasoning_effort_mapping: dict[str, str] | None,
+    reasoning_effort_default: str | None,
+) -> TestConfig:
+    r"""V15 test config rendering the reasoning effort model setting only."""
+    return TestConfig(
+        version=TokenizerVersion.v15,
+        model_settings_fields=frozenset({"reasoning_effort"}),
+        reasoning_effort_values=reasoning_effort_values,
+        reasoning_effort_mapping=reasoning_effort_mapping,
+        reasoning_effort_default=reasoning_effort_default,
+    )
+
+
+def build_reasoning_effort_template(
+    reasoning_effort_values: tuple[str, ...] | None = None,
+    reasoning_effort_mapping: dict[str, str] | None = None,
+    reasoning_effort_default: str | None = None,
+) -> str:
+    r"""Build the v15 chat template rendering the reasoning effort model setting.
+
+    Args:
+        reasoning_effort_values: Reasoning effort values exposed on requests, or
+            None to expose the full standard ladder.
+        reasoning_effort_mapping: Mapping from exposed to model-side reasoning
+            effort values, or None to render the exposed value as-is.
+        reasoning_effort_default: Exposed value rendered when the request leaves
+            the effort unset.
+
+    Returns:
+        The generated chat template.
+    """
+    config = _reasoning_effort_config(
+        reasoning_effort_values=reasoning_effort_values,
+        reasoning_effort_mapping=reasoning_effort_mapping,
+        reasoning_effort_default=reasoning_effort_default,
+    )
+    return build_chat_template(config=build_template_config(config=config))
 
 
 def build_template_config(config: TestConfig) -> TemplateConfig:
@@ -67,6 +138,9 @@ def build_template_config(config: TestConfig) -> TemplateConfig:
         plain_thinking_support=config.plain_think,
         use_special_token_variables=True,
         model_settings_fields=config.model_settings_fields,
+        reasoning_effort_values=config.reasoning_effort_values,
+        reasoning_effort_mapping=config.reasoning_effort_mapping,
+        reasoning_effort_default=config.reasoning_effort_default,
     )
 
 
@@ -136,25 +210,39 @@ def build_render_args(request: ChatCompletionRequest) -> dict[str, Any]:
 
 
 def _build_model_settings_builder(config: TestConfig) -> ModelSettingsBuilder | None:
-    r"""Build the settings builders represented by a test configuration."""
+    r"""Build the settings builders represented by a test configuration.
+
+    The reasoning effort builder exposes `config.exposed_reasoning_effort_values`.
+    The default is the exposed value from `reasoning_effort_default`.
+    """
     if not config.version.supports_model_settings:
         return None
 
     selected_fields = config.model_settings_fields
     if selected_fields is None:
-        selected_fields = TemplateConfig(version=config.version).model_settings_fields
-        assert selected_fields is not None
+        # Mirror TemplateConfig's automatic field selection.
+        selected_fields = frozenset({"reasoning_effort"}) if config.version.supports_model_settings else frozenset()
+
+    reasoning_effort_builder: ReasoningEffortBuilder | None = None
+    if "reasoning_effort" in selected_fields:
+        mapping = config.reasoning_effort_mapping
+        values = [ReasoningEffort(value) for value in config.exposed_reasoning_effort_values]
+        default = (
+            ReasoningEffort(config.reasoning_effort_default) if config.reasoning_effort_default is not None else None
+        )
+        reasoning_effort_builder = ReasoningEffortBuilder(
+            accepts_none=True,
+            default=default,
+            values=values,
+            mapping=(
+                {ReasoningEffort(key): ReasoningEffort(value) for key, value in mapping.items()}
+                if mapping is not None
+                else None
+            ),
+        )
 
     return ModelSettingsBuilder(
-        reasoning_effort=(
-            EnumBuilder(
-                accepts_none=True,
-                default=ReasoningEffort.none,
-                values=[ReasoningEffort.none, ReasoningEffort.high],
-            )
-            if "reasoning_effort" in selected_fields
-            else None
-        ),
+        reasoning_effort=reasoning_effort_builder,
         json_schema=JSONSchemaBuilder() if "json_schema" in selected_fields else None,
     )
 
@@ -308,6 +396,34 @@ def build_tekken_json(config: TestConfig, output_dir: Path) -> Path:
         json.dump(tekken_data, f, ensure_ascii=False)
 
     return tekken_path
+
+
+def build_reasoning_effort_tekken_json(
+    output_dir: Path,
+    reasoning_effort_values: tuple[str, ...] | None = None,
+    reasoning_effort_mapping: dict[str, str] | None = None,
+    reasoning_effort_default: str | None = None,
+) -> Path:
+    r"""Write a v15 tekken.json whose reasoning effort builder exposes the given configuration.
+
+    Args:
+        output_dir: Directory to write the JSON file into.
+        reasoning_effort_values: Reasoning effort values exposed on requests, or
+            None to expose the full standard ladder.
+        reasoning_effort_mapping: Mapping from exposed to model-side reasoning
+            effort values, or None to encode the exposed value as-is.
+        reasoning_effort_default: Exposed value encoded when the request leaves
+            the effort unset.
+
+    Returns:
+        Path to the written tekken.json file.
+    """
+    config = _reasoning_effort_config(
+        reasoning_effort_values=reasoning_effort_values,
+        reasoning_effort_mapping=reasoning_effort_mapping,
+        reasoning_effort_default=reasoning_effort_default,
+    )
+    return build_tekken_json(config=config, output_dir=output_dir)
 
 
 def build_spm_path(config: TestConfig, output_dir: Path) -> Path:

@@ -1,3 +1,4 @@
+from enum import StrEnum, auto
 from typing import Any
 
 import pytest
@@ -19,6 +20,7 @@ from mistral_common.tokens.tokenizers.model_settings_builder import (
     FieldBuilder,
     JSONSchemaBuilder,
     ModelSettingsBuilder,
+    ReasoningEffortBuilder,
     ValidatorType,
 )
 
@@ -28,7 +30,7 @@ class StringToIntBuilder(FieldBuilder[str, int]):
     accepts_none: bool = False
     default: int | None = None
 
-    def _convert(self, input_value: str) -> int:
+    def _convert(self, field_name: str, input_value: str) -> int:
         return int(input_value)
 
     def _validate_built_value(self, field_name: str, value: int) -> None:
@@ -75,6 +77,27 @@ class TestEnumBuilder:
         with pytest.raises(ValidationError, match="Empty list of values"):
             EnumBuilder[ReasoningEffort](values=[], accepts_none=False, default=None)
 
+    def test_default_must_be_one_of_the_values(self) -> None:
+        with pytest.raises(ValidationError, match="is not in"):
+            EnumBuilder[ReasoningEffort](values=[ReasoningEffort.high], accepts_none=True, default=ReasoningEffort.none)
+
+    def test_build_value_rejects_unexposed_value(self) -> None:
+        builder = EnumBuilder[ReasoningEffort](values=[ReasoningEffort.high], accepts_none=False, default=None)
+        with pytest.raises(InvalidRequestException, match="should be one of"):
+            builder.build_value(field_name="reasoning_effort", value=ReasoningEffort.none)
+
+    def test_build_value_requires_value_when_not_accepted(self) -> None:
+        builder = EnumBuilder[ReasoningEffort](
+            values=[ReasoningEffort.none, ReasoningEffort.high], accepts_none=False, default=None
+        )
+        with pytest.raises(InvalidRequestException, match="reasoning_effort should be set for this model"):
+            builder.build_value(field_name="reasoning_effort", value=None)
+
+    def test_build_value_empty_values_not_supported(self) -> None:
+        builder = EnumBuilder[ReasoningEffort](values=[], accepts_none=True, default=None)
+        with pytest.raises(InvalidRequestException, match="not supported for this model"):
+            builder.build_value(field_name="reasoning_effort", value=ReasoningEffort.high)
+
 
 class TestModelSettingsBuilder:
     @pytest.mark.parametrize(
@@ -87,7 +110,7 @@ class TestModelSettingsBuilder:
             ),
             (
                 ModelSettingsBuilder(
-                    reasoning_effort=EnumBuilder[ReasoningEffort](
+                    reasoning_effort=ReasoningEffortBuilder(
                         values=[ReasoningEffort.none, ReasoningEffort.high], accepts_none=False, default=None
                     )
                 ),
@@ -96,7 +119,7 @@ class TestModelSettingsBuilder:
             ),
             (
                 ModelSettingsBuilder(
-                    reasoning_effort=EnumBuilder[ReasoningEffort](
+                    reasoning_effort=ReasoningEffortBuilder(
                         values=[ReasoningEffort.high], accepts_none=False, default=None
                     )
                 ),
@@ -105,12 +128,12 @@ class TestModelSettingsBuilder:
             ),
             (
                 ModelSettingsBuilder(
-                    reasoning_effort=EnumBuilder[ReasoningEffort](
-                        values=[ReasoningEffort.high], accepts_none=True, default=None
+                    reasoning_effort=ReasoningEffortBuilder(
+                        values=[ReasoningEffort.high], accepts_none=True, default=ReasoningEffort.high
                     ),
                 ),
                 ChatCompletionRequest(messages=[], reasoning_effort=None),
-                ModelSettings(reasoning_effort=None),
+                ModelSettings(reasoning_effort=ReasoningEffort.high),
             ),
         ],
     )
@@ -121,20 +144,18 @@ class TestModelSettingsBuilder:
 
     def test_encode_invalid_enum_value_raises_error(self) -> None:
         builder_high_only = ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder[ReasoningEffort](
-                values=[ReasoningEffort.high], accepts_none=False, default=None
-            )
+            reasoning_effort=ReasoningEffortBuilder(values=[ReasoningEffort.high], accepts_none=False, default=None)
         )
         chat_completion_request = ChatCompletionRequest[UATS](messages=[], reasoning_effort=ReasoningEffort.none)
         with pytest.raises(
             InvalidRequestException,
-            match=r"reasoning_effort should be one of \['high'\], got none.",
+            match=r"should be one of \['high'\], got none.",
         ):
             builder_high_only.build_settings(chat_completion_request)
 
     def test_encode_missing_required_field_raises_error(self) -> None:
         builder = ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder[ReasoningEffort](
+            reasoning_effort=ReasoningEffortBuilder(
                 values=[ReasoningEffort.none, ReasoningEffort.high], accepts_none=False, default=None
             )
         )
@@ -148,11 +169,13 @@ class TestModelSettingsBuilder:
 
     def test_encode_unexpected_field_raises_error(self) -> None:
         builder = ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder[ReasoningEffort](values=[], accepts_none=True, default=None)
+            reasoning_effort=ReasoningEffortBuilder(
+                values=[ReasoningEffort.none], accepts_none=True, default=ReasoningEffort.none
+            )
         )
         chat_completion_request = ChatCompletionRequest[UATS](messages=[], reasoning_effort=ReasoningEffort.high)
 
-        with pytest.raises(InvalidRequestException, match=r"reasoning_effort not supported for this model."):
+        with pytest.raises(InvalidRequestException, match=r"should be one of \['none'\], got high."):
             builder.build_settings(chat_completion_request)
 
     def test_ignore_field(self) -> None:
@@ -164,7 +187,7 @@ class TestModelSettingsBuilder:
     def test_reasoning_effort_does_not_exist(self) -> None:
         with pytest.raises(ValidationError, match=r"[type=enum, input_value='blabla', input_type=str]"):
             ModelSettingsBuilder(
-                reasoning_effort=EnumBuilder[ReasoningEffort](
+                reasoning_effort=ReasoningEffortBuilder(
                     values=[ReasoningEffort.none, "blabla"],  # type: ignore[list-item]
                     accepts_none=False,
                     default=None,
@@ -174,7 +197,7 @@ class TestModelSettingsBuilder:
     def test_compatibility_accept_none_default(self) -> None:
         with pytest.raises(ValidationError, match=r"Default values can only be defined for accepts_none fields"):
             ModelSettingsBuilder(
-                reasoning_effort=EnumBuilder[ReasoningEffort](
+                reasoning_effort=ReasoningEffortBuilder(
                     values=[ReasoningEffort.none], accepts_none=False, default=ReasoningEffort.none
                 )
             )
@@ -182,14 +205,14 @@ class TestModelSettingsBuilder:
     def test_default_in_values(self) -> None:
         with pytest.raises(ValidationError, match=r"Default value self.default='high' is not in self.values"):
             ModelSettingsBuilder(
-                reasoning_effort=EnumBuilder[ReasoningEffort](
+                reasoning_effort=ReasoningEffortBuilder(
                     values=[ReasoningEffort.none], accepts_none=True, default=ReasoningEffort.high
                 )
             )
 
     def test_default_works(self) -> None:
         builder = ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder[ReasoningEffort](
+            reasoning_effort=ReasoningEffortBuilder(
                 values=[ReasoningEffort.none], accepts_none=True, default=ReasoningEffort.none
             )
         )
@@ -216,30 +239,336 @@ class TestModelSettingsBuilder:
     )
     def test_validator_unavailable_setting(self, reasoning_effort: ReasoningEffort | None) -> None:
         builder = ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder[ReasoningEffort](
+            reasoning_effort=ReasoningEffortBuilder(
                 values=[ReasoningEffort.none], accepts_none=True, default=ReasoningEffort.none
             )
         )
         settings = ModelSettings(reasoning_effort=reasoning_effort)
         if reasoning_effort != ReasoningEffort.none:
-            with pytest.raises(InvalidRequestException, match=r"reasoning_effort should be"):
+            with pytest.raises(InvalidRequestException, match=r"should be"):
                 builder.validate_settings(settings)
         else:
             builder.validate_settings(settings)
 
     @pytest.mark.parametrize(("accepts_none"), ([False, True]))
-    def test_validator_accepts_none(self, accepts_none: bool) -> None:
+    def test_validator_rejects_none_reasoning_effort_in_settings(self, accepts_none: bool) -> None:
+        # A reasoning effort builder always declares a default, so a built
+        # ModelSettings never carries a None reasoning effort.
         builder = ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder[ReasoningEffort](
-                values=[ReasoningEffort.none], accepts_none=accepts_none, default=None
+            reasoning_effort=ReasoningEffortBuilder(
+                values=[ReasoningEffort.none],
+                accepts_none=accepts_none,
+                default=ReasoningEffort.none if accepts_none else None,
             )
         )
         settings = ModelSettings(reasoning_effort=None)
-        if accepts_none:
+        with pytest.raises(InvalidRequestException, match=r"reasoning_effort should be set for this model"):
             builder.validate_settings(settings)
-        else:
-            with pytest.raises(InvalidRequestException, match=r"reasoning_effort should be set for this model"):
-                builder.validate_settings(settings)
+
+
+class _Level(StrEnum):
+    r"""Enum sharing value names with reasoning efforts, to check the default rule stays effort-specific."""
+
+    low = auto()
+    high = auto()
+
+
+def _request(reasoning_effort: ReasoningEffort | None) -> ChatCompletionRequest:
+    return ChatCompletionRequest(messages=[], reasoning_effort=reasoning_effort)
+
+
+def _remapping_builder() -> ModelSettingsBuilder:
+    r"""Builder exposing low, high and max, remapped onto the low, medium and high the model supports.
+
+    The default is an exposed value and is mapped like any request value.
+    """
+    return ModelSettingsBuilder(
+        reasoning_effort=ReasoningEffortBuilder(
+            values=[ReasoningEffort.low, ReasoningEffort.high, ReasoningEffort.max],
+            mapping={
+                ReasoningEffort.low: ReasoningEffort.low,
+                ReasoningEffort.high: ReasoningEffort.medium,
+                ReasoningEffort.max: ReasoningEffort.high,
+            },
+            accepts_none=True,
+            default=ReasoningEffort.high,
+        )
+    )
+
+
+class TestReasoningEffortBuilderMapping:
+    def test_mapping_is_none_by_default(self) -> None:
+        builder = ReasoningEffortBuilder(
+            values=[ReasoningEffort.none, ReasoningEffort.high], accepts_none=False, default=None
+        )
+        assert builder.mapping is None
+
+    def test_mapping_keys_must_match_values(self) -> None:
+        with pytest.raises(ValidationError, match="must match"):
+            ReasoningEffortBuilder(
+                values=[ReasoningEffort.none, ReasoningEffort.high],
+                mapping={ReasoningEffort.high: ReasoningEffort.high},
+                accepts_none=False,
+                default=None,
+            )
+        with pytest.raises(ValidationError, match="must match"):
+            ReasoningEffortBuilder(
+                values=[ReasoningEffort.high],
+                mapping={ReasoningEffort.none: ReasoningEffort.high, ReasoningEffort.high: ReasoningEffort.high},
+                accepts_none=False,
+                default=None,
+            )
+
+    @pytest.mark.parametrize(
+        "mapping",
+        [
+            {ReasoningEffort.none: ReasoningEffort.none, ReasoningEffort.high: ReasoningEffort.high},
+            {
+                ReasoningEffort.low: ReasoningEffort.low,
+                ReasoningEffort.high: ReasoningEffort.medium,
+                ReasoningEffort.max: ReasoningEffort.high,
+            },
+        ],
+    )
+    def test_valid_mappings(self, mapping: dict[ReasoningEffort, ReasoningEffort]) -> None:
+        ReasoningEffortBuilder(values=list(mapping), mapping=mapping, accepts_none=False, default=None)
+
+    def test_build_value_maps_exposed_values(self) -> None:
+        builder = ReasoningEffortBuilder(
+            values=[ReasoningEffort.low, ReasoningEffort.high],
+            mapping={ReasoningEffort.low: ReasoningEffort.low, ReasoningEffort.high: ReasoningEffort.medium},
+            accepts_none=False,
+            default=None,
+        )
+        assert builder.build_value(field_name="reasoning_effort", value=ReasoningEffort.low) == ReasoningEffort.low
+        assert builder.build_value(field_name="reasoning_effort", value=ReasoningEffort.high) == ReasoningEffort.medium
+
+    def test_build_value_maps_default(self) -> None:
+        builder = ReasoningEffortBuilder(
+            values=[ReasoningEffort.low, ReasoningEffort.high],
+            mapping={ReasoningEffort.low: ReasoningEffort.low, ReasoningEffort.high: ReasoningEffort.medium},
+            accepts_none=True,
+            default=ReasoningEffort.high,
+        )
+        assert builder.build_value(field_name="reasoning_effort", value=None) == ReasoningEffort.medium
+
+    def test_build_value_maps_exposed_to_model_side_values(self) -> None:
+        mapping = {
+            ReasoningEffort.low: ReasoningEffort.low,
+            ReasoningEffort.high: ReasoningEffort.medium,
+            ReasoningEffort.max: ReasoningEffort.high,
+        }
+        builder = ReasoningEffortBuilder(
+            values=[ReasoningEffort.low, ReasoningEffort.high, ReasoningEffort.max],
+            mapping=mapping,
+            accepts_none=False,
+            default=None,
+        )
+        for exposed, model_side in mapping.items():
+            assert builder.build_value(field_name="reasoning_effort", value=exposed) == model_side
+
+    def test_build_value_maps_default_to_model_side_value(self) -> None:
+        # The default is the exposed "high", which the model receives as "medium".
+        builder = ReasoningEffortBuilder(
+            values=[ReasoningEffort.low, ReasoningEffort.high, ReasoningEffort.max],
+            mapping={
+                ReasoningEffort.low: ReasoningEffort.low,
+                ReasoningEffort.high: ReasoningEffort.medium,
+                ReasoningEffort.max: ReasoningEffort.high,
+            },
+            accepts_none=True,
+            default=ReasoningEffort.high,
+        )
+        assert builder.build_value(field_name="reasoning_effort", value=None) == ReasoningEffort.medium
+
+
+class TestModelSettingsBuilderMapping:
+    def test_build_settings_with_mapping(self) -> None:
+        builder = _remapping_builder()
+        assert builder.build_settings(_request(ReasoningEffort.low)) == ModelSettings(
+            reasoning_effort=ReasoningEffort.low
+        )
+        assert builder.build_settings(_request(ReasoningEffort.high)) == ModelSettings(
+            reasoning_effort=ReasoningEffort.medium
+        )
+        assert builder.build_settings(_request(ReasoningEffort.max)) == ModelSettings(
+            reasoning_effort=ReasoningEffort.high
+        )
+        assert builder.build_settings(_request(None)) == ModelSettings(reasoning_effort=ReasoningEffort.medium)
+
+    def test_build_settings_unset_effort_resolves_to_mapped_default(self) -> None:
+        builder = ModelSettingsBuilder(
+            reasoning_effort=ReasoningEffortBuilder(
+                values=[ReasoningEffort.low, ReasoningEffort.high, ReasoningEffort.max],
+                mapping={
+                    ReasoningEffort.low: ReasoningEffort.low,
+                    ReasoningEffort.high: ReasoningEffort.medium,
+                    ReasoningEffort.max: ReasoningEffort.high,
+                },
+                accepts_none=True,
+                default=ReasoningEffort.high,
+            )
+        )
+        assert builder.build_settings(_request(None)) == ModelSettings(reasoning_effort=ReasoningEffort.medium)
+
+    def test_build_settings_identity_mapping(self) -> None:
+        builder = ModelSettingsBuilder(
+            reasoning_effort=ReasoningEffortBuilder(
+                values=[ReasoningEffort.none, ReasoningEffort.high],
+                mapping={ReasoningEffort.none: ReasoningEffort.none, ReasoningEffort.high: ReasoningEffort.high},
+                accepts_none=False,
+                default=None,
+            )
+        )
+        assert builder.build_settings(_request(ReasoningEffort.none)) == ModelSettings(
+            reasoning_effort=ReasoningEffort.none
+        )
+
+    def test_mapping_must_preserve_reasoning_effort_order(self) -> None:
+        with pytest.raises(ValidationError, match="must preserve the order of reasoning efforts"):
+            ModelSettingsBuilder(
+                reasoning_effort=ReasoningEffortBuilder(
+                    values=[ReasoningEffort.none, ReasoningEffort.low],
+                    mapping={ReasoningEffort.none: ReasoningEffort.low, ReasoningEffort.low: ReasoningEffort.none},
+                    accepts_none=False,
+                    default=None,
+                )
+            )
+
+    def test_mapping_preserving_reasoning_effort_order_is_authorized(self) -> None:
+        ModelSettingsBuilder(
+            reasoning_effort=ReasoningEffortBuilder(
+                values=[ReasoningEffort.none, ReasoningEffort.low, ReasoningEffort.medium],
+                mapping={
+                    ReasoningEffort.none: ReasoningEffort.low,
+                    ReasoningEffort.low: ReasoningEffort.low,
+                    ReasoningEffort.medium: ReasoningEffort.medium,
+                },
+                accepts_none=False,
+                default=None,
+            )
+        )
+
+    def test_build_settings_mapping_to_unexposed_value(self) -> None:
+        # The model-side value is not part of the exposed values: built values
+        # are validated against the mapped values, not the exposed ones.
+        builder = ModelSettingsBuilder(
+            reasoning_effort=ReasoningEffortBuilder(
+                values=[ReasoningEffort.low],
+                mapping={ReasoningEffort.low: ReasoningEffort.medium},
+                accepts_none=False,
+                default=None,
+            )
+        )
+        assert builder.build_settings(_request(ReasoningEffort.low)) == ModelSettings(
+            reasoning_effort=ReasoningEffort.medium
+        )
+
+    def test_build_settings_unexposed_effort_raises(self) -> None:
+        builder = ModelSettingsBuilder(
+            reasoning_effort=ReasoningEffortBuilder(
+                values=[ReasoningEffort.high],
+                mapping={ReasoningEffort.high: ReasoningEffort.high},
+                accepts_none=False,
+                default=None,
+            )
+        )
+        with pytest.raises(InvalidRequestException, match="should be one of"):
+            builder.build_settings(_request(ReasoningEffort.none))
+
+    def test_build_settings_missing_effort_raises(self) -> None:
+        builder = ModelSettingsBuilder(
+            reasoning_effort=ReasoningEffortBuilder(
+                values=[ReasoningEffort.none, ReasoningEffort.high],
+                mapping={ReasoningEffort.none: ReasoningEffort.none, ReasoningEffort.high: ReasoningEffort.high},
+                accepts_none=False,
+                default=None,
+            )
+        )
+        with pytest.raises(InvalidRequestException, match="reasoning_effort should be set for this model"):
+            builder.build_settings(_request(None))
+
+    def test_validate_settings_with_mapping(self) -> None:
+        builder = _remapping_builder()
+        builder.validate_settings(ModelSettings(reasoning_effort=ReasoningEffort.medium))
+        with pytest.raises(
+            InvalidRequestException,
+            match=r"should be one of \['low', 'medium', 'high'\], got none\.",
+        ):
+            builder.validate_settings(ModelSettings(reasoning_effort=ReasoningEffort.none))
+
+    def test_validate_settings_rejects_none_when_default_set(self) -> None:
+        builder = _remapping_builder()
+        with pytest.raises(InvalidRequestException, match="reasoning_effort should be set for this model"):
+            builder.validate_settings(ModelSettings(reasoning_effort=None))
+
+    def test_validate_settings_pass_through(self) -> None:
+        builder = ModelSettingsBuilder(
+            reasoning_effort=ReasoningEffortBuilder(
+                values=[ReasoningEffort.none, ReasoningEffort.high], accepts_none=True, default=ReasoningEffort.none
+            )
+        )
+        builder.validate_settings(ModelSettings(reasoning_effort=ReasoningEffort.none))
+        builder.validate_settings(ModelSettings(reasoning_effort=ReasoningEffort.high))
+
+    def test_reasoning_effort_builder_requires_default_when_accepting_none(self) -> None:
+        with pytest.raises(ValidationError, match="must declare a default"):
+            ReasoningEffortBuilder(values=[ReasoningEffort.none, ReasoningEffort.high], accepts_none=True, default=None)
+        with pytest.raises(ValidationError, match="must declare a default"):
+            ReasoningEffortBuilder(values=[], mapping={}, accepts_none=True, default=None)
+
+    def test_reasoning_effort_field_requires_reasoning_effort_builder(self) -> None:
+        with pytest.raises(ValidationError, match="instance of ReasoningEffortBuilder"):
+            ModelSettingsBuilder(
+                reasoning_effort=EnumBuilder[ReasoningEffort](  # type: ignore[arg-type]
+                    values=[ReasoningEffort.none, ReasoningEffort.high], accepts_none=True, default=ReasoningEffort.none
+                )
+            )
+
+    def test_default_not_required_for_other_enum_builders(self) -> None:
+        # The default requirement applies to ReasoningEffortBuilder, not to
+        # enum builders in general, whatever the enum.
+        builder = EnumBuilder[_Level](values=[_Level.low, _Level.high], accepts_none=True, default=None)
+        assert builder.build_value(field_name="level", value=None) is None
+        generic = EnumBuilder[ReasoningEffort](
+            values=[ReasoningEffort.low, ReasoningEffort.high], accepts_none=True, default=None
+        )
+        assert generic.build_value(field_name="reasoning_effort", value=None) is None
+
+    def test_builder_validated_from_dict(self) -> None:
+        builder = ModelSettingsBuilder.model_validate(
+            {
+                "reasoning_effort": {
+                    "type": "enum",
+                    "accepts_none": True,
+                    "default": "high",
+                    "values": ["low", "high", "max"],
+                    "mapping": {"low": "low", "high": "medium", "max": "high"},
+                }
+            }
+        )
+        assert isinstance(builder.reasoning_effort, ReasoningEffortBuilder)
+        assert builder.build_settings(_request(ReasoningEffort.max)) == ModelSettings(
+            reasoning_effort=ReasoningEffort.high
+        )
+        assert builder.build_settings(_request(None)) == ModelSettings(reasoning_effort=ReasoningEffort.medium)
+
+    def test_builder_from_dict_requires_default_when_accepting_none(self) -> None:
+        with pytest.raises(ValidationError, match="must declare a default"):
+            ModelSettingsBuilder.model_validate(
+                {
+                    "reasoning_effort": {
+                        "type": "enum",
+                        "accepts_none": True,
+                        "default": None,
+                        "values": ["none", "high"],
+                    }
+                }
+            )
+
+    def test_model_dump_round_trip(self) -> None:
+        builder = _remapping_builder()
+        assert ModelSettingsBuilder.model_validate(builder.model_dump()) == builder
 
 
 JSON_SCHEMA_DICT = {"type": "object", "properties": {"a": {"type": "string"}}}

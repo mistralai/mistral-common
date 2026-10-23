@@ -33,6 +33,7 @@ def tekken_v15_json_schema_path(tmp_path_factory: pytest.TempPathFactory) -> Pat
     config = TestConfig(
         version=TokenizerVersion.v15,
         model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+        reasoning_effort_default="none",
     )
     return build_tekken_json(config=config, output_dir=build_dir)
 
@@ -41,7 +42,16 @@ def test_cli_generates_template(tmp_path: Path) -> None:
     """CLI generates a template file with expected content."""
     output_path = tmp_path / "template.jinja"
     result = subprocess.run(
-        [sys.executable, str(SCRIPT_PATH), "--version", "v15", "--saving_path", str(output_path)],
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--version",
+            "v15",
+            "--reasoning_effort_default",
+            "none",
+            "--saving_path",
+            str(output_path),
+        ],
         capture_output=True,
         text=True,
     )
@@ -50,6 +60,19 @@ def test_cli_generates_template(tmp_path: Path) -> None:
     content = output_path.read_text()
     assert "bos_token" in content
     assert "[MODEL_SETTINGS]" in content
+
+
+def test_cli_reasoning_effort_default_required(tmp_path: Path) -> None:
+    """CLI rejects a v15 template without an explicit reasoning effort default."""
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--version", "v15", "--saving_path", str(output_path)],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "Reasoning effort default is required" in result.stderr
 
 
 def test_cli_model_settings_fields_json_schema(tmp_path: Path) -> None:
@@ -62,6 +85,8 @@ def test_cli_model_settings_fields_json_schema(tmp_path: Path) -> None:
             "v15",
             "--model_settings_fields",
             "reasoning_effort,json_schema",
+            "--reasoning_effort_default",
+            "none",
             "--saving_path",
             str(output_path),
         ],
@@ -76,7 +101,16 @@ def test_cli_model_settings_fields_json_schema(tmp_path: Path) -> None:
 def test_cli_model_settings_fields_default(tmp_path: Path) -> None:
     output_path = tmp_path / "template.jinja"
     result = subprocess.run(
-        [sys.executable, str(SCRIPT_PATH), "--version", "v15", "--saving_path", str(output_path)],
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--version",
+            "v15",
+            "--reasoning_effort_default",
+            "none",
+            "--saving_path",
+            str(output_path),
+        ],
         capture_output=True,
         text=True,
     )
@@ -196,7 +230,17 @@ def test_cli_with_image_flag(tmp_path: Path) -> None:
     """CLI --image flag produces template with image support."""
     output_path = tmp_path / "template.jinja"
     result = subprocess.run(
-        [sys.executable, str(SCRIPT_PATH), "--version", "v15", "--image", "--saving_path", str(output_path)],
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--version",
+            "v15",
+            "--image",
+            "--reasoning_effort_default",
+            "none",
+            "--saving_path",
+            str(output_path),
+        ],
         capture_output=True,
         text=True,
     )
@@ -209,7 +253,17 @@ def test_cli_with_thinking_flag(tmp_path: Path) -> None:
     """CLI --thinking flag produces template with thinking support."""
     output_path = tmp_path / "template.jinja"
     result = subprocess.run(
-        [sys.executable, str(SCRIPT_PATH), "--version", "v15", "--thinking", "--saving_path", str(output_path)],
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--version",
+            "v15",
+            "--thinking",
+            "--reasoning_effort_default",
+            "none",
+            "--saving_path",
+            str(output_path),
+        ],
         capture_output=True,
         text=True,
     )
@@ -255,7 +309,18 @@ def test_cli_invalid_config(tmp_path: Path) -> None:
     """CLI rejects invalid configuration (e.g., image + audio)."""
     output_path = tmp_path / "template.jinja"
     result = subprocess.run(
-        [sys.executable, str(SCRIPT_PATH), "--version", "v15", "--image", "--audio", "--saving_path", str(output_path)],
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--version",
+            "v15",
+            "--image",
+            "--audio",
+            "--reasoning_effort_default",
+            "none",
+            "--saving_path",
+            str(output_path),
+        ],
         capture_output=True,
         text=True,
     )

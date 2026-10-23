@@ -12,6 +12,8 @@ from mistral_common.integrations.chat_templates.template_generator import (
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
 from tests.integrations.chat_templates.helpers import (
+    LOW_HIGH_MAX_REASONING_EFFORT_MAPPING,
+    NONE_HIGH_REASONING_EFFORT_VALUES,
     TestConfig,
     build_template_config,
     load_golden_template,
@@ -60,6 +62,7 @@ class TestGenerateChatTemplateAPI:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
         )
 
         assert "response_format" in selected_template
@@ -94,7 +97,7 @@ class TestGenerateChatTemplateAPI:
         assert static_output == dynamic_output
 
     def test_empty_messages_raises(self) -> None:
-        config = TemplateConfig(version=TokenizerVersion.v15)
+        config = TemplateConfig(version=TokenizerVersion.v15, reasoning_effort_default="none")
         template = build_chat_template(config)
         with pytest.raises(Exception, match="list object has no element 0"):
             render_template(template, messages=[])
@@ -123,7 +126,11 @@ class TestTemplateConfigModelSettings:
     @pytest.mark.parametrize("field", MODEL_SETTINGS_FIELD_CHOICES)
     def test_each_field_choice_builds_a_template(self, field: str) -> None:
         template = build_chat_template(
-            config=TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=frozenset({field}))
+            config=TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({field}),
+                reasoning_effort_default="none" if field == "reasoning_effort" else None,
+            )
         )
 
         assert f'"{field}": ' in template
@@ -154,7 +161,9 @@ class TestTemplateConfigModelSettings:
         assert str(excinfo.value) == "Model settings fields are only available for tokenizer versions v15 and above"
 
     def test_none_model_settings_fields_resolves_automatically(self) -> None:
-        v15_config = TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=None)
+        v15_config = TemplateConfig(
+            version=TokenizerVersion.v15, model_settings_fields=None, reasoning_effort_default="none"
+        )
         v13_config = TemplateConfig(version=TokenizerVersion.v13, model_settings_fields=None)
 
         assert v15_config.model_settings_fields == frozenset({"reasoning_effort"})
@@ -168,6 +177,99 @@ class TestTemplateConfigModelSettings:
 
         assert str(v15_excinfo.value) == "Model settings fields must be None (automatic) or a non-empty set"
         assert str(v13_excinfo.value) == "Model settings fields are only available for tokenizer versions v15 and above"
+
+    def test_reasoning_effort_values_require_reasoning_effort_field(self) -> None:
+        with pytest.raises(ValueError, match="Reasoning effort values require the reasoning_effort"):
+            TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"json_schema"}),
+                reasoning_effort_values=NONE_HIGH_REASONING_EFFORT_VALUES,
+            )
+
+    def test_reasoning_effort_values_require_model_settings_support(self) -> None:
+        with pytest.raises(ValueError, match="Reasoning effort values require the reasoning_effort"):
+            TemplateConfig(version=TokenizerVersion.v13, reasoning_effort_values=NONE_HIGH_REASONING_EFFORT_VALUES)
+
+    def test_reasoning_effort_values_empty_rejected(self) -> None:
+        with pytest.raises(ValueError, match="Reasoning effort values must be None or a non-empty tuple"):
+            TemplateConfig(version=TokenizerVersion.v15, reasoning_effort_values=())
+
+    def test_reasoning_effort_values_must_not_contain_duplicates(self) -> None:
+        with pytest.raises(ValueError, match="Reasoning effort values must not contain duplicates"):
+            TemplateConfig(version=TokenizerVersion.v15, reasoning_effort_values=("high", "high"))
+
+    def test_reasoning_effort_values_must_be_standard_efforts(self) -> None:
+        with pytest.raises(ValueError, match="Unknown reasoning effort values: minimal"):
+            TemplateConfig(version=TokenizerVersion.v15, reasoning_effort_values=("none", "minimal"))
+
+    def test_reasoning_effort_values_must_match_mapping_keys(self) -> None:
+        with pytest.raises(ValueError, match="Reasoning effort values must match the mapping keys"):
+            TemplateConfig(
+                version=TokenizerVersion.v15,
+                reasoning_effort_values=("low", "high"),
+                reasoning_effort_mapping=LOW_HIGH_MAX_REASONING_EFFORT_MAPPING,
+            )
+
+    def test_reasoning_effort_mapping_requires_reasoning_effort_field(self) -> None:
+        with pytest.raises(ValueError, match="Reasoning effort mapping requires the reasoning_effort"):
+            TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"json_schema"}),
+                reasoning_effort_mapping=LOW_HIGH_MAX_REASONING_EFFORT_MAPPING,
+            )
+
+    def test_reasoning_effort_mapping_requires_model_settings_support(self) -> None:
+        with pytest.raises(ValueError, match="Reasoning effort mapping requires the reasoning_effort"):
+            TemplateConfig(version=TokenizerVersion.v13, reasoning_effort_mapping=LOW_HIGH_MAX_REASONING_EFFORT_MAPPING)
+
+    def test_reasoning_effort_mapping_empty_rejected(self) -> None:
+        with pytest.raises(ValueError, match="Reasoning effort mapping must be None or a non-empty mapping"):
+            TemplateConfig(version=TokenizerVersion.v15, reasoning_effort_mapping={})
+
+    def test_reasoning_effort_mapping_values_must_be_standard_efforts(self) -> None:
+        with pytest.raises(ValueError, match="Unknown reasoning effort values in mapping: minimal"):
+            TemplateConfig(version=TokenizerVersion.v15, reasoning_effort_mapping={"none": "minimal"})
+
+    def test_reasoning_effort_mapping_must_preserve_reasoning_effort_order(self) -> None:
+        with pytest.raises(ValueError, match="must preserve the order of reasoning efforts"):
+            TemplateConfig(version=TokenizerVersion.v15, reasoning_effort_mapping={"none": "low", "low": "none"})
+
+    def test_reasoning_effort_default_requires_reasoning_effort_field(self) -> None:
+        with pytest.raises(ValueError, match="Reasoning effort default requires the reasoning_effort"):
+            TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"json_schema"}),
+                reasoning_effort_default="none",
+            )
+
+    def test_reasoning_effort_default_is_required_when_reasoning_effort_field_enabled(self) -> None:
+        with pytest.raises(ValueError, match="Reasoning effort default is required"):
+            TemplateConfig(version=TokenizerVersion.v15)
+        with pytest.raises(ValueError, match="Reasoning effort default is required"):
+            TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+            )
+
+    def test_reasoning_effort_default_must_be_an_exposed_value_with_mapping(self) -> None:
+        with pytest.raises(ValueError, match="Reasoning effort default must be one of the exposed values"):
+            TemplateConfig(
+                version=TokenizerVersion.v15,
+                reasoning_effort_mapping=LOW_HIGH_MAX_REASONING_EFFORT_MAPPING,
+                reasoning_effort_default="none",
+            )
+
+    def test_reasoning_effort_default_must_be_an_exposed_value_with_values(self) -> None:
+        with pytest.raises(ValueError, match="Reasoning effort default must be one of the exposed values"):
+            TemplateConfig(
+                version=TokenizerVersion.v15,
+                reasoning_effort_values=NONE_HIGH_REASONING_EFFORT_VALUES,
+                reasoning_effort_default="low",
+            )
+
+    def test_reasoning_effort_default_must_be_a_standard_value_without_mapping(self) -> None:
+        with pytest.raises(ValueError, match="Reasoning effort default must be one of the exposed values"):
+            TemplateConfig(version=TokenizerVersion.v15, reasoning_effort_default="minimal")
 
 
 class TestTokenVariables:
@@ -187,7 +289,9 @@ class TestTokenVariables:
             assert unexpected not in template
 
     def test_use_special_token_variables_false_renders_correctly(self) -> None:
-        config = TemplateConfig(version=TokenizerVersion.v15, use_special_token_variables=False)
+        config = TemplateConfig(
+            version=TokenizerVersion.v15, use_special_token_variables=False, reasoning_effort_default="none"
+        )
         template = build_chat_template(config)
         messages: list[dict[str, Any]] = [
             {"role": "user", "content": "Hello"},
@@ -216,6 +320,7 @@ class TestMessageContentValidation:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -238,6 +343,7 @@ class TestMessageContentValidation:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -422,7 +528,7 @@ class TestRenderContentCall:
 
     def test_tool_ban_thinking_not_in_desc(self) -> None:
         """Tool call site with thinking config must have support_thinking=false and no 'thinking' in desc."""
-        config = TemplateConfig(version=TokenizerVersion.v15, thinking_support=True)
+        config = TemplateConfig(version=TokenizerVersion.v15, thinking_support=True, reasoning_effort_default="none")
         result = _render_content_call(
             config=config,
             content_expr="message['content']",

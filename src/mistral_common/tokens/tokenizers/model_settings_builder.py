@@ -1,3 +1,5 @@
+import itertools
+from collections.abc import Mapping
 from enum import Enum, StrEnum, auto
 from typing import Any, ClassVar, Generic, Literal, TypeAlias, TypeVar, final
 
@@ -68,8 +70,12 @@ class FieldBuilder(MistralBase, Generic[InputT, OutputT]):
         """
         raise NotImplementedError(f"{field_name} is not supported")
 
-    def _convert(self, input_value: InputT) -> OutputT:
+    def _convert(self, field_name: str, input_value: InputT) -> OutputT:
         r"""Convert an input value into its built value.
+
+        Args:
+            field_name: Name of the field being converted, used in errors.
+            input_value: The request-side value to convert.
 
         Returns:
             The converted value.
@@ -93,7 +99,7 @@ class FieldBuilder(MistralBase, Generic[InputT, OutputT]):
             if not self.accepts_none:
                 raise InvalidRequestException(f"{field_name} should be set for this model.")
             return self.default
-        return self._convert(input_value=value)
+        return self._convert(field_name=field_name, input_value=value)
 
     def validate_built_value(self, field_name: str, value: OutputT | None) -> None:
         r"""Validate a fully built value, including `None` checks.
@@ -124,6 +130,32 @@ class FieldBuilder(MistralBase, Generic[InputT, OutputT]):
 
 
 E = TypeVar("E", bound=Enum)
+EffortT = TypeVar("EffortT")
+
+
+def validate_reasoning_effort_mapping_order(mapping: Mapping[EffortT, EffortT]) -> None:
+    r"""Ensure a reasoning effort mapping preserves the order of reasoning efforts.
+
+    When the exposed values are sorted by increasing effort, their model-side
+    values must not decrease: `none -> low, low -> low, medium -> medium` is
+    authorized, but `none -> low, low -> none` is not. Keys and values may be
+    `ReasoningEffort` members or their string values: the enum constructor
+    accepts both forms, so the mapping is normalized to members first.
+
+    Args:
+        mapping: Mapping from exposed reasoning efforts to model-side efforts.
+
+    Raises:
+        ValueError: If the mapping does not preserve the order of reasoning efforts.
+    """
+    efforts = {ReasoningEffort(key): ReasoningEffort(value) for key, value in mapping.items()}
+    rank = list(ReasoningEffort).index
+    model_ranks = [rank(efforts[exposed]) for exposed in sorted(efforts, key=rank)]
+    if any(lower > higher for lower, higher in itertools.pairwise(model_ranks)):
+        raise ValueError(
+            f"Mapping {mapping} must preserve the order of reasoning efforts: "
+            "model-side values must not decrease as exposed values increase."
+        )
 
 
 class EnumBuilder(FieldBuilder[E, E]):
@@ -135,14 +167,58 @@ class EnumBuilder(FieldBuilder[E, E]):
 
     Attributes:
         type: The type of validator (always ENUM for this class).
-        values: List of allowed enum values.
+        values: List of allowed values.
     """
 
     type: ValidatorType = ValidatorType.ENUM
     values: list[E]
 
-    def _convert(self, input_value: E) -> E:
+    @property
+    def _exposed_values(self) -> list[E]:
+        r"""Values exposed on requests."""
+        return self.values
+
+    def _validate_allowed_value(self, value: E) -> None:
+        r"""Check that a value is exposed, with a specific error when nothing is supported.
+
+        Args:
+            value: The value to check.
+
+        Raises:
+            InvalidRequestException: If no value is supported, or the value is not exposed.
+        """
+        exposed = self._exposed_values
+        if len(exposed) == 0:
+            raise InvalidRequestException("not supported for this model.")
+        if value not in exposed:
+            raise InvalidRequestException(f"should be one of {exposed}, got {value}.")
+
+    def _convert(self, field_name: str, input_value: E) -> E:
+        r"""Validate an exposed value and return it as the built value.
+
+        Args:
+            field_name: Name of the field being converted, used in errors.
+            input_value: The value to validate.
+
+        Returns:
+            The built value.
+
+        Raises:
+            InvalidRequestException: If the value is not one of the exposed values.
+        """
+        self._validate_allowed_value(value=input_value)
         return input_value
+
+    def _build_from_optional(self, field_name: str, value: E | None) -> E | None:
+        r"""Resolve an optional value, resolving the default like any exposed value.
+
+        Unlike the base implementation, the default is not returned as-is:
+        it goes through `_convert`, so subclasses translating values translate
+        the default too.
+        """
+        if value is None and self.default is not None:
+            return self._convert(field_name=field_name, input_value=self.default)
+        return super()._build_from_optional(field_name=field_name, value=value)
 
     @model_validator(mode="after")
     def validate_unique_values(self) -> "EnumBuilder":
@@ -166,15 +242,115 @@ class EnumBuilder(FieldBuilder[E, E]):
         return self
 
     def _validate_built_value(self, field_name: str, value: E) -> None:
-        r"""Check that value is one of the allowed enum values.
+        r"""Check that the built value is one the builder can produce.
 
         Raises:
-            InvalidRequestException: If unset when required, unsupported, or not allowed.
+            InvalidRequestException: If the value is unsupported or not allowed.
         """
-        if len(self.values) == 0:
-            raise InvalidRequestException(f"{field_name} not supported for this model.")
-        if value not in self.values:
-            raise InvalidRequestException(f"{field_name} should be one of {self.values}, got {value}.")
+        self._validate_allowed_value(value=value)
+
+
+class ReasoningEffortBuilder(EnumBuilder[ReasoningEffort]):
+    r"""Builder for the reasoning effort field.
+
+    Carries the reasoning-effort-specific remapping and invariants so they
+    hold wherever the builder is constructed, standalone or from tokenizer
+    JSON:
+
+    - When `mapping` is configured, the allowed values are the ones exposed
+      on requests and the built value is their translation through the
+      mapping, so `ModelSettings` holds model-side values. Requests and the
+      default are validated against the exposed `values`.
+    - The mapping must preserve the order of reasoning efforts.
+    - A builder that accepts `None` declares a default: `None` is an allowed
+      request value, never the default itself.
+
+    Attributes:
+        mapping: Mapping from exposed values to model-side values, or `None`
+            to use the exposed values as-is.
+    """
+
+    mapping: dict[ReasoningEffort, ReasoningEffort] | None = None
+
+    @property
+    def _exposed_values(self) -> list[ReasoningEffort]:
+        r"""Values exposed on requests: the mapping keys when a mapping is configured."""
+        if self.mapping is None:
+            return super()._exposed_values
+        return list(dict.fromkeys(self.mapping))
+
+    @property
+    def _built_values(self) -> list[ReasoningEffort]:
+        r"""Built values: the mapped values when a mapping is configured, the exposed values otherwise."""
+        if self.mapping is None:
+            return super()._exposed_values
+        return list(dict.fromkeys(self.mapping.values()))
+
+    def _convert(self, field_name: str, input_value: ReasoningEffort) -> ReasoningEffort:
+        r"""Translate a validated exposed value into its model-side value.
+
+        Args:
+            field_name: Name of the field being converted, used in errors.
+            input_value: The exposed value to validate and translate.
+
+        Returns:
+            The model-side value.
+
+        Raises:
+            InvalidRequestException: If the value is not exposed, or has no translation.
+        """
+        exposed = super()._convert(field_name=field_name, input_value=input_value)
+        if self.mapping is None:
+            return exposed
+        try:
+            return self.mapping[exposed]
+        except KeyError:
+            raise InvalidRequestException(f"should be one of {list(self.mapping)}, got {input_value}.") from None
+
+    def _validate_built_value(self, field_name: str, value: ReasoningEffort) -> None:
+        r"""Check that the built value is one the builder can produce.
+
+        The built value is a model-side value when a mapping is configured,
+        an exposed value otherwise.
+
+        Raises:
+            InvalidRequestException: If the value is unsupported or not allowed.
+        """
+        allowed = self._built_values
+        if len(allowed) == 0:
+            raise InvalidRequestException("not supported for this model.")
+        if value not in allowed:
+            raise InvalidRequestException(f"should be one of {allowed}, got {value}.")
+
+    @model_validator(mode="after")
+    def validate_mapping(self) -> "ReasoningEffortBuilder":
+        r"""Ensure the mapping translates exactly the allowed values."""
+        if self.mapping is not None and set(self.mapping) != set(self.values):
+            raise ValueError(f"Mapping keys {list(self.mapping)=} must match {self.values=}.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_mapping_order(self) -> "ReasoningEffortBuilder":
+        r"""Ensure the mapping preserves the order of reasoning efforts.
+
+        The reasoning effort ladder is ordered: model-side values may not
+        decrease as exposed values increase.
+        """
+        if self.mapping is not None:
+            validate_reasoning_effort_mapping_order(self.mapping)
+        return self
+
+    @model_validator(mode="after")
+    def validate_default_required(self) -> "ReasoningEffortBuilder":
+        r"""Ensure the builder declares a default when it accepts `None`.
+
+        A request may leave the effort unset, but the builder must resolve it
+        to a declared default: `None` is an allowed request value, never the
+        default itself.
+        """
+        if self.accepts_none and self.default is None:
+            raise ValueError("The reasoning effort builder must declare a default when it accepts None.")
+        return self
 
 
 class JSONSchemaBuilder(FieldBuilder[ResponseFormat, JSONSchemaDict]):
@@ -203,7 +379,7 @@ class JSONSchemaBuilder(FieldBuilder[ResponseFormat, JSONSchemaDict]):
         """
         self._validate_built_value(field_name=field_name, value=value)
 
-    def _convert(self, input_value: ResponseFormat) -> JSONSchemaDict:
+    def _convert(self, field_name: str, input_value: ResponseFormat) -> JSONSchemaDict:
         r"""Render the response format's schema for model-settings encoding."""
         return input_value.get_schema(purpose=SchemaRenderingMode.model_settings)
 
@@ -241,7 +417,7 @@ class ModelSettingsBuilder(MistralBase):
         "json_schema": "response_format",
     }
 
-    reasoning_effort: EnumBuilder[ReasoningEffort] | None = None
+    reasoning_effort: ReasoningEffortBuilder | None = None
     json_schema: JSONSchemaBuilder | None = None
 
     @staticmethod

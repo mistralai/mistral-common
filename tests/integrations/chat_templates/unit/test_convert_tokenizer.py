@@ -8,8 +8,19 @@ from mistral_common.integrations.chat_templates.chat_templates import (
     convert_tokenizer_to_chat_template,
     generate_chat_template,
 )
+from mistral_common.protocol.instruct.request import ReasoningEffort
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.helpers import TestConfig, build_spm_path, build_tekken_json
+from tests.integrations.chat_templates.helpers import (
+    LOW_HIGH_MAX_REASONING_EFFORT_DEFAULT,
+    LOW_HIGH_MAX_REASONING_EFFORT_MAPPING,
+    NONE_HIGH_REASONING_EFFORT_DEFAULT,
+    NONE_HIGH_REASONING_EFFORT_VALUES,
+    TestConfig,
+    build_reasoning_effort_tekken_json,
+    build_reasoning_effort_template,
+    build_spm_path,
+    build_tekken_json,
+)
 
 
 class TestConvertTokenizerToChatTemplate:
@@ -32,7 +43,10 @@ class TestConvertTokenizerToChatTemplate:
         assert "[THINK]" in result
 
     def test_tekken_v15_derives_reasoning_effort_only(self, tmp_path: Path) -> None:
-        path = build_tekken_json(config=TestConfig(version=TokenizerVersion.v15), output_dir=tmp_path)
+        path = build_tekken_json(
+            config=TestConfig(version=TokenizerVersion.v15, reasoning_effort_default="none"),
+            output_dir=tmp_path,
+        )
 
         result = convert_tokenizer_to_chat_template(tokenizer_file=path)
         expected = generate_chat_template(
@@ -45,6 +59,7 @@ class TestConvertTokenizerToChatTemplate:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=frozenset({"reasoning_effort"}),
+            reasoning_effort_default="none",
         )
 
         assert result == expected
@@ -54,6 +69,7 @@ class TestConvertTokenizerToChatTemplate:
             config=TestConfig(
                 version=TokenizerVersion.v15,
                 model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+                reasoning_effort_default="none",
             ),
             output_dir=tmp_path,
         )
@@ -69,12 +85,16 @@ class TestConvertTokenizerToChatTemplate:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+            reasoning_effort_default="none",
         )
 
         assert result == expected
 
     def test_tekken_v15_without_model_settings_builder_raises(self, tmp_path: Path) -> None:
-        path = build_tekken_json(config=TestConfig(version=TokenizerVersion.v15), output_dir=tmp_path)
+        path = build_tekken_json(
+            config=TestConfig(version=TokenizerVersion.v15, reasoning_effort_default="none"),
+            output_dir=tmp_path,
+        )
         tekken_data = json.loads(path.read_text(encoding="utf-8"))
         del tekken_data["model_settings_builder"]
         path.write_text(json.dumps(obj=tekken_data, ensure_ascii=False), encoding="utf-8")
@@ -251,3 +271,41 @@ class TestConvertTokenizerToChatTemplate:
         invalid_path.write_text("not a tokenizer")
         with pytest.raises(TokenizerException, match="Unrecognized tokenizer file:"):
             convert_tokenizer_to_chat_template(tokenizer_file=invalid_path)
+
+
+class TestConvertTokenizerToChatTemplateMapping:
+    def test_exposed_values_and_default_are_detected_from_tokenizer_file(self, tmp_path: Path) -> None:
+        tekken_path = build_reasoning_effort_tekken_json(
+            output_dir=tmp_path,
+            reasoning_effort_values=NONE_HIGH_REASONING_EFFORT_VALUES,
+            reasoning_effort_default=NONE_HIGH_REASONING_EFFORT_DEFAULT,
+        )
+        template = convert_tokenizer_to_chat_template(tokenizer_file=tekken_path)
+        assert template == build_reasoning_effort_template(
+            reasoning_effort_values=NONE_HIGH_REASONING_EFFORT_VALUES,
+            reasoning_effort_default=NONE_HIGH_REASONING_EFFORT_DEFAULT,
+        )
+        assert "reasoning_effort_mapping" not in template
+
+    def test_full_ladder_values_are_detected_from_tokenizer_file(self, tmp_path: Path) -> None:
+        tekken_path = build_reasoning_effort_tekken_json(
+            output_dir=tmp_path,
+            reasoning_effort_values=tuple(effort.value for effort in ReasoningEffort),
+            reasoning_effort_default="none",
+        )
+        template = convert_tokenizer_to_chat_template(tokenizer_file=tekken_path)
+        assert template == build_reasoning_effort_template(reasoning_effort_default="none")
+        assert "{%- if reasoning_effort not in ['none', 'low', 'medium', 'high', 'xhigh', 'max'] %}" in template
+
+    def test_mapping_and_default_are_detected_from_tokenizer_file(self, tmp_path: Path) -> None:
+        tekken_path = build_reasoning_effort_tekken_json(
+            output_dir=tmp_path,
+            reasoning_effort_mapping=LOW_HIGH_MAX_REASONING_EFFORT_MAPPING,
+            reasoning_effort_default=LOW_HIGH_MAX_REASONING_EFFORT_DEFAULT,
+        )
+        template = convert_tokenizer_to_chat_template(tokenizer_file=tekken_path)
+        assert template == build_reasoning_effort_template(
+            reasoning_effort_mapping=LOW_HIGH_MAX_REASONING_EFFORT_MAPPING,
+            reasoning_effort_default=LOW_HIGH_MAX_REASONING_EFFORT_DEFAULT,
+        )
+        assert "{%- set reasoning_effort = 'high' %}" in template

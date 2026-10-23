@@ -34,7 +34,10 @@ from mistral_common.protocol.instruct.request import (
 )
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
+from mistral_common.tokens.tokenizers.model_settings_builder import (
+    ModelSettingsBuilder,
+    ReasoningEffortBuilder,
+)
 
 
 def mock_chat_completion(messages: list[ChatMessage]) -> ChatCompletionRequest:
@@ -1186,9 +1189,7 @@ class TestChatCompletionRequestNormalizationV15:
             SystemMessage,
             InstructRequest,
             ModelSettingsBuilder(
-                reasoning_effort=EnumBuilder[ReasoningEffort](
-                    values=list(ReasoningEffort), accepts_none=False, default=None
-                )
+                reasoning_effort=ReasoningEffortBuilder(values=list(ReasoningEffort), accepts_none=False, default=None)
             ),
         )
 
@@ -1436,9 +1437,7 @@ class TestChatCompletionRequestNormalizationV15:
             TokenizerVersion.v15,
             InstructRequestNormalizerV15,
             ModelSettingsBuilder(
-                reasoning_effort=EnumBuilder[ReasoningEffort](
-                    values=list(ReasoningEffort), accepts_none=False, default=None
-                )
+                reasoning_effort=ReasoningEffortBuilder(values=list(ReasoningEffort), accepts_none=False, default=None)
             ),
         ),
     ],
