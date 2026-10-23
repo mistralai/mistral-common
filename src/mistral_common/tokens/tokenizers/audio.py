@@ -5,7 +5,7 @@ import math
 import re
 import warnings
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, StrEnum, auto
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -317,7 +317,7 @@ def _check_mult_of(num_samples: int, mult_of: int) -> None:
     assert num_samples % mult_of == 0, f"{num_samples=} must be a multiple of {mult_of=}"
 
 
-class TranscriptionFormat(str, Enum):
+class TranscriptionFormat(StrEnum):
     r"""Transcription format.
 
     Should be set by the tokenizer for correct encoding.
@@ -327,8 +327,8 @@ class TranscriptionFormat(str, Enum):
         STREAMING: Encode audio incrementally with left and right padding.
     """
 
-    INSTRUCT = "instruct"
-    STREAMING = "streaming"
+    INSTRUCT = auto()
+    STREAMING = auto()
 
 
 @dataclass

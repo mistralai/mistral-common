@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, StrEnum, auto
 from typing import Any, ClassVar, Generic, Literal, TypeAlias, TypeVar, final
 
 from pydantic import model_validator
@@ -15,7 +15,7 @@ from mistral_common.protocol.instruct.request import (
 from mistral_common.utils.json_utils import validate_json_schema_by_draft7
 
 
-class ValidatorType(str, Enum):
+class ValidatorType(StrEnum):
     r"""Enumeration of validator types.
 
     Attributes:
@@ -23,8 +23,8 @@ class ValidatorType(str, Enum):
         JSON_SCHEMA: Indicates that the validator is for JSON schema values.
     """
 
-    ENUM = "enum"
-    JSON_SCHEMA = "json_schema"
+    ENUM = auto()
+    JSON_SCHEMA = auto()
 
 
 InputT = TypeVar("InputT")
