@@ -54,6 +54,9 @@ class TestConfig:
     think: bool = False
     plain_think: bool = False
     model_settings_fields: frozenset[str] | None = None
+    reasoning_effort_mapping: dict[str, str] | None = None
+    reasoning_effort_values: tuple[str, ...] | None = None
+    reasoning_effort_default: str | None = None
 
 
 def build_template_config(config: TestConfig) -> TemplateConfig:
@@ -67,6 +70,9 @@ def build_template_config(config: TestConfig) -> TemplateConfig:
         plain_thinking_support=config.plain_think,
         use_special_token_variables=True,
         model_settings_fields=config.model_settings_fields,
+        reasoning_effort_values=config.reasoning_effort_values,
+        reasoning_effort_mapping=config.reasoning_effort_mapping,
+        reasoning_effort_default=config.reasoning_effort_default,
     )
 
 
@@ -135,8 +141,26 @@ def build_render_args(request: ChatCompletionRequest) -> dict[str, Any]:
     return kwargs
 
 
+def exposed_reasoning_effort_values(config: TestConfig) -> tuple[str, ...]:
+    r"""Reasoning effort values exposed by a test configuration.
+
+    The explicit values when set, else the mapping keys when a mapping is set,
+    else the full standard ladder.
+    """
+    if config.reasoning_effort_values is not None:
+        return config.reasoning_effort_values
+    if config.reasoning_effort_mapping is not None:
+        return tuple(config.reasoning_effort_mapping)
+    return tuple(effort.value for effort in ReasoningEffort)
+
+
 def _build_model_settings_builder(config: TestConfig) -> ModelSettingsBuilder | None:
-    r"""Build the settings builders represented by a test configuration."""
+    r"""Build the settings builders represented by a test configuration.
+
+    The reasoning effort builder exposes the values from `reasoning_effort_values`
+    when set, else the mapping keys when a mapping is set, else the full standard
+    ladder. The default is the exposed value from `reasoning_effort_default`.
+    """
     if not config.version.supports_model_settings:
         return None
 
@@ -145,16 +169,26 @@ def _build_model_settings_builder(config: TestConfig) -> ModelSettingsBuilder | 
         selected_fields = TemplateConfig(version=config.version).model_settings_fields
         assert selected_fields is not None
 
+    reasoning_effort_builder: EnumBuilder[ReasoningEffort] | None = None
+    if "reasoning_effort" in selected_fields:
+        mapping = config.reasoning_effort_mapping
+        values = [ReasoningEffort(value) for value in exposed_reasoning_effort_values(config=config)]
+        default = (
+            ReasoningEffort(config.reasoning_effort_default) if config.reasoning_effort_default is not None else None
+        )
+        reasoning_effort_builder = EnumBuilder(
+            accepts_none=True,
+            default=default,
+            values=values,
+            mapping=(
+                {ReasoningEffort(key): ReasoningEffort(value) for key, value in mapping.items()}
+                if mapping is not None
+                else None
+            ),
+        )
+
     return ModelSettingsBuilder(
-        reasoning_effort=(
-            EnumBuilder(
-                accepts_none=True,
-                default=ReasoningEffort.none,
-                values=[ReasoningEffort.none, ReasoningEffort.high],
-            )
-            if "reasoning_effort" in selected_fields
-            else None
-        ),
+        reasoning_effort=reasoning_effort_builder,
         json_schema=JSONSchemaBuilder() if "json_schema" in selected_fields else None,
     )
 

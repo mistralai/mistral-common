@@ -5,7 +5,7 @@ import pytest
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.integrations.chat_templates.template_generator import TemplateConfig, build_chat_template
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.conftest import has_released_template
+from tests.integrations.chat_templates.conftest import GOLDEN_CONFIGS, format_config_id
 from tests.integrations.chat_templates.helpers import (
     TestConfig,
     build_template_config,
@@ -19,11 +19,7 @@ THINK_CONFIGS = [
     (TokenizerVersion.v15, False, False),
     (TokenizerVersion.v15, True, False),
 ]
-GOLDEN_THINK_CONFIGS = [
-    (version, image, audio)
-    for version, image, audio in THINK_CONFIGS
-    if has_released_template(TestConfig(version=version, image=image, audio=audio, think=True))
-]
+GOLDEN_THINK_CONFIGS = [config for config in GOLDEN_CONFIGS if config.think]
 
 
 class TestReasoningContentConversion:
@@ -200,20 +196,23 @@ class TestReasoningContentConversion:
         assert "Partial answer." in output
         assert "Final answer." in output
 
-    @pytest.mark.parametrize(("version", "image", "audio"), GOLDEN_THINK_CONFIGS)
-    def test_reasoning_static_dynamic_parity(self, version: TokenizerVersion, image: bool, audio: bool) -> None:
-        config = build_template_config(TestConfig(version=version, image=image, audio=audio, think=True))
-        static_template = load_golden_template(config)
+    @pytest.mark.parametrize("config", GOLDEN_THINK_CONFIGS, ids=[format_config_id(c) for c in GOLDEN_THINK_CONFIGS])
+    def test_reasoning_static_dynamic_parity(self, config: TestConfig) -> None:
+        template_config = build_template_config(config)
+        static_template = load_golden_template(template_config)
         dynamic_template = generate_chat_template(
-            spm=False,
-            tokenizer_version=version,
-            image_support=image,
-            audio_support=audio,
-            thinking_support=True,
+            spm=config.spm,
+            tokenizer_version=config.version,
+            image_support=config.image,
+            audio_support=config.audio,
+            thinking_support=config.think,
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
-            model_settings_fields=None,
+            model_settings_fields=config.model_settings_fields,
+            reasoning_effort_values=config.reasoning_effort_values,
+            reasoning_effort_mapping=config.reasoning_effort_mapping,
+            reasoning_effort_default=config.reasoning_effort_default,
         )
 
         messages: list[dict[str, Any]] = [

@@ -34,11 +34,19 @@ ALL_CONFIGS: list[TestConfig] = [
     TestConfig(version=TokenizerVersion.v13, audio=True),
     TestConfig(version=TokenizerVersion.v13, think=True),
     TestConfig(version=TokenizerVersion.v13, image=True, think=True),
-    TestConfig(version=TokenizerVersion.v15),
-    TestConfig(version=TokenizerVersion.v15, image=True),
-    TestConfig(version=TokenizerVersion.v15, audio=True),
-    TestConfig(version=TokenizerVersion.v15, think=True),
-    TestConfig(version=TokenizerVersion.v15, image=True, think=True),
+    TestConfig(version=TokenizerVersion.v15, reasoning_effort_default="none"),
+    TestConfig(version=TokenizerVersion.v15, image=True, reasoning_effort_default="none"),
+    TestConfig(version=TokenizerVersion.v15, audio=True, reasoning_effort_default="none"),
+    TestConfig(version=TokenizerVersion.v15, think=True, reasoning_effort_default="none"),
+    # Released v15 template of the past model: none and high exposed and
+    # supported as-is, without any remapping.
+    TestConfig(
+        version=TokenizerVersion.v15,
+        image=True,
+        think=True,
+        reasoning_effort_values=("none", "high"),
+        reasoning_effort_default="none",
+    ),
     # SPM
     TestConfig(version=TokenizerVersion.v1, spm=True),
     TestConfig(version=TokenizerVersion.v2, spm=True),
@@ -52,22 +60,29 @@ ALL_CONFIGS: list[TestConfig] = [
     TestConfig(
         version=TokenizerVersion.v15,
         model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+        reasoning_effort_default="none",
     ),
     TestConfig(
         version=TokenizerVersion.v15,
         image=True,
         model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+        reasoning_effort_default="none",
     ),
     TestConfig(
         version=TokenizerVersion.v15,
         think=True,
         model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+        reasoning_effort_default="none",
     ),
+    # Released v15 template of the upcoming model: low, high and max exposed,
+    # remapped onto the low, medium and high the model supports.
     TestConfig(
         version=TokenizerVersion.v15,
         image=True,
         think=True,
         model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+        reasoning_effort_mapping={"low": "low", "high": "medium", "max": "high"},
+        reasoning_effort_default="high",
     ),
 ]
 

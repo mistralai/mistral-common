@@ -74,15 +74,23 @@ class ReasoningEffort(str, Enum):
 
     Attributes:
         none: No reasoning effort; model generates responses directly.
+        low: Low reasoning effort; the model spends little compute on reasoning.
+        medium: Medium reasoning effort, between low and high.
         high: High reasoning effort for complex tasks; model spends more compute
             on reasoning before generating the final response.
+        xhigh: Extra-high reasoning effort, above high, for the most demanding tasks.
+        max: Maximum reasoning effort the model supports.
 
     Note:
         Supported for tokenizer >= v15 only. Earlier versions will raise an error.
     """
 
     none = "none"
+    low = "low"
+    medium = "medium"
     high = "high"
+    xhigh = "xhigh"
+    max = "max"
 
 
 class ModelSettings(MistralBase):

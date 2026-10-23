@@ -1,5 +1,6 @@
+import itertools
 from enum import Enum
-from typing import Any, ClassVar, Generic, Literal, TypeAlias, TypeVar, final
+from typing import Any, ClassVar, Generic, Literal, Mapping, TypeAlias, TypeVar, final
 
 from pydantic import model_validator
 
@@ -124,6 +125,34 @@ class FieldBuilder(MistralBase, Generic[InputT, OutputT]):
 
 
 E = TypeVar("E", bound=Enum)
+EffortT = TypeVar("EffortT")
+
+_REASONING_EFFORT_VALUES: frozenset[str] = frozenset(effort.value for effort in ReasoningEffort)
+
+
+def validate_reasoning_effort_mapping_order(mapping: Mapping[EffortT, EffortT]) -> None:
+    r"""Ensure a reasoning effort mapping preserves the order of reasoning efforts.
+
+    When the exposed values are sorted by increasing effort, their model-side
+    values must not decrease: `none -> low, low -> low, medium -> medium` is
+    authorized, but `none -> low, low -> none` is not. Keys and values may be
+    `ReasoningEffort` members or their string values: the enum constructor
+    accepts both forms, so the mapping is normalized to members first.
+
+    Args:
+        mapping: Mapping from exposed reasoning efforts to model-side efforts.
+
+    Raises:
+        ValueError: If the mapping does not preserve the order of reasoning efforts.
+    """
+    efforts = {ReasoningEffort(key): ReasoningEffort(value) for key, value in mapping.items()}
+    rank = list(ReasoningEffort).index
+    model_ranks = [rank(efforts[exposed]) for exposed in sorted(efforts, key=rank)]
+    if any(lower > higher for lower, higher in itertools.pairwise(model_ranks)):
+        raise ValueError(
+            f"Mapping {mapping} must preserve the order of reasoning efforts: "
+            "model-side values must not decrease as exposed values increase."
+        )
 
 
 class EnumBuilder(FieldBuilder[E, E]):
@@ -133,16 +162,54 @@ class EnumBuilder(FieldBuilder[E, E]):
     It rejects duplicate values during initialization and ensures the
     allowed values list is non-empty when `None` is not accepted.
 
+    When `mapping` is configured, the allowed values are the ones exposed on
+    requests and the built value is their translation through the mapping, so
+    `ModelSettings` holds model-side values. For reasoning efforts, the
+    mapping must preserve the order of reasoning efforts: model-side values
+    may not decrease as exposed values increase.
+
     Attributes:
         type: The type of validator (always ENUM for this class).
-        values: List of allowed enum values.
+        values: List of allowed values exposed on requests.
+        mapping: Mapping from exposed values to model-side values, or `None`
+            to use the exposed values as-is.
     """
 
     type: ValidatorType = ValidatorType.ENUM
     values: list[E]
+    mapping: dict[E, E] | None = None
 
     def _convert(self, input_value: E) -> E:
-        return input_value
+        r"""Translate an exposed value into its model-side value."""
+        if self.mapping is None:
+            return input_value
+        return self.mapping[input_value]
+
+    def _build_from_optional(self, field_name: str, value: E | None) -> E | None:
+        r"""Resolve an optional exposed value and translate it through the mapping.
+
+        Unlike the base implementation, the default is resolved like any
+        exposed value: it is validated and mapped.
+
+        Returns:
+            The mapped value, or `None` when the value is `None`, the field
+            accepts `None`, and no default is configured.
+
+        Raises:
+            InvalidRequestException: If value is `None` and the field does not
+                accept `None`, or if the value is not one of the allowed values.
+        """
+        if value is None:
+            if not self.accepts_none:
+                raise InvalidRequestException(f"{field_name} should be set for this model.")
+            if self.default is None:
+                return None
+            value = self.default
+        if len(self.values) == 0:
+            raise InvalidRequestException(f"{field_name} not supported for this model.")
+        if value not in self.values:
+            raise InvalidRequestException(f"{field_name} should be one of {self.values}, got {value}.")
+        return self._convert(input_value=value)
 
     @model_validator(mode="after")
     def validate_unique_values(self) -> "EnumBuilder":
@@ -165,16 +232,34 @@ class EnumBuilder(FieldBuilder[E, E]):
             raise ValueError(f"Default value {self.default=} is not in {self.values=}.")
         return self
 
+    @model_validator(mode="after")
+    def validate_mapping(self) -> "EnumBuilder":
+        r"""Ensure the mapping translates exactly the allowed values and preserves the effort order."""
+        if self.mapping is not None:
+            if set(self.mapping) != set(self.values):
+                raise ValueError(f"Mapping keys {list(self.mapping)=} must match {self.values=}.")
+            if self.values and set(self.values).issubset(_REASONING_EFFORT_VALUES):
+                # The reasoning effort ladder is ordered: the remapping must preserve it.
+                validate_reasoning_effort_mapping_order(self.mapping)
+        return self
+
     def _validate_built_value(self, field_name: str, value: E) -> None:
-        r"""Check that value is one of the allowed enum values.
+        r"""Check that the built value is one the builder can produce.
+
+        The built value is model-side: it is checked against the mapped values
+        when a mapping is configured, and against the allowed values otherwise.
 
         Raises:
             InvalidRequestException: If unset when required, unsupported, or not allowed.
         """
-        if len(self.values) == 0:
+        if self.mapping is None:
+            allowed = self.values
+        else:
+            allowed = list(dict.fromkeys(self.mapping.values()))
+        if len(allowed) == 0:
             raise InvalidRequestException(f"{field_name} not supported for this model.")
-        if value not in self.values:
-            raise InvalidRequestException(f"{field_name} should be one of {self.values}, got {value}.")
+        if value not in allowed:
+            raise InvalidRequestException(f"{field_name} should be one of {allowed}, got {value}.")
 
 
 class JSONSchemaBuilder(FieldBuilder[ResponseFormat, JSONSchemaDict]):

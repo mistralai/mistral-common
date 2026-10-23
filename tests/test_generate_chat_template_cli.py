@@ -33,6 +33,7 @@ def tekken_v15_json_schema_path(tmp_path_factory: pytest.TempPathFactory) -> Pat
     config = TestConfig(
         version=TokenizerVersion.v15,
         model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+        reasoning_effort_default="none",
     )
     return build_tekken_json(config=config, output_dir=build_dir)
 

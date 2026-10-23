@@ -63,6 +63,9 @@ class TestTransformersMistralCommonParity:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=config.model_settings_fields,
+            reasoning_effort_values=config.reasoning_effort_values,
+            reasoning_effort_mapping=config.reasoning_effort_mapping,
+            reasoning_effort_default=config.reasoning_effort_default,
         )
 
         # Build HF tokenizer for Tekken-based token ID comparison
@@ -139,6 +142,9 @@ class TestTransformersMistralCommonParity:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=config.model_settings_fields,
+            reasoning_effort_values=config.reasoning_effort_values,
+            reasoning_effort_mapping=config.reasoning_effort_mapping,
+            reasoning_effort_default=config.reasoning_effort_default,
         )
 
         # Starting with assistant is rejected by the first-message constraint
@@ -230,6 +236,9 @@ class TestTransformersMistralCommonParity:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=config.model_settings_fields,
+            reasoning_effort_values=config.reasoning_effort_values,
+            reasoning_effort_mapping=config.reasoning_effort_mapping,
+            reasoning_effort_default=config.reasoning_effort_default,
         )
         # Not using parametrize here because invalid_convs depends on the version/image/audio/think
         # parameters from the outer parametrize. Each sub-case is identifiable via the TemplateError
