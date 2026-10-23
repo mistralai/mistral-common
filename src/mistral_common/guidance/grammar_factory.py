@@ -1,5 +1,5 @@
 import json
-from enum import Enum
+from enum import StrEnum, auto
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable
@@ -70,10 +70,10 @@ def _cached_get_lark_from_jinja(
     return str(lark_grammar)
 
 
-class _GrammarVariant(str, Enum):
-    base = "base"
-    plain_think = "plain_think"
-    think = "think"
+class _GrammarVariant(StrEnum):
+    base = auto()
+    plain_think = auto()
+    think = auto()
 
 
 JINJA_PATHS = {

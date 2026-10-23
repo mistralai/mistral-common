@@ -1,7 +1,7 @@
 import json
+from typing import assert_type
 
 import pytest
-from typing_extensions import assert_type
 
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,

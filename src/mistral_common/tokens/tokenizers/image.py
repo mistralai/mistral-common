@@ -1,7 +1,7 @@
 import base64
 import logging
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum, auto
 from io import BytesIO
 
 import numpy as np
@@ -98,14 +98,14 @@ DATASET_STD = (0.26862954, 0.26130258, 0.27577711)  # RGB
 
 
 # only relevant for spm
-class MultiModalVersion(str, Enum):
+class MultiModalVersion(StrEnum):
     r"""Version of the image tokenizer.
 
     Attributes:
         m1: The first multimodal version, patch size 16 and max image size 1024.
     """
 
-    m1 = "m1"
+    m1 = auto()
 
     @property
     def config(self) -> "ImageConfig":

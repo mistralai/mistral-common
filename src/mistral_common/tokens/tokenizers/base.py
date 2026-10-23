@@ -1,6 +1,6 @@
 import warnings
 from abc import ABC, abstractmethod
-from enum import Enum
+from enum import StrEnum, auto
 from pathlib import Path
 from typing import Generic, TypeVar
 
@@ -21,7 +21,7 @@ from mistral_common.tokens.tokenizers.image import ImageEncoder
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
 
 
-class UserMessagePosition(str, Enum):
+class UserMessagePosition(StrEnum):
     r"""Where to encode available tools in the token stream.
 
     Attributes:
@@ -29,11 +29,11 @@ class UserMessagePosition(str, Enum):
         last: Encode the available tools section after the message.
     """
 
-    first = "first"
-    last = "last"
+    first = auto()
+    last = auto()
 
 
-class SpecialTokens(str, Enum):
+class SpecialTokens(StrEnum):
     r"""Enum of special tokens used in the tokenizer.
 
     Attributes:
@@ -110,7 +110,7 @@ class SpecialTokens(str, Enum):
     end_model_settings = "[/MODEL_SETTINGS]"
 
 
-class SpecialTokenPolicy(str, Enum):
+class SpecialTokenPolicy(StrEnum):
     r"""What to do with special tokens when encoding/decoding.
 
     Attributes:
@@ -119,9 +119,9 @@ class SpecialTokenPolicy(str, Enum):
         RAISE: Raise an error if special tokens are found.
     """
 
-    IGNORE = "ignore"
-    KEEP = "keep"
-    RAISE = "raise"
+    IGNORE = auto()
+    KEEP = auto()
+    RAISE = auto()
 
     @classmethod
     def validate(cls, policy: "SpecialTokenPolicy | str") -> "SpecialTokenPolicy":
@@ -144,7 +144,7 @@ class SpecialTokenPolicy(str, Enum):
             raise ValueError(f"Invalid `special_token_policy` {policy!r}. Expected one of: {valid}.") from e
 
 
-class TokenizerVersion(str, Enum):
+class TokenizerVersion(StrEnum):
     r"""Enum of tokenizer versions, ordered and comparable.
 
     Allows distinguishing between tokenizer generations and maintaining
@@ -212,13 +212,13 @@ class TokenizerVersion(str, Enum):
             other = TokenizerVersion(other)
         return self.version_num >= other.version_num
 
-    v1 = "v1"  # vocab_size = 32000
-    v2 = "v2"  # vocab_size = 32768 with special control tokens [INST], [\INST]
-    v3 = "v3"  # vocab_size = 32768 (spm) OR 131072 (tekken) with improved function calling
-    v7 = "v7"  # vocab_size = 32768 (spm) or 131072 (tekken) with improved system prompt and function calling
-    v11 = "v11"  # 131072 (tekken) with improved function calling
-    v13 = "v13"  # 131072 (tekken) with no call id and better prompt caching
-    v15 = "v15"  # 131072 (tekken) with model settings
+    v1 = auto()  # vocab_size = 32000
+    v2 = auto()  # vocab_size = 32768 with special control tokens [INST], [\INST]
+    v3 = auto()  # vocab_size = 32768 (spm) OR 131072 (tekken) with improved function calling
+    v7 = auto()  # vocab_size = 32768 (spm) or 131072 (tekken) with improved system prompt and function calling
+    v11 = auto()  # 131072 (tekken) with improved function calling
+    v13 = auto()  # 131072 (tekken) with no call id and better prompt caching
+    v15 = auto()  # 131072 (tekken) with model settings
 
 
 class Tokenized(MistralBase):
