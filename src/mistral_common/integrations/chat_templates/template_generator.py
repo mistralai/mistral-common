@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 
+from mistral_common.protocol.instruct.request import ReasoningEffort
 from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
+from mistral_common.tokens.tokenizers.model_settings_builder import validate_reasoning_effort_mapping_order
 
 # Generated templates join text with Jinja `~`, never `+`: stock Jinja's `tojson` and `safe` return Markup,
 # and `+` with a Markup operand HTML-escapes the other one.
@@ -26,6 +28,9 @@ _BEGIN_THINK = SpecialTokens.begin_think.value
 _END_THINK = SpecialTokens.end_think.value
 _BEGIN_MODEL_SETTINGS = SpecialTokens.begin_model_settings.value
 _END_MODEL_SETTINGS = SpecialTokens.end_model_settings.value
+
+# Standard reasoning efforts accepted by templates without a remapping.
+_REASONING_EFFORT_VALUES = tuple(effort.value for effort in ReasoningEffort)
 
 MODEL_SETTINGS_FIELD_CHOICES: tuple[str, ...] = ("reasoning_effort", "json_schema")
 # Jinja lines that append each field's `"name": value` JSON fragment to `model_settings_parts`.
@@ -72,6 +77,24 @@ class TemplateConfig:
             automatic fields for the tokenizer version (`reasoning_effort` for v15 and
             above, none below). An explicit set must be non-empty, requires v15 or above,
             and may only contain values from `MODEL_SETTINGS_FIELD_CHOICES`.
+        reasoning_effort_values: Reasoning effort values exposed on requests, or
+            `None` to expose the full standard ladder. When no mapping is set, the
+            template validates requests against these values and renders them as-is.
+            Must be a non-empty tuple of standard efforts, must match the mapping keys
+            when a mapping is also set, and requires the `reasoning_effort` model
+            settings field.
+        reasoning_effort_mapping: Mapping from exposed reasoning effort values to
+            model-side values, or `None` to render the exposed value as-is. When set,
+            the template validates requests against the mapping keys and renders the
+            mapped value in the model settings. Keys and values must be standard
+            efforts, model-side values must not decrease as exposed values increase
+            (the mapping preserves the order of reasoning efforts), and the mapping
+            must be non-empty and requires the `reasoning_effort` model settings field.
+        reasoning_effort_default: Exposed reasoning effort value rendered when the
+            request leaves the effort unset, or `None` to fall back to `"none"`. Must
+            be one of the exposed values (the mapping keys when a mapping is set, the
+            configured values otherwise, the standard efforts by default) and requires
+            the `reasoning_effort` model settings field.
 
     Raises:
         ValueError: If the configuration is invalid (e.g., conflicting options like
@@ -93,6 +116,9 @@ class TemplateConfig:
     plain_thinking_support: bool = False
     use_special_token_variables: bool = False
     model_settings_fields: frozenset[str] | None = None
+    reasoning_effort_values: tuple[str, ...] | None = None
+    reasoning_effort_mapping: dict[str, str] | None = None
+    reasoning_effort_default: str | None = None
 
     def __post_init__(self) -> None:
         explicit_model_settings_fields = self.model_settings_fields is not None
@@ -110,6 +136,44 @@ class TemplateConfig:
             raise ValueError("Model settings fields are only available for tokenizer versions v15 and above")
         if explicit_model_settings_fields and not self.model_settings_fields:
             raise ValueError("Model settings fields must be None (automatic) or a non-empty set")
+        if self.reasoning_effort_values is not None:
+            if not self.reasoning_effort_values:
+                raise ValueError("Reasoning effort values must be None or a non-empty tuple")
+            if "reasoning_effort" not in self.model_settings_fields:
+                raise ValueError("Reasoning effort values require the reasoning_effort model settings field")
+            unknown_values = set(self.reasoning_effort_values) - set(_REASONING_EFFORT_VALUES)
+            if unknown_values:
+                unknown_names = ", ".join(sorted(unknown_values))
+                allowed_names = ", ".join(f'"{value}"' for value in _REASONING_EFFORT_VALUES)
+                raise ValueError(
+                    f"Unknown reasoning effort values: {unknown_names}. Allowed values are: {allowed_names}."
+                )
+            if self.reasoning_effort_mapping is not None and set(self.reasoning_effort_values) != set(
+                self.reasoning_effort_mapping
+            ):
+                raise ValueError("Reasoning effort values must match the mapping keys when both are set")
+        if self.reasoning_effort_mapping is not None:
+            if not self.reasoning_effort_mapping:
+                raise ValueError("Reasoning effort mapping must be None or a non-empty mapping")
+            if "reasoning_effort" not in self.model_settings_fields:
+                raise ValueError("Reasoning effort mapping requires the reasoning_effort model settings field")
+            mapping_keys = set(self.reasoning_effort_mapping)
+            mapping_values = set(self.reasoning_effort_mapping.values())
+            unknown_values = (mapping_keys | mapping_values) - set(_REASONING_EFFORT_VALUES)
+            if unknown_values:
+                unknown_names = ", ".join(sorted(unknown_values))
+                allowed_names = ", ".join(f'"{value}"' for value in _REASONING_EFFORT_VALUES)
+                raise ValueError(
+                    f"Unknown reasoning effort values in mapping: {unknown_names}. Allowed values are: {allowed_names}."
+                )
+            validate_reasoning_effort_mapping_order(self.reasoning_effort_mapping)
+        if self.reasoning_effort_default is not None:
+            if "reasoning_effort" not in self.model_settings_fields:
+                raise ValueError("Reasoning effort default requires the reasoning_effort model settings field")
+            exposed_values = self.exposed_reasoning_effort_values
+            if self.reasoning_effort_default not in exposed_values:
+                allowed = ", ".join(f'"{value}"' for value in exposed_values)
+                raise ValueError(f"Reasoning effort default must be one of the exposed values: {allowed}")
 
         if self.plain_thinking_support and self.thinking_support:
             raise ValueError("Plain thinking support and thinking support are mutually exclusive")
@@ -129,6 +193,19 @@ class TemplateConfig:
             raise ValueError("Plain thinking support is only available for tokenizer version v11")
         if self.audio_support and self.plain_thinking_support:
             raise ValueError("Audio and plain thinking support are mutually exclusive")
+
+    @property
+    def exposed_reasoning_effort_values(self) -> tuple[str, ...]:
+        r"""Reasoning effort values exposed on requests.
+
+        The mapping keys when a remapping is set, the configured values
+        otherwise, or the full standard ladder by default.
+        """
+        if self.reasoning_effort_mapping is not None:
+            return tuple(self.reasoning_effort_mapping)
+        if self.reasoning_effort_values is not None:
+            return self.reasoning_effort_values
+        return _REASONING_EFFORT_VALUES
 
     @property
     def bos_expr(self) -> str:
@@ -488,6 +565,23 @@ def _generate_system_prompt_handling_v7_plus(config: TemplateConfig) -> list[str
     return lines
 
 
+def _allowed_efforts_message(values: tuple[str, ...]) -> str:
+    r"""Phrase the allowed reasoning efforts for the template validation error.
+
+    Two values read naturally as "either A or B", matching the released v15
+    templates; more values read as "one of A, B, ...".
+
+    Args:
+        values: The allowed reasoning effort values.
+
+    Returns:
+        The phrasing to follow "reasoning_effort must be" in the error message.
+    """
+    if len(values) == 2:
+        return f'either "{values[0]}" or "{values[1]}"'
+    return "one of " + ", ".join(f'"{value}"' for value in values)
+
+
 def _generate_available_tools_definition(config: TemplateConfig) -> str:
     r"""Generate available tools and selected model settings definitions.
 
@@ -558,16 +652,44 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
         )
 
     if has_reasoning_effort:
+        default_effort = config.reasoning_effort_default if config.reasoning_effort_default is not None else "none"
         lines.extend(
             [
                 "{%- if reasoning_effort is not defined or reasoning_effort is none %}",
-                "    {%- set reasoning_effort = 'none' %}",
-                "{%- endif %}",
-                "{%- if reasoning_effort not in ['none', 'high'] %}",
-                '    {{- raise_exception(\'reasoning_effort must be either "none" or "high"\') }}',
+                f"    {{%- set reasoning_effort = '{default_effort}' %}}",
                 "{%- endif %}",
             ]
         )
+        mapping = config.reasoning_effort_mapping
+        if mapping is None:
+            # Without a remapping, the template accepts the exposed reasoning efforts.
+            exposed_values = config.exposed_reasoning_effort_values
+            allowed_literal = "[" + ", ".join(f"'{value}'" for value in exposed_values) + "]"
+            allowed = _allowed_efforts_message(exposed_values)
+            lines.extend(
+                [
+                    "{%- if reasoning_effort not in " + allowed_literal + " %}",
+                    "    {{- raise_exception('reasoning_effort must be " + allowed + "') }}",
+                    "{%- endif %}",
+                ]
+            )
+        else:
+            # Rendered model settings must carry the model-side value: validate the
+            # exposed value against the mapping keys, then translate it.
+            mapping_literal = "{" + ", ".join(f"'{key}': '{value}'" for key, value in mapping.items()) + "}"
+            allowed = _allowed_efforts_message(tuple(mapping))
+            lines.extend(
+                [
+                    "{#- The model was trained on values that do not produce a standard number of tokens for "
+                    "the community, so exposed reasoning efforts are remapped onto the trained values to "
+                    "bring users to known territory. -#}",
+                    "{%- set reasoning_effort_mapping = " + mapping_literal + " %}",
+                    "{%- if reasoning_effort not in reasoning_effort_mapping %}",
+                    "    {{- raise_exception('reasoning_effort must be " + allowed + "') }}",
+                    "{%- endif %}",
+                    "{%- set reasoning_effort = reasoning_effort_mapping[reasoning_effort] %}",
+                ]
+            )
 
     if config.model_settings_fields:
         lines.append("{%- set model_settings_parts = [] %}")

@@ -6,10 +6,20 @@ from mistral_common.integrations.chat_templates.template_generator import (
 from mistral_common.integrations.chat_templates.template_generator import (
     build_chat_template as _build_chat_template,
 )
+from mistral_common.protocol.instruct.request import ReasoningEffort
 from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
 from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
+
+
+def _reasoning_effort_str(effort: ReasoningEffort | str) -> str:
+    r"""Return the plain string value of a reasoning effort.
+
+    Model settings store enum members as plain strings, but a hand-built
+    mapping may still carry enum members.
+    """
+    return effort.value if isinstance(effort, ReasoningEffort) else effort
 
 
 def generate_chat_template(
@@ -22,6 +32,9 @@ def generate_chat_template(
     plain_thinking_support: bool,
     use_special_token_variables: bool,
     model_settings_fields: frozenset[str] | None,
+    reasoning_effort_values: tuple[str, ...] | None = None,
+    reasoning_effort_mapping: dict[str, str] | None = None,
+    reasoning_effort_default: str | None = None,
 ) -> str:
     r"""Generate a chat template based on configuration.
 
@@ -44,6 +57,18 @@ def generate_chat_template(
         model_settings_fields: Fields to render, or `None` to select automatically
             based on the tokenizer version. Required — pass `None` explicitly for
             the automatic selection.
+        reasoning_effort_values: Reasoning effort values exposed on requests, or
+            `None` to expose the full standard ladder. When no mapping is set, the
+            template validates requests against these values and renders them
+            as-is. Requires `model_settings_fields` to contain `reasoning_effort`.
+        reasoning_effort_mapping: Mapping from exposed reasoning effort values to
+            model-side values, or `None` to render the exposed value as-is. When set,
+            the template validates requests against the mapping keys and renders the
+            mapped value. Requires `model_settings_fields` to contain `reasoning_effort`.
+        reasoning_effort_default: Exposed reasoning effort value rendered when the
+            request leaves the effort unset, or `None` to fall back to `"none"`. Must
+            be one of the exposed values. Requires `model_settings_fields` to contain
+            `reasoning_effort`.
 
     Returns:
         The generated Jinja2 template as a string.
@@ -57,6 +82,9 @@ def generate_chat_template(
         plain_thinking_support=plain_thinking_support,
         use_special_token_variables=use_special_token_variables,
         model_settings_fields=model_settings_fields,
+        reasoning_effort_values=reasoning_effort_values,
+        reasoning_effort_mapping=reasoning_effort_mapping,
+        reasoning_effort_default=reasoning_effort_default,
     )
     template = _build_chat_template(config)
 
@@ -107,8 +135,10 @@ def convert_tokenizer_to_chat_template(
     forcing the feature on.
 
     For tokenizer versions that support model settings, selected fields are
-    derived from configured builders in the tokenizer file. The tokenizer must
-    have a builder with at least one configured field to produce a matching template.
+    derived from configured builders in the tokenizer file, as are the exposed
+    reasoning effort values, the remapping and the default. The tokenizer must
+    have a builder with at least one configured field to produce a matching
+    template.
 
     Args:
         tokenizer_file: Path to the tokenizer file (tekken JSON or SentencePiece `.model.vX`).
@@ -141,6 +171,9 @@ def convert_tokenizer_to_chat_template(
         SpecialTokens.end_think.value
     )
     model_settings_fields: frozenset[str] | None = None
+    reasoning_effort_values: tuple[str, ...] | None = None
+    reasoning_effort_mapping: dict[str, str] | None = None
+    reasoning_effort_default: str | None = None
     if version.supports_model_settings:
         model_settings_builder = tokenizer.model_settings_builder
         if model_settings_builder is None:
@@ -152,6 +185,19 @@ def convert_tokenizer_to_chat_template(
         )
         if not model_settings_fields:
             raise ValueError("Model settings builder must configure at least one field")
+        reasoning_effort_builder = model_settings_builder.reasoning_effort
+        if reasoning_effort_builder is not None:
+            if reasoning_effort_builder.mapping is not None:
+                reasoning_effort_mapping = {
+                    _reasoning_effort_str(key): _reasoning_effort_str(value)
+                    for key, value in reasoning_effort_builder.mapping.items()
+                }
+            else:
+                reasoning_effort_values = tuple(
+                    _reasoning_effort_str(value) for value in reasoning_effort_builder.values
+                )
+            if reasoning_effort_builder.default is not None:
+                reasoning_effort_default = _reasoning_effort_str(reasoning_effort_builder.default)
 
     if plain_thinking_support is None:
         plain_thinking_support = version == TokenizerVersion.v11 and not audio_support
@@ -166,4 +212,7 @@ def convert_tokenizer_to_chat_template(
         plain_thinking_support=plain_thinking_support,
         use_special_token_variables=use_special_token_variables,
         model_settings_fields=model_settings_fields,
+        reasoning_effort_values=reasoning_effort_values,
+        reasoning_effort_mapping=reasoning_effort_mapping,
+        reasoning_effort_default=reasoning_effort_default,
     )

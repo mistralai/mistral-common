@@ -36,7 +36,14 @@ class TestV15ModelSettings:
 
     @pytest.mark.parametrize(
         ("reasoning_effort", "expected_value"),
-        [(None, "none"), ("high", "high"), ("none", "none")],
+        [
+            (None, "none"),
+            ("low", "low"),
+            ("medium", "medium"),
+            ("high", "high"),
+            ("xhigh", "xhigh"),
+            ("max", "max"),
+        ],
     )
     def test_v15_reasoning_effort_rendering(
         self, v15_template: str, reasoning_effort: str | None, expected_value: str
@@ -500,11 +507,11 @@ class TestV15ModelSettings:
         )
         messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
 
-        with pytest.raises(ValueError, match='reasoning_effort must be either "none" or "high"'):
+        with pytest.raises(ValueError, match="reasoning_effort must be one of"):
             render_template(
                 template=template,
                 messages=messages,
-                reasoning_effort="medium",
+                reasoning_effort="minimal",
             )
 
     def test_v15_reasoning_effort_only_ignores_response_format(self) -> None:

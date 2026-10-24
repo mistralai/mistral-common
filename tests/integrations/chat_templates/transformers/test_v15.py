@@ -41,8 +41,8 @@ class TestV15ReasoningEffort:
     )
     @pytest.mark.parametrize(
         "reasoning_effort",
-        [None, "high", "none"],
-        ids=["no_effort", "high", "none"],
+        [None, "high", "none", "low", "medium", "xhigh", "max"],
+        ids=["no_effort", "high", "none", "low", "medium", "xhigh", "max"],
     )
     def test_valid_reasoning_effort(
         self,
@@ -88,7 +88,7 @@ class TestV15ReasoningEffort:
     )
     @pytest.mark.parametrize(
         "reasoning_effort",
-        ["low", "medium", "invalid_value"],
+        ["minimal", "ultra", "invalid_value"],
     )
     def test_invalid_reasoning_effort(
         self,
@@ -119,7 +119,7 @@ class TestV15ReasoningEffort:
             "reasoning_effort": reasoning_effort,
         }
 
-        with pytest.raises(TemplateError, match='reasoning_effort must be either "none" or "high"'):
+        with pytest.raises(TemplateError, match="reasoning_effort must be one of"):
             encode_transformers_from_openai(chat_template, conv)
 
 
@@ -174,8 +174,13 @@ _PARITY_CASES = [
 def _build_v15_parity_setup(
     tmp_path: Path, model_settings_fields: frozenset[str]
 ) -> tuple[Path, MistralTokenizer, str]:
+    reasoning_effort_default = "none" if "reasoning_effort" in model_settings_fields else None
     tokenizer_path = build_tekken_json(
-        config=TestConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields),
+        config=TestConfig(
+            version=TokenizerVersion.v15,
+            model_settings_fields=model_settings_fields,
+            reasoning_effort_default=reasoning_effort_default,
+        ),
         output_dir=tmp_path,
     )
     mistral_tokenizer = MistralTokenizer.from_file(tokenizer_filename=str(tokenizer_path), mode=ValidationMode.test)
@@ -189,6 +194,7 @@ def _build_v15_parity_setup(
         plain_thinking_support=False,
         use_special_token_variables=True,
         model_settings_fields=model_settings_fields,
+        reasoning_effort_default=reasoning_effort_default,
     )
     return tokenizer_path, mistral_tokenizer, template
 
