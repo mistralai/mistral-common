@@ -370,7 +370,10 @@ class AssistantMessage(BaseMessage):
                 if not _are_think_chunks(think_chunks) or not _are_text_chunks(content_chunks):
                     raise RuntimeError("Impossible, only think or content chunks should have been present.")
                 if len(think_chunks) > 0:
-                    out_dict[reasoning_field_format.value] = "\n".join(tc.thinking for tc in think_chunks)
+                    # Plain strings match the `str` enum cases above but have no `.value`.
+                    out_dict[ReasoningFieldFormat(reasoning_field_format).value] = "\n".join(
+                        tc.thinking for tc in think_chunks
+                    )
 
                 if len(content_chunks) == 1:
                     out_dict["content"] = content_chunks[0].text
