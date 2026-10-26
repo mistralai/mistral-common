@@ -22,7 +22,10 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_system_message_tools_multiturn_request,
     build_system_multiturn_request,
     build_system_singleturn_request,
+    build_system_tools_multiturn_request,
     build_tool_message_request,
+    build_tools_multiturn_request,
+    build_tools_singleturn_request,
 )
 from tests.utils import assert_tokenized_equal, decode_keep
 
@@ -40,17 +43,20 @@ _PREFIXED_FINAL_MESSAGE_TOKENS = [
     1, 733, 16289, 28793, 17121, 22526, 13, 13, 28708, 733, 28748, 16289, 28793, 287, 2, 733, 16289, 28793, 277, 733,
     28748, 16289, 28793, 281
 ]
+_TOOLS_SINGLETURN_TOKENS = [1, 733, 16289, 28793, 264, 733, 28748, 16289, 28793]
 # fmt: on
 
 _NORMAL_EXPECTED = Tokenized(tokens=_NORMAL_TOKENS)
 _SYSTEM_SINGLETURN_EXPECTED = Tokenized(tokens=_SYSTEM_SINGLETURN_TOKENS)
 _SYSTEM_MULTITURN_EXPECTED = Tokenized(tokens=_SYSTEM_MULTITURN_TOKENS)
 _PREFIXED_FINAL_MESSAGE_EXPECTED = Tokenized(tokens=_PREFIXED_FINAL_MESSAGE_TOKENS, prefix_ids=[281])
+_TOOLS_SINGLETURN_EXPECTED = Tokenized(tokens=_TOOLS_SINGLETURN_TOKENS)
 
 _NORMAL_TEXT = "<s>▁[INST]▁a▁[/INST]▁b</s>▁[INST]▁c▁[/INST]▁d</s>"
 _SYSTEM_SINGLETURN_TEXT = "<s>▁[INST]▁SYSTEM<0x0A><0x0A>a▁[/INST]"
 _SYSTEM_MULTITURN_TEXT = "<s>▁[INST]▁SYSTEM<0x0A><0x0A>a▁[/INST]▁b</s>▁[INST]▁c▁[/INST]▁d</s>"
 _PREFIXED_FINAL_MESSAGE_TEXT = "<s>▁[INST]▁SYSTEM<0x0A><0x0A>a▁[/INST]▁b</s>▁[INST]▁c▁[/INST]▁d"
+_TOOLS_SINGLETURN_TEXT = "<s>▁[INST]▁a▁[/INST]"
 
 _TOOLS_NOT_IMPLEMENTED_MESSAGE = r"^Tools not implemented for tokenizer V1$"
 _SYSTEM_MESSAGE_NOT_IMPLEMENTED_MESSAGE = r"^System message encoding not implemented for InstructTokenizerV1$"
@@ -83,6 +89,24 @@ def tokenizer() -> InstructTokenizer:
             _PREFIXED_FINAL_MESSAGE_EXPECTED,
             _PREFIXED_FINAL_MESSAGE_TEXT,
             id="prefixed-final-message",
+        ),
+        pytest.param(
+            partial(build_tools_singleturn_request, settings=None),
+            _TOOLS_SINGLETURN_EXPECTED,
+            _TOOLS_SINGLETURN_TEXT,
+            id="shared-tools-singleturn",
+        ),
+        pytest.param(
+            partial(build_tools_multiturn_request, settings=None),
+            _NORMAL_EXPECTED,
+            _NORMAL_TEXT,
+            id="shared-tools-multiturn",
+        ),
+        pytest.param(
+            partial(build_system_tools_multiturn_request, settings=None),
+            _SYSTEM_MULTITURN_EXPECTED,
+            _SYSTEM_MULTITURN_TEXT,
+            id="shared-system-tools-multiturn",
         ),
     ],
 )
