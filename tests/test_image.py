@@ -136,7 +136,7 @@ def test_download_image(spatial_merge_size: int, special_token_ids: SpecialImage
 
 @pytest.mark.parametrize("url", ["data:image/png;base64", "data:image/png;base64,"])
 def test_image_from_chunk_data_url_without_payload(url: str) -> None:
-    with pytest.raises(ValueError, match="expected a base64 payload"):
+    with pytest.raises(ValueError, match="Invalid base64 data URL"):
         image_from_chunk(chunk=ImageURLChunk(image_url=url))
 
 

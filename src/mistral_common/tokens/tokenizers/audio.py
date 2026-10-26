@@ -2,7 +2,6 @@ import base64
 import io
 import logging
 import math
-import re
 import warnings
 from dataclasses import dataclass
 from enum import Enum, StrEnum, auto
@@ -21,6 +20,7 @@ from mistral_common.imports import (
     is_soxr_installed,
 )
 from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk, AudioURLType
+from mistral_common.utils.data_url import maybe_strip_base64_data_url_prefix
 
 if is_soxr_installed():
     import soxr
@@ -135,19 +135,27 @@ class Audio:
             An instance of the Audio class.
 
         Raises:
-            ValueError: If the string is not valid base64 or decoding fails.
+            ValueError: If the input is a malformed data URL, is not valid
+                base64, or the payload cannot be decoded as audio.
         """
         assert_soundfile_installed()
 
-        if re.match(r"^data:audio/\w+;base64,", audio_base64):
-            audio_base64 = audio_base64.split(",")[1]
+        audio_base64 = maybe_strip_base64_data_url_prefix(audio_base64, strict=True)
 
         try:
             audio_bytes = base64.b64decode(audio_base64)
         except Exception as e:
             raise ValueError("base64 decoding failed. Please check the input string is a valid base64.") from e
 
-        return Audio.from_bytes(audio_bytes, strict=strict)
+        try:
+            return Audio.from_bytes(audio_bytes, strict=strict)
+        except RuntimeError as e:
+            # soundfile decode failures (LibsndfileError); the multi-channel
+            # ValueError from from_bytes is a validation error and propagates as is
+            raise ValueError(
+                "Failed to decode the base64 payload as audio. "
+                "Verify that the input is a valid audio file (e.g. wav or mp3)."
+            ) from e
 
     @staticmethod
     def from_file(file: str, strict: bool = True) -> "Audio":
