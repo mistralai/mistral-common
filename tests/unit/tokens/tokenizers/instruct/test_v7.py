@@ -20,7 +20,7 @@ from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized, TokenizerVersion
-from mistral_common.tokens.tokenizers.image import DATASET_MEAN, DATASET_STD, ImageEncoder
+from mistral_common.tokens.tokenizers.image import DATASET_MEAN, DATASET_STD, ImageConfig, ImageEncoder
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
@@ -148,6 +148,8 @@ def _build_solid_image(rgb: tuple[int, int, int], shape: tuple[int, int, int]) -
     return np.broadcast_to(array=vector[:, None, None], shape=shape)
 
 
+# Image rows below check token placement, shape and dtype in the token stream;
+# normalization correctness is covered by the image encoder tests.
 _RED_4X4_IMAGE = _build_solid_image(rgb=(255, 0, 0), shape=(3, 4, 4))
 _BLUE_4X4_IMAGE = _build_solid_image(rgb=(0, 0, 255), shape=(3, 4, 4))
 _BLUE_6X4_IMAGE = _build_solid_image(rgb=(0, 0, 255), shape=(3, 4, 6))
@@ -438,10 +440,13 @@ def spm_tokenizer() -> InstructTokenizer:
 @pytest.fixture(scope="module")
 def spm_patch2_tokenizer() -> InstructTokenizer:
     r"""Provide a separate bundled v7 multimodal instruct tokenizer with an image patch size of 2."""
-    tokenizer = MistralTokenizer.v7(is_mm=True).instruct_tokenizer
-    assert isinstance(tokenizer.image_encoder, ImageEncoder)
-    tokenizer.image_encoder.image_config.image_patch_size = 2
-    return tokenizer
+    base = MistralTokenizer.v7(is_mm=True).instruct_tokenizer
+    assert isinstance(base.image_encoder, ImageEncoder)
+    patch2_encoder = ImageEncoder(
+        image_config=ImageConfig(image_patch_size=2, max_image_size=1024),
+        special_ids=base.image_encoder.special_ids,
+    )
+    return InstructTokenizerV7(tokenizer=base.tokenizer, image_encoder=patch2_encoder)
 
 
 @pytest.fixture(scope="module")
