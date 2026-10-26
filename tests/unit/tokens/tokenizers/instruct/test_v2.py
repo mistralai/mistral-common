@@ -9,7 +9,6 @@ from mistral_common.protocol.instruct.chunk import ContentChunk, TextChunk
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
-    SystemMessage,
     ToolMessage,
     UserMessage,
 )
@@ -17,6 +16,17 @@ from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from tests.unit.tokens.tokenizers.instruct.request_builders import (
+    build_empty_assistant_request,
+    build_normal_request,
+    build_prefixed_final_message_request,
+    build_system_message_request,
+    build_system_multiturn_request,
+    build_system_singleturn_request,
+    build_system_tools_multiturn_request,
+    build_tools_multiturn_request,
+    build_tools_singleturn_request,
+)
 from tests.utils import assert_tokenized_equal, decode_keep
 
 # fmt: off
@@ -177,87 +187,6 @@ def tokenizer() -> InstructTokenizer:
     return MistralTokenizer.v2().instruct_tokenizer
 
 
-def _build_normal_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build the v2 multi-turn request without a system prompt."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(content="b"),
-            UserMessage(content="c"),
-            AssistantMessage(content="d"),
-        ]
-    )
-
-
-def _build_system_singleturn_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build the v2 single-turn request with a system prompt."""
-    return InstructRequest[ChatMessage, Tool](messages=[UserMessage(content="a")], system_prompt="SYSTEM")
-
-
-def _build_system_multiturn_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build the v2 multi-turn request with a system prompt."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(content="b"),
-            UserMessage(content="c"),
-            AssistantMessage(content="d"),
-        ],
-        system_prompt="SYSTEM",
-    )
-
-
-def _build_prefixed_final_message_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build the v2 request with a prefixed final assistant message."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(content="b"),
-            UserMessage(content="c"),
-            AssistantMessage(content="d", prefix=True),
-        ],
-        system_prompt="SYSTEM",
-    )
-
-
-def _build_tools_singleturn_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build the v2 single-turn request with one available tool."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[UserMessage(content="a")],
-        available_tools=[Tool(function=Function(name="tool1", description="1", parameters={}))],
-    )
-
-
-def _build_tools_multiturn_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build the v2 multi-turn request with two available tools."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(content="b"),
-            UserMessage(content="c"),
-            AssistantMessage(content="d"),
-        ],
-        available_tools=[
-            Tool(function=Function(name="tool1", description="1", parameters={})),
-            Tool(function=Function(name="tool2", description="2", parameters={})),
-        ],
-    )
-
-
-def _build_system_tools_multiturn_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build the v2 multi-turn request with a system prompt and tool."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(content="b"),
-            UserMessage(content="c"),
-            AssistantMessage(content="d"),
-        ],
-        available_tools=[Tool(function=Function(name="tool1", description="1", parameters={}))],
-        system_prompt="SYSTEM",
-    )
-
-
 def _build_tool_message_multiple_shots_without_history_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build the v2 request with multiple tool shots and no call history."""
     return InstructRequest[ChatMessage, Tool](
@@ -391,11 +320,6 @@ def _build_non_final_prefixed_assistant_request() -> InstructRequest[ChatMessage
     )
 
 
-def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a v2 request containing an empty assistant message."""
-    return InstructRequest[ChatMessage, Tool](messages=[UserMessage(content="a"), AssistantMessage(content="")])
-
-
 def _build_parallel_results_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build the v2 request with two results for one assistant turn."""
     tool_calls = [
@@ -416,47 +340,42 @@ def _build_parallel_results_request() -> InstructRequest[ChatMessage, Tool]:
     return InstructRequest[ChatMessage, Tool](messages=messages)
 
 
-def _build_system_message_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a v2 request containing a system message."""
-    return InstructRequest[ChatMessage, Tool](messages=[SystemMessage(content="s"), UserMessage(content="a")])
-
-
 @pytest.mark.parametrize(
     argnames="request_builder, expected, expected_text",
     argvalues=[
-        pytest.param(_build_normal_request, _NORMAL_EXPECTED, _NORMAL_TEXT, id="normal"),
+        pytest.param(build_normal_request, _NORMAL_EXPECTED, _NORMAL_TEXT, id="normal"),
         pytest.param(
-            _build_system_singleturn_request,
+            build_system_singleturn_request,
             _SYSTEM_SINGLETURN_EXPECTED,
             _SYSTEM_SINGLETURN_TEXT,
             id="system-singleturn",
         ),
         pytest.param(
-            _build_system_multiturn_request,
+            build_system_multiturn_request,
             _SYSTEM_MULTITURN_EXPECTED,
             _SYSTEM_MULTITURN_TEXT,
             id="system-multiturn",
         ),
         pytest.param(
-            _build_prefixed_final_message_request,
+            build_prefixed_final_message_request,
             _PREFIXED_FINAL_MESSAGE_EXPECTED,
             _PREFIXED_FINAL_MESSAGE_TEXT,
             id="prefixed-final-message",
         ),
         pytest.param(
-            _build_tools_singleturn_request,
+            build_tools_singleturn_request,
             _TOOLS_SINGLETURN_EXPECTED,
             _TOOLS_SINGLETURN_TEXT,
             id="tools-singleturn",
         ),
         pytest.param(
-            _build_tools_multiturn_request,
+            build_tools_multiturn_request,
             _TOOLS_MULTITURN_EXPECTED,
             _TOOLS_MULTITURN_TEXT,
             id="tools-multiturn",
         ),
         pytest.param(
-            _build_system_tools_multiturn_request,
+            build_system_tools_multiturn_request,
             _SYSTEM_TOOLS_MULTITURN_EXPECTED,
             _SYSTEM_TOOLS_MULTITURN_TEXT,
             id="system-tools-multiturn",
@@ -548,13 +467,13 @@ def test_encode_instruct(
             _build_non_final_prefixed_assistant_request, AssertionError, None, id="non-final-prefixed-assistant"
         ),
         pytest.param(
-            _build_empty_assistant_request,
+            build_empty_assistant_request,
             TokenizerException,
             _INVALID_ASSISTANT_MESSAGE,
             id="empty-assistant",
         ),
         pytest.param(
-            _build_system_message_request,
+            build_system_message_request,
             NotImplementedError,
             _SYSTEM_MESSAGE_NOT_IMPLEMENTED_MESSAGE,
             id="system-message",

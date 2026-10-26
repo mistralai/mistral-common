@@ -8,7 +8,6 @@ from mistral_common.exceptions import TokenizerException
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
-    SystemMessage,
     ToolMessage,
     UserMessage,
 )
@@ -16,6 +15,14 @@ from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import FunctionCall, Tool, ToolCall
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from tests.unit.tokens.tokenizers.instruct.request_builders import (
+    build_empty_assistant_request,
+    build_normal_request,
+    build_prefixed_final_message_request,
+    build_system_message_request,
+    build_system_multiturn_request,
+    build_system_singleturn_request,
+)
 from tests.utils import assert_tokenized_equal, decode_keep
 
 # fmt: off
@@ -54,49 +61,6 @@ def tokenizer() -> InstructTokenizer:
     return MistralTokenizer.v1().instruct_tokenizer
 
 
-def _build_normal_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build the v1 multi-turn request without a system prompt."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(content="b"),
-            UserMessage(content="c"),
-            AssistantMessage(content="d"),
-        ]
-    )
-
-
-def _build_system_singleturn_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build the v1 single-turn request with a system prompt."""
-    return InstructRequest[ChatMessage, Tool](messages=[UserMessage(content="a")], system_prompt="SYSTEM")
-
-
-def _build_system_multiturn_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build the v1 multi-turn request with a system prompt."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(content="b"),
-            UserMessage(content="c"),
-            AssistantMessage(content="d"),
-        ],
-        system_prompt="SYSTEM",
-    )
-
-
-def _build_prefixed_final_message_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build the v1 request with a prefixed final assistant message."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(content="b"),
-            UserMessage(content="c"),
-            AssistantMessage(content="d", prefix=True),
-        ],
-        system_prompt="SYSTEM",
-    )
-
-
 def _build_tool_message_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build a v1 request containing a tool result."""
     return InstructRequest[ChatMessage, Tool](
@@ -114,34 +78,24 @@ def _build_assistant_tool_calls_request() -> InstructRequest[ChatMessage, Tool]:
     )
 
 
-def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a v1 request containing an empty assistant message."""
-    return InstructRequest[ChatMessage, Tool](messages=[UserMessage(content="a"), AssistantMessage(content="")])
-
-
-def _build_system_message_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a v1 request containing a system message."""
-    return InstructRequest[ChatMessage, Tool](messages=[SystemMessage(content="s"), UserMessage(content="a")])
-
-
 @pytest.mark.parametrize(
     argnames="request_builder, expected, expected_text",
     argvalues=[
-        pytest.param(_build_normal_request, _NORMAL_EXPECTED, _NORMAL_TEXT, id="normal"),
+        pytest.param(build_normal_request, _NORMAL_EXPECTED, _NORMAL_TEXT, id="normal"),
         pytest.param(
-            _build_system_singleturn_request,
+            build_system_singleturn_request,
             _SYSTEM_SINGLETURN_EXPECTED,
             _SYSTEM_SINGLETURN_TEXT,
             id="system-singleturn",
         ),
         pytest.param(
-            _build_system_multiturn_request,
+            build_system_multiturn_request,
             _SYSTEM_MULTITURN_EXPECTED,
             _SYSTEM_MULTITURN_TEXT,
             id="system-multiturn",
         ),
         pytest.param(
-            _build_prefixed_final_message_request,
+            build_prefixed_final_message_request,
             _PREFIXED_FINAL_MESSAGE_EXPECTED,
             _PREFIXED_FINAL_MESSAGE_TEXT,
             id="prefixed-final-message",
@@ -175,9 +129,9 @@ def test_encode_instruct(
             _TOOLS_NOT_IMPLEMENTED_MESSAGE,
             id="assistant-tool-calls",
         ),
-        pytest.param(_build_empty_assistant_request, TokenizerException, None, id="empty-assistant"),
+        pytest.param(build_empty_assistant_request, TokenizerException, None, id="empty-assistant"),
         pytest.param(
-            _build_system_message_request,
+            build_system_message_request,
             NotImplementedError,
             _SYSTEM_MESSAGE_NOT_IMPLEMENTED_MESSAGE,
             id="system-message",

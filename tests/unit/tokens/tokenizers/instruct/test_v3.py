@@ -11,7 +11,6 @@ from mistral_common.protocol.instruct.chunk import ContentChunk, ImageChunk, Tex
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
-    SystemMessage,
     ToolMessage,
     UserMessage,
 )
@@ -20,6 +19,14 @@ from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, 
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized
 from mistral_common.tokens.tokenizers.image import DATASET_MEAN, DATASET_STD
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from tests.unit.tokens.tokenizers.instruct.request_builders import (
+    build_empty_assistant_request,
+    build_prefixed_final_message_request,
+    build_system_message_request,
+    build_system_tools_multiturn_request,
+    build_tools_multiturn_request,
+    build_tools_singleturn_request,
+)
 from tests.utils import assert_tokenized_equal, decode_keep
 
 # fmt: off
@@ -330,57 +337,6 @@ def tekken_mm_tokenizer() -> InstructTokenizer:
     return MistralTokenizer.v3(is_tekken=True, is_mm=True).instruct_tokenizer
 
 
-def _build_tools_singleturn_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a v3 single-turn request with one available tool."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[UserMessage(content="a")],
-        available_tools=[Tool(function=Function(name="tool1", description="1", parameters={}))],
-    )
-
-
-def _build_tools_multiturn_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a v3 multi-turn request with two available tools."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(content="b"),
-            UserMessage(content="c"),
-            AssistantMessage(content="d"),
-        ],
-        available_tools=[
-            Tool(function=Function(name="tool1", description="1", parameters={})),
-            Tool(function=Function(name="tool2", description="2", parameters={})),
-        ],
-    )
-
-
-def _build_system_tools_multiturn_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a v3 multi-turn request with a system prompt and tool."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(content="b"),
-            UserMessage(content="c"),
-            AssistantMessage(content="d"),
-        ],
-        available_tools=[Tool(function=Function(name="tool1", description="1", parameters={}))],
-        system_prompt="SYSTEM",
-    )
-
-
-def _build_prefixed_final_message_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a v3 request with a prefixed final assistant message."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(content="b"),
-            UserMessage(content="c"),
-            AssistantMessage(content="d", prefix=True),
-        ],
-        system_prompt="SYSTEM",
-    )
-
-
 def _build_tool_message_multiple_shots_with_history_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build a v3 request with tool-call history across multiple shots."""
     return InstructRequest[ChatMessage, Tool](
@@ -550,71 +506,61 @@ def _build_tool_call_and_content_request() -> InstructRequest[ChatMessage, Tool]
     )
 
 
-def _build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a v3 request containing an empty assistant message."""
-    return InstructRequest[ChatMessage, Tool](messages=[UserMessage(content="a"), AssistantMessage(content="")])
-
-
-def _build_system_message_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a v3 request containing a system message."""
-    return InstructRequest[ChatMessage, Tool](messages=[SystemMessage(content="s"), UserMessage(content="a")])
-
-
 @pytest.mark.parametrize(
     argnames="backend, request_builder, expected, expected_text",
     argvalues=[
         pytest.param(
             "spm",
-            _build_tools_singleturn_request,
+            build_tools_singleturn_request,
             _SPM_TOOLS_SINGLETURN_EXPECTED,
             _SPM_TOOLS_SINGLETURN_TEXT,
             id="spm-tools-singleturn",
         ),
         pytest.param(
             "tekken",
-            _build_tools_singleturn_request,
+            build_tools_singleturn_request,
             _TEKKEN_TOOLS_SINGLETURN_EXPECTED,
             _TEKKEN_TOOLS_SINGLETURN_TEXT,
             id="tekken-tools-singleturn",
         ),
         pytest.param(
             "spm",
-            _build_tools_multiturn_request,
+            build_tools_multiturn_request,
             _SPM_TOOLS_MULTITURN_EXPECTED,
             _SPM_TOOLS_MULTITURN_TEXT,
             id="spm-tools-multiturn",
         ),
         pytest.param(
             "tekken",
-            _build_tools_multiturn_request,
+            build_tools_multiturn_request,
             _TEKKEN_TOOLS_MULTITURN_EXPECTED,
             _TEKKEN_TOOLS_MULTITURN_TEXT,
             id="tekken-tools-multiturn",
         ),
         pytest.param(
             "spm",
-            _build_system_tools_multiturn_request,
+            build_system_tools_multiturn_request,
             _SPM_SYSTEM_TOOLS_MULTITURN_EXPECTED,
             _SPM_SYSTEM_TOOLS_MULTITURN_TEXT,
             id="spm-system-tools-multiturn",
         ),
         pytest.param(
             "tekken",
-            _build_system_tools_multiturn_request,
+            build_system_tools_multiturn_request,
             _TEKKEN_SYSTEM_TOOLS_MULTITURN_EXPECTED,
             _TEKKEN_SYSTEM_TOOLS_MULTITURN_TEXT,
             id="tekken-system-tools-multiturn",
         ),
         pytest.param(
             "spm",
-            _build_prefixed_final_message_request,
+            build_prefixed_final_message_request,
             _SPM_PREFIXED_FINAL_MESSAGE_EXPECTED,
             _SPM_PREFIXED_FINAL_MESSAGE_TEXT,
             id="spm-prefixed-final-message",
         ),
         pytest.param(
             "tekken",
-            _build_prefixed_final_message_request,
+            build_prefixed_final_message_request,
             _TEKKEN_PREFIXED_FINAL_MESSAGE_EXPECTED,
             _TEKKEN_PREFIXED_FINAL_MESSAGE_TEXT,
             id="tekken-prefixed-final-message",
@@ -794,7 +740,7 @@ def test_encode_instruct(
         ),
         pytest.param(
             "spm",
-            _build_empty_assistant_request,
+            build_empty_assistant_request,
             TokenizerException,
             _INVALID_ASSISTANT_MESSAGE,
             id="spm-empty-assistant",
@@ -808,21 +754,21 @@ def test_encode_instruct(
         ),
         pytest.param(
             "tekken",
-            _build_empty_assistant_request,
+            build_empty_assistant_request,
             TokenizerException,
             _INVALID_ASSISTANT_MESSAGE,
             id="tekken-empty-assistant",
         ),
         pytest.param(
             "spm",
-            _build_system_message_request,
+            build_system_message_request,
             NotImplementedError,
             _SYSTEM_MESSAGE_NOT_IMPLEMENTED_MESSAGE,
             id="spm-system-message",
         ),
         pytest.param(
             "tekken",
-            _build_system_message_request,
+            build_system_message_request,
             NotImplementedError,
             _SYSTEM_MESSAGE_NOT_IMPLEMENTED_MESSAGE,
             id="tekken-system-message",
