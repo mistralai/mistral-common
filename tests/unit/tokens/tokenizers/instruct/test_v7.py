@@ -17,6 +17,7 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.request import InstructRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
+from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized, TokenizerVersion
 from mistral_common.tokens.tokenizers.image import DATASET_MEAN, DATASET_STD, ImageEncoder
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7
@@ -25,9 +26,13 @@ from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import quick_vocab
 from tests.test_tokenizer_v7_audio import get_tekkenizer_with_audio
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
+    build_audio_user_request,
     build_empty_assistant_request,
+    build_image_user_request,
     build_normal_request,
     build_system_message_request,
+    build_text_then_audio_user_request,
+    build_text_then_image_user_request,
     build_tool_message_request,
     build_tools_multiturn_request,
     build_tools_singleturn_request,
@@ -265,6 +270,9 @@ _NO_AUDIO_TOOLS_MULTITURN_TOKENS = [
     225, 225, 193, 6, 3, 199, 4, 200, 2]
 _NO_AUDIO_TOOL_MESSAGE_TOKENS = [1, 3, 197, 4, 7, 149, 150, 151, 152, 153, 154, 155, 156, 157, 19, 200, 8]
 _NO_AUDIO_SYSTEM_MESSAGE_TOKENS = [1, 17, 215, 18, 3, 197, 4]
+_SPM_PATCH2_IMAGE_USER_TOKENS = [1, 3, 10, 10, 14, 10, 10, 15, 1032, 4]
+_WITH_AUDIO_AUDIO_USER_TOKENS = [1, 3, 25, 24, 24, 4]
+_WITH_AUDIO_TEXT_THEN_AUDIO_USER_TOKENS = [1, 3, 197, 25, 24, 24, 4]
 # fmt: on
 
 _SPM_NORMAL_EXPECTED = Tokenized(tokens=_SPM_NORMAL_TOKENS)
@@ -277,6 +285,12 @@ _NO_AUDIO_TOOLS_SINGLETURN_EXPECTED = Tokenized(tokens=_NO_AUDIO_TOOLS_SINGLETUR
 _NO_AUDIO_TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_NO_AUDIO_TOOLS_MULTITURN_TOKENS)
 _NO_AUDIO_TOOL_MESSAGE_EXPECTED = Tokenized(tokens=_NO_AUDIO_TOOL_MESSAGE_TOKENS)
 _NO_AUDIO_SYSTEM_MESSAGE_EXPECTED = Tokenized(tokens=_NO_AUDIO_SYSTEM_MESSAGE_TOKENS)
+_SILENT_AUDIO = Audio(audio_array=np.zeros(shape=2400, dtype=np.float32), sampling_rate=24_000, format="wav")
+_SPM_PATCH2_IMAGE_USER_EXPECTED = Tokenized(tokens=_SPM_PATCH2_IMAGE_USER_TOKENS, images=[_RED_4X4_IMAGE])
+_WITH_AUDIO_AUDIO_USER_EXPECTED = Tokenized(tokens=_WITH_AUDIO_AUDIO_USER_TOKENS, audios=[_SILENT_AUDIO])
+_WITH_AUDIO_TEXT_THEN_AUDIO_USER_EXPECTED = Tokenized(
+    tokens=_WITH_AUDIO_TEXT_THEN_AUDIO_USER_TOKENS, audios=[_SILENT_AUDIO]
+)
 
 _SPM_NORMAL_TEXT = "<s>[INST]▁a[/INST]▁b</s>[INST]▁c[/INST]▁d</s>"
 _SPM_TOOLS_SINGLETURN_TEXT = (
@@ -302,6 +316,9 @@ _NO_AUDIO_TOOLS_MULTITURN_TEXT = (
 )
 _NO_AUDIO_TOOL_MESSAGE_TEXT = "<s>[INST]a[/INST][TOOL_RESULTS]123456789[TOOL_CONTENT]d[/TOOL_RESULTS]"
 _NO_AUDIO_SYSTEM_MESSAGE_TEXT = "<s>[SYSTEM_PROMPT]s[/SYSTEM_PROMPT][INST]a[/INST]"
+_SPM_PATCH2_IMAGE_USER_TEXT = "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁a[/INST]"
+_WITH_AUDIO_AUDIO_USER_TEXT = "<s>[INST][BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
+_WITH_AUDIO_TEXT_THEN_AUDIO_USER_TEXT = "<s>[INST]a[BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
 
 _INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
 _TRUNCATION_FAILED_MESSAGE = r"^Input couldn't fit in truncate_at_max_token$"
@@ -995,6 +1012,34 @@ def _build_assistant_think_request() -> InstructRequest[ChatMessage, Tool]:
             _NO_AUDIO_SYSTEM_MESSAGE_EXPECTED,
             _NO_AUDIO_SYSTEM_MESSAGE_TEXT,
             id="no-audio-shared-system-message",
+        ),
+        pytest.param(
+            "spm_patch2",
+            build_image_user_request,
+            _SPM_PATCH2_IMAGE_USER_EXPECTED,
+            _SPM_PATCH2_IMAGE_USER_TEXT,
+            id="spm-patch2-shared-image-user",
+        ),
+        pytest.param(
+            "spm_patch2",
+            build_text_then_image_user_request,
+            _SPM_PATCH2_IMAGE_USER_EXPECTED,
+            _SPM_PATCH2_IMAGE_USER_TEXT,
+            id="spm-patch2-shared-text-then-image-user",
+        ),
+        pytest.param(
+            "with_audio",
+            build_audio_user_request,
+            _WITH_AUDIO_AUDIO_USER_EXPECTED,
+            _WITH_AUDIO_AUDIO_USER_TEXT,
+            id="with-audio-shared-audio-user",
+        ),
+        pytest.param(
+            "with_audio",
+            build_text_then_audio_user_request,
+            _WITH_AUDIO_TEXT_THEN_AUDIO_USER_EXPECTED,
+            _WITH_AUDIO_TEXT_THEN_AUDIO_USER_TEXT,
+            id="with-audio-shared-text-then-audio-user",
         ),
     ],
 )
