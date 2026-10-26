@@ -5,7 +5,9 @@ import numpy as np
 import pytest
 import soundfile as sf
 from PIL import Image
+from pydantic import ValidationError
 
+from mistral_common.image import maybe_load_image_from_str_or_bytes
 from mistral_common.protocol.instruct.chunk import AudioChunk, ImageChunk, ImageURLChunk
 from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.image import image_from_chunk
@@ -38,17 +40,29 @@ def _wav_b64() -> str:
         ("data:image/png;charset=utf-8;base64,aGVsbG8=", "aGVsbG8="),
         # Only the first comma splits header from payload.
         ("data:image/png;base64,YWJj,ZGVm", "YWJj,ZGVm"),
-        # Non-base64 data URLs, and strings that are not data URLs, pass through.
-        ("data:text/plain,hello", "data:text/plain,hello"),
-        ("data:image/png;base64", "data:image/png;base64"),
-        ("data:,hello", "data:,hello"),
-        ("aGVsbG8=", "aGVsbG8="),
-        ("https://example.com/image.png", "https://example.com/image.png"),
-        ("", ""),
     ],
 )
-def test_maybe_strip_base64_data_url_prefix_lenient(value: str, expected: str) -> None:
-    assert maybe_strip_base64_data_url_prefix(value, strict=False) == expected
+def test_maybe_strip_base64_data_url_prefix(value: str, expected: str) -> None:
+    assert maybe_strip_base64_data_url_prefix(value) == expected
+
+
+@pytest.mark.parametrize("value", ["aGVsbG8=", "https://example.com/image.png", ""])
+def test_maybe_strip_base64_data_url_prefix_passes_through_non_data_urls(value: str) -> None:
+    assert maybe_strip_base64_data_url_prefix(value) == value
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "data:text/plain,hello",  # non-base64 data URL
+        "data:,hello",  # no `;base64` header
+        "data:image/png;base64",  # no comma
+        "data:image/png;base64,",  # empty payload
+    ],
+)
+def test_maybe_strip_base64_data_url_prefix_rejects_malformed_data_urls(value: str) -> None:
+    with pytest.raises(ValueError, match="Invalid base64 data URL"):
+        maybe_strip_base64_data_url_prefix(value)
 
 
 def test_image_chunk_round_trips_data_url_serialization() -> None:
@@ -62,6 +76,24 @@ def test_image_chunk_accepts_data_url_string() -> None:
     # `image` is typed as a PIL Image; the BeforeValidator accepts base64 strings and data URLs.
     chunk = ImageChunk(image=f"data:image/png;base64,{_png_b64()}")  # type: ignore[arg-type]
     assert chunk.image.size == (1, 1)
+
+
+def test_image_chunk_rejects_malformed_data_url() -> None:
+    # Malformed data URLs fail fast at validation, not later at decode time.
+    with pytest.raises(ValidationError, match="Invalid base64 data URL"):
+        ImageChunk(image="data:text/plain,hello")  # type: ignore[arg-type]
+
+
+def test_image_chunk_garbage_base64_still_raises_runtime_error() -> None:
+    # Inputs that are not data URLs keep the historical contract: the
+    # validator reports undecodable payloads as RuntimeError.
+    with pytest.raises(RuntimeError, match="Encountered an error when loading image"):
+        ImageChunk(image="aGVsbG8gd29ybGQ=")  # type: ignore[arg-type]
+
+
+def test_maybe_load_image_from_str_or_bytes_rejects_malformed_data_url() -> None:
+    with pytest.raises(ValueError, match="Invalid base64 data URL"):
+        maybe_load_image_from_str_or_bytes("data:text/plain,hello")
 
 
 @pytest.mark.parametrize("subtype", ["image/x-icon", "image/svg+xml", "image/vnd.microsoft.icon"])
@@ -108,25 +140,6 @@ def test_audio_chunk_to_openai_strips_base64_data_url_prefix(fmt: str) -> None:
     assert result["input_audio"]["format"] == fmt
     assert result["input_audio"]["data"] == b64
     assert AudioChunk.from_openai(result).input_audio == b64
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "data:text/plain,hello",  # non-base64 data URL
-        "data:,hello",  # no `;base64` header
-        "data:image/png;base64",  # no comma
-        "data:image/png;base64,",  # empty payload
-    ],
-)
-def test_maybe_strip_base64_data_url_prefix_strict_rejects_malformed_data_urls(value: str) -> None:
-    with pytest.raises(ValueError, match="Invalid base64 data URL"):
-        maybe_strip_base64_data_url_prefix(value, strict=True)
-
-
-@pytest.mark.parametrize("value", ["aGVsbG8=", "https://example.com/image.png", ""])
-def test_maybe_strip_base64_data_url_prefix_strict_passes_through_non_data_urls(value: str) -> None:
-    assert maybe_strip_base64_data_url_prefix(value, strict=True) == value
 
 
 def test_image_from_chunk_accepts_mislabeled_mime_type() -> None:

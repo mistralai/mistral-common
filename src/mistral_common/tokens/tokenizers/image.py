@@ -78,7 +78,7 @@ def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
         return chunk.image
     url = chunk.get_url()
     if url.startswith("data:"):
-        data = maybe_strip_base64_data_url_prefix(url, strict=True)
+        data = maybe_strip_base64_data_url_prefix(url)
         try:
             image_data = base64.b64decode(data)
         except ValueError as e:
