@@ -21,12 +21,14 @@ from mistral_common.tokens.tokenizers.image import DATASET_MEAN, DATASET_STD
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_empty_assistant_request,
+    build_image_user_request,
     build_normal_request,
     build_prefixed_final_message_request,
     build_system_message_request,
     build_system_multiturn_request,
     build_system_singleturn_request,
     build_system_tools_multiturn_request,
+    build_text_then_image_user_request,
     build_tool_call_request,
     build_tools_multiturn_request,
     build_tools_singleturn_request,
@@ -167,6 +169,7 @@ _TEKKEN_USER_TEXT_CHUNKS_SYSTEM_PROMPT_TOKENS = [1, 3, 1115, 1267, 1097, 1098, 4
 _TEKKEN_SYSTEM_PROMPT_LAST_USER_ONLY_TOKENS = [1, 3, 1097, 4, 1098, 2, 3, 1115, 1267, 1099, 4]
 _TEKKEN_MM_TEXT_THEN_IMAGE_TOKENS = [1, 3, 10, 13, 1097, 4]
 _TEKKEN_MM_TEXT_THEN_IMAGE_SYSTEM_PROMPT_TOKENS = [1, 3, 1115, 1267, 10, 13, 1097, 4]
+_TEKKEN_MM_IMAGE_USER_TOKENS = [1, 3, 10, 13, 1097, 4]
 # fmt: on
 
 _RED_16X16_IMAGE = np.broadcast_to(
@@ -223,6 +226,7 @@ _TEKKEN_MM_TEXT_THEN_IMAGE_SYSTEM_PROMPT_EXPECTED = Tokenized(
     tokens=_TEKKEN_MM_TEXT_THEN_IMAGE_SYSTEM_PROMPT_TOKENS,
     images=[_RED_16X16_IMAGE],
 )
+_TEKKEN_MM_IMAGE_USER_EXPECTED = Tokenized(tokens=_TEKKEN_MM_IMAGE_USER_TOKENS, images=[_RED_16X16_IMAGE])
 
 _SPM_NORMAL_TEXT = "<s>[INST]▁a[/INST]▁b</s>[INST]▁c[/INST]▁d</s>"
 _TEKKEN_NORMAL_TEXT = "<s>[INST]a[/INST]b</s>[INST]c[/INST]d</s>"
@@ -335,6 +339,7 @@ _TEKKEN_USER_TEXT_CHUNKS_SYSTEM_PROMPT_TEXT = "<s>[INST]s\n\nab[/INST]"
 _TEKKEN_SYSTEM_PROMPT_LAST_USER_ONLY_TEXT = "<s>[INST]a[/INST]b</s>[INST]s\n\nc[/INST]"
 _TEKKEN_MM_TEXT_THEN_IMAGE_TEXT = "<s>[INST][IMG][IMG_END]a[/INST]"
 _TEKKEN_MM_TEXT_THEN_IMAGE_SYSTEM_PROMPT_TEXT = "<s>[INST]s\n\n[IMG][IMG_END]a[/INST]"
+_TEKKEN_MM_IMAGE_USER_TEXT = "<s>[INST][IMG][IMG_END]a[/INST]"
 
 _TOOL_CALL_AND_CONTENT_MESSAGE = r"^Cannot have tool calls and content defined in the same assistant message"
 _INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
@@ -766,6 +771,20 @@ def _build_tool_call_and_content_request() -> InstructRequest[ChatMessage, Tool]
             _TEKKEN_MM_TEXT_THEN_IMAGE_SYSTEM_PROMPT_EXPECTED,
             _TEKKEN_MM_TEXT_THEN_IMAGE_SYSTEM_PROMPT_TEXT,
             id="tekken-mm-text-then-image-system-prompt",
+        ),
+        pytest.param(
+            "tekken_mm",
+            build_image_user_request,
+            _TEKKEN_MM_IMAGE_USER_EXPECTED,
+            _TEKKEN_MM_IMAGE_USER_TEXT,
+            id="tekken-mm-image-user",
+        ),
+        pytest.param(
+            "tekken_mm",
+            build_text_then_image_user_request,
+            _TEKKEN_MM_IMAGE_USER_EXPECTED,
+            _TEKKEN_MM_IMAGE_USER_TEXT,
+            id="tekken-mm-text-then-image-user",
         ),
     ],
 )
