@@ -121,6 +121,53 @@ def build_system_message_request(*, settings: ModelSettings | None) -> InstructR
     )
 
 
+def build_system_message_multiturn_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build the multi-turn request with a system message."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            SystemMessage(content="SYSTEM"),
+            UserMessage(content="a"),
+            AssistantMessage(content="b"),
+            UserMessage(content="c"),
+            AssistantMessage(content="d"),
+        ],
+        settings=settings or ModelSettings.none(),
+    )
+
+
+def build_system_message_prefixed_final_request(
+    *, settings: ModelSettings | None
+) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build the request with a system message and a prefixed final assistant message."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            SystemMessage(content="SYSTEM"),
+            UserMessage(content="a"),
+            AssistantMessage(content="b"),
+            UserMessage(content="c"),
+            AssistantMessage(content="d", prefix=True),
+        ],
+        settings=settings or ModelSettings.none(),
+    )
+
+
+def build_system_message_tools_multiturn_request(
+    *, settings: ModelSettings | None
+) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build the multi-turn request with a system message and one available tool."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            SystemMessage(content="SYSTEM"),
+            UserMessage(content="a"),
+            AssistantMessage(content="b"),
+            UserMessage(content="c"),
+            AssistantMessage(content="d"),
+        ],
+        available_tools=[Tool(function=Function(name="tool1", description="1", parameters={}))],
+        settings=settings or ModelSettings.none(),
+    )
+
+
 def build_tool_message_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
     r"""Build the request containing a tool result without a preceding assistant turn."""
     return InstructRequest[ChatMessage, Tool](
