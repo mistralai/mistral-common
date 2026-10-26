@@ -596,13 +596,7 @@ class Tekkenizer(Tokenizer):
             ValueError: If `special_token_policy` is invalid or RAISE is set and
                 special tokens are encountered.
         """
-        try:
-            special_token_policy = SpecialTokenPolicy(special_token_policy)
-        except ValueError as e:
-            valid = ", ".join(repr(p.value) for p in SpecialTokenPolicy)
-            raise ValueError(
-                f"Invalid `special_token_policy` {special_token_policy!r}. Expected one of: {valid}."
-            ) from e
+        special_token_policy = SpecialTokenPolicy.validate(special_token_policy)
 
         return "".join(self._decode_all(tokens, special_token_policy=special_token_policy))
 
@@ -641,15 +635,15 @@ class Tekkenizer(Tokenizer):
             ValueError: If `special_token_policy` is RAISE and `token_id` is a special token,
                 or if `special_token_policy` is invalid.
         """
+        special_token_policy = SpecialTokenPolicy.validate(special_token_policy)
+
         if token_id < self.num_special_tokens:
             if special_token_policy == SpecialTokenPolicy.KEEP:
                 return self._all_special_tokens[token_id]["token_str"].encode("utf-8")
             elif special_token_policy == SpecialTokenPolicy.RAISE:
                 raise ValueError(f"{token_id} is a special token")
-            elif special_token_policy == SpecialTokenPolicy.IGNORE:
-                return b""
             else:
-                raise ValueError(f"Unknown special token policy {special_token_policy}")
+                return b""
 
         return self._model.decode_single_token_bytes(token_id - self.num_special_tokens)
 

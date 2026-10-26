@@ -56,7 +56,10 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.request import (
     ChatCompletionRequest,
+    JsonSchema,
     ReasoningEffort,
+    ResponseFormat,
+    ResponseFormats,
 )
 from mistral_common.protocol.instruct.tool_calls import (
     Function,
@@ -834,6 +837,25 @@ def test_request_to_openai_derives_continuation_flag(messages: list[ChatMessage]
     assert request.to_openai()["continue_final_message"] is expected
 
 
+def test_to_openai_renames_custom_schema_to_schema() -> None:
+    schema = {"type": "object"}
+    rf = ResponseFormat(type=ResponseFormats.json_schema, json_schema=JsonSchema(name="x", schema=schema))
+    out = ChatCompletionRequest(messages=[UserMessage(content="hi")], response_format=rf).to_openai()
+    assert out["response_format"]["json_schema"]["schema"] == schema
+    assert "custom_schema" not in out["response_format"]["json_schema"]
+
+
+def test_from_openai_accepts_schema_key() -> None:
+    schema = {"type": "object"}
+    req = ChatCompletionRequest.from_openai(
+        messages=[{"role": "user", "content": "hi"}],
+        response_format={"type": "json_schema", "json_schema": {"name": "x", "schema": schema}},
+    )
+    assert req.response_format is not None
+    assert req.response_format.json_schema is not None
+    assert req.response_format.json_schema.custom_schema == schema
+
+
 @pytest.mark.parametrize(
     "reasoning_effort",
     [None, ReasoningEffort.none, ReasoningEffort.high],
@@ -1546,3 +1568,16 @@ def test_from_openai_drops_extra_fields(from_openai_call: Any, expected: Any) ->
 def test_direct_construction_still_strict(constructor: Any) -> None:
     with pytest.raises(Exception):
         constructor()
+
+
+def test_convert_function_from_openai_null_strict() -> None:
+    openai_function: dict[str, Any] = {"name": "get_weather", "parameters": {"type": "object"}, "strict": None}
+    assert Function.from_openai(openai_function) == Function(name="get_weather", parameters={"type": "object"})
+
+
+def test_convert_tool_from_openai_null_strict() -> None:
+    openai_tool: dict[str, Any] = {
+        "type": "function",
+        "function": {"name": "get_weather", "parameters": {"type": "object"}, "strict": None},
+    }
+    assert Tool.from_openai(openai_tool) == Tool(function=Function(name="get_weather", parameters={"type": "object"}))

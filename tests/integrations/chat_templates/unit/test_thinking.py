@@ -5,13 +5,24 @@ import pytest
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.integrations.chat_templates.template_generator import TemplateConfig, build_chat_template
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.helpers import TestConfig, _load_golden_template, _make_config, render_template
+from tests.integrations.chat_templates.conftest import has_released_template
+from tests.integrations.chat_templates.helpers import (
+    TestConfig,
+    build_template_config,
+    load_golden_template,
+    render_template,
+)
 
 THINK_CONFIGS = [
     (TokenizerVersion.v13, False, False),
     (TokenizerVersion.v13, True, False),
     (TokenizerVersion.v15, False, False),
     (TokenizerVersion.v15, True, False),
+]
+GOLDEN_THINK_CONFIGS = [
+    (version, image, audio)
+    for version, image, audio in THINK_CONFIGS
+    if has_released_template(TestConfig(version=version, image=image, audio=audio, think=True))
 ]
 
 
@@ -27,6 +38,7 @@ class TestReasoningContentConversion:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -48,6 +60,7 @@ class TestReasoningContentConversion:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -71,6 +84,7 @@ class TestReasoningContentConversion:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -98,6 +112,7 @@ class TestReasoningContentConversion:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -119,6 +134,7 @@ class TestReasoningContentConversion:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -167,6 +183,7 @@ class TestReasoningContentConversion:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -183,10 +200,10 @@ class TestReasoningContentConversion:
         assert "Partial answer." in output
         assert "Final answer." in output
 
-    @pytest.mark.parametrize(("version", "image", "audio"), THINK_CONFIGS)
+    @pytest.mark.parametrize(("version", "image", "audio"), GOLDEN_THINK_CONFIGS)
     def test_reasoning_static_dynamic_parity(self, version: TokenizerVersion, image: bool, audio: bool) -> None:
-        config = _make_config(TestConfig(version=version, image=image, audio=audio, think=True))
-        static_template = _load_golden_template(config)
+        config = build_template_config(TestConfig(version=version, image=image, audio=audio, think=True))
+        static_template = load_golden_template(config)
         dynamic_template = generate_chat_template(
             spm=False,
             tokenizer_version=version,
@@ -196,6 +213,7 @@ class TestReasoningContentConversion:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -239,6 +257,7 @@ class TestReasoningContentConversion:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         reasoning_text = (
@@ -276,6 +295,7 @@ class TestReasoningEdgeCases:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -298,6 +318,7 @@ class TestReasoningEdgeCases:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -330,6 +351,7 @@ class TestClosedAttribute:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -365,6 +387,7 @@ class TestClosedAttribute:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -393,6 +416,7 @@ class TestPlainThink:
             default_system_prompt=None,
             plain_thinking_support=True,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -413,8 +437,8 @@ class TestPlainThink:
 
     @pytest.mark.parametrize("image", [False, True])
     def test_plain_think_static_dynamic_parity(self, image: bool) -> None:
-        config = _make_config(TestConfig(version=TokenizerVersion.v11, image=image, plain_think=True))
-        static_template = _load_golden_template(config)
+        config = build_template_config(TestConfig(version=TokenizerVersion.v11, image=image, plain_think=True))
+        static_template = load_golden_template(config)
         dynamic_template = generate_chat_template(
             spm=False,
             tokenizer_version=TokenizerVersion.v11,
@@ -424,6 +448,7 @@ class TestPlainThink:
             default_system_prompt=None,
             plain_thinking_support=True,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -451,6 +476,7 @@ class TestPlainThink:
             default_system_prompt=None,
             plain_thinking_support=True,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -472,6 +498,7 @@ class TestPlainThink:
             default_system_prompt=None,
             plain_thinking_support=True,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -498,6 +525,7 @@ class TestPlainThink:
             default_system_prompt=None,
             plain_thinking_support=True,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -532,6 +560,7 @@ class TestPlainThink:
             default_system_prompt=None,
             plain_thinking_support=True,
             use_special_token_variables=True,
+            model_settings_fields=None,
         )
 
         messages: list[dict[str, Any]] = [

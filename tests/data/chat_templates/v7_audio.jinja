@@ -8,7 +8,7 @@
 {#- Handle system prompt if it exists. #}
 {%- set loop_messages = messages %}
 {%- if messages[0]['role'] != 'system' and default_system_message != '' %}
-    {{- '[SYSTEM_PROMPT]' + default_system_message + '[/SYSTEM_PROMPT]' }}
+    {{- '[SYSTEM_PROMPT]' ~ default_system_message ~ '[/SYSTEM_PROMPT]' }}
 {%- endif %}
 {%- if messages[0]['role'] == 'system' or default_system_message != '' %}
     {%- set has_sp = true %}
@@ -22,7 +22,7 @@
 {%- set has_tools = false %}
 {%- if tools is defined and tools is not none and tools|length > 0 %}
     {%- set has_tools = true %}
-    {%- set available_tools = '[AVAILABLE_TOOLS]' + (tools| tojson) + '[/AVAILABLE_TOOLS]' %}
+    {%- set available_tools = '[AVAILABLE_TOOLS]' ~ (tools| tojson) ~ '[/AVAILABLE_TOOLS]' %}
 {%- endif %}
 
 {#- Macros #}
@@ -39,11 +39,11 @@
                 {%- endif -%}
                 {{- '[AUDIO]' -}}
             {%- else -%}
-                {{- raise_exception('Only ' + supported_types_desc + ' chunks are supported in ' + context_name + '.') -}}
+                {{- raise_exception('Only ' ~ supported_types_desc ~ ' chunks are supported in ' ~ context_name ~ '.') -}}
             {%- endif -%}
         {%- endfor -%}
     {%- else -%}
-        {{- raise_exception(context_name + ' must have non-empty content.') -}}
+        {{- raise_exception(context_name ~ ' must have non-empty content.') -}}
     {%- endif -%}
 {%- endmacro -%}
 
@@ -104,7 +104,7 @@
 {#- Validates message ordering. #}
 {%- set ns = namespace(max_idx_user=-1) %}
 {%- if loop_messages | length > 0 and loop_messages[0]['role'] not in ['user', 'system'] %}
-    {{- raise_exception('Conversation must start with a user or system message, got ' + loop_messages[0]['role'] + '.') }}
+    {{- raise_exception('Conversation must start with a user or system message, got ' ~ loop_messages[0]['role'] ~ '.') }}
 {%- endif %}
 {%- set ns_order = namespace(previous_role=none) %}
 {%- for message in loop_messages %}
@@ -112,19 +112,19 @@
     {%- if ns_order.previous_role is not none %}
         {%- if ns_order.previous_role == 'system' %}
             {%- if current_role not in ['user', 'assistant', 'system'] %}
-                {{- raise_exception('Unexpected role \'' + current_role + '\' after role \'' + ns_order.previous_role + '\'') }}
+                {{- raise_exception('Unexpected role \'' ~ current_role ~ '\' after role \'' ~ ns_order.previous_role ~ '\'') }}
             {%- endif %}
         {%- elif ns_order.previous_role == 'user' %}
             {%- if current_role not in ['assistant', 'system', 'user'] %}
-                {{- raise_exception('Unexpected role \'' + current_role + '\' after role \'' + ns_order.previous_role + '\'') }}
+                {{- raise_exception('Unexpected role \'' ~ current_role ~ '\' after role \'' ~ ns_order.previous_role ~ '\'') }}
             {%- endif %}
         {%- elif ns_order.previous_role == 'assistant' %}
             {%- if current_role not in ['assistant', 'user', 'tool'] %}
-                {{- raise_exception('Unexpected role \'' + current_role + '\' after role \'' + ns_order.previous_role + '\'') }}
+                {{- raise_exception('Unexpected role \'' ~ current_role ~ '\' after role \'' ~ ns_order.previous_role ~ '\'') }}
             {%- endif %}
         {%- elif ns_order.previous_role == 'tool' %}
             {%- if current_role not in ['assistant', 'tool', 'user'] %}
-                {{- raise_exception('Unexpected role \'' + current_role + '\' after role \'' + ns_order.previous_role + '\'') }}
+                {{- raise_exception('Unexpected role \'' ~ current_role ~ '\' after role \'' ~ ns_order.previous_role ~ '\'') }}
             {%- endif %}
         {%- endif %}
     {%- endif %}
@@ -171,7 +171,7 @@
                 {%- elif arguments == '' %}
                     {%- set arguments = '{}' %}
                 {%- endif %}
-                {{- '{"name": "' + name + '", "arguments": ' + arguments + ', "id": "' + id + '"}' }}
+                {{- '{"name": "' ~ name ~ '", "arguments": ' ~ arguments ~ ', "id": "' ~ id ~ '"}' }}
                 {%- if loop.length > 1 and loop.index < loop.length %}
                     {{- ', ' }}
                 {%- endif %}
@@ -190,7 +190,7 @@
         {%- else %}
             {{- raise_exception('Tool message must have a call_id or tool_call_id of 9 characters or numbers.') }}
         {%- endif %}
-        {{- '[TOOL_RESULTS]' + tool_id + '[TOOL_CONTENT]' + message['content']|string + '[/TOOL_RESULTS]' }}
+        {{- '[TOOL_RESULTS]' ~ tool_id ~ '[TOOL_CONTENT]' ~ message['content']|string ~ '[/TOOL_RESULTS]' }}
 
     {#- System messages. #}
     {%- elif message['role'] == 'system' %}
@@ -200,7 +200,7 @@
 
     {#- Raise exception for unsupported roles. #}
     {%- else %}
-        {{- raise_exception('Only user, assistant, system and tool roles are supported, got ' + message['role'] + '.') }}
+        {{- raise_exception('Only user, assistant, system and tool roles are supported, got ' ~ message['role'] ~ '.') }}
     {%- endif %}
     {%- if message['role'] == 'user' %}
         {%- set ns.index = ns.index + 1 %}

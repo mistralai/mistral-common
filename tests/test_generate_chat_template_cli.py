@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.helpers import TestConfig, _build_tekken_json
+from tests.integrations.chat_templates.helpers import TestConfig, build_tekken_json
 
 SCRIPT_PATH = Path(__file__).parent.parent / "scripts" / "generate_chat_template.py"
 
@@ -15,7 +15,7 @@ def tekken_think_v13_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """Path to a v13 think tekken.json used for auto-detect CLI tests."""
     build_dir = tmp_path_factory.mktemp("tokenizer")
     config = TestConfig(version=TokenizerVersion.v13, think=True)
-    return _build_tekken_json(config=config, output_dir=build_dir)
+    return build_tekken_json(config=config, output_dir=build_dir)
 
 
 @pytest.fixture(scope="session")
@@ -23,7 +23,18 @@ def tekken_v11_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """Path to a plain v11 tekken.json used for auto-detect CLI plain thinking tests."""
     build_dir = tmp_path_factory.mktemp("tokenizer")
     config = TestConfig(version=TokenizerVersion.v11)
-    return _build_tekken_json(config=config, output_dir=build_dir)
+    return build_tekken_json(config=config, output_dir=build_dir)
+
+
+@pytest.fixture(scope="session")
+def tekken_v15_json_schema_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    r"""Path to a v15 Tekken tokenizer with both model settings builders."""
+    build_dir = tmp_path_factory.mktemp("tokenizer")
+    config = TestConfig(
+        version=TokenizerVersion.v15,
+        model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+    )
+    return build_tekken_json(config=config, output_dir=build_dir)
 
 
 def test_cli_generates_template(tmp_path: Path) -> None:
@@ -38,6 +49,146 @@ def test_cli_generates_template(tmp_path: Path) -> None:
     assert output_path.exists()
     content = output_path.read_text()
     assert "bos_token" in content
+    assert "[MODEL_SETTINGS]" in content
+
+
+def test_cli_model_settings_fields_json_schema(tmp_path: Path) -> None:
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--version",
+            "v15",
+            "--model_settings_fields",
+            "reasoning_effort,json_schema",
+            "--saving_path",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert "response_format" in output_path.read_text()
+
+
+def test_cli_model_settings_fields_default(tmp_path: Path) -> None:
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--version", "v15", "--saving_path", str(output_path)],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    content = output_path.read_text()
+    assert "[MODEL_SETTINGS]" in content
+    assert "response_format" not in content
+
+
+def test_cli_model_settings_fields_empty_value_rejected(tmp_path: Path) -> None:
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--version",
+            "v15",
+            "--model_settings_fields",
+            "",
+            "--saving_path",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "--model_settings_fields must list at least one field" in result.stderr
+
+
+def test_cli_model_settings_fields_invalid_choice(tmp_path: Path) -> None:
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--version",
+            "v15",
+            "--model_settings_fields",
+            "bogus",
+            "--saving_path",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "Unknown model settings fields" in result.stderr
+
+
+def test_cli_model_settings_fields_below_v15(tmp_path: Path) -> None:
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--version",
+            "v13",
+            "--model_settings_fields",
+            "reasoning_effort",
+            "--saving_path",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "Model settings fields are only available for tokenizer versions v15 and above" in result.stderr
+
+
+def test_cli_model_settings_fields_rejected_in_autodetect(tmp_path: Path, tekken_think_v13_path: Path) -> None:
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--tokenizer_file",
+            str(tekken_think_v13_path),
+            "--model_settings_fields",
+            "reasoning_effort",
+            "--saving_path",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "--tokenizer_file cannot be combined with manual capability flags: --model_settings_fields" in result.stderr
+
+
+def test_cli_autodetect_v15_json_schema_builder(tmp_path: Path, tekken_v15_json_schema_path: Path) -> None:
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--tokenizer_file",
+            str(tekken_v15_json_schema_path),
+            "--saving_path",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    content = output_path.read_text()
+    assert "response_format" in content
     assert "[MODEL_SETTINGS]" in content
 
 

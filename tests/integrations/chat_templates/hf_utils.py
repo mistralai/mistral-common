@@ -38,6 +38,17 @@ def _to_openai_request(chat_request: ChatCompletionRequest, keep_name_for_tools:
     return openai_request
 
 
+def _model_settings_template_kwargs(openai_request: dict[str, Any]) -> dict[str, Any]:
+    r"""Select model-settings inputs to forward as template variables."""
+    template_kwargs: dict[str, Any] = {}
+    reasoning_effort = openai_request.get("reasoning_effort")
+    if reasoning_effort is not None:
+        template_kwargs["reasoning_effort"] = reasoning_effort
+    if "response_format" in openai_request:
+        template_kwargs["response_format"] = openai_request["response_format"]
+    return template_kwargs
+
+
 def encode_transformers(
     chat_template: str, chat_request: ChatCompletionRequest, keep_name_for_tools: bool = False
 ) -> str:
@@ -61,7 +72,7 @@ def encode_transformers_from_openai(chat_template: str, openai_request: dict[str
     return _render_via_transformers(chat_template, openai_request)
 
 
-def _build_hf_tokenizer(tekken_path: Path, chat_template: str) -> "PreTrainedTokenizerFast":
+def build_hf_tokenizer(tekken_path: Path, chat_template: str) -> "PreTrainedTokenizerFast":
     r"""Build a `PreTrainedTokenizerFast` from a tekken.json file.
 
     Converts the Tekken BPE vocabulary to a HuggingFace tokenizers format,
@@ -202,11 +213,6 @@ def encode_hf_tokens(
         for tool in tools:
             tool["function"].pop("strict", None)
 
-    template_kwargs: dict[str, Any] = {}
-    reasoning_effort = openai_request.get("reasoning_effort")
-    if reasoning_effort is not None:
-        template_kwargs["reasoning_effort"] = reasoning_effort
-
     result = hf_tokenizer.apply_chat_template(
         conversation=messages,
         tools=tools,
@@ -214,7 +220,7 @@ def encode_hf_tokens(
         return_dict=False,
         padding=False,
         truncation=False,
-        **template_kwargs,
+        **_model_settings_template_kwargs(openai_request),
     )
     return cast(list[int], result)
 
@@ -224,18 +230,13 @@ def _render_via_transformers(chat_template: str, openai_request: dict[str, Any])
     for tool in openai_request.get("tools", []):
         tool["function"].pop("strict", False)
 
-    reasoning_effort = openai_request.get("reasoning_effort")
-    template_kwargs: dict[str, Any] = {}
-    if reasoning_effort is not None:
-        template_kwargs["reasoning_effort"] = reasoning_effort
-
     encoded = render_jinja_template(
         [openai_request["messages"]],
         tools=openai_request.get("tools", None),
         chat_template=chat_template,
         bos_token="<s>",
         eos_token="</s>",
-        **template_kwargs,
+        **_model_settings_template_kwargs(openai_request),
     )[0][0]
     assert isinstance(encoded, str), type(encoded)
     return encoded

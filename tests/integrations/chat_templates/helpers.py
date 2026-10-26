@@ -18,13 +18,20 @@ from jinja2 import BaseLoader
 from jinja2.sandbox import ImmutableSandboxedEnvironment
 from PIL import Image
 
-from mistral_common.integrations.chat_templates.template_generator import TemplateConfig
+from mistral_common.integrations.chat_templates.template_generator import (
+    MODEL_SETTINGS_FIELD_CHOICES,
+    TemplateConfig,
+)
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, ReasoningEffort
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
+from mistral_common.tokens.tokenizers.model_settings_builder import (
+    EnumBuilder,
+    JSONSchemaBuilder,
+    ModelSettingsBuilder,
+)
 from tests.test_tekken import get_special_tokens
 from tests.utils import decode_keep
 
@@ -46,24 +53,35 @@ class TestConfig:
     audio: bool = False
     think: bool = False
     plain_think: bool = False
+    model_settings_fields: frozenset[str] | None = None
 
 
-def _make_config(c: TestConfig) -> TemplateConfig:
+def build_template_config(config: TestConfig) -> TemplateConfig:
     r"""Create a `TemplateConfig` from a test config."""
     return TemplateConfig(
-        version=c.version,
-        spm=c.spm,
-        image_support=c.image,
-        audio_support=c.audio,
-        thinking_support=c.think,
-        plain_thinking_support=c.plain_think,
+        version=config.version,
+        spm=config.spm,
+        image_support=config.image,
+        audio_support=config.audio,
+        thinking_support=config.think,
+        plain_thinking_support=config.plain_think,
         use_special_token_variables=True,
+        model_settings_fields=config.model_settings_fields,
     )
 
 
-def _load_golden_template(config: TemplateConfig) -> str:
+def load_golden_template(config: TemplateConfig) -> str:
     r"""Load the static golden template for a config."""
     parts = [config.version.value]
+    if config.supports_model_settings:
+        model_settings_fields = config.model_settings_fields
+        assert model_settings_fields is not None
+        settings_part = "_".join(
+            "response_format" if field == "json_schema" else field
+            for field in MODEL_SETTINGS_FIELD_CHOICES
+            if field in model_settings_fields
+        )
+        parts.append(settings_part)
     if config.image_support and config.any_thinking_support:
         parts.append("image_think")
     elif config.image_support:
@@ -81,8 +99,72 @@ def _load_golden_template(config: TemplateConfig) -> str:
     return path.read_text()
 
 
+def build_render_args(request: ChatCompletionRequest) -> dict[str, Any]:
+    r"""Convert a ChatCompletionRequest to render_template kwargs.
+
+    Enriches tool messages with the `name` field resolved from the preceding
+    assistant's `tool_calls`, which the v2 Jinja template requires but
+    `ToolMessage.to_openai()` omits.
+    """
+    openai = request.to_openai()
+    messages = openai["messages"]
+
+    # Build a mapping from tool_call_id -> function name so tool messages
+    # can carry the `name` field expected by v2 templates.
+    tool_call_names: dict[str, str] = {}
+    for msg in messages:
+        for tc in msg.get("tool_calls", []):
+            tc_id = tc.get("id")
+            fn_name = tc.get("function", {}).get("name")
+            if tc_id and fn_name:
+                tool_call_names[tc_id] = fn_name
+
+    for msg in messages:
+        if msg.get("role") == "tool" and "name" not in msg:
+            tc_id = msg.get("tool_call_id")
+            if tc_id and tc_id in tool_call_names:
+                msg["name"] = tool_call_names[tc_id]
+
+    kwargs: dict[str, Any] = {
+        "messages": messages,
+    }
+    if "tools" in openai and openai["tools"]:
+        kwargs["tools"] = openai["tools"]
+    if (reasoning := openai.get("reasoning_effort")) is not None:
+        kwargs["reasoning_effort"] = reasoning
+    return kwargs
+
+
+def _build_model_settings_builder(config: TestConfig) -> ModelSettingsBuilder | None:
+    r"""Build the settings builders represented by a test configuration."""
+    if not config.version.supports_model_settings:
+        return None
+
+    selected_fields = config.model_settings_fields
+    if selected_fields is None:
+        selected_fields = TemplateConfig(version=config.version).model_settings_fields
+        assert selected_fields is not None
+
+    return ModelSettingsBuilder(
+        reasoning_effort=(
+            EnumBuilder(
+                accepts_none=True,
+                default=ReasoningEffort.none,
+                values=[ReasoningEffort.none, ReasoningEffort.high],
+            )
+            if "reasoning_effort" in selected_fields
+            else None
+        ),
+        json_schema=JSONSchemaBuilder() if "json_schema" in selected_fields else None,
+    )
+
+
 def render_template(
-    template: str, messages: list[Any], tools: list[Any] | None = None, reasoning_effort: str | None = None
+    template: str,
+    messages: list[Any],
+    tools: list[Any] | None = None,
+    reasoning_effort: str | None = None,
+    response_format: dict[str, Any] | None = None,
 ) -> str:
     r"""Render a Jinja2 template with the given messages using a pure Jinja2 sandbox.
 
@@ -95,8 +177,12 @@ def render_template(
     def raise_exception(msg: str) -> None:
         raise ValueError(msg)
 
+    def tojson(value: Any) -> str:
+        return json.dumps(obj=value, ensure_ascii=False)
+
     env = ImmutableSandboxedEnvironment(loader=BaseLoader())
     env.globals["raise_exception"] = raise_exception
+    env.filters["tojson"] = tojson
     jinja_template = env.from_string(template)
 
     render_kwargs: dict[str, Any] = {
@@ -109,6 +195,8 @@ def render_template(
     # Only add reasoning_effort for v15+ templates that support it
     if reasoning_effort is not None:
         render_kwargs["reasoning_effort"] = reasoning_effort
+    if response_format is not None:
+        render_kwargs["response_format"] = response_format
 
     return jinja_template.render(**render_kwargs)
 
@@ -154,13 +242,12 @@ def _sample_audio() -> Audio:
     )
 
 
-_IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/7/78/Red_Square_%282x2_Pixel%29.png"
-_IMAGE = _create_dummy_image()
-_AUDIO_URL = _sample_audio().to_base64("wav")
-_AUDIO = _AUDIO_URL
+DUMMY_IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/7/78/Red_Square_%282x2_Pixel%29.png"
+DUMMY_IMAGE = _create_dummy_image()
+DUMMY_AUDIO_BASE64 = _sample_audio().to_base64("wav")
 
 
-def _build_tekken_json(config: TestConfig, output_dir: Path) -> Path:
+def build_tekken_json(config: TestConfig, output_dir: Path) -> Path:
     r"""Build a tekken.json file for the given test config.
 
     Constructs a complete Tekken tokenizer JSON file by combining the base
@@ -212,14 +299,8 @@ def _build_tekken_json(config: TestConfig, output_dir: Path) -> Path:
             },
         }
 
-    if config.version.supports_model_settings:
-        model_settings_builder = ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder(
-                accepts_none=True,
-                default=ReasoningEffort.none,
-                values=[ReasoningEffort.none, ReasoningEffort.high],
-            )
-        )
+    model_settings_builder = _build_model_settings_builder(config)
+    if model_settings_builder is not None:
         tekken_data["model_settings_builder"] = model_settings_builder.model_dump(mode="json")
 
     tekken_path = output_dir / "tekken.json"
@@ -229,7 +310,7 @@ def _build_tekken_json(config: TestConfig, output_dir: Path) -> Path:
     return tekken_path
 
 
-def _build_spm_path(config: TestConfig, output_dir: Path) -> Path:
+def build_spm_path(config: TestConfig, output_dir: Path) -> Path:
     r"""Copy the SPM model file with the correct version suffix.
 
     The SPM tokenizer version is determined by the filename suffix (e.g.,
@@ -257,7 +338,7 @@ def _get_mistral_tekkenizer(config: TestConfig, output_dir: Path, validation_mod
     r"""Build a `MistralTokenizer` with Tekken backend via `from_file`.
 
     Writes a tekken.json with the desired version and features via
-    `_build_tekken_json`, then loads it through the production
+    `build_tekken_json`, then loads it through the production
     `MistralTokenizer.from_file` path.
 
     Args:
@@ -268,7 +349,7 @@ def _get_mistral_tekkenizer(config: TestConfig, output_dir: Path, validation_mod
     Returns:
         A configured `MistralTokenizer` instance.
     """
-    tekken_path = _build_tekken_json(config, output_dir)
+    tekken_path = build_tekken_json(config=config, output_dir=output_dir)
     return MistralTokenizer.from_file(str(tekken_path), mode=validation_mode)
 
 
@@ -278,7 +359,7 @@ def _get_mistral_sentencepiece(
     r"""Build a `MistralTokenizer` with SentencePiece backend via `from_file`.
 
     Copies the shipped SPM model with the correct version suffix via
-    `_build_spm_path`, then loads it through the production
+    `build_spm_path`, then loads it through the production
     `MistralTokenizer.from_file` path.
 
     Args:
@@ -289,11 +370,11 @@ def _get_mistral_sentencepiece(
     Returns:
         A configured `MistralTokenizer` instance.
     """
-    spm_path = _build_spm_path(config, output_dir)
+    spm_path = build_spm_path(config=config, output_dir=output_dir)
     return MistralTokenizer.from_file(str(spm_path), mode=validation_mode)
 
 
-def _get_mistral_tokenizer(
+def get_mistral_tokenizer(
     spm: bool,
     tokenizer_version: TokenizerVersion,
     validation_mode: ValidationMode,

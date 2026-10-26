@@ -1,16 +1,23 @@
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
 from mistral_common.exceptions import InvalidRequestException
-from mistral_common.protocol.instruct.messages import UATS
+from mistral_common.protocol.instruct.messages import UATS, UserMessage
 from mistral_common.protocol.instruct.request import (
     ChatCompletionRequest,
+    JsonSchema,
     ModelSettings,
     ReasoningEffort,
+    ResponseFormat,
+    ResponseFormats,
+    SchemaRenderingMode,
 )
 from mistral_common.tokens.tokenizers.model_settings_builder import (
     EnumBuilder,
     FieldBuilder,
+    JSONSchemaBuilder,
     ModelSettingsBuilder,
     ValidatorType,
 )
@@ -235,8 +242,79 @@ class TestModelSettingsBuilder:
                 builder.validate_settings(settings)
 
 
+JSON_SCHEMA_DICT = {"type": "object", "properties": {"a": {"type": "string"}}}
+JSON_OBJECT_OR_ARRAY_SCHEMA = {"anyOf": [{"type": "object"}, {"type": "array"}]}
+
+
+def _req(rf: ResponseFormat) -> ChatCompletionRequest:
+    return ChatCompletionRequest(messages=[UserMessage(content="hi")], response_format=rf)
+
+
+def test_builder_text_yields_none() -> None:
+    b = ModelSettingsBuilder(json_schema=JSONSchemaBuilder())
+    response_format = ResponseFormat(type=ResponseFormats.text)
+    assert response_format.get_schema(purpose=SchemaRenderingMode.model_settings) is None
+    assert b.build_settings(_req(response_format)).json_schema is None
+
+
+def test_builder_json_yields_anyof() -> None:
+    b = ModelSettingsBuilder(json_schema=JSONSchemaBuilder())
+    response_format = ResponseFormat(type=ResponseFormats.json_object)
+    assert response_format.get_schema(purpose=SchemaRenderingMode.model_settings) == JSON_OBJECT_OR_ARRAY_SCHEMA
+    assert b.build_settings(_req(response_format)).json_schema == JSON_OBJECT_OR_ARRAY_SCHEMA
+
+
+@pytest.mark.parametrize("strict", [False, True])
+def test_builder_json_schema_yields_custom_schema(strict: bool) -> None:
+    b = ModelSettingsBuilder(json_schema=JSONSchemaBuilder())
+    response_format = ResponseFormat(
+        type=ResponseFormats.json_schema,
+        json_schema=JsonSchema(name="x", schema=JSON_SCHEMA_DICT, strict=strict),
+    )
+    assert response_format.get_schema(purpose=SchemaRenderingMode.model_settings) == JSON_SCHEMA_DICT
+    assert b.build_settings(_req(response_format)).json_schema == JSON_SCHEMA_DICT
+
+
+@pytest.mark.parametrize(
+    ("strict", "expected_grammar_schema"),
+    [(False, JSON_OBJECT_OR_ARRAY_SCHEMA), (True, JSON_SCHEMA_DICT)],
+)
+def test_response_format_grammar_schema_respects_strict(strict: bool, expected_grammar_schema: dict[str, Any]) -> None:
+    response_format = ResponseFormat(
+        type=ResponseFormats.json_schema,
+        json_schema=JsonSchema(name="x", schema=JSON_SCHEMA_DICT, strict=strict),
+    )
+
+    assert response_format.get_schema(purpose=SchemaRenderingMode.grammar) == expected_grammar_schema
+    assert response_format.get_schema(purpose=SchemaRenderingMode.model_settings) == JSON_SCHEMA_DICT
+
+
+def test_json_schema_rejects_invalid_schema() -> None:
+    with pytest.raises(ValidationError, match="123 is not valid under any of the given schemas"):
+        JsonSchema(name="x", schema={"type": 123})
+
+
+def test_json_schema_missing_schema_raises() -> None:
+    with pytest.raises(ValidationError, match="Response format `json_schema` must define the schema"):
+        ResponseFormat(type=ResponseFormats.json_schema)
+
+
+def test_builder_without_json_schema_ignores_response_format() -> None:
+    settings = ModelSettingsBuilder().build_settings(_req(ResponseFormat(type=ResponseFormats.json_object)))
+    assert settings.json_schema is None
+
+
+def test_validate_settings_rejects_invalid_json_schema() -> None:
+    builder = ModelSettingsBuilder(json_schema=JSONSchemaBuilder())
+
+    with pytest.raises(InvalidRequestException, match="json_schema is not a valid JSON schema"):
+        builder.validate_settings(settings=ModelSettings(json_schema={"type": 123}))
+
+
 def test_all_model_settings_and_builder_fields_match() -> None:
     model_fields = set(ModelSettings.model_fields.keys())
     builder_fields = set(ModelSettingsBuilder.model_fields.keys())
 
     assert model_fields == builder_fields
+    assert set(ModelSettingsBuilder._SETTINGS_TO_REQUEST_FIELDS) == builder_fields
+    assert set(ModelSettingsBuilder._SETTINGS_TO_REQUEST_FIELDS.values()) <= set(ChatCompletionRequest.model_fields)
