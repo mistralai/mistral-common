@@ -1,6 +1,7 @@
 r"""Direct formatting tests for the bundled v2 instruct tokenizer."""
 
 from collections.abc import Callable
+from functools import partial
 
 import pytest
 
@@ -343,39 +344,39 @@ def _build_parallel_results_request() -> InstructRequest[ChatMessage, Tool]:
 @pytest.mark.parametrize(
     argnames="request_builder, expected, expected_text",
     argvalues=[
-        pytest.param(build_normal_request, _NORMAL_EXPECTED, _NORMAL_TEXT, id="normal"),
+        pytest.param(partial(build_normal_request, settings=None), _NORMAL_EXPECTED, _NORMAL_TEXT, id="normal"),
         pytest.param(
-            build_system_singleturn_request,
+            partial(build_system_singleturn_request, settings=None),
             _SYSTEM_SINGLETURN_EXPECTED,
             _SYSTEM_SINGLETURN_TEXT,
             id="system-singleturn",
         ),
         pytest.param(
-            build_system_multiturn_request,
+            partial(build_system_multiturn_request, settings=None),
             _SYSTEM_MULTITURN_EXPECTED,
             _SYSTEM_MULTITURN_TEXT,
             id="system-multiturn",
         ),
         pytest.param(
-            build_prefixed_final_message_request,
+            partial(build_prefixed_final_message_request, settings=None),
             _PREFIXED_FINAL_MESSAGE_EXPECTED,
             _PREFIXED_FINAL_MESSAGE_TEXT,
             id="prefixed-final-message",
         ),
         pytest.param(
-            build_tools_singleturn_request,
+            partial(build_tools_singleturn_request, settings=None),
             _TOOLS_SINGLETURN_EXPECTED,
             _TOOLS_SINGLETURN_TEXT,
             id="tools-singleturn",
         ),
         pytest.param(
-            build_tools_multiturn_request,
+            partial(build_tools_multiturn_request, settings=None),
             _TOOLS_MULTITURN_EXPECTED,
             _TOOLS_MULTITURN_TEXT,
             id="tools-multiturn",
         ),
         pytest.param(
-            build_system_tools_multiturn_request,
+            partial(build_system_tools_multiturn_request, settings=None),
             _SYSTEM_TOOLS_MULTITURN_EXPECTED,
             _SYSTEM_TOOLS_MULTITURN_TEXT,
             id="system-tools-multiturn",
@@ -467,13 +468,13 @@ def test_encode_instruct(
             _build_non_final_prefixed_assistant_request, AssertionError, None, id="non-final-prefixed-assistant"
         ),
         pytest.param(
-            build_empty_assistant_request,
+            partial(build_empty_assistant_request, settings=None),
             TokenizerException,
             _INVALID_ASSISTANT_MESSAGE,
             id="empty-assistant",
         ),
         pytest.param(
-            build_system_message_request,
+            partial(build_system_message_request, settings=None),
             NotImplementedError,
             _SYSTEM_MESSAGE_NOT_IMPLEMENTED_MESSAGE,
             id="system-message",

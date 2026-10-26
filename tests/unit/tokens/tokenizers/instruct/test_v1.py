@@ -1,6 +1,7 @@
 r"""Direct formatting tests for the bundled v1 instruct tokenizer."""
 
 from collections.abc import Callable
+from functools import partial
 
 import pytest
 
@@ -61,21 +62,21 @@ def tokenizer() -> InstructTokenizer:
 @pytest.mark.parametrize(
     argnames="request_builder, expected, expected_text",
     argvalues=[
-        pytest.param(build_normal_request, _NORMAL_EXPECTED, _NORMAL_TEXT, id="normal"),
+        pytest.param(partial(build_normal_request, settings=None), _NORMAL_EXPECTED, _NORMAL_TEXT, id="normal"),
         pytest.param(
-            build_system_singleturn_request,
+            partial(build_system_singleturn_request, settings=None),
             _SYSTEM_SINGLETURN_EXPECTED,
             _SYSTEM_SINGLETURN_TEXT,
             id="system-singleturn",
         ),
         pytest.param(
-            build_system_multiturn_request,
+            partial(build_system_multiturn_request, settings=None),
             _SYSTEM_MULTITURN_EXPECTED,
             _SYSTEM_MULTITURN_TEXT,
             id="system-multiturn",
         ),
         pytest.param(
-            build_prefixed_final_message_request,
+            partial(build_prefixed_final_message_request, settings=None),
             _PREFIXED_FINAL_MESSAGE_EXPECTED,
             _PREFIXED_FINAL_MESSAGE_TEXT,
             id="prefixed-final-message",
@@ -98,20 +99,22 @@ def test_encode_instruct(
     argnames="request_builder, expected_exception, expected_message",
     argvalues=[
         pytest.param(
-            build_tool_message_request,
+            partial(build_tool_message_request, settings=None),
             TokenizerException,
             _TOOLS_NOT_IMPLEMENTED_MESSAGE,
             id="tool-message",
         ),
         pytest.param(
-            build_assistant_tool_calls_request,
+            partial(build_assistant_tool_calls_request, settings=None),
             TokenizerException,
             _TOOLS_NOT_IMPLEMENTED_MESSAGE,
             id="assistant-tool-calls",
         ),
-        pytest.param(build_empty_assistant_request, TokenizerException, None, id="empty-assistant"),
         pytest.param(
-            build_system_message_request,
+            partial(build_empty_assistant_request, settings=None), TokenizerException, None, id="empty-assistant"
+        ),
+        pytest.param(
+            partial(build_system_message_request, settings=None),
             NotImplementedError,
             _SYSTEM_MESSAGE_NOT_IMPLEMENTED_MESSAGE,
             id="system-message",

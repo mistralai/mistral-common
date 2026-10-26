@@ -457,12 +457,14 @@ def _build_tool_message_request(content: str | list[ContentChunk]) -> InstructRe
 
 def _build_explicit_null_id_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build a v3 request with an explicit null-like tool-call ID."""
-    return build_tool_call_request(tool_call=ToolCall(id="null", function=FunctionCall(name="b", arguments="{}")))
+    return build_tool_call_request(
+        tool_call=ToolCall(id="null", function=FunctionCall(name="b", arguments="{}")), settings=None
+    )
 
 
 def _build_default_id_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build a v3 request with a default tool-call ID."""
-    return build_tool_call_request(tool_call=ToolCall(function=FunctionCall(name="b", arguments="{}")))
+    return build_tool_call_request(tool_call=ToolCall(function=FunctionCall(name="b", arguments="{}")), settings=None)
 
 
 def _build_non_ascii_tools_calls_and_results_request() -> InstructRequest[ChatMessage, Tool]:
