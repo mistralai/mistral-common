@@ -18,6 +18,7 @@ from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, 
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
+    build_assistant_tool_calls_request,
     build_empty_assistant_request,
     build_normal_request,
     build_prefixed_final_message_request,
@@ -28,6 +29,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_system_multiturn_request,
     build_system_singleturn_request,
     build_system_tools_multiturn_request,
+    build_tool_message_request,
     build_tools_multiturn_request,
     build_tools_singleturn_request,
 )
@@ -52,6 +54,12 @@ _SYSTEM_TOOLS_MULTITURN_TOKENS = [
     1, 3, 1032, 4, 1055, 2, 6, 1501, 7567, 1891, 2032, 1113, 3396, 1316, 1113, 3396, 2032, 10598, 1629, 2032,
     1113, 7230, 29508, 1316, 1113, 7286, 2032, 1113, 29508, 1316, 1113, 12206, 2032, 1139, 1743, 10925, 7, 3,
     17889, 23294, 781, 781, 29485, 4, 1049, 2
+]
+_ASSISTANT_TOOL_CALLS_TOKENS = [
+    1, 3, 1032, 4, 5, 1501, 7567, 1629, 2032, 1113, 29494, 1316, 1113, 17452, 2032, 1139, 1743, 29561, 2
+]
+_TOOL_MESSAGE_TOKENS = [
+    1, 3, 1032, 4, 8, 1501, 7567, 1629, 2032, 2009, 29493, 1113, 4557, 2032, 1113, 29483, 29507, 10925, 9
 ]
 _TOOL_MESSAGE_MULTIPLE_SHOTS_WITHOUT_HISTORY_TOKENS = [
     1, 3, 1032, 4, 1085, 2, 3, 1053, 4, 5, 1501, 7567, 1629, 2032, 1113, 29494, 1316, 1113, 17452, 2032, 1139,
@@ -105,6 +113,8 @@ _PREFIXED_FINAL_MESSAGE_EXPECTED = Tokenized(tokens=_PREFIXED_FINAL_MESSAGE_TOKE
 _TOOLS_SINGLETURN_EXPECTED = Tokenized(tokens=_TOOLS_SINGLETURN_TOKENS)
 _TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_TOOLS_MULTITURN_TOKENS)
 _SYSTEM_TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_SYSTEM_TOOLS_MULTITURN_TOKENS)
+_ASSISTANT_TOOL_CALLS_EXPECTED = Tokenized(tokens=_ASSISTANT_TOOL_CALLS_TOKENS)
+_TOOL_MESSAGE_EXPECTED = Tokenized(tokens=_TOOL_MESSAGE_TOKENS)
 _TOOL_MESSAGE_MULTIPLE_SHOTS_WITHOUT_HISTORY_EXPECTED = Tokenized(
     tokens=_TOOL_MESSAGE_MULTIPLE_SHOTS_WITHOUT_HISTORY_TOKENS
 )
@@ -138,6 +148,8 @@ _SYSTEM_TOOLS_MULTITURN_TEXT = (
     '▁{"name":▁"tool1",▁"description":▁"1",▁"parameters":▁{}}}][/AVAILABLE_TOOLS]'
     "[INST]▁SYSTEM<0x0A><0x0A>c[/INST]▁d</s>"
 )
+_ASSISTANT_TOOL_CALLS_TEXT = '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>'
+_TOOL_MESSAGE_TEXT = '<s>[INST]▁a[/INST][TOOL_RESULTS]▁[{"name":▁null,▁"content":▁"d"}][/TOOL_RESULTS]'
 _TOOL_MESSAGE_MULTIPLE_SHOTS_WITHOUT_HISTORY_TEXT = (
     '<s>[INST]▁a[/INST]▁e</s>[INST]▁f[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{}}]</s>'
     '[TOOL_RESULTS]▁[{"name":▁"b",▁"content":▁"d"}][/TOOL_RESULTS]'
@@ -383,6 +395,18 @@ def _build_parallel_results_request() -> InstructRequest[ChatMessage, Tool]:
             _SYSTEM_TOOLS_MULTITURN_EXPECTED,
             _SYSTEM_TOOLS_MULTITURN_TEXT,
             id="system-tools-multiturn",
+        ),
+        pytest.param(
+            partial(build_assistant_tool_calls_request, settings=None),
+            _ASSISTANT_TOOL_CALLS_EXPECTED,
+            _ASSISTANT_TOOL_CALLS_TEXT,
+            id="shared-assistant-tool-calls",
+        ),
+        pytest.param(
+            partial(build_tool_message_request, settings=None),
+            _TOOL_MESSAGE_EXPECTED,
+            _TOOL_MESSAGE_TEXT,
+            id="shared-tool-message",
         ),
         pytest.param(
             _build_tool_message_multiple_shots_without_history_request,

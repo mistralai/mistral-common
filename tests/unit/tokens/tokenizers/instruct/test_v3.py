@@ -21,6 +21,7 @@ from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized
 from mistral_common.tokens.tokenizers.image import DATASET_MEAN, DATASET_STD
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
+    build_assistant_tool_calls_request,
     build_empty_assistant_request,
     build_image_user_request,
     build_multi_image_user_request,
@@ -36,6 +37,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_system_tools_multiturn_request,
     build_text_then_image_user_request,
     build_tool_call_request,
+    build_tool_message_request,
     build_tools_multiturn_request,
     build_tools_singleturn_request,
 )
@@ -80,6 +82,22 @@ _TEKKEN_SYSTEM_TOOLS_MULTITURN_TOKENS = [
 ]
 _SPM_PREFIXED_FINAL_MESSAGE_TOKENS = [1, 3, 1032, 4, 1055, 2, 3, 17889, 23294, 781, 781, 29485, 4, 1049]
 _TEKKEN_PREFIXED_FINAL_MESSAGE_TOKENS = [1, 3, 1097, 4, 1098, 2, 3, 101289, 58343, 1267, 1099, 4, 1100]
+_SPM_ASSISTANT_TOOL_CALLS_TOKENS = [
+    1, 3, 1032, 4, 5, 1501, 7567, 1629, 2032, 1113, 29494, 1316, 1113, 17452, 2032, 13450, 1113, 1081, 2032, 1113,
+    29508, 29518, 29538, 29549, 29550, 29552, 29555, 29551, 29542, 29507, 10925, 2
+]
+_TEKKEN_ASSISTANT_TOOL_CALLS_TOKENS = [
+    1, 3, 1097, 4, 9, 1091, 19227, 2391, 2811, 1429, 1098, 1897, 1429, 61906, 2811, 58208, 1429, 1327, 2811, 1429,
+    1049, 1050, 1051, 1052, 1053, 1054, 1055, 1056, 1057, 1034, 27028, 2
+]
+_SPM_TOOL_MESSAGE_TOKENS = [
+    1, 3, 1032, 4, 8, 10598, 4557, 2032, 1113, 29483, 1316, 1113, 3613, 29498, 1081, 2032, 1113, 29508, 29518,
+    29538, 29549, 29550, 29552, 29555, 29551, 29542, 18163, 9
+]
+_TEKKEN_TOOL_MESSAGE_TOKENS = [
+    1, 3, 1097, 4, 7, 19227, 5431, 2811, 1429, 1100, 1897, 1429, 19881, 3384, 2811, 1429, 1049, 1050, 1051, 1052,
+    1053, 1054, 1055, 1056, 1057, 46005, 8
+]
 _SPM_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_TOKENS = [
     1, 3, 1032, 4, 5, 1501, 7567, 1629, 2032, 1113, 29494, 1316, 1113, 17452, 2032, 13450, 1113, 1081, 2032, 1113,
     29502, 29507, 10925, 2, 8, 10598, 4557, 2032, 1113, 29483, 1316, 1113, 3613, 29498, 1081, 2032, 1113, 29502,
@@ -215,6 +233,10 @@ _SPM_SYSTEM_TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_SPM_SYSTEM_TOOLS_MULTIT
 _TEKKEN_SYSTEM_TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_TEKKEN_SYSTEM_TOOLS_MULTITURN_TOKENS)
 _SPM_PREFIXED_FINAL_MESSAGE_EXPECTED = Tokenized(tokens=_SPM_PREFIXED_FINAL_MESSAGE_TOKENS, prefix_ids=[1049])
 _TEKKEN_PREFIXED_FINAL_MESSAGE_EXPECTED = Tokenized(tokens=_TEKKEN_PREFIXED_FINAL_MESSAGE_TOKENS, prefix_ids=[1100])
+_SPM_ASSISTANT_TOOL_CALLS_EXPECTED = Tokenized(tokens=_SPM_ASSISTANT_TOOL_CALLS_TOKENS)
+_TEKKEN_ASSISTANT_TOOL_CALLS_EXPECTED = Tokenized(tokens=_TEKKEN_ASSISTANT_TOOL_CALLS_TOKENS)
+_SPM_TOOL_MESSAGE_EXPECTED = Tokenized(tokens=_SPM_TOOL_MESSAGE_TOKENS)
+_TEKKEN_TOOL_MESSAGE_EXPECTED = Tokenized(tokens=_TEKKEN_TOOL_MESSAGE_TOKENS)
 _SPM_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_EXPECTED = Tokenized(
     tokens=_SPM_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_TOKENS
 )
@@ -290,6 +312,14 @@ _TEKKEN_SYSTEM_TOOLS_MULTITURN_TEXT = (
 )
 _SPM_PREFIXED_FINAL_MESSAGE_TEXT = "<s>[INST]▁a[/INST]▁b</s>[INST]▁SYSTEM<0x0A><0x0A>c[/INST]▁d"
 _TEKKEN_PREFIXED_FINAL_MESSAGE_TEXT = "<s>[INST]a[/INST]b</s>[INST]SYSTEM\n\nc[/INST]d"
+_SPM_ASSISTANT_TOOL_CALLS_TEXT = (
+    '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"123456789"}]</s>'
+)
+_TEKKEN_ASSISTANT_TOOL_CALLS_TEXT = (
+    '<s>[INST]a[/INST][TOOL_CALLS][{"name": "b", "arguments": {}, "id": "123456789"}]</s>'
+)
+_SPM_TOOL_MESSAGE_TEXT = '<s>[INST]▁a[/INST][TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"123456789"}[/TOOL_RESULTS]'
+_TEKKEN_TOOL_MESSAGE_TEXT = '<s>[INST]a[/INST][TOOL_RESULTS]{"content": "d", "call_id": "123456789"}[/TOOL_RESULTS]'
 _SPM_TOOL_MESSAGE_MULTIPLE_SHOTS_WITH_HISTORY_TEXT = (
     '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"0"}]</s>'
     '[TOOL_RESULTS]▁{"content":▁"d",▁"call_id":▁"0"}[/TOOL_RESULTS]▁e</s>[INST]▁f[/INST]'
@@ -652,6 +682,34 @@ def _build_tool_call_and_content_request() -> InstructRequest[ChatMessage, Tool]
             _TEKKEN_PREFIXED_FINAL_MESSAGE_EXPECTED,
             _TEKKEN_PREFIXED_FINAL_MESSAGE_TEXT,
             id="tekken-prefixed-final-message",
+        ),
+        pytest.param(
+            "spm",
+            partial(build_assistant_tool_calls_request, settings=None),
+            _SPM_ASSISTANT_TOOL_CALLS_EXPECTED,
+            _SPM_ASSISTANT_TOOL_CALLS_TEXT,
+            id="spm-shared-assistant-tool-calls",
+        ),
+        pytest.param(
+            "tekken",
+            partial(build_assistant_tool_calls_request, settings=None),
+            _TEKKEN_ASSISTANT_TOOL_CALLS_EXPECTED,
+            _TEKKEN_ASSISTANT_TOOL_CALLS_TEXT,
+            id="tekken-shared-assistant-tool-calls",
+        ),
+        pytest.param(
+            "spm",
+            partial(build_tool_message_request, settings=None),
+            _SPM_TOOL_MESSAGE_EXPECTED,
+            _SPM_TOOL_MESSAGE_TEXT,
+            id="spm-shared-tool-message",
+        ),
+        pytest.param(
+            "tekken",
+            partial(build_tool_message_request, settings=None),
+            _TEKKEN_TOOL_MESSAGE_EXPECTED,
+            _TEKKEN_TOOL_MESSAGE_TEXT,
+            id="tekken-shared-tool-message",
         ),
         pytest.param(
             "spm",
