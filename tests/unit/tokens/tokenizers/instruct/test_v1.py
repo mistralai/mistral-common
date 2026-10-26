@@ -5,23 +5,20 @@ from collections.abc import Callable
 import pytest
 
 from mistral_common.exceptions import TokenizerException
-from mistral_common.protocol.instruct.messages import (
-    AssistantMessage,
-    ChatMessage,
-    ToolMessage,
-    UserMessage,
-)
+from mistral_common.protocol.instruct.messages import ChatMessage
 from mistral_common.protocol.instruct.request import InstructRequest
-from mistral_common.protocol.instruct.tool_calls import FunctionCall, Tool, ToolCall
+from mistral_common.protocol.instruct.tool_calls import Tool
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
+    build_assistant_tool_calls_request,
     build_empty_assistant_request,
     build_normal_request,
     build_prefixed_final_message_request,
     build_system_message_request,
     build_system_multiturn_request,
     build_system_singleturn_request,
+    build_tool_message_request,
 )
 from tests.utils import assert_tokenized_equal, decode_keep
 
@@ -59,23 +56,6 @@ _SYSTEM_MESSAGE_NOT_IMPLEMENTED_MESSAGE = r"^System message encoding not impleme
 def tokenizer() -> InstructTokenizer:
     r"""Provide the bundled v1 instruct tokenizer for formatting cases."""
     return MistralTokenizer.v1().instruct_tokenizer
-
-
-def _build_tool_message_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a v1 request containing a tool result."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[UserMessage(content="a"), ToolMessage(content="d", tool_call_id="123456789")]
-    )
-
-
-def _build_assistant_tool_calls_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a v1 request containing an assistant tool call."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="b", arguments="{}"))]),
-        ]
-    )
 
 
 @pytest.mark.parametrize(
@@ -118,13 +98,13 @@ def test_encode_instruct(
     argnames="request_builder, expected_exception, expected_message",
     argvalues=[
         pytest.param(
-            _build_tool_message_request,
+            build_tool_message_request,
             TokenizerException,
             _TOOLS_NOT_IMPLEMENTED_MESSAGE,
             id="tool-message",
         ),
         pytest.param(
-            _build_assistant_tool_calls_request,
+            build_assistant_tool_calls_request,
             TokenizerException,
             _TOOLS_NOT_IMPLEMENTED_MESSAGE,
             id="assistant-tool-calls",

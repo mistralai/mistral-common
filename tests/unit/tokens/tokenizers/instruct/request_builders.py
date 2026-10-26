@@ -8,10 +8,11 @@ from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
     SystemMessage,
+    ToolMessage,
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import InstructRequest
-from mistral_common.protocol.instruct.tool_calls import Function, Tool
+from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 
 
 def build_normal_request() -> InstructRequest[ChatMessage, Tool]:
@@ -103,3 +104,22 @@ def build_empty_assistant_request() -> InstructRequest[ChatMessage, Tool]:
 def build_system_message_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build the request containing a system message."""
     return InstructRequest[ChatMessage, Tool](messages=[SystemMessage(content="s"), UserMessage(content="a")])
+
+
+def build_tool_message_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build the request containing a tool result without a preceding assistant turn."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[UserMessage(content="a"), ToolMessage(content="d", tool_call_id="123456789")]
+    )
+
+
+def build_tool_call_request(tool_call: ToolCall) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a user turn followed by an assistant turn with the supplied tool call."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[UserMessage(content="a"), AssistantMessage(tool_calls=[tool_call])]
+    )
+
+
+def build_assistant_tool_calls_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a user turn followed by an assistant turn with one identified tool call."""
+    return build_tool_call_request(tool_call=ToolCall(id="123456789", function=FunctionCall(name="b", arguments="{}")))

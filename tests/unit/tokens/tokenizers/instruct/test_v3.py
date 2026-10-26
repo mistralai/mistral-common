@@ -24,6 +24,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_prefixed_final_message_request,
     build_system_message_request,
     build_system_tools_multiturn_request,
+    build_tool_call_request,
     build_tools_multiturn_request,
     build_tools_singleturn_request,
 )
@@ -407,21 +408,12 @@ def _build_tool_message_request(content: str | list[ContentChunk]) -> InstructRe
 
 def _build_explicit_null_id_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build a v3 request with an explicit null-like tool-call ID."""
-    return _build_tool_call_without_id_request(
-        tool_call=ToolCall(id="null", function=FunctionCall(name="b", arguments="{}"))
-    )
+    return build_tool_call_request(tool_call=ToolCall(id="null", function=FunctionCall(name="b", arguments="{}")))
 
 
 def _build_default_id_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build a v3 request with a default tool-call ID."""
-    return _build_tool_call_without_id_request(tool_call=ToolCall(function=FunctionCall(name="b", arguments="{}")))
-
-
-def _build_tool_call_without_id_request(tool_call: ToolCall) -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a one-call v3 request containing the supplied call."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[UserMessage(content="a"), AssistantMessage(tool_calls=[tool_call])]
-    )
+    return build_tool_call_request(tool_call=ToolCall(function=FunctionCall(name="b", arguments="{}")))
 
 
 def _build_non_ascii_tools_calls_and_results_request() -> InstructRequest[ChatMessage, Tool]:
