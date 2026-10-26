@@ -54,9 +54,7 @@ def build_system_multiturn_request(*, settings: ModelSettings | None) -> Instruc
     )
 
 
-def build_prefixed_final_message_request(
-    *, settings: ModelSettings | None
-) -> InstructRequest[ChatMessage, Tool]:
+def build_prefixed_final_message_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
     r"""Build the request with a prefixed final assistant message."""
     return InstructRequest[ChatMessage, Tool](
         messages=[
@@ -96,9 +94,7 @@ def build_tools_multiturn_request(*, settings: ModelSettings | None) -> Instruct
     )
 
 
-def build_system_tools_multiturn_request(
-    *, settings: ModelSettings | None
-) -> InstructRequest[ChatMessage, Tool]:
+def build_system_tools_multiturn_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
     r"""Build the multi-turn request with a system prompt and tool."""
     return InstructRequest[ChatMessage, Tool](
         messages=[
