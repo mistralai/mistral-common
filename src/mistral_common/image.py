@@ -109,7 +109,7 @@ def maybe_load_image_from_str_or_bytes(x: Image.Image | str | bytes) -> Image.Im
         except Exception:
             raise RuntimeError("Encountered an error when loading image from bytes.")
 
-    x = maybe_strip_base64_data_url_prefix(x)
+    x = maybe_strip_base64_data_url_prefix(x, strict=False)
     try:
         image = Image.open(io.BytesIO(base64.b64decode(x.encode("ascii"))))
         return image

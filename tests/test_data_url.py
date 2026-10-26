@@ -47,8 +47,8 @@ def _wav_b64() -> str:
         ("", ""),
     ],
 )
-def test_maybe_strip_base64_data_url_prefix(value: str, expected: str) -> None:
-    assert maybe_strip_base64_data_url_prefix(value) == expected
+def test_maybe_strip_base64_data_url_prefix_lenient(value: str, expected: str) -> None:
+    assert maybe_strip_base64_data_url_prefix(value, strict=False) == expected
 
 
 def test_image_chunk_round_trips_data_url_serialization() -> None:

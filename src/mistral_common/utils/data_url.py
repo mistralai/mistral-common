@@ -1,4 +1,4 @@
-def maybe_strip_base64_data_url_prefix(s: str, *, strict: bool = False) -> str:
+def maybe_strip_base64_data_url_prefix(s: str, *, strict: bool) -> str:
     r"""Return the payload of a base64 data URL, or the input unchanged.
 
     Implements the split step of the WHATWG Fetch "data: URL processor": if the
@@ -20,13 +20,13 @@ def maybe_strip_base64_data_url_prefix(s: str, *, strict: bool = False) -> str:
         ValueError: If `strict` is `True` and `s` is a malformed base64 data URL.
 
     Examples:
-        >>> maybe_strip_base64_data_url_prefix("data:image/png;base64,aGVsbG8=")
+        >>> maybe_strip_base64_data_url_prefix("data:image/png;base64,aGVsbG8=", strict=False)
         'aGVsbG8='
-        >>> maybe_strip_base64_data_url_prefix("data:image/svg+xml;base64,aGVsbG8=")
+        >>> maybe_strip_base64_data_url_prefix("data:image/svg+xml;base64,aGVsbG8=", strict=False)
         'aGVsbG8='
-        >>> maybe_strip_base64_data_url_prefix("data:text/plain,hello")
+        >>> maybe_strip_base64_data_url_prefix("data:text/plain,hello", strict=False)
         'data:text/plain,hello'
-        >>> maybe_strip_base64_data_url_prefix("aGVsbG8=")
+        >>> maybe_strip_base64_data_url_prefix("aGVsbG8=", strict=False)
         'aGVsbG8='
         >>> maybe_strip_base64_data_url_prefix("data:text/plain,hello", strict=True)
         Traceback (most recent call last):
