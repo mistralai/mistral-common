@@ -24,6 +24,14 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import quick_vocab
 from tests.test_tokenizer_v7_audio import get_tekkenizer_with_audio
+from tests.unit.tokens.tokenizers.instruct.request_builders import (
+    build_empty_assistant_request,
+    build_normal_request,
+    build_system_message_request,
+    build_tool_message_request,
+    build_tools_multiturn_request,
+    build_tools_singleturn_request,
+)
 from tests.utils import assert_tokenized_equal, decode_keep
 
 # fmt: off
@@ -224,6 +232,76 @@ _SYSTEM_LIST_CONTENT_TEXT = "<s>[SYSTEM_PROMPT]▁s[/SYSTEM_PROMPT][INST]▁a[/I
 _ASSISTANT_LIST_CONTENT_TEXT = "<s>[INST]▁a[/INST]▁b</s>"
 _SYSTEM_AND_USER_WORDS_TEXT = "<s>[SYSTEM_PROMPT]▁hello▁world[/SYSTEM_PROMPT][INST]▁good▁day[/INST]"
 _TRUNCATION_LAST_USER_AT_LIMIT_TEXT = "<s>[INST]aaaaaaa[/INST]"
+
+# fmt: off
+_SPM_NORMAL_TOKENS = [1, 3, 1032, 4, 1055, 2, 3, 1045, 4, 1049, 2]
+_SPM_TOOLS_SINGLETURN_TOKENS = [
+    1, 6, 1501, 7567, 1891, 2032, 1113, 3396, 1316, 1113, 3396, 2032, 10598, 1629, 2032, 1113, 7230, 29508, 1316,
+    1113, 7286, 2032, 1113, 29508, 1316, 1113, 12206, 2032, 1139, 1743, 10925, 7, 3, 1032, 4]
+_SPM_TOOLS_MULTITURN_TOKENS = [
+    1, 3, 1032, 4, 1055, 2, 6, 1501, 7567, 1891, 2032, 1113, 3396, 1316, 1113, 3396, 2032, 10598, 1629, 2032, 1113,
+    7230, 29508, 1316, 1113, 7286, 2032, 1113, 29508, 1316, 1113, 12206, 2032, 1139, 1743, 1649, 10598, 1891, 2032,
+    1113, 3396, 1316, 1113, 3396, 2032, 10598, 1629, 2032, 1113, 7230, 29518, 1316, 1113, 7286, 2032, 1113, 29518,
+    1316, 1113, 12206, 2032, 1139, 1743, 10925, 7, 3, 1045, 4, 1049, 2]
+_SPM_TOOL_MESSAGE_TOKENS = [
+    1, 3, 1032, 4, 8, 29473, 29508, 29518, 29538, 29549, 29550, 29552, 29555, 29551, 29542, 18, 1049, 9]
+_SPM_SYSTEM_MESSAGE_TOKENS = [1, 16, 1036, 17, 3, 1032, 4]
+_NO_AUDIO_NORMAL_TOKENS = [1, 3, 197, 4, 198, 2, 3, 199, 4, 200, 2]
+_NO_AUDIO_TOOLS_SINGLETURN_TOKENS = [
+    1, 5, 191, 223, 134, 216, 221, 212, 201, 134, 158, 132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 144,
+    132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 158, 132, 223, 134, 210, 197, 209, 201, 134, 158, 132, 134,
+    216, 211, 211, 208, 149, 134, 144, 132, 134, 200, 201, 215, 199, 214, 205, 212, 216, 205, 211, 210, 134, 158, 132,
+    134, 149, 134, 144, 132, 134, 212, 197, 214, 197, 209, 201, 216, 201, 214, 215, 134, 158, 132, 223, 225, 225, 225,
+    193, 6, 3, 197, 4]
+_NO_AUDIO_TOOLS_MULTITURN_TOKENS = [
+    1, 3, 197, 4, 198, 2, 5, 191, 223, 134, 216, 221, 212, 201, 134, 158, 132, 134, 202, 217, 210, 199, 216, 205, 211,
+    210, 134, 144, 132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 158, 132, 223, 134, 210, 197, 209, 201, 134,
+    158, 132, 134, 216, 211, 211, 208, 149, 134, 144, 132, 134, 200, 201, 215, 199, 214, 205, 212, 216, 205, 211, 210,
+    134, 158, 132, 134, 149, 134, 144, 132, 134, 212, 197, 214, 197, 209, 201, 216, 201, 214, 215, 134, 158, 132, 223,
+    225, 225, 225, 144, 132, 223, 134, 216, 221, 212, 201, 134, 158, 132, 134, 202, 217, 210, 199, 216, 205, 211, 210,
+    134, 144, 132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 158, 132, 223, 134, 210, 197, 209, 201, 134, 158,
+    132, 134, 216, 211, 211, 208, 150, 134, 144, 132, 134, 200, 201, 215, 199, 214, 205, 212, 216, 205, 211, 210, 134,
+    158, 132, 134, 150, 134, 144, 132, 134, 212, 197, 214, 197, 209, 201, 216, 201, 214, 215, 134, 158, 132, 223, 225,
+    225, 225, 193, 6, 3, 199, 4, 200, 2]
+_NO_AUDIO_TOOL_MESSAGE_TOKENS = [1, 3, 197, 4, 7, 149, 150, 151, 152, 153, 154, 155, 156, 157, 19, 200, 8]
+_NO_AUDIO_SYSTEM_MESSAGE_TOKENS = [1, 17, 215, 18, 3, 197, 4]
+# fmt: on
+
+_SPM_NORMAL_EXPECTED = Tokenized(tokens=_SPM_NORMAL_TOKENS)
+_SPM_TOOLS_SINGLETURN_EXPECTED = Tokenized(tokens=_SPM_TOOLS_SINGLETURN_TOKENS)
+_SPM_TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_SPM_TOOLS_MULTITURN_TOKENS)
+_SPM_TOOL_MESSAGE_EXPECTED = Tokenized(tokens=_SPM_TOOL_MESSAGE_TOKENS)
+_SPM_SYSTEM_MESSAGE_EXPECTED = Tokenized(tokens=_SPM_SYSTEM_MESSAGE_TOKENS)
+_NO_AUDIO_NORMAL_EXPECTED = Tokenized(tokens=_NO_AUDIO_NORMAL_TOKENS)
+_NO_AUDIO_TOOLS_SINGLETURN_EXPECTED = Tokenized(tokens=_NO_AUDIO_TOOLS_SINGLETURN_TOKENS)
+_NO_AUDIO_TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_NO_AUDIO_TOOLS_MULTITURN_TOKENS)
+_NO_AUDIO_TOOL_MESSAGE_EXPECTED = Tokenized(tokens=_NO_AUDIO_TOOL_MESSAGE_TOKENS)
+_NO_AUDIO_SYSTEM_MESSAGE_EXPECTED = Tokenized(tokens=_NO_AUDIO_SYSTEM_MESSAGE_TOKENS)
+
+_SPM_NORMAL_TEXT = "<s>[INST]▁a[/INST]▁b</s>[INST]▁c[/INST]▁d</s>"
+_SPM_TOOLS_SINGLETURN_TEXT = (
+    '<s>[AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"tool1",▁"description":▁"1",▁"parameters":▁{}}}]'
+    "[/AVAILABLE_TOOLS][INST]▁a[/INST]"
+)
+_SPM_TOOLS_MULTITURN_TEXT = (
+    '<s>[INST]▁a[/INST]▁b</s>[AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"tool1",▁"description":▁"1",'
+    '▁"parameters":▁{}}},▁{"type":▁"function",▁"function":▁{"name":▁"tool2",▁"description":▁"2",▁"parameters":▁{}}}]'
+    "[/AVAILABLE_TOOLS][INST]▁c[/INST]▁d</s>"
+)
+_SPM_TOOL_MESSAGE_TEXT = "<s>[INST]▁a[/INST][TOOL_RESULTS]▁123456789[TOOL_CONTENT]▁d[/TOOL_RESULTS]"
+_SPM_SYSTEM_MESSAGE_TEXT = "<s>[SYSTEM_PROMPT]▁s[/SYSTEM_PROMPT][INST]▁a[/INST]"
+_NO_AUDIO_NORMAL_TEXT = "<s>[INST]a[/INST]b</s>[INST]c[/INST]d</s>"
+_NO_AUDIO_TOOLS_SINGLETURN_TEXT = (
+    '<s>[AVAILABLE_TOOLS][{"type": "function", "function": {"name": "tool1", "description": "1", "parameters": {}}}]'
+    "[/AVAILABLE_TOOLS][INST]a[/INST]"
+)
+_NO_AUDIO_TOOLS_MULTITURN_TEXT = (
+    '<s>[INST]a[/INST]b</s>[AVAILABLE_TOOLS][{"type": "function", "function": {"name": "tool1", "description": "1", '
+    '"parameters": {}}}, {"type": "function", "function": {"name": "tool2", "description": "2", "parameters": {}}}]'
+    "[/AVAILABLE_TOOLS][INST]c[/INST]d</s>"
+)
+_NO_AUDIO_TOOL_MESSAGE_TEXT = "<s>[INST]a[/INST][TOOL_RESULTS]123456789[TOOL_CONTENT]d[/TOOL_RESULTS]"
+_NO_AUDIO_SYSTEM_MESSAGE_TEXT = "<s>[SYSTEM_PROMPT]s[/SYSTEM_PROMPT][INST]a[/INST]"
 
 _INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
 _TRUNCATION_FAILED_MESSAGE = r"^Input couldn't fit in truncate_at_max_token$"
@@ -848,6 +926,76 @@ def _build_assistant_think_request() -> InstructRequest[ChatMessage, Tool]:
             _TRUNCATION_LAST_USER_AT_LIMIT_TEXT,
             id="with-audio-truncation-last-user-at-limit",
         ),
+        pytest.param(
+            "spm",
+            build_normal_request,
+            _SPM_NORMAL_EXPECTED,
+            _SPM_NORMAL_TEXT,
+            id="spm-shared-normal",
+        ),
+        pytest.param(
+            "spm",
+            build_tools_singleturn_request,
+            _SPM_TOOLS_SINGLETURN_EXPECTED,
+            _SPM_TOOLS_SINGLETURN_TEXT,
+            id="spm-shared-tools-singleturn",
+        ),
+        pytest.param(
+            "spm",
+            build_tools_multiturn_request,
+            _SPM_TOOLS_MULTITURN_EXPECTED,
+            _SPM_TOOLS_MULTITURN_TEXT,
+            id="spm-shared-tools-multiturn",
+        ),
+        pytest.param(
+            "spm",
+            build_tool_message_request,
+            _SPM_TOOL_MESSAGE_EXPECTED,
+            _SPM_TOOL_MESSAGE_TEXT,
+            id="spm-shared-tool-message",
+        ),
+        pytest.param(
+            "spm",
+            build_system_message_request,
+            _SPM_SYSTEM_MESSAGE_EXPECTED,
+            _SPM_SYSTEM_MESSAGE_TEXT,
+            id="spm-shared-system-message",
+        ),
+        pytest.param(
+            "no_audio",
+            build_normal_request,
+            _NO_AUDIO_NORMAL_EXPECTED,
+            _NO_AUDIO_NORMAL_TEXT,
+            id="no-audio-shared-normal",
+        ),
+        pytest.param(
+            "no_audio",
+            build_tools_singleturn_request,
+            _NO_AUDIO_TOOLS_SINGLETURN_EXPECTED,
+            _NO_AUDIO_TOOLS_SINGLETURN_TEXT,
+            id="no-audio-shared-tools-singleturn",
+        ),
+        pytest.param(
+            "no_audio",
+            build_tools_multiturn_request,
+            _NO_AUDIO_TOOLS_MULTITURN_EXPECTED,
+            _NO_AUDIO_TOOLS_MULTITURN_TEXT,
+            id="no-audio-shared-tools-multiturn",
+        ),
+        pytest.param(
+            "no_audio",
+            build_tool_message_request,
+            _NO_AUDIO_TOOL_MESSAGE_EXPECTED,
+            _NO_AUDIO_TOOL_MESSAGE_TEXT,
+            id="no-audio-shared-tool-message",
+        ),
+        pytest.param(
+            "no_audio",
+            build_system_message_request,
+            _NO_AUDIO_SYSTEM_MESSAGE_EXPECTED,
+            _NO_AUDIO_SYSTEM_MESSAGE_TEXT,
+            id="no-audio-shared-system-message",
+        ),
     ],
 )
 def test_encode_instruct(
@@ -943,6 +1091,20 @@ def test_encode_instruct(
             TokenizerException,
             _THINK_NOT_IMPLEMENTED_MESSAGE,
             id="spm-assistant-think",
+        ),
+        pytest.param(
+            "spm",
+            build_empty_assistant_request,
+            TokenizerException,
+            _INVALID_ASSISTANT_MESSAGE,
+            id="spm-shared-empty-assistant",
+        ),
+        pytest.param(
+            "no_audio",
+            build_empty_assistant_request,
+            TokenizerException,
+            _INVALID_ASSISTANT_MESSAGE,
+            id="no-audio-shared-empty-assistant",
         ),
     ],
 )
