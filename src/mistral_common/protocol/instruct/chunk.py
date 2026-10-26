@@ -31,12 +31,17 @@ def _detect_audio_format(data: str | bytes) -> str:
         The detected audio format as a lowercase string (e.g. "wav", "mp3").
 
     Raises:
-        ValueError: If the audio format cannot be detected.
+        ValueError: If the input is a malformed data URL, is not valid base64,
+            or the audio format cannot be detected.
     """
     assert_soundfile_installed()
 
     if isinstance(data, str):
-        audio_bytes = base64.b64decode(maybe_strip_base64_data_url_prefix(data))
+        payload = maybe_strip_base64_data_url_prefix(data, strict=True)
+        try:
+            audio_bytes = base64.b64decode(payload)
+        except ValueError as e:
+            raise ValueError("base64 decoding failed. Please check the input string is a valid base64.") from e
     else:
         audio_bytes = data
 
@@ -173,7 +178,7 @@ class ImageChunk(BaseContentChunk):
         image_url_dict = openai_chunk["image_url"]
         assert isinstance(image_url_dict, dict) and "url" in image_url_dict, image_url_dict
 
-        url = maybe_strip_base64_data_url_prefix(image_url_dict["url"])
+        url = maybe_strip_base64_data_url_prefix(image_url_dict["url"], strict=True)
 
         return cls.model_validate({"image": url})
 
@@ -475,7 +480,7 @@ class AudioChunk(BaseContentChunk):
         if isinstance(self.input_audio, bytes):
             content = base64.b64encode(self.input_audio).decode("utf-8")
         else:
-            content = maybe_strip_base64_data_url_prefix(self.input_audio)
+            content = maybe_strip_base64_data_url_prefix(self.input_audio, strict=True)
         fmt = _detect_audio_format(self.input_audio)
         return {
             "type": self.type,
