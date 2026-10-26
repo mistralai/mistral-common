@@ -27,6 +27,7 @@ from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import quick_vocab
 from tests.test_tokenizer_v7_audio import get_tekkenizer_with_audio
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
+    build_assistant_tool_calls_request,
     build_audio_user_request,
     build_empty_assistant_request,
     build_image_user_request,
@@ -259,6 +260,10 @@ _SPM_TOOLS_MULTITURN_TOKENS = [
     1316, 1113, 12206, 2032, 1139, 1743, 10925, 7, 3, 1045, 4, 1049, 2]
 _SPM_TOOL_MESSAGE_TOKENS = [
     1, 3, 1032, 4, 8, 29473, 29508, 29518, 29538, 29549, 29550, 29552, 29555, 29551, 29542, 18, 1049, 9]
+_SPM_ASSISTANT_TOOL_CALLS_TOKENS = [
+    1, 3, 1032, 4, 5, 1501, 7567, 1629, 2032, 1113, 29494, 1316, 1113, 17452, 2032, 13450, 1113, 1081, 2032, 1113,
+    29508, 29518, 29538, 29549, 29550, 29552, 29555, 29551, 29542, 29507, 10925, 2
+]
 _SPM_SYSTEM_MESSAGE_TOKENS = [1, 16, 1036, 17, 3, 1032, 4]
 _SPM_SYSTEM_MESSAGE_MULTITURN_TOKENS = [1, 16, 17889, 23294, 17, 3, 1032, 4, 1055, 2, 3, 1045, 4, 1049, 2]
 _SPM_SYSTEM_MESSAGE_PREFIXED_FINAL_TOKENS = [1, 16, 17889, 23294, 17, 3, 1032, 4, 1055, 2, 3, 1045, 4, 1049]
@@ -285,6 +290,11 @@ _NO_AUDIO_TOOLS_MULTITURN_TOKENS = [
     158, 132, 134, 150, 134, 144, 132, 134, 212, 197, 214, 197, 209, 201, 216, 201, 214, 215, 134, 158, 132, 223, 225,
     225, 225, 193, 6, 3, 199, 4, 200, 2]
 _NO_AUDIO_TOOL_MESSAGE_TOKENS = [1, 3, 197, 4, 7, 149, 150, 151, 152, 153, 154, 155, 156, 157, 19, 200, 8]
+_NO_AUDIO_ASSISTANT_TOOL_CALLS_TOKENS = [
+    1, 3, 197, 4, 9, 191, 223, 134, 210, 197, 209, 201, 134, 158, 132, 134, 198, 134, 144, 132, 134, 197, 214, 203,
+    217, 209, 201, 210, 216, 215, 134, 158, 132, 223, 225, 144, 132, 134, 205, 200, 134, 158, 132, 134, 149, 150, 151,
+    152, 153, 154, 155, 156, 157, 134, 225, 193, 2
+]
 _NO_AUDIO_SYSTEM_MESSAGE_TOKENS = [1, 17, 215, 18, 3, 197, 4]
 _NO_AUDIO_SYSTEM_MESSAGE_MULTITURN_TOKENS = [
     1, 17, 183, 189, 183, 184, 169, 177, 18, 3, 197, 4, 198, 2, 3, 199, 4, 200, 2
@@ -312,6 +322,7 @@ _SPM_NORMAL_EXPECTED = Tokenized(tokens=_SPM_NORMAL_TOKENS)
 _SPM_TOOLS_SINGLETURN_EXPECTED = Tokenized(tokens=_SPM_TOOLS_SINGLETURN_TOKENS)
 _SPM_TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_SPM_TOOLS_MULTITURN_TOKENS)
 _SPM_TOOL_MESSAGE_EXPECTED = Tokenized(tokens=_SPM_TOOL_MESSAGE_TOKENS)
+_SPM_ASSISTANT_TOOL_CALLS_EXPECTED = Tokenized(tokens=_SPM_ASSISTANT_TOOL_CALLS_TOKENS)
 _SPM_SYSTEM_MESSAGE_EXPECTED = Tokenized(tokens=_SPM_SYSTEM_MESSAGE_TOKENS)
 _SPM_SYSTEM_MESSAGE_MULTITURN_EXPECTED = Tokenized(tokens=_SPM_SYSTEM_MESSAGE_MULTITURN_TOKENS)
 _SPM_SYSTEM_MESSAGE_PREFIXED_FINAL_EXPECTED = Tokenized(
@@ -322,6 +333,7 @@ _NO_AUDIO_NORMAL_EXPECTED = Tokenized(tokens=_NO_AUDIO_NORMAL_TOKENS)
 _NO_AUDIO_TOOLS_SINGLETURN_EXPECTED = Tokenized(tokens=_NO_AUDIO_TOOLS_SINGLETURN_TOKENS)
 _NO_AUDIO_TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_NO_AUDIO_TOOLS_MULTITURN_TOKENS)
 _NO_AUDIO_TOOL_MESSAGE_EXPECTED = Tokenized(tokens=_NO_AUDIO_TOOL_MESSAGE_TOKENS)
+_NO_AUDIO_ASSISTANT_TOOL_CALLS_EXPECTED = Tokenized(tokens=_NO_AUDIO_ASSISTANT_TOOL_CALLS_TOKENS)
 _NO_AUDIO_SYSTEM_MESSAGE_EXPECTED = Tokenized(tokens=_NO_AUDIO_SYSTEM_MESSAGE_TOKENS)
 _NO_AUDIO_SYSTEM_MESSAGE_MULTITURN_EXPECTED = Tokenized(tokens=_NO_AUDIO_SYSTEM_MESSAGE_MULTITURN_TOKENS)
 _NO_AUDIO_SYSTEM_MESSAGE_PREFIXED_FINAL_EXPECTED = Tokenized(
@@ -358,6 +370,9 @@ _SPM_TOOLS_MULTITURN_TEXT = (
     "[/AVAILABLE_TOOLS][INST]▁c[/INST]▁d</s>"
 )
 _SPM_TOOL_MESSAGE_TEXT = "<s>[INST]▁a[/INST][TOOL_RESULTS]▁123456789[TOOL_CONTENT]▁d[/TOOL_RESULTS]"
+_SPM_ASSISTANT_TOOL_CALLS_TEXT = (
+    '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"123456789"}]</s>'
+)
 _SPM_SYSTEM_MESSAGE_TEXT = "<s>[SYSTEM_PROMPT]▁s[/SYSTEM_PROMPT][INST]▁a[/INST]"
 _SPM_SYSTEM_MESSAGE_MULTITURN_TEXT = (
     "<s>[SYSTEM_PROMPT]▁SYSTEM[/SYSTEM_PROMPT][INST]▁a[/INST]▁b</s>[INST]▁c[/INST]▁d</s>"
@@ -380,6 +395,9 @@ _NO_AUDIO_TOOLS_MULTITURN_TEXT = (
     "[/AVAILABLE_TOOLS][INST]c[/INST]d</s>"
 )
 _NO_AUDIO_TOOL_MESSAGE_TEXT = "<s>[INST]a[/INST][TOOL_RESULTS]123456789[TOOL_CONTENT]d[/TOOL_RESULTS]"
+_NO_AUDIO_ASSISTANT_TOOL_CALLS_TEXT = (
+    '<s>[INST]a[/INST][TOOL_CALLS][{"name": "b", "arguments": {}, "id": "123456789"}]</s>'
+)
 _NO_AUDIO_SYSTEM_MESSAGE_TEXT = "<s>[SYSTEM_PROMPT]s[/SYSTEM_PROMPT][INST]a[/INST]"
 _NO_AUDIO_SYSTEM_MESSAGE_MULTITURN_TEXT = (
     "<s>[SYSTEM_PROMPT]SYSTEM[/SYSTEM_PROMPT][INST]a[/INST]b</s>[INST]c[/INST]d</s>"
@@ -1059,6 +1077,13 @@ def _build_assistant_think_request() -> InstructRequest[ChatMessage, Tool]:
         ),
         pytest.param(
             "spm",
+            partial(build_assistant_tool_calls_request, settings=None),
+            _SPM_ASSISTANT_TOOL_CALLS_EXPECTED,
+            _SPM_ASSISTANT_TOOL_CALLS_TEXT,
+            id="spm-shared-assistant-tool-calls",
+        ),
+        pytest.param(
+            "spm",
             partial(build_system_message_request, settings=None),
             _SPM_SYSTEM_MESSAGE_EXPECTED,
             _SPM_SYSTEM_MESSAGE_TEXT,
@@ -1112,6 +1137,13 @@ def _build_assistant_think_request() -> InstructRequest[ChatMessage, Tool]:
             _NO_AUDIO_TOOL_MESSAGE_EXPECTED,
             _NO_AUDIO_TOOL_MESSAGE_TEXT,
             id="no-audio-shared-tool-message",
+        ),
+        pytest.param(
+            "no_audio",
+            partial(build_assistant_tool_calls_request, settings=None),
+            _NO_AUDIO_ASSISTANT_TOOL_CALLS_EXPECTED,
+            _NO_AUDIO_ASSISTANT_TOOL_CALLS_TEXT,
+            id="no-audio-shared-assistant-tool-calls",
         ),
         pytest.param(
             "no_audio",
