@@ -29,6 +29,10 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_audio_user_request,
     build_empty_assistant_request,
     build_image_user_request,
+    build_multi_audio_user_request,
+    build_multi_image_user_request,
+    build_multiturn_audio_request,
+    build_multiturn_image_request,
     build_normal_request,
     build_system_message_request,
     build_text_then_audio_user_request,
@@ -140,6 +144,7 @@ def _build_solid_image(rgb: tuple[int, int, int], shape: tuple[int, int, int]) -
 
 
 _RED_4X4_IMAGE = _build_solid_image(rgb=(255, 0, 0), shape=(3, 4, 4))
+_BLUE_4X4_IMAGE = _build_solid_image(rgb=(0, 0, 255), shape=(3, 4, 4))
 _BLUE_6X4_IMAGE = _build_solid_image(rgb=(0, 0, 255), shape=(3, 4, 6))
 
 _IMAGE_AND_TOOL_RESULT_EXPECTED = Tokenized(tokens=_IMAGE_AND_TOOL_RESULT_TOKENS, images=[_RED_4X4_IMAGE])
@@ -273,6 +278,10 @@ _NO_AUDIO_SYSTEM_MESSAGE_TOKENS = [1, 17, 215, 18, 3, 197, 4]
 _SPM_PATCH2_IMAGE_USER_TOKENS = [1, 3, 10, 10, 14, 10, 10, 15, 1032, 4]
 _WITH_AUDIO_AUDIO_USER_TOKENS = [1, 3, 25, 24, 24, 4]
 _WITH_AUDIO_TEXT_THEN_AUDIO_USER_TOKENS = [1, 3, 197, 25, 24, 24, 4]
+_SPM_PATCH2_MULTI_IMAGE_USER_TOKENS = [1, 3, 10, 10, 14, 10, 10, 15, 10, 10, 14, 10, 10, 15, 4]
+_SPM_PATCH2_MULTITURN_IMAGE_TOKENS = [1, 3, 10, 10, 14, 10, 10, 15, 4, 1055, 2, 3, 10, 10, 14, 10, 10, 15, 4, 1049, 2]
+_WITH_AUDIO_MULTI_AUDIO_USER_TOKENS = [1, 3, 25, 24, 24, 25, 24, 24, 4]
+_WITH_AUDIO_MULTITURN_AUDIO_TOKENS = [1, 3, 25, 24, 24, 4, 198, 2, 3, 25, 24, 24, 4, 200, 2]
 # fmt: on
 
 _SPM_NORMAL_EXPECTED = Tokenized(tokens=_SPM_NORMAL_TOKENS)
@@ -290,6 +299,18 @@ _SPM_PATCH2_IMAGE_USER_EXPECTED = Tokenized(tokens=_SPM_PATCH2_IMAGE_USER_TOKENS
 _WITH_AUDIO_AUDIO_USER_EXPECTED = Tokenized(tokens=_WITH_AUDIO_AUDIO_USER_TOKENS, audios=[_SILENT_AUDIO])
 _WITH_AUDIO_TEXT_THEN_AUDIO_USER_EXPECTED = Tokenized(
     tokens=_WITH_AUDIO_TEXT_THEN_AUDIO_USER_TOKENS, audios=[_SILENT_AUDIO]
+)
+_SPM_PATCH2_MULTI_IMAGE_USER_EXPECTED = Tokenized(
+    tokens=_SPM_PATCH2_MULTI_IMAGE_USER_TOKENS, images=[_RED_4X4_IMAGE, _BLUE_4X4_IMAGE]
+)
+_SPM_PATCH2_MULTITURN_IMAGE_EXPECTED = Tokenized(
+    tokens=_SPM_PATCH2_MULTITURN_IMAGE_TOKENS, images=[_RED_4X4_IMAGE, _RED_4X4_IMAGE]
+)
+_WITH_AUDIO_MULTI_AUDIO_USER_EXPECTED = Tokenized(
+    tokens=_WITH_AUDIO_MULTI_AUDIO_USER_TOKENS, audios=[_SILENT_AUDIO, _SILENT_AUDIO]
+)
+_WITH_AUDIO_MULTITURN_AUDIO_EXPECTED = Tokenized(
+    tokens=_WITH_AUDIO_MULTITURN_AUDIO_TOKENS, audios=[_SILENT_AUDIO, _SILENT_AUDIO]
 )
 
 _SPM_NORMAL_TEXT = "<s>[INST]▁a[/INST]▁b</s>[INST]▁c[/INST]▁d</s>"
@@ -319,6 +340,17 @@ _NO_AUDIO_SYSTEM_MESSAGE_TEXT = "<s>[SYSTEM_PROMPT]s[/SYSTEM_PROMPT][INST]a[/INS
 _SPM_PATCH2_IMAGE_USER_TEXT = "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁a[/INST]"
 _WITH_AUDIO_AUDIO_USER_TEXT = "<s>[INST][BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
 _WITH_AUDIO_TEXT_THEN_AUDIO_USER_TEXT = "<s>[INST]a[BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
+_SPM_PATCH2_MULTI_IMAGE_USER_TEXT = (
+    "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END][/INST]"
+)
+_SPM_PATCH2_MULTITURN_IMAGE_TEXT = (
+    "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END][/INST]▁b</s>"
+    "[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END][/INST]▁d</s>"
+)
+_WITH_AUDIO_MULTI_AUDIO_USER_TEXT = "<s>[INST][BEGIN_AUDIO][AUDIO][AUDIO][BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
+_WITH_AUDIO_MULTITURN_AUDIO_TEXT = (
+    "<s>[INST][BEGIN_AUDIO][AUDIO][AUDIO][/INST]b</s>[INST][BEGIN_AUDIO][AUDIO][AUDIO][/INST]d</s>"
+)
 
 _INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
 _TRUNCATION_FAILED_MESSAGE = r"^Input couldn't fit in truncate_at_max_token$"
@@ -1040,6 +1072,34 @@ def _build_assistant_think_request() -> InstructRequest[ChatMessage, Tool]:
             _WITH_AUDIO_TEXT_THEN_AUDIO_USER_EXPECTED,
             _WITH_AUDIO_TEXT_THEN_AUDIO_USER_TEXT,
             id="with-audio-shared-text-then-audio-user",
+        ),
+        pytest.param(
+            "spm_patch2",
+            build_multi_image_user_request,
+            _SPM_PATCH2_MULTI_IMAGE_USER_EXPECTED,
+            _SPM_PATCH2_MULTI_IMAGE_USER_TEXT,
+            id="spm-patch2-shared-multi-image-user",
+        ),
+        pytest.param(
+            "spm_patch2",
+            build_multiturn_image_request,
+            _SPM_PATCH2_MULTITURN_IMAGE_EXPECTED,
+            _SPM_PATCH2_MULTITURN_IMAGE_TEXT,
+            id="spm-patch2-shared-multiturn-image",
+        ),
+        pytest.param(
+            "with_audio",
+            build_multi_audio_user_request,
+            _WITH_AUDIO_MULTI_AUDIO_USER_EXPECTED,
+            _WITH_AUDIO_MULTI_AUDIO_USER_TEXT,
+            id="with-audio-shared-multi-audio-user",
+        ),
+        pytest.param(
+            "with_audio",
+            build_multiturn_audio_request,
+            _WITH_AUDIO_MULTITURN_AUDIO_EXPECTED,
+            _WITH_AUDIO_MULTITURN_AUDIO_TEXT,
+            id="with-audio-shared-multiturn-audio",
         ),
     ],
 )
