@@ -22,6 +22,8 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_empty_assistant_request,
     build_image_user_request,
+    build_multi_image_user_request,
+    build_multiturn_image_request,
     build_normal_request,
     build_prefixed_final_message_request,
     build_system_message_request,
@@ -170,12 +172,24 @@ _TEKKEN_SYSTEM_PROMPT_LAST_USER_ONLY_TOKENS = [1, 3, 1097, 4, 1098, 2, 3, 1115, 
 _TEKKEN_MM_TEXT_THEN_IMAGE_TOKENS = [1, 3, 10, 13, 1097, 4]
 _TEKKEN_MM_TEXT_THEN_IMAGE_SYSTEM_PROMPT_TOKENS = [1, 3, 1115, 1267, 10, 13, 1097, 4]
 _TEKKEN_MM_IMAGE_USER_TOKENS = [1, 3, 10, 13, 1097, 4]
+_TEKKEN_MM_MULTI_IMAGE_USER_TOKENS = [1, 3, 10, 13, 10, 13, 4]
+_TEKKEN_MM_MULTITURN_IMAGE_TOKENS = [1, 3, 10, 13, 4, 1098, 2, 3, 10, 13, 4, 1100, 2]
 # fmt: on
 
 _RED_16X16_IMAGE = np.broadcast_to(
     array=(
         (
             np.array(object=(255, 0, 0), dtype=np.float32) / np.float32(255.0)
+            - np.array(object=DATASET_MEAN, dtype=np.float32)
+        )
+        / np.array(object=DATASET_STD, dtype=np.float32)
+    )[:, None, None],
+    shape=(3, 16, 16),
+)
+_BLUE_16X16_IMAGE = np.broadcast_to(
+    array=(
+        (
+            np.array(object=(0, 0, 255), dtype=np.float32) / np.float32(255.0)
             - np.array(object=DATASET_MEAN, dtype=np.float32)
         )
         / np.array(object=DATASET_STD, dtype=np.float32)
@@ -227,6 +241,12 @@ _TEKKEN_MM_TEXT_THEN_IMAGE_SYSTEM_PROMPT_EXPECTED = Tokenized(
     images=[_RED_16X16_IMAGE],
 )
 _TEKKEN_MM_IMAGE_USER_EXPECTED = Tokenized(tokens=_TEKKEN_MM_IMAGE_USER_TOKENS, images=[_RED_16X16_IMAGE])
+_TEKKEN_MM_MULTI_IMAGE_USER_EXPECTED = Tokenized(
+    tokens=_TEKKEN_MM_MULTI_IMAGE_USER_TOKENS, images=[_RED_16X16_IMAGE, _BLUE_16X16_IMAGE]
+)
+_TEKKEN_MM_MULTITURN_IMAGE_EXPECTED = Tokenized(
+    tokens=_TEKKEN_MM_MULTITURN_IMAGE_TOKENS, images=[_RED_16X16_IMAGE, _RED_16X16_IMAGE]
+)
 
 _SPM_NORMAL_TEXT = "<s>[INST]▁a[/INST]▁b</s>[INST]▁c[/INST]▁d</s>"
 _TEKKEN_NORMAL_TEXT = "<s>[INST]a[/INST]b</s>[INST]c[/INST]d</s>"
@@ -340,6 +360,8 @@ _TEKKEN_SYSTEM_PROMPT_LAST_USER_ONLY_TEXT = "<s>[INST]a[/INST]b</s>[INST]s\n\nc[
 _TEKKEN_MM_TEXT_THEN_IMAGE_TEXT = "<s>[INST][IMG][IMG_END]a[/INST]"
 _TEKKEN_MM_TEXT_THEN_IMAGE_SYSTEM_PROMPT_TEXT = "<s>[INST]s\n\n[IMG][IMG_END]a[/INST]"
 _TEKKEN_MM_IMAGE_USER_TEXT = "<s>[INST][IMG][IMG_END]a[/INST]"
+_TEKKEN_MM_MULTI_IMAGE_USER_TEXT = "<s>[INST][IMG][IMG_END][IMG][IMG_END][/INST]"
+_TEKKEN_MM_MULTITURN_IMAGE_TEXT = "<s>[INST][IMG][IMG_END][/INST]b</s>[INST][IMG][IMG_END][/INST]d</s>"
 
 _TOOL_CALL_AND_CONTENT_MESSAGE = r"^Cannot have tool calls and content defined in the same assistant message"
 _INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
@@ -785,6 +807,20 @@ def _build_tool_call_and_content_request() -> InstructRequest[ChatMessage, Tool]
             _TEKKEN_MM_IMAGE_USER_EXPECTED,
             _TEKKEN_MM_IMAGE_USER_TEXT,
             id="tekken-mm-text-then-image-user",
+        ),
+        pytest.param(
+            "tekken_mm",
+            build_multi_image_user_request,
+            _TEKKEN_MM_MULTI_IMAGE_USER_EXPECTED,
+            _TEKKEN_MM_MULTI_IMAGE_USER_TEXT,
+            id="tekken-mm-multi-image-user",
+        ),
+        pytest.param(
+            "tekken_mm",
+            build_multiturn_image_request,
+            _TEKKEN_MM_MULTITURN_IMAGE_EXPECTED,
+            _TEKKEN_MM_MULTITURN_IMAGE_TEXT,
+            id="tekken-mm-multiturn-image",
         ),
     ],
 )

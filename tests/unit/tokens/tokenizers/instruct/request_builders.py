@@ -166,6 +166,11 @@ def build_red_image_chunk() -> ImageChunk:
     return ImageChunk(image=Image.new(mode="RGB", size=(4, 4), color="red"))
 
 
+def build_blue_image_chunk() -> ImageChunk:
+    r"""Build an image chunk holding a blue 4x4 image."""
+    return ImageChunk(image=Image.new(mode="RGB", size=(4, 4), color="blue"))
+
+
 def build_silent_audio_chunk(*, num_samples: int = 2400, sampling_rate: int = 24_000) -> AudioChunk:
     r"""Build an audio chunk holding silence."""
     audio = Audio(audio_array=np.zeros(shape=num_samples, dtype=np.float32), sampling_rate=sampling_rate, format="wav")
@@ -200,4 +205,46 @@ def build_text_then_audio_user_request(*, settings: ModelSettings | None = None)
     content: list[ContentChunk] = [TextChunk(text="a"), build_silent_audio_chunk()]
     return InstructRequest[ChatMessage, Tool](
         messages=[UserMessage(content=content)], settings=settings or ModelSettings.none()
+    )
+
+
+def build_multi_image_user_request(*, settings: ModelSettings | None = None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a request whose single user message holds two sequential images (red then blue)."""
+    content: list[ContentChunk] = [build_red_image_chunk(), build_blue_image_chunk()]
+    return InstructRequest[ChatMessage, Tool](
+        messages=[UserMessage(content=content)], settings=settings or ModelSettings.none()
+    )
+
+
+def build_multi_audio_user_request(*, settings: ModelSettings | None = None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a request whose single user message holds two sequential silent audio chunks."""
+    content: list[ContentChunk] = [build_silent_audio_chunk(), build_silent_audio_chunk()]
+    return InstructRequest[ChatMessage, Tool](
+        messages=[UserMessage(content=content)], settings=settings or ModelSettings.none()
+    )
+
+
+def build_multiturn_image_request(*, settings: ModelSettings | None = None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a multi-turn request where each user message holds a red 4x4 image."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            UserMessage(content=[build_red_image_chunk()]),
+            AssistantMessage(content="b"),
+            UserMessage(content=[build_red_image_chunk()]),
+            AssistantMessage(content="d"),
+        ],
+        settings=settings or ModelSettings.none(),
+    )
+
+
+def build_multiturn_audio_request(*, settings: ModelSettings | None = None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a multi-turn request where each user message holds a silent audio chunk."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            UserMessage(content=[build_silent_audio_chunk()]),
+            AssistantMessage(content="b"),
+            UserMessage(content=[build_silent_audio_chunk()]),
+            AssistantMessage(content="d"),
+        ],
+        settings=settings or ModelSettings.none(),
     )
