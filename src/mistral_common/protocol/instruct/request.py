@@ -1,5 +1,5 @@
 from collections.abc import Iterable, Mapping
-from enum import Enum
+from enum import StrEnum, auto
 from typing import Any, Generic
 
 from pydantic import ConfigDict, Field, TypeAdapter, field_validator, model_validator
@@ -52,24 +52,24 @@ def _map_continue_final_message(
     return copied_messages
 
 
-class ResponseFormats(str, Enum):
+class ResponseFormats(StrEnum):
     r"""Enum of the different formats for an instruct response.
 
     Attributes:
         text: Response will be plain text.
-        json: Response will be a valid JSON object.
+        json_object: Response will be a valid JSON object.
         json_schema: Response will follow a custom JSON schema.
 
     Examples:
         >>> response_format = ResponseFormats.text
     """
 
-    text = "text"
-    json = "json_object"
-    json_schema = "json_schema"
+    text = auto()
+    json_object = auto()
+    json_schema = auto()
 
 
-class ReasoningEffort(str, Enum):
+class ReasoningEffort(StrEnum):
     r"""Controls the amount of reasoning effort the model applies during generation.
 
     Attributes:
@@ -81,8 +81,8 @@ class ReasoningEffort(str, Enum):
         Supported for tokenizer >= v15 only. Earlier versions will raise an error.
     """
 
-    none = "none"
-    high = "high"
+    none = auto()
+    high = auto()
 
 
 class ModelSettings(MistralBase):
@@ -141,7 +141,7 @@ class JsonSchema(MistralBase):
         return value
 
 
-class SchemaRenderingMode(str, Enum):
+class SchemaRenderingMode(StrEnum):
     r"""Select how a response-format schema is applied.
 
     Attributes:
@@ -149,8 +149,8 @@ class SchemaRenderingMode(str, Enum):
         model_settings: The schema is encoded in model settings unchanged.
     """
 
-    grammar = "grammar"
-    model_settings = "model_settings"
+    grammar = auto()
+    model_settings = auto()
 
 
 class ResponseFormat(MistralBase):
@@ -158,7 +158,7 @@ class ResponseFormat(MistralBase):
 
     Attributes:
         type: The response format type. Use `ResponseFormats.text` for plain text,
-            `ResponseFormats.json` for JSON output, or `ResponseFormats.json_schema`
+            `ResponseFormats.json_object` for JSON output, or `ResponseFormats.json_schema`
             for a custom JSON schema.
         json_schema: The JSON schema when `type` is `json_schema`.
 
@@ -191,7 +191,7 @@ class ResponseFormat(MistralBase):
             if purpose == SchemaRenderingMode.grammar and not self.json_schema.strict:
                 return _JSON_OBJECT_OR_ARRAY_SCHEMA
             return self.json_schema.custom_schema
-        if self.type == ResponseFormats.json:
+        if self.type == ResponseFormats.json_object:
             return _JSON_OBJECT_OR_ARRAY_SCHEMA
         return None
 
@@ -413,8 +413,6 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         if random_seed is None:
             random_seed = kwargs.pop("random_seed", None)
 
-        filtered_kwargs = cls._filter_cls_fields(kwargs)
-
         converted_messages: list[ChatMessage] = convert_openai_messages(messages)
         converted_messages = _map_continue_final_message(
             messages=converted_messages,
@@ -423,12 +421,14 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
 
         converted_tools = convert_openai_tools(tools) if tools is not None else None
 
-        return cls(
-            # Pydantic cannot express the runtime-selected request class's message generic here.
-            messages=converted_messages,  # type: ignore[arg-type]
-            tools=converted_tools,
-            random_seed=random_seed,
-            **filtered_kwargs,
+        return cls.model_validate(
+            {
+                "messages": converted_messages,
+                "tools": converted_tools,
+                "random_seed": random_seed,
+                **kwargs,
+            },
+            extra="ignore",
         )
 
 

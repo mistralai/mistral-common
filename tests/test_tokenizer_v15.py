@@ -506,7 +506,7 @@ def v15_json_schema_mistral_tokenizer() -> MistralTokenizer:
             id="text",
         ),
         pytest.param(
-            ResponseFormat(type=ResponseFormats.json),
+            ResponseFormat(type=ResponseFormats.json_object),
             '<s>[MODEL_SETTINGS]{"json_schema": {"anyOf": [{"type": "object"}, {"type": "array"}]}}'
             "[/MODEL_SETTINGS][INST]hi[/INST]",
             id="json",
@@ -568,7 +568,7 @@ def v15_reasoning_and_json_schema_mistral_tokenizer() -> MistralTokenizer:
             id="text",
         ),
         pytest.param(
-            ResponseFormat(type=ResponseFormats.json),
+            ResponseFormat(type=ResponseFormats.json_object),
             ReasoningEffort.high,
             '<s>[MODEL_SETTINGS]{"json_schema": {"anyOf": [{"type": "object"}, {"type": "array"}]}, '
             '"reasoning_effort": "high"}[/MODEL_SETTINGS][INST]hi[/INST]',

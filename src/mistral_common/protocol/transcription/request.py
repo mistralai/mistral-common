@@ -1,5 +1,5 @@
 import io
-from enum import Enum
+from enum import StrEnum, auto
 from typing import Any
 
 from pydantic import Field, model_validator
@@ -15,7 +15,7 @@ if is_soundfile_installed():
     import soundfile as sf
 
 
-class StreamingMode(str, Enum):
+class StreamingMode(StrEnum):
     r"""Streaming behavior for a transcription request.
 
     Attributes:
@@ -25,9 +25,9 @@ class StreamingMode(str, Enum):
         OFFLINE: Audio is sent in one go and the transcription is streamed back.
     """
 
-    DISABLED = "disabled"
-    ONLINE = "online"
-    OFFLINE = "offline"
+    DISABLED = auto()
+    ONLINE = auto()
+    OFFLINE = auto()
 
 
 class TranscriptionRequest(BaseCompletionRequest):
@@ -100,7 +100,7 @@ class TranscriptionRequest(BaseCompletionRequest):
         if isinstance(raw, MistralBase):
             raw = raw.model_dump()
         if isinstance(raw, dict) and "data" in raw:
-            values["audio"] = raw["data"]
+            return {**values, "audio": raw["data"]}
         return values
 
     def to_openai(self, exclude: tuple = (), **kwargs: Any) -> dict[str, list[dict[str, Any]]]:

@@ -4,7 +4,7 @@
 
 Mistral-Common is a preprocessing library for Mistral's Large Language Models (LLMs).
 It encodes requests for Instruct, Transcription or Fill-In-The-Middle (FIM) tasks to tokens and optionally processed images or audios.
-- Language: Python 3.10 to 3.15
+- Language: Python 3.11 to 3.15
 - Package Manager: uv
 - Testing: pytest
 - Formatting and Linting: Ruff
@@ -114,7 +114,7 @@ mistral-common/
 ### Style
 - Respect ruff and mypy rules
 - Naming: snake_case for functions/variables, PascalCase for classes
-- Use Python functionalities supported by Python 3.10
+- Use Python functionalities supported by Python 3.11
 - Call function arguments explicitly by keyword, not implicitly by position (e.g. `fn(x=1, y=2)`, not `fn(1, 2)`)
 
 ### Comments
@@ -130,7 +130,7 @@ mistral-common/
 
 ### Type Hints (Required)
 - Use Python's type hints extensively
-- Use modern (Python 3.10+) typing module types
+- Use modern (Python 3.11+) typing module types
 
 ### Error Handling
 - Use custom exceptions from `mistral_common.exceptions`
