@@ -178,7 +178,7 @@ class ImageChunk(BaseContentChunk):
         image_url_dict = openai_chunk["image_url"]
         assert isinstance(image_url_dict, dict) and "url" in image_url_dict, image_url_dict
 
-        url = maybe_strip_base64_data_url_prefix(image_url_dict["url"], strict=True)
+        url = maybe_strip_base64_data_url_prefix(image_url_dict["url"], strict=False)
 
         return cls.model_validate({"image": url})
 
@@ -480,7 +480,7 @@ class AudioChunk(BaseContentChunk):
         if isinstance(self.input_audio, bytes):
             content = base64.b64encode(self.input_audio).decode("utf-8")
         else:
-            content = maybe_strip_base64_data_url_prefix(self.input_audio, strict=True)
+            content = maybe_strip_base64_data_url_prefix(self.input_audio, strict=False)
         fmt = _detect_audio_format(self.input_audio)
         return {
             "type": self.type,

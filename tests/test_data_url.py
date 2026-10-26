@@ -155,9 +155,11 @@ def test_image_from_chunk_rejects_malformed_data_url(url: str) -> None:
         image_from_chunk(ImageURLChunk(image_url=url))
 
 
-def test_image_chunk_from_openai_rejects_malformed_data_url() -> None:
+def test_image_chunk_from_openai_malformed_data_url_fails_in_validator() -> None:
+    # from_openai strips leniently; the malformed data URL then fails in the
+    # image validator, like a direct ImageChunk(image=...) construction.
     openai_chunk = {"type": "image_url", "image_url": {"url": "data:text/plain,hello"}}
-    with pytest.raises(ValueError, match="Invalid base64 data URL"):
+    with pytest.raises(RuntimeError, match="Encountered an error when loading image"):
         ImageChunk.from_openai(openai_chunk)
 
 
