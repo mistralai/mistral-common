@@ -4,10 +4,9 @@ These builders construct requests whose shape is identical across tokenizer vers
 Expected token IDs and decoded text stay in each version's test module.
 """
 
-import numpy as np
 from PIL import Image
 
-from mistral_common.protocol.instruct.chunk import AudioChunk, ContentChunk, ImageChunk, TextChunk
+from mistral_common.protocol.instruct.chunk import ContentChunk, ImageChunk, TextChunk
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
@@ -17,7 +16,6 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.request import InstructRequest, ModelSettings
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
-from mistral_common.tokens.tokenizers.audio import Audio
 
 
 def build_normal_request(*, settings: ModelSettings | None = None) -> InstructRequest[ChatMessage, Tool]:
@@ -171,12 +169,6 @@ def build_blue_image_chunk() -> ImageChunk:
     return ImageChunk(image=Image.new(mode="RGB", size=(4, 4), color="blue"))
 
 
-def build_silent_audio_chunk(*, num_samples: int = 2400, sampling_rate: int = 24_000) -> AudioChunk:
-    r"""Build an audio chunk holding silence."""
-    audio = Audio(audio_array=np.zeros(shape=num_samples, dtype=np.float32), sampling_rate=sampling_rate, format="wav")
-    return AudioChunk.from_audio(audio=audio)
-
-
 def build_image_user_request(*, settings: ModelSettings | None = None) -> InstructRequest[ChatMessage, Tool]:
     r"""Build a request whose single user message holds a red 4x4 image followed by text."""
     content: list[ContentChunk] = [build_red_image_chunk(), TextChunk(text="a")]
@@ -193,32 +185,9 @@ def build_text_then_image_user_request(*, settings: ModelSettings | None = None)
     )
 
 
-def build_audio_user_request(*, settings: ModelSettings | None = None) -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request whose single user message holds a silent audio chunk."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[UserMessage(content=[build_silent_audio_chunk()])], settings=settings or ModelSettings.none()
-    )
-
-
-def build_text_then_audio_user_request(*, settings: ModelSettings | None = None) -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request whose single user message holds text followed by a silent audio chunk."""
-    content: list[ContentChunk] = [TextChunk(text="a"), build_silent_audio_chunk()]
-    return InstructRequest[ChatMessage, Tool](
-        messages=[UserMessage(content=content)], settings=settings or ModelSettings.none()
-    )
-
-
 def build_multi_image_user_request(*, settings: ModelSettings | None = None) -> InstructRequest[ChatMessage, Tool]:
     r"""Build a request whose single user message holds two sequential images (red then blue)."""
     content: list[ContentChunk] = [build_red_image_chunk(), build_blue_image_chunk()]
-    return InstructRequest[ChatMessage, Tool](
-        messages=[UserMessage(content=content)], settings=settings or ModelSettings.none()
-    )
-
-
-def build_multi_audio_user_request(*, settings: ModelSettings | None = None) -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request whose single user message holds two sequential silent audio chunks."""
-    content: list[ContentChunk] = [build_silent_audio_chunk(), build_silent_audio_chunk()]
     return InstructRequest[ChatMessage, Tool](
         messages=[UserMessage(content=content)], settings=settings or ModelSettings.none()
     )
@@ -231,19 +200,6 @@ def build_multiturn_image_request(*, settings: ModelSettings | None = None) -> I
             UserMessage(content=[build_red_image_chunk()]),
             AssistantMessage(content="b"),
             UserMessage(content=[build_red_image_chunk()]),
-            AssistantMessage(content="d"),
-        ],
-        settings=settings or ModelSettings.none(),
-    )
-
-
-def build_multiturn_audio_request(*, settings: ModelSettings | None = None) -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a multi-turn request where each user message holds a silent audio chunk."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content=[build_silent_audio_chunk()]),
-            AssistantMessage(content="b"),
-            UserMessage(content=[build_silent_audio_chunk()]),
             AssistantMessage(content="d"),
         ],
         settings=settings or ModelSettings.none(),
