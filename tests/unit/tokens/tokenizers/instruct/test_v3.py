@@ -21,8 +21,11 @@ from mistral_common.tokens.tokenizers.image import DATASET_MEAN, DATASET_STD
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_empty_assistant_request,
+    build_normal_request,
     build_prefixed_final_message_request,
     build_system_message_request,
+    build_system_multiturn_request,
+    build_system_singleturn_request,
     build_system_tools_multiturn_request,
     build_tool_call_request,
     build_tools_multiturn_request,
@@ -31,6 +34,12 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
 from tests.utils import assert_tokenized_equal, decode_keep
 
 # fmt: off
+_SPM_NORMAL_TOKENS = [1, 3, 1032, 4, 1055, 2, 3, 1045, 4, 1049, 2]
+_TEKKEN_NORMAL_TOKENS = [1, 3, 1097, 4, 1098, 2, 3, 1099, 4, 1100, 2]
+_SPM_SYSTEM_SINGLETURN_TOKENS = [1, 3, 17889, 23294, 781, 781, 29476, 4]
+_TEKKEN_SYSTEM_SINGLETURN_TOKENS = [1, 3, 101289, 58343, 1267, 1097, 4]
+_SPM_SYSTEM_MULTITURN_TOKENS = [1, 3, 1032, 4, 1055, 2, 3, 17889, 23294, 781, 781, 29485, 4, 1049, 2]
+_TEKKEN_SYSTEM_MULTITURN_TOKENS = [1, 3, 1097, 4, 1098, 2, 3, 101289, 58343, 1267, 1099, 4, 1100, 2]
 _SPM_TOOLS_SINGLETURN_TOKENS = [
     1, 6, 1501, 7567, 1891, 2032, 1113, 3396, 1316, 1113, 3396, 2032, 10598, 1629, 2032, 1113, 7230, 29508, 1316,
     1113, 7286, 2032, 1113, 29508, 1316, 1113, 12206, 2032, 1139, 1743, 10925, 7, 3, 1032, 4
@@ -171,6 +180,12 @@ _RED_16X16_IMAGE = np.broadcast_to(
     shape=(3, 16, 16),
 )
 
+_SPM_NORMAL_EXPECTED = Tokenized(tokens=_SPM_NORMAL_TOKENS)
+_TEKKEN_NORMAL_EXPECTED = Tokenized(tokens=_TEKKEN_NORMAL_TOKENS)
+_SPM_SYSTEM_SINGLETURN_EXPECTED = Tokenized(tokens=_SPM_SYSTEM_SINGLETURN_TOKENS)
+_TEKKEN_SYSTEM_SINGLETURN_EXPECTED = Tokenized(tokens=_TEKKEN_SYSTEM_SINGLETURN_TOKENS)
+_SPM_SYSTEM_MULTITURN_EXPECTED = Tokenized(tokens=_SPM_SYSTEM_MULTITURN_TOKENS)
+_TEKKEN_SYSTEM_MULTITURN_EXPECTED = Tokenized(tokens=_TEKKEN_SYSTEM_MULTITURN_TOKENS)
 _SPM_TOOLS_SINGLETURN_EXPECTED = Tokenized(tokens=_SPM_TOOLS_SINGLETURN_TOKENS)
 _TEKKEN_TOOLS_SINGLETURN_EXPECTED = Tokenized(tokens=_TEKKEN_TOOLS_SINGLETURN_TOKENS)
 _SPM_TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_SPM_TOOLS_MULTITURN_TOKENS)
@@ -209,6 +224,12 @@ _TEKKEN_MM_TEXT_THEN_IMAGE_SYSTEM_PROMPT_EXPECTED = Tokenized(
     images=[_RED_16X16_IMAGE],
 )
 
+_SPM_NORMAL_TEXT = "<s>[INST]▁a[/INST]▁b</s>[INST]▁c[/INST]▁d</s>"
+_TEKKEN_NORMAL_TEXT = "<s>[INST]a[/INST]b</s>[INST]c[/INST]d</s>"
+_SPM_SYSTEM_SINGLETURN_TEXT = "<s>[INST]▁SYSTEM<0x0A><0x0A>a[/INST]"
+_TEKKEN_SYSTEM_SINGLETURN_TEXT = "<s>[INST]SYSTEM\n\na[/INST]"
+_SPM_SYSTEM_MULTITURN_TEXT = "<s>[INST]▁a[/INST]▁b</s>[INST]▁SYSTEM<0x0A><0x0A>c[/INST]▁d</s>"
+_TEKKEN_SYSTEM_MULTITURN_TEXT = "<s>[INST]a[/INST]b</s>[INST]SYSTEM\n\nc[/INST]d</s>"
 _SPM_TOOLS_SINGLETURN_TEXT = (
     '<s>[AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":'
     '▁{"name":▁"tool1",▁"description":▁"1",▁"parameters":▁{}}}][/AVAILABLE_TOOLS][INST]▁a[/INST]'
@@ -501,6 +522,48 @@ def _build_tool_call_and_content_request() -> InstructRequest[ChatMessage, Tool]
 @pytest.mark.parametrize(
     argnames="backend, request_builder, expected, expected_text",
     argvalues=[
+        pytest.param(
+            "spm",
+            build_normal_request,
+            _SPM_NORMAL_EXPECTED,
+            _SPM_NORMAL_TEXT,
+            id="spm-normal",
+        ),
+        pytest.param(
+            "tekken",
+            build_normal_request,
+            _TEKKEN_NORMAL_EXPECTED,
+            _TEKKEN_NORMAL_TEXT,
+            id="tekken-normal",
+        ),
+        pytest.param(
+            "spm",
+            build_system_singleturn_request,
+            _SPM_SYSTEM_SINGLETURN_EXPECTED,
+            _SPM_SYSTEM_SINGLETURN_TEXT,
+            id="spm-system-singleturn",
+        ),
+        pytest.param(
+            "tekken",
+            build_system_singleturn_request,
+            _TEKKEN_SYSTEM_SINGLETURN_EXPECTED,
+            _TEKKEN_SYSTEM_SINGLETURN_TEXT,
+            id="tekken-system-singleturn",
+        ),
+        pytest.param(
+            "spm",
+            build_system_multiturn_request,
+            _SPM_SYSTEM_MULTITURN_EXPECTED,
+            _SPM_SYSTEM_MULTITURN_TEXT,
+            id="spm-system-multiturn",
+        ),
+        pytest.param(
+            "tekken",
+            build_system_multiturn_request,
+            _TEKKEN_SYSTEM_MULTITURN_EXPECTED,
+            _TEKKEN_SYSTEM_MULTITURN_TEXT,
+            id="tekken-system-multiturn",
+        ),
         pytest.param(
             "spm",
             build_tools_singleturn_request,
