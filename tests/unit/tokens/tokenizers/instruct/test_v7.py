@@ -999,7 +999,7 @@ def _build_assistant_think_request() -> InstructRequest[ChatMessage, Tool]:
         ),
         pytest.param(
             "spm",
-            build_tool_message_request,
+            partial(build_tool_message_request, settings=None),
             _SPM_TOOL_MESSAGE_EXPECTED,
             _SPM_TOOL_MESSAGE_TEXT,
             id="spm-shared-tool-message",
@@ -1034,7 +1034,7 @@ def _build_assistant_think_request() -> InstructRequest[ChatMessage, Tool]:
         ),
         pytest.param(
             "no_audio",
-            build_tool_message_request,
+            partial(build_tool_message_request, settings=None),
             _NO_AUDIO_TOOL_MESSAGE_EXPECTED,
             _NO_AUDIO_TOOL_MESSAGE_TEXT,
             id="no-audio-shared-tool-message",
