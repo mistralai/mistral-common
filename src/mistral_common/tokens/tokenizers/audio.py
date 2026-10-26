@@ -140,7 +140,7 @@ class Audio:
         """
         assert_soundfile_installed()
 
-        audio_base64 = maybe_strip_base64_data_url_prefix(audio_base64, strict=True)
+        audio_base64 = maybe_strip_base64_data_url_prefix(audio_base64)
 
         try:
             audio_bytes = base64.b64decode(audio_base64)

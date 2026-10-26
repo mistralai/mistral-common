@@ -37,7 +37,7 @@ def _detect_audio_format(data: str | bytes) -> str:
     assert_soundfile_installed()
 
     if isinstance(data, str):
-        payload = maybe_strip_base64_data_url_prefix(data, strict=True)
+        payload = maybe_strip_base64_data_url_prefix(data)
         try:
             audio_bytes = base64.b64decode(payload)
         except ValueError as e:
@@ -172,13 +172,14 @@ class ImageChunk(BaseContentChunk):
         Raises:
             AssertionError: If the chunk type is not `image_url` or the
                 `image_url` entry is malformed.
+            ValueError: If the URL is a malformed data URL.
         """
         assert openai_chunk.get("type") == "image_url", openai_chunk
 
         image_url_dict = openai_chunk["image_url"]
         assert isinstance(image_url_dict, dict) and "url" in image_url_dict, image_url_dict
 
-        url = maybe_strip_base64_data_url_prefix(image_url_dict["url"], strict=True)
+        url = maybe_strip_base64_data_url_prefix(image_url_dict["url"])
 
         return cls.model_validate({"image": url})
 
@@ -480,7 +481,7 @@ class AudioChunk(BaseContentChunk):
         if isinstance(self.input_audio, bytes):
             content = base64.b64encode(self.input_audio).decode("utf-8")
         else:
-            content = maybe_strip_base64_data_url_prefix(self.input_audio, strict=True)
+            content = maybe_strip_base64_data_url_prefix(self.input_audio)
         fmt = _detect_audio_format(self.input_audio)
         return {
             "type": self.type,
