@@ -4,10 +4,21 @@ These builders construct requests whose shape is identical across tokenizer vers
 Expected token IDs and decoded text stay in each version's test module.
 """
 
+import base64
+from io import BytesIO
+
 import numpy as np
 from PIL import Image
 
-from mistral_common.protocol.instruct.chunk import AudioChunk, ContentChunk, ImageChunk, TextChunk, ThinkChunk
+from mistral_common.protocol.instruct.chunk import (
+    AudioChunk,
+    AudioURLChunk,
+    ContentChunk,
+    ImageChunk,
+    ImageURLChunk,
+    TextChunk,
+    ThinkChunk,
+)
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
@@ -716,6 +727,103 @@ def build_assistant_think_request(*, settings: ModelSettings | None) -> Instruct
         messages=[
             UserMessage(content="a"),
             AssistantMessage(content=[ThinkChunk(thinking="t"), TextChunk(text="b")]),
+        ],
+        settings=settings or ModelSettings.none(),
+    )
+
+
+# --- Multimodal data builders ---
+
+
+def build_silent_audio_url_chunk() -> AudioURLChunk:
+    r"""Build a silent audio URL chunk (data URI)."""
+    audio_chunk = build_silent_audio_chunk()
+    return AudioURLChunk(audio_url=str(audio_chunk.input_audio))
+
+
+def build_red_image_url_chunk() -> ImageURLChunk:
+    r"""Build a 4x4 solid-red PNG image URL chunk (data URI)."""
+    img = Image.new("RGB", (4, 4), "red")
+    buf = BytesIO()
+    img.save(buf, "PNG")
+    data_url = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"
+    return ImageURLChunk(image_url=data_url)
+
+
+# --- Arbitrary tool call IDs ---
+
+
+def build_arbitrary_tool_call_id_request(
+    tool_call_id: str, *, settings: ModelSettings | None
+) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a request with a tool call using an arbitrary (non-standard) tool call ID."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(
+                content="",
+                tool_calls=[
+                    ToolCall(
+                        id=tool_call_id,
+                        function=FunctionCall(name="f", arguments="{}"),
+                    )
+                ],
+            ),
+            ToolMessage(content="b", tool_call_id=tool_call_id),
+        ],
+        settings=settings or ModelSettings.none(),
+    )
+
+
+# --- System message with audio ---
+
+
+def build_system_audio_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a request whose system message contains text and audio chunks."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            SystemMessage(content=[TextChunk(text="System with content"), build_silent_audio_chunk()]),
+            UserMessage(content="Hello"),
+        ],
+        settings=settings or ModelSettings.none(),
+    )
+
+
+# --- User message with audio URL ---
+
+
+def build_user_audio_url_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a request whose user message contains text and an audio URL chunk."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            UserMessage(content=[TextChunk(text="Here is content"), build_silent_audio_url_chunk()]),
+        ],
+        settings=settings or ModelSettings.none(),
+    )
+
+
+# --- User message with image URL ---
+
+
+def build_user_image_url_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a request whose user message contains text and an image URL chunk."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            UserMessage(content=[TextChunk(text="Here is content"), build_red_image_url_chunk()]),
+        ],
+        settings=settings or ModelSettings.none(),
+    )
+
+
+# --- System text then user audio ---
+
+
+def build_system_then_audio_user_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a request with a text-only system message followed by a user message with audio."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            SystemMessage(content="hello"),
+            UserMessage(content=[build_silent_audio_chunk()]),
         ],
         settings=settings or ModelSettings.none(),
     )
