@@ -31,6 +31,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_assistant_text_request,
     build_assistant_tool_calls_request,
     build_audio_user_request,
+    build_call_with_id_before_last_user_request,
     build_closed_think_request,
     build_closed_think_then_text_request,
     build_empty_assistant_request,
@@ -48,8 +49,10 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_open_think_request,
     build_open_think_text_and_call_request,
     build_prefixed_text_request,
+    build_prefixed_tool_call_and_content_request,
     build_system_and_user_words_request,
     build_system_audio_request,
+    build_system_list_content_request,
     build_system_message_multiturn_request,
     build_system_message_prefixed_final_request,
     build_system_message_request,
@@ -61,6 +64,8 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_system_two_closed_thinks_request,
     build_text_then_audio_user_request,
     build_text_then_image_user_request,
+    build_tool_call_and_content_request,
+    build_tool_calls_with_two_results_request,
     build_tool_message_request,
     build_tool_result_image_request,
     build_tool_result_text_chunks_request,
@@ -68,9 +73,15 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_tools_before_first_user_request,
     build_tools_multiturn_request,
     build_tools_singleturn_request,
+    build_truncation_drop_by_chunk_1_request,
+    build_truncation_drop_by_chunk_2_request,
+    build_truncation_drop_first_assistant_request,
+    build_truncation_full_convo_request,
+    build_truncation_keep_sys_and_last_message_request,
     build_truncation_last_user_at_limit_request,
     build_truncation_last_user_one_over_request,
     build_truncation_last_user_too_long_request,
+    build_truncation_start_with_assistant_request,
     build_truncation_system_prompt_too_long_request,
     build_user_audio_url_request,
     build_user_image_url_request,
@@ -187,6 +198,36 @@ _TOOLS_BEFORE_FIRST_USER_TEXT = (
     '"parameters": {}}}][/AVAILABLE_TOOLS][INST]a[/INST]b</s>[INST]c[/INST]'
 )
 _SYSTEM_THEN_USER_AUDIO_TEXT = "<s>[SYSTEM_PROMPT]hello[/SYSTEM_PROMPT][INST][BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
+_SHARED_TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_TEXT = (
+    "<s>[SYSTEM_PROMPT]a[/SYSTEM_PROMPT][SYSTEM_PROMPT]a[/SYSTEM_PROMPT][INST]bbbbbbb[/INST]"
+)
+_SHARED_TRUNCATION_DROP_FIRST_ASSISTANT_TEXT = "<s>[INST]b[/INST][INST]a[/INST][INST]aaaaaaa[/INST]"
+_SHARED_TRUNCATION_START_WITH_ASSISTANT_TEXT = "<s>b</s>[INST]a[/INST][INST]aaaaaaa[/INST]"
+_SHARED_TRUNCATION_DROP_BY_CHUNK_1_TEXT = "<s>[INST]a[/INST]bbbbbbb</s>"
+_SHARED_TRUNCATION_DROP_BY_CHUNK_2_TEXT = "<s>[INST]aaaaaaa[/INST]"
+_SHARED_TRUNCATION_FULL_CONVO_TEXT = (
+    "<s>[SYSTEM_PROMPT]a[/SYSTEM_PROMPT][INST]a[/INST]a</s>[SYSTEM_PROMPT]b[/SYSTEM_PROMPT][INST]a[/INST]"
+)
+_SHARED_TOOL_CALL_AND_CONTENT_TEXT = (
+    '<s>[AVAILABLE_TOOLS][{"type": "function", "function": {"name": "t1", "description": "", "parameters": {}'
+    '}}, {"type": "function", "function": {"name": "t2", "description": "", "parameters": {}}}]['
+    "/AVAILABLE_TOOLS][INST]a[/INST]b1b2[TOOL_CALLS]t1[ARGS]{}[TOOL_CALLS]t2[ARGS]{}</s>"
+)
+_SHARED_PREFIXED_TOOL_CALL_AND_CONTENT_TEXT = (
+    '<s>[AVAILABLE_TOOLS][{"type": "function", "function": {"name": "t1", "description": "", "parameters": {}'
+    '}}, {"type": "function", "function": {"name": "t2", "description": "", "parameters": {}}}]['
+    "/AVAILABLE_TOOLS][INST]a[/INST]b1b2[TOOL_CALLS]t1[ARGS]{}[TOOL_CALLS]t2[ARGS]{}"
+)
+_SHARED_TOOL_CALLS_WITH_TWO_RESULTS_TEXT = (
+    '<s>[AVAILABLE_TOOLS][{"type": "function", "function": {"name": "t1", "description": "", "parameters": {}'
+    '}}, {"type": "function", "function": {"name": "t2", "description": "", "parameters": {}}}]['
+    "/AVAILABLE_TOOLS][INST]a[/INST]b1b2[TOOL_CALLS]t1[ARGS]{}[TOOL_CALLS]t2[ARGS]{}</s>[TOOL_RESULTS]"
+    "r1[/TOOL_RESULTS][TOOL_RESULTS]r2[/TOOL_RESULTS]"
+)
+_SHARED_SYSTEM_LIST_CONTENT_TEXT = "<s>[SYSTEM_PROMPT]s[/SYSTEM_PROMPT][INST]a[/INST]"
+_SHARED_CALL_WITH_ID_BEFORE_LAST_USER_TEXT = '<s>[INST]a[/INST][TOOL_CALLS]a_a_a[ARGS]"blabla"</s>[INST]c[/INST]'
+_SHARED_PREFIXED_TEXT_TEXT = "<s>[INST]a[/INST]hello"
+
 _TOOL_RESULT_IMAGE_TEXT = (
     "<s>[INST]a[/INST][TOOL_CALLS]F1[ARGS]{}</s>[TOOL_RESULTS][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END][/TOOL_RESULTS]"
 )
@@ -240,6 +281,53 @@ _MULTI_IMAGE_USER_TOKENS = [1, 3, 10, 10, 12, 10, 10, 13, 10, 10, 12, 10, 10, 13
 _MULTITURN_IMAGE_TOKENS = [1, 3, 10, 10, 12, 10, 10, 13, 4, 198, 2, 3, 10, 10, 12, 10, 10, 13, 4, 200, 2]
 _MULTI_AUDIO_USER_TOKENS = [1, 3, 25, 24, 24, 25, 24, 24, 4]
 _MULTITURN_AUDIO_TOKENS = [1, 3, 25, 24, 24, 4, 198, 2, 3, 25, 24, 24, 4, 200, 2]
+_SHARED_TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_TOKENS = [
+    1, 17, 197, 18, 17, 197, 18, 3, 198, 198, 198, 198, 198, 198, 198, 4
+]
+_SHARED_TRUNCATION_DROP_FIRST_ASSISTANT_TOKENS = [1, 3, 198, 4, 3, 197, 4, 3, 197, 197, 197, 197, 197, 197, 197, 4]
+_SHARED_TRUNCATION_START_WITH_ASSISTANT_TOKENS = [1, 198, 2, 3, 197, 4, 3, 197, 197, 197, 197, 197, 197, 197, 4]
+_SHARED_TRUNCATION_DROP_BY_CHUNK_1_TOKENS = [1, 3, 197, 4, 198, 198, 198, 198, 198, 198, 198, 2]
+_SHARED_TRUNCATION_DROP_BY_CHUNK_2_TOKENS = [1, 3, 197, 197, 197, 197, 197, 197, 197, 4]
+_SHARED_TRUNCATION_FULL_CONVO_TOKENS = [1, 17, 197, 18, 3, 197, 4, 197, 2, 17, 198, 18, 3, 197, 4]
+_SHARED_TOOL_CALL_AND_CONTENT_TOKENS = [
+    1, 5, 191, 223, 134, 216, 221, 212, 201, 134, 158, 132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 144,
+    132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 158, 132, 223, 134, 210, 197, 209, 201, 134, 158, 132,
+    134, 216, 149, 134, 144, 132, 134, 200, 201, 215, 199, 214, 205, 212, 216, 205, 211, 210, 134, 158, 132, 134,
+    134, 144, 132, 134, 212, 197, 214, 197, 209, 201, 216, 201, 214, 215, 134, 158, 132, 223, 225, 225, 225, 144,
+    132, 223, 134, 216, 221, 212, 201, 134, 158, 132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 144, 132,
+    134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 158, 132, 223, 134, 210, 197, 209, 201, 134, 158, 132, 134,
+    216, 150, 134, 144, 132, 134, 200, 201, 215, 199, 214, 205, 212, 216, 205, 211, 210, 134, 158, 132, 134, 134,
+    144, 132, 134, 212, 197, 214, 197, 209, 201, 216, 201, 214, 215, 134, 158, 132, 223, 225, 225, 225, 193, 6, 3,
+    197, 4, 198, 149, 198, 150, 9, 216, 149, 32, 223, 225, 9, 216, 150, 32, 223, 225, 2
+]
+_SHARED_PREFIXED_TOOL_CALL_AND_CONTENT_TOKENS = [
+    1, 5, 191, 223, 134, 216, 221, 212, 201, 134, 158, 132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 144,
+    132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 158, 132, 223, 134, 210, 197, 209, 201, 134, 158, 132,
+    134, 216, 149, 134, 144, 132, 134, 200, 201, 215, 199, 214, 205, 212, 216, 205, 211, 210, 134, 158, 132, 134,
+    134, 144, 132, 134, 212, 197, 214, 197, 209, 201, 216, 201, 214, 215, 134, 158, 132, 223, 225, 225, 225, 144,
+    132, 223, 134, 216, 221, 212, 201, 134, 158, 132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 144, 132,
+    134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 158, 132, 223, 134, 210, 197, 209, 201, 134, 158, 132, 134,
+    216, 150, 134, 144, 132, 134, 200, 201, 215, 199, 214, 205, 212, 216, 205, 211, 210, 134, 158, 132, 134, 134,
+    144, 132, 134, 212, 197, 214, 197, 209, 201, 216, 201, 214, 215, 134, 158, 132, 223, 225, 225, 225, 193, 6, 3,
+    197, 4, 198, 149, 198, 150, 9, 216, 149, 32, 223, 225, 9, 216, 150, 32, 223, 225
+]
+_SHARED_TOOL_CALLS_WITH_TWO_RESULTS_TOKENS = [
+    1, 5, 191, 223, 134, 216, 221, 212, 201, 134, 158, 132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 144,
+    132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 158, 132, 223, 134, 210, 197, 209, 201, 134, 158, 132,
+    134, 216, 149, 134, 144, 132, 134, 200, 201, 215, 199, 214, 205, 212, 216, 205, 211, 210, 134, 158, 132, 134,
+    134, 144, 132, 134, 212, 197, 214, 197, 209, 201, 216, 201, 214, 215, 134, 158, 132, 223, 225, 225, 225, 144,
+    132, 223, 134, 216, 221, 212, 201, 134, 158, 132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 144, 132,
+    134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 158, 132, 223, 134, 210, 197, 209, 201, 134, 158, 132, 134,
+    216, 150, 134, 144, 132, 134, 200, 201, 215, 199, 214, 205, 212, 216, 205, 211, 210, 134, 158, 132, 134, 134,
+    144, 132, 134, 212, 197, 214, 197, 209, 201, 216, 201, 214, 215, 134, 158, 132, 223, 225, 225, 225, 193, 6, 3,
+    197, 4, 198, 149, 198, 150, 9, 216, 149, 32, 223, 225, 9, 216, 150, 32, 223, 225, 2, 7, 214, 149, 8, 7, 214, 150,
+    8
+]
+_SHARED_SYSTEM_LIST_CONTENT_TOKENS = [1, 17, 215, 18, 3, 197, 4]
+_SHARED_CALL_WITH_ID_BEFORE_LAST_USER_TOKENS = [
+    1, 3, 197, 4, 9, 197, 195, 197, 195, 197, 32, 134, 198, 208, 197, 198, 208, 197, 134, 2, 3, 199, 4
+]
+_SHARED_PREFIXED_TEXT_TOKENS = [1, 3, 197, 4, 204, 201, 208, 208, 211]
 # fmt: on
 
 _SHARED_NORMAL_EXPECTED = Tokenized(tokens=_SHARED_NORMAL_TOKENS)
@@ -263,6 +351,23 @@ _MULTI_IMAGE_USER_EXPECTED = Tokenized(tokens=_MULTI_IMAGE_USER_TOKENS, images=[
 _MULTITURN_IMAGE_EXPECTED = Tokenized(tokens=_MULTITURN_IMAGE_TOKENS, images=[_RED_4X4_IMAGE, _RED_4X4_IMAGE])
 _MULTI_AUDIO_USER_EXPECTED = Tokenized(tokens=_MULTI_AUDIO_USER_TOKENS, audios=[_SILENT_AUDIO, _SILENT_AUDIO])
 _MULTITURN_AUDIO_EXPECTED = Tokenized(tokens=_MULTITURN_AUDIO_TOKENS, audios=[_SILENT_AUDIO, _SILENT_AUDIO])
+_SHARED_TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_EXPECTED = Tokenized(
+    tokens=_SHARED_TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_TOKENS
+)
+_SHARED_TRUNCATION_DROP_FIRST_ASSISTANT_EXPECTED = Tokenized(tokens=_SHARED_TRUNCATION_DROP_FIRST_ASSISTANT_TOKENS)
+_SHARED_TRUNCATION_START_WITH_ASSISTANT_EXPECTED = Tokenized(tokens=_SHARED_TRUNCATION_START_WITH_ASSISTANT_TOKENS)
+_SHARED_TRUNCATION_DROP_BY_CHUNK_1_EXPECTED = Tokenized(tokens=_SHARED_TRUNCATION_DROP_BY_CHUNK_1_TOKENS)
+_SHARED_TRUNCATION_DROP_BY_CHUNK_2_EXPECTED = Tokenized(tokens=_SHARED_TRUNCATION_DROP_BY_CHUNK_2_TOKENS)
+_SHARED_TRUNCATION_FULL_CONVO_EXPECTED = Tokenized(tokens=_SHARED_TRUNCATION_FULL_CONVO_TOKENS)
+_SHARED_TOOL_CALL_AND_CONTENT_EXPECTED = Tokenized(tokens=_SHARED_TOOL_CALL_AND_CONTENT_TOKENS)
+_SHARED_PREFIXED_TOOL_CALL_AND_CONTENT_EXPECTED = Tokenized(
+    tokens=_SHARED_PREFIXED_TOOL_CALL_AND_CONTENT_TOKENS,
+    prefix_ids=[198, 149, 198, 150, 9, 216, 149, 32, 223, 225, 9, 216, 150, 32, 223, 225],
+)
+_SHARED_TOOL_CALLS_WITH_TWO_RESULTS_EXPECTED = Tokenized(tokens=_SHARED_TOOL_CALLS_WITH_TWO_RESULTS_TOKENS)
+_SHARED_SYSTEM_LIST_CONTENT_EXPECTED = Tokenized(tokens=_SHARED_SYSTEM_LIST_CONTENT_TOKENS)
+_SHARED_CALL_WITH_ID_BEFORE_LAST_USER_EXPECTED = Tokenized(tokens=_SHARED_CALL_WITH_ID_BEFORE_LAST_USER_TOKENS)
+_SHARED_PREFIXED_TEXT_EXPECTED = Tokenized(tokens=_SHARED_PREFIXED_TEXT_TOKENS, prefix_ids=[204, 201, 208, 208, 211])
 
 _SHARED_NORMAL_TEXT = "<s>[INST]a[/INST]b</s>[INST]c[/INST]d</s>"
 _SHARED_TOOLS_SINGLETURN_TEXT = (
@@ -779,6 +884,153 @@ def image_tokenizer() -> InstructTokenizerV13:
             _SYSTEM_THEN_AUDIO_USER_EXPECTED_V2,
             _SYSTEM_THEN_AUDIO_USER_TEXT,
             id="audio-shared-system-then-audio-user",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_truncation_keep_sys_and_last_message_request, settings=None),
+            _SHARED_TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_EXPECTED,
+            _SHARED_TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_TEXT,
+            id="no-think-shared-truncation-keep-sys-and-last-message",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_truncation_keep_sys_and_last_message_request, settings=None),
+            _SHARED_TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_EXPECTED,
+            _SHARED_TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_TEXT,
+            id="audio-shared-truncation-keep-sys-and-last-message",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_truncation_drop_first_assistant_request, settings=None),
+            _SHARED_TRUNCATION_DROP_FIRST_ASSISTANT_EXPECTED,
+            _SHARED_TRUNCATION_DROP_FIRST_ASSISTANT_TEXT,
+            id="no-think-shared-truncation-drop-first-assistant",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_truncation_drop_first_assistant_request, settings=None),
+            _SHARED_TRUNCATION_DROP_FIRST_ASSISTANT_EXPECTED,
+            _SHARED_TRUNCATION_DROP_FIRST_ASSISTANT_TEXT,
+            id="audio-shared-truncation-drop-first-assistant",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_truncation_start_with_assistant_request, settings=None),
+            _SHARED_TRUNCATION_START_WITH_ASSISTANT_EXPECTED,
+            _SHARED_TRUNCATION_START_WITH_ASSISTANT_TEXT,
+            id="no-think-shared-truncation-start-with-assistant",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_truncation_start_with_assistant_request, settings=None),
+            _SHARED_TRUNCATION_START_WITH_ASSISTANT_EXPECTED,
+            _SHARED_TRUNCATION_START_WITH_ASSISTANT_TEXT,
+            id="audio-shared-truncation-start-with-assistant",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_truncation_drop_by_chunk_1_request, settings=None),
+            _SHARED_TRUNCATION_DROP_BY_CHUNK_1_EXPECTED,
+            _SHARED_TRUNCATION_DROP_BY_CHUNK_1_TEXT,
+            id="no-think-shared-truncation-drop-by-chunk-1",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_truncation_drop_by_chunk_1_request, settings=None),
+            _SHARED_TRUNCATION_DROP_BY_CHUNK_1_EXPECTED,
+            _SHARED_TRUNCATION_DROP_BY_CHUNK_1_TEXT,
+            id="audio-shared-truncation-drop-by-chunk-1",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_truncation_drop_by_chunk_2_request, settings=None),
+            _SHARED_TRUNCATION_DROP_BY_CHUNK_2_EXPECTED,
+            _SHARED_TRUNCATION_DROP_BY_CHUNK_2_TEXT,
+            id="no-think-shared-truncation-drop-by-chunk-2",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_truncation_drop_by_chunk_2_request, settings=None),
+            _SHARED_TRUNCATION_DROP_BY_CHUNK_2_EXPECTED,
+            _SHARED_TRUNCATION_DROP_BY_CHUNK_2_TEXT,
+            id="audio-shared-truncation-drop-by-chunk-2",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_truncation_full_convo_request, settings=None),
+            _SHARED_TRUNCATION_FULL_CONVO_EXPECTED,
+            _SHARED_TRUNCATION_FULL_CONVO_TEXT,
+            id="no-think-shared-truncation-full-convo",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_truncation_full_convo_request, settings=None),
+            _SHARED_TRUNCATION_FULL_CONVO_EXPECTED,
+            _SHARED_TRUNCATION_FULL_CONVO_TEXT,
+            id="audio-shared-truncation-full-convo",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_tool_call_and_content_request, settings=None),
+            _SHARED_TOOL_CALL_AND_CONTENT_EXPECTED,
+            _SHARED_TOOL_CALL_AND_CONTENT_TEXT,
+            id="no-think-shared-tool-call-and-content",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_tool_call_and_content_request, settings=None),
+            _SHARED_TOOL_CALL_AND_CONTENT_EXPECTED,
+            _SHARED_TOOL_CALL_AND_CONTENT_TEXT,
+            id="audio-shared-tool-call-and-content",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_prefixed_tool_call_and_content_request, settings=None),
+            _SHARED_PREFIXED_TOOL_CALL_AND_CONTENT_EXPECTED,
+            _SHARED_PREFIXED_TOOL_CALL_AND_CONTENT_TEXT,
+            id="no-think-shared-prefixed-tool-call-and-content",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_prefixed_tool_call_and_content_request, settings=None),
+            _SHARED_PREFIXED_TOOL_CALL_AND_CONTENT_EXPECTED,
+            _SHARED_PREFIXED_TOOL_CALL_AND_CONTENT_TEXT,
+            id="audio-shared-prefixed-tool-call-and-content",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_tool_calls_with_two_results_request, settings=None),
+            _SHARED_TOOL_CALLS_WITH_TWO_RESULTS_EXPECTED,
+            _SHARED_TOOL_CALLS_WITH_TWO_RESULTS_TEXT,
+            id="no-think-shared-tool-calls-with-two-results",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_tool_calls_with_two_results_request, settings=None),
+            _SHARED_TOOL_CALLS_WITH_TWO_RESULTS_EXPECTED,
+            _SHARED_TOOL_CALLS_WITH_TWO_RESULTS_TEXT,
+            id="audio-shared-tool-calls-with-two-results",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_system_list_content_request, settings=None),
+            _SHARED_SYSTEM_LIST_CONTENT_EXPECTED,
+            _SHARED_SYSTEM_LIST_CONTENT_TEXT,
+            id="no-think-shared-system-list-content",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_call_with_id_before_last_user_request, settings=None),
+            _SHARED_CALL_WITH_ID_BEFORE_LAST_USER_EXPECTED,
+            _SHARED_CALL_WITH_ID_BEFORE_LAST_USER_TEXT,
+            id="no-think-shared-call-with-id-before-last-user",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_prefixed_text_request, "hello", settings=None),
+            _SHARED_PREFIXED_TEXT_EXPECTED,
+            _SHARED_PREFIXED_TEXT_TEXT,
+            id="no-think-shared-prefixed-text",
         ),
     ],
 )
