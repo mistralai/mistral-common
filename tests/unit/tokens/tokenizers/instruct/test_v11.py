@@ -34,6 +34,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_multi_image_user_request,
     build_multiturn_audio_request,
     build_multiturn_image_request,
+    build_non_ascii_call_arguments_request,
     build_normal_request,
     build_system_and_user_words_request,
     build_system_audio_request,
@@ -353,14 +354,6 @@ def _build_call_with_id_before_last_user_request() -> InstructRequest[ChatMessag
     )
 
 
-def _build_non_ascii_call_arguments_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a tool call whose JSON arguments contain non-ASCII text."""
-    return build_user_then_assistant_request(
-        assistant=AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="f", arguments='{"x": "é"}'))]),
-        settings=None,
-    )
-
-
 @pytest.mark.parametrize(
     argnames="config, request_builder, expected, expected_text",
     argvalues=[
@@ -394,7 +387,7 @@ def _build_non_ascii_call_arguments_request() -> InstructRequest[ChatMessage, To
         ),
         pytest.param(
             "default",
-            _build_non_ascii_call_arguments_request,
+            partial(build_non_ascii_call_arguments_request, settings=None),
             _NON_ASCII_CALL_ARGUMENTS_EXPECTED,
             _NON_ASCII_CALL_ARGUMENTS_TEXT,
             id="default-non-ascii-call-arguments",

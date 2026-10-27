@@ -775,6 +775,19 @@ def build_arbitrary_tool_call_id_request(
     )
 
 
+# --- Non-ASCII tool call arguments ---
+
+
+def build_non_ascii_call_arguments_request(
+    tool_call_id: str | None = None, *, settings: ModelSettings | None
+) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a tool call whose JSON arguments contain non-ASCII text."""
+    tool_call = ToolCall(function=FunctionCall(name="f", arguments='{"x": "é"}'))
+    if tool_call_id is not None:
+        tool_call = ToolCall(id=tool_call_id, function=FunctionCall(name="f", arguments='{"x": "é"}'))
+    return build_user_then_assistant_request(assistant=AssistantMessage(tool_calls=[tool_call]), settings=settings)
+
+
 # --- System message with audio ---
 
 
