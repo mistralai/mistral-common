@@ -41,6 +41,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_multi_image_user_request,
     build_multiturn_audio_request,
     build_multiturn_image_request,
+    build_non_ascii_call_arguments_request,
     build_normal_request,
     build_system_and_user_words_request,
     build_system_audio_request,
@@ -480,18 +481,6 @@ def _build_system_open_think_last_request() -> InstructRequest[ChatMessage, Tool
     )
 
 
-def _build_non_ascii_call_arguments_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a tool call with an ID and non-ASCII JSON arguments."""
-    return build_user_then_assistant_request(
-        assistant=AssistantMessage(
-            tool_calls=[
-                ToolCall(id="123456789", function=FunctionCall(name="f", arguments='{"x": "é"}')),
-            ]
-        ),
-        settings=None,
-    )
-
-
 def _build_tools_before_first_user_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build a tool listing and conversation with two user messages."""
     return InstructRequest[ChatMessage, Tool](
@@ -605,7 +594,7 @@ def _build_tool_result_image_request() -> InstructRequest[ChatMessage, Tool]:
         ),
         pytest.param(
             "no_think",
-            _build_non_ascii_call_arguments_request,
+            partial(build_non_ascii_call_arguments_request, "123456789", settings=None),
             _NON_ASCII_CALL_ARGUMENTS_EXPECTED,
             _NON_ASCII_CALL_ARGUMENTS_TEXT,
             id="no-think-non-ascii-call-arguments",
