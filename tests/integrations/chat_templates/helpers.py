@@ -28,9 +28,9 @@ from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import (
-    EnumBuilder,
     JSONSchemaBuilder,
     ModelSettingsBuilder,
+    ReasoningEffortBuilder,
 )
 from tests.test_tekken import get_special_tokens
 from tests.utils import decode_keep
@@ -58,6 +58,10 @@ class TestConfig:
 
 def build_template_config(config: TestConfig) -> TemplateConfig:
     r"""Create a `TemplateConfig` from a test config."""
+    model_settings_fields = config.model_settings_fields
+    has_reasoning_effort = config.version.supports_model_settings and (
+        model_settings_fields is None or "reasoning_effort" in model_settings_fields
+    )
     return TemplateConfig(
         version=config.version,
         spm=config.spm,
@@ -66,7 +70,8 @@ def build_template_config(config: TestConfig) -> TemplateConfig:
         thinking_support=config.think,
         plain_thinking_support=config.plain_think,
         use_special_token_variables=True,
-        model_settings_fields=config.model_settings_fields,
+        model_settings_fields=model_settings_fields,
+        reasoning_effort_default="none" if has_reasoning_effort else None,
     )
 
 
@@ -142,12 +147,12 @@ def _build_model_settings_builder(config: TestConfig) -> ModelSettingsBuilder | 
 
     selected_fields = config.model_settings_fields
     if selected_fields is None:
-        selected_fields = TemplateConfig(version=config.version).model_settings_fields
+        selected_fields = TemplateConfig(version=config.version, reasoning_effort_default="none").model_settings_fields
         assert selected_fields is not None
 
     return ModelSettingsBuilder(
         reasoning_effort=(
-            EnumBuilder(
+            ReasoningEffortBuilder(
                 accepts_none=True,
                 default=ReasoningEffort.none,
                 values=[ReasoningEffort.none, ReasoningEffort.high],

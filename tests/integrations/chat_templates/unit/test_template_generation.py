@@ -49,6 +49,7 @@ class TestGenerateChatTemplateAPI:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=frozenset({"json_schema"}),
+            reasoning_effort_default=None,
         )
         default_template = generate_chat_template(
             spm=False,
@@ -60,6 +61,7 @@ class TestGenerateChatTemplateAPI:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
         )
 
         assert "response_format" in selected_template
@@ -94,7 +96,7 @@ class TestGenerateChatTemplateAPI:
         assert static_output == dynamic_output
 
     def test_empty_messages_raises(self) -> None:
-        config = TemplateConfig(version=TokenizerVersion.v15)
+        config = TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=frozenset({"json_schema"}))
         template = build_chat_template(config)
         with pytest.raises(Exception, match="list object has no element 0"):
             render_template(template, messages=[])
@@ -123,14 +125,21 @@ class TestTemplateConfigModelSettings:
     @pytest.mark.parametrize("field", MODEL_SETTINGS_FIELD_CHOICES)
     def test_each_field_choice_builds_a_template(self, field: str) -> None:
         template = build_chat_template(
-            config=TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=frozenset({field}))
+            config=TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({field}),
+                reasoning_effort_default=("none" if field == "reasoning_effort" else None),
+            )
         )
 
         assert f'"{field}": ' in template
 
     def test_unknown_model_settings_field_raises(self) -> None:
         with pytest.raises(ValueError) as excinfo:
-            TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=frozenset({"bogus"}))
+            TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"bogus"}),
+            )
 
         assert str(excinfo.value) == (
             "Unknown model settings fields: bogus. Allowed fields are: reasoning_effort, json_schema."
@@ -138,7 +147,10 @@ class TestTemplateConfigModelSettings:
 
     def test_unknown_model_settings_fields_sorted_in_message(self) -> None:
         with pytest.raises(ValueError) as excinfo:
-            TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=frozenset({"zzz", "aaa"}))
+            TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"zzz", "aaa"}),
+            )
 
         assert str(excinfo.value) == (
             "Unknown model settings fields: aaa, zzz. Allowed fields are: reasoning_effort, json_schema."
@@ -154,7 +166,9 @@ class TestTemplateConfigModelSettings:
         assert str(excinfo.value) == "Model settings fields are only available for tokenizer versions v15 and above"
 
     def test_none_model_settings_fields_resolves_automatically(self) -> None:
-        v15_config = TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=None)
+        v15_config = TemplateConfig(
+            version=TokenizerVersion.v15, model_settings_fields=None, reasoning_effort_default="none"
+        )
         v13_config = TemplateConfig(version=TokenizerVersion.v13, model_settings_fields=None)
 
         assert v15_config.model_settings_fields == frozenset({"reasoning_effort"})
@@ -162,7 +176,10 @@ class TestTemplateConfigModelSettings:
 
     def test_explicit_empty_model_settings_fields_rejected(self) -> None:
         with pytest.raises(ValueError) as v15_excinfo:
-            TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=frozenset())
+            TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset(),
+            )
         with pytest.raises(ValueError) as v13_excinfo:
             TemplateConfig(version=TokenizerVersion.v13, model_settings_fields=frozenset())
 
@@ -187,7 +204,9 @@ class TestTokenVariables:
             assert unexpected not in template
 
     def test_use_special_token_variables_false_renders_correctly(self) -> None:
-        config = TemplateConfig(version=TokenizerVersion.v15, use_special_token_variables=False)
+        config = TemplateConfig(
+            version=TokenizerVersion.v15, use_special_token_variables=False, reasoning_effort_default="none"
+        )
         template = build_chat_template(config)
         messages: list[dict[str, Any]] = [
             {"role": "user", "content": "Hello"},
@@ -216,6 +235,7 @@ class TestMessageContentValidation:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -238,6 +258,7 @@ class TestMessageContentValidation:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -422,7 +443,11 @@ class TestRenderContentCall:
 
     def test_tool_ban_thinking_not_in_desc(self) -> None:
         """Tool call site with thinking config must have support_thinking=false and no 'thinking' in desc."""
-        config = TemplateConfig(version=TokenizerVersion.v15, thinking_support=True)
+        config = TemplateConfig(
+            version=TokenizerVersion.v15,
+            thinking_support=True,
+            reasoning_effort_default="none",
+        )
         result = _render_content_call(
             config=config,
             content_expr="message['content']",

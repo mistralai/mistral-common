@@ -19,6 +19,7 @@ from mistral_common.tokens.tokenizers.model_settings_builder import (
     FieldBuilder,
     JSONSchemaBuilder,
     ModelSettingsBuilder,
+    ReasoningEffortBuilder,
     ValidatorType,
 )
 
@@ -87,8 +88,8 @@ class TestModelSettingsBuilder:
             ),
             (
                 ModelSettingsBuilder(
-                    reasoning_effort=EnumBuilder[ReasoningEffort](
-                        values=[ReasoningEffort.none, ReasoningEffort.high], accepts_none=False, default=None
+                    reasoning_effort=ReasoningEffortBuilder(
+                        values=[ReasoningEffort.none, ReasoningEffort.high], default=ReasoningEffort.none
                     )
                 ),
                 ChatCompletionRequest(messages=[], reasoning_effort=ReasoningEffort.none),
@@ -96,21 +97,19 @@ class TestModelSettingsBuilder:
             ),
             (
                 ModelSettingsBuilder(
-                    reasoning_effort=EnumBuilder[ReasoningEffort](
-                        values=[ReasoningEffort.high], accepts_none=False, default=None
-                    )
+                    reasoning_effort=ReasoningEffortBuilder(values=[ReasoningEffort.high], default=ReasoningEffort.high)
                 ),
                 ChatCompletionRequest(messages=[], reasoning_effort=ReasoningEffort.high),
                 ModelSettings(reasoning_effort=ReasoningEffort.high),
             ),
             (
                 ModelSettingsBuilder(
-                    reasoning_effort=EnumBuilder[ReasoningEffort](
-                        values=[ReasoningEffort.high], accepts_none=True, default=None
+                    reasoning_effort=ReasoningEffortBuilder(
+                        values=[ReasoningEffort.high], default=ReasoningEffort.high
                     ),
                 ),
                 ChatCompletionRequest(messages=[], reasoning_effort=None),
-                ModelSettings(reasoning_effort=None),
+                ModelSettings(reasoning_effort=ReasoningEffort.high),
             ),
         ],
     )
@@ -121,9 +120,7 @@ class TestModelSettingsBuilder:
 
     def test_encode_invalid_enum_value_raises_error(self) -> None:
         builder_high_only = ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder[ReasoningEffort](
-                values=[ReasoningEffort.high], accepts_none=False, default=None
-            )
+            reasoning_effort=ReasoningEffortBuilder(values=[ReasoningEffort.high], default=ReasoningEffort.high)
         )
         chat_completion_request = ChatCompletionRequest[UATS](messages=[], reasoning_effort=ReasoningEffort.none)
         with pytest.raises(
@@ -132,27 +129,13 @@ class TestModelSettingsBuilder:
         ):
             builder_high_only.build_settings(chat_completion_request)
 
-    def test_encode_missing_required_field_raises_error(self) -> None:
-        builder = ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder[ReasoningEffort](
-                values=[ReasoningEffort.none, ReasoningEffort.high], accepts_none=False, default=None
-            )
-        )
-        chat_completion_request = ChatCompletionRequest[UATS](messages=[], reasoning_effort=None)
-
-        with pytest.raises(
-            InvalidRequestException,
-            match=r"reasoning_effort should be set.",
-        ):
-            builder.build_settings(chat_completion_request)
-
     def test_encode_unexpected_field_raises_error(self) -> None:
         builder = ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder[ReasoningEffort](values=[], accepts_none=True, default=None)
+            reasoning_effort=ReasoningEffortBuilder(values=[ReasoningEffort.none], default=ReasoningEffort.none)
         )
         chat_completion_request = ChatCompletionRequest[UATS](messages=[], reasoning_effort=ReasoningEffort.high)
 
-        with pytest.raises(InvalidRequestException, match=r"reasoning_effort not supported for this model."):
+        with pytest.raises(InvalidRequestException, match=r"reasoning_effort should be one of"):
             builder.build_settings(chat_completion_request)
 
     def test_ignore_field(self) -> None:
@@ -164,17 +147,16 @@ class TestModelSettingsBuilder:
     def test_reasoning_effort_does_not_exist(self) -> None:
         with pytest.raises(ValidationError, match=r"[type=enum, input_value='blabla', input_type=str]"):
             ModelSettingsBuilder(
-                reasoning_effort=EnumBuilder[ReasoningEffort](
+                reasoning_effort=ReasoningEffortBuilder(
                     values=[ReasoningEffort.none, "blabla"],  # type: ignore[list-item]
-                    accepts_none=False,
                     default=None,
                 )
             )
 
-    def test_compatibility_accept_none_default(self) -> None:
-        with pytest.raises(ValidationError, match=r"Default values can only be defined for accepts_none fields"):
+    def test_builder_always_accepts_none(self) -> None:
+        with pytest.raises(ValidationError, match=r"Input should be True"):
             ModelSettingsBuilder(
-                reasoning_effort=EnumBuilder[ReasoningEffort](
+                reasoning_effort=ReasoningEffortBuilder(
                     values=[ReasoningEffort.none], accepts_none=False, default=ReasoningEffort.none
                 )
             )
@@ -182,16 +164,12 @@ class TestModelSettingsBuilder:
     def test_default_in_values(self) -> None:
         with pytest.raises(ValidationError, match=r"Default value self.default='high' is not in self.values"):
             ModelSettingsBuilder(
-                reasoning_effort=EnumBuilder[ReasoningEffort](
-                    values=[ReasoningEffort.none], accepts_none=True, default=ReasoningEffort.high
-                )
+                reasoning_effort=ReasoningEffortBuilder(values=[ReasoningEffort.none], default=ReasoningEffort.high)
             )
 
     def test_default_works(self) -> None:
         builder = ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder[ReasoningEffort](
-                values=[ReasoningEffort.none], accepts_none=True, default=ReasoningEffort.none
-            )
+            reasoning_effort=ReasoningEffortBuilder(values=[ReasoningEffort.none], default=ReasoningEffort.none)
         )
         assert builder.build_settings(ChatCompletionRequest(messages=[], reasoning_effort=None)) == ModelSettings(
             reasoning_effort=ReasoningEffort.none
@@ -216,9 +194,7 @@ class TestModelSettingsBuilder:
     )
     def test_validator_unavailable_setting(self, reasoning_effort: ReasoningEffort | None) -> None:
         builder = ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder[ReasoningEffort](
-                values=[ReasoningEffort.none], accepts_none=True, default=ReasoningEffort.none
-            )
+            reasoning_effort=ReasoningEffortBuilder(values=[ReasoningEffort.none], default=ReasoningEffort.none)
         )
         settings = ModelSettings(reasoning_effort=reasoning_effort)
         if reasoning_effort != ReasoningEffort.none:
@@ -227,19 +203,13 @@ class TestModelSettingsBuilder:
         else:
             builder.validate_settings(settings)
 
-    @pytest.mark.parametrize(("accepts_none"), ([False, True]))
-    def test_validator_accepts_none(self, accepts_none: bool) -> None:
+    def test_validator_rejects_unresolved_none(self) -> None:
         builder = ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder[ReasoningEffort](
-                values=[ReasoningEffort.none], accepts_none=accepts_none, default=None
-            )
+            reasoning_effort=ReasoningEffortBuilder(values=[ReasoningEffort.none], default=ReasoningEffort.none)
         )
         settings = ModelSettings(reasoning_effort=None)
-        if accepts_none:
+        with pytest.raises(InvalidRequestException, match="reasoning_effort should be set"):
             builder.validate_settings(settings)
-        else:
-            with pytest.raises(InvalidRequestException, match=r"reasoning_effort should be set for this model"):
-                builder.validate_settings(settings)
 
 
 JSON_SCHEMA_DICT = {"type": "object", "properties": {"a": {"type": "string"}}}

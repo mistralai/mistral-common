@@ -50,6 +50,7 @@ class TestDefaultSystemPromptInjection:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
         )
 
         output = encode_transformers_from_openai(chat_template, CONV_NO_SYSTEM)
@@ -72,6 +73,7 @@ class TestDefaultSystemPromptInjection:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
         )
 
         output = encode_transformers_from_openai(chat_template, self.CONV_WITH_SYSTEM)
@@ -125,6 +127,7 @@ class TestDefaultSystemPromptInjection:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
         )
 
         result = encode_transformers_from_openai(template, CONV_NO_SYSTEM)

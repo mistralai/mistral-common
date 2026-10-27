@@ -66,6 +66,7 @@ class TestPlainThinkParity:
             plain_thinking_support=True,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
         )
 
         for conversation in conversations:
@@ -97,6 +98,7 @@ class TestPlainThinkParity:
             plain_thinking_support=True,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
         )
 
         # Build a conversation with thinking chunks
@@ -178,6 +180,7 @@ class TestPlainThinkParity:
             plain_thinking_support=True,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
         )
 
         for conversation in conversations:

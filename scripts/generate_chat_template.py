@@ -34,6 +34,18 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--reasoning_effort_values",
+        type=str,
+        default=None,
+        help="Manual mode: comma-separated exposed reasoning effort values (default: full standard ladder)",
+    )
+    parser.add_argument(
+        "--reasoning_effort_default",
+        type=str,
+        default=None,
+        help="Manual mode: exposed reasoning effort rendered when the request leaves the effort unset",
+    )
+    parser.add_argument(
         "--plain_thinking",
         action="store_true",
         help=(
@@ -71,6 +83,8 @@ def main() -> None:
             (args.audio, "--audio"),
             (args.thinking, "--thinking"),
             (args.model_settings_fields is not None, "--model_settings_fields"),
+            (args.reasoning_effort_values is not None, "--reasoning_effort_values"),
+            (args.reasoning_effort_default is not None, "--reasoning_effort_default"),
         ]
         conflicting = [flag for is_set, flag in manual_flag_checks if is_set]
 
@@ -105,6 +119,14 @@ def main() -> None:
             if not model_settings_fields:
                 parser.error("--model_settings_fields must list at least one field")
 
+        reasoning_effort_values = None
+        if args.reasoning_effort_values is not None:
+            reasoning_effort_values = tuple(
+                item.strip() for item in args.reasoning_effort_values.split(",") if item.strip()
+            )
+            if not reasoning_effort_values:
+                parser.error("--reasoning_effort_values must list at least one value")
+
         try:
             template = generate_chat_template(
                 spm=args.spm,
@@ -116,6 +138,8 @@ def main() -> None:
                 plain_thinking_support=args.plain_thinking,
                 use_special_token_variables=not args.no_special_token_variables,
                 model_settings_fields=model_settings_fields,
+                reasoning_effort_values=reasoning_effort_values,
+                reasoning_effort_default=args.reasoning_effort_default,
             )
         except ValueError as e:
             parser.error(str(e))

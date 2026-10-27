@@ -38,8 +38,8 @@
 {%- if reasoning_effort is not defined or reasoning_effort is none %}
     {%- set reasoning_effort = 'none' %}
 {%- endif %}
-{%- if reasoning_effort not in ['none', 'high'] %}
-    {{- raise_exception('reasoning_effort must be either "none" or "high"') }}
+{%- if reasoning_effort not in ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] %}
+    {{- raise_exception('reasoning_effort must be one of "none", "minimal", "low", "medium", "high", "xhigh", "max"') }}
 {%- endif %}
 {%- set model_settings_parts = [] %}
 {%- if json_schema is not none %}

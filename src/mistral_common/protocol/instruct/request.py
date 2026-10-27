@@ -74,15 +74,25 @@ class ReasoningEffort(StrEnum):
 
     Attributes:
         none: No reasoning effort; model generates responses directly.
+        minimal: Minimal reasoning effort, with only a small amount of additional computation.
+        low: Low reasoning effort; the model spends little compute on reasoning.
+        medium: Medium reasoning effort, between low and high.
         high: High reasoning effort for complex tasks; model spends more compute
             on reasoning before generating the final response.
+        xhigh: Extra-high reasoning effort, above high, for the most demanding tasks.
+        max: Maximum reasoning effort the model supports.
 
     Note:
         Supported for tokenizer >= v15 only. Earlier versions will raise an error.
     """
 
     none = auto()
+    minimal = auto()
+    low = auto()
+    medium = auto()
     high = auto()
+    xhigh = auto()
+    max = auto()
 
 
 class ModelSettings(MistralBase):
@@ -212,8 +222,8 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             none (no tools), any/required (deprecated, use required). Default: auto.
         truncate_for_context_length: If `True`, automatically truncate messages to
             fit within the model's context length. Default: `False`.
-        reasoning_effort: Controls reasoning effort (none or high). Requires tokenizer
-            >= v15. If `None`, uses model default.
+        reasoning_effort: Controls reasoning effort (one of "none", "minimal", "low", "medium", "high",
+            "xhigh", or "max"). Requires tokenizer >= v15. If `None`, uses model default.
 
     Examples:
         >>> from mistral_common.protocol.instruct.messages import UserMessage, AssistantMessage

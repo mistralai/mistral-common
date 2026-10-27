@@ -177,6 +177,26 @@ class EnumBuilder(FieldBuilder[E, E]):
             raise InvalidRequestException(f"{field_name} should be one of {self.values}, got {value}.")
 
 
+class ReasoningEffortBuilder(EnumBuilder[ReasoningEffort]):
+    r"""Builder for the reasoning effort field.
+
+    A request may always leave the reasoning effort unset, so the builder always
+    accepts `None` and must declare the default it resolves to.
+
+    Attributes:
+        accepts_none: Always `True`.
+    """
+
+    accepts_none: Literal[True] = True
+
+    @model_validator(mode="after")
+    def validate_default_required(self) -> "ReasoningEffortBuilder":
+        r"""Require a configured default because reasoning effort may be unset."""
+        if self.default is None:
+            raise ValueError("The reasoning effort builder must declare a default.")
+        return self
+
+
 class JSONSchemaBuilder(FieldBuilder[ResponseFormat, JSONSchemaDict]):
     r"""Builder for response-format JSON schema fields.
 
@@ -241,7 +261,7 @@ class ModelSettingsBuilder(MistralBase):
         "json_schema": "response_format",
     }
 
-    reasoning_effort: EnumBuilder[ReasoningEffort] | None = None
+    reasoning_effort: ReasoningEffortBuilder | None = None
     json_schema: JSONSchemaBuilder | None = None
 
     @staticmethod
