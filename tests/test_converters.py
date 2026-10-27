@@ -1466,6 +1466,37 @@ class TestToolChoice:
         assert reconstructed.tool_choice == expected_reconstructed
 
 
+class TestParallelToolCalls:
+    @pytest.mark.parametrize("parallel_tool_calls", [True, False])
+    def test_to_openai_with_tools_includes_parallel_tool_calls(self, parallel_tool_calls: bool) -> None:
+        request = ChatCompletionRequest(
+            messages=[UserMessage(content="Hello")],
+            tools=[Tool(function=Function(name="get_weather", parameters={}))],
+            parallel_tool_calls=parallel_tool_calls,
+        )
+
+        assert request.to_openai()["parallel_tool_calls"] is parallel_tool_calls
+
+    @pytest.mark.parametrize("tools", [None, []])
+    def test_to_openai_without_tools_omits_parallel_tool_calls(self, tools: list[Tool] | None) -> None:
+        request = ChatCompletionRequest(messages=[UserMessage(content="Hello")], tools=tools, parallel_tool_calls=False)
+
+        assert "parallel_tool_calls" not in request.to_openai()
+
+    def test_parallel_tool_calls_default_true(self) -> None:
+        request = ChatCompletionRequest(messages=[UserMessage(content="Hello")])
+
+        assert request.parallel_tool_calls is True
+
+    @pytest.mark.parametrize(("value", "expected"), [(False, False), (True, True), (None, True)])
+    def test_from_openai_parallel_tool_calls(self, value: bool | None, expected: bool) -> None:
+        request = ChatCompletionRequest.from_openai(
+            messages=[{"role": "user", "content": "Hello"}], parallel_tool_calls=value
+        )
+
+        assert request.parallel_tool_calls is expected
+
+
 @pytest.mark.parametrize(
     ["from_openai_call", "expected"],
     [
