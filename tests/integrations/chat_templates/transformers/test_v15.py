@@ -63,6 +63,8 @@ class TestV15ReasoningEffort:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
         )
 
         conv: dict = {
@@ -88,7 +90,7 @@ class TestV15ReasoningEffort:
     )
     @pytest.mark.parametrize(
         "reasoning_effort",
-        ["low", "medium", "invalid_value"],
+        ["medium", "invalid_value"],
     )
     def test_invalid_reasoning_effort(
         self,
@@ -109,6 +111,8 @@ class TestV15ReasoningEffort:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=("none", "high"),
+            reasoning_effort_default="none",
         )
 
         conv = {
@@ -179,6 +183,7 @@ def _build_v15_parity_setup(
         output_dir=tmp_path,
     )
     mistral_tokenizer = MistralTokenizer.from_file(tokenizer_filename=str(tokenizer_path), mode=ValidationMode.test)
+    has_effort = "reasoning_effort" in model_settings_fields
     template = generate_chat_template(
         spm=False,
         tokenizer_version=TokenizerVersion.v15,
@@ -189,6 +194,8 @@ def _build_v15_parity_setup(
         plain_thinking_support=False,
         use_special_token_variables=True,
         model_settings_fields=model_settings_fields,
+        reasoning_effort_values=("none", "high") if has_effort else None,
+        reasoning_effort_default="none" if has_effort else None,
     )
     return tokenizer_path, mistral_tokenizer, template
 
@@ -232,6 +239,8 @@ class TestV15ResponseFormat:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=model_settings_fields,
+            reasoning_effort_values=("none", "high"),
+            reasoning_effort_default="none",
         )
         openai_request = {
             "messages": [{"role": "user", "content": "Hello"}],

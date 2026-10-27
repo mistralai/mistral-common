@@ -27,6 +27,8 @@ class TestConvertTokenizerToChatTemplate:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
         assert result == expected
         assert "[THINK]" in result
@@ -45,6 +47,8 @@ class TestConvertTokenizerToChatTemplate:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=frozenset({"reasoning_effort"}),
+            reasoning_effort_values=("none", "high"),
+            reasoning_effort_default="none",
         )
 
         assert result == expected
@@ -69,9 +73,23 @@ class TestConvertTokenizerToChatTemplate:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+            reasoning_effort_values=("none", "high"),
+            reasoning_effort_default="none",
         )
 
         assert result == expected
+
+    def test_tekken_v15_derives_configured_reasoning_effort_values_and_default(self, tmp_path: Path) -> None:
+        path = build_tekken_json(config=TestConfig(version=TokenizerVersion.v15), output_dir=tmp_path)
+        tokenizer_json = json.loads(path.read_text(encoding="utf-8"))
+        tokenizer_json["model_settings_builder"]["reasoning_effort"]["values"] = ["minimal", "max"]
+        tokenizer_json["model_settings_builder"]["reasoning_effort"]["default"] = "max"
+        path.write_text(json.dumps(obj=tokenizer_json, ensure_ascii=False), encoding="utf-8")
+
+        result = convert_tokenizer_to_chat_template(tokenizer_file=path)
+
+        assert "'minimal', 'max'" in result
+        assert "reasoning_effort = 'max'" in result
 
     def test_tekken_v15_without_model_settings_builder_raises(self, tmp_path: Path) -> None:
         path = build_tekken_json(config=TestConfig(version=TokenizerVersion.v15), output_dir=tmp_path)
@@ -108,6 +126,8 @@ class TestConvertTokenizerToChatTemplate:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
         assert result == expected
 
@@ -125,6 +145,8 @@ class TestConvertTokenizerToChatTemplate:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
         assert result == expected
 
@@ -142,6 +164,8 @@ class TestConvertTokenizerToChatTemplate:
             plain_thinking_support=True,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
         assert result == expected
         assert "<think>" in result
@@ -161,6 +185,8 @@ class TestConvertTokenizerToChatTemplate:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
         assert result == expected
         assert "<think>" not in result
@@ -195,6 +221,8 @@ class TestConvertTokenizerToChatTemplate:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
         assert result == expected
 
@@ -241,6 +269,8 @@ class TestConvertTokenizerToChatTemplate:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
         assert result == expected
         assert "[AUDIO]" in result

@@ -39,6 +39,8 @@ class TestReasoningContentConversion:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -61,6 +63,8 @@ class TestReasoningContentConversion:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -85,6 +89,8 @@ class TestReasoningContentConversion:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -113,6 +119,8 @@ class TestReasoningContentConversion:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -135,6 +143,8 @@ class TestReasoningContentConversion:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -184,6 +194,8 @@ class TestReasoningContentConversion:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -214,6 +226,8 @@ class TestReasoningContentConversion:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -229,7 +243,12 @@ class TestReasoningContentConversion:
         assert static_output == dynamic_output
 
     def test_reasoning_content_with_none_content(self) -> None:
-        config = TemplateConfig(version=TokenizerVersion.v15, thinking_support=True)
+        config = TemplateConfig(
+            version=TokenizerVersion.v15,
+            thinking_support=True,
+            reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
+        )
         template = build_chat_template(config)
         messages: list[dict[str, Any]] = [
             {"role": "user", "content": "Hello"},
@@ -258,6 +277,8 @@ class TestReasoningContentConversion:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         reasoning_text = (
@@ -296,6 +317,8 @@ class TestReasoningEdgeCases:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -319,6 +342,8 @@ class TestReasoningEdgeCases:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -352,6 +377,8 @@ class TestClosedAttribute:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -388,6 +415,8 @@ class TestClosedAttribute:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -417,6 +446,8 @@ class TestPlainThink:
             plain_thinking_support=True,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -449,6 +480,8 @@ class TestPlainThink:
             plain_thinking_support=True,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -477,6 +510,8 @@ class TestPlainThink:
             plain_thinking_support=True,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -499,6 +534,8 @@ class TestPlainThink:
             plain_thinking_support=True,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -526,6 +563,8 @@ class TestPlainThink:
             plain_thinking_support=True,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -561,6 +600,8 @@ class TestPlainThink:
             plain_thinking_support=True,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         messages: list[dict[str, Any]] = [

@@ -177,6 +177,31 @@ class EnumBuilder(FieldBuilder[E, E]):
             raise InvalidRequestException(f"{field_name} should be one of {self.values}, got {value}.")
 
 
+class ReasoningEffortEnumBuilder(EnumBuilder[ReasoningEffort]):
+    r"""Build reasoning effort enum values with a required default.
+
+    This concrete subclass makes instances pickleable. Using
+    `EnumBuilder[ReasoningEffort]` directly as a Pydantic field type creates
+    instances whose class is a runtime-parameterized generic that pickle cannot
+    resolve by module attribute lookup.
+
+    A request may always leave the reasoning effort unset, so the builder always
+    accepts `None` and must declare the default it resolves to.
+
+    Attributes:
+        accepts_none: Always `True`.
+    """
+
+    accepts_none: Literal[True] = True
+
+    @model_validator(mode="after")
+    def validate_default_required(self) -> "ReasoningEffortEnumBuilder":
+        r"""Require a configured default because reasoning effort may be unset."""
+        if self.default is None:
+            raise ValueError("The reasoning effort builder must declare a default.")
+        return self
+
+
 class JSONSchemaBuilder(FieldBuilder[ResponseFormat, JSONSchemaDict]):
     r"""Builder for response-format JSON schema fields.
 
@@ -241,7 +266,7 @@ class ModelSettingsBuilder(MistralBase):
         "json_schema": "response_format",
     }
 
-    reasoning_effort: EnumBuilder[ReasoningEffort] | None = None
+    reasoning_effort: ReasoningEffortEnumBuilder | None = None
     json_schema: JSONSchemaBuilder | None = None
 
     @staticmethod

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from mistral_common.protocol.instruct.request import ReasoningEffort
 from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
 
 # Generated templates join text with Jinja `~`, never `+`: stock Jinja's `tojson` and `safe` return Markup,
@@ -26,6 +27,8 @@ _BEGIN_THINK = SpecialTokens.begin_think.value
 _END_THINK = SpecialTokens.end_think.value
 _BEGIN_MODEL_SETTINGS = SpecialTokens.begin_model_settings.value
 _END_MODEL_SETTINGS = SpecialTokens.end_model_settings.value
+
+_REASONING_EFFORT_VALUES = tuple(str(effort) for effort in ReasoningEffort)
 
 MODEL_SETTINGS_FIELD_CHOICES: tuple[str, ...] = ("reasoning_effort", "json_schema")
 # Jinja lines that append each field's `"name": value` JSON fragment to `model_settings_parts`.
@@ -72,6 +75,11 @@ class TemplateConfig:
             automatic fields for the tokenizer version (`reasoning_effort` for v15 and
             above, none below). An explicit set must be non-empty, requires v15 or above,
             and may only contain values from `MODEL_SETTINGS_FIELD_CHOICES`.
+        reasoning_effort_values: Reasoning effort values exposed on requests. Required when the
+            `reasoning_effort` model settings field is enabled.
+        reasoning_effort_default: Exposed reasoning effort rendered when the request
+            leaves the effort unset. Required when the `reasoning_effort` model
+            settings field is enabled, and must be one of `reasoning_effort_values`.
 
     Raises:
         ValueError: If the configuration is invalid (e.g., conflicting options like
@@ -93,6 +101,8 @@ class TemplateConfig:
     plain_thinking_support: bool = False
     use_special_token_variables: bool = False
     model_settings_fields: frozenset[str] | None = None
+    reasoning_effort_values: tuple[str, ...] | None = None
+    reasoning_effort_default: str | None = None
 
     def __post_init__(self) -> None:
         explicit_model_settings_fields = self.model_settings_fields is not None
@@ -129,6 +139,37 @@ class TemplateConfig:
             raise ValueError("Plain thinking support is only available for tokenizer version v11")
         if self.audio_support and self.plain_thinking_support:
             raise ValueError("Audio and plain thinking support are mutually exclusive")
+
+        has_reasoning_effort = "reasoning_effort" in self.model_settings_fields
+        if has_reasoning_effort and self.reasoning_effort_values is None:
+            raise ValueError(
+                "Reasoning effort values are required when the reasoning_effort model settings field is enabled"
+            )
+        if self.reasoning_effort_values is not None:
+            if not self.reasoning_effort_values:
+                raise ValueError("Reasoning effort values must be a non-empty tuple")
+            if len(set(self.reasoning_effort_values)) != len(self.reasoning_effort_values):
+                raise ValueError("Reasoning effort values must not contain duplicates")
+            unknown_values = set(self.reasoning_effort_values) - set(_REASONING_EFFORT_VALUES)
+            if unknown_values:
+                unknown_names = ", ".join(sorted(unknown_values))
+                allowed_names = ", ".join(f'"{value}"' for value in _REASONING_EFFORT_VALUES)
+                raise ValueError(
+                    f"Unknown reasoning effort values: {unknown_names}. Allowed values are: {allowed_names}."
+                )
+            if not has_reasoning_effort:
+                raise ValueError("Reasoning effort values require the reasoning_effort model settings field")
+        if self.reasoning_effort_default is not None:
+            if not has_reasoning_effort:
+                raise ValueError("Reasoning effort default requires the reasoning_effort model settings field")
+            assert self.reasoning_effort_values is not None
+            if self.reasoning_effort_default not in self.reasoning_effort_values:
+                allowed = ", ".join(f'"{value}"' for value in self.reasoning_effort_values)
+                raise ValueError(f"Reasoning effort default must be one of the exposed values: {allowed}")
+        if has_reasoning_effort and self.reasoning_effort_default is None:
+            raise ValueError(
+                "Reasoning effort default is required when the reasoning_effort model settings field is enabled"
+            )
 
     @property
     def bos_expr(self) -> str:
@@ -558,13 +599,21 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
         )
 
     if has_reasoning_effort:
+        assert config.reasoning_effort_default is not None
+        assert config.reasoning_effort_values is not None
+        exposed_values = config.reasoning_effort_values
+        allowed_literal = "[" + ", ".join(f"'{value}'" for value in exposed_values) + "]"
+        if len(exposed_values) == 2:
+            allowed = f'either "{exposed_values[0]}" or "{exposed_values[1]}"'
+        else:
+            allowed = "one of " + ", ".join(f'"{value}"' for value in exposed_values)
         lines.extend(
             [
                 "{%- if reasoning_effort is not defined or reasoning_effort is none %}",
-                "    {%- set reasoning_effort = 'none' %}",
+                f"    {{%- set reasoning_effort = '{config.reasoning_effort_default}' %}}",
                 "{%- endif %}",
-                "{%- if reasoning_effort not in ['none', 'high'] %}",
-                '    {{- raise_exception(\'reasoning_effort must be either "none" or "high"\') }}',
+                "{%- if reasoning_effort not in " + allowed_literal + " %}",
+                "    {{- raise_exception('reasoning_effort must be " + allowed + "') }}",
                 "{%- endif %}",
             ]
         )

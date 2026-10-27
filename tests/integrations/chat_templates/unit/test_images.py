@@ -17,6 +17,8 @@ class TestImageBlockOrdering:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         # Text first, then image — should be sorted so image appears before text
@@ -50,6 +52,8 @@ class TestImageBlockOrdering:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         # Three blocks: text, image, text — NOT sorted (only 2-block content is sorted)

@@ -24,6 +24,8 @@ class TestToolRoleSupport:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -60,6 +62,8 @@ class TestToolRoleSupport:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -116,6 +120,8 @@ class TestToolRoleSupport:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -170,6 +176,8 @@ class TestV2ToolResultParsing:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
     @pytest.mark.parametrize(
@@ -293,6 +301,8 @@ class TestV2ToolResultParsing:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -331,6 +341,8 @@ class TestV3ToolResultParsing:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
     @pytest.mark.parametrize(
@@ -433,6 +445,8 @@ class TestV7ToolCalls:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -488,6 +502,8 @@ class TestV7ToolCalls:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -561,6 +577,8 @@ class TestV7ToolCalls:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -601,6 +619,8 @@ class TestV11ToolCalls:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -658,6 +678,8 @@ class TestV11ToolCalls:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -713,6 +735,8 @@ class TestV13PlusToolCalls:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [

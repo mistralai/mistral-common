@@ -41,7 +41,18 @@ def test_cli_generates_template(tmp_path: Path) -> None:
     """CLI generates a template file with expected content."""
     output_path = tmp_path / "template.jinja"
     result = subprocess.run(
-        [sys.executable, str(SCRIPT_PATH), "--version", "v15", "--saving_path", str(output_path)],
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--version",
+            "v15",
+            "--reasoning_effort_values",
+            "none,high",
+            "--reasoning_effort_default",
+            "none",
+            "--saving_path",
+            str(output_path),
+        ],
         capture_output=True,
         text=True,
     )
@@ -61,7 +72,7 @@ def test_cli_model_settings_fields_json_schema(tmp_path: Path) -> None:
             "--version",
             "v15",
             "--model_settings_fields",
-            "reasoning_effort,json_schema",
+            "json_schema",
             "--saving_path",
             str(output_path),
         ],
@@ -73,10 +84,45 @@ def test_cli_model_settings_fields_json_schema(tmp_path: Path) -> None:
     assert "response_format" in output_path.read_text()
 
 
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (["--version", "v15"], "Reasoning effort values are required"),
+        (["--version", "v15", "--reasoning_effort_values", "none,high"], "Reasoning effort default is required"),
+        (["--version", "v15", "--reasoning_effort_default", "none"], "Reasoning effort values are required"),
+        (
+            ["--version", "v15", "--model_settings_fields", "reasoning_effort"],
+            "Reasoning effort values are required",
+        ),
+    ],
+)
+def test_cli_requires_reasoning_effort_arguments(tmp_path: Path, arguments: list[str], message: str) -> None:
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), *arguments, "--saving_path", str(output_path)],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert message in result.stderr
+
+
 def test_cli_model_settings_fields_default(tmp_path: Path) -> None:
     output_path = tmp_path / "template.jinja"
     result = subprocess.run(
-        [sys.executable, str(SCRIPT_PATH), "--version", "v15", "--saving_path", str(output_path)],
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--version",
+            "v15",
+            "--reasoning_effort_values",
+            "none,high",
+            "--reasoning_effort_default",
+            "none",
+            "--saving_path",
+            str(output_path),
+        ],
         capture_output=True,
         text=True,
     )
@@ -171,6 +217,77 @@ def test_cli_model_settings_fields_rejected_in_autodetect(tmp_path: Path, tekken
     assert "--tokenizer_file cannot be combined with manual capability flags: --model_settings_fields" in result.stderr
 
 
+def test_cli_reasoning_effort_flags(tmp_path: Path) -> None:
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--version",
+            "v15",
+            "--reasoning_effort_values",
+            "minimal,max",
+            "--reasoning_effort_default",
+            "max",
+            "--saving_path",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    content = output_path.read_text()
+    assert "'minimal', 'max'" in content
+    assert "reasoning_effort = 'max'" in content
+
+
+def test_cli_reasoning_effort_default_rejected_in_autodetect(tmp_path: Path, tekken_think_v13_path: Path) -> None:
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--tokenizer_file",
+            str(tekken_think_v13_path),
+            "--reasoning_effort_default",
+            "none",
+            "--saving_path",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert (
+        "--tokenizer_file cannot be combined with manual capability flags: --reasoning_effort_default" in result.stderr
+    )
+
+
+def test_cli_reasoning_effort_values_rejected_in_autodetect(tmp_path: Path, tekken_think_v13_path: Path) -> None:
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--tokenizer_file",
+            str(tekken_think_v13_path),
+            "--reasoning_effort_values",
+            "minimal,max",
+            "--saving_path",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert (
+        "--tokenizer_file cannot be combined with manual capability flags: --reasoning_effort_values" in result.stderr
+    )
+
+
 def test_cli_autodetect_v15_json_schema_builder(tmp_path: Path, tekken_v15_json_schema_path: Path) -> None:
     output_path = tmp_path / "template.jinja"
     result = subprocess.run(
@@ -196,7 +313,19 @@ def test_cli_with_image_flag(tmp_path: Path) -> None:
     """CLI --image flag produces template with image support."""
     output_path = tmp_path / "template.jinja"
     result = subprocess.run(
-        [sys.executable, str(SCRIPT_PATH), "--version", "v15", "--image", "--saving_path", str(output_path)],
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--version",
+            "v15",
+            "--image",
+            "--reasoning_effort_values",
+            "none,high",
+            "--reasoning_effort_default",
+            "none",
+            "--saving_path",
+            str(output_path),
+        ],
         capture_output=True,
         text=True,
     )
@@ -209,7 +338,19 @@ def test_cli_with_thinking_flag(tmp_path: Path) -> None:
     """CLI --thinking flag produces template with thinking support."""
     output_path = tmp_path / "template.jinja"
     result = subprocess.run(
-        [sys.executable, str(SCRIPT_PATH), "--version", "v15", "--thinking", "--saving_path", str(output_path)],
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--version",
+            "v15",
+            "--thinking",
+            "--reasoning_effort_values",
+            "none,high",
+            "--reasoning_effort_default",
+            "none",
+            "--saving_path",
+            str(output_path),
+        ],
         capture_output=True,
         text=True,
     )

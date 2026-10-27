@@ -28,6 +28,8 @@ class TestV15ModelSettings:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
         )
 
     def test_v15_template_contains_model_settings(self, v15_template: str) -> None:
@@ -60,6 +62,8 @@ class TestV15ModelSettings:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
         )
 
         messages = [
@@ -88,6 +92,8 @@ class TestV15ModelSettings:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
         )
 
         messages = [
@@ -116,6 +122,8 @@ class TestV15ModelSettings:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
         )
 
         tools = [
@@ -169,6 +177,8 @@ class TestV15ModelSettings:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
         )
 
         messages: list[dict[str, Any]] = []
@@ -230,6 +240,8 @@ class TestV15ModelSettings:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
         )
 
         messages: list[dict[str, Any]] = [
@@ -412,8 +424,14 @@ class TestV15ModelSettings:
         ids=["json_schema", "both"],
     )
     def test_v15_json_schema_renders_with_stock_jinja_tojson(self, model_settings_fields: frozenset[str]) -> None:
+        has_reasoning_effort = "reasoning_effort" in model_settings_fields
         template = build_chat_template(
-            config=TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=model_settings_fields)
+            config=TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=model_settings_fields,
+                reasoning_effort_values=("none", "high") if has_reasoning_effort else None,
+                reasoning_effort_default="none" if has_reasoning_effort else None,
+            )
         )
         environment = ImmutableSandboxedEnvironment(loader=BaseLoader())
 
@@ -431,6 +449,8 @@ class TestV15ModelSettings:
             config=TemplateConfig(
                 version=TokenizerVersion.v15,
                 model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+                reasoning_effort_values=("none", "high"),
+                reasoning_effort_default="none",
             )
         )
         messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
@@ -457,6 +477,8 @@ class TestV15ModelSettings:
             config=TemplateConfig(
                 version=TokenizerVersion.v15,
                 model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+                reasoning_effort_values=("none", "high"),
+                reasoning_effort_default="none",
             )
         )
         messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
@@ -477,6 +499,8 @@ class TestV15ModelSettings:
             config=TemplateConfig(
                 version=TokenizerVersion.v15,
                 model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+                reasoning_effort_values=("none", "high"),
+                reasoning_effort_default="none",
             )
         )
         messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
@@ -496,6 +520,8 @@ class TestV15ModelSettings:
             config=TemplateConfig(
                 version=TokenizerVersion.v15,
                 model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+                reasoning_effort_values=("none", "high"),
+                reasoning_effort_default="none",
             )
         )
         messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
@@ -504,11 +530,17 @@ class TestV15ModelSettings:
             render_template(
                 template=template,
                 messages=messages,
-                reasoning_effort="medium",
+                reasoning_effort="bogus",
             )
 
     def test_v15_reasoning_effort_only_ignores_response_format(self) -> None:
-        template = build_chat_template(config=TemplateConfig(version=TokenizerVersion.v15))
+        template = build_chat_template(
+            config=TemplateConfig(
+                version=TokenizerVersion.v15,
+                reasoning_effort_values=("none", "high"),
+                reasoning_effort_default="none",
+            )
+        )
         messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}]
         response_format = {
             "type": "json_schema",
@@ -525,6 +557,8 @@ class TestV15ModelSettings:
             config=TemplateConfig(
                 version=TokenizerVersion.v15,
                 model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+                reasoning_effort_values=("none", "high"),
+                reasoning_effort_default="none",
             )
         )
         tools = [
@@ -570,6 +604,8 @@ class TestV15MultimodalContent:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
         )
 
         messages: list[dict[str, Any]] = [
@@ -608,6 +644,8 @@ class TestV15MultimodalContent:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
         )
 
         messages: list[dict[str, Any]] = [
@@ -646,6 +684,8 @@ class TestV15MultimodalContent:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
         )
 
         messages: list[dict[str, Any]] = [
@@ -677,6 +717,8 @@ class TestV15MultimodalContent:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default=None,
+            reasoning_effort_values=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -705,6 +747,8 @@ class TestV15MultimodalContent:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default=None,
+            reasoning_effort_values=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -733,6 +777,8 @@ class TestV15MultimodalContent:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -762,6 +808,8 @@ class TestV15MultimodalContent:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
         )
 
         tools = [{"type": "function", "function": {"name": "fn", "description": "test", "parameters": {}}}]
@@ -819,6 +867,8 @@ class TestV15MultimodalContent:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         messages: list[dict[str, Any]] = [
