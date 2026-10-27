@@ -530,6 +530,60 @@ def build_two_calls_without_id_request(*, settings: ModelSettings | None) -> Ins
     )
 
 
+def build_call_with_id_before_last_user_request(
+    *, settings: ModelSettings | None
+) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a tool call with an ID followed by the final user turn."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="a_a_a", arguments="blabla"), id="ABC")]),
+            UserMessage(content="c"),
+        ],
+        settings=settings or ModelSettings.none(),
+    )
+
+
+def build_tool_result_request(
+    content: str | list[ContentChunk], *, settings: ModelSettings | None
+) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a request with one assistant call and its tool result."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="F1", arguments="{}"))]),
+            ToolMessage(content=content, tool_call_id="123456789"),
+        ],
+        settings=settings or ModelSettings.none(),
+    )
+
+
+def build_tool_result_text_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a request whose tool result is the text ``R1``."""
+    return build_tool_result_request(content="R1", settings=settings)
+
+
+def build_tool_result_text_chunks_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a request whose tool result has two text chunks."""
+    return build_tool_result_request(content=[TextChunk(text="R1"), TextChunk(text="R2")], settings=settings)
+
+
+def build_tool_result_image_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a tool result containing one red image."""
+    return build_tool_result_request(
+        content=[ImageChunk(image=Image.new(mode="RGB", size=(4, 4), color="red"))], settings=settings
+    )
+
+
+def build_tools_before_first_user_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a tool listing and conversation with two user messages."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[UserMessage(content="a"), AssistantMessage(content="b"), UserMessage(content="c")],
+        available_tools=[Tool(function=Function(name="f", description="", parameters={}))],
+        settings=settings or ModelSettings.none(),
+    )
+
+
 # --- Image + tool variants ---
 
 
@@ -859,12 +913,125 @@ def build_user_image_url_request(*, settings: ModelSettings | None) -> InstructR
 # --- System text then user audio ---
 
 
-def build_system_then_audio_user_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+def build_system_then_audio_user_request(
+    *, num_samples: int = 2400, sampling_rate: int = 24_000, settings: ModelSettings | None
+) -> InstructRequest[ChatMessage, Tool]:
     r"""Build a request with a text-only system message followed by a user message with audio."""
     return InstructRequest[ChatMessage, Tool](
         messages=[
             SystemMessage(content="hello"),
-            UserMessage(content=[build_silent_audio_chunk()]),
+            UserMessage(content=[build_silent_audio_chunk(num_samples=num_samples, sampling_rate=sampling_rate)]),
         ],
         settings=settings or ModelSettings.none(),
+    )
+
+
+# --- System message content variants ---
+
+
+def build_system_request(
+    content: str | list[ContentChunk], *, settings: ModelSettings | None
+) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a system message followed by the user turn."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[SystemMessage(content=content), UserMessage(content="a")],
+        settings=settings or ModelSettings.none(),
+    )
+
+
+def build_system_text_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a system message with plain text content."""
+    return build_system_request(content="S1", settings=settings)
+
+
+def build_system_text_chunk_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a system message with one text chunk."""
+    return build_system_request(content=[TextChunk(text="S1")], settings=settings)
+
+
+def build_system_think_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a system message containing a think chunk (rejected in v15)."""
+    return build_system_request(content=[ThinkChunk(thinking="Hi")], settings=settings)
+
+
+def build_system_text_then_think_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a system message with text followed by a think chunk."""
+    return build_system_request(content=[TextChunk(text="S1"), ThinkChunk(thinking="Hi")], settings=settings)
+
+
+def build_system_think_between_text_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a system message with text on both sides of a think chunk."""
+    return build_system_request(
+        content=[TextChunk(text="S1"), ThinkChunk(thinking="TS"), TextChunk(text="S2")], settings=settings
+    )
+
+
+def build_system_two_closed_thinks_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a system message with two closed think chunks between text."""
+    return build_system_request(
+        content=[
+            TextChunk(text="S1"),
+            TextChunk(text="S3"),
+            ThinkChunk(thinking="TS", closed=True),
+            ThinkChunk(thinking="TS", closed=True),
+            TextChunk(text="S2"),
+        ],
+        settings=settings,
+    )
+
+
+def build_system_open_think_last_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a system message ending with an open think chunk."""
+    return build_system_request(
+        content=[TextChunk(text="S1"), TextChunk(text="S3"), ThinkChunk(thinking="TS", closed=False)],
+        settings=settings,
+    )
+
+
+# --- Assistant content variants ---
+
+
+def build_assistant_text_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build an assistant turn with plain text content."""
+    return build_user_then_assistant_request(assistant=AssistantMessage(content="A1"), settings=settings)
+
+
+def build_assistant_text_chunk_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build an assistant turn containing one text chunk."""
+    return build_user_then_assistant_request(
+        assistant=AssistantMessage(content=[TextChunk(text="A1")]), settings=settings
+    )
+
+
+def build_closed_think_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a closed assistant think chunk request."""
+    return build_user_then_assistant_request(
+        assistant=AssistantMessage(content=[ThinkChunk(thinking="T1")]), settings=settings
+    )
+
+
+def build_open_think_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build an open assistant think chunk request."""
+    return build_user_then_assistant_request(
+        assistant=AssistantMessage(content=[ThinkChunk(thinking="T1", closed=False)]),
+        settings=settings,
+    )
+
+
+def build_closed_think_then_text_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a closed think chunk followed by assistant text."""
+    return build_user_then_assistant_request(
+        assistant=AssistantMessage(content=[ThinkChunk(thinking="T1"), TextChunk(text="A1")]),
+        settings=settings,
+    )
+
+
+def build_open_think_text_and_call_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build assistant content with an open think chunk, text and a tool call."""
+    return build_user_then_assistant_request(
+        assistant=AssistantMessage(
+            content=[ThinkChunk(thinking="R1", closed=False), TextChunk(text="A1")],
+            tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="F1", arguments="{'a': 1}"))],
+        ),
+        settings=settings,
     )

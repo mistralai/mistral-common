@@ -7,9 +7,9 @@ import numpy as np
 import pytest
 
 from mistral_common.exceptions import TokenizerException
-from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, UserMessage
+from mistral_common.protocol.instruct.messages import ChatMessage
 from mistral_common.protocol.instruct.request import InstructRequest
-from mistral_common.protocol.instruct.tool_calls import FunctionCall, Tool, ToolCall
+from mistral_common.protocol.instruct.tool_calls import Tool
 from mistral_common.tokens.tokenizers.audio import (
     Audio,
     AudioConfig,
@@ -28,6 +28,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_assistant_think_request,
     build_assistant_tool_calls_request,
     build_audio_user_request,
+    build_call_with_id_before_last_user_request,
     build_empty_assistant_request,
     build_image_user_request,
     build_multi_audio_user_request,
@@ -319,17 +320,6 @@ def audio_tokenizer() -> InstructTokenizerV11:
     )
 
 
-def _build_call_with_id_before_last_user_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a tool call with an ID followed by the final user turn."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="a_a_a", arguments="blabla"), id="ABC")]),
-            UserMessage(content="c"),
-        ]
-    )
-
-
 @pytest.mark.parametrize(
     argnames="config, request_builder, expected, expected_text",
     argvalues=[
@@ -356,7 +346,7 @@ def _build_call_with_id_before_last_user_request() -> InstructRequest[ChatMessag
         ),
         pytest.param(
             "default",
-            _build_call_with_id_before_last_user_request,
+            partial(build_call_with_id_before_last_user_request, settings=None),
             _CALL_WITH_ID_BEFORE_LAST_USER_EXPECTED,
             _CALL_WITH_ID_BEFORE_LAST_USER_TEXT,
             id="default-call-with-id-before-last-user",
