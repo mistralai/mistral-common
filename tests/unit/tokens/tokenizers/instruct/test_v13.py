@@ -5,19 +5,13 @@ from functools import partial
 
 import numpy as np
 import pytest
-from PIL import Image
 
 from mistral_common.exceptions import TokenizerException
-from mistral_common.protocol.instruct.chunk import AudioChunk, ContentChunk, ImageChunk, TextChunk, ThinkChunk
 from mistral_common.protocol.instruct.messages import (
-    AssistantMessage,
     ChatMessage,
-    SystemMessage,
-    ToolMessage,
-    UserMessage,
 )
 from mistral_common.protocol.instruct.request import InstructRequest
-from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
+from mistral_common.protocol.instruct.tool_calls import Tool
 from mistral_common.tokens.tokenizers.audio import (
     Audio,
     AudioConfig,
@@ -33,8 +27,12 @@ from tests.test_tekken import get_special_tokens, quick_vocab
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_arbitrary_tool_call_id_request,
     build_assistant_list_content_request,
+    build_assistant_text_chunk_request,
+    build_assistant_text_request,
     build_assistant_tool_calls_request,
     build_audio_user_request,
+    build_closed_think_request,
+    build_closed_think_then_text_request,
     build_empty_assistant_request,
     build_image_user_request,
     build_multi_audio_user_request,
@@ -43,6 +41,8 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_multiturn_image_request,
     build_non_ascii_call_arguments_request,
     build_normal_request,
+    build_open_think_request,
+    build_open_think_text_and_call_request,
     build_prefixed_text_request,
     build_system_and_user_words_request,
     build_system_audio_request,
@@ -50,16 +50,23 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_system_message_prefixed_final_request,
     build_system_message_request,
     build_system_message_tools_multiturn_request,
+    build_system_open_think_last_request,
+    build_system_text_request,
     build_system_then_audio_user_request,
+    build_system_think_between_text_request,
+    build_system_two_closed_thinks_request,
     build_text_then_audio_user_request,
     build_text_then_image_user_request,
     build_tool_message_request,
+    build_tool_result_image_request,
+    build_tool_result_text_chunks_request,
+    build_tool_result_text_request,
+    build_tools_before_first_user_request,
     build_tools_multiturn_request,
     build_tools_singleturn_request,
     build_truncation_last_user_at_limit_request,
     build_user_audio_url_request,
     build_user_image_url_request,
-    build_user_then_assistant_request,
 )
 from tests.utils import assert_tokenized_equal, decode_keep
 
@@ -377,157 +384,40 @@ def image_tokenizer() -> InstructTokenizerV13:
     )
 
 
-def _build_tool_result_request(content: str | list[ContentChunk]) -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request with one assistant call and its tool result."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="F1", arguments="{}"))]),
-            ToolMessage(content=content, tool_call_id="123456789"),
-        ]
-    )
-
-
-def _build_system_request(content: str | list[ContentChunk]) -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a system message followed by the user turn."""
-    return InstructRequest[ChatMessage, Tool](messages=[SystemMessage(content=content), UserMessage(content="a")])
-
-
-def _build_tool_result_text_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request whose tool result is the text `R1`."""
-    return _build_tool_result_request(content="R1")
-
-
-def _build_tool_result_text_chunks_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request whose tool result has two text chunks."""
-    return _build_tool_result_request(content=[TextChunk(text="R1"), TextChunk(text="R2")])
-
-
-def _build_closed_think_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a closed assistant think chunk request."""
-    return build_user_then_assistant_request(
-        assistant=AssistantMessage(content=[ThinkChunk(thinking="T1")]), settings=None
-    )
-
-
-def _build_open_think_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build an open assistant think chunk request."""
-    return build_user_then_assistant_request(
-        assistant=AssistantMessage(content=[ThinkChunk(thinking="T1", closed=False)]),
-        settings=None,
-    )
-
-
-def _build_assistant_text_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build an assistant turn with plain text content."""
-    return build_user_then_assistant_request(assistant=AssistantMessage(content="A1"), settings=None)
-
-
-def _build_assistant_text_chunk_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build an assistant turn containing one text chunk."""
-    return build_user_then_assistant_request(assistant=AssistantMessage(content=[TextChunk(text="A1")]), settings=None)
-
-
-def _build_closed_think_then_text_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a closed think chunk followed by assistant text."""
-    return build_user_then_assistant_request(
-        assistant=AssistantMessage(content=[ThinkChunk(thinking="T1"), TextChunk(text="A1")]),
-        settings=None,
-    )
-
-
-def _build_open_think_text_and_call_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build assistant content with an open think chunk, text and a tool call."""
-    return build_user_then_assistant_request(
-        assistant=AssistantMessage(
-            content=[ThinkChunk(thinking="R1", closed=False), TextChunk(text="A1")],
-            tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="F1", arguments="{'a': 1}"))],
-        ),
-        settings=None,
-    )
-
-
-def _build_system_text_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a system message with plain text content."""
-    return _build_system_request(content="S1")
-
-
-def _build_system_think_between_text_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a system message with text on both sides of a think chunk."""
-    return _build_system_request(content=[TextChunk(text="S1"), ThinkChunk(thinking="TS"), TextChunk(text="S2")])
-
-
-def _build_system_two_closed_thinks_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a system message with two closed think chunks between text."""
-    return _build_system_request(
-        content=[
-            TextChunk(text="S1"),
-            TextChunk(text="S3"),
-            ThinkChunk(thinking="TS", closed=True),
-            ThinkChunk(thinking="TS", closed=True),
-            TextChunk(text="S2"),
-        ]
-    )
-
-
-def _build_system_open_think_last_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a system message ending with an open think chunk."""
-    return _build_system_request(
-        content=[TextChunk(text="S1"), TextChunk(text="S3"), ThinkChunk(thinking="TS", closed=False)]
-    )
-
-
-def _build_tools_before_first_user_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a tool listing and conversation with two user messages."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[UserMessage(content="a"), AssistantMessage(content="b"), UserMessage(content="c")],
-        available_tools=[Tool(function=Function(name="f", description="", parameters={}))],
-    )
-
-
-def _build_system_then_user_audio_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a system message followed by a user audio chunk."""
-    audio = Audio(audio_array=np.zeros(shape=1600, dtype=np.float32), sampling_rate=16_000, format="wav")
-    return InstructRequest[ChatMessage, Tool](
-        messages=[SystemMessage(content="hello"), UserMessage(content=[AudioChunk.from_audio(audio=audio)])]
-    )
-
-
-def _build_tool_result_image_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a tool result containing one red image."""
-    return _build_tool_result_request(content=[ImageChunk(image=Image.new(mode="RGB", size=(4, 4), color="red"))])
-
-
 @pytest.mark.parametrize(
     argnames="config, request_builder, expected, expected_text",
     argvalues=[
         pytest.param(
             "no_think",
-            _build_tool_result_text_request,
+            partial(build_tool_result_text_request, settings=None),
             _TOOL_RESULT_TEXT_EXPECTED,
             _TOOL_RESULT_TEXT_TEXT,
             id="no-think-tool-result-text",
         ),
         pytest.param(
             "no_think",
-            _build_tool_result_text_chunks_request,
+            partial(build_tool_result_text_chunks_request, settings=None),
             _TOOL_RESULT_TEXT_CHUNKS_EXPECTED,
             _TOOL_RESULT_TEXT_CHUNKS_TEXT,
             id="no-think-tool-result-text-chunks",
         ),
         pytest.param(
             "with_think",
-            _build_closed_think_request,
+            partial(build_closed_think_request, settings=None),
             _CLOSED_THINK_EXPECTED,
             _CLOSED_THINK_TEXT,
             id="with-think-closed-think",
         ),
         pytest.param(
-            "with_think", _build_open_think_request, _OPEN_THINK_EXPECTED, _OPEN_THINK_TEXT, id="with-think-open-think"
+            "with_think",
+            partial(build_open_think_request, settings=None),
+            _OPEN_THINK_EXPECTED,
+            _OPEN_THINK_TEXT,
+            id="with-think-open-think",
         ),
         pytest.param(
             "with_think",
-            _build_assistant_text_request,
+            partial(build_assistant_text_request, settings=None),
             _ASSISTANT_TEXT_EXPECTED,
             _ASSISTANT_TEXT_TEXT,
             id="with-think-assistant-text",
@@ -541,49 +431,49 @@ def _build_tool_result_image_request() -> InstructRequest[ChatMessage, Tool]:
         ),
         pytest.param(
             "with_think",
-            _build_assistant_text_chunk_request,
+            partial(build_assistant_text_chunk_request, settings=None),
             _ASSISTANT_TEXT_EXPECTED,
             _ASSISTANT_TEXT_TEXT,
             id="with-think-assistant-text-chunk",
         ),
         pytest.param(
             "with_think",
-            _build_closed_think_then_text_request,
+            partial(build_closed_think_then_text_request, settings=None),
             _CLOSED_THINK_THEN_TEXT_EXPECTED,
             _CLOSED_THINK_THEN_TEXT_TEXT,
             id="with-think-closed-think-then-text",
         ),
         pytest.param(
             "with_think",
-            _build_open_think_text_and_call_request,
+            partial(build_open_think_text_and_call_request, settings=None),
             _OPEN_THINK_TEXT_AND_CALL_EXPECTED,
             _OPEN_THINK_TEXT_AND_CALL_TEXT,
             id="with-think-open-think-text-and-call",
         ),
         pytest.param(
             "with_think",
-            _build_system_text_request,
+            partial(build_system_text_request, settings=None),
             _SYSTEM_TEXT_EXPECTED,
             _SYSTEM_TEXT_TEXT,
             id="with-think-system-text",
         ),
         pytest.param(
             "with_think",
-            _build_system_think_between_text_request,
+            partial(build_system_think_between_text_request, settings=None),
             _SYSTEM_THINK_BETWEEN_TEXT_EXPECTED,
             _SYSTEM_THINK_BETWEEN_TEXT_TEXT,
             id="with-think-system-think-between-text",
         ),
         pytest.param(
             "with_think",
-            _build_system_two_closed_thinks_request,
+            partial(build_system_two_closed_thinks_request, settings=None),
             _SYSTEM_TWO_CLOSED_THINKS_EXPECTED,
             _SYSTEM_TWO_CLOSED_THINKS_TEXT,
             id="with-think-system-two-closed-thinks",
         ),
         pytest.param(
             "with_think",
-            _build_system_open_think_last_request,
+            partial(build_system_open_think_last_request, settings=None),
             _SYSTEM_OPEN_THINK_LAST_EXPECTED,
             _SYSTEM_OPEN_THINK_LAST_TEXT,
             id="with-think-system-open-think-last",
@@ -597,21 +487,21 @@ def _build_tool_result_image_request() -> InstructRequest[ChatMessage, Tool]:
         ),
         pytest.param(
             "no_think",
-            _build_tools_before_first_user_request,
+            partial(build_tools_before_first_user_request, settings=None),
             _TOOLS_BEFORE_FIRST_USER_EXPECTED,
             _TOOLS_BEFORE_FIRST_USER_TEXT,
             id="no-think-tools-before-first-user",
         ),
         pytest.param(
             "audio",
-            _build_system_then_user_audio_request,
+            partial(build_system_then_audio_user_request, num_samples=1600, sampling_rate=16_000, settings=None),
             _SYSTEM_THEN_USER_AUDIO_EXPECTED,
             _SYSTEM_THEN_USER_AUDIO_TEXT,
             id="audio-system-then-user-audio",
         ),
         pytest.param(
             "image",
-            _build_tool_result_image_request,
+            partial(build_tool_result_image_request, settings=None),
             _TOOL_RESULT_IMAGE_EXPECTED,
             _TOOL_RESULT_IMAGE_TEXT,
             id="image-tool-result-image",
