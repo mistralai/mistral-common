@@ -159,7 +159,9 @@ class TestModelSettingsBuilder:
         with pytest.raises(ValidationError, match=r"Input should be True"):
             ModelSettingsBuilder(
                 reasoning_effort=ReasoningEffortEnumBuilder(
-                    values=[ReasoningEffort.none], accepts_none=False, default=ReasoningEffort.none
+                    values=[ReasoningEffort.none],
+                    accepts_none=False,  # type: ignore[arg-type]
+                    default=ReasoningEffort.none,
                 )
             )
 
