@@ -43,6 +43,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_multiturn_image_request,
     build_non_ascii_call_arguments_request,
     build_normal_request,
+    build_prefixed_text_request,
     build_system_and_user_words_request,
     build_system_audio_request,
     build_system_message_multiturn_request,
@@ -422,11 +423,6 @@ def _build_assistant_text_request() -> InstructRequest[ChatMessage, Tool]:
     return build_user_then_assistant_request(assistant=AssistantMessage(content="A1"), settings=None)
 
 
-def _build_prefixed_assistant_text_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a prefixed assistant turn with plain text content."""
-    return build_user_then_assistant_request(assistant=AssistantMessage(content="A1", prefix=True), settings=None)
-
-
 def _build_assistant_text_chunk_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build an assistant turn containing one text chunk."""
     return build_user_then_assistant_request(assistant=AssistantMessage(content=[TextChunk(text="A1")]), settings=None)
@@ -538,7 +534,7 @@ def _build_tool_result_image_request() -> InstructRequest[ChatMessage, Tool]:
         ),
         pytest.param(
             "with_think",
-            _build_prefixed_assistant_text_request,
+            partial(build_prefixed_text_request, "A1", settings=None),
             _PREFIXED_ASSISTANT_TEXT_EXPECTED,
             _PREFIXED_ASSISTANT_TEXT_TEXT,
             id="with-think-prefixed-assistant-text",
