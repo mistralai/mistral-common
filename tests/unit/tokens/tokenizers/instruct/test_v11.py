@@ -32,6 +32,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_empty_assistant_request,
     build_empty_content_empty_calls_request,
     build_empty_content_no_calls_request,
+    build_empty_content_one_call_request,
     build_image_user_request,
     build_multi_audio_user_request,
     build_multi_image_user_request,
@@ -40,24 +41,37 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_non_ascii_call_arguments_request,
     build_none_content_empty_calls_request,
     build_none_content_no_calls_request,
+    build_none_content_one_call_request,
     build_normal_request,
     build_one_call_without_id_request,
     build_prefixed_text_request,
+    build_prefixed_tool_call_and_content_request,
     build_system_and_user_words_request,
     build_system_audio_request,
+    build_system_list_content_request,
     build_system_message_multiturn_request,
     build_system_message_prefixed_final_request,
     build_system_message_request,
     build_system_message_tools_multiturn_request,
     build_system_then_audio_user_request,
+    build_system_tools_and_call_request,
     build_text_then_audio_user_request,
     build_text_then_image_user_request,
+    build_tool_call_and_content_request,
+    build_tool_calls_with_two_results_request,
     build_tool_message_request,
+    build_tool_result_after_history_request,
     build_tools_multiturn_request,
     build_tools_singleturn_request,
+    build_truncation_drop_by_chunk_1_request,
+    build_truncation_drop_by_chunk_2_request,
+    build_truncation_drop_first_assistant_request,
+    build_truncation_full_convo_request,
+    build_truncation_keep_sys_and_last_message_request,
     build_truncation_last_user_at_limit_request,
     build_truncation_last_user_one_over_request,
     build_truncation_last_user_too_long_request,
+    build_truncation_start_with_assistant_request,
     build_truncation_system_prompt_too_long_request,
     build_two_calls_without_id_request,
     build_user_audio_url_request,
@@ -148,6 +162,96 @@ _USER_AUDIO_URL_TOKENS = [
 _USER_IMAGE_URL_TOKENS = [
     1, 3, 10, 10, 12, 10, 10, 13, 172, 201, 214, 201, 132, 205, 215, 132, 199, 211, 210, 216, 201, 210, 216, 4
 ]
+_TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_TOKENS = [
+    1, 17, 197, 18, 17, 197, 18, 3, 198, 198, 198, 198, 198, 198, 198, 4
+]
+_TRUNCATION_DROP_FIRST_ASSISTANT_TOKENS = [
+    1, 3, 198, 4, 3, 197, 4, 3, 197, 197, 197, 197, 197, 197, 197, 4
+]
+_TRUNCATION_START_WITH_ASSISTANT_TOKENS = [
+    1, 198, 2, 3, 197, 4, 3, 197, 197, 197, 197, 197, 197, 197, 4
+]
+_TRUNCATION_DROP_BY_CHUNK_1_TOKENS = [1, 3, 197, 4, 198, 198, 198, 198, 198, 198, 198, 2]
+_TRUNCATION_DROP_BY_CHUNK_2_TOKENS = [1, 3, 197, 197, 197, 197, 197, 197, 197, 4]
+_TRUNCATION_FULL_CONVO_TOKENS = [
+    1, 17, 197, 18, 3, 197, 4, 197, 2, 17, 198, 18, 3, 197, 4
+]
+_EMPTY_CONTENT_ONE_CALL_TOKENS = [1, 9, 216, 201, 215, 216, 195, 202, 210, 32, 223, 225]
+_EMPTY_CONTENT_ONE_CALL_PREFIX_IDS = [9, 216, 201, 215, 216, 195, 202, 210, 32, 223, 225]
+_NONE_CONTENT_ONE_CALL_TOKENS = [1, 9, 216, 201, 215, 216, 195, 202, 210, 32, 223, 225]
+_NONE_CONTENT_ONE_CALL_PREFIX_IDS = [9, 216, 201, 215, 216, 195, 202, 210, 32, 223, 225]
+_PREFIXED_TOOL_CALL_AND_CONTENT_TOKENS = [
+    1, 5, 191, 223, 134, 216, 221, 212, 201, 134, 158, 132, 134, 202, 217, 210, 199, 216, 205, 211,
+    210, 134, 144, 132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 158, 132, 223, 134, 210,
+    197, 209, 201, 134, 158, 132, 134, 216, 149, 134, 144, 132, 134, 200, 201, 215, 199, 214, 205,
+    212, 216, 205, 211, 210, 134, 158, 132, 134, 134, 144, 132, 134, 212, 197, 214, 197, 209, 201,
+    216, 201, 214, 215, 134, 158, 132, 223, 225, 225, 225, 144, 132, 223, 134, 216, 221, 212, 201,
+    134, 158, 132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 144, 132, 134, 202, 217, 210,
+    199, 216, 205, 211, 210, 134, 158, 132, 223, 134, 210, 197, 209, 201, 134, 158, 132, 134, 216,
+    150, 134, 144, 132, 134, 200, 201, 215, 199, 214, 205, 212, 216, 205, 211, 210, 134, 158, 132,
+    134, 134, 144, 132, 134, 212, 197, 214, 197, 209, 201, 216, 201, 214, 215, 134, 158, 132, 223,
+    225, 225, 225, 193, 6, 3, 197, 4, 198, 149, 198, 150, 9, 216, 149, 33, 148, 148, 148, 148, 148,
+    148, 148, 148, 148, 32, 223, 225, 9, 216, 150, 33, 149, 149, 149, 149, 149, 149, 149, 149, 149,
+    32, 223, 225
+]
+_PREFIXED_TOOL_CALL_AND_CONTENT_PREFIX_IDS = [
+    198, 149, 198, 150, 9, 216, 149, 33, 148, 148, 148, 148, 148, 148, 148, 148, 148, 32, 223, 225,
+    9, 216, 150, 33, 149, 149, 149, 149, 149, 149, 149, 149, 149, 32, 223, 225
+]
+_TOOL_CALL_AND_CONTENT_TOKENS = [
+    1, 5, 191, 223, 134, 216, 221, 212, 201, 134, 158, 132, 134, 202, 217, 210, 199, 216, 205, 211,
+    210, 134, 144, 132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 158, 132, 223, 134, 210,
+    197, 209, 201, 134, 158, 132, 134, 216, 149, 134, 144, 132, 134, 200, 201, 215, 199, 214, 205,
+    212, 216, 205, 211, 210, 134, 158, 132, 134, 134, 144, 132, 134, 212, 197, 214, 197, 209, 201,
+    216, 201, 214, 215, 134, 158, 132, 223, 225, 225, 225, 144, 132, 223, 134, 216, 221, 212, 201,
+    134, 158, 132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 144, 132, 134, 202, 217, 210,
+    199, 216, 205, 211, 210, 134, 158, 132, 223, 134, 210, 197, 209, 201, 134, 158, 132, 134, 216,
+    150, 134, 144, 132, 134, 200, 201, 215, 199, 214, 205, 212, 216, 205, 211, 210, 134, 158, 132,
+    134, 134, 144, 132, 134, 212, 197, 214, 197, 209, 201, 216, 201, 214, 215, 134, 158, 132, 223,
+    225, 225, 225, 193, 6, 3, 197, 4, 198, 149, 198, 150, 9, 216, 149, 33, 148, 148, 148, 148, 148,
+    148, 148, 148, 148, 32, 223, 225, 9, 216, 150, 33, 149, 149, 149, 149, 149, 149, 149, 149, 149,
+    32, 223, 225, 2
+]
+_TOOL_CALLS_WITH_TWO_RESULTS_TOKENS = [
+    1, 5, 191, 223, 134, 216, 221, 212, 201, 134, 158, 132, 134, 202, 217, 210, 199, 216, 205, 211,
+    210, 134, 144, 132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 158, 132, 223, 134, 210,
+    197, 209, 201, 134, 158, 132, 134, 216, 149, 134, 144, 132, 134, 200, 201, 215, 199, 214, 205,
+    212, 216, 205, 211, 210, 134, 158, 132, 134, 134, 144, 132, 134, 212, 197, 214, 197, 209, 201,
+    216, 201, 214, 215, 134, 158, 132, 223, 225, 225, 225, 144, 132, 223, 134, 216, 221, 212, 201,
+    134, 158, 132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 144, 132, 134, 202, 217, 210,
+    199, 216, 205, 211, 210, 134, 158, 132, 223, 134, 210, 197, 209, 201, 134, 158, 132, 134, 216,
+    150, 134, 144, 132, 134, 200, 201, 215, 199, 214, 205, 212, 216, 205, 211, 210, 134, 158, 132,
+    134, 134, 144, 132, 134, 212, 197, 214, 197, 209, 201, 216, 201, 214, 215, 134, 158, 132, 223,
+    225, 225, 225, 193, 6, 3, 197, 4, 198, 149, 198, 150, 9, 216, 149, 33, 148, 148, 148, 148, 148,
+    148, 148, 148, 148, 32, 223, 225, 9, 216, 150, 33, 149, 149, 149, 149, 149, 149, 149, 149, 149,
+    32, 223, 225, 2, 7, 148, 148, 148, 148, 148, 148, 148, 148, 148, 19, 214, 149, 8, 7, 149, 149,
+    149, 149, 149, 149, 149, 149, 149, 19, 214, 150, 8
+]
+_TOOL_RESULT_AFTER_HISTORY_TOKENS = [
+    1, 17, 197, 18, 3, 197, 4, 5, 191, 223, 134, 216, 221, 212, 201, 134, 158, 132, 134, 202, 217,
+    210, 199, 216, 205, 211, 210, 134, 144, 132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134,
+    158, 132, 223, 134, 210, 197, 209, 201, 134, 158, 132, 134, 216, 134, 144, 132, 134, 200, 201,
+    215, 199, 214, 205, 212, 216, 205, 211, 210, 134, 158, 132, 134, 134, 144, 132, 134, 212, 197,
+    214, 197, 209, 201, 216, 201, 214, 215, 134, 158, 132, 223, 134, 216, 221, 212, 201, 134, 158,
+    132, 134, 211, 198, 206, 201, 199, 216, 134, 144, 132, 134, 212, 214, 211, 212, 201, 214, 216,
+    205, 201, 215, 134, 158, 132, 223, 134, 203, 134, 158, 132, 223, 134, 216, 221, 212, 201, 134,
+    158, 132, 134, 215, 216, 214, 205, 210, 203, 134, 225, 144, 132, 134, 204, 134, 158, 132, 223,
+    134, 216, 221, 212, 201, 134, 158, 132, 134, 215, 216, 214, 205, 210, 203, 134, 225, 225, 225,
+    225, 225, 193, 6, 3, 199, 4, 198, 9, 216, 32, 223, 134, 203, 134, 158, 132, 134, 204, 134, 225,
+    2, 7, 149, 150, 151, 152, 19, 198, 8
+]
+_SYSTEM_TOOLS_AND_CALL_TOKENS = [
+    1, 17, 197, 18, 5, 191, 223, 134, 216, 221, 212, 201, 134, 158, 132, 134, 202, 217, 210, 199,
+    216, 205, 211, 210, 134, 144, 132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 158, 132,
+    223, 134, 210, 197, 209, 201, 134, 158, 132, 134, 216, 134, 144, 132, 134, 200, 201, 215, 199,
+    214, 205, 212, 216, 205, 211, 210, 134, 158, 132, 134, 134, 144, 132, 134, 212, 197, 214, 197,
+    209, 201, 216, 201, 214, 215, 134, 158, 132, 223, 134, 216, 221, 212, 201, 134, 158, 132, 134,
+    211, 198, 206, 201, 199, 216, 134, 144, 132, 134, 212, 214, 211, 212, 201, 214, 216, 205, 201,
+    215, 134, 158, 132, 223, 134, 203, 134, 158, 132, 223, 134, 216, 221, 212, 201, 134, 158, 132,
+    134, 215, 216, 214, 205, 210, 203, 134, 225, 144, 132, 134, 204, 134, 158, 132, 223, 134, 216,
+    221, 212, 201, 134, 158, 132, 134, 215, 216, 214, 205, 210, 203, 134, 225, 225, 225, 225, 225,
+    193, 6, 3, 197, 4, 198, 9, 216, 32, 223, 134, 203, 134, 158, 132, 134, 204, 134, 225, 2
+]
 # fmt: on
 
 _NORMAL_EXPECTED = Tokenized(tokens=_NORMAL_TOKENS)
@@ -200,6 +304,49 @@ _SYSTEM_AUDIO_TEXT = (
 _USER_AUDIO_URL_TEXT = "<s>[INST]Here is content[BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
 _USER_IMAGE_URL_TEXT = "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]Here is content[/INST]"
 
+_TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_TEXT = (
+    "<s>[SYSTEM_PROMPT]a[/SYSTEM_PROMPT][SYSTEM_PROMPT]a[/SYSTEM_PROMPT][INST]bbbbbbb[/INST]"
+)
+_TRUNCATION_DROP_FIRST_ASSISTANT_TEXT = "<s>[INST]b[/INST][INST]a[/INST][INST]aaaaaaa[/INST]"
+_TRUNCATION_START_WITH_ASSISTANT_TEXT = "<s>b</s>[INST]a[/INST][INST]aaaaaaa[/INST]"
+_TRUNCATION_DROP_BY_CHUNK_1_TEXT = "<s>[INST]a[/INST]bbbbbbb</s>"
+_TRUNCATION_DROP_BY_CHUNK_2_TEXT = "<s>[INST]aaaaaaa[/INST]"
+_TRUNCATION_FULL_CONVO_TEXT = (
+    "<s>[SYSTEM_PROMPT]a[/SYSTEM_PROMPT][INST]a[/INST]a</s>[SYSTEM_PROMPT]b[/SYSTEM_PROMPT][INST]a[/INST]"
+)
+_EMPTY_CONTENT_ONE_CALL_TEXT = "<s>[TOOL_CALLS]test_fn[ARGS]{}"
+_NONE_CONTENT_ONE_CALL_TEXT = "<s>[TOOL_CALLS]test_fn[ARGS]{}"
+_PREFIXED_TOOL_CALL_AND_CONTENT_TEXT = (
+    '<s>[AVAILABLE_TOOLS][{"type": "function", "function": {"name": "t1", "description": "", '
+    '"parameters": {}}}, {"type": "function", "function": {"name": "t2", "description": "", '
+    '"parameters": {}}}][/AVAILABLE_TOOLS][INST]a[/INST]b1b2[TOOL_CALLS]t1[CALL_ID]000000000[ARGS]'
+    "{}[TOOL_CALLS]t2[CALL_ID]111111111[ARGS]{}"
+)
+_TOOL_CALL_AND_CONTENT_TEXT = (
+    '<s>[AVAILABLE_TOOLS][{"type": "function", "function": {"name": "t1", "description": "", '
+    '"parameters": {}}}, {"type": "function", "function": {"name": "t2", "description": "", '
+    '"parameters": {}}}][/AVAILABLE_TOOLS][INST]a[/INST]b1b2[TOOL_CALLS]t1[CALL_ID]000000000[ARGS]'
+    "{}[TOOL_CALLS]t2[CALL_ID]111111111[ARGS]{}</s>"
+)
+_TOOL_CALLS_WITH_TWO_RESULTS_TEXT = (
+    '<s>[AVAILABLE_TOOLS][{"type": "function", "function": {"name": "t1", "description": "", '
+    '"parameters": {}}}, {"type": "function", "function": {"name": "t2", "description": "", '
+    '"parameters": {}}}][/AVAILABLE_TOOLS][INST]a[/INST]b1b2[TOOL_CALLS]t1[CALL_ID]000000000[ARGS]'
+    "{}[TOOL_CALLS]t2[CALL_ID]111111111[ARGS]{}</s>[TOOL_RESULTS]000000000[TOOL_CONTENT]r1[/"
+    "TOOL_RESULTS][TOOL_RESULTS]111111111[TOOL_CONTENT]r2[/TOOL_RESULTS]"
+)
+_TOOL_RESULT_AFTER_HISTORY_TEXT = (
+    '<s>[SYSTEM_PROMPT]a[/SYSTEM_PROMPT][INST]a[/INST][AVAILABLE_TOOLS][{"type": "function", '
+    '"function": {"name": "t", "description": "", "parameters": {"type": "object", '
+    '"properties": {"g": {"type": "string"}, "h": {"type": "string"}}}}}][/AVAILABLE_TOOLS]['
+    'INST]c[/INST]b[TOOL_CALLS]t[ARGS]{"g": "h"}</s>[TOOL_RESULTS]1234[TOOL_CONTENT]b[/TOOL_RESULTS]'
+)
+_SYSTEM_TOOLS_AND_CALL_TEXT = (
+    '<s>[SYSTEM_PROMPT]a[/SYSTEM_PROMPT][AVAILABLE_TOOLS][{"type": "function", "function": {"name": "t", '
+    '"description": "", "parameters": {"type": "object", "properties": {"g": {"type": "string"}, "h"'
+    ': {"type": "string"}}}}}][/AVAILABLE_TOOLS][INST]a[/INST]b[TOOL_CALLS]t[ARGS]{"g": "h"}</s>'
+)
+
 _RED_4X4_IMAGE = np.broadcast_to(
     array=(
         (
@@ -240,6 +387,26 @@ _MULTITURN_AUDIO_EXPECTED = Tokenized(tokens=_MULTITURN_AUDIO_TOKENS, audios=[_S
 _SYSTEM_AUDIO_EXPECTED = Tokenized(tokens=_SYSTEM_AUDIO_TOKENS, audios=[_SILENT_AUDIO])
 _USER_AUDIO_URL_EXPECTED = Tokenized(tokens=_USER_AUDIO_URL_TOKENS, audios=[_SILENT_AUDIO])
 _USER_IMAGE_URL_EXPECTED = Tokenized(tokens=_USER_IMAGE_URL_TOKENS, images=[_RED_4X4_IMAGE])
+
+_TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_EXPECTED = Tokenized(tokens=_TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_TOKENS)
+_TRUNCATION_DROP_FIRST_ASSISTANT_EXPECTED = Tokenized(tokens=_TRUNCATION_DROP_FIRST_ASSISTANT_TOKENS)
+_TRUNCATION_START_WITH_ASSISTANT_EXPECTED = Tokenized(tokens=_TRUNCATION_START_WITH_ASSISTANT_TOKENS)
+_TRUNCATION_DROP_BY_CHUNK_1_EXPECTED = Tokenized(tokens=_TRUNCATION_DROP_BY_CHUNK_1_TOKENS)
+_TRUNCATION_DROP_BY_CHUNK_2_EXPECTED = Tokenized(tokens=_TRUNCATION_DROP_BY_CHUNK_2_TOKENS)
+_TRUNCATION_FULL_CONVO_EXPECTED = Tokenized(tokens=_TRUNCATION_FULL_CONVO_TOKENS)
+_EMPTY_CONTENT_ONE_CALL_EXPECTED = Tokenized(
+    tokens=_EMPTY_CONTENT_ONE_CALL_TOKENS, prefix_ids=_EMPTY_CONTENT_ONE_CALL_PREFIX_IDS
+)
+_NONE_CONTENT_ONE_CALL_EXPECTED = Tokenized(
+    tokens=_NONE_CONTENT_ONE_CALL_TOKENS, prefix_ids=_NONE_CONTENT_ONE_CALL_PREFIX_IDS
+)
+_PREFIXED_TOOL_CALL_AND_CONTENT_EXPECTED = Tokenized(
+    tokens=_PREFIXED_TOOL_CALL_AND_CONTENT_TOKENS, prefix_ids=_PREFIXED_TOOL_CALL_AND_CONTENT_PREFIX_IDS
+)
+_TOOL_CALL_AND_CONTENT_EXPECTED = Tokenized(tokens=_TOOL_CALL_AND_CONTENT_TOKENS)
+_TOOL_CALLS_WITH_TWO_RESULTS_EXPECTED = Tokenized(tokens=_TOOL_CALLS_WITH_TWO_RESULTS_TOKENS)
+_TOOL_RESULT_AFTER_HISTORY_EXPECTED = Tokenized(tokens=_TOOL_RESULT_AFTER_HISTORY_TOKENS)
+_SYSTEM_TOOLS_AND_CALL_EXPECTED = Tokenized(tokens=_SYSTEM_TOOLS_AND_CALL_TOKENS)
 
 _IMAGE_USER_TEXT = "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]a[/INST]"
 _AUDIO_USER_TEXT = "<s>[INST][BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
@@ -540,6 +707,167 @@ def audio_tokenizer() -> InstructTokenizerV11:
             _USER_IMAGE_URL_EXPECTED,
             _USER_IMAGE_URL_TEXT,
             id="image-shared-user-image-url",
+        ),
+        pytest.param(
+            "default",
+            partial(build_truncation_keep_sys_and_last_message_request, settings=None),
+            _TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_EXPECTED,
+            _TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_TEXT,
+            id="default-shared-truncation-keep-sys-and-last-message",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_truncation_keep_sys_and_last_message_request, settings=None),
+            _TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_EXPECTED,
+            _TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_TEXT,
+            id="audio-shared-truncation-keep-sys-and-last-message",
+        ),
+        pytest.param(
+            "default",
+            partial(build_truncation_drop_first_assistant_request, settings=None),
+            _TRUNCATION_DROP_FIRST_ASSISTANT_EXPECTED,
+            _TRUNCATION_DROP_FIRST_ASSISTANT_TEXT,
+            id="default-shared-truncation-drop-first-assistant",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_truncation_drop_first_assistant_request, settings=None),
+            _TRUNCATION_DROP_FIRST_ASSISTANT_EXPECTED,
+            _TRUNCATION_DROP_FIRST_ASSISTANT_TEXT,
+            id="audio-shared-truncation-drop-first-assistant",
+        ),
+        pytest.param(
+            "default",
+            partial(build_truncation_start_with_assistant_request, settings=None),
+            _TRUNCATION_START_WITH_ASSISTANT_EXPECTED,
+            _TRUNCATION_START_WITH_ASSISTANT_TEXT,
+            id="default-shared-truncation-start-with-assistant",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_truncation_start_with_assistant_request, settings=None),
+            _TRUNCATION_START_WITH_ASSISTANT_EXPECTED,
+            _TRUNCATION_START_WITH_ASSISTANT_TEXT,
+            id="audio-shared-truncation-start-with-assistant",
+        ),
+        pytest.param(
+            "default",
+            partial(build_truncation_drop_by_chunk_1_request, settings=None),
+            _TRUNCATION_DROP_BY_CHUNK_1_EXPECTED,
+            _TRUNCATION_DROP_BY_CHUNK_1_TEXT,
+            id="default-shared-truncation-drop-by-chunk-1",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_truncation_drop_by_chunk_1_request, settings=None),
+            _TRUNCATION_DROP_BY_CHUNK_1_EXPECTED,
+            _TRUNCATION_DROP_BY_CHUNK_1_TEXT,
+            id="audio-shared-truncation-drop-by-chunk-1",
+        ),
+        pytest.param(
+            "default",
+            partial(build_truncation_drop_by_chunk_2_request, settings=None),
+            _TRUNCATION_DROP_BY_CHUNK_2_EXPECTED,
+            _TRUNCATION_DROP_BY_CHUNK_2_TEXT,
+            id="default-shared-truncation-drop-by-chunk-2",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_truncation_drop_by_chunk_2_request, settings=None),
+            _TRUNCATION_DROP_BY_CHUNK_2_EXPECTED,
+            _TRUNCATION_DROP_BY_CHUNK_2_TEXT,
+            id="audio-shared-truncation-drop-by-chunk-2",
+        ),
+        pytest.param(
+            "default",
+            partial(build_truncation_full_convo_request, settings=None),
+            _TRUNCATION_FULL_CONVO_EXPECTED,
+            _TRUNCATION_FULL_CONVO_TEXT,
+            id="default-shared-truncation-full-convo",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_truncation_full_convo_request, settings=None),
+            _TRUNCATION_FULL_CONVO_EXPECTED,
+            _TRUNCATION_FULL_CONVO_TEXT,
+            id="audio-shared-truncation-full-convo",
+        ),
+        pytest.param(
+            "default",
+            partial(build_empty_content_one_call_request, settings=None),
+            _EMPTY_CONTENT_ONE_CALL_EXPECTED,
+            _EMPTY_CONTENT_ONE_CALL_TEXT,
+            id="default-shared-empty-content-one-call",
+        ),
+        pytest.param(
+            "default",
+            partial(build_none_content_one_call_request, settings=None),
+            _NONE_CONTENT_ONE_CALL_EXPECTED,
+            _NONE_CONTENT_ONE_CALL_TEXT,
+            id="default-shared-none-content-one-call",
+        ),
+        pytest.param(
+            "default",
+            partial(build_prefixed_tool_call_and_content_request, settings=None),
+            _PREFIXED_TOOL_CALL_AND_CONTENT_EXPECTED,
+            _PREFIXED_TOOL_CALL_AND_CONTENT_TEXT,
+            id="default-shared-prefixed-tool-call-and-content",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_prefixed_tool_call_and_content_request, settings=None),
+            _PREFIXED_TOOL_CALL_AND_CONTENT_EXPECTED,
+            _PREFIXED_TOOL_CALL_AND_CONTENT_TEXT,
+            id="audio-shared-prefixed-tool-call-and-content",
+        ),
+        pytest.param(
+            "default",
+            partial(build_tool_call_and_content_request, settings=None),
+            _TOOL_CALL_AND_CONTENT_EXPECTED,
+            _TOOL_CALL_AND_CONTENT_TEXT,
+            id="default-shared-tool-call-and-content",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_tool_call_and_content_request, settings=None),
+            _TOOL_CALL_AND_CONTENT_EXPECTED,
+            _TOOL_CALL_AND_CONTENT_TEXT,
+            id="audio-shared-tool-call-and-content",
+        ),
+        pytest.param(
+            "default",
+            partial(build_tool_calls_with_two_results_request, settings=None),
+            _TOOL_CALLS_WITH_TWO_RESULTS_EXPECTED,
+            _TOOL_CALLS_WITH_TWO_RESULTS_TEXT,
+            id="default-shared-tool-calls-with-two-results",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_tool_calls_with_two_results_request, settings=None),
+            _TOOL_CALLS_WITH_TWO_RESULTS_EXPECTED,
+            _TOOL_CALLS_WITH_TWO_RESULTS_TEXT,
+            id="audio-shared-tool-calls-with-two-results",
+        ),
+        pytest.param(
+            "default",
+            partial(build_tool_result_after_history_request, settings=None),
+            _TOOL_RESULT_AFTER_HISTORY_EXPECTED,
+            _TOOL_RESULT_AFTER_HISTORY_TEXT,
+            id="default-shared-tool-result-after-history",
+        ),
+        pytest.param(
+            "default",
+            partial(build_system_tools_and_call_request, settings=None),
+            _SYSTEM_TOOLS_AND_CALL_EXPECTED,
+            _SYSTEM_TOOLS_AND_CALL_TEXT,
+            id="default-shared-system-tools-and-call",
+        ),
+        pytest.param(
+            "default",
+            partial(build_system_list_content_request, settings=None),
+            _SYSTEM_MESSAGE_EXPECTED,
+            _SYSTEM_MESSAGE_TEXT,
+            id="default-shared-system-list-content",
         ),
     ],
 )
