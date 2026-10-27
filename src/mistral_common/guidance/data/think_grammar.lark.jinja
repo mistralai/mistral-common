@@ -16,14 +16,18 @@ start: body
 
 {% if mode == "auto" -%}
 body: think? (content | fcalls)
-{% elif mode == "any" or mode == "required" -%}
+{% elif mode == "any" -%}
 body: think? fcalls
 {% elif mode == "none" -%}
 body: think? content
 {% endif -%}
 
+{% if json_schema_str != None and not json_only -%}
+fcalls: pretool_content? {{ fcall }}
+pretool_content: (/[ \t\r\n]+/ | /[^{\[\s](.|\n)*/)+
+{% else -%}
 fcalls: content? {{ fcall }}
-
+{% endif %}
 content: (/(.|\n)+/)+
 
 think: {{ begin_think_token }} content {{ end_think_token }}

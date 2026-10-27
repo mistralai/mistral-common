@@ -220,6 +220,8 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         tools: List of available tools for the model to use. If `None`, no tools are available.
         tool_choice: Strategy for tool selection. Options: auto (model decides),
             none (no tools), any/required (deprecated, use required). Default: auto.
+        parallel_tool_calls: Whether the model may call multiple tools in one
+            response. Defaults to `True`.
         truncate_for_context_length: If `True`, automatically truncate messages to
             fit within the model's context length. Default: `False`.
         reasoning_effort: Controls reasoning effort (one of "none", "minimal", "low", "medium", "high",
@@ -245,6 +247,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     response_format: ResponseFormat = Field(default_factory=ResponseFormat)
     tools: list[Tool] | None = None
     tool_choice: ToolChoice = ToolChoiceEnum.auto
+    parallel_tool_calls: bool = True
     truncate_for_context_length: bool = False
     reasoning_effort: ReasoningEffort | None = None
 
@@ -331,12 +334,12 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             ...     ),
             ... )])
             >>> request.to_openai()
-            {'temperature': 0.7, 'top_p': 1.0, 'response_format': {'type': 'text'}, 'continue_final_message': False, 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'tools': [{'type': 'function', 'function': {'name': 'get_current_weather', 'description': 'Get the current weather in a given location', 'parameters': {'type': 'object', 'properties': {'location': {'type': 'string', 'description': 'The city and state, e.g. San Francisco, CA'}, 'unit': {'type': 'string', 'enum': ['celsius', 'fahrenheit']}}, 'required': ['location']}, 'strict': False}}], 'tool_choice': 'auto'}
+            {'temperature': 0.7, 'top_p': 1.0, 'response_format': {'type': 'text'}, 'continue_final_message': False, 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'tools': [{'type': 'function', 'function': {'name': 'get_current_weather', 'description': 'Get the current weather in a given location', 'parameters': {'type': 'object', 'properties': {'location': {'type': 'string', 'description': 'The city and state, e.g. San Francisco, CA'}, 'unit': {'type': 'string', 'enum': ['celsius', 'fahrenheit']}}, 'required': ['location']}, 'strict': False}}], 'parallel_tool_calls': True, 'tool_choice': 'auto'}
         """  # noqa: E501
 
         # Handle messages and tools separately.
         openai_request: dict[str, Any] = self.model_dump(
-            exclude={"messages", "tools", "truncate_for_context_length", "tool_choice"},
+            exclude={"messages", "tools", "truncate_for_context_length", "tool_choice", "parallel_tool_calls"},
             exclude_none=True,
             by_alias=True,
         )
@@ -372,6 +375,9 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         openai_request["messages"] = openai_messages
         if self.tools is not None:
             openai_request["tools"] = [tool.to_openai() for tool in self.tools]
+        # OpenAI rejects `parallel_tool_calls` when no tools are given.
+        if self.tools:
+            openai_request["parallel_tool_calls"] = self.parallel_tool_calls
 
         openai_tool_choice: str | dict[str, Any]
         match self.tool_choice:
@@ -422,6 +428,10 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         random_seed = kwargs.pop("seed", None)
         if random_seed is None:
             random_seed = kwargs.pop("random_seed", None)
+
+        # OpenAI clients send `parallel_tool_calls: null` to mean the default.
+        if "parallel_tool_calls" in kwargs and kwargs["parallel_tool_calls"] is None:
+            kwargs["parallel_tool_calls"] = True
 
         converted_messages: list[ChatMessage] = convert_openai_messages(messages)
         converted_messages = _map_continue_final_message(
