@@ -34,6 +34,8 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_assistant_tool_calls_request,
     build_audio_user_request,
     build_empty_assistant_request,
+    build_empty_content_empty_calls_request,
+    build_empty_content_no_calls_request,
     build_hi_user_request,
     build_image_user_request,
     build_multi_audio_user_request,
@@ -41,6 +43,8 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_multiturn_audio_request,
     build_multiturn_image_request,
     build_no_tools_pipeline_request,
+    build_none_content_empty_calls_request,
+    build_none_content_no_calls_request,
     build_normal_request,
     build_system_and_user_words_request,
     build_system_audio_request,
@@ -61,6 +65,9 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_tools_pipeline_request,
     build_tools_singleturn_request,
     build_truncation_last_user_at_limit_request,
+    build_truncation_last_user_one_over_request,
+    build_truncation_last_user_too_long_request,
+    build_truncation_system_prompt_too_long_request,
     build_user_audio_url_request,
     build_user_image_url_request,
 )
@@ -80,6 +87,7 @@ _SYSTEM_TEXT_TEXT = (
 _SYSTEM_THINK_MESSAGE = r"^ThinkChunk in system message is not supported for this model$"
 _INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
 _REASONING_EFFORT_REQUIRED_MESSAGE = r"^reasoning_effort should be set for this model\.$"
+_TRUNCATION_FAILED_MESSAGE = r"^Input couldn't fit in truncate_at_max_token$"
 
 _SETTINGS = ModelSettings(reasoning_effort=ReasoningEffort.high)
 _SETTINGS_JSON = '{"reasoning_effort": "high"}'
@@ -604,6 +612,76 @@ def test_encode_instruct(
     argvalues=[
         pytest.param(
             "default",
+            partial(build_none_content_no_calls_request, settings=_SETTINGS),
+            TokenizerException,
+            _INVALID_ASSISTANT_MESSAGE,
+            id="default-shared-none-content-no-calls",
+        ),
+        pytest.param(
+            "default",
+            partial(build_none_content_empty_calls_request, settings=_SETTINGS),
+            TokenizerException,
+            _INVALID_ASSISTANT_MESSAGE,
+            id="default-shared-none-content-empty-calls",
+        ),
+        pytest.param(
+            "default",
+            partial(build_empty_content_no_calls_request, settings=_SETTINGS),
+            TokenizerException,
+            _INVALID_ASSISTANT_MESSAGE,
+            id="default-shared-empty-content-no-calls",
+        ),
+        pytest.param(
+            "default",
+            partial(build_empty_content_empty_calls_request, settings=_SETTINGS),
+            TokenizerException,
+            _INVALID_ASSISTANT_MESSAGE,
+            id="default-shared-empty-content-empty-calls",
+        ),
+        pytest.param(
+            "default",
+            partial(build_truncation_system_prompt_too_long_request, settings=_SETTINGS),
+            TokenizerException,
+            _TRUNCATION_FAILED_MESSAGE,
+            id="default-shared-truncation-system-prompt-too-long",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_truncation_system_prompt_too_long_request, settings=_SETTINGS),
+            TokenizerException,
+            _TRUNCATION_FAILED_MESSAGE,
+            id="audio-shared-truncation-system-prompt-too-long",
+        ),
+        pytest.param(
+            "default",
+            partial(build_truncation_last_user_too_long_request, settings=_SETTINGS),
+            TokenizerException,
+            _TRUNCATION_FAILED_MESSAGE,
+            id="default-shared-truncation-last-user-too-long",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_truncation_last_user_too_long_request, settings=_SETTINGS),
+            TokenizerException,
+            _TRUNCATION_FAILED_MESSAGE,
+            id="audio-shared-truncation-last-user-too-long",
+        ),
+        pytest.param(
+            "default",
+            partial(build_truncation_last_user_one_over_request, settings=_SETTINGS),
+            TokenizerException,
+            _TRUNCATION_FAILED_MESSAGE,
+            id="default-shared-truncation-last-user-one-over",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_truncation_last_user_one_over_request, settings=_SETTINGS),
+            TokenizerException,
+            _TRUNCATION_FAILED_MESSAGE,
+            id="audio-shared-truncation-last-user-one-over",
+        ),
+        pytest.param(
+            "default",
             partial(build_system_think_request, settings=_SETTINGS),
             TokenizerException,
             _SYSTEM_THINK_MESSAGE,
@@ -622,6 +700,13 @@ def test_encode_instruct(
             TokenizerException,
             _INVALID_ASSISTANT_MESSAGE,
             id="default-shared-empty-assistant",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_empty_assistant_request, settings=_SETTINGS),
+            TokenizerException,
+            _INVALID_ASSISTANT_MESSAGE,
+            id="audio-shared-empty-assistant",
         ),
         pytest.param(
             "default",
