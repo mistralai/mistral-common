@@ -10,7 +10,13 @@ from tests.integrations.chat_templates.helpers import render_template
 
 def test_template_config_rejects_invalid_reasoning_effort_options() -> None:
     invalid_options: list[tuple[dict[str, Any], str]] = [
-        ({"reasoning_effort_values": ()}, "non-empty tuple"),
+        (
+            {
+                "reasoning_effort_values": (),
+                "reasoning_effort_default": "none",
+            },
+            "non-empty tuple",
+        ),
         ({"reasoning_effort_values": ("low", "low")}, "duplicates"),
         ({"reasoning_effort_values": ("unknown",)}, "Unknown reasoning effort values"),
         (
@@ -18,7 +24,10 @@ def test_template_config_rejects_invalid_reasoning_effort_options() -> None:
             "require the reasoning_effort model settings field",
         ),
         (
-            {"model_settings_fields": frozenset({"reasoning_effort"})},
+            {
+                "model_settings_fields": frozenset({"reasoning_effort"}),
+                "reasoning_effort_values": ("none", "high"),
+            },
             "default is required",
         ),
         (
@@ -36,10 +45,14 @@ def test_template_config_rejects_invalid_reasoning_effort_options() -> None:
             TemplateConfig(version=TokenizerVersion.v15, **options)
 
 
-def test_template_config_exposes_full_effort_ladder_by_default() -> None:
-    config = TemplateConfig(version=TokenizerVersion.v15, reasoning_effort_default="none")
+def test_template_config_requires_effort_values_when_field_is_enabled() -> None:
+    with pytest.raises(ValueError, match="Reasoning effort values are required"):
+        TemplateConfig(version=TokenizerVersion.v15, reasoning_effort_default="none")
 
-    assert config.exposed_reasoning_effort_values == ("none", "minimal", "low", "medium", "high", "xhigh", "max")
+
+def test_template_config_requires_effort_default_when_field_is_enabled() -> None:
+    with pytest.raises(ValueError, match="default is required"):
+        TemplateConfig(version=TokenizerVersion.v15, reasoning_effort_values=("none", "high"))
 
 
 def test_template_config_requires_default_in_exposed_values() -> None:

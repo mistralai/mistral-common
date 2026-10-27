@@ -27,6 +27,8 @@ class TestConvertTokenizerToChatTemplate:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
         assert result == expected
         assert "[THINK]" in result
@@ -124,6 +126,8 @@ class TestConvertTokenizerToChatTemplate:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
         assert result == expected
 
@@ -141,6 +145,8 @@ class TestConvertTokenizerToChatTemplate:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
         assert result == expected
 
@@ -158,6 +164,8 @@ class TestConvertTokenizerToChatTemplate:
             plain_thinking_support=True,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
         assert result == expected
         assert "<think>" in result
@@ -177,6 +185,8 @@ class TestConvertTokenizerToChatTemplate:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
         assert result == expected
         assert "<think>" not in result
@@ -211,6 +221,8 @@ class TestConvertTokenizerToChatTemplate:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
         assert result == expected
 
@@ -257,6 +269,8 @@ class TestConvertTokenizerToChatTemplate:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
         assert result == expected
         assert "[AUDIO]" in result

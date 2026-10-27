@@ -22,8 +22,8 @@ def generate_chat_template(
     plain_thinking_support: bool,
     use_special_token_variables: bool,
     model_settings_fields: frozenset[str] | None,
-    reasoning_effort_values: tuple[str, ...] | None = None,
-    reasoning_effort_default: str | None = None,
+    reasoning_effort_values: tuple[str, ...] | None,
+    reasoning_effort_default: str | None,
 ) -> str:
     r"""Generate a chat template based on configuration.
 
@@ -46,12 +46,11 @@ def generate_chat_template(
         model_settings_fields: Fields to render, or `None` to select automatically
             based on the tokenizer version. Required — pass `None` explicitly for
             the automatic selection.
-        reasoning_effort_values: Reasoning effort values exposed on requests, or
-            `None` to expose the full standard ladder. Requires the
-            `reasoning_effort` model settings field when set.
+        reasoning_effort_values: Reasoning effort values exposed on requests. Required when the
+            `reasoning_effort` model settings field is enabled.
         reasoning_effort_default: Exposed reasoning effort rendered when the request
             leaves the effort unset. Required when the `reasoning_effort` model
-            settings field is enabled and must be one of the exposed values.
+            settings field is enabled and must be one of `reasoning_effort_values`.
 
     Returns:
         The generated Jinja2 template as a string.

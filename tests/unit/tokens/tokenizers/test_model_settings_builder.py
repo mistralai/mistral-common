@@ -1,3 +1,4 @@
+import pickle
 from pathlib import Path
 
 import pytest
@@ -7,13 +8,13 @@ from mistral_common.exceptions import InvalidRequestException
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, ModelSettings, ReasoningEffort
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder, ReasoningEffortBuilder
+from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder, ReasoningEffortEnumBuilder
 from tests.integrations.chat_templates.helpers import TestConfig, build_tekken_json
 
 
-class TestReasoningEffortBuilder:
+class TestReasoningEffortEnumBuilder:
     def test_accepts_configured_values_and_builds_default(self) -> None:
-        builder = ReasoningEffortBuilder(
+        builder = ReasoningEffortEnumBuilder(
             accepts_none=True,
             default=ReasoningEffort.medium,
             values=[ReasoningEffort.low, ReasoningEffort.medium, ReasoningEffort.max],
@@ -27,7 +28,7 @@ class TestReasoningEffortBuilder:
 
     def test_accepts_none_is_required(self) -> None:
         with pytest.raises(ValidationError, match="accepts_none"):
-            ReasoningEffortBuilder(
+            ReasoningEffortEnumBuilder(
                 accepts_none=False,
                 default=None,
                 values=[ReasoningEffort.low],
@@ -35,14 +36,14 @@ class TestReasoningEffortBuilder:
 
     def test_default_is_required(self) -> None:
         with pytest.raises(ValidationError, match="must declare a default"):
-            ReasoningEffortBuilder(
+            ReasoningEffortEnumBuilder(
                 accepts_none=True,
                 default=None,
                 values=[ReasoningEffort.low],
             )
 
     def test_rejects_effort_outside_configured_values(self) -> None:
-        builder = ReasoningEffortBuilder(
+        builder = ReasoningEffortEnumBuilder(
             accepts_none=True,
             default=ReasoningEffort.low,
             values=[ReasoningEffort.low, ReasoningEffort.medium],
@@ -57,5 +58,19 @@ class TestReasoningEffortBuilder:
         tokenizer = MistralTokenizer.from_file(str(path))
 
         assert isinstance(
-            tokenizer.instruct_tokenizer.tokenizer.model_settings_builder.reasoning_effort, ReasoningEffortBuilder
+            tokenizer.instruct_tokenizer.tokenizer.model_settings_builder.reasoning_effort, ReasoningEffortEnumBuilder
         )
+
+    def test_model_settings_builder_round_trips_through_pickle(self) -> None:
+        settings_builder = ModelSettingsBuilder(
+            reasoning_effort=ReasoningEffortEnumBuilder(
+                accepts_none=True,
+                default=ReasoningEffort.none,
+                values=[ReasoningEffort.none, ReasoningEffort.high],
+            )
+        )
+
+        restored = pickle.loads(pickle.dumps(settings_builder))
+
+        assert restored == settings_builder
+        assert type(restored.reasoning_effort) is ReasoningEffortEnumBuilder

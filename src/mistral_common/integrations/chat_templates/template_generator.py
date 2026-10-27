@@ -75,12 +75,11 @@ class TemplateConfig:
             automatic fields for the tokenizer version (`reasoning_effort` for v15 and
             above, none below). An explicit set must be non-empty, requires v15 or above,
             and may only contain values from `MODEL_SETTINGS_FIELD_CHOICES`.
-        reasoning_effort_values: Reasoning effort values exposed on requests, or
-            `None` to expose the full standard ladder. Requires the
-            `reasoning_effort` model settings field when set.
+        reasoning_effort_values: Reasoning effort values exposed on requests. Required when the
+            `reasoning_effort` model settings field is enabled.
         reasoning_effort_default: Exposed reasoning effort rendered when the request
             leaves the effort unset. Required when the `reasoning_effort` model
-            settings field is enabled, and must be one of the exposed values.
+            settings field is enabled, and must be one of `reasoning_effort_values`.
 
     Raises:
         ValueError: If the configuration is invalid (e.g., conflicting options like
@@ -142,9 +141,13 @@ class TemplateConfig:
             raise ValueError("Audio and plain thinking support are mutually exclusive")
 
         has_reasoning_effort = "reasoning_effort" in self.model_settings_fields
+        if has_reasoning_effort and self.reasoning_effort_values is None:
+            raise ValueError(
+                "Reasoning effort values are required when the reasoning_effort model settings field is enabled"
+            )
         if self.reasoning_effort_values is not None:
             if not self.reasoning_effort_values:
-                raise ValueError("Reasoning effort values must be None or a non-empty tuple")
+                raise ValueError("Reasoning effort values must be a non-empty tuple")
             if len(set(self.reasoning_effort_values)) != len(self.reasoning_effort_values):
                 raise ValueError("Reasoning effort values must not contain duplicates")
             unknown_values = set(self.reasoning_effort_values) - set(_REASONING_EFFORT_VALUES)
@@ -159,20 +162,14 @@ class TemplateConfig:
         if self.reasoning_effort_default is not None:
             if not has_reasoning_effort:
                 raise ValueError("Reasoning effort default requires the reasoning_effort model settings field")
-            if self.reasoning_effort_default not in self.exposed_reasoning_effort_values:
-                allowed = ", ".join(f'"{value}"' for value in self.exposed_reasoning_effort_values)
+            assert self.reasoning_effort_values is not None
+            if self.reasoning_effort_default not in self.reasoning_effort_values:
+                allowed = ", ".join(f'"{value}"' for value in self.reasoning_effort_values)
                 raise ValueError(f"Reasoning effort default must be one of the exposed values: {allowed}")
         if has_reasoning_effort and self.reasoning_effort_default is None:
             raise ValueError(
                 "Reasoning effort default is required when the reasoning_effort model settings field is enabled"
             )
-
-    @property
-    def exposed_reasoning_effort_values(self) -> tuple[str, ...]:
-        r"""Reasoning effort values exposed on requests."""
-        if self.reasoning_effort_values is not None:
-            return self.reasoning_effort_values
-        return _REASONING_EFFORT_VALUES
 
     @property
     def bos_expr(self) -> str:
@@ -603,9 +600,13 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
 
     if has_reasoning_effort:
         assert config.reasoning_effort_default is not None
-        exposed_values = config.exposed_reasoning_effort_values
+        assert config.reasoning_effort_values is not None
+        exposed_values = config.reasoning_effort_values
         allowed_literal = "[" + ", ".join(f"'{value}'" for value in exposed_values) + "]"
-        allowed = _allowed_efforts_message(exposed_values)
+        if len(exposed_values) == 2:
+            allowed = f'either "{exposed_values[0]}" or "{exposed_values[1]}"'
+        else:
+            allowed = "one of " + ", ".join(f'"{value}"' for value in exposed_values)
         lines.extend(
             [
                 "{%- if reasoning_effort is not defined or reasoning_effort is none %}",
@@ -636,13 +637,6 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
         )
 
     return "\n".join(lines)
-
-
-def _allowed_efforts_message(values: tuple[str, ...]) -> str:
-    r"""Phrase exposed reasoning efforts for a template validation error."""
-    if len(values) == 2:
-        return f'either "{values[0]}" or "{values[1]}"'
-    return "one of " + ", ".join(f'"{value}"' for value in values)
 
 
 def _generate_macros(config: TemplateConfig) -> str:

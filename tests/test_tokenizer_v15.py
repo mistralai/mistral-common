@@ -40,7 +40,7 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import (
     JSONSchemaBuilder,
     ModelSettingsBuilder,
-    ReasoningEffortBuilder,
+    ReasoningEffortEnumBuilder,
 )
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
@@ -163,7 +163,7 @@ def _build_model_settings_builder(
     if not allowed_reasoning_effort:
         return ModelSettingsBuilder.none()
     return ModelSettingsBuilder(
-        reasoning_effort=ReasoningEffortBuilder(
+        reasoning_effort=ReasoningEffortEnumBuilder(
             values=[ReasoningEffort(v) for v in allowed_reasoning_effort],
             default=ReasoningEffort(allowed_reasoning_effort[0]),
         )
@@ -476,7 +476,7 @@ def test_end_to_end_with_alternative_default(
 ) -> None:
     """A configured default is emitted for an unset effort."""
     builder = ModelSettingsBuilder(
-        reasoning_effort=ReasoningEffortBuilder(values=list(ReasoningEffort), default=ReasoningEffort.max)
+        reasoning_effort=ReasoningEffortEnumBuilder(values=list(ReasoningEffort), default=ReasoningEffort.max)
     )
     tokenizer_v15 = get_v15_mistral_tokenizer(builder)
     request = ChatCompletionRequest(messages=messages, reasoning_effort=reasoning_effort)
@@ -549,7 +549,7 @@ def test_v15_rejects_invalid_json_schema_settings(messages: list[ChatMessage]) -
 @pytest.fixture
 def v15_reasoning_and_json_schema_mistral_tokenizer() -> MistralTokenizer:
     builder = ModelSettingsBuilder(
-        reasoning_effort=ReasoningEffortBuilder(values=list(ReasoningEffort), default=ReasoningEffort.none),
+        reasoning_effort=ReasoningEffortEnumBuilder(values=list(ReasoningEffort), default=ReasoningEffort.none),
         json_schema=JSONSchemaBuilder(),
     )
     return get_v15_mistral_tokenizer(builder)

@@ -24,6 +24,7 @@ class TestAudioSystemPrompt:
             use_special_token_variables=True,
             model_settings_fields=None,
             reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -55,6 +56,7 @@ class TestAudioSystemPrompt:
             use_special_token_variables=True,
             model_settings_fields=None,
             reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
         )
 
         messages: list[dict[str, Any]] = [

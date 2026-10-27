@@ -32,7 +32,7 @@ from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV15,
 )
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder, ReasoningEffortBuilder
+from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder, ReasoningEffortEnumBuilder
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekkenizer
 from tests.test_tekken import get_special_tokens, quick_vocab
 
@@ -131,7 +131,7 @@ def v13_no_think_tekken() -> MistralTokenizer:
 
 
 _V15_MODEL_SETTINGS_BUILDER = ModelSettingsBuilder(
-    reasoning_effort=ReasoningEffortBuilder(
+    reasoning_effort=ReasoningEffortEnumBuilder(
         values=list(ReasoningEffort),
         default=ReasoningEffort.none,
     ),

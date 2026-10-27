@@ -32,6 +32,8 @@ class TestGenerateChatTemplateAPI:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
     def test_basic_generation(self, v13_template: str) -> None:
@@ -49,6 +51,7 @@ class TestGenerateChatTemplateAPI:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=frozenset({"json_schema"}),
+            reasoning_effort_values=None,
             reasoning_effort_default=None,
         )
         default_template = generate_chat_template(
@@ -62,6 +65,7 @@ class TestGenerateChatTemplateAPI:
             use_special_token_variables=True,
             model_settings_fields=None,
             reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
         )
 
         assert "response_format" in selected_template
@@ -78,6 +82,8 @@ class TestGenerateChatTemplateAPI:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
         assert "You are a helpful assistant." in template_with_prompt
 
@@ -112,6 +118,8 @@ class TestGenerateChatTemplateAPI:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
         messages: list[dict[str, Any]] = [{"role": "user", "content": "Hello"}]
         result = render_template(template, messages=messages)
@@ -128,6 +136,7 @@ class TestTemplateConfigModelSettings:
             config=TemplateConfig(
                 version=TokenizerVersion.v15,
                 model_settings_fields=frozenset({field}),
+                reasoning_effort_values=("none", "high") if field == "reasoning_effort" else None,
                 reasoning_effort_default=("none" if field == "reasoning_effort" else None),
             )
         )
@@ -167,7 +176,10 @@ class TestTemplateConfigModelSettings:
 
     def test_none_model_settings_fields_resolves_automatically(self) -> None:
         v15_config = TemplateConfig(
-            version=TokenizerVersion.v15, model_settings_fields=None, reasoning_effort_default="none"
+            version=TokenizerVersion.v15,
+            model_settings_fields=None,
+            reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
         )
         v13_config = TemplateConfig(version=TokenizerVersion.v13, model_settings_fields=None)
 
@@ -205,7 +217,10 @@ class TestTokenVariables:
 
     def test_use_special_token_variables_false_renders_correctly(self) -> None:
         config = TemplateConfig(
-            version=TokenizerVersion.v15, use_special_token_variables=False, reasoning_effort_default="none"
+            version=TokenizerVersion.v15,
+            use_special_token_variables=False,
+            reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
         )
         template = build_chat_template(config)
         messages: list[dict[str, Any]] = [
@@ -236,6 +251,7 @@ class TestMessageContentValidation:
             use_special_token_variables=True,
             model_settings_fields=None,
             reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -259,6 +275,7 @@ class TestMessageContentValidation:
             use_special_token_variables=True,
             model_settings_fields=None,
             reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -283,6 +300,8 @@ class TestMessageContentValidation:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -304,6 +323,8 @@ class TestMessageContentValidation:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -447,6 +468,7 @@ class TestRenderContentCall:
             version=TokenizerVersion.v15,
             thinking_support=True,
             reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
         )
         result = _render_content_call(
             config=config,

@@ -22,8 +22,8 @@
 {%- if reasoning_effort is not defined or reasoning_effort is none %}
     {%- set reasoning_effort = 'none' %}
 {%- endif %}
-{%- if reasoning_effort not in ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] %}
-    {{- raise_exception('reasoning_effort must be one of "none", "minimal", "low", "medium", "high", "xhigh", "max"') }}
+{%- if reasoning_effort not in ['none', 'high'] %}
+    {{- raise_exception('reasoning_effort must be either "none" or "high"') }}
 {%- endif %}
 {%- set model_settings_parts = [] %}
 {%- set model_settings_parts = model_settings_parts + ['"reasoning_effort": "' ~ reasoning_effort ~ '"'] %}

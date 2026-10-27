@@ -46,6 +46,8 @@ def test_cli_generates_template(tmp_path: Path) -> None:
             str(SCRIPT_PATH),
             "--version",
             "v15",
+            "--reasoning_effort_values",
+            "none,high",
             "--reasoning_effort_default",
             "none",
             "--saving_path",
@@ -82,6 +84,30 @@ def test_cli_model_settings_fields_json_schema(tmp_path: Path) -> None:
     assert "response_format" in output_path.read_text()
 
 
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (["--version", "v15"], "Reasoning effort values are required"),
+        (["--version", "v15", "--reasoning_effort_values", "none,high"], "Reasoning effort default is required"),
+        (["--version", "v15", "--reasoning_effort_default", "none"], "Reasoning effort values are required"),
+        (
+            ["--version", "v15", "--model_settings_fields", "reasoning_effort"],
+            "Reasoning effort values are required",
+        ),
+    ],
+)
+def test_cli_requires_reasoning_effort_arguments(tmp_path: Path, arguments: list[str], message: str) -> None:
+    output_path = tmp_path / "template.jinja"
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), *arguments, "--saving_path", str(output_path)],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert message in result.stderr
+
+
 def test_cli_model_settings_fields_default(tmp_path: Path) -> None:
     output_path = tmp_path / "template.jinja"
     result = subprocess.run(
@@ -90,6 +116,8 @@ def test_cli_model_settings_fields_default(tmp_path: Path) -> None:
             str(SCRIPT_PATH),
             "--version",
             "v15",
+            "--reasoning_effort_values",
+            "none,high",
             "--reasoning_effort_default",
             "none",
             "--saving_path",
@@ -291,6 +319,8 @@ def test_cli_with_image_flag(tmp_path: Path) -> None:
             "--version",
             "v15",
             "--image",
+            "--reasoning_effort_values",
+            "none,high",
             "--reasoning_effort_default",
             "none",
             "--saving_path",
@@ -314,6 +344,8 @@ def test_cli_with_thinking_flag(tmp_path: Path) -> None:
             "--version",
             "v15",
             "--thinking",
+            "--reasoning_effort_values",
+            "none,high",
             "--reasoning_effort_default",
             "none",
             "--saving_path",

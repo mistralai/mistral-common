@@ -155,6 +155,7 @@ class TestTransformersMistralCommonParity:
             use_special_token_variables=True,
             model_settings_fields=config.model_settings_fields,
             reasoning_effort_default=reasoning_effort_default,
+            reasoning_effort_values=("none", "high") if reasoning_effort_default is not None else None,
         )
 
         # Starting with assistant is rejected by the first-message constraint
@@ -253,6 +254,7 @@ class TestTransformersMistralCommonParity:
             use_special_token_variables=True,
             model_settings_fields=config.model_settings_fields,
             reasoning_effort_default=reasoning_effort_default,
+            reasoning_effort_values=("none", "high") if reasoning_effort_default is not None else None,
         )
         # Not using parametrize here because invalid_convs depends on the version/image/audio/think
         # parameters from the outer parametrize. Each sub-case is identifiable via the TemplateError

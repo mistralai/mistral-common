@@ -32,6 +32,7 @@ class TestInvalidConfigs:
                 {
                     "version": TokenizerVersion.v15,
                     "plain_thinking_support": True,
+                    "reasoning_effort_values": ("none", "high"),
                     "reasoning_effort_default": "none",
                 },
                 "Plain thinking support is only available for tokenizer version v11",

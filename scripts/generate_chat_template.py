@@ -37,13 +37,13 @@ def main() -> None:
         "--reasoning_effort_values",
         type=str,
         default=None,
-        help="Manual mode: comma-separated exposed reasoning effort values (default: full standard ladder)",
+        help="Manual mode: comma-separated exposed reasoning effort values (required when reasoning_effort is enabled)",
     )
     parser.add_argument(
         "--reasoning_effort_default",
         type=str,
         default=None,
-        help="Manual mode: exposed reasoning effort rendered when the request leaves the effort unset",
+        help="Manual mode: default exposed reasoning effort (required when reasoning_effort is enabled)",
     )
     parser.add_argument(
         "--plain_thinking",
