@@ -18,6 +18,7 @@ from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, 
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
+    build_arbitrary_tool_call_id_request,
     build_assistant_tool_calls_request,
     build_empty_assistant_request,
     build_normal_request,
@@ -104,6 +105,10 @@ _RESULTS_WITHOUT_USER_TOKENS = [
     1, 8, 1501, 7567, 1629, 2032, 1113, 29490, 1316, 1113, 4557, 2032, 1113, 29480, 29507, 10925, 9, 8, 1501,
     7567, 1629, 2032, 1113, 29490, 1316, 1113, 4557, 2032, 1113, 29543, 29507, 10925, 9
 ]
+_ARBITRARY_TOOL_CALL_ID_TOKENS = [
+    1, 3, 1032, 4, 5, 1501, 7567, 1629, 2032, 1113, 29490, 1316, 1113, 17452, 2032, 1139, 1743, 29561, 2, 8,
+    1501, 7567, 1629, 2032, 2009, 29493, 1113, 4557, 2032, 1113, 29494, 29507, 10925, 9
+]
 # fmt: on
 
 _NORMAL_EXPECTED = Tokenized(tokens=_NORMAL_TOKENS)
@@ -128,6 +133,7 @@ _TRAILING_SPACES_STRIPPED_EXPECTED = Tokenized(tokens=_TRAILING_SPACES_STRIPPED_
 _RESULTS_RESET_AT_CALL_TURN_EXPECTED = Tokenized(tokens=_RESULTS_RESET_AT_CALL_TURN_TOKENS)
 _RESULTS_RESET_AT_USER_EXPECTED = Tokenized(tokens=_RESULTS_RESET_AT_USER_TOKENS)
 _RESULTS_WITHOUT_USER_EXPECTED = Tokenized(tokens=_RESULTS_WITHOUT_USER_TOKENS)
+_ARBITRARY_TOOL_CALL_ID_EXPECTED = Tokenized(tokens=_ARBITRARY_TOOL_CALL_ID_TOKENS)
 
 _NORMAL_TEXT = "<s>[INST]▁a[/INST]▁b</s>[INST]▁c[/INST]▁d</s>"
 _SYSTEM_SINGLETURN_TEXT = "<s>[INST]▁SYSTEM<0x0A><0x0A>a[/INST]"
@@ -190,6 +196,10 @@ _RESULTS_RESET_AT_USER_TEXT = (
 _RESULTS_WITHOUT_USER_TEXT = (
     '<s>[TOOL_RESULTS]▁[{"name":▁"f",▁"content":▁"r"}][/TOOL_RESULTS]'
     '[TOOL_RESULTS]▁[{"name":▁"f",▁"content":▁"q"}][/TOOL_RESULTS]'
+)
+_ARBITRARY_TOOL_CALL_ID_TEXT = (
+    '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"f",▁"arguments":▁{}}]</s>'
+    '[TOOL_RESULTS]▁[{"name":▁null,▁"content":▁"b"}][/TOOL_RESULTS]'
 )
 
 _PARALLEL_RESULTS_MESSAGE = r"v2.*multiple tool results.*assistant turn"
@@ -473,6 +483,18 @@ def _build_parallel_results_request() -> InstructRequest[ChatMessage, Tool]:
             _RESULTS_WITHOUT_USER_EXPECTED,
             _RESULTS_WITHOUT_USER_TEXT,
             id="results-without-user",
+        ),
+        pytest.param(
+            partial(build_arbitrary_tool_call_id_request, "x", settings=None),
+            _ARBITRARY_TOOL_CALL_ID_EXPECTED,
+            _ARBITRARY_TOOL_CALL_ID_TEXT,
+            id="shared-arbitrary-tool-call-id-x",
+        ),
+        pytest.param(
+            partial(build_arbitrary_tool_call_id_request, "call/id-1", settings=None),
+            _ARBITRARY_TOOL_CALL_ID_EXPECTED,
+            _ARBITRARY_TOOL_CALL_ID_TEXT,
+            id="shared-arbitrary-tool-call-id-call-slash-id-1",
         ),
     ],
 )
