@@ -437,6 +437,13 @@ def build_empty_content_empty_calls_request(*, settings: ModelSettings | None) -
     )
 
 
+def build_prefixed_text_request(content: str, *, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a user turn followed by a prefixed assistant turn with the given text content."""
+    return build_user_then_assistant_request(
+        assistant=AssistantMessage(content=content, prefix=True), settings=settings
+    )
+
+
 # --- Tool call variants ---
 
 
@@ -499,6 +506,27 @@ def build_tool_calls_with_two_results_request(*, settings: ModelSettings | None)
             ToolMessage(content="r2", tool_call_id="111111111"),
         ],
         settings=settings or ModelSettings.none(),
+    )
+
+
+def build_one_call_without_id_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a user turn followed by an assistant turn with one tool call lacking an ID (accepted in v11)."""
+    return build_user_then_assistant_request(
+        assistant=AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="a_a_a", arguments="blabla"))]),
+        settings=settings,
+    )
+
+
+def build_two_calls_without_id_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a user turn followed by an assistant turn with two tool calls lacking IDs (accepted in v11)."""
+    return build_user_then_assistant_request(
+        assistant=AssistantMessage(
+            tool_calls=[
+                ToolCall(function=FunctionCall(name="a_a_a", arguments="blabla")),
+                ToolCall(function=FunctionCall(name="b", arguments="blu")),
+            ]
+        ),
+        settings=settings,
     )
 
 

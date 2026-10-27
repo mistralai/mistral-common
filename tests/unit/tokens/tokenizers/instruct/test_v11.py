@@ -36,6 +36,8 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_multiturn_image_request,
     build_non_ascii_call_arguments_request,
     build_normal_request,
+    build_one_call_without_id_request,
+    build_prefixed_text_request,
     build_system_and_user_words_request,
     build_system_audio_request,
     build_system_message_multiturn_request,
@@ -49,9 +51,9 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_tools_multiturn_request,
     build_tools_singleturn_request,
     build_truncation_last_user_at_limit_request,
+    build_two_calls_without_id_request,
     build_user_audio_url_request,
     build_user_image_url_request,
-    build_user_then_assistant_request,
 )
 from tests.utils import assert_tokenized_equal, decode_keep
 
@@ -317,32 +319,6 @@ def audio_tokenizer() -> InstructTokenizerV11:
     )
 
 
-def _build_one_call_without_id_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build an assistant tool call without an ID."""
-    return build_user_then_assistant_request(
-        assistant=AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="a_a_a", arguments="blabla"))]),
-        settings=None,
-    )
-
-
-def _build_prefixed_text_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a prefixed assistant text turn."""
-    return build_user_then_assistant_request(assistant=AssistantMessage(content='"blabla"', prefix=True), settings=None)
-
-
-def _build_two_calls_without_id_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build an assistant turn with two tool calls without IDs."""
-    return build_user_then_assistant_request(
-        assistant=AssistantMessage(
-            tool_calls=[
-                ToolCall(function=FunctionCall(name="a_a_a", arguments="blabla")),
-                ToolCall(function=FunctionCall(name="b", arguments="blu")),
-            ]
-        ),
-        settings=None,
-    )
-
-
 def _build_call_with_id_before_last_user_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build a tool call with an ID followed by the final user turn."""
     return InstructRequest[ChatMessage, Tool](
@@ -359,21 +335,21 @@ def _build_call_with_id_before_last_user_request() -> InstructRequest[ChatMessag
     argvalues=[
         pytest.param(
             "default",
-            _build_one_call_without_id_request,
+            partial(build_one_call_without_id_request, settings=None),
             _ONE_CALL_WITHOUT_ID_EXPECTED,
             _ONE_CALL_WITHOUT_ID_TEXT,
             id="default-one-call-without-id",
         ),
         pytest.param(
             "default",
-            _build_prefixed_text_request,
+            partial(build_prefixed_text_request, '"blabla"', settings=None),
             _PREFIXED_TEXT_EXPECTED,
             _PREFIXED_TEXT_TEXT,
             id="default-prefixed-text",
         ),
         pytest.param(
             "default",
-            _build_two_calls_without_id_request,
+            partial(build_two_calls_without_id_request, settings=None),
             _TWO_CALLS_WITHOUT_ID_EXPECTED,
             _TWO_CALLS_WITHOUT_ID_TEXT,
             id="default-two-calls-without-id",
