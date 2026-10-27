@@ -1048,6 +1048,8 @@ def build_open_think_text_and_call_request(*, settings: ModelSettings | None) ->
             tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="F1", arguments="{'a': 1}"))],
         ),
         settings=settings,
+    )
+
 
 # --- Model settings and JSON schema builders (v15) ---
 

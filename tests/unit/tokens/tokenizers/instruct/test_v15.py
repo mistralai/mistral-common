@@ -8,8 +8,7 @@ import numpy as np
 import pytest
 
 from mistral_common.exceptions import InvalidRequestException, TokenizerException
-from mistral_common.protocol.instruct.chunk import ContentChunk, TextChunk, ThinkChunk
-from mistral_common.protocol.instruct.messages import ChatMessage, SystemMessage, UserMessage
+from mistral_common.protocol.instruct.messages import ChatMessage
 from mistral_common.protocol.instruct.request import InstructRequest, ModelSettings, ReasoningEffort
 from mistral_common.protocol.instruct.tool_calls import Tool
 from mistral_common.tokens.tokenizers.audio import (
@@ -49,8 +48,12 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_system_message_prefixed_final_request,
     build_system_message_request,
     build_system_message_tools_multiturn_request,
+    build_system_text_chunk_request,
+    build_system_text_request,
+    build_system_text_then_think_request,
     build_system_then_audio_user_request,
     build_system_think_chunk_request,
+    build_system_think_request,
     build_text_then_audio_user_request,
     build_text_then_image_user_request,
     build_tool_message_request,
@@ -388,50 +391,19 @@ def audio_tokenizer() -> InstructTokenizerV15:
     )
 
 
-def _build_system_request(content: str | list[ContentChunk]) -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a system message followed by a user turn with high reasoning effort."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[SystemMessage(content=content), UserMessage(content="a")],
-        settings=ModelSettings(reasoning_effort=ReasoningEffort.high),
-    )
-
-
-def _build_system_text_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a system message with string content."""
-    return _build_system_request(content="S1")
-
-
-def _build_system_text_chunk_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a system message with one text chunk."""
-    return _build_system_request(content=[TextChunk(text="S1")])
-
-
-def _build_system_think_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a system message containing a think chunk."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[SystemMessage(content=[ThinkChunk(thinking="Hi")])],
-        settings=ModelSettings(reasoning_effort=ReasoningEffort.high),
-    )
-
-
-def _build_system_text_then_think_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a system message with text followed by a think chunk."""
-    return _build_system_request(content=[TextChunk(text="S1"), ThinkChunk(thinking="Hi")])
-
-
 @pytest.mark.parametrize(
     argnames="config, request_builder, expected, expected_text",
     argvalues=[
         pytest.param(
             "default",
-            _build_system_text_request,
+            partial(build_system_text_request, settings=_SETTINGS),
             _SYSTEM_TEXT_EXPECTED,
             _SYSTEM_TEXT_TEXT,
             id="default-system-text",
         ),
         pytest.param(
             "default",
-            _build_system_text_chunk_request,
+            partial(build_system_text_chunk_request, settings=_SETTINGS),
             _SYSTEM_TEXT_EXPECTED,
             _SYSTEM_TEXT_TEXT,
             id="default-system-text-chunk",
@@ -632,14 +604,14 @@ def test_encode_instruct(
     argvalues=[
         pytest.param(
             "default",
-            _build_system_think_request,
+            partial(build_system_think_request, settings=_SETTINGS),
             TokenizerException,
             _SYSTEM_THINK_MESSAGE,
             id="default-system-think",
         ),
         pytest.param(
             "default",
-            _build_system_text_then_think_request,
+            partial(build_system_text_then_think_request, settings=_SETTINGS),
             TokenizerException,
             _SYSTEM_THINK_MESSAGE,
             id="default-system-text-then-think",
