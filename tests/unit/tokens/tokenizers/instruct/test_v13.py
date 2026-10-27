@@ -31,6 +31,7 @@ from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import get_special_tokens, quick_vocab
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
+    build_arbitrary_tool_call_id_request,
     build_assistant_list_content_request,
     build_assistant_tool_calls_request,
     build_audio_user_request,
@@ -42,16 +43,20 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_multiturn_image_request,
     build_normal_request,
     build_system_and_user_words_request,
+    build_system_audio_request,
     build_system_message_multiturn_request,
     build_system_message_prefixed_final_request,
     build_system_message_request,
     build_system_message_tools_multiturn_request,
+    build_system_then_audio_user_request,
     build_text_then_audio_user_request,
     build_text_then_image_user_request,
     build_tool_message_request,
     build_tools_multiturn_request,
     build_tools_singleturn_request,
     build_truncation_last_user_at_limit_request,
+    build_user_audio_url_request,
+    build_user_image_url_request,
     build_user_then_assistant_request,
 )
 from tests.utils import assert_tokenized_equal, decode_keep
@@ -86,6 +91,18 @@ _TOOLS_BEFORE_FIRST_USER_TOKENS = [
 ]
 _SYSTEM_THEN_USER_AUDIO_TOKENS = [1, 17, 204, 201, 208, 208, 211, 18, 3, 25, 24, 24, 4]
 _TOOL_RESULT_IMAGE_TOKENS = [1, 3, 197, 4, 9, 170, 149, 32, 223, 225, 2, 7, 10, 10, 12, 10, 10, 13, 8]
+_ARBITRARY_TOOL_CALL_ID_TOKENS = [1, 3, 197, 4, 9, 202, 32, 223, 225, 2, 7, 198, 8]
+_SYSTEM_AUDIO_TOKENS = [
+    1, 17, 183, 221, 215, 216, 201, 209, 132, 219, 205, 216, 204, 132, 199, 211, 210, 216, 201, 210, 216,
+    25, 24, 24, 18, 3, 172, 201, 208, 208, 211, 4
+]
+_USER_AUDIO_URL_TOKENS = [
+    1, 3, 172, 201, 214, 201, 132, 205, 215, 132, 199, 211, 210, 216, 201, 210, 216, 25, 24, 24, 4
+]
+_USER_IMAGE_URL_TOKENS = [
+    1, 3, 10, 10, 12, 10, 10, 13, 172, 201, 214, 201, 132, 205, 215, 132, 199, 211, 210, 216, 201, 210, 216, 4
+]
+_SYSTEM_THEN_AUDIO_USER_TOKENS = [1, 17, 204, 201, 208, 208, 211, 18, 3, 25, 24, 24, 4]
 # fmt: on
 
 _RED_4X4_IMAGE = np.broadcast_to(
@@ -126,6 +143,11 @@ _SYSTEM_TWO_CLOSED_THINKS_EXPECTED = Tokenized(tokens=_SYSTEM_TWO_CLOSED_THINKS_
 _SYSTEM_OPEN_THINK_LAST_EXPECTED = Tokenized(tokens=_SYSTEM_OPEN_THINK_LAST_TOKENS)
 _NON_ASCII_CALL_ARGUMENTS_EXPECTED = Tokenized(tokens=_NON_ASCII_CALL_ARGUMENTS_TOKENS)
 _TOOLS_BEFORE_FIRST_USER_EXPECTED = Tokenized(tokens=_TOOLS_BEFORE_FIRST_USER_TOKENS)
+_ARBITRARY_TOOL_CALL_ID_EXPECTED = Tokenized(tokens=_ARBITRARY_TOOL_CALL_ID_TOKENS)
+_SYSTEM_AUDIO_EXPECTED = Tokenized(tokens=_SYSTEM_AUDIO_TOKENS, audios=[_SILENT_AUDIO])
+_USER_AUDIO_URL_EXPECTED = Tokenized(tokens=_USER_AUDIO_URL_TOKENS, audios=[_SILENT_AUDIO])
+_USER_IMAGE_URL_EXPECTED = Tokenized(tokens=_USER_IMAGE_URL_TOKENS, images=[_RED_4X4_IMAGE])
+_SYSTEM_THEN_AUDIO_USER_EXPECTED_V2 = Tokenized(tokens=_SYSTEM_THEN_AUDIO_USER_TOKENS, audios=[_SILENT_AUDIO])
 _SYSTEM_THEN_USER_AUDIO_EXPECTED = Tokenized(tokens=_SYSTEM_THEN_USER_AUDIO_TOKENS, audios=[_SILENT_AUDIO])
 _TOOL_RESULT_IMAGE_EXPECTED = Tokenized(tokens=_TOOL_RESULT_IMAGE_TOKENS, images=[_RED_4X4_IMAGE])
 
@@ -262,6 +284,13 @@ _MULTITURN_IMAGE_TEXT = (
 )
 _MULTI_AUDIO_USER_TEXT = "<s>[INST][BEGIN_AUDIO][AUDIO][AUDIO][BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
 _MULTITURN_AUDIO_TEXT = "<s>[INST][BEGIN_AUDIO][AUDIO][AUDIO][/INST]b</s>[INST][BEGIN_AUDIO][AUDIO][AUDIO][/INST]d</s>"
+_ARBITRARY_TOOL_CALL_ID_TEXT = "<s>[INST]a[/INST][TOOL_CALLS]f[ARGS]{}</s>[TOOL_RESULTS]b[/TOOL_RESULTS]"
+_SYSTEM_AUDIO_TEXT = (
+    "<s>[SYSTEM_PROMPT]System with content[BEGIN_AUDIO][AUDIO][AUDIO][/SYSTEM_PROMPT][INST]Hello[/INST]"
+)
+_USER_AUDIO_URL_TEXT = "<s>[INST]Here is content[BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
+_USER_IMAGE_URL_TEXT = "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]Here is content[/INST]"
+_SYSTEM_THEN_AUDIO_USER_TEXT = "<s>[SYSTEM_PROMPT]hello[/SYSTEM_PROMPT][INST][BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
 
 
 @pytest.fixture(scope="module")
@@ -825,6 +854,48 @@ def _build_tool_result_image_request() -> InstructRequest[ChatMessage, Tool]:
             _MULTITURN_AUDIO_EXPECTED,
             _MULTITURN_AUDIO_TEXT,
             id="audio-shared-multiturn-audio",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_arbitrary_tool_call_id_request, "x", settings=None),
+            _ARBITRARY_TOOL_CALL_ID_EXPECTED,
+            _ARBITRARY_TOOL_CALL_ID_TEXT,
+            id="no-think-shared-arbitrary-tool-call-id",
+        ),
+        pytest.param(
+            "with_think",
+            partial(build_arbitrary_tool_call_id_request, "call/id-1", settings=None),
+            _ARBITRARY_TOOL_CALL_ID_EXPECTED,
+            _ARBITRARY_TOOL_CALL_ID_TEXT,
+            id="with-think-shared-arbitrary-tool-call-id",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_system_audio_request, settings=None),
+            _SYSTEM_AUDIO_EXPECTED,
+            _SYSTEM_AUDIO_TEXT,
+            id="audio-shared-system-audio",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_user_audio_url_request, settings=None),
+            _USER_AUDIO_URL_EXPECTED,
+            _USER_AUDIO_URL_TEXT,
+            id="audio-shared-user-audio-url",
+        ),
+        pytest.param(
+            "image",
+            partial(build_user_image_url_request, settings=None),
+            _USER_IMAGE_URL_EXPECTED,
+            _USER_IMAGE_URL_TEXT,
+            id="image-shared-user-image-url",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_system_then_audio_user_request, settings=None),
+            _SYSTEM_THEN_AUDIO_USER_EXPECTED_V2,
+            _SYSTEM_THEN_AUDIO_USER_TEXT,
+            id="audio-shared-system-then-audio-user",
         ),
     ],
 )

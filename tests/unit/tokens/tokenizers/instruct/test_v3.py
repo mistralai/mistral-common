@@ -21,6 +21,7 @@ from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized
 from mistral_common.tokens.tokenizers.image import DATASET_MEAN, DATASET_STD
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
+    build_arbitrary_tool_call_id_request,
     build_assistant_tool_calls_request,
     build_empty_assistant_request,
     build_image_user_request,
@@ -40,6 +41,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_tool_message_request,
     build_tools_multiturn_request,
     build_tools_singleturn_request,
+    build_user_image_url_request,
 )
 from tests.utils import assert_tokenized_equal, decode_keep
 
@@ -196,6 +198,27 @@ _TEKKEN_MM_TEXT_THEN_IMAGE_SYSTEM_PROMPT_TOKENS = [1, 3, 1115, 1267, 10, 13, 109
 _TEKKEN_MM_IMAGE_USER_TOKENS = [1, 3, 10, 13, 1097, 4]
 _TEKKEN_MM_MULTI_IMAGE_USER_TOKENS = [1, 3, 10, 13, 10, 13, 4]
 _TEKKEN_MM_MULTITURN_IMAGE_TOKENS = [1, 3, 10, 13, 4, 1098, 2, 3, 10, 13, 4, 1100, 2]
+_SPM_ARBITRARY_TOOL_CALL_ID_X_TOKENS = [
+    1, 3, 1032, 4, 5, 1501, 7567, 1629, 2032, 1113, 29490, 1316, 1113, 17452, 2032, 13450, 1113, 1081, 2032,
+    1113, 29512, 29507, 10925, 2, 8, 10598, 4557, 2032, 1113, 29494, 1316, 1113, 3613, 29498, 1081, 2032,
+    1113, 29512, 18163, 9
+]
+_SPM_ARBITRARY_TOOL_CALL_ID_CALL_ID_TOKENS = [
+    1, 3, 1032, 4, 5, 1501, 7567, 1629, 2032, 1113, 29490, 1316, 1113, 17452, 2032, 13450, 1113, 1081, 2032,
+    1113, 3613, 29516, 1081, 29501, 29508, 29507, 10925, 2, 8, 10598, 4557, 2032, 1113, 29494, 1316, 1113,
+    3613, 29498, 1081, 2032, 1113, 3613, 29516, 1081, 29501, 29508, 18163, 9
+]
+_TEKKEN_ARBITRARY_TOOL_CALL_ID_X_TOKENS = [
+    1, 3, 1097, 4, 9, 1091, 19227, 2391, 2811, 1429, 1102, 1897, 1429, 61906, 2811, 58208, 1429, 1327, 2811,
+    1429, 1120, 1034, 27028, 2, 7, 19227, 5431, 2811, 1429, 1098, 1897, 1429, 19881, 3384, 2811, 1429, 1120,
+    46005, 8
+]
+_TEKKEN_ARBITRARY_TOOL_CALL_ID_CALL_ID_TOKENS = [
+    1, 3, 1097, 4, 9, 1091, 19227, 2391, 2811, 1429, 1102, 1897, 1429, 61906, 2811, 58208, 1429, 1327, 2811,
+    1429, 19881, 100046, 1045, 1049, 1034, 27028, 2, 7, 19227, 5431, 2811, 1429, 1098, 1897, 1429, 19881, 3384,
+    2811, 1429, 19881, 100046, 1045, 1049, 46005, 8
+]
+_TEKKEN_MM_USER_IMAGE_URL_TOKENS = [1, 3, 10, 13, 11745, 1395, 4701, 4]
 # fmt: on
 
 _RED_16X16_IMAGE = np.broadcast_to(
@@ -273,6 +296,11 @@ _TEKKEN_MM_MULTI_IMAGE_USER_EXPECTED = Tokenized(
 _TEKKEN_MM_MULTITURN_IMAGE_EXPECTED = Tokenized(
     tokens=_TEKKEN_MM_MULTITURN_IMAGE_TOKENS, images=[_RED_16X16_IMAGE, _RED_16X16_IMAGE]
 )
+_SPM_ARBITRARY_TOOL_CALL_ID_X_EXPECTED = Tokenized(tokens=_SPM_ARBITRARY_TOOL_CALL_ID_X_TOKENS)
+_SPM_ARBITRARY_TOOL_CALL_ID_CALL_ID_EXPECTED = Tokenized(tokens=_SPM_ARBITRARY_TOOL_CALL_ID_CALL_ID_TOKENS)
+_TEKKEN_ARBITRARY_TOOL_CALL_ID_X_EXPECTED = Tokenized(tokens=_TEKKEN_ARBITRARY_TOOL_CALL_ID_X_TOKENS)
+_TEKKEN_ARBITRARY_TOOL_CALL_ID_CALL_ID_EXPECTED = Tokenized(tokens=_TEKKEN_ARBITRARY_TOOL_CALL_ID_CALL_ID_TOKENS)
+_TEKKEN_MM_USER_IMAGE_URL_EXPECTED = Tokenized(tokens=_TEKKEN_MM_USER_IMAGE_URL_TOKENS, images=[_RED_16X16_IMAGE])
 
 _SPM_NORMAL_TEXT = "<s>[INST]▁a[/INST]▁b</s>[INST]▁c[/INST]▁d</s>"
 _TEKKEN_NORMAL_TEXT = "<s>[INST]a[/INST]b</s>[INST]c[/INST]d</s>"
@@ -396,6 +424,23 @@ _TEKKEN_MM_TEXT_THEN_IMAGE_SYSTEM_PROMPT_TEXT = "<s>[INST]s\n\n[IMG][IMG_END]a[/
 _TEKKEN_MM_IMAGE_USER_TEXT = "<s>[INST][IMG][IMG_END]a[/INST]"
 _TEKKEN_MM_MULTI_IMAGE_USER_TEXT = "<s>[INST][IMG][IMG_END][IMG][IMG_END][/INST]"
 _TEKKEN_MM_MULTITURN_IMAGE_TEXT = "<s>[INST][IMG][IMG_END][/INST]b</s>[INST][IMG][IMG_END][/INST]d</s>"
+_SPM_ARBITRARY_TOOL_CALL_ID_X_TEXT = (
+    '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"f",▁"arguments":▁{},▁"id":▁"x"}]</s>'
+    '[TOOL_RESULTS]▁{"content":▁"b",▁"call_id":▁"x"}[/TOOL_RESULTS]'
+)
+_SPM_ARBITRARY_TOOL_CALL_ID_CALL_ID_TEXT = (
+    '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"f",▁"arguments":▁{},▁"id":▁"call/id-1"}]</s>'
+    '[TOOL_RESULTS]▁{"content":▁"b",▁"call_id":▁"call/id-1"}[/TOOL_RESULTS]'
+)
+_TEKKEN_ARBITRARY_TOOL_CALL_ID_X_TEXT = (
+    '<s>[INST]a[/INST][TOOL_CALLS][{"name": "f", "arguments": {}, "id": "x"}]</s>'
+    '[TOOL_RESULTS]{"content": "b", "call_id": "x"}[/TOOL_RESULTS]'
+)
+_TEKKEN_ARBITRARY_TOOL_CALL_ID_CALL_ID_TEXT = (
+    '<s>[INST]a[/INST][TOOL_CALLS][{"name": "f", "arguments": {}, "id": "call/id-1"}]</s>'
+    '[TOOL_RESULTS]{"content": "b", "call_id": "call/id-1"}[/TOOL_RESULTS]'
+)
+_TEKKEN_MM_USER_IMAGE_URL_TEXT = "<s>[INST][IMG][IMG_END]Here is content[/INST]"
 
 _TOOL_CALL_AND_CONTENT_MESSAGE = r"^Cannot have tool calls and content defined in the same assistant message"
 _INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
@@ -885,6 +930,41 @@ def _build_tool_call_and_content_request() -> InstructRequest[ChatMessage, Tool]
             _TEKKEN_MM_MULTITURN_IMAGE_EXPECTED,
             _TEKKEN_MM_MULTITURN_IMAGE_TEXT,
             id="tekken-mm-multiturn-image",
+        ),
+        pytest.param(
+            "spm",
+            partial(build_arbitrary_tool_call_id_request, "x", settings=None),
+            _SPM_ARBITRARY_TOOL_CALL_ID_X_EXPECTED,
+            _SPM_ARBITRARY_TOOL_CALL_ID_X_TEXT,
+            id="spm-shared-arbitrary-tool-call-id-x",
+        ),
+        pytest.param(
+            "spm",
+            partial(build_arbitrary_tool_call_id_request, "call/id-1", settings=None),
+            _SPM_ARBITRARY_TOOL_CALL_ID_CALL_ID_EXPECTED,
+            _SPM_ARBITRARY_TOOL_CALL_ID_CALL_ID_TEXT,
+            id="spm-shared-arbitrary-tool-call-id-call-slash-id-1",
+        ),
+        pytest.param(
+            "tekken",
+            partial(build_arbitrary_tool_call_id_request, "x", settings=None),
+            _TEKKEN_ARBITRARY_TOOL_CALL_ID_X_EXPECTED,
+            _TEKKEN_ARBITRARY_TOOL_CALL_ID_X_TEXT,
+            id="tekken-shared-arbitrary-tool-call-id-x",
+        ),
+        pytest.param(
+            "tekken",
+            partial(build_arbitrary_tool_call_id_request, "call/id-1", settings=None),
+            _TEKKEN_ARBITRARY_TOOL_CALL_ID_CALL_ID_EXPECTED,
+            _TEKKEN_ARBITRARY_TOOL_CALL_ID_CALL_ID_TEXT,
+            id="tekken-shared-arbitrary-tool-call-id-call-slash-id-1",
+        ),
+        pytest.param(
+            "tekken_mm",
+            partial(build_user_image_url_request, settings=None),
+            _TEKKEN_MM_USER_IMAGE_URL_EXPECTED,
+            _TEKKEN_MM_USER_IMAGE_URL_TEXT,
+            id="tekken-mm-shared-user-image-url",
         ),
     ],
 )

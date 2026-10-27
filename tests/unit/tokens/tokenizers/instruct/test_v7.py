@@ -21,6 +21,7 @@ from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import quick_vocab
 from tests.test_tokenizer_v7_audio import get_tekkenizer_with_audio
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
+    build_arbitrary_tool_call_id_request,
     build_assistant_list_content_request,
     build_assistant_think_request,
     build_assistant_tool_calls_request,
@@ -44,11 +45,13 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_prefixed_assistant_after_image_request,
     build_prefixed_tool_call_and_content_request,
     build_system_and_user_words_request,
+    build_system_audio_request,
     build_system_list_content_request,
     build_system_message_multiturn_request,
     build_system_message_prefixed_final_request,
     build_system_message_request,
     build_system_message_tools_multiturn_request,
+    build_system_then_audio_user_request,
     build_system_tools_and_call_request,
     build_text_then_audio_user_request,
     build_text_then_image_user_request,
@@ -71,6 +74,8 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_truncation_start_with_assistant_request,
     build_truncation_system_prompt_too_long_request,
     build_two_images_request,
+    build_user_audio_url_request,
+    build_user_image_url_request,
 )
 from tests.utils import assert_tokenized_equal, decode_keep
 
@@ -179,6 +184,7 @@ def _build_solid_image(rgb: tuple[int, int, int], shape: tuple[int, int, int]) -
 _RED_4X4_IMAGE = _build_solid_image(rgb=(255, 0, 0), shape=(3, 4, 4))
 _BLUE_4X4_IMAGE = _build_solid_image(rgb=(0, 0, 255), shape=(3, 4, 4))
 _BLUE_6X4_IMAGE = _build_solid_image(rgb=(0, 0, 255), shape=(3, 4, 6))
+_RED_16X16_IMAGE = _build_solid_image(rgb=(255, 0, 0), shape=(3, 16, 16))
 
 _IMAGE_AND_TOOL_RESULT_EXPECTED = Tokenized(tokens=_IMAGE_AND_TOOL_RESULT_TOKENS, images=[_RED_4X4_IMAGE])
 _PREFIXED_ASSISTANT_AFTER_IMAGE_EXPECTED = Tokenized(
@@ -344,6 +350,22 @@ _SPM_PATCH2_MULTI_IMAGE_USER_TOKENS = [1, 3, 10, 10, 14, 10, 10, 15, 10, 10, 14,
 _SPM_PATCH2_MULTITURN_IMAGE_TOKENS = [1, 3, 10, 10, 14, 10, 10, 15, 4, 1055, 2, 3, 10, 10, 14, 10, 10, 15, 4, 1049, 2]
 _WITH_AUDIO_MULTI_AUDIO_USER_TOKENS = [1, 3, 25, 24, 24, 25, 24, 24, 4]
 _WITH_AUDIO_MULTITURN_AUDIO_TOKENS = [1, 3, 25, 24, 24, 4, 198, 2, 3, 25, 24, 24, 4, 200, 2]
+_SPM_ARBITRARY_TOOL_CALL_ID_X_TOKENS = [
+    1, 3, 1032, 4, 5, 1501, 7567, 1629, 2032, 1113, 29490, 1316, 1113, 17452, 2032, 13450, 1113, 1081, 2032,
+    1113, 29512, 29507, 10925, 2, 8, 2086, 18, 1055, 9
+]
+_SPM_ARBITRARY_TOOL_CALL_ID_CALL_ID_TOKENS = [
+    1, 3, 1032, 4, 5, 1501, 7567, 1629, 2032, 1113, 29490, 1316, 1113, 17452, 2032, 13450, 1113, 1081, 2032,
+    1113, 3613, 29516, 1081, 29501, 29508, 29507, 10925, 2, 8, 1802, 29516, 1081, 29501, 29508, 18, 1055, 9
+]
+_WITH_AUDIO_SYSTEM_AUDIO_TOKENS = [
+    1, 17, 183, 221, 215, 216, 201, 209, 132, 219, 205, 216, 204, 132, 199, 211, 210, 216, 201, 210, 216,
+    25, 24, 24, 18, 3, 172, 201, 208, 208, 211, 4
+]
+_WITH_AUDIO_USER_AUDIO_URL_TOKENS = [
+    1, 3, 172, 201, 214, 201, 132, 205, 215, 132, 199, 211, 210, 216, 201, 210, 216, 25, 24, 24, 4
+]
+_SPM_USER_IMAGE_URL_TOKENS = [1, 3, 10, 15, 4771, 1117, 3804, 4]
 # fmt: on
 
 _SPM_NORMAL_EXPECTED = Tokenized(tokens=_SPM_NORMAL_TOKENS)
@@ -386,6 +408,11 @@ _WITH_AUDIO_MULTI_AUDIO_USER_EXPECTED = Tokenized(
 _WITH_AUDIO_MULTITURN_AUDIO_EXPECTED = Tokenized(
     tokens=_WITH_AUDIO_MULTITURN_AUDIO_TOKENS, audios=[_SILENT_AUDIO, _SILENT_AUDIO]
 )
+_SPM_ARBITRARY_TOOL_CALL_ID_X_EXPECTED = Tokenized(tokens=_SPM_ARBITRARY_TOOL_CALL_ID_X_TOKENS)
+_SPM_ARBITRARY_TOOL_CALL_ID_CALL_ID_EXPECTED = Tokenized(tokens=_SPM_ARBITRARY_TOOL_CALL_ID_CALL_ID_TOKENS)
+_WITH_AUDIO_SYSTEM_AUDIO_EXPECTED = Tokenized(tokens=_WITH_AUDIO_SYSTEM_AUDIO_TOKENS, audios=[_SILENT_AUDIO])
+_WITH_AUDIO_USER_AUDIO_URL_EXPECTED = Tokenized(tokens=_WITH_AUDIO_USER_AUDIO_URL_TOKENS, audios=[_SILENT_AUDIO])
+_SPM_USER_IMAGE_URL_EXPECTED = Tokenized(tokens=_SPM_USER_IMAGE_URL_TOKENS, images=[_RED_16X16_IMAGE])
 
 _SPM_NORMAL_TEXT = "<s>[INST]▁a[/INST]▁b</s>[INST]▁c[/INST]▁d</s>"
 _SPM_TOOLS_SINGLETURN_TEXT = (
@@ -451,8 +478,22 @@ _WITH_AUDIO_MULTI_AUDIO_USER_TEXT = "<s>[INST][BEGIN_AUDIO][AUDIO][AUDIO][BEGIN_
 _WITH_AUDIO_MULTITURN_AUDIO_TEXT = (
     "<s>[INST][BEGIN_AUDIO][AUDIO][AUDIO][/INST]b</s>[INST][BEGIN_AUDIO][AUDIO][AUDIO][/INST]d</s>"
 )
+_SPM_ARBITRARY_TOOL_CALL_ID_X_TEXT = (
+    '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"f",▁"arguments":▁{},▁"id":▁"x"}]</s>'
+    "[TOOL_RESULTS]▁x[TOOL_CONTENT]▁b[/TOOL_RESULTS]"
+)
+_SPM_ARBITRARY_TOOL_CALL_ID_CALL_ID_TEXT = (
+    '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"f",▁"arguments":▁{},▁"id":▁"call/id-1"}]</s>'
+    "[TOOL_RESULTS]▁call/id-1[TOOL_CONTENT]▁b[/TOOL_RESULTS]"
+)
+_WITH_AUDIO_SYSTEM_AUDIO_TEXT = (
+    "<s>[SYSTEM_PROMPT]System with content[BEGIN_AUDIO][AUDIO][AUDIO][/SYSTEM_PROMPT][INST]Hello[/INST]"
+)
+_WITH_AUDIO_USER_AUDIO_URL_TEXT = "<s>[INST]Here is content[BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
+_SPM_USER_IMAGE_URL_TEXT = "<s>[INST][IMG][IMG_END]▁Here▁is▁content[/INST]"
 
 _INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
+_SYSTEM_AUDIO_NOT_ALLOWED_MESSAGE = r"^System messages are not yet allowed when audio is present$"
 _TRUNCATION_FAILED_MESSAGE = r"^Input couldn't fit in truncate_at_max_token$"
 _THINK_NOT_IMPLEMENTED_MESSAGE = r"^Think not implemented for tokenizer < V13\.$"
 
@@ -924,6 +965,41 @@ def with_audio_tokenizer() -> InstructTokenizer:
             _WITH_AUDIO_MULTITURN_AUDIO_TEXT,
             id="with-audio-shared-multiturn-audio",
         ),
+        pytest.param(
+            "spm",
+            partial(build_arbitrary_tool_call_id_request, "x", settings=None),
+            _SPM_ARBITRARY_TOOL_CALL_ID_X_EXPECTED,
+            _SPM_ARBITRARY_TOOL_CALL_ID_X_TEXT,
+            id="spm-shared-arbitrary-tool-call-id-x",
+        ),
+        pytest.param(
+            "spm",
+            partial(build_arbitrary_tool_call_id_request, "call/id-1", settings=None),
+            _SPM_ARBITRARY_TOOL_CALL_ID_CALL_ID_EXPECTED,
+            _SPM_ARBITRARY_TOOL_CALL_ID_CALL_ID_TEXT,
+            id="spm-shared-arbitrary-tool-call-id-call-slash-id-1",
+        ),
+        pytest.param(
+            "with_audio",
+            partial(build_system_audio_request, settings=None),
+            _WITH_AUDIO_SYSTEM_AUDIO_EXPECTED,
+            _WITH_AUDIO_SYSTEM_AUDIO_TEXT,
+            id="with-audio-shared-system-audio",
+        ),
+        pytest.param(
+            "with_audio",
+            partial(build_user_audio_url_request, settings=None),
+            _WITH_AUDIO_USER_AUDIO_URL_EXPECTED,
+            _WITH_AUDIO_USER_AUDIO_URL_TEXT,
+            id="with-audio-shared-user-audio-url",
+        ),
+        pytest.param(
+            "spm",
+            partial(build_user_image_url_request, settings=None),
+            _SPM_USER_IMAGE_URL_EXPECTED,
+            _SPM_USER_IMAGE_URL_TEXT,
+            id="spm-shared-user-image-url",
+        ),
     ],
 )
 def test_encode_instruct(
@@ -1033,6 +1109,13 @@ def test_encode_instruct(
             TokenizerException,
             _INVALID_ASSISTANT_MESSAGE,
             id="no-audio-shared-empty-assistant",
+        ),
+        pytest.param(
+            "with_audio",
+            partial(build_system_then_audio_user_request, settings=None),
+            ValueError,
+            _SYSTEM_AUDIO_NOT_ALLOWED_MESSAGE,
+            id="with-audio-shared-system-then-audio-user-rejected",
         ),
     ],
 )
