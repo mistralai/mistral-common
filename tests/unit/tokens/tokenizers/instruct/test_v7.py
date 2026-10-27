@@ -5,19 +5,13 @@ from functools import partial
 
 import numpy as np
 import pytest
-from PIL import Image
 
 from mistral_common.exceptions import TokenizerException
-from mistral_common.protocol.instruct.chunk import ContentChunk, ImageChunk, TextChunk, ThinkChunk
 from mistral_common.protocol.instruct.messages import (
-    AssistantMessage,
     ChatMessage,
-    SystemMessage,
-    ToolMessage,
-    UserMessage,
 )
 from mistral_common.protocol.instruct.request import InstructRequest
-from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
+from mistral_common.protocol.instruct.tool_calls import Tool
 from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized, TokenizerVersion
 from mistral_common.tokens.tokenizers.image import DATASET_MEAN, DATASET_STD, ImageConfig, ImageEncoder
@@ -27,24 +21,56 @@ from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import quick_vocab
 from tests.test_tokenizer_v7_audio import get_tekkenizer_with_audio
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
+    build_assistant_list_content_request,
+    build_assistant_think_request,
     build_assistant_tool_calls_request,
     build_audio_user_request,
     build_empty_assistant_request,
+    build_empty_content_empty_calls_request,
+    build_empty_content_no_calls_request,
+    build_empty_content_one_call_request,
+    build_empty_text_then_two_images_request,
+    build_image_and_tool_result_request,
     build_image_user_request,
+    build_leading_image_remains_first_request,
     build_multi_audio_user_request,
     build_multi_image_user_request,
     build_multiturn_audio_request,
     build_multiturn_image_request,
+    build_none_content_empty_calls_request,
+    build_none_content_no_calls_request,
+    build_none_content_one_call_request,
     build_normal_request,
+    build_prefixed_assistant_after_image_request,
+    build_prefixed_tool_call_and_content_request,
+    build_system_and_user_words_request,
+    build_system_list_content_request,
     build_system_message_multiturn_request,
     build_system_message_prefixed_final_request,
     build_system_message_request,
     build_system_message_tools_multiturn_request,
+    build_system_tools_and_call_request,
     build_text_then_audio_user_request,
     build_text_then_image_user_request,
+    build_text_then_two_images_request,
+    build_tool_call_and_content_request,
+    build_tool_calls_with_two_results_request,
     build_tool_message_request,
+    build_tool_result_after_history_request,
     build_tools_multiturn_request,
     build_tools_singleturn_request,
+    build_trailing_image_moves_first_request,
+    build_truncation_drop_by_chunk_1_request,
+    build_truncation_drop_by_chunk_2_request,
+    build_truncation_drop_first_assistant_request,
+    build_truncation_full_convo_request,
+    build_truncation_keep_sys_and_last_message_request,
+    build_truncation_last_user_at_limit_request,
+    build_truncation_last_user_one_over_request,
+    build_truncation_last_user_too_long_request,
+    build_truncation_start_with_assistant_request,
+    build_truncation_system_prompt_too_long_request,
+    build_two_images_request,
 )
 from tests.utils import assert_tokenized_equal, decode_keep
 
@@ -475,582 +501,246 @@ def with_audio_tokenizer() -> InstructTokenizer:
     return get_tekkenizer_with_audio()
 
 
-def _build_red_image_chunk() -> ImageChunk:
-    r"""Build an image chunk holding a red 4x4 image."""
-    return ImageChunk(image=Image.new(mode="RGB", size=(4, 4), color="red"))
-
-
-def _build_blue_image_chunk() -> ImageChunk:
-    r"""Build an image chunk holding a blue 6x4 image."""
-    return ImageChunk(image=Image.new(mode="RGB", size=(6, 4), color="blue"))
-
-
-def _build_red_image_user_message() -> UserMessage:
-    r"""Build a user message with the text `a` followed by a red 4x4 image."""
-    return UserMessage(content=[TextChunk(text="a"), _build_red_image_chunk()])
-
-
-def _build_image_user_request(content: list[ContentChunk]) -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request holding a lone user message with the supplied chunks."""
-    return InstructRequest[ChatMessage, Tool](messages=[UserMessage(content=content)])
-
-
-def _build_string_properties_tool() -> Tool:
-    r"""Build the tool `t` whose parameters are the string properties `g` and `h`."""
-    return Tool(
-        function=Function(
-            name="t",
-            parameters={
-                "type": "object",
-                "properties": {"g": {"type": "string"}, "h": {"type": "string"}},
-            },
-        )
-    )
-
-
-def _build_tool_call_with_argument() -> ToolCall:
-    r"""Build a call to the tool `t` with the argument `g="h"`."""
-    return ToolCall(function=FunctionCall(name="t", arguments='{"g": "h"}'))
-
-
-def _build_two_tools() -> list[Tool]:
-    r"""Build the tools `t1` and `t2`, both without parameters."""
-    return [Tool(function=Function(name="t1", parameters={})), Tool(function=Function(name="t2", parameters={}))]
-
-
-def _build_two_calls_assistant_message(prefix: bool) -> AssistantMessage:
-    r"""Build an assistant message with content `b1b2` and calls to `t1` and `t2`."""
-    return AssistantMessage(
-        content="b1b2",
-        prefix=prefix,
-        tool_calls=[
-            ToolCall(id="000000000", function=FunctionCall(name="t1", arguments="{}")),
-            ToolCall(id="111111111", function=FunctionCall(name="t2", arguments="{}")),
-        ],
-    )
-
-
-def _build_prefixed_assistant_request(
-    content: str | None, tool_calls: list[ToolCall] | None
-) -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request with a lone prefixed assistant message holding the supplied content and calls."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[AssistantMessage(content=content, tool_calls=tool_calls, prefix=True)]
-    )
-
-
-def _build_image_and_tool_result_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request with an image user turn, a plain assistant turn and a tool result."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            _build_red_image_user_message(),
-            AssistantMessage(content="b"),
-            ToolMessage(tool_call_id="b", content="f"),
-        ]
-    )
-
-
-def _build_prefixed_assistant_after_image_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request whose final assistant message is a prefix after an image user turn."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[_build_red_image_user_message(), AssistantMessage(content="b", prefix=True)]
-    )
-
-
-def _build_none_content_one_call_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request with a lone prefixed assistant message of `None` content and one call."""
-    return _build_prefixed_assistant_request(
-        content=None, tool_calls=[ToolCall(function=FunctionCall(name="test_fn", arguments="{}"))]
-    )
-
-
-def _build_empty_content_one_call_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request with a lone prefixed assistant message of empty content and one call."""
-    return _build_prefixed_assistant_request(
-        content="", tool_calls=[ToolCall(function=FunctionCall(name="test_fn", arguments="{}"))]
-    )
-
-
-def _build_system_tools_and_call_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request with a system message, a tool and an assistant turn calling it."""
-    return InstructRequest[ChatMessage, Tool](
-        available_tools=[_build_string_properties_tool()],
-        messages=[
-            SystemMessage(content="a"),
-            UserMessage(content="a"),
-            AssistantMessage(content="b", tool_calls=[_build_tool_call_with_argument()]),
-        ],
-    )
-
-
-def _build_tool_result_after_history_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request with a tool result after consecutive user turns and a tool call."""
-    return InstructRequest[ChatMessage, Tool](
-        available_tools=[_build_string_properties_tool()],
-        messages=[
-            SystemMessage(content="a"),
-            UserMessage(content="a"),
-            UserMessage(content="c"),
-            AssistantMessage(content="b", tool_calls=[_build_tool_call_with_argument()]),
-            ToolMessage(content="b", tool_call_id="1234"),
-        ],
-    )
-
-
-def _build_tool_call_and_content_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request with an assistant turn combining content and two tool calls."""
-    return InstructRequest[ChatMessage, Tool](
-        available_tools=_build_two_tools(),
-        messages=[UserMessage(content="a"), _build_two_calls_assistant_message(prefix=False)],
-    )
-
-
-def _build_prefixed_tool_call_and_content_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request whose final prefixed assistant turn combines content and two tool calls."""
-    return InstructRequest[ChatMessage, Tool](
-        available_tools=_build_two_tools(),
-        messages=[UserMessage(content="a"), _build_two_calls_assistant_message(prefix=True)],
-    )
-
-
-def _build_tool_calls_with_two_results_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request with an assistant turn of two tool calls followed by one result per call."""
-    return InstructRequest[ChatMessage, Tool](
-        available_tools=_build_two_tools(),
-        messages=[
-            UserMessage(content="a"),
-            _build_two_calls_assistant_message(prefix=False),
-            ToolMessage(content="r1", tool_call_id="000000000"),
-            ToolMessage(content="r2", tool_call_id="111111111"),
-        ],
-    )
-
-
-def _build_truncation_keep_sys_and_last_message_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a 15-token request where, next to the system prompts, only the last user message fits."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            SystemMessage(content="a"),
-            UserMessage(content="c"),
-            UserMessage(content="c"),
-            SystemMessage(content="a"),
-            UserMessage(content="bbbbbbb"),
-        ],
-        truncate_at_max_tokens=15,
-    )
-
-
-def _build_truncation_drop_first_assistant_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a 15-token request where dropping the first assistant message makes everything else fit."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            AssistantMessage(content="c"),
-            UserMessage(content="b"),
-            UserMessage(content="a"),
-            UserMessage(content="aaaaaaa"),
-        ],
-        truncate_at_max_tokens=15,
-    )
-
-
-def _build_truncation_start_with_assistant_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a 15-token request whose truncated result may start with an assistant message because the input did."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            AssistantMessage(content="c"),
-            AssistantMessage(content="b"),
-            UserMessage(content="a"),
-            UserMessage(content="aaaaaaa"),
-        ],
-        truncate_at_max_tokens=15,
-    )
-
-
-def _build_truncation_drop_by_chunk_1_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a 15-token request where the first assistant message, then the user and tool pair, are dropped."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            AssistantMessage(content="c"),
-            UserMessage(content="c"),
-            ToolMessage(content="c", tool_call_id="1234"),
-            UserMessage(content="a"),
-            AssistantMessage(content="bbbbbbb"),
-        ],
-        truncate_at_max_tokens=15,
-    )
-
-
-def _build_truncation_drop_by_chunk_2_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a 15-token request where only the last message is kept because the first chunk of three is too big."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content="c"),
-            AssistantMessage(content="c"),
-            AssistantMessage(content="c"),
-            UserMessage(content="aaaaaaa"),
-        ],
-        truncate_at_max_tokens=15,
-    )
-
-
-def _build_truncation_full_convo_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a 15-token request over a conversation with several system messages, truncated at its start."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            SystemMessage(content="a"),
-            UserMessage(content="c"),
-            AssistantMessage(content="c"),
-            UserMessage(content="a"),
-            AssistantMessage(content="a"),
-            SystemMessage(content="b"),
-            UserMessage(content="a"),
-        ],
-        truncate_at_max_tokens=15,
-    )
-
-
-def _build_empty_text_then_two_images_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request with an empty text chunk, a red 4x4 image and a blue 6x4 image."""
-    return _build_image_user_request(content=[TextChunk(text=""), _build_red_image_chunk(), _build_blue_image_chunk()])
-
-
-def _build_text_then_two_images_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request with a text chunk, a red 4x4 image and a blue 6x4 image."""
-    return _build_image_user_request(content=[TextChunk(text="x"), _build_red_image_chunk(), _build_blue_image_chunk()])
-
-
-def _build_two_images_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request with a red 4x4 image followed by a blue 6x4 image."""
-    return _build_image_user_request(content=[_build_red_image_chunk(), _build_blue_image_chunk()])
-
-
-def _build_trailing_image_moves_first_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request whose single image follows a text chunk."""
-    return _build_image_user_request(content=[TextChunk(text="x"), _build_red_image_chunk()])
-
-
-def _build_leading_image_remains_first_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request whose single image precedes a text chunk."""
-    return _build_image_user_request(content=[_build_red_image_chunk(), TextChunk(text="x")])
-
-
-def _build_system_list_content_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request whose system message holds a single text chunk."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[SystemMessage(content=[TextChunk(text="s")]), UserMessage(content="a")]
-    )
-
-
-def _build_assistant_list_content_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request whose assistant message holds a single text chunk."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[UserMessage(content="a"), AssistantMessage(content=[TextChunk(text="b")])]
-    )
-
-
-def _build_system_and_user_words_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request with multi-word system and user message content."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[SystemMessage(content="hello world"), UserMessage(content="good day")]
-    )
-
-
-def _build_truncation_last_user_at_limit_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a one-message request whose tokens, BOS excluded, equal the limit."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[UserMessage(content="a" * 7)],
-        truncate_at_max_tokens=9,
-    )
-
-
-def _build_none_content_no_calls_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request with a lone prefixed assistant message of `None` content and no calls."""
-    return _build_prefixed_assistant_request(content=None, tool_calls=None)
-
-
-def _build_none_content_empty_calls_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request with a lone prefixed assistant message of `None` content and an empty call list."""
-    return _build_prefixed_assistant_request(content=None, tool_calls=[])
-
-
-def _build_empty_content_no_calls_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request with a lone prefixed assistant message of empty content and no calls."""
-    return _build_prefixed_assistant_request(content="", tool_calls=None)
-
-
-def _build_empty_content_empty_calls_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request with a lone prefixed assistant message of empty content and an empty call list."""
-    return _build_prefixed_assistant_request(content="", tool_calls=[])
-
-
-def _build_truncation_system_prompt_too_long_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a 9-token request whose only message is a system prompt that does not fit."""
-    return InstructRequest[ChatMessage, Tool](messages=[SystemMessage(content="a" * 10)], truncate_at_max_tokens=9)
-
-
-def _build_truncation_last_user_too_long_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a 9-token request whose only message is a last user message that does not fit."""
-    return InstructRequest[ChatMessage, Tool](messages=[UserMessage(content="a" * 10)], truncate_at_max_tokens=9)
-
-
-def _build_truncation_last_user_one_over_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a one-message request whose tokens, BOS excluded, exceed the limit by one."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[UserMessage(content="a" * 8)],
-        truncate_at_max_tokens=9,
-    )
-
-
-def _build_assistant_think_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a request whose assistant message contains a think chunk."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(content=[ThinkChunk(thinking="t"), TextChunk(text="b")]),
-        ]
-    )
-
-
 @pytest.mark.parametrize(
     argnames="config, request_builder, expected, expected_text",
     argvalues=[
         pytest.param(
             "spm_patch2",
-            _build_image_and_tool_result_request,
+            partial(build_image_and_tool_result_request, settings=None),
             _IMAGE_AND_TOOL_RESULT_EXPECTED,
             _IMAGE_AND_TOOL_RESULT_TEXT,
-            id="spm-patch2-image-and-tool-result",
+            id="spm-patch2-shared-image-and-tool-result",
         ),
         pytest.param(
             "spm_patch2",
-            _build_prefixed_assistant_after_image_request,
+            partial(build_prefixed_assistant_after_image_request, settings=None),
             _PREFIXED_ASSISTANT_AFTER_IMAGE_EXPECTED,
             _PREFIXED_ASSISTANT_AFTER_IMAGE_TEXT,
-            id="spm-patch2-prefixed-assistant-after-image",
+            id="spm-patch2-shared-prefixed-assistant-after-image",
         ),
         pytest.param(
             "spm",
-            _build_none_content_one_call_request,
+            partial(build_none_content_one_call_request, settings=None),
             _PREFIXED_CALL_WITHOUT_CONTENT_EXPECTED,
             _PREFIXED_CALL_WITHOUT_CONTENT_TEXT,
-            id="spm-none-content-one-call",
+            id="spm-shared-none-content-one-call",
         ),
         pytest.param(
             "spm",
-            _build_empty_content_one_call_request,
+            partial(build_empty_content_one_call_request, settings=None),
             _PREFIXED_CALL_WITHOUT_CONTENT_EXPECTED,
             _PREFIXED_CALL_WITHOUT_CONTENT_TEXT,
-            id="spm-empty-content-one-call",
+            id="spm-shared-empty-content-one-call",
         ),
         pytest.param(
             "spm",
-            _build_system_tools_and_call_request,
+            partial(build_system_tools_and_call_request, settings=None),
             _SYSTEM_TOOLS_AND_CALL_EXPECTED,
             _SYSTEM_TOOLS_AND_CALL_TEXT,
-            id="spm-system-tools-and-call",
+            id="spm-shared-system-tools-and-call",
         ),
         pytest.param(
             "spm",
-            _build_tool_result_after_history_request,
+            partial(build_tool_result_after_history_request, settings=None),
             _TOOL_RESULT_AFTER_HISTORY_EXPECTED,
             _TOOL_RESULT_AFTER_HISTORY_TEXT,
-            id="spm-tool-result-after-history",
+            id="spm-shared-tool-result-after-history",
         ),
         pytest.param(
             "no_audio",
-            _build_tool_call_and_content_request,
+            partial(build_tool_call_and_content_request, settings=None),
             _TOOL_CALL_AND_CONTENT_EXPECTED,
             _TOOL_CALL_AND_CONTENT_TEXT,
-            id="no-audio-tool-call-and-content",
+            id="no-audio-shared-tool-call-and-content",
         ),
         pytest.param(
             "with_audio",
-            _build_tool_call_and_content_request,
+            partial(build_tool_call_and_content_request, settings=None),
             _TOOL_CALL_AND_CONTENT_EXPECTED,
             _TOOL_CALL_AND_CONTENT_TEXT,
-            id="with-audio-tool-call-and-content",
+            id="with-audio-shared-tool-call-and-content",
         ),
         pytest.param(
             "no_audio",
-            _build_prefixed_tool_call_and_content_request,
+            partial(build_prefixed_tool_call_and_content_request, settings=None),
             _PREFIXED_TOOL_CALL_AND_CONTENT_EXPECTED,
             _PREFIXED_TOOL_CALL_AND_CONTENT_TEXT,
-            id="no-audio-prefixed-tool-call-and-content",
+            id="no-audio-shared-prefixed-tool-call-and-content",
         ),
         pytest.param(
             "with_audio",
-            _build_prefixed_tool_call_and_content_request,
+            partial(build_prefixed_tool_call_and_content_request, settings=None),
             _PREFIXED_TOOL_CALL_AND_CONTENT_EXPECTED,
             _PREFIXED_TOOL_CALL_AND_CONTENT_TEXT,
-            id="with-audio-prefixed-tool-call-and-content",
+            id="with-audio-shared-prefixed-tool-call-and-content",
         ),
         pytest.param(
             "no_audio",
-            _build_tool_calls_with_two_results_request,
+            partial(build_tool_calls_with_two_results_request, settings=None),
             _TOOL_CALLS_WITH_TWO_RESULTS_EXPECTED,
             _TOOL_CALLS_WITH_TWO_RESULTS_TEXT,
-            id="no-audio-tool-calls-with-two-results",
+            id="no-audio-shared-tool-calls-with-two-results",
         ),
         pytest.param(
             "with_audio",
-            _build_tool_calls_with_two_results_request,
+            partial(build_tool_calls_with_two_results_request, settings=None),
             _TOOL_CALLS_WITH_TWO_RESULTS_EXPECTED,
             _TOOL_CALLS_WITH_TWO_RESULTS_TEXT,
-            id="with-audio-tool-calls-with-two-results",
+            id="with-audio-shared-tool-calls-with-two-results",
         ),
         pytest.param(
             "no_audio",
-            _build_truncation_keep_sys_and_last_message_request,
+            partial(build_truncation_keep_sys_and_last_message_request, settings=None),
             _TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_EXPECTED,
             _TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_TEXT,
-            id="no-audio-truncation-keep-sys-and-last-message",
+            id="no-audio-shared-truncation-keep-sys-and-last-message",
         ),
         pytest.param(
             "with_audio",
-            _build_truncation_keep_sys_and_last_message_request,
+            partial(build_truncation_keep_sys_and_last_message_request, settings=None),
             _TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_EXPECTED,
             _TRUNCATION_KEEP_SYS_AND_LAST_MESSAGE_TEXT,
-            id="with-audio-truncation-keep-sys-and-last-message",
+            id="with-audio-shared-truncation-keep-sys-and-last-message",
         ),
         pytest.param(
             "no_audio",
-            _build_truncation_drop_first_assistant_request,
+            partial(build_truncation_drop_first_assistant_request, settings=None),
             _TRUNCATION_DROP_FIRST_ASSISTANT_EXPECTED,
             _TRUNCATION_DROP_FIRST_ASSISTANT_TEXT,
-            id="no-audio-truncation-drop-first-assistant",
+            id="no-audio-shared-truncation-drop-first-assistant",
         ),
         pytest.param(
             "with_audio",
-            _build_truncation_drop_first_assistant_request,
+            partial(build_truncation_drop_first_assistant_request, settings=None),
             _TRUNCATION_DROP_FIRST_ASSISTANT_EXPECTED,
             _TRUNCATION_DROP_FIRST_ASSISTANT_TEXT,
-            id="with-audio-truncation-drop-first-assistant",
+            id="with-audio-shared-truncation-drop-first-assistant",
         ),
         pytest.param(
             "no_audio",
-            _build_truncation_start_with_assistant_request,
+            partial(build_truncation_start_with_assistant_request, settings=None),
             _TRUNCATION_START_WITH_ASSISTANT_EXPECTED,
             _TRUNCATION_START_WITH_ASSISTANT_TEXT,
-            id="no-audio-truncation-start-with-assistant",
+            id="no-audio-shared-truncation-start-with-assistant",
         ),
         pytest.param(
             "with_audio",
-            _build_truncation_start_with_assistant_request,
+            partial(build_truncation_start_with_assistant_request, settings=None),
             _TRUNCATION_START_WITH_ASSISTANT_EXPECTED,
             _TRUNCATION_START_WITH_ASSISTANT_TEXT,
-            id="with-audio-truncation-start-with-assistant",
+            id="with-audio-shared-truncation-start-with-assistant",
         ),
         pytest.param(
             "no_audio",
-            _build_truncation_drop_by_chunk_1_request,
+            partial(build_truncation_drop_by_chunk_1_request, settings=None),
             _TRUNCATION_DROP_BY_CHUNK_1_EXPECTED,
             _TRUNCATION_DROP_BY_CHUNK_1_TEXT,
-            id="no-audio-truncation-drop-by-chunk-1",
+            id="no-audio-shared-truncation-drop-by-chunk-1",
         ),
         pytest.param(
             "with_audio",
-            _build_truncation_drop_by_chunk_1_request,
+            partial(build_truncation_drop_by_chunk_1_request, settings=None),
             _TRUNCATION_DROP_BY_CHUNK_1_EXPECTED,
             _TRUNCATION_DROP_BY_CHUNK_1_TEXT,
-            id="with-audio-truncation-drop-by-chunk-1",
+            id="with-audio-shared-truncation-drop-by-chunk-1",
         ),
         pytest.param(
             "no_audio",
-            _build_truncation_drop_by_chunk_2_request,
+            partial(build_truncation_drop_by_chunk_2_request, settings=None),
             _TRUNCATION_DROP_BY_CHUNK_2_EXPECTED,
             _TRUNCATION_DROP_BY_CHUNK_2_TEXT,
-            id="no-audio-truncation-drop-by-chunk-2",
+            id="no-audio-shared-truncation-drop-by-chunk-2",
         ),
         pytest.param(
             "with_audio",
-            _build_truncation_drop_by_chunk_2_request,
+            partial(build_truncation_drop_by_chunk_2_request, settings=None),
             _TRUNCATION_DROP_BY_CHUNK_2_EXPECTED,
             _TRUNCATION_DROP_BY_CHUNK_2_TEXT,
-            id="with-audio-truncation-drop-by-chunk-2",
+            id="with-audio-shared-truncation-drop-by-chunk-2",
         ),
         pytest.param(
             "no_audio",
-            _build_truncation_full_convo_request,
+            partial(build_truncation_full_convo_request, settings=None),
             _TRUNCATION_FULL_CONVO_EXPECTED,
             _TRUNCATION_FULL_CONVO_TEXT,
-            id="no-audio-truncation-full-convo",
+            id="no-audio-shared-truncation-full-convo",
         ),
         pytest.param(
             "with_audio",
-            _build_truncation_full_convo_request,
+            partial(build_truncation_full_convo_request, settings=None),
             _TRUNCATION_FULL_CONVO_EXPECTED,
             _TRUNCATION_FULL_CONVO_TEXT,
-            id="with-audio-truncation-full-convo",
+            id="with-audio-shared-truncation-full-convo",
         ),
         pytest.param(
             "spm_patch2",
-            _build_empty_text_then_two_images_request,
+            partial(build_empty_text_then_two_images_request, settings=None),
             _TWO_IMAGES_EXPECTED,
             _TWO_IMAGES_TEXT,
-            id="spm-patch2-empty-text-then-two-images",
+            id="spm-patch2-shared-empty-text-then-two-images",
         ),
         pytest.param(
             "spm_patch2",
-            _build_text_then_two_images_request,
+            partial(build_text_then_two_images_request, settings=None),
             _TEXT_THEN_TWO_IMAGES_EXPECTED,
             _TEXT_THEN_TWO_IMAGES_TEXT,
-            id="spm-patch2-text-then-two-images",
+            id="spm-patch2-shared-text-then-two-images",
         ),
         pytest.param(
             "spm_patch2",
-            _build_two_images_request,
+            partial(build_two_images_request, settings=None),
             _TWO_IMAGES_EXPECTED,
             _TWO_IMAGES_TEXT,
-            id="spm-patch2-two-images",
+            id="spm-patch2-shared-two-images",
         ),
         pytest.param(
             "spm_patch2",
-            _build_trailing_image_moves_first_request,
+            partial(build_trailing_image_moves_first_request, settings=None),
             _ONE_IMAGE_WITH_TEXT_EXPECTED,
             _ONE_IMAGE_WITH_TEXT_TEXT,
-            id="spm-patch2-trailing-image-moves-first",
+            id="spm-patch2-shared-trailing-image-moves-first",
         ),
         pytest.param(
             "spm_patch2",
-            _build_leading_image_remains_first_request,
+            partial(build_leading_image_remains_first_request, settings=None),
             _ONE_IMAGE_WITH_TEXT_EXPECTED,
             _ONE_IMAGE_WITH_TEXT_TEXT,
-            id="spm-patch2-leading-image-remains-first",
+            id="spm-patch2-shared-leading-image-remains-first",
         ),
         pytest.param(
             "spm",
-            _build_system_list_content_request,
+            partial(build_system_list_content_request, settings=None),
             _SYSTEM_LIST_CONTENT_EXPECTED,
             _SYSTEM_LIST_CONTENT_TEXT,
-            id="spm-system-list-content",
+            id="spm-shared-system-list-content",
         ),
         pytest.param(
             "spm",
-            _build_assistant_list_content_request,
+            partial(build_assistant_list_content_request, settings=None),
             _ASSISTANT_LIST_CONTENT_EXPECTED,
             _ASSISTANT_LIST_CONTENT_TEXT,
-            id="spm-assistant-list-content",
+            id="spm-shared-assistant-list-content",
         ),
         pytest.param(
             "spm",
-            _build_system_and_user_words_request,
+            partial(build_system_and_user_words_request, settings=None),
             _SYSTEM_AND_USER_WORDS_EXPECTED,
             _SYSTEM_AND_USER_WORDS_TEXT,
-            id="spm-system-and-user-words",
+            id="spm-shared-system-and-user-words",
         ),
         pytest.param(
             "no_audio",
-            _build_truncation_last_user_at_limit_request,
+            partial(build_truncation_last_user_at_limit_request, settings=None),
             _TRUNCATION_LAST_USER_AT_LIMIT_EXPECTED,
             _TRUNCATION_LAST_USER_AT_LIMIT_TEXT,
-            id="no-audio-truncation-last-user-at-limit",
+            id="no-audio-shared-truncation-last-user-at-limit",
         ),
         pytest.param(
             "with_audio",
-            _build_truncation_last_user_at_limit_request,
+            partial(build_truncation_last_user_at_limit_request, settings=None),
             _TRUNCATION_LAST_USER_AT_LIMIT_EXPECTED,
             _TRUNCATION_LAST_USER_AT_LIMIT_TEXT,
-            id="with-audio-truncation-last-user-at-limit",
+            id="with-audio-shared-truncation-last-user-at-limit",
         ),
         pytest.param(
             "spm",
@@ -1255,80 +945,80 @@ def test_encode_instruct(
     argvalues=[
         pytest.param(
             "spm",
-            _build_none_content_no_calls_request,
+            partial(build_none_content_no_calls_request, settings=None),
             TokenizerException,
             _INVALID_ASSISTANT_MESSAGE,
-            id="spm-none-content-no-calls",
+            id="spm-shared-none-content-no-calls",
         ),
         pytest.param(
             "spm",
-            _build_none_content_empty_calls_request,
+            partial(build_none_content_empty_calls_request, settings=None),
             TokenizerException,
             _INVALID_ASSISTANT_MESSAGE,
-            id="spm-none-content-empty-calls",
+            id="spm-shared-none-content-empty-calls",
         ),
         pytest.param(
             "spm",
-            _build_empty_content_no_calls_request,
+            partial(build_empty_content_no_calls_request, settings=None),
             TokenizerException,
             _INVALID_ASSISTANT_MESSAGE,
-            id="spm-empty-content-no-calls",
+            id="spm-shared-empty-content-no-calls",
         ),
         pytest.param(
             "spm",
-            _build_empty_content_empty_calls_request,
+            partial(build_empty_content_empty_calls_request, settings=None),
             TokenizerException,
             _INVALID_ASSISTANT_MESSAGE,
-            id="spm-empty-content-empty-calls",
+            id="spm-shared-empty-content-empty-calls",
         ),
         pytest.param(
             "no_audio",
-            _build_truncation_system_prompt_too_long_request,
+            partial(build_truncation_system_prompt_too_long_request, settings=None),
             TokenizerException,
             _TRUNCATION_FAILED_MESSAGE,
-            id="no-audio-truncation-system-prompt-too-long",
+            id="no-audio-shared-truncation-system-prompt-too-long",
         ),
         pytest.param(
             "with_audio",
-            _build_truncation_system_prompt_too_long_request,
+            partial(build_truncation_system_prompt_too_long_request, settings=None),
             TokenizerException,
             _TRUNCATION_FAILED_MESSAGE,
-            id="with-audio-truncation-system-prompt-too-long",
+            id="with-audio-shared-truncation-system-prompt-too-long",
         ),
         pytest.param(
             "no_audio",
-            _build_truncation_last_user_too_long_request,
+            partial(build_truncation_last_user_too_long_request, settings=None),
             TokenizerException,
             _TRUNCATION_FAILED_MESSAGE,
-            id="no-audio-truncation-last-user-too-long",
+            id="no-audio-shared-truncation-last-user-too-long",
         ),
         pytest.param(
             "with_audio",
-            _build_truncation_last_user_too_long_request,
+            partial(build_truncation_last_user_too_long_request, settings=None),
             TokenizerException,
             _TRUNCATION_FAILED_MESSAGE,
-            id="with-audio-truncation-last-user-too-long",
+            id="with-audio-shared-truncation-last-user-too-long",
         ),
         pytest.param(
             "no_audio",
-            _build_truncation_last_user_one_over_request,
+            partial(build_truncation_last_user_one_over_request, settings=None),
             TokenizerException,
             _TRUNCATION_FAILED_MESSAGE,
-            id="no-audio-truncation-last-user-one-over",
+            id="no-audio-shared-truncation-last-user-one-over",
         ),
         pytest.param(
             "with_audio",
-            _build_truncation_last_user_one_over_request,
+            partial(build_truncation_last_user_one_over_request, settings=None),
             TokenizerException,
             _TRUNCATION_FAILED_MESSAGE,
-            id="with-audio-truncation-last-user-one-over",
+            id="with-audio-shared-truncation-last-user-one-over",
         ),
         pytest.param(
             "spm",
-            _build_assistant_think_request,
+            partial(build_assistant_think_request, settings=None),
             TokenizerException,
             _THINK_NOT_IMPLEMENTED_MESSAGE,
-            id="spm-assistant-think",
+            id="spm-shared-assistant-think",
         ),
         pytest.param(
             "spm",
