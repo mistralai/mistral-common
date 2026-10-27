@@ -841,3 +841,70 @@ def build_system_think_chunk_request(*, settings: ModelSettings | None) -> Instr
         ],
         settings=settings or ModelSettings.none(),
     )
+
+
+# --- Model settings and JSON schema builders (v15) ---
+
+
+def build_math_interpreter_tool() -> Tool:
+    r"""Build the math_interpreter tool used by model settings tests."""
+    return Tool(
+        function=Function(
+            name="math_interpreter",
+            description="Get the value of an arithmetic expression.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "expression": {
+                        "type": "string",
+                        "description": "Math expression.",
+                    }
+                },
+            },
+        )
+    )
+
+
+def build_pipeline_conversation() -> list[ChatMessage]:
+    r"""Build the multi-turn conversation used by model settings tests."""
+    return [
+        SystemMessage(content="S"),
+        UserMessage(content="U1"),
+        AssistantMessage(
+            content="A1",
+            tool_calls=[
+                ToolCall(id="123456789", function=FunctionCall(name="F1", arguments="{}")),
+                ToolCall(id="999999999", function=FunctionCall(name="F2", arguments="{}")),
+            ],
+        ),
+        ToolMessage(content="R1", tool_call_id="123456789"),
+        ToolMessage(content="R2", tool_call_id="999999999"),
+        AssistantMessage(content="A2"),
+        UserMessage(content="U2"),
+    ]
+
+
+def build_tools_pipeline_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a request with the math_interpreter tool and the pipeline conversation."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=build_pipeline_conversation(),
+        available_tools=[build_math_interpreter_tool()],
+        settings=settings or ModelSettings.none(),
+    )
+
+
+def build_no_tools_pipeline_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a request with the pipeline conversation and no tools."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=build_pipeline_conversation(),
+        available_tools=None,
+        settings=settings or ModelSettings.none(),
+    )
+
+
+def build_hi_user_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a request with a single user message holding 'hi'."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[UserMessage(content="hi")],
+        settings=settings or ModelSettings.none(),
+    )
