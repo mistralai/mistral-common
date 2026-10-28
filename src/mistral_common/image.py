@@ -68,6 +68,7 @@ def download_image(url: str, timeout: float | None) -> Image.Image:
 
         # Convert the image content to a PIL Image
         img = Image.open(io.BytesIO(response.content))
+        img.load()
         return img
 
     except requests.exceptions.Timeout as e:
@@ -106,13 +107,16 @@ def maybe_load_image_from_str_or_bytes(x: Image.Image | str | bytes) -> Image.Im
         return x
     if isinstance(x, bytes):
         try:
-            return Image.open(io.BytesIO(x))
+            image = Image.open(io.BytesIO(x))
+            image.load()
+            return image
         except Exception:
             raise RuntimeError("Encountered an error when loading image from bytes.")
 
     x = maybe_strip_base64_data_url_prefix(x)
     try:
         image = Image.open(io.BytesIO(base64.b64decode(x.encode("ascii"))))
+        image.load()
         return image
     except Exception as e:
         raise RuntimeError(

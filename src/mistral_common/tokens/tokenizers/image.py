@@ -84,7 +84,9 @@ def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
         except ValueError as e:
             raise ValueError(f"Invalid image data URL {url[:64]}: payload is not valid base64.") from e
         try:
-            return Image.open(BytesIO(image_data))
+            image = Image.open(BytesIO(image_data))
+            image.load()
+            return image
         except Exception as e:
             raise ValueError(f"Invalid image data URL {url[:64]}: payload is not a decodable image.") from e
     if url.startswith("file://"):
