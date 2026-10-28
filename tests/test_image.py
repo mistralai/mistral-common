@@ -311,14 +311,66 @@ def test_image_encoder_exif_orientation(special_token_ids: SpecialImageIDs) -> N
     assert encoding.image.shape == (3, 208, 112)
 
 
-def test_apply_exif_orientation_corrupted_fallback() -> None:
-    img = _create_test_image((50, 50))
-    with patch("PIL.ImageOps.exif_transpose", side_effect=ValueError("Corrupted EXIF")):
-        oriented = apply_exif_orientation(img)
-        assert oriented.size == (50, 50)
-
-
-def test_transform_image_applies_exif_orientation() -> None:
+def test_apply_exif_orientation_malformed_exif_fallback() -> None:
     img = _create_image_with_exif_orientation((200, 100), 6)
-    transformed = transform_image(img, (50, 100))
-    assert transformed.shape == (3, 100, 50)
+    with patch.object(img, "getexif", side_effect=ValueError("Corrupted EXIF")):
+        oriented = apply_exif_orientation(img)
+    assert oriented is img
+    assert oriented.size == (200, 100)
+
+
+@pytest.mark.parametrize("orientation", [None, 1])
+def test_apply_exif_orientation_no_op_returns_same_object(orientation: int | None) -> None:
+    img: Image.Image
+    if orientation is None:
+        buf = BytesIO()
+        Image.new("RGB", (200, 100)).save(buf, format="JPEG")
+        buf.seek(0)
+        img = Image.open(buf)
+    else:
+        img = _create_image_with_exif_orientation((200, 100), orientation)
+    assert apply_exif_orientation(img) is img
+
+
+def test_apply_exif_orientation_preserves_format_and_is_idempotent() -> None:
+    img = _create_image_with_exif_orientation((200, 100), 6)
+    oriented = apply_exif_orientation(img)
+    assert oriented.format == "JPEG"
+    assert oriented.size == (100, 200)
+    assert apply_exif_orientation(oriented).size == (100, 200)
+
+
+def test_apply_exif_orientation_truncated_image_raises() -> None:
+    img = Image.new("RGB", (400, 200), (128, 128, 128))
+    exif = img.getexif()
+    exif[0x0112] = 6
+    buf = BytesIO()
+    img.save(buf, format="JPEG", exif=exif)
+    truncated = Image.open(BytesIO(buf.getvalue()[:-300]))
+    with pytest.raises(OSError):
+        apply_exif_orientation(truncated)
+
+
+def test_image_chunk_serialization_keeps_jpeg_format() -> None:
+    img = _create_image_with_exif_orientation((200, 100), 6)
+    chunk = ImageChunk(image=img)
+    assert chunk.image.format == "JPEG"
+    serialized = chunk.model_dump(context={"add_format_prefix": True})["image"]
+    assert serialized.startswith("data:image/jpeg;base64,")
+
+
+def test_transform_image_does_not_reorient() -> None:
+    # Orientation is the caller's responsibility: `new_size` is computed from `image.size`.
+    img = _create_image_with_exif_orientation((200, 100), 6)
+    transformed = transform_image(img, (200, 100))
+    assert transformed.shape == (3, 100, 200)
+
+
+def test_image_from_chunk_data_url_exif_orientation() -> None:
+    img = _create_image_with_exif_orientation((200, 100), 6)
+    buf = BytesIO()
+    img.save(buf, format="JPEG", exif=img.getexif())
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    url_chunk = ImageURLChunk(image_url=f"data:image/jpeg;base64,{b64}")
+    oriented = image_from_chunk(url_chunk)
+    assert oriented.size == (100, 200)

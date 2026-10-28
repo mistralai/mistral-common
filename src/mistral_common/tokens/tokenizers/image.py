@@ -70,7 +70,8 @@ def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
         RuntimeError: If the URL scheme is not data:..., file..., or http(s).
     """
     if isinstance(chunk, ImageChunk):
-        return apply_exif_orientation(chunk.image)
+        # Already oriented by the `SerializableImage` validator.
+        return chunk.image
     if chunk.get_url().startswith("data:image"):
         data = chunk.get_url().split(",")[1]
         image_data = base64.b64decode(data)
@@ -205,7 +206,6 @@ def transform_image(image: Image.Image, new_size: tuple[int, int]) -> np.ndarray
     """
     assert_opencv_installed()
 
-    image = apply_exif_orientation(image)
     np_image = cv2.resize(np.array(_convert_to_rgb(image), dtype=np.float32), new_size, interpolation=cv2.INTER_CUBIC)
     return normalize(np_image, DATASET_MEAN, DATASET_STD)
 

@@ -1,9 +1,8 @@
 import base64
-import contextlib
 import io
 
 import requests
-from PIL import Image, ImageOps
+from PIL import ExifTags, Image, ImageOps
 from pydantic import BeforeValidator, PlainSerializer, SerializationInfo
 from typing_extensions import Annotated
 
@@ -14,20 +13,37 @@ def apply_exif_orientation(image: Image.Image) -> Image.Image:
     r"""Apply EXIF orientation transposition to an image if present.
 
     Transposes the image according to its EXIF orientation tag (e.g. from mobile cameras)
-    so pixels match user visual orientation. If no EXIF data is present or if EXIF is
-    malformed, the original image is returned unchanged.
+    so pixels match user visual orientation. The orientation tag is removed from the
+    returned image, so applying this function more than once is safe.
+
+    Note:
+        This also applies to `PIL.Image.Image` objects passed in directly, matching vLLM's
+        behavior. An image whose pixels were already rotated manually but that still
+        carries an orientation tag will therefore be rotated again.
 
     Args:
         image: The PIL Image to transpose.
 
     Returns:
-        The oriented PIL Image.
+        The oriented PIL Image, with its original `format` preserved. If the image has no
+        orientation tag, or its EXIF metadata is malformed, the same object is returned
+        unchanged (no copy and no pixel decoding).
+
+    Raises:
+        OSError: If the image has an orientation tag but its pixel data cannot be decoded
+            (e.g. a truncated file).
     """
-    with contextlib.suppress(Exception):
-        transposed = ImageOps.exif_transpose(image)
-        if transposed is not None:
-            return transposed
-    return image
+    try:
+        orientation = image.getexif().get(ExifTags.Base.Orientation, 1)
+    except Exception:
+        # Malformed EXIF metadata only; pixel decoding errors surface below.
+        return image
+    if orientation == 1:
+        return image
+    image_format = image.format
+    oriented = ImageOps.exif_transpose(image)
+    oriented.format = image_format
+    return oriented
 
 
 def download_image(url: str) -> Image.Image:
