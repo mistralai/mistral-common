@@ -1,10 +1,14 @@
 import json
+from dataclasses import dataclass
 from enum import StrEnum, auto
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable
 
+from typing_extensions import assert_never
+
 from mistral_common.deprecation import warn_once
+from mistral_common.exceptions import InvalidRequestException
 from mistral_common.guidance.tokenizer import from_mistral_tokenizer
 from mistral_common.imports import (
     assert_jinja2_installed,
@@ -12,7 +16,12 @@ from mistral_common.imports import (
     is_jinja2_installed,
     is_llguidance_installed,
 )
-from mistral_common.protocol.instruct.tool_calls import NamedToolChoice, Tool, ToolChoice, ToolChoiceEnum
+from mistral_common.protocol.instruct.request import (
+    ChatCompletionRequest,
+    ResponseFormats,
+    SchemaRenderingMode,
+)
+from mistral_common.protocol.instruct.tool_calls import NamedToolChoice, Tool, ToolChoiceEnum
 from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import is_tekkenizer
@@ -26,13 +35,20 @@ if is_jinja2_installed():
 JINJA_DIR = Path(__file__).parent / "data"
 
 
-def _validate_mode_and_tools(mode: ToolChoice, tools: list[Tool] | None) -> None:
-    if isinstance(mode, NamedToolChoice) and all(mode.function.name != tool.function.name for tool in (tools or [])):
-        raise ValueError(
-            f"Tool choice requires the {mode.function.name} tool but no tools with this name has been passed."
-        )
-    elif mode in [ToolChoiceEnum.any, ToolChoiceEnum.required] and not tools:
-        raise ValueError(f"When {mode=} please ensure to pass tools, got {tools=}.")
+class _GrammarMode(StrEnum):
+    r"""Template branch selected by a tool choice; the deprecated `any` maps to `required`."""
+
+    auto = "auto"
+    required = "required"
+    none = "none"
+
+
+_TOOL_CHOICE_TO_GRAMMAR_MODE: dict[ToolChoiceEnum, _GrammarMode] = {
+    ToolChoiceEnum.auto: _GrammarMode.auto,
+    ToolChoiceEnum.any: _GrammarMode.required,
+    ToolChoiceEnum.required: _GrammarMode.required,
+    ToolChoiceEnum.none: _GrammarMode.none,
+}
 
 
 @lru_cache()
@@ -86,6 +102,105 @@ JINJA_PATHS = {
 _TOOL_CALL_GRAMMAR = "{tool_calls_token} SAFE_WS? {tool_name} {args_token} SAFE_WS? %json {args_json} SAFE_WS?"
 
 
+@dataclass(frozen=True)
+class _GrammarSpec:
+    r"""Carry request-derived settings through one grammar render."""
+
+    mode: _GrammarMode
+    tools: list[Tool] | None
+    json_schema: dict[str, Any] | None
+    parallel_tool_calls: bool
+    json_only: bool
+    force_tool_names: bool
+
+
+def _get_grammar_spec(request: ChatCompletionRequest) -> _GrammarSpec | None:
+    r"""Select grammar settings based on the request's response format."""
+    match request.response_format.type:
+        case ResponseFormats.text:
+            return _text_grammar_spec(request=request)
+        case ResponseFormats.json_object | ResponseFormats.json_schema:
+            return _json_grammar_spec(request=request)
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
+def _text_grammar_spec(request: ChatCompletionRequest) -> _GrammarSpec | None:
+    r"""Resolve text requests while preserving their tool-choice semantics."""
+    tools = request.tools or None
+    choice = request.tool_choice
+
+    if tools is None:
+        match choice:
+            case ToolChoiceEnum.auto:
+                return None
+            case ToolChoiceEnum.none:
+                mode = _GrammarMode.none
+            case ToolChoiceEnum.any | ToolChoiceEnum.required:
+                raise InvalidRequestException(f"No tools provided for tool choice `{choice}`")
+            case NamedToolChoice():
+                raise InvalidRequestException(f"No tools provided for tool choice `{choice.function.name}`")
+            case _ as unreachable:
+                assert_never(unreachable)
+        force_tool_names = False
+    else:
+        match choice:
+            case NamedToolChoice():
+                name = choice.function.name
+                available = [tool.function.name for tool in tools]
+                if name not in available:
+                    raise InvalidRequestException(f"Tool choice `{name}` not found in available tools: {available}.")
+                tools = [tool for tool in tools if tool.function.name == name]
+                mode = _GrammarMode.required
+                force_tool_names = True
+            case ToolChoiceEnum.auto | ToolChoiceEnum.none | ToolChoiceEnum.any | ToolChoiceEnum.required:
+                mode = _TOOL_CHOICE_TO_GRAMMAR_MODE[choice]
+                force_tool_names = False
+            case _ as unreachable:
+                assert_never(unreachable)
+
+    return _GrammarSpec(
+        mode=mode,
+        tools=tools,
+        json_schema=None,
+        parallel_tool_calls=request.parallel_tool_calls,
+        json_only=False,
+        force_tool_names=force_tool_names,
+    )
+
+
+def _json_grammar_spec(request: ChatCompletionRequest) -> _GrammarSpec:
+    r"""Resolve JSON response settings and any compatible tool-call union."""
+    tools = request.tools or None
+    choice = request.tool_choice
+    if tools is not None and choice not in (ToolChoiceEnum.none, ToolChoiceEnum.auto):
+        raise InvalidRequestException(
+            f"`{request.response_format.type}` response type with tools is only compatible with `tool_choice: auto`"
+        )
+
+    json_schema = request.response_format.get_schema(purpose=SchemaRenderingMode.grammar)
+    assert json_schema is not None
+
+    if tools is not None and choice != ToolChoiceEnum.none:
+        return _GrammarSpec(
+            mode=_GrammarMode.auto,
+            tools=tools,
+            json_schema=json_schema,
+            parallel_tool_calls=request.parallel_tool_calls,
+            json_only=False,
+            force_tool_names=False,
+        )
+
+    return _GrammarSpec(
+        mode=_GrammarMode.none,
+        tools=None,
+        json_schema=json_schema,
+        parallel_tool_calls=request.parallel_tool_calls,
+        json_only=True,
+        force_tool_names=False,
+    )
+
+
 def _get_tool_args_json(tool: Tool) -> dict[str, Any]:
     r"""Return the JSON schema of a tool's arguments.
 
@@ -105,9 +220,10 @@ def _get_tool_args_json(tool: Tool) -> dict[str, Any]:
 
 def _convert_tool_calls(
     tools: list[Tool] | None,
-    mode: ToolChoice,
+    mode: _GrammarMode,
     parallel_tool_calls: bool,
     get_special_token_id: Callable[[str], str],
+    force_tool_names: bool,
 ) -> str:
     r"""Convert tool definitions into a lark grammar fragment.
 
@@ -116,19 +232,20 @@ def _convert_tool_calls(
     object arguments.
 
     Args:
-        tools: The list of tools available. Ignored when mode is ToolChoiceEnum.none.
-        mode: The tool choice controlling which tools can be called. A
-            NamedToolChoice restricts the grammar to that single tool.
+        tools: The list of tools available. Ignored when mode is `none`.
+        mode: The grammar mode; `none` disables tool calls.
         parallel_tool_calls: If `True`, the grammar allows repeated tool calls
             (one or more); if `False`, exactly one.
         get_special_token_id: Callable that maps a special token name to its
             lark grammar syntax.
+        force_tool_names: If `True`, pin non-strict tool calls to the names in
+            `tools` rather than accepting any tool name.
 
     Returns:
         The lark grammar string for tool calls, or an empty string when mode
-        is ToolChoiceEnum.none.
+        is `none`.
     """
-    if mode == ToolChoiceEnum.none:
+    if mode == _GrammarMode.none:
         return ""
 
     tool_calls_token = get_special_token_id(SpecialTokens.tool_calls.value)
@@ -137,17 +254,17 @@ def _convert_tool_calls(
     any_strict_true = any(tool.function.strict for tool in tools) if tools else False
 
     if not tools or not any_strict_true:
-        tool_name = f'"{mode.function.name}"' if isinstance(mode, NamedToolChoice) else "/.+/"
+        if force_tool_names:
+            assert tools
+            tool_name = " | ".join(f'"{tool.function.name}"' for tool in tools)
+            if len(tools) > 1:
+                tool_name = f"({tool_name})"
+        else:
+            tool_name = "/.+/"
         tool_entries = [(tool_name, '{"type": "object"}')]
     else:
-        filtered_tools = (
-            [next(tool for tool in tools if tool.function.name == mode.function.name)]
-            if isinstance(mode, NamedToolChoice)
-            else tools
-        )
         tool_entries = [
-            (f'"{tool.function.name}"', json.dumps(_get_tool_args_json(tool), ensure_ascii=False))
-            for tool in filtered_tools
+            (f'"{tool.function.name}"', json.dumps(_get_tool_args_json(tool), ensure_ascii=False)) for tool in tools
         ]
 
     grammar_parts = [
@@ -297,11 +414,12 @@ class GrammarFactory:
     def get_lark_from_jinja(
         self,
         template: str,
-        mode: ToolChoice,
+        mode: ToolChoiceEnum,
         tools: list[Tool] | None,
         json_schema: dict[str, Any] | None,
         parallel_tool_calls: bool,
-        json_only: bool = False,
+        json_only: bool,
+        force_tool_names: bool,
     ) -> str:
         r"""Render a lark grammar from a jinja template.
 
@@ -310,32 +428,70 @@ class GrammarFactory:
 
         Args:
             template: Jinja template to render, as obtained from `select_jinja_template`.
-            mode: The tool choice. `ToolChoiceEnum.none` disables tool call sections;
-                a NamedToolChoice restricts the grammar to that single tool.
-            tools: The list of tools available. Required when mode is any/required
-                or a NamedToolChoice; ignored when mode is none.
+            mode: The tool choice. `none` disables tool calls; `required` (and the
+                deprecated `any`) forces a tool call. Named tool choices go through
+                `get_grammar_for_chat_request`.
+            tools: The list of tools available. Required when mode is any/required;
+                ignored when mode is none.
             json_schema: Optional JSON schema additionally allowed by the grammar,
                 unioned with tool call and text alternatives. If `None`, no JSON
-                section is added.
+                section is added. With tools and a mode other than `none`, the
+                `required` branch is rendered so plain text cannot replace the JSON
+                answer; think templates still allow text that does not start
+                like JSON before a tool call.
             parallel_tool_calls: If `True`, the grammar allows one or more tool
                 calls in sequence; if `False`, exactly one.
             json_only: If `True`, generates only JSON schema grammar without
                 text/tool call alternatives.
+            force_tool_names: If `True`, pins non-strict tool names to those in
+                `tools`.
 
         Returns:
             The rendered lark grammar string.
 
         Raises:
-            ValueError: If a NamedToolChoice references a tool not in tools, or
-                mode is any/required with no tools provided.
+            ValueError: If `mode` is a `NamedToolChoice`, or mode is any/required
+                with no tools provided.
         """
-        # Verifies that the NamedToolChoice has a valid tool and "any", "required" has tools.
-        _validate_mode_and_tools(mode=mode, tools=tools)
+        if isinstance(mode, NamedToolChoice):
+            raise ValueError("Named tool choices are only supported by `get_grammar_for_chat_request`.")
+        return self._render(
+            template=template,
+            mode=_TOOL_CHOICE_TO_GRAMMAR_MODE[ToolChoiceEnum(mode)],
+            tools=tools,
+            json_schema=json_schema,
+            parallel_tool_calls=parallel_tool_calls,
+            json_only=json_only,
+            force_tool_names=force_tool_names,
+        )
 
-        fcall = _convert_tool_calls(tools, mode, parallel_tool_calls, self._special_token_lark)
+    def _render(
+        self,
+        template: str,
+        mode: _GrammarMode,
+        tools: list[Tool] | None,
+        json_schema: dict[str, Any] | None,
+        parallel_tool_calls: bool,
+        json_only: bool,
+        force_tool_names: bool,
+    ) -> str:
+        r"""Render the lark grammar for a grammar mode; see `get_lark_from_jinja` for the arguments."""
+        if mode == _GrammarMode.required and not tools:
+            raise ValueError(f"A forced tool call requires tools, please ensure to pass tools, got {tools=}.")
+
         json_schema_str = json.dumps(json_schema, ensure_ascii=False) if json_schema else None
-        # NamedToolChoice forces a specific tool, which maps to "required" grammar.
-        template_mode = ToolChoiceEnum.required if isinstance(mode, NamedToolChoice) else ToolChoiceEnum(mode)
+        if json_schema_str is not None and tools and not json_only and mode == _GrammarMode.auto:
+            # Free text before a tool call would also match the JSON answer and defeat the schema,
+            # so the union with tools only allows JSON or tool calls.
+            mode = _GrammarMode.required
+
+        fcall = _convert_tool_calls(
+            tools=tools,
+            mode=mode,
+            parallel_tool_calls=parallel_tool_calls,
+            get_special_token_id=self._special_token_lark,
+            force_tool_names=force_tool_names,
+        )
         think_with_json = self._tokenizer.version.supports_model_settings
 
         begin_think_token = self._get_optional_special_token_lark(SpecialTokens.begin_think.value)
@@ -343,7 +499,7 @@ class GrammarFactory:
 
         return _cached_get_lark_from_jinja(
             template=template,
-            mode=template_mode.value,
+            mode=mode.value,
             fcall=fcall,
             json_schema_str=json_schema_str,
             parallel_tool_calls=parallel_tool_calls,
@@ -351,6 +507,38 @@ class GrammarFactory:
             think_with_json=think_with_json,
             begin_think_token=begin_think_token,
             end_think_token=end_think_token,
+        )
+
+    def get_grammar_for_chat_request(self, request: ChatCompletionRequest, template: str) -> str | None:
+        r"""Resolve a chat request to its lark grammar in one pass.
+
+        Returns `None` when the request needs no grammar and raises
+        `InvalidRequestException` for inconsistent request combinations.
+        `template` is used as given; callers select their custom or default
+        template before calling this method.
+
+        Args:
+            request: Chat completion request to resolve.
+            template: Jinja template used to render the grammar.
+
+        Returns:
+            The rendered lark grammar, or `None` when no grammar is needed.
+
+        Raises:
+            InvalidRequestException: If the request contains an incompatible
+                tool choice or response format.
+        """
+        spec = _get_grammar_spec(request=request)
+        if spec is None:
+            return None
+        return self._render(
+            template=template,
+            mode=spec.mode,
+            tools=spec.tools,
+            json_schema=spec.json_schema,
+            parallel_tool_calls=spec.parallel_tool_calls,
+            json_only=spec.json_only,
+            force_tool_names=spec.force_tool_names,
         )
 
     def get_lark_for_json_schema(self, template: str, json_schema: dict[str, Any]) -> str:
@@ -373,4 +561,5 @@ class GrammarFactory:
             json_schema=json_schema,
             parallel_tool_calls=True,
             json_only=True,
+            force_tool_names=False,
         )
