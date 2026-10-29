@@ -979,6 +979,49 @@ REQUEST_MID_CONV_SYSTEM_WITH_CONSECUTIVE_USERS_TRAIN = ChatCompletionRequest(  #
     ]
 )
 
+# -- Trailing spaces in assistant content --
+# From v2 on, the tokenizer strips trailing spaces (not newlines) from text-only assistant content.
+
+REQUEST_ASSISTANT_TRAILING_SPACES_TEST = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="User says hello"),
+        AssistantMessage(content="Assistant says hi  "),
+        UserMessage(content="User says how are you ?"),
+    ]
+)
+
+REQUEST_ASSISTANT_TRAILING_SPACES_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="User says hello"),
+        AssistantMessage(content="Assistant says hi  "),
+        UserMessage(content="User says how are you ?"),
+        AssistantMessage(content="Assistant says fine\n "),
+    ]
+)
+
+REQUEST_ASSISTANT_TEXT_CHUNKS_TRAILING_SPACES_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="User says hello"),
+        AssistantMessage(content=[TextChunk(text="Assistant says hi ")]),
+        UserMessage(content="User says how are you ?"),
+        AssistantMessage(content=[TextChunk(text="Assistant says "), TextChunk(text="fine  ")]),
+    ]
+)
+
+REQUEST_ASSISTANT_THINK_TRAILING_SPACES_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="User says hello"),
+        AssistantMessage(
+            content=[
+                ThinkChunk(thinking="Assistant thinks "),
+                TextChunk(text="Assistant says hi "),
+            ]
+        ),
+        UserMessage(content="User says how are you ?"),
+        AssistantMessage(content="Assistant says fine "),
+    ]
+)
+
 # -- Multimodal content in non-user messages (v15+) --
 
 REQUEST_TOOL_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
@@ -1080,6 +1123,7 @@ def get_conversations(
             REQUEST_ONE_TURN_WITH_SYSTEM_TEST,
             REQUEST_MULTI_TURN_TEST,
             REQUEST_MULTI_TURN_WITH_SYSTEM_TEST,
+            REQUEST_ASSISTANT_TRAILING_SPACES_TEST,
         ]
         if validation_mode == ValidationMode.test
         else [
@@ -1087,6 +1131,7 @@ def get_conversations(
             REQUEST_ONE_TURN_WITH_SYSTEM_TRAIN,
             REQUEST_MULTI_TURN_TRAIN,
             REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
+            REQUEST_ASSISTANT_TRAILING_SPACES_TRAIN,
         ]
     )
 
@@ -1167,6 +1212,7 @@ def get_conversations(
                     REQUEST_CONSECUTIVE_USERS_TEXT_CHUNKS_TRAIN,
                     REQUEST_CONSECUTIVE_ASSISTANTS_TEXT_CHUNKS_TRAIN,
                     REQUEST_SYSTEM_TEXT_CHUNKS_TRAIN,
+                    REQUEST_ASSISTANT_TEXT_CHUNKS_TRAILING_SPACES_TRAIN,
                 ]
             )
         if image:
@@ -1183,6 +1229,7 @@ def get_conversations(
                 [
                     REQUEST_CONSECUTIVE_ASSISTANTS_THINK_TRAIN,
                     REQUEST_CONSECUTIVE_SYSTEMS_THINK_TRAIN,
+                    REQUEST_ASSISTANT_THINK_TRAILING_SPACES_TRAIN,
                 ]
             )
     else:

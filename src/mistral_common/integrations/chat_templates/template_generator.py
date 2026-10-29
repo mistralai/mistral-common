@@ -30,6 +30,10 @@ _END_MODEL_SETTINGS = SpecialTokens.end_model_settings.value
 
 _REASONING_EFFORT_VALUES = tuple(str(effort) for effort in ReasoningEffort)
 
+# Marker that Transformers' `continue_final_message` appends to the final message. It then checks that the marker's
+# trailing space survived rendering and, if not, strips all trailing whitespace from the render.
+_TRANSFORMERS_CONTINUE_TAG = "CONTINUE_FINAL_MESSAGE_TAG "
+
 MODEL_SETTINGS_FIELD_CHOICES: tuple[str, ...] = ("reasoning_effort", "json_schema")
 # Jinja lines that append each field's `"name": value` JSON fragment to `model_settings_parts`.
 _MODEL_SETTINGS_FRAGMENTS: dict[str, list[str]] = {
@@ -1441,6 +1445,12 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
 def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     r"""Generate assistant message handling section.
 
+    Trailing spaces are stripped from string content, as the v2+ instruct tokenizers do. Text-only chunk lists
+    reach this point as strings because the aggregation step merges them, so they are stripped too, while lists
+    that keep other chunk types are rendered as is. When the content ends with the Transformers
+    `continue_final_message` marker, the spaces before the marker are stripped and the marker is kept, so that
+    Transformers does not fall back to stripping trailing newlines as well.
+
     Args:
         config: Template configuration specifying version and features.
 
@@ -1484,7 +1494,7 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
 
     rc = _render_content_call(
         config=config,
-        content_expr="message['content']",
+        content_expr="assistant_content",
         context_name="assistant message contents",
         supported_types_desc=asst_types_desc,
         support_thinking=True,
@@ -1494,6 +1504,23 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     )
 
     lines.append("        {%- if message['content'] %}")
+    # Only spaces are stripped, not newlines, to match `rstrip(" ")` in the instruct tokenizers.
+    lines.append("            {%- if message['content'] is string %}")
+    lines.append(
+        "                {#- Transformers' continue_final_message appends this marker. "
+        "Keep it so that trailing newlines survive. #}"
+    )
+    lines.append(f"                {{%- if message['content'].endswith('{_TRANSFORMERS_CONTINUE_TAG}') %}}")
+    lines.append(
+        "                    {%- set assistant_content = "
+        f"message['content'][:-{len(_TRANSFORMERS_CONTINUE_TAG)}].rstrip(' ') ~ '{_TRANSFORMERS_CONTINUE_TAG}' %}}"
+    )
+    lines.append("                {%- else %}")
+    lines.append("                    {%- set assistant_content = message['content'].rstrip(' ') %}")
+    lines.append("                {%- endif %}")
+    lines.append("            {%- else %}")
+    lines.append("                {%- set assistant_content = message['content'] %}")
+    lines.append("            {%- endif %}")
 
     if config.uses_spm_space_tracking:
         lines.append("            {%- if ns.add_space %}")
