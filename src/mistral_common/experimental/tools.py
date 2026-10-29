@@ -233,8 +233,9 @@ def _decode_tool_calls(tool_call_tokens: Sequence[list[int]], tokenizer: Tokeniz
         The list of decoded tool calls.
 
     Raises:
-        ValueError: If the tokenizer version is v1 (no tool call support), or
-            version-specific decoding errors.
+        ValueError: If the tokenizer version is v1 (no tool call support).
+        InvalidToolCallError: If a tool call cannot be decoded
+            (`InvalidArgsToolCallError` for invalid arguments).
     """
     tools_calls = []
     for tool_call in tool_call_tokens:
