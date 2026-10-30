@@ -1,11 +1,12 @@
 import base64
+import contextlib
 import io
 import math
 import os
 from typing import Annotated
 
 import requests
-from PIL import Image
+from PIL import Image, ImageOps
 from pydantic import BeforeValidator, PlainSerializer, SerializationInfo
 
 from mistral_common import __version__
@@ -66,8 +67,10 @@ def download_image(url: str, timeout: float | None) -> Image.Image:
         response = requests.get(url, headers=headers, timeout=timeout)
         response.raise_for_status()  # Raise an error for bad responses (4xx, 5xx)
 
-        # Convert the image content to a PIL Image
+        # Convert the image content to a PIL Image; load() forces decoding now
+        # so a truncated image fails here instead of later at encode time.
         img = Image.open(io.BytesIO(response.content))
+        img.load()
         return img
 
     except requests.exceptions.Timeout as e:
@@ -106,13 +109,16 @@ def maybe_load_image_from_str_or_bytes(x: Image.Image | str | bytes) -> Image.Im
         return x
     if isinstance(x, bytes):
         try:
-            return Image.open(io.BytesIO(x))
+            image = Image.open(io.BytesIO(x))
+            image.load()
+            return image
         except Exception:
             raise RuntimeError("Encountered an error when loading image from bytes.")
 
     x = maybe_strip_base64_data_url_prefix(x)
     try:
         image = Image.open(io.BytesIO(base64.b64decode(x.encode("ascii"))))
+        image.load()
         return image
     except Exception as e:
         raise RuntimeError(
