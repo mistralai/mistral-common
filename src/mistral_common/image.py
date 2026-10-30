@@ -1,12 +1,11 @@
 import base64
-import contextlib
 import io
 import math
 import os
 from typing import Annotated
 
 import requests
-from PIL import Image, ImageOps
+from PIL import Image
 from pydantic import BeforeValidator, PlainSerializer, SerializationInfo
 
 from mistral_common import __version__
