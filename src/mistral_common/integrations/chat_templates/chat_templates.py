@@ -8,6 +8,7 @@ from mistral_common.integrations.chat_templates.template_generator import (
 )
 from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
 from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
 
 
@@ -20,6 +21,9 @@ def generate_chat_template(
     default_system_prompt: str | None,
     plain_thinking_support: bool,
     use_special_token_variables: bool,
+    model_settings_fields: frozenset[str] | None,
+    reasoning_effort_values: tuple[str, ...] | None,
+    reasoning_effort_default: str | None,
 ) -> str:
     r"""Generate a chat template based on configuration.
 
@@ -39,6 +43,14 @@ def generate_chat_template(
             Mutually exclusive with `thinking_support`.
         use_special_token_variables: Whether to emit BOS/EOS as Jinja variable
             references (`bos_token`/`eos_token`) or as literal values.
+        model_settings_fields: Fields to render, or `None` to select automatically
+            based on the tokenizer version. Required — pass `None` explicitly for
+            the automatic selection.
+        reasoning_effort_values: Reasoning effort values exposed on requests. Required when the
+            `reasoning_effort` model settings field is enabled.
+        reasoning_effort_default: Exposed reasoning effort rendered when the request
+            leaves the effort unset. Required when the `reasoning_effort` model
+            settings field is enabled and must be one of `reasoning_effort_values`.
 
     Returns:
         The generated Jinja2 template as a string.
@@ -51,6 +63,9 @@ def generate_chat_template(
         thinking_support=thinking_support,
         plain_thinking_support=plain_thinking_support,
         use_special_token_variables=use_special_token_variables,
+        model_settings_fields=model_settings_fields,
+        reasoning_effort_values=reasoning_effort_values,
+        reasoning_effort_default=reasoning_effort_default,
     )
     template = _build_chat_template(config)
 
@@ -100,6 +115,10 @@ def convert_tokenizer_to_chat_template(
     the intent explicitly, but on any other tokenizer it raises rather than
     forcing the feature on.
 
+    For tokenizer versions that support model settings, selected fields are
+    derived from configured builders in the tokenizer file. The tokenizer must
+    have a builder with at least one configured field to produce a matching template.
+
     Args:
         tokenizer_file: Path to the tokenizer file (tekken JSON or SentencePiece `.model.vX`).
         system_prompt: Optional default system prompt to embed in the template.
@@ -116,7 +135,8 @@ def convert_tokenizer_to_chat_template(
     Raises:
         TokenizerException: If the tokenizer file is not recognized or invalid.
         ValueError: If `plain_thinking_support` is forced to a value incompatible
-            with the detected version, audio support, or thinking support.
+            with the detected version, audio support, or thinking support, or if
+            a model-settings-capable tokenizer has no configured builder fields.
     """
     mistral_tokenizer = MistralTokenizer.from_file(tokenizer_file)
     instruct_tokenizer = mistral_tokenizer.instruct_tokenizer
@@ -129,6 +149,26 @@ def convert_tokenizer_to_chat_template(
     thinking_support = tokenizer.is_special(SpecialTokens.begin_think.value) and tokenizer.is_special(
         SpecialTokens.end_think.value
     )
+    model_settings_fields: frozenset[str] | None = None
+    reasoning_effort_values: tuple[str, ...] | None = None
+    reasoning_effort_default: str | None = None
+    if version.supports_model_settings:
+        model_settings_builder = tokenizer.model_settings_builder
+        if model_settings_builder is None:
+            raise ValueError("Model-settings-capable tokenizer has no model settings builder")
+        model_settings_fields = frozenset(
+            field_name
+            for field_name in ModelSettingsBuilder.model_fields
+            if getattr(model_settings_builder, field_name) is not None
+        )
+        if not model_settings_fields:
+            raise ValueError("Model settings builder must configure at least one field")
+        reasoning_effort_builder = model_settings_builder.reasoning_effort
+        if reasoning_effort_builder is not None:
+            reasoning_effort_values = tuple(str(value) for value in reasoning_effort_builder.values)
+            assert reasoning_effort_builder.default is not None
+            reasoning_effort_default = str(reasoning_effort_builder.default)
+
     if plain_thinking_support is None:
         plain_thinking_support = version == TokenizerVersion.v11 and not audio_support
 
@@ -141,4 +181,7 @@ def convert_tokenizer_to_chat_template(
         default_system_prompt=system_prompt,
         plain_thinking_support=plain_thinking_support,
         use_special_token_variables=use_special_token_variables,
+        model_settings_fields=model_settings_fields,
+        reasoning_effort_values=reasoning_effort_values,
+        reasoning_effort_default=reasoning_effort_default,
     )

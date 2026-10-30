@@ -24,8 +24,11 @@ from mistral_common.protocol.instruct.normalize import get_normalizer
 from mistral_common.protocol.instruct.request import (
     ChatCompletionRequest,
     InstructRequest,
+    JsonSchema,
     ModelSettings,
     ReasoningEffort,
+    ResponseFormat,
+    ResponseFormats,
 )
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.protocol.instruct.validator import ValidationMode, get_validator
@@ -34,7 +37,11 @@ from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersio
 from mistral_common.tokens.tokenizers.image import ImageConfig, ImageEncoder, SpecialImageIDs
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV15
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
+from mistral_common.tokens.tokenizers.model_settings_builder import (
+    JSONSchemaBuilder,
+    ModelSettingsBuilder,
+    ReasoningEffortEnumBuilder,
+)
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
 from tests.test_tekken import get_special_tokens, quick_vocab
@@ -153,11 +160,12 @@ def _build_model_settings_builder(
     """
     if allowed_reasoning_effort is None:
         return ModelSettingsBuilder.none()
+    if not allowed_reasoning_effort:
+        return ModelSettingsBuilder.none()
     return ModelSettingsBuilder(
-        reasoning_effort=EnumBuilder[ReasoningEffort](
+        reasoning_effort=ReasoningEffortEnumBuilder(
             values=[ReasoningEffort(v) for v in allowed_reasoning_effort],
-            accepts_none=True,
-            default=ReasoningEffort(allowed_reasoning_effort[0]) if allowed_reasoning_effort else None,
+            default=ReasoningEffort(allowed_reasoning_effort[0]),
         )
     )
 
@@ -409,7 +417,7 @@ def test_system_think_chunk_raises_v15(v15_tekkenizer: InstructTokenizerV15) -> 
         ("high", ("none", "high"), None, None),
         ("high", ("none",), InvalidRequestException, "should be one of"),
         ("none", ("none",), None, None),
-        ("none", (), InvalidRequestException, "not supported for this model"),
+        ("none", (), None, None),
     ],
 )
 def test_forbidden_reasoning_effort_raises(
@@ -453,35 +461,151 @@ def test_encode_ignore_one_model_settings(
 @pytest.mark.parametrize("reasoning_effort", [None, *list(ReasoningEffort)])
 def test_end_to_end_with_default(messages: list[ChatMessage], reasoning_effort: ReasoningEffort | None) -> None:
     """When the builder has a default, None reasoning_effort resolves to the default."""
-    builder = _build_model_settings_builder(("none", "high"))
+    builder = _build_model_settings_builder(tuple(ReasoningEffort))
     tokenizer_v15 = get_v15_mistral_tokenizer(builder)
     request = ChatCompletionRequest(messages=messages, reasoning_effort=reasoning_effort)
     tokenized = tokenizer_v15.encode_chat_completion(request)
     text = decode_keep(tokenizer_v15, tokenized)
-    if reasoning_effort == ReasoningEffort.high:
-        assert '[MODEL_SETTINGS]{"reasoning_effort": "high"}[/MODEL_SETTINGS]' in text
-    else:
-        # Both None (default applied) and explicit "none" resolve to the default "none"
-        assert '[MODEL_SETTINGS]{"reasoning_effort": "none"}[/MODEL_SETTINGS]' in text
+    expected_effort = ReasoningEffort.none if reasoning_effort is None else reasoning_effort
+    assert f'[MODEL_SETTINGS]{{"reasoning_effort": "{expected_effort}"}}[/MODEL_SETTINGS]' in text
 
 
 @pytest.mark.parametrize("reasoning_effort", [None, *list(ReasoningEffort)])
-def test_end_to_end_no_default(messages: list[ChatMessage], reasoning_effort: ReasoningEffort | None) -> None:
-    """When the builder has no default, None reasoning_effort means no model settings."""
+def test_end_to_end_with_alternative_default(
+    messages: list[ChatMessage], reasoning_effort: ReasoningEffort | None
+) -> None:
+    """A configured default is emitted for an unset effort."""
     builder = ModelSettingsBuilder(
-        reasoning_effort=EnumBuilder[ReasoningEffort](values=list(ReasoningEffort), accepts_none=True, default=None)
+        reasoning_effort=ReasoningEffortEnumBuilder(values=list(ReasoningEffort), default=ReasoningEffort.max)
     )
     tokenizer_v15 = get_v15_mistral_tokenizer(builder)
     request = ChatCompletionRequest(messages=messages, reasoning_effort=reasoning_effort)
     tokenized = tokenizer_v15.encode_chat_completion(request)
     text = decode_keep(tokenizer_v15, tokenized)
-    if reasoning_effort == ReasoningEffort.high:
-        assert '[MODEL_SETTINGS]{"reasoning_effort": "high"}[/MODEL_SETTINGS]' in text
-    elif reasoning_effort == ReasoningEffort.none:
-        assert '[MODEL_SETTINGS]{"reasoning_effort": "none"}[/MODEL_SETTINGS]' in text
+    if reasoning_effort is None:
+        assert '[MODEL_SETTINGS]{"reasoning_effort": "max"}[/MODEL_SETTINGS]' in text
     else:
-        # None with no default -> no model settings encoded
-        assert "[MODEL_SETTINGS]" not in text
+        assert f'[MODEL_SETTINGS]{{"reasoning_effort": "{reasoning_effort}"}}[/MODEL_SETTINGS]' in text
+
+
+@pytest.fixture
+def v15_json_schema_mistral_tokenizer() -> MistralTokenizer:
+    builder = ModelSettingsBuilder(json_schema=JSONSchemaBuilder())
+    return get_v15_mistral_tokenizer(builder)
+
+
+@pytest.mark.parametrize(
+    ("response_format", "expected_text"),
+    [
+        pytest.param(
+            ResponseFormat(type=ResponseFormats.text),
+            "<s>[INST]hi[/INST]",
+            id="text",
+        ),
+        pytest.param(
+            ResponseFormat(type=ResponseFormats.json_object),
+            '<s>[MODEL_SETTINGS]{"json_schema": {"anyOf": [{"type": "object"}, {"type": "array"}]}}'
+            "[/MODEL_SETTINGS][INST]hi[/INST]",
+            id="json",
+        ),
+        pytest.param(
+            ResponseFormat(
+                type=ResponseFormats.json_schema,
+                json_schema=JsonSchema(name="x", schema={"type": "object"}),
+            ),
+            '<s>[MODEL_SETTINGS]{"json_schema": {"type": "object"}}[/MODEL_SETTINGS][INST]hi[/INST]',
+            id="json_schema",
+        ),
+        pytest.param(
+            ResponseFormat(
+                type=ResponseFormats.json_schema,
+                json_schema=JsonSchema(name="x", schema={"type": "object", "description": "réponse"}),
+            ),
+            '<s>[MODEL_SETTINGS]{"json_schema": {"type": "object", "description": "réponse"}}'
+            "[/MODEL_SETTINGS][INST]hi[/INST]",
+            id="json_schema_non_ascii",
+        ),
+    ],
+)
+def test_v15_encodes_json_schema_into_model_settings(
+    v15_json_schema_mistral_tokenizer: MistralTokenizer,
+    response_format: ResponseFormat,
+    expected_text: str,
+) -> None:
+    request = ChatCompletionRequest(messages=[UserMessage(content="hi")], response_format=response_format)
+    tokenized = v15_json_schema_mistral_tokenizer.encode_chat_completion(request)
+    text = decode_keep(tokenizer=v15_json_schema_mistral_tokenizer, tokenized=tokenized)
+    assert text == expected_text, text
+
+
+def test_v15_rejects_invalid_json_schema_settings(messages: list[ChatMessage]) -> None:
+    tokenizer = get_v15_tekkenizer(ModelSettingsBuilder(json_schema=JSONSchemaBuilder()))
+    request: InstructRequest = InstructRequest(messages=messages, settings=ModelSettings(json_schema={"type": 123}))
+
+    with pytest.raises(InvalidRequestException, match="json_schema is not a valid JSON schema"):
+        tokenizer.encode_instruct(request)
+
+
+@pytest.fixture
+def v15_reasoning_and_json_schema_mistral_tokenizer() -> MistralTokenizer:
+    builder = ModelSettingsBuilder(
+        reasoning_effort=ReasoningEffortEnumBuilder(values=list(ReasoningEffort), default=ReasoningEffort.none),
+        json_schema=JSONSchemaBuilder(),
+    )
+    return get_v15_mistral_tokenizer(builder)
+
+
+@pytest.mark.parametrize(
+    ("response_format", "reasoning_effort", "expected_text"),
+    [
+        pytest.param(
+            ResponseFormat(type=ResponseFormats.text),
+            ReasoningEffort.high,
+            '<s>[MODEL_SETTINGS]{"reasoning_effort": "high"}[/MODEL_SETTINGS][INST]hi[/INST]',
+            id="text",
+        ),
+        pytest.param(
+            ResponseFormat(type=ResponseFormats.json_object),
+            ReasoningEffort.high,
+            '<s>[MODEL_SETTINGS]{"json_schema": {"anyOf": [{"type": "object"}, {"type": "array"}]}, '
+            '"reasoning_effort": "high"}[/MODEL_SETTINGS][INST]hi[/INST]',
+            id="json",
+        ),
+        pytest.param(
+            ResponseFormat(
+                type=ResponseFormats.json_schema,
+                json_schema=JsonSchema(
+                    name="x",
+                    schema={
+                        "type": "object",
+                        "properties": {"zeta": {"type": "string"}, "alpha": {"type": "number"}},
+                        "required": ["zeta", "alpha"],
+                    },
+                ),
+            ),
+            ReasoningEffort.none,
+            '<s>[MODEL_SETTINGS]{"json_schema": {"type": "object", "properties": '
+            '{"zeta": {"type": "string"}, "alpha": {"type": "number"}}, '
+            '"required": ["zeta", "alpha"]}, "reasoning_effort": "none"}'
+            "[/MODEL_SETTINGS][INST]hi[/INST]",
+            id="json_schema",
+        ),
+    ],
+)
+def test_v15_encodes_reasoning_effort_and_json_schema_into_model_settings(
+    v15_reasoning_and_json_schema_mistral_tokenizer: MistralTokenizer,
+    response_format: ResponseFormat,
+    reasoning_effort: ReasoningEffort,
+    expected_text: str,
+) -> None:
+    request = ChatCompletionRequest(
+        messages=[UserMessage(content="hi")],
+        response_format=response_format,
+        reasoning_effort=reasoning_effort,
+    )
+    tokenized = v15_reasoning_and_json_schema_mistral_tokenizer.encode_chat_completion(request)
+    text = decode_keep(tokenizer=v15_reasoning_and_json_schema_mistral_tokenizer, tokenized=tokenized)
+    assert text == expected_text, text
 
 
 def test_encode_chat_completion_prefixed_final_message() -> None:

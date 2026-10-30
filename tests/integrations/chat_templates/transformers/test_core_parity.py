@@ -53,6 +53,13 @@ class TestTransformersMistralCommonParity:
 
         mistral_tokenizer = MistralTokenizer.from_file(str(tokenizer_path), mode=mode)
 
+        settings_builder = mistral_tokenizer.instruct_tokenizer.tokenizer.model_settings_builder
+        reasoning_effort_values = None
+        reasoning_effort_default = None
+        if settings_builder is not None and settings_builder.reasoning_effort is not None:
+            reasoning_effort_values = tuple(str(value) for value in settings_builder.reasoning_effort.values)
+            reasoning_effort_default = str(settings_builder.reasoning_effort.default)
+
         chat_template = generate_chat_template(
             spm=config.spm,
             tokenizer_version=config.version,
@@ -62,6 +69,9 @@ class TestTransformersMistralCommonParity:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=config.model_settings_fields,
+            reasoning_effort_values=reasoning_effort_values,
+            reasoning_effort_default=reasoning_effort_default,
         )
 
         # Build HF tokenizer for Tekken-based token ID comparison
@@ -128,6 +138,12 @@ class TestTransformersMistralCommonParity:
         ids=[format_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
     )
     def test_role_error(self, config: TestConfig) -> None:
+        reasoning_effort_default = (
+            "none"
+            if config.version.supports_model_settings
+            and (config.model_settings_fields is None or "reasoning_effort" in config.model_settings_fields)
+            else None
+        )
         chat_template = generate_chat_template(
             spm=config.spm,
             tokenizer_version=config.version,
@@ -137,6 +153,9 @@ class TestTransformersMistralCommonParity:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=config.model_settings_fields,
+            reasoning_effort_default=reasoning_effort_default,
+            reasoning_effort_values=("none", "high") if reasoning_effort_default is not None else None,
         )
 
         # Starting with assistant is rejected by the first-message constraint
@@ -218,6 +237,12 @@ class TestTransformersMistralCommonParity:
         if not config.audio:
             invalid_convs += [invalid_user_audio]
 
+        reasoning_effort_default = (
+            "none"
+            if config.version.supports_model_settings
+            and (config.model_settings_fields is None or "reasoning_effort" in config.model_settings_fields)
+            else None
+        )
         chat_template = generate_chat_template(
             spm=config.spm,
             tokenizer_version=config.version,
@@ -227,6 +252,9 @@ class TestTransformersMistralCommonParity:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=config.model_settings_fields,
+            reasoning_effort_default=reasoning_effort_default,
+            reasoning_effort_values=("none", "high") if reasoning_effort_default is not None else None,
         )
         # Not using parametrize here because invalid_convs depends on the version/image/audio/think
         # parameters from the outer parametrize. Each sub-case is identifiable via the TemplateError

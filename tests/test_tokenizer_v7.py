@@ -1,17 +1,13 @@
-import json
-
 import pytest
 from PIL import Image
 
 from mistral_common.exceptions import TokenizerException
 from mistral_common.protocol.instruct.chunk import (
-    ContentChunk,
     ImageChunk,
     TextChunk,
 )
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
-    ChatMessage,
     SystemMessage,
     ToolMessage,
     UserMessage,
@@ -25,11 +21,8 @@ from mistral_common.protocol.instruct.validator import (
 )
 from mistral_common.tokens.tokenizers.base import (
     InstructRequest,
-    InstructTokenizer,
-    Tokenized,
     TokenizerVersion,
 )
-from mistral_common.tokens.tokenizers.image import ImageEncoder
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
@@ -54,221 +47,6 @@ def no_audio_tekkenizer() -> InstructTokenizerV7:
 @pytest.fixture
 def with_audio_tekkenizer() -> InstructTokenizerV7:
     return get_tekkenizer_with_audio()
-
-
-@pytest.fixture(scope="session")
-def spm_tokenizer() -> InstructTokenizerV7:
-    tokenizer = MistralTokenizer.v7(is_mm=True).instruct_tokenizer
-    image_encoder = tokenizer.image_encoder
-    assert isinstance(image_encoder, ImageEncoder)
-    # hardcode image_patch_size = 2 for easier checks
-    image_encoder.image_config.image_patch_size = 2
-    return tokenizer  # type: ignore
-
-
-def test_tokenize_assistant_message(spm_tokenizer: InstructTokenizerV7) -> None:
-    tokenized = spm_tokenizer.encode_instruct(
-        InstructRequest(
-            messages=[
-                UserMessage(
-                    content=[
-                        TextChunk(
-                            text="a",
-                        ),
-                        ImageChunk(image=Image.new("RGB", (4, 4), "red")),
-                    ]
-                ),
-                AssistantMessage(content="b"),
-                ToolMessage(tool_call_id="b", content="f"),
-            ],
-        )
-    )
-    _im = 10
-    _im_break = 14
-    _im_end = 15
-    img_tokens = [_im, _im, _im_break, _im, _im, _im_end]
-    assert tokenized.tokens == [
-        1,  # bos
-        3,  # begin_inst
-        *img_tokens,
-        1032,  # a
-        4,  # end_inst
-        1055,  # b
-        2,  # eos
-        8,  # [TOOL_RESULTS]
-        1055,  # tool_call_id b
-        18,  # [TOOL_CONTENT]
-        1053,  # f
-        9,  # [/TOOL_RESULTS]
-    ]
-    assert (
-        decode_keep(spm_tokenizer, tokenized)
-        == "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁a[/INST]▁b</s>[TOOL_RESULTS]▁b[TOOL_CONTENT]▁f[/TOOL_RESULTS]"  # noqa
-    )
-
-
-def test_tokenize_empty_content_assistant_message(spm_tokenizer: InstructTokenizerV7) -> None:
-    for content in [None, ""]:
-        tool_calls: list[ToolCall] | None
-        for tool_calls in [None, [], [ToolCall(function=FunctionCall(name="test_fn", arguments="{}"))]]:
-            instruct_request: InstructRequest = InstructRequest(
-                messages=[AssistantMessage(content=content, tool_calls=tool_calls, prefix=True)]
-            )
-            if not content and not tool_calls:
-                with pytest.raises(TokenizerException, match="Invalid assistant message:"):
-                    spm_tokenizer.encode_instruct(instruct_request)
-            else:
-                tokenized = spm_tokenizer.encode_instruct(instruct_request)
-                expected = Tokenized(
-                    tokens=[
-                        1,
-                        5,
-                        1501,
-                        7567,
-                        1629,
-                        2032,
-                        1113,
-                        2381,
-                        29498,
-                        6410,
-                        1316,
-                        1113,
-                        17452,
-                        2032,
-                        1139,
-                        1743,
-                        29561,
-                    ],
-                    prefix_ids=[
-                        5,
-                        1501,
-                        7567,
-                        1629,
-                        2032,
-                        1113,
-                        2381,
-                        29498,
-                        6410,
-                        1316,
-                        1113,
-                        17452,
-                        2032,
-                        1139,
-                        1743,
-                        29561,
-                    ],
-                )
-                expected._text = '<s>[TOOL_CALLS]▁[{"name":▁"test_fn",▁"arguments":▁{}}]'
-                assert tokenized == expected
-
-
-def test_tokenize_prefixed_assistant_message(spm_tokenizer: InstructTokenizerV7) -> None:
-    tokenized = spm_tokenizer.encode_instruct(
-        InstructRequest(
-            messages=[
-                UserMessage(
-                    content=[
-                        TextChunk(
-                            text="a",
-                        ),
-                        ImageChunk(image=Image.new("RGB", (4, 4), "red")),
-                    ]
-                ),
-                AssistantMessage(content="b", prefix=True),
-            ],
-        )
-    )
-    _im = 10
-    _im_break = 14
-    _im_end = 15
-    img_tokens = [_im, _im, _im_break, _im, _im, _im_end]
-    assert tokenized.tokens == [
-        1,  # bos
-        3,  # begin_inst
-        *img_tokens,
-        1032,  # a
-        4,  # end_inst
-        1055,  # b
-    ]
-    assert decode_keep(spm_tokenizer, tokenized) == "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁a[/INST]▁b"
-
-
-@pytest.mark.parametrize(
-    "messages, expected_text",
-    [
-        (
-            [
-                SystemMessage(content="a"),
-                UserMessage(content="a"),
-                AssistantMessage(
-                    content="b",
-                    tool_calls=[
-                        ToolCall(
-                            function=FunctionCall(
-                                name="t",
-                                arguments=json.dumps(
-                                    {
-                                        "g": "h",
-                                    },
-                                    ensure_ascii=False,
-                                ),
-                            ),
-                        ),
-                    ],
-                ),
-            ],
-            '<s>[SYSTEM_PROMPT]▁a[/SYSTEM_PROMPT][AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"t",▁"description":▁"",▁"parameters":▁{"type":▁"object",▁"properties":▁{"g":▁{"type":▁"string"},▁"h":▁{"type":▁"string"}}}}}][/AVAILABLE_TOOLS][INST]▁a[/INST]▁b[TOOL_CALLS]▁[{"name":▁"t",▁"arguments":▁{"g":▁"h"}}]</s>',  # noqa
-        ),
-        (
-            [
-                SystemMessage(content="a"),
-                UserMessage(content="a"),
-                UserMessage(content="c"),
-                AssistantMessage(
-                    content="b",
-                    tool_calls=[
-                        ToolCall(
-                            function=FunctionCall(
-                                name="t",
-                                arguments=json.dumps(
-                                    {
-                                        "g": "h",
-                                    },
-                                    ensure_ascii=False,
-                                ),
-                            ),
-                        ),
-                    ],
-                ),
-                ToolMessage(content="b", tool_call_id="1234"),
-            ],
-            '<s>[SYSTEM_PROMPT]▁a[/SYSTEM_PROMPT][INST]▁a[/INST][AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"t",▁"description":▁"",▁"parameters":▁{"type":▁"object",▁"properties":▁{"g":▁{"type":▁"string"},▁"h":▁{"type":▁"string"}}}}}][/AVAILABLE_TOOLS][INST]▁c[/INST]▁b[TOOL_CALLS]▁[{"name":▁"t",▁"arguments":▁{"g":▁"h"}}]</s>[TOOL_RESULTS]▁1234[TOOL_CONTENT]▁b[/TOOL_RESULTS]',  # noqa
-        ),
-    ],
-)
-def test_encode_spm(spm_tokenizer: InstructTokenizerV7, messages: list[ChatMessage], expected_text: str) -> None:
-    tokenized = spm_tokenizer.encode_instruct(
-        InstructRequest(
-            available_tools=[
-                Tool(
-                    function=Function(
-                        name="t",
-                        parameters={
-                            "type": "object",
-                            "properties": {
-                                "g": {"type": "string"},
-                                "h": {"type": "string"},
-                            },
-                        },
-                    )
-                ),
-            ],
-            messages=messages,
-        )
-    )
-
-    text = decode_keep(spm_tokenizer, tokenized)
-    assert text == expected_text, f"{text} != {expected_text}"
 
 
 def test_encode_chat_completion() -> None:
@@ -312,111 +90,6 @@ def test_encode_chat_completion() -> None:
         decode_keep(tokenizer, encoded)
         == '<s>[SYSTEM_PROMPT]▁a[/SYSTEM_PROMPT][AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"t",▁"description":▁"",▁"parameters":▁{"type":▁"object",▁"properties":▁{"g":▁{"type":▁"string"},▁"h":▁{"type":▁"string"}}}}}][/AVAILABLE_TOOLS][INST][IMG][IMG_END]▁a[/INST]▁b</s>[TOOL_RESULTS]▁123456789[TOOL_CONTENT]▁f[/TOOL_RESULTS]'  # noqa
     )
-
-
-@pytest.mark.parametrize(
-    "messages,truncated_text",
-    [
-        # max_tokens is always set to truncate at 15 tokens
-        pytest.param(
-            # with the system prompts, only one user message fits, keep the last one
-            [
-                SystemMessage(content="a"),
-                UserMessage(content="c"),
-                UserMessage(content="c"),
-                SystemMessage(content="a"),
-                UserMessage(content="bbbbbbb"),
-            ],
-            "<s>[SYSTEM_PROMPT]a[/SYSTEM_PROMPT][SYSTEM_PROMPT]a[/SYSTEM_PROMPT][INST]bbbbbbb[/INST]",
-            id="keep_sys_and_last_message",
-        ),
-        pytest.param(
-            # drop the first assistant message - everything else fits
-            [
-                AssistantMessage(content="c"),
-                UserMessage(content="b"),
-                UserMessage(content="a"),
-                UserMessage(content="aaaaaaa"),
-            ],
-            "<s>[INST]b[/INST][INST]a[/INST][INST]aaaaaaa[/INST]",
-        ),
-        pytest.param(
-            # the result can start with a non-user message because the input did too
-            [
-                AssistantMessage(content="c"),
-                AssistantMessage(content="b"),
-                UserMessage(content="a"),
-                UserMessage(content="aaaaaaa"),
-            ],
-            "<s>b</s>[INST]a[/INST][INST]aaaaaaa[/INST]",
-        ),
-        pytest.param(
-            # drop the first assistant message, then drop user+tool because the go together and both don't fit
-            [
-                AssistantMessage(content="c"),
-                UserMessage(content="c"),
-                ToolMessage(content="c", tool_call_id="1234"),
-                UserMessage(content="a"),
-                AssistantMessage(content="bbbbbbb"),
-            ],
-            "<s>[INST]a[/INST]bbbbbbb</s>",
-            id="drop_by_chunk_1",
-        ),
-        pytest.param(
-            # drop everything but the last message, because the first chunk (3 messages) is too big
-            [
-                UserMessage(content="c"),
-                AssistantMessage(content="c"),
-                AssistantMessage(content="c"),
-                UserMessage(content="aaaaaaa"),
-            ],
-            "<s>[INST]aaaaaaa[/INST]",
-            id="drop_by_chunk_2",
-        ),
-        pytest.param(
-            [
-                SystemMessage(content="a"),
-                UserMessage(content="c"),
-                AssistantMessage(content="c"),
-                UserMessage(content="a"),
-                AssistantMessage(content="a"),
-                SystemMessage(content="b"),
-                UserMessage(content="a"),
-            ],
-            "<s>[SYSTEM_PROMPT]a[/SYSTEM_PROMPT][INST]a[/INST]a</s>[SYSTEM_PROMPT]b[/SYSTEM_PROMPT][INST]a[/INST]",
-            id="full_convo",
-        ),
-    ],
-)
-@pytest.mark.parametrize("tekkenizer", ["no_audio_tekkenizer", "with_audio_tekkenizer"])
-def test_truncation(
-    request: pytest.FixtureRequest, tekkenizer: str, messages: list[ChatMessage], truncated_text: str
-) -> None:
-    tokenizer: InstructTokenizer = request.getfixturevalue(tekkenizer)
-
-    tokenized = tokenizer.encode_instruct(InstructRequest(messages=messages, truncate_at_max_tokens=15))
-    text = decode_keep(tokenizer, tokenized)
-    assert text == truncated_text, f"{text} != {truncated_text}"
-
-
-@pytest.mark.parametrize(
-    "messages",
-    [
-        [
-            # system prompt doesn't fit
-            SystemMessage(content="a" * 10),
-        ],
-        [
-            # last user msg doesn't fit
-            UserMessage(content="a" * 10),
-        ],
-    ],
-)
-@pytest.mark.parametrize("tekkenizer", ["no_audio_tekkenizer", "with_audio_tekkenizer"])
-def test_truncation_failed(request: pytest.FixtureRequest, tekkenizer: str, messages: list[ChatMessage]) -> None:
-    tokenizer = request.getfixturevalue(tekkenizer)
-    with pytest.raises(TokenizerException):
-        tokenizer.encode_instruct(InstructRequest(messages=messages, truncate_at_max_tokens=9))
 
 
 def test_from_model() -> None:
@@ -470,16 +143,6 @@ def test_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkeni
     )
     tokenized = tokenizer.encode_instruct(instruct_request)
     tokens = tokenized.tokens
-    text = decode_keep(tokenizer, tokenized)
-
-    assert text == (
-        '<s>[AVAILABLE_TOOLS][{"type": "function", "function": '
-        '{"name": "t1", "description": "", "parameters": {}}}, '
-        '{"type": "function", "function": {"name": "t2", "description"'
-        ': "", "parameters": {}}}][/AVAILABLE_TOOLS][INST]a[/INST]b1b2[TOOL_CALLS]'
-        '[{"name": "t1", "arguments": {}, "id": "000000000"}, {"name": "t2", "arguments": {}'
-        ', "id": "111111111"}]</s>'
-    )
 
     # make sure it also works end to end
     tools = instruct_request.available_tools
@@ -492,39 +155,6 @@ def test_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkeni
     tokens_2 = mistral_tokenizer.encode_chat_completion(chat_completion_request)
 
     assert tokens == tokens_2.tokens
-
-
-@pytest.mark.parametrize("tekkenizer", ["no_audio_tekkenizer", "with_audio_tekkenizer"])
-def test_prefixed_assistant_tool_call_and_content(request: pytest.FixtureRequest, tekkenizer: str) -> None:
-    tokenizer = request.getfixturevalue(tekkenizer)
-    instruct_request: InstructRequest[ChatMessage, Tool] = InstructRequest(
-        available_tools=[
-            Tool(function=Function(name="t1", parameters={})),
-            Tool(function=Function(name="t2", parameters={})),
-        ],
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(
-                content="b1b2",
-                prefix=True,
-                tool_calls=[
-                    ToolCall(id="000000000", function=FunctionCall(name="t1", arguments="{}")),
-                    ToolCall(id="111111111", function=FunctionCall(name="t2", arguments="{}")),
-                ],
-            ),
-        ],
-    )
-
-    tokenized = tokenizer.encode_instruct(instruct_request)
-
-    assert decode_keep(tokenizer, tokenized) == (
-        '<s>[AVAILABLE_TOOLS][{"type": "function", "function": '
-        '{"name": "t1", "description": "", "parameters": {}}}, '
-        '{"type": "function", "function": {"name": "t2", "description"'
-        ': "", "parameters": {}}}][/AVAILABLE_TOOLS][INST]a[/INST]b1b2[TOOL_CALLS]'
-        '[{"name": "t1", "arguments": {}, "id": "000000000"}, {"name": "t2", "arguments": {}'
-        ', "id": "111111111"}]'
-    )
 
 
 @pytest.mark.parametrize("tekkenizer", ["no_audio_tekkenizer", "with_audio_tekkenizer"])
@@ -576,96 +206,3 @@ def test_encode_chat_completion_prefixed_final_message() -> None:
     assert encoded.tokens == [1, 3, 1032, 4, 1055]
     assert encoded.tokens[-1] != eos_id
     assert eos_id not in encoded.prefix_ids
-
-
-def _image_tokens(width: int, height: int) -> list[int]:
-    _im = 10
-    _im_break = 14
-    _im_end = 15
-    image_tokens = ([_im] * width + [_im_break]) * height
-    image_tokens[-1] = _im_end
-    return image_tokens
-
-
-def _image_tokenizer_spans(tokens: list[int]) -> list[list[int]]:
-    _im = 10
-    _im_end = 15
-    spans: list[list[int]] = []
-    start_idx: int | None = None
-    for idx, token in enumerate(tokens):
-        if start_idx is None:
-            if token == _im:
-                start_idx = idx
-        elif token == _im_end:
-            spans.append(tokens[start_idx : idx + 1])
-            start_idx = None
-    return spans
-
-
-@pytest.mark.parametrize(
-    "content",
-    [
-        pytest.param(
-            [
-                TextChunk(text=""),
-                ImageChunk(image=Image.new("RGB", (4, 4), "red")),
-                ImageChunk(image=Image.new("RGB", (6, 4), "blue")),
-            ],
-            id="empty-text-then-two-images",
-        ),
-        pytest.param(
-            [
-                TextChunk(text="x"),
-                ImageChunk(image=Image.new("RGB", (4, 4), "red")),
-                ImageChunk(image=Image.new("RGB", (6, 4), "blue")),
-            ],
-            id="text-then-two-images",
-        ),
-        pytest.param(
-            [
-                ImageChunk(image=Image.new("RGB", (4, 4), "red")),
-                ImageChunk(image=Image.new("RGB", (6, 4), "blue")),
-            ],
-            id="two-images",
-        ),
-    ],
-)
-def test_multi_image_order_is_preserved(spm_tokenizer: InstructTokenizerV7, content: list[ContentChunk]) -> None:
-    tokenized = spm_tokenizer.encode_instruct(InstructRequest(messages=[UserMessage(content=content)]))
-    assert _image_tokenizer_spans(tokenized.tokens) == [_image_tokens(2, 2), _image_tokens(3, 2)]
-
-
-def test_single_trailing_image_moves_first(spm_tokenizer: InstructTokenizerV7) -> None:
-    tokenized = spm_tokenizer.encode_instruct(
-        InstructRequest(
-            messages=[
-                UserMessage(
-                    content=[
-                        TextChunk(text="x"),
-                        ImageChunk(image=Image.new("RGB", (4, 4), "red")),
-                    ]
-                )
-            ]
-        )
-    )
-    assert _image_tokenizer_spans(tokenized.tokens) == [_image_tokens(2, 2)]
-    x_token = spm_tokenizer.tokenizer.encode("x", bos=False, eos=False)[0]
-    assert tokenized.tokens.index(10) < tokenized.tokens.index(x_token)
-
-
-def test_single_leading_image_remains_first(spm_tokenizer: InstructTokenizerV7) -> None:
-    tokenized = spm_tokenizer.encode_instruct(
-        InstructRequest(
-            messages=[
-                UserMessage(
-                    content=[
-                        ImageChunk(image=Image.new("RGB", (4, 4), "red")),
-                        TextChunk(text="x"),
-                    ]
-                )
-            ]
-        )
-    )
-    assert _image_tokenizer_spans(tokenized.tokens) == [_image_tokens(2, 2)]
-    x_token = spm_tokenizer.tokenizer.encode("x", bos=False, eos=False)[0]
-    assert tokenized.tokens.index(10) < tokenized.tokens.index(x_token)

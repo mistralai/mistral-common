@@ -34,22 +34,17 @@ def _create_temporary_hf_model_cache(repo_id: str) -> Path:
 def test_list_local_hf_repo_files() -> None:
     hf_cache = _create_temporary_hf_model_cache("mistralai/Mistral-7B-v0.1")
     with patch("huggingface_hub.constants.HF_HUB_CACHE", hf_cache):
-        # Test without revision
         files = sorted(list_local_hf_repo_files("mistralai/Mistral-7B-v0.1", None))
         assert files == ["file2.txt", "tekken.json"]
 
-        # Test with a specific revision
         files = sorted(list_local_hf_repo_files("mistralai/Mistral-7B-v0.1", "RANDOM_REVISION"))
         assert files == ["file2.txt", "tekken.json"]
 
-        # Test with a branch/tag revision that must be resolved via refs (e.g. "main")
         files = sorted(list_local_hf_repo_files("mistralai/Mistral-7B-v0.1", "main"))
         assert files == ["file2.txt", "tekken.json"]
 
-        # Test with non-existent revision
         assert list_local_hf_repo_files("mistralai/Mistral-7B-v0.1", "non_existent_revision") == []
 
-    # Test huggingface_hub not installed
     with patch("mistral_common.tokens.tokenizers.utils._hub_installed", False):
         with pytest.raises(ImportError):
             list_local_hf_repo_files("mistralai/Mistral-7B-v0.1", "test_revision")
@@ -135,12 +130,10 @@ def test_download_tokenizer_from_hf_hub(files: list[str], expected: str | None) 
                 )
                 assert tokenizer == expected
 
-    # Test huggingface_hub not installed
     with patch("mistral_common.tokens.tokenizers.utils._hub_installed", False):
         with pytest.raises(ImportError):
             list_local_hf_repo_files("mistralai/Mistral-7B-v0.1", "test_revision")
 
-    # Test with local_files_only and force_download
     with pytest.raises(
         ValueError, match="You cannot force the download of the tokenizer if you only want to use local files."
     ):

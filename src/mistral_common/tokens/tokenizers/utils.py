@@ -3,30 +3,19 @@ import os
 from pathlib import Path
 from typing import Iterator
 
+from mistral_common.exceptions import MistralCommonException
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.image import MultiModalVersion
 
 _hub_installed: bool
 try:
-    import httpx
     import huggingface_hub
     import huggingface_hub.constants
     import huggingface_hub.errors
 
-    # huggingface_hub >= 2.0 raises network errors from httpx2, whose exception
-    # types are not httpx subclasses, so the offline fallback must catch both.
-    _http_error_types: tuple[type[BaseException], ...] = (httpx.HTTPError,)
-    try:
-        import httpx2
-
-        _http_error_types = (*_http_error_types, httpx2.HTTPError)
-    except ImportError:
-        pass
-
-    _offline_fallback_error_types: tuple[type[BaseException], ...] = (
-        *_http_error_types,
-        huggingface_hub.errors.OfflineModeIsEnabled,
-    )
+    # `huggingface_hub.utils.httpx` re-exports the HTTP module the hub raises network
+    # errors from (httpx on 1.x, httpx2 on 2.x), so one HTTPError type covers both stacks.
+    from huggingface_hub.utils import httpx as _hub_httpx
 
     _hub_installed = True
 except ImportError:
@@ -149,7 +138,6 @@ def get_one_valid_tokenizer_file(files: list[str]) -> str:
 
     if len(valid_tokenizer_file_names_and_files) == 0:
         raise ValueError("No tokenizer file found.")
-    # If there are multiple tokenizer files, we use tekken.json if it exists, otherwise the versioned one.
     if len(valid_tokenizer_file_names_and_files) > 1:
         for file_name, tokenizer_file in valid_tokenizer_file_names_and_files:
             if "tekken.json" == file_name:
@@ -201,6 +189,8 @@ def download_tokenizer_from_hf_hub(
             no valid tokenizer file exists in the repo.
         FileNotFoundError: If local files were required but none were found
             in the cache.
+        MistralCommonException: If an unexpected error occurs while listing the
+            repo files on the Hugging Face Hub.
     """
     _assert_hub_installed()
 
@@ -212,7 +202,7 @@ def download_tokenizer_from_hf_hub(
             hf_api = huggingface_hub.HfApi()
             repo_files = hf_api.list_repo_files(repo_id, revision=revision, token=token)
             local_files_only = False
-        except _offline_fallback_error_types as e:
+        except (_hub_httpx.HTTPError, huggingface_hub.errors.OfflineModeIsEnabled) as e:
             if force_download:
                 raise e
 
@@ -226,6 +216,11 @@ def download_tokenizer_from_hf_hub(
                     f"Could not connect to the Hugging Face Hub and no local files were found for the repo ID {repo_id}"
                     f" and revision {revision}. Please check your internet connection and try again."
                 ) from e
+        except Exception as e:
+            raise MistralCommonException(
+                f"Something went wrong while listing the files of the Hugging Face repo {repo_id} "
+                f"(revision: {revision})."
+            ) from e
     else:
         repo_files = list_local_hf_repo_files(repo_id=repo_id, revision=revision, cache_dir=cache_dir)
         if len(repo_files) == 0:
