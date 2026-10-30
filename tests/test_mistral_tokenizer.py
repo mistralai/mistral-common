@@ -4,6 +4,8 @@ from unittest.mock import patch
 import pytest
 
 from mistral_common.exceptions import TokenizerException
+from mistral_common.protocol.instruct.messages import UATS, AssistantMessage, UserMessage
+from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import (
@@ -170,6 +172,44 @@ def test_mistral_tokenizer_version_property() -> None:
 def test_mistral_tokenizer_mode_property() -> None:
     tokenizer_path = str(MistralTokenizer._data_path() / "tokenizer.model.v1")
 
-    for mode in [ValidationMode.serving, ValidationMode.finetuning, ValidationMode.test]:
+    for mode in [ValidationMode.serving, ValidationMode.finetuning, ValidationMode.test, ValidationMode.agnostic]:
         tokenizer = MistralTokenizer.from_file(tokenizer_path, mode)
         assert tokenizer.mode == tokenizer._chat_completion_request_validator.mode == mode
+
+
+def test_from_file_defaults_to_agnostic_mode() -> None:
+    tokenizer_path = str(MistralTokenizer._data_path() / "tokenizer.model.v1")
+
+    tokenizer = MistralTokenizer.from_file(tokenizer_path)
+
+    assert tokenizer.mode == ValidationMode.agnostic
+
+
+def test_from_hf_hub_defaults_to_agnostic_mode() -> None:
+    def _mocked_hf_download(
+        repo_id: str,
+        token: bool | str | None = None,
+        revision: str | None = None,
+        force_download: bool = False,
+        local_files_only: bool = False,
+    ) -> str:
+        return str(MistralTokenizer._data_path() / "tekken_240911.json")
+
+    with patch("mistral_common.tokens.tokenizers.mistral.download_tokenizer_from_hf_hub", _mocked_hf_download):
+        tokenizer = MistralTokenizer.from_hf_hub("mistralai/Pixtral-Large-Instruct-2411")
+
+    assert tokenizer.mode == ValidationMode.agnostic
+
+
+def test_default_mode_encodes_training_style_conversation() -> None:
+    tokenizer_path = str(MistralTokenizer._data_path() / "tekken_240911.json")
+    tokenizer = MistralTokenizer.from_file(tokenizer_path)
+
+    request = ChatCompletionRequest[UATS](
+        messages=[UserMessage(content="foo"), AssistantMessage(content="bar")],
+    )
+
+    tokenized = tokenizer.encode_chat_completion(request)
+
+    assert len(tokenized.tokens) > 0
+    assert "bar" in tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.IGNORE)
