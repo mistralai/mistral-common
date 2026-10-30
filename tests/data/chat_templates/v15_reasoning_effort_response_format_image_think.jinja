@@ -220,7 +220,15 @@
         {%- endif %}
 
         {%- if message['content'] %}
-            {{- render_content(content=message['content'], context_name='assistant message contents', supported_types_desc='text and thinking', support_thinking=true, support_images=false) -}}
+            {%- set asst_content = message['content'] %}
+            {%- if asst_content is string %}
+                {%- if asst_content.endswith('CONTINUE_FINAL_MESSAGE_TAG ') %}
+                    {%- set asst_content = asst_content[:-27].rstrip(' ') ~ 'CONTINUE_FINAL_MESSAGE_TAG ' %}
+                {%- else %}
+                    {%- set asst_content = asst_content.rstrip(' ') %}
+                {%- endif %}
+            {%- endif %}
+            {{- render_content(content=asst_content, context_name='assistant message contents', supported_types_desc='text and thinking', support_thinking=true, support_images=false) -}}
         {%- endif %}
 
         {%- if message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}
@@ -233,7 +241,7 @@
                 {%- elif arguments == '' %}
                     {%- set arguments = '{}' %}
                 {%- endif %}
-                {{- name ~ '[ARGS]' ~ arguments }}
+                {{- (name ~ '[ARGS]' ~ ('%s'|format(arguments)))|safe }}
             {%- endfor %}
         {%- endif %}
 

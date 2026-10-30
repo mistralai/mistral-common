@@ -764,12 +764,45 @@ def _generate_macros(config: TemplateConfig) -> str:
     return "\n".join(lines)
 
 
-def _emit_int_float_parsing(indent: str) -> list[str]:
-    r"""Generate the Jinja2 block for parsing `message['content']` as int or float.
+def _emit_tool_text_flattening(indent: str) -> list[str]:
+    r"""Generate the Jinja2 block that sets `tool_text` from a pre-v15 tool message's content.
 
-    Attempts int parsing first, then float, falling back to the string
-    representation. Used in tool message handling to preserve numeric types
-    in JSON-serialized tool results.
+    Pre-v15 tokenizers only accept text chunks in tool results: they skip empty text chunks
+    and join the others with two newlines. List content is flattened the same way instead
+    of being printed as a Python list. Any other content is kept as is, so it still renders
+    as before.
+
+    Args:
+        indent: Whitespace prefix for each emitted line.
+
+    Returns:
+        Lines of Jinja2 template code that set `tool_text`.
+    """
+    return [
+        f"{indent}{{%- set tool_text = message['content'] %}}",
+        f"{indent}{{%- if message['content'] is defined and message['content'] is not string"
+        " and message['content'] is iterable and message['content'] is not mapping %}",
+        f"{indent}    {{%- set ns_tool = namespace(parts=[]) %}}",
+        f"{indent}    {{%- for block in message['content'] %}}",
+        f"{indent}        {{%- if block['type'] == 'text' %}}",
+        f"{indent}            {{%- if block['text'] %}}",
+        f"{indent}                {{%- set ns_tool.parts = ns_tool.parts + [block['text']] %}}",
+        f"{indent}            {{%- endif %}}",
+        f"{indent}        {{%- else %}}",
+        f"{indent}            {{{{- raise_exception('Only text chunks are supported in tool message content.') }}}}",
+        f"{indent}        {{%- endif %}}",
+        f"{indent}    {{%- endfor %}}",
+        f"{indent}    {{%- set tool_text = ns_tool.parts | join('\\n\\n') %}}",
+        f"{indent}{{%- endif %}}",
+    ]
+
+
+def _emit_int_float_parsing(indent: str) -> list[str]:
+    r"""Generate the Jinja2 block for parsing the tool message text as int or float.
+
+    Flattens the content into `tool_text`, then attempts int parsing first, then
+    float, falling back to the string representation. Used in tool message handling
+    to preserve numeric types in JSON-serialized tool results.
 
     Args:
         indent: Whitespace prefix for each emitted line.
@@ -778,16 +811,17 @@ def _emit_int_float_parsing(indent: str) -> list[str]:
         Lines of Jinja2 template code for int/float content parsing.
     """
     return [
+        *_emit_tool_text_flattening(indent=indent),
         f"{indent}{{# Try to parse 'content' as int or float if possible #}}",
-        f"{indent}{{%- set tool_content = message['content']|string %}}",
+        f"{indent}{{%- set tool_content = tool_text|string %}}",
         f"{indent}{{# Try to parse as int #}}",
-        f"{indent}{{%- set parsed_int = message['content']|int %}}",
-        f"{indent}{{% if parsed_int|string == message['content'] %}}",
+        f"{indent}{{%- set parsed_int = tool_text|int %}}",
+        f"{indent}{{% if parsed_int|string == tool_text %}}",
         f"{indent}    {{%- set tool_content = parsed_int %}}",
         f"{indent}{{# If int fails, try to parse as float #}}",
         f"{indent}{{%- else %}}",
-        f"{indent}    {{%- set parsed_float = message['content']|float %}}",
-        f"{indent}    {{%- if parsed_float|string == message['content'] %}}",
+        f"{indent}    {{%- set parsed_float = tool_text|float %}}",
+        f"{indent}    {{%- if parsed_float|string == tool_text %}}",
         f"{indent}        {{%- set tool_content = parsed_float %}}",
         f"{indent}    {{%- endif %}}",
         f"{indent}{{%- endif %}}",
@@ -1484,7 +1518,7 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
 
     rc = _render_content_call(
         config=config,
-        content_expr="message['content']",
+        content_expr="asst_content",
         context_name="assistant message contents",
         supported_types_desc=asst_types_desc,
         support_thinking=True,
@@ -1494,6 +1528,20 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     )
 
     lines.append("        {%- if message['content'] %}")
+    # The tokenizer strips trailing spaces from assistant string content; the template
+    # must do the same to stay in sync. Transformers appends 'CONTINUE_FINAL_MESSAGE_TAG '
+    # (tag plus one space) for continue_final_message: keep that trailing space, and only
+    # strip spaces from the part before the tag.
+    lines.append("            {%- set asst_content = message['content'] %}")
+    lines.append("            {%- if asst_content is string %}")
+    lines.append("                {%- if asst_content.endswith('CONTINUE_FINAL_MESSAGE_TAG ') %}")
+    lines.append(
+        "                    {%- set asst_content = asst_content[:-27].rstrip(' ') ~ 'CONTINUE_FINAL_MESSAGE_TAG ' %}"
+    )  # noqa: E501
+    lines.append("                {%- else %}")
+    lines.append("                    {%- set asst_content = asst_content.rstrip(' ') %}")
+    lines.append("                {%- endif %}")
+    lines.append("            {%- endif %}")
 
     if config.uses_spm_space_tracking:
         lines.append("            {%- if ns.add_space %}")
@@ -1564,13 +1612,15 @@ def _generate_tool_calls_elif_v2_v3(config: TemplateConfig) -> str:
     if config.uses_v2_tool_format:
         # v2: no ID in tool calls
         lines.extend(_emit_argument_normalization("                "))
-        lines.append("                {{- '{\"name\": \"' ~ name ~ '\", \"arguments\": ' ~ arguments ~ '}' }}")
+        lines.append(
+            "                {{- ('{\"name\": \"' ~ name ~ '\", \"arguments\": ' ~ ('%s'|format(arguments)) ~ '}')|safe }}"  # noqa: E501
+        )
     else:
         # v3_spm: has ID in tool calls
         lines.extend(_emit_call_id_validation("                "))
         lines.extend(_emit_argument_normalization("                "))
         lines.append(
-            '                {{- \'{"name": "\' ~ name ~ \'", "arguments": \' ~ arguments ~ \', "id": "\' ~ id ~ \'"}\' }}'  # noqa: E501
+            "                {{- ('{\"name\": \"' ~ name ~ '\", \"arguments\": ' ~ ('%s'|format(arguments)) ~ ', \"id\": \"' ~ id ~ '\"}')|safe }}"  # noqa: E501
         )
 
     lines.append("                {%- if loop.length > 1 and loop.index < loop.length %}")
@@ -1616,7 +1666,7 @@ def _generate_tool_calls_block(config: TemplateConfig) -> str:
         lines.append("                {%- set name = tool['function']['name'] %}")
         lines.append("                {%- set arguments = tool['function']['arguments'] %}")
         lines.extend(_emit_argument_normalization("                "))
-        lines.append("                {{- name ~ '" + _ARGS + "' ~ arguments }}")
+        lines.append("                {{- (name ~ '" + _ARGS + "' ~ ('%s'|format(arguments)))|safe }}")
         lines.append("            {%- endfor %}")
     elif config.uses_call_id_in_tool_calls:
         lines.append("            {%- for tool in message['tool_calls'] %}")
@@ -1625,7 +1675,9 @@ def _generate_tool_calls_block(config: TemplateConfig) -> str:
         lines.append("                {%- set arguments = tool['function']['arguments'] %}")
         lines.extend(_emit_call_id_validation("                "))
         lines.extend(_emit_argument_normalization("                "))
-        lines.append("                {{- name ~ '" + _CALL_ID + "' ~ id ~ '" + _ARGS + "' ~ arguments }}")
+        lines.append(
+            "                {{- (name ~ '" + _CALL_ID + "' ~ id ~ '" + _ARGS + "' ~ ('%s'|format(arguments)))|safe }}"
+        )  # noqa: E501
         lines.append("            {%- endfor %}")
     else:
         if config.spm:
@@ -1638,7 +1690,7 @@ def _generate_tool_calls_block(config: TemplateConfig) -> str:
         lines.extend(_emit_call_id_validation("                "))
         lines.extend(_emit_argument_normalization("                "))
         lines.append(
-            '                {{- \'{"name": "\' ~ name ~ \'", "arguments": \' ~ arguments ~ \', "id": "\' ~ id ~ \'"}\' }}'  # noqa: E501
+            "                {{- ('{\"name\": \"' ~ name ~ '\", \"arguments\": ' ~ ('%s'|format(arguments)) ~ ', \"id\": \"' ~ id ~ '\"}')|safe }}"  # noqa: E501
         )
         lines.append("                {%- if loop.length > 1 and loop.index < loop.length %}")
         lines.append("                    {{- ', ' }}")
@@ -1700,11 +1752,19 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         lines.append("        ")
         if config.spm:
             lines.append(
-                "        {{- '" + _BEGIN_TOOL_RESULTS + " [' ~ (tool_message|tojson) ~ ']" + _END_TOOL_RESULTS + "' }}"
+                "        {{- ('"
+                + _BEGIN_TOOL_RESULTS
+                + " [' ~ ('%s'|format(tool_message|tojson)) ~ ']"
+                + _END_TOOL_RESULTS
+                + "')|safe }}"
             )  # noqa: E501
         else:
             lines.append(
-                "        {{- '" + _BEGIN_TOOL_RESULTS + "[' ~ (tool_message|tojson) ~ ']" + _END_TOOL_RESULTS + "' }}"
+                "        {{- ('"
+                + _BEGIN_TOOL_RESULTS
+                + "[' ~ ('%s'|format(tool_message|tojson)) ~ ']"
+                + _END_TOOL_RESULTS
+                + "')|safe }}"
             )  # noqa: E501
     elif config.uses_json_tool_results:
         lines.extend(_emit_int_float_parsing("        "))
@@ -1714,17 +1774,22 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         lines.append("        {%- set tool_message = {'content': tool_content, 'call_id': tool_id} %}")
         lines.append("        ")
         lines.append(
-            "        {{- '" + _BEGIN_TOOL_RESULTS + " ' ~ (tool_message|tojson) ~ '" + _END_TOOL_RESULTS + "' }}"
+            "        {{- ('"
+            + _BEGIN_TOOL_RESULTS
+            + " ' ~ ('%s'|format(tool_message|tojson)) ~ '"
+            + _END_TOOL_RESULTS
+            + "')|safe }}"
         )  # noqa: E501
     elif config.uses_tool_content_format:
         lines.extend(_emit_call_id_resolution("        "))
+        lines.extend(_emit_tool_text_flattening(indent="        "))
         if config.spm:
             lines.append(
                 "        {{- '"
                 + _BEGIN_TOOL_RESULTS
                 + " ' ~ tool_id ~ '"
                 + _BEGIN_TOOL_CONTENT
-                + " ' ~ message['content']|string ~ '"
+                + " ' ~ tool_text|string ~ '"
                 + _END_TOOL_RESULTS
                 + "' }}"  # noqa: E501
             )
@@ -1734,7 +1799,7 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
                 + _BEGIN_TOOL_RESULTS
                 + "' ~ tool_id ~ '"
                 + _BEGIN_TOOL_CONTENT
-                + "' ~ message['content']|string ~ '"
+                + "' ~ tool_text|string ~ '"
                 + _END_TOOL_RESULTS
                 + "' }}"  # noqa: E501
             )
@@ -1760,8 +1825,9 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
             lines.append("        {{- " + tool_rc + " -}}")
             lines.append("        {{- '" + _END_TOOL_RESULTS + "' }}")
         else:
+            lines.extend(_emit_tool_text_flattening(indent="        "))
             lines.append(
-                "        {{- '" + _BEGIN_TOOL_RESULTS + "' ~ message['content']|string ~ '" + _END_TOOL_RESULTS + "' }}"
+                "        {{- '" + _BEGIN_TOOL_RESULTS + "' ~ tool_text|string ~ '" + _END_TOOL_RESULTS + "' }}"
             )  # noqa: E501
     else:
         # v3 non-spm style
@@ -1772,7 +1838,11 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         lines.append("        {%- set tool_message = {'content': tool_content, 'call_id': tool_id} %}")
         lines.append("        ")
         lines.append(
-            "        {{- '" + _BEGIN_TOOL_RESULTS + "' ~ (tool_message|tojson) ~ '" + _END_TOOL_RESULTS + "' }}"
+            "        {{- ('"
+            + _BEGIN_TOOL_RESULTS
+            + "' ~ ('%s'|format(tool_message|tojson)) ~ '"
+            + _END_TOOL_RESULTS
+            + "')|safe }}"
         )  # noqa: E501
 
     # SPM tracking
@@ -1940,10 +2010,22 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("")
     lines.append("    {#- Assistant messages supports text content or text chunks. #}")
     lines.append("    {%- elif message['role'] == 'assistant' %}")
-    lines.append("        {%- if message['content'] is string and message['content'] != '' %}")
-    lines.append("            {{- message['content'] }}")
-    lines.append("        {%- elif message['content'] | length > 0 %}")
-    lines.append("            {%- for block in message['content'] %}")
+    # Same trailing-space stripping as the other versions: the tokenizer rstrips
+    # assistant string content, except for the 'CONTINUE_FINAL_MESSAGE_TAG ' suffix.
+    lines.append("        {%- set asst_content = message['content'] %}")
+    lines.append("        {%- if asst_content is string %}")
+    lines.append("            {%- if asst_content.endswith('CONTINUE_FINAL_MESSAGE_TAG ') %}")
+    lines.append(
+        "                {%- set asst_content = asst_content[:-27].rstrip(' ') ~ 'CONTINUE_FINAL_MESSAGE_TAG ' %}"
+    )  # noqa: E501
+    lines.append("            {%- else %}")
+    lines.append("                {%- set asst_content = asst_content.rstrip(' ') %}")
+    lines.append("            {%- endif %}")
+    lines.append("        {%- endif %}")
+    lines.append("        {%- if asst_content is string and asst_content != '' %}")
+    lines.append("            {{- asst_content }}")
+    lines.append("        {%- elif asst_content is not string and asst_content | length > 0 %}")
+    lines.append("            {%- for block in asst_content %}")
     lines.append("                {%- if block['type'] == 'text' %}")
     lines.append("                    {{- block['text'] }}")
     lines.append("                {%- else %}")
