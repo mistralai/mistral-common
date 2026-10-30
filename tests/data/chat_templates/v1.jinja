@@ -132,18 +132,10 @@
 
     {#- Assistant messages supports text content or text chunks. #}
     {%- elif message['role'] == 'assistant' %}
-        {%- set asst_content = message['content'] %}
-        {%- if asst_content is string %}
-            {%- if asst_content.endswith('CONTINUE_FINAL_MESSAGE_TAG ') %}
-                {%- set asst_content = asst_content[:-27].rstrip(' ') ~ 'CONTINUE_FINAL_MESSAGE_TAG ' %}
-            {%- else %}
-                {%- set asst_content = asst_content.rstrip(' ') %}
-            {%- endif %}
-        {%- endif %}
-        {%- if asst_content is string and asst_content != '' %}
-            {{- asst_content }}
-        {%- elif asst_content is not string and asst_content | length > 0 %}
-            {%- for block in asst_content %}
+        {%- if message['content'] is string and message['content'] != '' %}
+            {{- message['content'] }}
+        {%- elif message['content'] | length > 0 %}
+            {%- for block in message['content'] %}
                 {%- if block['type'] == 'text' %}
                     {{- block['text'] }}
                 {%- else %}

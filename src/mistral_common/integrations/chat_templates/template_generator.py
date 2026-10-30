@@ -2010,22 +2010,12 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("")
     lines.append("    {#- Assistant messages supports text content or text chunks. #}")
     lines.append("    {%- elif message['role'] == 'assistant' %}")
-    # Same trailing-space stripping as the other versions: the tokenizer rstrips
-    # assistant string content, except for the 'CONTINUE_FINAL_MESSAGE_TAG ' suffix.
-    lines.append("        {%- set asst_content = message['content'] %}")
-    lines.append("        {%- if asst_content is string %}")
-    lines.append("            {%- if asst_content.endswith('CONTINUE_FINAL_MESSAGE_TAG ') %}")
-    lines.append(
-        "                {%- set asst_content = asst_content[:-27].rstrip(' ') ~ 'CONTINUE_FINAL_MESSAGE_TAG ' %}"
-    )  # noqa: E501
-    lines.append("            {%- else %}")
-    lines.append("                {%- set asst_content = asst_content.rstrip(' ') %}")
-    lines.append("            {%- endif %}")
-    lines.append("        {%- endif %}")
-    lines.append("        {%- if asst_content is string and asst_content != '' %}")
-    lines.append("            {{- asst_content }}")
-    lines.append("        {%- elif asst_content is not string and asst_content | length > 0 %}")
-    lines.append("            {%- for block in asst_content %}")
+    # V1 keeps assistant content as is: InstructTokenizerV1.encode_assistant_message
+    # does not rstrip trailing spaces (only V2+ does), so the template must not either.
+    lines.append("        {%- if message['content'] is string and message['content'] != '' %}")
+    lines.append("            {{- message['content'] }}")
+    lines.append("        {%- elif message['content'] | length > 0 %}")
+    lines.append("            {%- for block in message['content'] %}")
     lines.append("                {%- if block['type'] == 'text' %}")
     lines.append("                    {{- block['text'] }}")
     lines.append("                {%- else %}")

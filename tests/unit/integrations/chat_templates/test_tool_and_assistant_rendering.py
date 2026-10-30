@@ -24,6 +24,8 @@ _PRE_V15_VERSIONS = [
     TokenizerVersion.v13,
 ]
 _ALL_VERSIONS = [*_PRE_V15_VERSIONS, TokenizerVersion.v15]
+# V1 encodes assistant content as is (no rstrip), so only V2+ strip trailing spaces.
+_V2_PLUS_VERSIONS = [v for v in _ALL_VERSIONS if v != TokenizerVersion.v1]
 
 
 def _generate(version: TokenizerVersion) -> str:
@@ -107,6 +109,7 @@ def test_list_tool_message_content_flattened_not_repr(version: TokenizerVersion,
 
 @pytest.mark.parametrize("version", _ALL_VERSIONS)
 def test_assistant_content_trailing_spaces_stripped(version: TokenizerVersion) -> None:
+    r"""V2+ tokenizers rstrip assistant string content, so the template strips too."""
     messages: list[dict[str, Any]] = [
         {"role": "user", "content": "hi"},
         {"role": "assistant", "content": "Hello   "},
@@ -116,7 +119,18 @@ def test_assistant_content_trailing_spaces_stripped(version: TokenizerVersion) -
     assert "Hello</s>" in output
 
 
-@pytest.mark.parametrize("version", _ALL_VERSIONS)
+def test_v1_assistant_content_keeps_trailing_spaces() -> None:
+    r"""V1 encodes assistant content as is (no rstrip), so the v1 template keeps spaces."""
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": "hi"},
+        {"role": "assistant", "content": "Hello   "},
+    ]
+    output = _render(_generate(TokenizerVersion.v1), messages, autoescape=False)
+
+    assert "Hello   </s>" in output
+
+
+@pytest.mark.parametrize("version", _V2_PLUS_VERSIONS)
 def test_assistant_content_keeps_trailing_newline(version: TokenizerVersion) -> None:
     messages: list[dict[str, Any]] = [
         {"role": "user", "content": "hi"},
@@ -127,7 +141,7 @@ def test_assistant_content_keeps_trailing_newline(version: TokenizerVersion) -> 
     assert "```python\n</s>" in output
 
 
-@pytest.mark.parametrize("version", _ALL_VERSIONS)
+@pytest.mark.parametrize("version", _V2_PLUS_VERSIONS)
 def test_assistant_content_preserves_continue_final_message_tag_space(version: TokenizerVersion) -> None:
     messages: list[dict[str, Any]] = [
         {"role": "user", "content": "hi"},
