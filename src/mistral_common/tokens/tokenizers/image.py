@@ -3,6 +3,7 @@ import logging
 from dataclasses import dataclass
 from enum import StrEnum, auto
 from io import BytesIO
+from urllib.parse import unquote
 
 import numpy as np
 from PIL import Image
@@ -84,11 +85,15 @@ def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
         except ValueError as e:
             raise ValueError(f"Invalid image data URL {url[:64]}: payload is not valid base64.") from e
         try:
-            return Image.open(BytesIO(image_data))
+            image = Image.open(BytesIO(image_data))
+            image.load()
+            return image
         except Exception as e:
             raise ValueError(f"Invalid image data URL {url[:64]}: payload is not a decodable image.") from e
     if url.startswith("file://"):
-        with open(url.removeprefix("file://"), "rb") as file:
+        # Decode percent-encoded path components (e.g. from Path.as_uri());
+        # plain paths are not URIs and keep literal percent characters.
+        with open(unquote(url.removeprefix("file://")), "rb") as file:
             image = Image.open(file)
             image.load()
         return image

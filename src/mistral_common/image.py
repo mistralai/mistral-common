@@ -17,10 +17,10 @@ _DEFAULT_IMAGE_DOWNLOAD_TIMEOUT_S = 10.0
 
 
 def _validate_timeout(timeout: object, *, error_message: str) -> float:
-    r"""Return a positive finite floating-point timeout."""
-    if not isinstance(timeout, float) or not math.isfinite(timeout) or timeout <= 0:
+    r"""Return a positive finite numeric timeout as a float."""
+    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
         raise ValueError(error_message)
-    return timeout
+    return float(timeout)
 
 
 def _resolve_env_image_download_timeout() -> float:
@@ -66,8 +66,10 @@ def download_image(url: str, timeout: float | None) -> Image.Image:
         response = requests.get(url, headers=headers, timeout=timeout)
         response.raise_for_status()  # Raise an error for bad responses (4xx, 5xx)
 
-        # Convert the image content to a PIL Image
+        # Convert the image content to a PIL Image; load() forces decoding now
+        # so a truncated image fails here instead of later at encode time.
         img = Image.open(io.BytesIO(response.content))
+        img.load()
         return img
 
     except requests.exceptions.Timeout as e:
@@ -106,13 +108,16 @@ def maybe_load_image_from_str_or_bytes(x: Image.Image | str | bytes) -> Image.Im
         return x
     if isinstance(x, bytes):
         try:
-            return Image.open(io.BytesIO(x))
+            image = Image.open(io.BytesIO(x))
+            image.load()
+            return image
         except Exception:
             raise RuntimeError("Encountered an error when loading image from bytes.")
 
     x = maybe_strip_base64_data_url_prefix(x)
     try:
         image = Image.open(io.BytesIO(base64.b64decode(x.encode("ascii"))))
+        image.load()
         return image
     except Exception as e:
         raise RuntimeError(
