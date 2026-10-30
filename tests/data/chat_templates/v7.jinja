@@ -144,7 +144,15 @@
         {%- endif %}
 
         {%- if message['content'] %}
-            {{- render_content(content=message['content'], context_name='assistant message contents') -}}
+            {%- set asst_content = message['content'] %}
+            {%- if asst_content is string %}
+                {%- if asst_content.endswith('CONTINUE_FINAL_MESSAGE_TAG ') %}
+                    {%- set asst_content = asst_content[:-27].rstrip(' ') ~ 'CONTINUE_FINAL_MESSAGE_TAG ' %}
+                {%- else %}
+                    {%- set asst_content = asst_content.rstrip(' ') %}
+                {%- endif %}
+            {%- endif %}
+            {{- render_content(content=asst_content, context_name='assistant message contents') -}}
         {%- endif %}
 
         {%- if message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}
@@ -161,7 +169,7 @@
                 {%- elif arguments == '' %}
                     {%- set arguments = '{}' %}
                 {%- endif %}
-                {{- '{"name": "' ~ name ~ '", "arguments": ' ~ arguments ~ ', "id": "' ~ id ~ '"}' }}
+                {{- ('{"name": "' ~ name ~ '", "arguments": ' ~ ('%s'|format(arguments)) ~ ', "id": "' ~ id ~ '"}')|safe }}
                 {%- if loop.length > 1 and loop.index < loop.length %}
                     {{- ', ' }}
                 {%- endif %}
@@ -180,7 +188,21 @@
         {%- else %}
             {{- raise_exception('Tool message must have a call_id or tool_call_id of 9 characters or numbers.') }}
         {%- endif %}
-        {{- '[TOOL_RESULTS]' ~ tool_id ~ '[TOOL_CONTENT]' ~ message['content']|string ~ '[/TOOL_RESULTS]' }}
+        {%- set tool_text = message['content'] %}
+        {%- if message['content'] is defined and message['content'] is not string and message['content'] is iterable and message['content'] is not mapping %}
+            {%- set ns_tool = namespace(parts=[]) %}
+            {%- for block in message['content'] %}
+                {%- if block['type'] == 'text' %}
+                    {%- if block['text'] %}
+                        {%- set ns_tool.parts = ns_tool.parts + [block['text']] %}
+                    {%- endif %}
+                {%- else %}
+                    {{- raise_exception('Only text chunks are supported in tool message content.') }}
+                {%- endif %}
+            {%- endfor %}
+            {%- set tool_text = ns_tool.parts | join('\n\n') %}
+        {%- endif %}
+        {{- '[TOOL_RESULTS]' ~ tool_id ~ '[TOOL_CONTENT]' ~ tool_text|string ~ '[/TOOL_RESULTS]' }}
 
     {#- System messages. #}
     {%- elif message['role'] == 'system' %}
