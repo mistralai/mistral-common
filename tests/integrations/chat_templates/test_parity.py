@@ -4,7 +4,7 @@ import pytest
 
 from mistral_common.integrations.chat_templates.template_generator import build_chat_template
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.conftest import ALL_CONFIGS, format_config_id
+from tests.integrations.chat_templates.conftest import ALL_CONFIGS, GOLDEN_CONFIGS, format_config_id
 from tests.integrations.chat_templates.fixtures_data import iter_render_args, parse_tool_call_arguments
 from tests.integrations.chat_templates.helpers import (
     TestConfig,
@@ -14,7 +14,7 @@ from tests.integrations.chat_templates.helpers import (
 )
 
 
-@pytest.mark.parametrize("config", ALL_CONFIGS, ids=[format_config_id(c) for c in ALL_CONFIGS])
+@pytest.mark.parametrize("config", GOLDEN_CONFIGS, ids=[format_config_id(c) for c in GOLDEN_CONFIGS])
 def test_dynamic_matches_static(config: TestConfig) -> None:
     template_config = build_template_config(config)
     dynamic = build_chat_template(template_config)
@@ -24,8 +24,8 @@ def test_dynamic_matches_static(config: TestConfig) -> None:
 
 @pytest.mark.parametrize(
     "config",
-    [c for c in ALL_CONFIGS if not c.plain_think],
-    ids=[format_config_id(c) for c in ALL_CONFIGS if not c.plain_think],
+    [c for c in GOLDEN_CONFIGS if not c.plain_think],
+    ids=[format_config_id(c) for c in GOLDEN_CONFIGS if not c.plain_think],
 )
 def test_dynamic_template_produces_same_output(config: TestConfig) -> None:
     template_config = build_template_config(config)
@@ -53,8 +53,8 @@ def test_dynamic_template_produces_same_output(config: TestConfig) -> None:
 # tested in unit/test_thinking.py::test_plain_think_static_dynamic_parity)
 @pytest.mark.parametrize(
     "config",
-    [c for c in ALL_CONFIGS if not c.plain_think],
-    ids=[format_config_id(c) for c in ALL_CONFIGS if not c.plain_think],
+    [c for c in GOLDEN_CONFIGS if not c.plain_think],
+    ids=[format_config_id(c) for c in GOLDEN_CONFIGS if not c.plain_think],
 )
 def test_dynamic_template_comprehensive(config: TestConfig) -> None:
     template_config = build_template_config(config)

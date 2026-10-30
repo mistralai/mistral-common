@@ -16,7 +16,7 @@ import pytest
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from tests.integrations.chat_templates.helpers import DUMMY_IMAGE, TestConfig
 
-# All configurations for output comparison tests (including SPM).
+# Every supported configuration (including SPM), for output comparison tests.
 ALL_CONFIGS: list[TestConfig] = [
     # Non-SPM
     TestConfig(version=TokenizerVersion.v1),
@@ -49,7 +49,40 @@ ALL_CONFIGS: list[TestConfig] = [
     # Plain thinking (v11 only)
     TestConfig(version=TokenizerVersion.v11, plain_think=True),
     TestConfig(version=TokenizerVersion.v11, image=True, plain_think=True),
+    TestConfig(
+        version=TokenizerVersion.v15,
+        model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+    ),
+    TestConfig(
+        version=TokenizerVersion.v15,
+        image=True,
+        model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+    ),
+    TestConfig(
+        version=TokenizerVersion.v15,
+        think=True,
+        model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+    ),
+    TestConfig(
+        version=TokenizerVersion.v15,
+        image=True,
+        think=True,
+        model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
+    ),
 ]
+
+
+def has_released_template(config: TestConfig) -> bool:
+    r"""Whether a config matches a released chat template; only those keep a golden template."""
+    if config.audio and config.version in (TokenizerVersion.v11, TokenizerVersion.v15):
+        return False
+    if config.version == TokenizerVersion.v15:
+        return config.image and config.think
+    return True
+
+
+# Configurations with a golden template in tests/data/chat_templates.
+GOLDEN_CONFIGS: list[TestConfig] = [c for c in ALL_CONFIGS if has_released_template(c)]
 
 # Parametrization configs for transformers tests (excludes plain_think).
 ALL_TRANSFORMERS_CONFIGS: list[TestConfig] = [c for c in ALL_CONFIGS if not c.plain_think]
@@ -192,6 +225,8 @@ def format_config_id(c: TestConfig) -> str:
         parts.append("think")
     if c.plain_think:
         parts.append("plain_think")
+    if c.model_settings_fields is not None:
+        parts.extend(sorted(c.model_settings_fields))
     return "_".join(parts)
 
 

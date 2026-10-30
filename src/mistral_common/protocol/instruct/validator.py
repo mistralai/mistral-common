@@ -1,10 +1,7 @@
 import re
 from collections.abc import Sequence
-from enum import Enum
-from typing import Generic
-
-from jsonschema import Draft7Validator, SchemaError
-from typing_extensions import assert_never
+from enum import StrEnum, auto
+from typing import Generic, assert_never
 
 from mistral_common.exceptions import (
     InvalidAssistantMessageException,
@@ -47,6 +44,7 @@ from mistral_common.protocol.instruct.tool_calls import (
     ToolCall,
 )
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
+from mistral_common.utils.json_utils import validate_json_schema_by_draft7
 
 _NULL_TOOL_CALL_ID = "null"
 _TOOL_CALL_ID_REGEX = re.compile(r"^[a-zA-Z0-9]{9}$")
@@ -80,7 +78,7 @@ def _validate_content_chunk_types(
         raise exception_cls(f"Unexpected content chunk types in {role} message: {invalid}")
 
 
-class ValidationMode(str, Enum):
+class ValidationMode(StrEnum):
     r"""Validation mode controlling which validation rules are applied.
 
     Attributes:
@@ -89,18 +87,18 @@ class ValidationMode(str, Enum):
         finetuning: Validation for finetuning scenarios. May allow some fields
             that are not allowed in serving mode.
         test: Lenient validation for testing. Skips some production constraints.
-        agnostic: Pipeline-agnostic validation. Applies all content checks
-            without assuming a downstream pipeline, so no terminal-role rule is
-            enforced.
+        agnostic: Pipeline-agnostic validation, used by default. Applies all
+            content checks without assuming a downstream pipeline, so no
+            terminal-role rule is enforced.
 
     Examples:
         >>> mode = ValidationMode.serving
     """
 
-    serving = "serving"
-    finetuning = "finetuning"
-    test = "test"
-    agnostic = "agnostic"
+    serving = auto()
+    finetuning = auto()
+    test = auto()
+    agnostic = auto()
 
 
 class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, ToolMessageType, SystemMessageType]):
@@ -118,14 +116,15 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
 
     _allow_tool_call_and_content: bool = False
 
-    def __init__(self, mode: ValidationMode = ValidationMode.test):
+    def __init__(self, mode: ValidationMode = ValidationMode.agnostic):
         r"""Initialize the MistralRequestValidator.
 
         Args:
-            mode: The validation mode to use. Options:
+            mode: The validation mode to use (default: `ValidationMode.agnostic`).
+                Options:
                 - `ValidationMode.serving`: Strict production validation
                 - `ValidationMode.finetuning`: Finetuning-specific validation
-                - `ValidationMode.test`: Lenient testing validation (default)
+                - `ValidationMode.test`: Lenient testing validation
                 - `ValidationMode.agnostic`: Pipeline-agnostic validation that
                     applies all content checks without terminal-role rules
         """
@@ -221,9 +220,9 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
             InvalidToolException: If the function name is invalid.
         """
         try:
-            Draft7Validator.check_schema(function.parameters)
-        except SchemaError as e:
-            raise InvalidToolSchemaException(f"Invalid tool schema: {e.message}")
+            validate_json_schema_by_draft7(value=function.parameters)
+        except ValueError as e:
+            raise InvalidToolSchemaException(f"Invalid tool schema: {e}") from e
 
         if not re.match(r"^[a-zA-Z0-9_-]{1,64}$", function.name):
             raise InvalidToolException(

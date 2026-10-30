@@ -1,7 +1,7 @@
 import base64
 import logging
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum, auto
 from io import BytesIO
 
 import numpy as np
@@ -13,6 +13,7 @@ from mistral_common.image import (
 )
 from mistral_common.imports import assert_opencv_installed, is_opencv_installed
 from mistral_common.protocol.instruct.chunk import ImageChunk, ImageURLChunk
+from mistral_common.utils.data_url import maybe_strip_base64_data_url_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -70,18 +71,22 @@ def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
         The image as a PIL Image object.
 
     Raises:
-        ValueError: If a data URL does not contain a base64 payload or the URL
-            scheme is unsupported.
+        ValueError: If the URL scheme is unsupported, or a data URL is malformed,
+            its payload is not valid base64, or its payload is not a decodable image.
     """
     if isinstance(chunk, ImageChunk):
         return chunk.image
     url = chunk.get_url()
-    if url.startswith("data:image"):
-        _, _, data = url.partition(",")
-        if not data:
-            raise ValueError(f"Invalid image data URL {url[:64]}: expected a base64 payload after a comma.")
-        image_data = base64.b64decode(data)
-        return Image.open(BytesIO(image_data))
+    if url.startswith("data:"):
+        data = maybe_strip_base64_data_url_prefix(url)
+        try:
+            image_data = base64.b64decode(data)
+        except ValueError as e:
+            raise ValueError(f"Invalid image data URL {url[:64]}: payload is not valid base64.") from e
+        try:
+            return Image.open(BytesIO(image_data))
+        except Exception as e:
+            raise ValueError(f"Invalid image data URL {url[:64]}: payload is not a decodable image.") from e
     if url.startswith("file://"):
         with open(url.removeprefix("file://"), "rb") as file:
             image = Image.open(file)
@@ -98,14 +103,14 @@ DATASET_STD = (0.26862954, 0.26130258, 0.27577711)  # RGB
 
 
 # only relevant for spm
-class MultiModalVersion(str, Enum):
+class MultiModalVersion(StrEnum):
     r"""Version of the image tokenizer.
 
     Attributes:
         m1: The first multimodal version, patch size 16 and max image size 1024.
     """
 
-    m1 = "m1"
+    m1 = auto()
 
     @property
     def config(self) -> "ImageConfig":

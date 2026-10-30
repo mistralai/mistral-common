@@ -1,9 +1,13 @@
+import io
 import math
 from typing import Any
 
 import numpy as np
 import pytest
+from pydantic import ValidationError
 
+from mistral_common.exceptions import InvalidRequestException, UnsupportedTokenizerFeatureException
+from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.protocol.transcription.request import (
     StreamingMode,
     TranscriptionRequest,
@@ -24,6 +28,14 @@ from mistral_common.tokens.tokenizers.mistral import (
 )
 from mistral_common.tokens.tokenizers.tekken import SpecialTokenInfo, Tekkenizer
 from tests.test_tekken import get_special_tokens, quick_vocab
+from tests.test_tokenizer_v7_audio import (
+    SYNTHETIC_V7_STREAMING,
+    SYNTHETIC_V7_STREAMING_NO_PAD,
+    SyntheticV7AudioProfile,
+    build_synthetic_v7_audio_tokenizer,
+    valid_reference_audio,
+    valid_reference_audio_bytes,
+)
 from tests.utils import decode_keep
 
 _audio_spectrogram_config = {
@@ -31,6 +43,25 @@ _audio_spectrogram_config = {
     "hop_length": 160,
     "window_size": 400,
 }
+
+STREAMING_TRANSCRIPTION_ERROR_CASES = (
+    pytest.param(
+        SYNTHETIC_V7_STREAMING_NO_PAD,
+        "",
+        StreamingMode.ONLINE,
+        UnsupportedTokenizerFeatureException,
+        r"the streaming_pad marker required for transcription",
+        id="audio-v7-streaming-transcription-no-streaming-pad-test",
+    ),
+    pytest.param(
+        SYNTHETIC_V7_STREAMING,
+        b"not decodable audio",
+        StreamingMode.DISABLED,
+        InvalidRequestException,
+        r"^Streaming transcription requires mode OFFLINE or ONLINE, got DISABLED\.$",
+        id="audio-v7-streaming-disabled-rejected-test",
+    ),
+)
 
 
 def add_special_tokens(
@@ -204,3 +235,132 @@ def test_audio_config_delay(rate: float, delay: int, num_delay_tokens: int) -> N
             audio_config_fn()
     else:
         assert audio_config_fn().get_num_delay_tokens() == num_delay_tokens
+
+
+@pytest.mark.parametrize(
+    ("profile", "audio", "streaming", "error_type", "message"),
+    STREAMING_TRANSCRIPTION_ERROR_CASES,
+)
+def test_public_streaming_transcription_errors(
+    profile: SyntheticV7AudioProfile,
+    audio: str | bytes,
+    streaming: StreamingMode,
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    tokenizer = build_synthetic_v7_audio_tokenizer(profile=profile)
+    assert tokenizer.mode == ValidationMode.test
+
+    request = TranscriptionRequest(
+        audio=audio,
+        streaming=streaming,
+        language=None,
+        target_streaming_delay_ms=None,
+    )
+    with pytest.raises(error_type, match=message):
+        tokenizer.encode_transcription(request)
+
+
+@pytest.mark.parametrize(
+    ("profile", "audio", "streaming", "error_type", "message"),
+    STREAMING_TRANSCRIPTION_ERROR_CASES
+    + (
+        pytest.param(
+            SYNTHETIC_V7_STREAMING_NO_PAD,
+            valid_reference_audio(),
+            StreamingMode.OFFLINE,
+            UnsupportedTokenizerFeatureException,
+            r"^Audio encoder does not provide the streaming_pad marker required for transcription\.$",
+            id="v7-streaming-profile-without-streaming-pad-marker-offline",
+        ),
+    ),
+)
+def test_direct_streaming_transcription_errors(
+    profile: SyntheticV7AudioProfile,
+    audio: str | bytes,
+    streaming: StreamingMode,
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    tokenizer = build_synthetic_v7_audio_tokenizer(profile=profile)
+    request = TranscriptionRequest(
+        audio=audio,
+        streaming=streaming,
+        language=None,
+        target_streaming_delay_ms=None,
+    )
+
+    with pytest.raises(error_type, match=message):
+        tokenizer.instruct_tokenizer.encode_transcription(request)
+
+
+@pytest.mark.parametrize(
+    argnames="audio",
+    argvalues=[pytest.param(valid_reference_audio_bytes(), id="audio-v7-online-bytes-rejected-test")],
+)
+def test_online_nonempty_bytes_rejected_at_construction(audio: bytes) -> None:
+    with pytest.raises(
+        ValidationError,
+        match=(
+            r"Value error, ONLINE streaming audio must be a base64 text value or empty prefill; received bytes\. "
+            r"\[type=value_error"
+        ),
+    ):
+        TranscriptionRequest(
+            audio=audio,
+            streaming=StreamingMode.ONLINE,
+            language=None,
+            target_streaming_delay_ms=None,
+        )
+
+
+def test_online_empty_bytes_prefill_still_constructs() -> None:
+    request = TranscriptionRequest(
+        audio=b"",
+        streaming=StreamingMode.ONLINE,
+        language=None,
+        target_streaming_delay_ms=None,
+    )
+
+    assert request.audio == b""
+
+
+def test_online_from_openai_request_still_constructs() -> None:
+    request = TranscriptionRequest.from_openai(
+        openai_request={"file": io.BytesIO(valid_reference_audio_bytes()), "streaming": "online"}
+    )
+
+    assert isinstance(request.audio, str)
+    assert request.audio
+    assert request.streaming == StreamingMode.ONLINE
+
+
+def test_online_base64_audio_keeps_direct_warning_and_combine_path() -> None:
+    tokenizer = build_synthetic_v7_audio_tokenizer(profile=SYNTHETIC_V7_STREAMING)
+    input_audio = Audio(
+        audio_array=np.linspace(-0.75, 0.75, 2_400, dtype=np.float32),
+        sampling_rate=24_000,
+        format="wav",
+    )
+    encoded_audio = input_audio.to_base64("wav")
+    request = TranscriptionRequest(
+        audio=encoded_audio,
+        streaming=StreamingMode.ONLINE,
+        language=None,
+        target_streaming_delay_ms=None,
+    )
+
+    with pytest.warns(FutureWarning, match="Passing audio.*deprecated"):
+        tokenized = tokenizer.instruct_tokenizer.encode_transcription(request)
+
+    decoded_audio = Audio.from_base64(encoded_audio)
+    assert len(tokenized.audios) == 1
+    assert tokenized.audios[0].sampling_rate == decoded_audio.sampling_rate
+    audio_encoder = tokenizer.instruct_tokenizer.audio_encoder
+    assert audio_encoder is not None
+    audio_config = audio_encoder.audio_config
+    left_padding_samples = audio_config.n_left_pad_tokens * audio_config.raw_audio_length_per_tok
+    expected_audio = np.concatenate(
+        (np.zeros(left_padding_samples, dtype=decoded_audio.audio_array.dtype), decoded_audio.audio_array)
+    )
+    np.testing.assert_array_equal(tokenized.audios[0].audio_array, expected_audio)

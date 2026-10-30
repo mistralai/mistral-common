@@ -45,7 +45,9 @@ class TestValidateTools:
             )
 
     def test_tool_function_invalid_schema(self, validator: MistralRequestValidator) -> None:
-        with pytest.raises(InvalidToolSchemaException, match=r"32 is not valid under any of the given schemas"):
+        with pytest.raises(
+            InvalidToolSchemaException, match=r"^Invalid tool schema: 32 is not valid under any of the given schemas"
+        ):
             validator._validate_tools(tools=[Tool(function=Function(name="function_name", parameters={"type": 32}))])
 
 
@@ -71,3 +73,7 @@ def test_get_validator_version_mapping(version: TokenizerVersion, expected_class
 def test_get_validator_mode_passed_correctly(mode: ValidationMode) -> None:
     validator = get_validator(TokenizerVersion.v2, mode)
     assert validator._mode == validator.mode == mode
+
+
+def test_validator_defaults_to_agnostic_mode() -> None:
+    assert MistralRequestValidator().mode == ValidationMode.agnostic

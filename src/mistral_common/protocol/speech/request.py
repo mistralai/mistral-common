@@ -1,6 +1,8 @@
 import io
 from typing import Any
 
+from pydantic import model_validator
+
 from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
 from mistral_common.protocol.base import BaseCompletionRequest
 from mistral_common.protocol.instruct.chunk import _detect_audio_format
@@ -21,7 +23,8 @@ class SpeechRequest(BaseCompletionRequest):
             serving side default speech model is used.
         input: Text to convert to speech.
         voice: Optional preset voice identifier (e.g., 'Neutral Male', 'Neutral
-            Female'). Ignored when `ref_audio` is provided.
+            Female'). Ignored when `ref_audio` is provided. At least one of
+            `voice` and `ref_audio` is required.
         ref_audio: Optional reference audio for voice cloning, provided as a
             base64-encoded string or raw bytes. Takes precedence over voice when
             both are provided.
@@ -32,6 +35,20 @@ class SpeechRequest(BaseCompletionRequest):
     input: str
     voice: str | None = None
     ref_audio: str | bytes | None = None
+
+    @model_validator(mode="after")
+    def _validate_source(self) -> "SpeechRequest":
+        r"""Require a voice or reference audio source.
+
+        Returns:
+            The validated speech request.
+
+        Raises:
+            ValueError: If neither `ref_audio` nor `voice` is provided.
+        """
+        if self.ref_audio is None and self.voice is None:
+            raise ValueError("Either ref_audio or voice must be defined.")
+        return self
 
     def to_openai(self, **kwargs: Any) -> dict[str, Any]:
         r"""Convert this SpeechRequest to an OpenAI-compatible request dictionary.
@@ -91,6 +108,7 @@ class SpeechRequest(BaseCompletionRequest):
 
         Raises:
             AssertionError: If decoded reference audio has no detectable format.
+            ValidationError: If neither ref_audio nor voice is provided.
         """
         seed = openai_request.get("seed")
         converted_dict: dict[str, Any] = {k: v for k, v in openai_request.items() if k in cls.model_fields}

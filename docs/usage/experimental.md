@@ -51,7 +51,7 @@ mistral_common serve mistralai/Magistral-Small-2507 [validation_mode] \
 #### Command Line Options
 
 - `tokenizer_path`: Path to the tokenizer. Can be a HuggingFace model ID or a local path.
-- `validation_mode`: Validation mode to use, choices in: "test", "finetuning", "serving", "agnostic" (Optional, defaults to `"test"`)
+- `validation_mode`: Validation mode to use, choices in: "test", "finetuning", "serving", "agnostic" (Optional, defaults to `"agnostic"`)
 - `--host`: API host (default: `127.0.0.1`)
 - `--port`: API port (default: `0` - auto-selects available port)
 - `--engine-url`: URL of the engine (default: `http://127.0.0.1:8080`)
@@ -194,7 +194,7 @@ import requests
 
 response = requests.post("http://localhost:8000/v1/detokenize/string", json={
     "tokens":[1, 3, 22177, 1044, 2606, 1584, 1636, 1063, 4],
-    "special_token_policy": 1,
+    "special_token_policy": "keep",
 })
 print(response.json())
 # <s>[INST]Hello, how are you?[/INST]

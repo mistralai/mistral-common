@@ -4,11 +4,13 @@ import pytest
 
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.integrations.chat_templates.template_generator import (
+    MODEL_SETTINGS_FIELD_CHOICES,
     TemplateConfig,
     _render_content_call,
     build_chat_template,
 )
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
+from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
 from tests.integrations.chat_templates.helpers import (
     TestConfig,
     build_template_config,
@@ -29,11 +31,45 @@ class TestGenerateChatTemplateAPI:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
     def test_basic_generation(self, v13_template: str) -> None:
         assert "{%- set default_system_message = '' %}" in v13_template
         assert "bos_token" in v13_template
+
+    def test_generate_chat_template_forwards_model_settings_fields(self) -> None:
+        selected_template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v15,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+            model_settings_fields=frozenset({"json_schema"}),
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
+        )
+        default_template = generate_chat_template(
+            spm=False,
+            tokenizer_version=TokenizerVersion.v15,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=None,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+            model_settings_fields=None,
+            reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
+        )
+
+        assert "response_format" in selected_template
+        assert "response_format" not in default_template
 
     def test_default_system_prompt(self) -> None:
         template_with_prompt = generate_chat_template(
@@ -45,6 +81,9 @@ class TestGenerateChatTemplateAPI:
             default_system_prompt="You are a helpful assistant.",
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
         assert "You are a helpful assistant." in template_with_prompt
 
@@ -63,7 +102,7 @@ class TestGenerateChatTemplateAPI:
         assert static_output == dynamic_output
 
     def test_empty_messages_raises(self) -> None:
-        config = TemplateConfig(version=TokenizerVersion.v15)
+        config = TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=frozenset({"json_schema"}))
         template = build_chat_template(config)
         with pytest.raises(Exception, match="list object has no element 0"):
             render_template(template, messages=[])
@@ -78,10 +117,86 @@ class TestGenerateChatTemplateAPI:
             default_system_prompt='You are "the best" assistant.',
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
         messages: list[dict[str, Any]] = [{"role": "user", "content": "Hello"}]
         result = render_template(template, messages=messages)
         assert 'You are "the best" assistant.' in result
+
+
+class TestTemplateConfigModelSettings:
+    def test_field_choices_match_model_settings_builder_fields(self) -> None:
+        assert set(MODEL_SETTINGS_FIELD_CHOICES) == set(ModelSettingsBuilder.model_fields)
+
+    @pytest.mark.parametrize("field", MODEL_SETTINGS_FIELD_CHOICES)
+    def test_each_field_choice_builds_a_template(self, field: str) -> None:
+        template = build_chat_template(
+            config=TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({field}),
+                reasoning_effort_values=("none", "high") if field == "reasoning_effort" else None,
+                reasoning_effort_default=("none" if field == "reasoning_effort" else None),
+            )
+        )
+
+        assert f'"{field}": ' in template
+
+    def test_unknown_model_settings_field_raises(self) -> None:
+        with pytest.raises(ValueError) as excinfo:
+            TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"bogus"}),
+            )
+
+        assert str(excinfo.value) == (
+            "Unknown model settings fields: bogus. Allowed fields are: reasoning_effort, json_schema."
+        )
+
+    def test_unknown_model_settings_fields_sorted_in_message(self) -> None:
+        with pytest.raises(ValueError) as excinfo:
+            TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset({"zzz", "aaa"}),
+            )
+
+        assert str(excinfo.value) == (
+            "Unknown model settings fields: aaa, zzz. Allowed fields are: reasoning_effort, json_schema."
+        )
+
+    def test_model_settings_fields_require_v15(self) -> None:
+        with pytest.raises(ValueError) as excinfo:
+            TemplateConfig(
+                version=TokenizerVersion.v13,
+                model_settings_fields=frozenset({"reasoning_effort"}),
+            )
+
+        assert str(excinfo.value) == "Model settings fields are only available for tokenizer versions v15 and above"
+
+    def test_none_model_settings_fields_resolves_automatically(self) -> None:
+        v15_config = TemplateConfig(
+            version=TokenizerVersion.v15,
+            model_settings_fields=None,
+            reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
+        )
+        v13_config = TemplateConfig(version=TokenizerVersion.v13, model_settings_fields=None)
+
+        assert v15_config.model_settings_fields == frozenset({"reasoning_effort"})
+        assert v13_config.model_settings_fields == frozenset()
+
+    def test_explicit_empty_model_settings_fields_rejected(self) -> None:
+        with pytest.raises(ValueError) as v15_excinfo:
+            TemplateConfig(
+                version=TokenizerVersion.v15,
+                model_settings_fields=frozenset(),
+            )
+        with pytest.raises(ValueError) as v13_excinfo:
+            TemplateConfig(version=TokenizerVersion.v13, model_settings_fields=frozenset())
+
+        assert str(v15_excinfo.value) == "Model settings fields must be None (automatic) or a non-empty set"
+        assert str(v13_excinfo.value) == "Model settings fields are only available for tokenizer versions v15 and above"
 
 
 class TestTokenVariables:
@@ -101,7 +216,12 @@ class TestTokenVariables:
             assert unexpected not in template
 
     def test_use_special_token_variables_false_renders_correctly(self) -> None:
-        config = TemplateConfig(version=TokenizerVersion.v15, use_special_token_variables=False)
+        config = TemplateConfig(
+            version=TokenizerVersion.v15,
+            use_special_token_variables=False,
+            reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
+        )
         template = build_chat_template(config)
         messages: list[dict[str, Any]] = [
             {"role": "user", "content": "Hello"},
@@ -129,6 +249,9 @@ class TestMessageContentValidation:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -150,6 +273,9 @@ class TestMessageContentValidation:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
+            reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -173,6 +299,9 @@ class TestMessageContentValidation:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -193,6 +322,9 @@ class TestMessageContentValidation:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
         )
 
         messages: list[dict[str, Any]] = [
@@ -332,7 +464,12 @@ class TestRenderContentCall:
 
     def test_tool_ban_thinking_not_in_desc(self) -> None:
         """Tool call site with thinking config must have support_thinking=false and no 'thinking' in desc."""
-        config = TemplateConfig(version=TokenizerVersion.v15, thinking_support=True)
+        config = TemplateConfig(
+            version=TokenizerVersion.v15,
+            thinking_support=True,
+            reasoning_effort_default="none",
+            reasoning_effort_values=("none", "high"),
+        )
         result = _render_content_call(
             config=config,
             content_expr="message['content']",
