@@ -2,6 +2,7 @@ import base64
 import io
 import logging
 import math
+import os
 import warnings
 from dataclasses import dataclass
 from enum import Enum, StrEnum, auto
@@ -12,8 +13,10 @@ from urllib.parse import unquote
 import numpy as np
 import requests as _requests_lib
 
+from mistral_common import __version__
 from mistral_common.deprecation import warn_once
 from mistral_common.exceptions import InvalidRequestException, UnsupportedTokenizerFeatureException
+from mistral_common.image import _validate_timeout
 from mistral_common.imports import (
     assert_soundfile_installed,
     assert_soxr_installed,
@@ -44,6 +47,27 @@ else:
 logger = logging.getLogger(__name__)
 
 EXPECTED_FORMAT_VALUES = [v.value.lower() for v in AudioFormat.__members__.values()]
+
+_AUDIO_DOWNLOAD_TIMEOUT_ENV_KEY = "MISTRAL_COMMON_AUDIO_DOWNLOAD_TIMEOUT"
+_DEFAULT_AUDIO_DOWNLOAD_TIMEOUT_S = 10.0
+
+
+def _resolve_env_audio_download_timeout() -> float:
+    r"""Return the HTTP timeout used when downloading audio files.
+
+    Reads `MISTRAL_COMMON_AUDIO_DOWNLOAD_TIMEOUT` (seconds). Unset or empty uses 10.
+    """
+    raw = os.getenv(_AUDIO_DOWNLOAD_TIMEOUT_ENV_KEY)
+    if raw is None or raw.strip() == "":
+        return _DEFAULT_AUDIO_DOWNLOAD_TIMEOUT_S
+    error_message = (
+        f"Invalid environment variable {_AUDIO_DOWNLOAD_TIMEOUT_ENV_KEY}: expected a positive finite number of seconds."
+    )
+    try:
+        timeout = float(raw)
+    except ValueError as e:
+        raise ValueError(error_message) from e
+    return _validate_timeout(timeout, error_message=error_message)
 
 
 class Audio:
@@ -96,7 +120,7 @@ class Audio:
         return duration
 
     @staticmethod
-    def from_url(url: str, strict: bool = True) -> "Audio":
+    def from_url(url: str, strict: bool = True, timeout: float | None = None) -> "Audio":
         r"""Create an Audio instance from a URL.
 
         Downloads the audio file and decodes it into samples.
@@ -105,17 +129,34 @@ class Audio:
             url: The URL of the audio file (http or https).
             strict: If `True`, strictly enforce mono audio; multi-channel audio
                 raises an error. If `False`, extra channels are dropped.
+            timeout: Seconds to wait for the server response. If `None`, uses the
+                `MISTRAL_COMMON_AUDIO_DOWNLOAD_TIMEOUT` environment variable.
 
         Returns:
             An instance of the Audio class.
 
         Raises:
-            ValueError: If the download or decoding fails.
+            ValueError: If the download times out or the decoding fails.
         """
+        if timeout is None:
+            timeout = _resolve_env_audio_download_timeout()
+        else:
+            timeout = _validate_timeout(
+                timeout,
+                error_message=f"timeout must be a positive finite number, got {timeout=}",
+            )
+
+        headers = {"User-Agent": f"mistral-common/{__version__}"}
         try:
-            response = _requests_lib.get(url)
+            response = _requests_lib.get(url, headers=headers, timeout=timeout)
             response.raise_for_status()
             return Audio.from_bytes(response.content, strict=strict)
+        except _requests_lib.Timeout as e:
+            raise ValueError(
+                f"Failed to download audio from URL: {url} (timed out after {timeout} seconds). "
+                f"Pass a larger `timeout` or set the environment variable {_AUDIO_DOWNLOAD_TIMEOUT_ENV_KEY} "
+                "to increase the timeout."
+            ) from e
         except _requests_lib.RequestException as e:  # Something went wrong with the request.
             raise ValueError(f"Failed to download audio from URL: {url}") from e
         except Exception as e:  # Something went wrong with the audio file.

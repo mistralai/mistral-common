@@ -43,7 +43,7 @@
 {%- endif %}
 {%- set model_settings_parts = [] %}
 {%- if json_schema is not none %}
-    {%- set model_settings_parts = model_settings_parts + ['"json_schema": ' ~ (json_schema|tojson)] %}
+    {%- set model_settings_parts = model_settings_parts + ['"json_schema": ' ~ ('%s'|format(json_schema|tojson))] %}
 {%- endif %}
 {%- set model_settings_parts = model_settings_parts + ['"reasoning_effort": "' ~ reasoning_effort ~ '"'] %}
 {%- set model_settings = '' %}
@@ -194,8 +194,8 @@
     {#- User messages supports text, image and image_url content. #}
     {%- if message['role'] == 'user' %}
         {%- if not ns.available_tools_and_settings_emitted %}
-            {{- available_tools }}
-            {{- model_settings }}
+            {{- available_tools|safe }}
+            {{- model_settings|safe }}
             {%- set ns.available_tools_and_settings_emitted = true %}
         {%- endif %}
         {%- if message['content'] is not string and message['content'] %}

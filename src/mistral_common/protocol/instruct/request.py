@@ -433,6 +433,10 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         if "parallel_tool_calls" in kwargs and kwargs["parallel_tool_calls"] is None:
             kwargs["parallel_tool_calls"] = True
 
+        # Same for `tool_choice: null`: it means the default, not an invalid value.
+        if "tool_choice" in kwargs and kwargs["tool_choice"] is None:
+            kwargs.pop("tool_choice")
+
         converted_messages: list[ChatMessage] = convert_openai_messages(messages)
         converted_messages = _map_continue_final_message(
             messages=converted_messages,

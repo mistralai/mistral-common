@@ -1,5 +1,6 @@
 import base64
 from io import BytesIO
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
@@ -43,3 +44,33 @@ def test_download_image_rejects_truncated_data() -> None:
         pytest.raises(ImageDecodeException, match="Error converting to PIL image"),
     ):
         download_image(url="https://example.com/image.png", timeout=10.0)
+
+
+def test_download_image_accepts_integer_timeout() -> None:
+    import io
+
+    stream = io.BytesIO()
+    Image.new("RGB", (4, 4)).save(stream, format="PNG")
+    response = Mock(content=stream.getvalue())
+    with patch("mistral_common.image.requests.get", return_value=response) as mock_get:
+        image = download_image(url="https://example.com/image.png", timeout=10)
+
+    assert mock_get.call_args.kwargs["timeout"] == 10.0
+    assert image.size == (4, 4)
+
+
+@pytest.mark.parametrize("timeout", [0, -1.5, float("inf"), float("nan"), True, "10"])
+def test_download_image_rejects_invalid_timeout(timeout: object) -> None:
+    with pytest.raises(ValueError, match="timeout must be a positive finite"):
+        download_image(url="https://example.com/image.png", timeout=timeout)  # type: ignore[arg-type]
+
+
+def test_image_file_url_decodes_percent_encoding(tmp_path: Path) -> None:
+    r"""A file URI from Path.as_uri() (percent-encoded) must load like the plain path."""
+    path = tmp_path / "my image.png"
+    Image.new("RGB", (4, 4), color="blue").save(path)
+
+    from_file_uri = image_from_chunk(chunk=ImageURLChunk(image_url=path.as_uri()))
+
+    assert path.as_uri().endswith("/my%20image.png")
+    assert from_file_uri.size == (4, 4)

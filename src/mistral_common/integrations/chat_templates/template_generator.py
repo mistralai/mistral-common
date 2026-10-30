@@ -35,7 +35,7 @@ MODEL_SETTINGS_FIELD_CHOICES: tuple[str, ...] = ("reasoning_effort", "json_schem
 _MODEL_SETTINGS_FRAGMENTS: dict[str, list[str]] = {
     "json_schema": [
         "{%- if json_schema is not none %}",
-        "    {%- set model_settings_parts = model_settings_parts + ['\"json_schema\": ' ~ (json_schema|tojson)] %}",
+        "    {%- set model_settings_parts = model_settings_parts + ['\"json_schema\": ' ~ ('%s'|format(json_schema|tojson))] %}",  # noqa: E501
         "{%- endif %}",
     ],
     "reasoning_effort": [
@@ -1256,9 +1256,9 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
             "available_tools_and_settings_emitted" if config.supports_model_settings else "available_tools_emitted"
         )
         lines.append(f"        {{%- if not ns.{emitted_var} %}}")
-        lines.append("            {{- available_tools }}")
+        lines.append("            {{- available_tools|safe }}")
         if config.supports_model_settings:
-            lines.append("            {{- model_settings }}")
+            lines.append("            {{- model_settings|safe }}")
         lines.append(f"            {{%- set ns.{emitted_var} = true %}}")
         lines.append("        {%- endif %}")
 

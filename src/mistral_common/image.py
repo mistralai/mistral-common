@@ -18,10 +18,10 @@ _DEFAULT_IMAGE_DOWNLOAD_TIMEOUT_S = 10.0
 
 
 def _validate_timeout(timeout: object, *, error_message: str) -> float:
-    r"""Return a positive finite floating-point timeout."""
-    if not isinstance(timeout, float) or not math.isfinite(timeout) or timeout <= 0:
+    r"""Return a positive finite numeric timeout as a float."""
+    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
         raise ValueError(error_message)
-    return timeout
+    return float(timeout)
 
 
 def _resolve_env_image_download_timeout() -> float:

@@ -175,8 +175,8 @@
     {#- User messages supports text, image and image_url content. #}
     {%- if message['role'] == 'user' %}
         {%- if not ns.available_tools_and_settings_emitted %}
-            {{- available_tools }}
-            {{- model_settings }}
+            {{- available_tools|safe }}
+            {{- model_settings|safe }}
             {%- set ns.available_tools_and_settings_emitted = true %}
         {%- endif %}
         {%- if message['content'] is not string and message['content'] %}

@@ -136,7 +136,7 @@
     {#- User messages supports text, input_audio and audio_url content. #}
     {%- if message['role'] == 'user' %}
         {%- if not ns.available_tools_emitted %}
-            {{- available_tools }}
+            {{- available_tools|safe }}
             {%- set ns.available_tools_emitted = true %}
         {%- endif %}
         {{- '[INST]' -}}
