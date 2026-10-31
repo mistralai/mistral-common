@@ -633,6 +633,30 @@ def test_id_to_byte_piece_returns_ordinary_bytes_and_raises_for_special_tokens(t
         tekkenizer.id_to_byte_piece(token_id=1, special_token_policy="invalid")  # type: ignore[arg-type]
 
 
+@pytest.mark.parametrize("policy", list(SpecialTokenPolicy))
+@pytest.mark.parametrize("token_id", [-1, -2, -1000])
+def test_decode_negative_token_id_raises(tekkenizer: Tekkenizer, token_id: int, policy: SpecialTokenPolicy) -> None:
+    # A negative token id must not be silently treated as a special token via
+    # Python negative indexing into `_all_special_tokens`; it is out of range.
+    with pytest.raises(ValueError, match="Invalid token id"):
+        tekkenizer.decode(tokens=[token_id], special_token_policy=policy)
+
+
+@pytest.mark.parametrize("policy", list(SpecialTokenPolicy))
+def test_decode_out_of_range_token_id_raises(tekkenizer: Tekkenizer, policy: SpecialTokenPolicy) -> None:
+    with pytest.raises(ValueError, match="Invalid token id"):
+        tekkenizer.decode(tokens=[tekkenizer.n_words], special_token_policy=policy)
+
+
+@pytest.mark.parametrize("policy", list(SpecialTokenPolicy))
+@pytest.mark.parametrize("token_id", [-1, -2])
+def test_id_to_byte_piece_negative_token_id_raises(
+    tekkenizer: Tekkenizer, token_id: int, policy: SpecialTokenPolicy
+) -> None:
+    with pytest.raises(ValueError, match="Invalid token id"):
+        tekkenizer.id_to_byte_piece(token_id=token_id, special_token_policy=policy)
+
+
 def test_init_truncates_vocab_to_inner_vocab_size() -> None:
     vocab = quick_vocab(extra_toks=[b"hello", b"world"])
     truncated = build_tekkenizer_with_vocab(vocab=vocab, vocab_size=256 + 20)
