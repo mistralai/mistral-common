@@ -490,6 +490,11 @@ class Tekkenizer(Tokenizer):
         return tokens
 
     def _decode_all(self, tokens: list[int], special_token_policy: SpecialTokenPolicy) -> list[str]:
+        for t in tokens:
+            if not 0 <= t < self.n_words:
+                raise ValueError(
+                    f"Invalid token id {t} for decoding. Token ids must be in the range [0, {self.n_words})."
+                )
         # Lump special and non-special tokens together to minimize calls to decode
         decoded: list[str] = []
         for is_special, group in groupby(tokens, lambda t: t < self.num_special_tokens):
@@ -593,8 +598,9 @@ class Tekkenizer(Tokenizer):
             The decoded UTF-8 string.
 
         Raises:
-            ValueError: If `special_token_policy` is invalid or RAISE is set and
-                special tokens are encountered.
+            ValueError: If `special_token_policy` is invalid, RAISE is set and
+                special tokens are encountered, or any token id is out of the
+                valid range `[0, n_words)`.
         """
         special_token_policy = SpecialTokenPolicy.validate(special_token_policy)
 
@@ -633,9 +639,13 @@ class Tekkenizer(Tokenizer):
 
         Raises:
             ValueError: If `special_token_policy` is RAISE and `token_id` is a special token,
-                or if `special_token_policy` is invalid.
+                if `special_token_policy` is invalid, or if `token_id` is out of the
+                valid range `[0, n_words)`.
         """
         special_token_policy = SpecialTokenPolicy.validate(special_token_policy)
+
+        if not 0 <= token_id < self.n_words:
+            raise ValueError(f"Invalid token id {token_id}. Token ids must be in the range [0, {self.n_words}).")
 
         if token_id < self.num_special_tokens:
             if special_token_policy == SpecialTokenPolicy.KEEP:
