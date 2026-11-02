@@ -8,6 +8,7 @@ import numpy as np
 from mistral_common.exceptions import (
     InvalidRequestException,
     TokenizerException,
+    UnsupportedTokenizerFeatureException,
 )
 from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.instruct.chunk import (
@@ -81,7 +82,7 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
         Returns:
             The image encoder, or `None` if image support is not configured.
         """
-        # this funtion is deprecated, use image_encoder instead
+        # this function is deprecated, use image_encoder instead
         # TODO(Patrick) - throw a deprecation warning once
         # changes applied to vllm and transformers
         return self.image_encoder
@@ -445,6 +446,52 @@ class InstructTokenizerV2(InstructTokenizerV1, Generic[InstructRequestType, FIMR
 
     _message_position_to_encode_tools_settings = UserMessagePosition.last
 
+    def encode_instruct(self, request: InstructRequest[ChatMessage, Tool]) -> Tokenized:
+        r"""Encode a request after validating tool-result limitations.
+
+        Args:
+            request: The instruct request to encode.
+
+        Returns:
+            The tokenized request.
+
+        Raises:
+            UnsupportedTokenizerFeatureException: If an assistant turn has
+                multiple tool results.
+        """
+        self._validate_tool_results(request=request)
+        return super().encode_instruct(request)
+
+    def _validate_tool_results(self, request: InstructRequest[ChatMessage, Tool]) -> None:
+        r"""Reject multiple tool results for a single encoded v2 assistant turn.
+
+        Args:
+            request: The normalized request to encode.
+
+        Raises:
+            UnsupportedTokenizerFeatureException: If a v2 assistant turn in the
+                encoded suffix has more than one tool result.
+        """
+        _, last_user_idx = self.find_first_last_user(request=request)
+        has_tool_call_turn = False
+        result_count = 0
+        for message_idx, message in enumerate(request.messages):
+            if message_idx < last_user_idx:
+                continue
+            if isinstance(message, AssistantMessage):
+                has_tool_call_turn = bool(message.tool_calls)
+                result_count = 0
+            elif isinstance(message, ToolMessage):
+                if has_tool_call_turn:
+                    result_count += 1
+                    if result_count > 1:
+                        raise UnsupportedTokenizerFeatureException(
+                            "Tokenizer v2 does not support multiple tool results for one assistant turn."
+                        )
+            else:
+                has_tool_call_turn = False
+                result_count = 0
+
     def __init__(
         self,
         tokenizer: Tokenizer,
@@ -688,6 +735,13 @@ class InstructTokenizerV3(InstructTokenizerV2, Generic[InstructRequestType, FIMR
             audio_encoder: The audio encoder to use.
         """
         super().__init__(tokenizer, image_encoder=image_encoder, audio_encoder=audio_encoder)
+
+    def _validate_tool_results(self, request: InstructRequest[ChatMessage, Tool]) -> None:
+        r"""Skip the v2 multiple-tool-result restriction.
+
+        V3 encodes each tool result as its own block, so one assistant turn may
+        carry multiple tool results.
+        """
 
     def _prepare_function_call(self, tool_call: ToolCall) -> dict[str, Any]:
         function_call = {
@@ -1035,7 +1089,10 @@ class InstructTokenizerV7(InstructTokenizerV3):
         Returns:
             Tokenized: The tokenized representation of the audio data, including processed audio and tokens
         """
-        assert self.audio_encoder is not None, f"Audio encoder must be defined, got {self.audio_encoder=}"
+        if self.audio_encoder is None:
+            raise UnsupportedTokenizerFeatureException(
+                f"Tokenizer {self.tokenizer.version.value} does not provide an audio encoder for transcription."
+            )
         if self.audio_encoder.audio_config.transcription_format == TranscriptionFormat.INSTRUCT:
             return self._encode_instruct_transcription(request)
         elif self.audio_encoder.audio_config.transcription_format == TranscriptionFormat.STREAMING:
@@ -1047,10 +1104,24 @@ class InstructTokenizerV7(InstructTokenizerV3):
         )
 
     def _encode_instruct_transcription(self, request: TranscriptionRequest) -> Tokenized:
-        assert request.streaming == StreamingMode.DISABLED, (
-            f"Request must not be in streaming mode, got {request.streaming=}"
-        )
-        assert self.TRANSCRIBE is not None, f"{self.__class__.__name__} needs to have a TRANSCRIBE token"
+        if request.streaming != StreamingMode.DISABLED:
+            raise InvalidRequestException(
+                f"Instruct transcription requires streaming mode DISABLED, got {request.streaming.upper()}."
+            )
+        if self.TRANSCRIBE is None:
+            raise UnsupportedTokenizerFeatureException(
+                f"Tokenizer {self.tokenizer.version.value} does not provide the TRANSCRIBE marker required for "
+                "transcription."
+            )
+        assert self.audio_encoder is not None
+        if self.audio_encoder.special_ids.begin_audio is None:
+            raise UnsupportedTokenizerFeatureException(
+                "Audio encoder does not provide the begin_audio marker required for transcription."
+            )
+        if self.audio_encoder.special_ids.audio is None:
+            raise UnsupportedTokenizerFeatureException(
+                "Audio encoder does not provide the audio marker required for transcription."
+            )
         prefix = self.start()
         tokens, images, audio = self.encode_user_message(
             UserMessage(content=[AudioChunk(input_audio=request.audio)]),
@@ -1091,6 +1162,11 @@ class InstructTokenizerV7(InstructTokenizerV3):
 
     def _encode_streaming_transcription(self, request: TranscriptionRequest) -> Tokenized:
         if request.streaming == StreamingMode.OFFLINE:
+            assert self.audio_encoder is not None
+            if self.audio_encoder.special_ids.streaming_pad is None:
+                raise UnsupportedTokenizerFeatureException(
+                    "Audio encoder does not provide the streaming_pad marker required for transcription."
+                )
             tokenized = self._encode_audio(request.audio, request.target_streaming_delay_ms)
 
             # we also add a BOS token in the beginning
@@ -1099,6 +1175,10 @@ class InstructTokenizerV7(InstructTokenizerV3):
             audios = tokenized.audios
         elif request.streaming == StreamingMode.ONLINE:
             assert self.audio_encoder is not None
+            if self.audio_encoder.special_ids.streaming_pad is None:
+                raise UnsupportedTokenizerFeatureException(
+                    "Audio encoder does not provide the streaming_pad marker required for transcription."
+                )
             left_pad, right_pad = self.audio_encoder.get_padding_audio(request.target_streaming_delay_ms)
             audios = [left_pad, right_pad]
 
@@ -1133,7 +1213,9 @@ class InstructTokenizerV7(InstructTokenizerV3):
             # we also add a BOS token in the beginning
             tokens = self.start() + self.audio_encoder.encode_streaming_tokens(request.target_streaming_delay_ms)
         else:
-            raise ValueError(f"Request must be in streaming mode, got {request.streaming=}")
+            raise InvalidRequestException(
+                f"Streaming transcription requires mode OFFLINE or ONLINE, got {request.streaming.upper()}."
+            )
 
         tokenized = Tokenized(
             tokens=tokens,
@@ -1238,9 +1320,6 @@ class InstructTokenizerV7(InstructTokenizerV3):
         Returns:
             Tokenized object with audio tokens and optional audio data.
         """
-        assert ref_audio is not None or voice is not None, (
-            f"Either ref_audio or voice must be defined to encode audio, got {ref_audio=} and {voice=}"
-        )
         assert self.audio_encoder is not None, (
             f"Audio encoder must be defined to encode audio, got {self.audio_encoder=}"
         )
@@ -1265,15 +1344,26 @@ class InstructTokenizerV7(InstructTokenizerV3):
         Returns:
             Tokenized object with the full token sequence and optional audio data.
         """
-        assert self.audio_encoder is not None, (
-            f"Audio encoder must be defined to encode audio, got {self.audio_encoder=}"
-        )
+        if self.audio_encoder is None:
+            raise UnsupportedTokenizerFeatureException(
+                f"Tokenizer {self.tokenizer.version.value} does not provide an audio encoder for speech."
+            )
         init_tokens = self.start()
         tokenized = Tokenized(tokens=init_tokens)
         tokenized_audio = self._encode_audio_for_speech_request(request.ref_audio, request.voice)
         tokenized.tokens.extend(tokenized_audio.tokens)
         tokenized.audios.extend(tokenized_audio.audios)
         tokens: list[int] = tokenized.tokens
+        if self.audio_encoder.special_ids.text_to_audio is None:
+            raise UnsupportedTokenizerFeatureException(
+                f"Tokenizer {self.tokenizer.version.value} does not provide the text_to_audio marker required for "
+                "speech."
+            )
+        if self.audio_encoder.special_ids.audio_to_text is None:
+            raise UnsupportedTokenizerFeatureException(
+                f"Tokenizer {self.tokenizer.version.value} does not provide the audio_to_text marker required for "
+                "speech."
+            )
         tokens.append(self.audio_encoder.text_to_audio_token)
         tokens.extend(self.tokenizer.encode(request.input, bos=False, eos=False))
         tokens.append(self.audio_encoder.audio_to_text_token)
@@ -1452,7 +1542,11 @@ class InstructTokenizerV15(InstructTokenizerV13):
         self._validate_settings(settings)
         if settings == ModelSettings.none():
             return []
-        dumped_settings = json.dumps(settings.model_dump(exclude_none=True), ensure_ascii=False, sort_keys=True)
+        dumped = settings.model_dump(exclude_none=True)
+        # Sort only top-level setting names: a recursive sort would reorder the user's JSON schema,
+        # whose property order conveys the intended generation order.
+        ordered = {k: dumped[k] for k in sorted(dumped)}
+        dumped_settings = json.dumps(obj=ordered, ensure_ascii=False)
         setting_json_tokens = self.tokenizer.encode(dumped_settings, bos=False, eos=False)
         settings_tokens = [
             self.BEGIN_MODEL_SETTINGS,

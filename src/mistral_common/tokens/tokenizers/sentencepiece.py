@@ -338,13 +338,7 @@ class SentencePieceTokenizer(Tokenizer):
         Returns:
             The decoded string.
         """
-        try:
-            special_token_policy = SpecialTokenPolicy(special_token_policy)
-        except ValueError as e:
-            valid = ", ".join(repr(p.value) for p in SpecialTokenPolicy)
-            raise ValueError(
-                f"Invalid `special_token_policy` {special_token_policy!r}. Expected one of: {valid}."
-            ) from e
+        special_token_policy = SpecialTokenPolicy.validate(special_token_policy)
 
         if special_token_policy == SpecialTokenPolicy.IGNORE:
             decoded = self._model.decode(tokens)

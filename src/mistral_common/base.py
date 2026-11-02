@@ -1,40 +1,13 @@
-from typing import Any
-
 from pydantic import BaseModel, ConfigDict
-from typing_extensions import Self
 
 
 class MistralBase(BaseModel):
     r"""Base class for all Mistral Pydantic models.
 
     Forbids extra attributes, validates default values and use enum values.
+
+    Methods converting from external formats (e.g. `from_openai`) tolerate
+    unknown fields by passing `extra="ignore"` to `model_validate`.
     """
 
     model_config = ConfigDict(extra="forbid", validate_default=True, use_enum_values=True)
-
-    @classmethod
-    def _filter_cls_fields(cls, data: dict[str, Any]) -> dict[str, Any]:
-        r"""Filter a dictionary to only include keys that are valid model fields.
-
-        Args:
-            data: The dictionary to filter.
-
-        Returns:
-            The subset of data whose keys are model fields of this class.
-        """
-        return {k: v for k, v in data.items() if k in cls.model_fields}
-
-    @classmethod
-    def model_validate_ignore_extra(cls, data: dict[str, Any]) -> Self:
-        r"""Build the model from the data after filtering out keys not in the model fields.
-
-        Unlike `model_validate`, does not raise on unknown keys; they are
-        silently dropped.
-
-        Args:
-            data: The dictionary to validate.
-
-        Returns:
-            The validated model instance.
-        """
-        return cls.model_validate(cls._filter_cls_fields(data))

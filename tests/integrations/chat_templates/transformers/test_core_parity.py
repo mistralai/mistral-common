@@ -1,3 +1,4 @@
+import copy
 from pathlib import Path
 from typing import Any
 
@@ -5,6 +6,7 @@ import pytest
 from jinja2.exceptions import TemplateError
 
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
+from mistral_common.integrations.chat_templates.template_generator import build_chat_template
 from mistral_common.protocol.instruct.chunk import TextChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage, UserMessage
 from mistral_common.protocol.instruct.validator import ValidationMode
@@ -12,17 +14,22 @@ from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.integrations.chat_templates.conftest import (
     ALL_TRANSFORMERS_CONFIGS,
-    _config_id,
+    format_config_id,
 )
-from tests.integrations.chat_templates.fixtures_data import _get_conversations
+from tests.integrations.chat_templates.fixtures_data import (
+    get_parity_conversations,
+    iter_render_args,
+    parse_tool_call_arguments,
+)
 from tests.integrations.chat_templates.helpers import (
     TestConfig,
-    _build_spm_path,
-    _build_tekken_json,
+    build_spm_path,
+    build_tekken_json,
+    build_template_config,
     encode_mistral_common,
 )
 from tests.integrations.chat_templates.hf_utils import (
-    _build_hf_tokenizer,
+    build_hf_tokenizer,
     encode_hf_tokens,
     encode_transformers,
     encode_transformers_from_openai,
@@ -33,18 +40,25 @@ class TestTransformersMistralCommonParity:
     @pytest.mark.parametrize(
         "config",
         ALL_TRANSFORMERS_CONFIGS,
-        ids=[_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
+        ids=[format_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
     )
     @pytest.mark.parametrize("mode", [ValidationMode.test, ValidationMode.finetuning])
     def test_chat_template(self, config: TestConfig, mode: ValidationMode, tmp_path: Path) -> None:
-        conversations = _get_conversations(config.version, mode, config.image, config.audio, config.think)
+        conversations = get_parity_conversations(config=config, mode=mode)
 
         if config.spm:
-            tokenizer_path = _build_spm_path(config, tmp_path)
+            tokenizer_path = build_spm_path(config=config, output_dir=tmp_path)
         else:
-            tokenizer_path = _build_tekken_json(config, tmp_path)
+            tokenizer_path = build_tekken_json(config=config, output_dir=tmp_path)
 
         mistral_tokenizer = MistralTokenizer.from_file(str(tokenizer_path), mode=mode)
+
+        settings_builder = mistral_tokenizer.instruct_tokenizer.tokenizer.model_settings_builder
+        reasoning_effort_values = None
+        reasoning_effort_default = None
+        if settings_builder is not None and settings_builder.reasoning_effort is not None:
+            reasoning_effort_values = tuple(str(value) for value in settings_builder.reasoning_effort.values)
+            reasoning_effort_default = str(settings_builder.reasoning_effort.default)
 
         chat_template = generate_chat_template(
             spm=config.spm,
@@ -55,12 +69,15 @@ class TestTransformersMistralCommonParity:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=config.model_settings_fields,
+            reasoning_effort_values=reasoning_effort_values,
+            reasoning_effort_default=reasoning_effort_default,
         )
 
         # Build HF tokenizer for Tekken-based token ID comparison
         hf_tokenizer = None
         if not config.spm:
-            hf_tokenizer = _build_hf_tokenizer(tokenizer_path, chat_template)
+            hf_tokenizer = build_hf_tokenizer(tekken_path=tokenizer_path, chat_template=chat_template)
 
         if config.version <= TokenizerVersion.v2:
             for conv in conversations:
@@ -99,9 +116,34 @@ class TestTransformersMistralCommonParity:
     @pytest.mark.parametrize(
         "config",
         ALL_TRANSFORMERS_CONFIGS,
-        ids=[_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
+        ids=[format_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
+    )
+    def test_dict_tool_arguments_render_like_string_arguments(self, config: TestConfig) -> None:
+        # Even with Transformers' `tojson`, `|safe` returns Markup and `str + Markup` HTML-escapes.
+        template = build_chat_template(config=build_template_config(config))
+
+        for mode, idx, render_args in iter_render_args(config=config):
+            string_output = encode_transformers_from_openai(
+                chat_template=template, openai_request=copy.deepcopy(render_args)
+            )
+            dict_output = encode_transformers_from_openai(
+                chat_template=template, openai_request=parse_tool_call_arguments(render_args=render_args)
+            )
+
+            assert dict_output == string_output, f"Output mismatch for {config}, mode={mode}, conversation={idx}"
+
+    @pytest.mark.parametrize(
+        "config",
+        ALL_TRANSFORMERS_CONFIGS,
+        ids=[format_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
     )
     def test_role_error(self, config: TestConfig) -> None:
+        reasoning_effort_default = (
+            "none"
+            if config.version.supports_model_settings
+            and (config.model_settings_fields is None or "reasoning_effort" in config.model_settings_fields)
+            else None
+        )
         chat_template = generate_chat_template(
             spm=config.spm,
             tokenizer_version=config.version,
@@ -111,6 +153,9 @@ class TestTransformersMistralCommonParity:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=config.model_settings_fields,
+            reasoning_effort_default=reasoning_effort_default,
+            reasoning_effort_values=("none", "high") if reasoning_effort_default is not None else None,
         )
 
         # Starting with assistant is rejected by the first-message constraint
@@ -167,7 +212,7 @@ class TestTransformersMistralCommonParity:
     @pytest.mark.parametrize(
         "config",
         ALL_TRANSFORMERS_CONFIGS,
-        ids=[_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
+        ids=[format_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
     )
     def test_invalid_chunks(
         self,
@@ -192,6 +237,12 @@ class TestTransformersMistralCommonParity:
         if not config.audio:
             invalid_convs += [invalid_user_audio]
 
+        reasoning_effort_default = (
+            "none"
+            if config.version.supports_model_settings
+            and (config.model_settings_fields is None or "reasoning_effort" in config.model_settings_fields)
+            else None
+        )
         chat_template = generate_chat_template(
             spm=config.spm,
             tokenizer_version=config.version,
@@ -201,6 +252,9 @@ class TestTransformersMistralCommonParity:
             default_system_prompt=None,
             plain_thinking_support=False,
             use_special_token_variables=True,
+            model_settings_fields=config.model_settings_fields,
+            reasoning_effort_default=reasoning_effort_default,
+            reasoning_effort_values=("none", "high") if reasoning_effort_default is not None else None,
         )
         # Not using parametrize here because invalid_convs depends on the version/image/audio/think
         # parameters from the outer parametrize. Each sub-case is identifiable via the TemplateError

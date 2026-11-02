@@ -1,8 +1,8 @@
 from collections.abc import Iterable, Mapping
-from enum import Enum
+from enum import StrEnum, auto
 from typing import Any, Generic
 
-from pydantic import Field, TypeAdapter, model_validator
+from pydantic import ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
 from mistral_common.base import MistralBase
 from mistral_common.deprecation import warn_once
@@ -19,9 +19,12 @@ from mistral_common.protocol.instruct.messages import (
     ReasoningFieldFormat,
 )
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolChoice, ToolChoiceEnum, ToolType
+from mistral_common.utils.json_utils import validate_json_schema_by_draft7
 
 _CONTINUE_FINAL_MESSAGE_KEY = "continue_final_message"
 _CONTINUE_FINAL_MESSAGE_ERROR = "continue_final_message=True requires final message to be an assistant."
+
+_JSON_OBJECT_OR_ARRAY_SCHEMA: dict[str, Any] = {"anyOf": [{"type": "object"}, {"type": "array"}]}
 
 
 def _map_continue_final_message(
@@ -49,72 +52,158 @@ def _map_continue_final_message(
     return copied_messages
 
 
-class ResponseFormats(str, Enum):
+class ResponseFormats(StrEnum):
     r"""Enum of the different formats for an instruct response.
 
     Attributes:
         text: Response will be plain text.
-        json: Response will be a valid JSON object.
+        json_object: Response will be a valid JSON object.
+        json_schema: Response will follow a custom JSON schema.
 
     Examples:
         >>> response_format = ResponseFormats.text
     """
 
-    text = "text"
-    json = "json_object"
+    text = auto()
+    json_object = auto()
+    json_schema = auto()
 
 
-class ReasoningEffort(str, Enum):
+class ReasoningEffort(StrEnum):
     r"""Controls the amount of reasoning effort the model applies during generation.
 
     Attributes:
         none: No reasoning effort; model generates responses directly.
+        minimal: Minimal reasoning effort, with only a small amount of additional computation.
+        low: Low reasoning effort; the model spends little compute on reasoning.
+        medium: Medium reasoning effort, between low and high.
         high: High reasoning effort for complex tasks; model spends more compute
             on reasoning before generating the final response.
+        xhigh: Extra-high reasoning effort, above high, for the most demanding tasks.
+        max: Maximum reasoning effort the model supports.
 
     Note:
         Supported for tokenizer >= v15 only. Earlier versions will raise an error.
     """
 
-    none = "none"
-    high = "high"
+    none = auto()
+    minimal = auto()
+    low = auto()
+    medium = auto()
+    high = auto()
+    xhigh = auto()
+    max = auto()
 
 
 class ModelSettings(MistralBase):
     r"""Model configuration settings for instruct requests.
 
     Encapsulates model-specific settings that influence inference behavior.
-    Currently supports reasoning effort configuration.
+    Currently supports reasoning effort and response format configuration.
 
     Attributes:
-        reasoning_effort: Controls reasoning effort. If `None` (default), the model
+        reasoning_effort: Controls reasoning effort. If `None`, the model
             uses its default reasoning behavior. Requires tokenizer >= v15.
+        json_schema: The JSON schema to enforce on the response, derived from the request's
+            response format. If `None`, no schema is enforced. Requires tokenizer >= v15.
     """
 
     reasoning_effort: ReasoningEffort | None = None
+    json_schema: dict[str, Any] | None = None
 
     @staticmethod
     def none() -> "ModelSettings":
         r"""Create a ModelSettings instance with all fields set to `None`.
 
         Returns:
-            ModelSettings with `reasoning_effort=None`.
+            An instance with all fields set to `None`.
         """
         return ModelSettings()
+
+
+class JsonSchema(MistralBase):
+    r"""A named JSON schema for structured responses.
+
+    Attributes:
+        name: The schema name.
+        description: An optional description of the schema.
+        custom_schema: The JSON schema (aliased `schema`).
+        strict: Whether grammar generation uses the custom schema. When `False`,
+            grammar generation falls back to any valid JSON; model settings always
+            retain the custom schema. The value is also preserved for OpenAI compatibility.
+
+    Examples:
+        >>> schema = JsonSchema(name="obj", schema={"type": "object"})
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str
+    description: str | None = None
+    custom_schema: dict[str, Any] = Field(..., alias="schema")
+    strict: bool = False
+
+    @field_validator("custom_schema")
+    @classmethod
+    def validate_custom_schema(cls, value: dict[str, Any]) -> dict[str, Any]:
+        r"""Validate the schema against JSON Schema Draft 7."""
+        validate_json_schema_by_draft7(value=value)
+        return value
+
+
+class SchemaRenderingMode(StrEnum):
+    r"""Select how a response-format schema is applied.
+
+    Attributes:
+        grammar: The schema constrains decoding; non-strict schemas fall back to any valid JSON.
+        model_settings: The schema is encoded in model settings unchanged.
+    """
+
+    grammar = auto()
+    model_settings = auto()
 
 
 class ResponseFormat(MistralBase):
     r"""Configuration for the response format.
 
     Attributes:
-        type: The response format type. Use `ResponseFormats.text` for plain text
-            or `ResponseFormats.json` for JSON output.
+        type: The response format type. Use `ResponseFormats.text` for plain text,
+            `ResponseFormats.json_object` for JSON output, or `ResponseFormats.json_schema`
+            for a custom JSON schema.
+        json_schema: The JSON schema when `type` is `json_schema`.
 
     Examples:
         >>> response_format = ResponseFormat(type=ResponseFormats.text)
     """
 
     type: ResponseFormats = ResponseFormats.text
+    json_schema: JsonSchema | None = None
+
+    @model_validator(mode="after")
+    def validate_schema_presence(self) -> "ResponseFormat":
+        r"""Require a schema when the response format selects `json_schema`."""
+        if self.type == ResponseFormats.json_schema and self.json_schema is None:
+            raise ValueError("Response format `json_schema` must define the schema")
+        return self
+
+    def get_schema(self, purpose: SchemaRenderingMode) -> dict[str, Any] | None:
+        r"""Resolve the response schema for grammar generation or model settings.
+
+        Args:
+            purpose: Whether the schema is used to constrain a grammar or encode
+                model settings.
+
+        Returns:
+            The schema selected for this purpose, or None for `text`.
+        """
+        if self.type == ResponseFormats.json_schema:
+            assert self.json_schema is not None
+            if purpose == SchemaRenderingMode.grammar and not self.json_schema.strict:
+                return _JSON_OBJECT_OR_ARRAY_SCHEMA
+            return self.json_schema.custom_schema
+        if self.type == ResponseFormats.json_object:
+            return _JSON_OBJECT_OR_ARRAY_SCHEMA
+        return None
 
 
 class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
@@ -131,10 +220,12 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         tools: List of available tools for the model to use. If `None`, no tools are available.
         tool_choice: Strategy for tool selection. Options: auto (model decides),
             none (no tools), any/required (deprecated, use required). Default: auto.
+        parallel_tool_calls: Whether the model may call multiple tools in one
+            response. Defaults to `True`.
         truncate_for_context_length: If `True`, automatically truncate messages to
             fit within the model's context length. Default: `False`.
-        reasoning_effort: Controls reasoning effort (none or high). Requires tokenizer
-            >= v15. If `None`, uses model default.
+        reasoning_effort: Controls reasoning effort (one of "none", "minimal", "low", "medium", "high",
+            "xhigh", or "max"). Requires tokenizer >= v15. If `None`, uses model default.
 
     Examples:
         >>> from mistral_common.protocol.instruct.messages import UserMessage, AssistantMessage
@@ -156,6 +247,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     response_format: ResponseFormat = Field(default_factory=ResponseFormat)
     tools: list[Tool] | None = None
     tool_choice: ToolChoice = ToolChoiceEnum.auto
+    parallel_tool_calls: bool = True
     truncate_for_context_length: bool = False
     reasoning_effort: ReasoningEffort | None = None
 
@@ -242,12 +334,14 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             ...     ),
             ... )])
             >>> request.to_openai()
-            {'temperature': 0.7, 'top_p': 1.0, 'response_format': {'type': 'text'}, 'continue_final_message': False, 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'tools': [{'type': 'function', 'function': {'name': 'get_current_weather', 'description': 'Get the current weather in a given location', 'parameters': {'type': 'object', 'properties': {'location': {'type': 'string', 'description': 'The city and state, e.g. San Francisco, CA'}, 'unit': {'type': 'string', 'enum': ['celsius', 'fahrenheit']}}, 'required': ['location']}, 'strict': False}}], 'tool_choice': 'auto'}
+            {'temperature': 0.7, 'top_p': 1.0, 'response_format': {'type': 'text'}, 'continue_final_message': False, 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'tools': [{'type': 'function', 'function': {'name': 'get_current_weather', 'description': 'Get the current weather in a given location', 'parameters': {'type': 'object', 'properties': {'location': {'type': 'string', 'description': 'The city and state, e.g. San Francisco, CA'}, 'unit': {'type': 'string', 'enum': ['celsius', 'fahrenheit']}}, 'required': ['location']}, 'strict': False}}], 'parallel_tool_calls': True, 'tool_choice': 'auto'}
         """  # noqa: E501
 
         # Handle messages and tools separately.
         openai_request: dict[str, Any] = self.model_dump(
-            exclude={"messages", "tools", "truncate_for_context_length", "tool_choice"}, exclude_none=True
+            exclude={"messages", "tools", "truncate_for_context_length", "tool_choice", "parallel_tool_calls"},
+            exclude_none=True,
+            by_alias=True,
         )
 
         # Rename random_seed to seed.
@@ -281,6 +375,9 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         openai_request["messages"] = openai_messages
         if self.tools is not None:
             openai_request["tools"] = [tool.to_openai() for tool in self.tools]
+        # OpenAI rejects `parallel_tool_calls` when no tools are given.
+        if self.tools:
+            openai_request["parallel_tool_calls"] = self.parallel_tool_calls
 
         openai_tool_choice: str | dict[str, Any]
         match self.tool_choice:
@@ -332,7 +429,9 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         if random_seed is None:
             random_seed = kwargs.pop("random_seed", None)
 
-        filtered_kwargs = cls._filter_cls_fields(kwargs)
+        # OpenAI clients send `parallel_tool_calls: null` to mean the default.
+        if "parallel_tool_calls" in kwargs and kwargs["parallel_tool_calls"] is None:
+            kwargs["parallel_tool_calls"] = True
 
         converted_messages: list[ChatMessage] = convert_openai_messages(messages)
         converted_messages = _map_continue_final_message(
@@ -342,12 +441,14 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
 
         converted_tools = convert_openai_tools(tools) if tools is not None else None
 
-        return cls(
-            # Pydantic cannot express the runtime-selected request class's message generic here.
-            messages=converted_messages,  # type: ignore[arg-type]
-            tools=converted_tools,
-            random_seed=random_seed,
-            **filtered_kwargs,
+        return cls.model_validate(
+            {
+                "messages": converted_messages,
+                "tools": converted_tools,
+                "random_seed": random_seed,
+                **kwargs,
+            },
+            extra="ignore",
         )
 
 

@@ -1,10 +1,9 @@
 import warnings
 from collections.abc import Sequence
-from enum import Enum
-from typing import Any, ClassVar, Literal, TypeVar
+from enum import StrEnum, auto
+from typing import Annotated, Any, ClassVar, Literal, TypeAlias, TypeGuard, TypeVar
 
 from pydantic import Field, model_validator
-from typing_extensions import Annotated, TypeAlias, TypeGuard
 
 from mistral_common.base import MistralBase
 from mistral_common.exceptions import InvalidAssistantMessageException
@@ -38,7 +37,7 @@ def _are_text_chunks(chunks: Sequence[ContentChunk]) -> TypeGuard[list[TextChunk
     return all(isinstance(c, TextChunk) for c in chunks)
 
 
-class ReasoningFieldFormat(str, Enum):
+class ReasoningFieldFormat(StrEnum):
     r"""Format options for serializing thinking content in `AssistantMessage.to_openai()`.
 
     Controls how leading ThinkChunk content is represented in the OpenAI output.
@@ -52,12 +51,12 @@ class ReasoningFieldFormat(str, Enum):
             Similar to reasoning but with a different field name.
     """
 
-    thinking_chunks = "thinking_chunks"
-    reasoning = "reasoning"
-    reasoning_content = "reasoning_content"
+    thinking_chunks = auto()
+    reasoning = auto()
+    reasoning_content = auto()
 
 
-class Roles(str, Enum):
+class Roles(StrEnum):
     r"""Enum of valid message roles in a conversation.
 
     Attributes:
@@ -70,10 +69,10 @@ class Roles(str, Enum):
         >>> role = Roles.user
     """
 
-    system = "system"
-    user = "user"
-    assistant = "assistant"
-    tool = "tool"
+    system = auto()
+    user = auto()
+    assistant = auto()
+    tool = auto()
 
 
 class BaseMessage(MistralBase):

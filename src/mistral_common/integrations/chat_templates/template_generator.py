@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 
+from mistral_common.protocol.instruct.request import ReasoningEffort
 from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
+
+# Generated templates join text with Jinja `~`, never `+`: stock Jinja's `tojson` and `safe` return Markup,
+# and `+` with a Markup operand HTML-escapes the other one.
 
 # Module-level constants derived from SpecialTokens enum
 _BOS = SpecialTokens.bos.value
@@ -23,6 +27,22 @@ _BEGIN_THINK = SpecialTokens.begin_think.value
 _END_THINK = SpecialTokens.end_think.value
 _BEGIN_MODEL_SETTINGS = SpecialTokens.begin_model_settings.value
 _END_MODEL_SETTINGS = SpecialTokens.end_model_settings.value
+
+_REASONING_EFFORT_VALUES = tuple(str(effort) for effort in ReasoningEffort)
+
+MODEL_SETTINGS_FIELD_CHOICES: tuple[str, ...] = ("reasoning_effort", "json_schema")
+# Jinja lines that append each field's `"name": value` JSON fragment to `model_settings_parts`.
+_MODEL_SETTINGS_FRAGMENTS: dict[str, list[str]] = {
+    "json_schema": [
+        "{%- if json_schema is not none %}",
+        "    {%- set model_settings_parts = model_settings_parts + ['\"json_schema\": ' ~ (json_schema|tojson)] %}",
+        "{%- endif %}",
+    ],
+    "reasoning_effort": [
+        "{%- set model_settings_parts = model_settings_parts + "
+        "['\"reasoning_effort\": \"' ~ reasoning_effort ~ '\"'] %}",
+    ],
+}
 
 
 @dataclass
@@ -51,6 +71,15 @@ class TemplateConfig:
             (`bos_token`/`eos_token`) or as literal string values (`'<s>'`/`'</s>'`).
             When `True`, the template expects `bos_token` and `eos_token`
             to be passed as render kwargs.
+        model_settings_fields: Model settings fields to render. `None` selects the
+            automatic fields for the tokenizer version (`reasoning_effort` for v15 and
+            above, none below). An explicit set must be non-empty, requires v15 or above,
+            and may only contain values from `MODEL_SETTINGS_FIELD_CHOICES`.
+        reasoning_effort_values: Reasoning effort values exposed on requests. Required when the
+            `reasoning_effort` model settings field is enabled.
+        reasoning_effort_default: Exposed reasoning effort rendered when the request
+            leaves the effort unset. Required when the `reasoning_effort` model
+            settings field is enabled, and must be one of `reasoning_effort_values`.
 
     Raises:
         ValueError: If the configuration is invalid (e.g., conflicting options like
@@ -71,8 +100,27 @@ class TemplateConfig:
     thinking_support: bool = False
     plain_thinking_support: bool = False
     use_special_token_variables: bool = False
+    model_settings_fields: frozenset[str] | None = None
+    reasoning_effort_values: tuple[str, ...] | None = None
+    reasoning_effort_default: str | None = None
 
     def __post_init__(self) -> None:
+        explicit_model_settings_fields = self.model_settings_fields is not None
+        if self.model_settings_fields is None:
+            self.model_settings_fields = (
+                frozenset({"reasoning_effort"}) if self.supports_model_settings else frozenset()
+            )
+
+        unknown_model_settings_fields = self.model_settings_fields - set(MODEL_SETTINGS_FIELD_CHOICES)
+        if unknown_model_settings_fields:
+            unknown_names = ", ".join(sorted(unknown_model_settings_fields))
+            allowed_names = ", ".join(MODEL_SETTINGS_FIELD_CHOICES)
+            raise ValueError(f"Unknown model settings fields: {unknown_names}. Allowed fields are: {allowed_names}.")
+        if explicit_model_settings_fields and not self.supports_model_settings:
+            raise ValueError("Model settings fields are only available for tokenizer versions v15 and above")
+        if explicit_model_settings_fields and not self.model_settings_fields:
+            raise ValueError("Model settings fields must be None (automatic) or a non-empty set")
+
         if self.plain_thinking_support and self.thinking_support:
             raise ValueError("Plain thinking support and thinking support are mutually exclusive")
         if self.spm and (self.version >= TokenizerVersion.v11 or self.audio_support):
@@ -91,6 +139,37 @@ class TemplateConfig:
             raise ValueError("Plain thinking support is only available for tokenizer version v11")
         if self.audio_support and self.plain_thinking_support:
             raise ValueError("Audio and plain thinking support are mutually exclusive")
+
+        has_reasoning_effort = "reasoning_effort" in self.model_settings_fields
+        if has_reasoning_effort and self.reasoning_effort_values is None:
+            raise ValueError(
+                "Reasoning effort values are required when the reasoning_effort model settings field is enabled"
+            )
+        if self.reasoning_effort_values is not None:
+            if not self.reasoning_effort_values:
+                raise ValueError("Reasoning effort values must be a non-empty tuple")
+            if len(set(self.reasoning_effort_values)) != len(self.reasoning_effort_values):
+                raise ValueError("Reasoning effort values must not contain duplicates")
+            unknown_values = set(self.reasoning_effort_values) - set(_REASONING_EFFORT_VALUES)
+            if unknown_values:
+                unknown_names = ", ".join(sorted(unknown_values))
+                allowed_names = ", ".join(f'"{value}"' for value in _REASONING_EFFORT_VALUES)
+                raise ValueError(
+                    f"Unknown reasoning effort values: {unknown_names}. Allowed values are: {allowed_names}."
+                )
+            if not has_reasoning_effort:
+                raise ValueError("Reasoning effort values require the reasoning_effort model settings field")
+        if self.reasoning_effort_default is not None:
+            if not has_reasoning_effort:
+                raise ValueError("Reasoning effort default requires the reasoning_effort model settings field")
+            assert self.reasoning_effort_values is not None
+            if self.reasoning_effort_default not in self.reasoning_effort_values:
+                allowed = ", ".join(f'"{value}"' for value in self.reasoning_effort_values)
+                raise ValueError(f"Reasoning effort default must be one of the exposed values: {allowed}")
+        if has_reasoning_effort and self.reasoning_effort_default is None:
+            raise ValueError(
+                "Reasoning effort default is required when the reasoning_effort model settings field is enabled"
+            )
 
     @property
     def bos_expr(self) -> str:
@@ -188,7 +267,7 @@ class TemplateConfig:
 
     @property
     def supports_model_settings(self) -> bool:
-        r"""Whether model settings (`reasoning_effort`) are supported. V15+."""
+        r"""Whether model settings are supported. V15+."""
         return self.version >= TokenizerVersion.v15
 
     @property
@@ -432,7 +511,7 @@ def _generate_system_prompt_handling_v7_plus(config: TemplateConfig) -> list[str
     lines = [
         "{%- set loop_messages = messages %}",
         "{%- if messages[0]['role'] != 'system' and default_system_message != '' %}",
-        "    {{- '" + _BEGIN_SYSTEM + "' + default_system_message + '" + _END_SYSTEM + "' }}",
+        "    {{- '" + _BEGIN_SYSTEM + "' ~ default_system_message ~ '" + _END_SYSTEM + "' }}",
         "{%- endif %}",
     ]
 
@@ -451,15 +530,14 @@ def _generate_system_prompt_handling_v7_plus(config: TemplateConfig) -> list[str
 
 
 def _generate_available_tools_definition(config: TemplateConfig) -> str:
-    r"""Generate available tools and model settings definition.
+    r"""Generate available tools and selected model settings definitions.
 
     Builds an `available_tools` string variable that contains
     `[AVAILABLE_TOOLS]...[/AVAILABLE_TOOLS]` (if tools are provided).
-    For v15+, also builds a separate `model_settings` variable containing
-    `[MODEL_SETTINGS]...[/MODEL_SETTINGS]` which is always emitted
-    (defaults to `reasoning_effort="none"` when not specified).
-    Both variables are emitted later in the message loop at the appropriate
-    user message position.
+    When the configuration selects model settings fields, builds a
+    `model_settings` variable containing `[MODEL_SETTINGS]...[/MODEL_SETTINGS]`
+    only when a selected field resolves to a value. Both variables are emitted
+    later in the message loop at the appropriate user message position.
 
     Args:
         config: The template configuration.
@@ -485,28 +563,76 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
         lines.append("    {%- set has_tools = true %}")
         if config.spm:
             lines.append(
-                "    {%- set available_tools = '" + _BEGIN_TOOLS + " ' + (tools| tojson) + '" + _END_TOOLS + "' %}"
+                "    {%- set available_tools = '" + _BEGIN_TOOLS + " ' ~ (tools| tojson) ~ '" + _END_TOOLS + "' %}"
             )
         else:
             lines.append(
-                "    {%- set available_tools = '" + _BEGIN_TOOLS + "' + (tools| tojson) + '" + _END_TOOLS + "' %}"
+                "    {%- set available_tools = '" + _BEGIN_TOOLS + "' ~ (tools| tojson) ~ '" + _END_TOOLS + "' %}"
             )
         lines.append("{%- endif %}")
 
-    if config.supports_model_settings:
+    assert config.model_settings_fields is not None
+    has_reasoning_effort = "reasoning_effort" in config.model_settings_fields
+    has_json_schema = "json_schema" in config.model_settings_fields
+
+    if has_json_schema:
+        lines.extend(
+            [
+                "{%- set json_schema = none %}",
+                "{%- if response_format is defined and response_format is not none %}",
+                "    {%- set response_format_type = response_format.get('type', 'text') %}",
+                "    {%- set response_json_schema = response_format.get('json_schema') %}",
+                "    {%- if response_format_type not in ['text', 'json_object', 'json_schema'] %}",
+                "        {{- raise_exception('Response format type must be one of text, json_object or json_schema, "
+                "got ' ~ response_format_type ~ '.') }}",
+                "    {%- elif response_format_type == 'json_schema' %}",
+                "        {%- if response_json_schema is none or response_json_schema.get('schema') is none %}",
+                "            {{- raise_exception('Response format `json_schema` must define the schema') }}",
+                "        {%- else %}",
+                "            {%- set json_schema = response_json_schema['schema'] %}",
+                "        {%- endif %}",
+                "    {%- elif response_format_type == 'json_object' %}",
+                "        {%- set json_schema = {'anyOf': [{'type': 'object'}, {'type': 'array'}]} %}",
+                "    {%- endif %}",
+                "{%- endif %}",
+            ]
+        )
+
+    if has_reasoning_effort:
+        assert config.reasoning_effort_default is not None
+        assert config.reasoning_effort_values is not None
+        exposed_values = config.reasoning_effort_values
+        allowed_literal = "[" + ", ".join(f"'{value}'" for value in exposed_values) + "]"
+        if len(exposed_values) == 2:
+            allowed = f'either "{exposed_values[0]}" or "{exposed_values[1]}"'
+        else:
+            allowed = "one of " + ", ".join(f'"{value}"' for value in exposed_values)
         lines.extend(
             [
                 "{%- if reasoning_effort is not defined or reasoning_effort is none %}",
-                "    {%- set reasoning_effort = 'none' %}",
+                f"    {{%- set reasoning_effort = '{config.reasoning_effort_default}' %}}",
                 "{%- endif %}",
-                "{%- if reasoning_effort not in ['none', 'high'] %}",
-                '    {{- raise_exception(\'reasoning_effort must be either "none" or "high"\') }}',
+                "{%- if reasoning_effort not in " + allowed_literal + " %}",
+                "    {{- raise_exception('reasoning_effort must be " + allowed + "') }}",
                 "{%- endif %}",
-                "{%- set model_settings = '"
+            ]
+        )
+
+    if config.model_settings_fields:
+        lines.append("{%- set model_settings_parts = [] %}")
+        # Sorted like the tokenizer, which orders top-level setting names alphabetically.
+        for field in sorted(config.model_settings_fields):
+            lines.extend(_MODEL_SETTINGS_FRAGMENTS[field])
+        lines.extend(
+            [
+                "{%- set model_settings = '' %}",
+                "{%- if model_settings_parts %}",
+                "    {%- set model_settings = '"
                 + _BEGIN_MODEL_SETTINGS
-                + '{"reasoning_effort": "\' + reasoning_effort + \'"}'
+                + "{' ~ model_settings_parts|join(', ') ~ '}"
                 + _END_MODEL_SETTINGS
-                + "' %}",  # noqa: E501
+                + "' %}",
+                "{%- endif %}",
             ]
         )
 
@@ -589,7 +715,7 @@ def _generate_macros(config: TemplateConfig) -> str:
         lines.extend(
             [
                 "            {%- elif support_thinking and block['type'] == 'thinking' -%}",
-                "                {{- '" + begin_tag + "' + block['thinking'] -}}",
+                "                {{- '" + begin_tag + "' ~ block['thinking'] -}}",
                 "                {%- if block.get('closed', true) -%}{{- '" + end_tag + "' -}}{%- endif -%}",
             ]
         )
@@ -616,12 +742,12 @@ def _generate_macros(config: TemplateConfig) -> str:
     if has_extra_types:
         lines.append("            {%- else -%}")
         lines.append(
-            "                {{- raise_exception('Only ' + supported_types_desc + ' chunks are supported in ' + context_name + '.') -}}"  # noqa: E501
+            "                {{- raise_exception('Only ' ~ supported_types_desc ~ ' chunks are supported in ' ~ context_name ~ '.') -}}"  # noqa: E501
         )
     else:
         lines.append("            {%- else -%}")
         lines.append(
-            "                {{- raise_exception('Only text chunks are supported in ' + context_name + '.') -}}"
+            "                {{- raise_exception('Only text chunks are supported in ' ~ context_name ~ '.') -}}"
         )
 
     lines.extend(
@@ -629,7 +755,7 @@ def _generate_macros(config: TemplateConfig) -> str:
             "            {%- endif -%}",
             "        {%- endfor -%}",
             "    {%- else -%}",
-            "        {{- raise_exception(context_name + ' must have non-empty content.') -}}",
+            "        {{- raise_exception(context_name ~ ' must have non-empty content.') -}}",
             "    {%- endif -%}",
             "{%- endmacro -%}",
         ]
@@ -1040,11 +1166,11 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
     if config.uses_system_prompt_tokens:
         # v7+: system messages remain in loop_messages, so first message can be user or system
         first_msg_cond = "{%- if loop_messages | length > 0 and loop_messages[0]['role'] not in ['user', 'system'] %}"
-        first_msg_err = "    {{- raise_exception('Conversation must start with a user or system message, got ' + loop_messages[0]['role'] + '.') }}"  # noqa: E501
+        first_msg_err = "    {{- raise_exception('Conversation must start with a user or system message, got ' ~ loop_messages[0]['role'] ~ '.') }}"  # noqa: E501
     else:
         # pre-v7: system messages are extracted, so first message must be user
         first_msg_cond = "{%- if loop_messages | length > 0 and loop_messages[0]['role'] != 'user' %}"
-        first_msg_err = "    {{- raise_exception('Conversation must start with a user message, got ' + loop_messages[0]['role'] + '.') }}"  # noqa: E501
+        first_msg_err = "    {{- raise_exception('Conversation must start with a user message, got ' ~ loop_messages[0]['role'] ~ '.') }}"  # noqa: E501
     lines.append(first_msg_cond)
     lines.append(first_msg_err)
     lines.append("{%- endif %}")
@@ -1055,7 +1181,7 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
     lines.append("    {%- set current_role = message['role'] %}")
     lines.append("    {%- if ns_order.previous_role is not none %}")
 
-    transition_error = "                {{- raise_exception('Unexpected role \\'' + current_role + '\\' after role \\'' + ns_order.previous_role + '\\'') }}"  # noqa: E501
+    transition_error = "                {{- raise_exception('Unexpected role \\'' ~ current_role ~ '\\' after role \\'' ~ ns_order.previous_role ~ '\\'') }}"  # noqa: E501
 
     if config.uses_system_prompt_tokens:
         # v7+: full transition table including system
@@ -1226,7 +1352,7 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
             lines.append("        {%- set added_sp = false %}")
             lines.append("        {%- if (ns.index == ns.max_idx_user) and system_message != '' %}")
             lines.append("            {%- set added_sp = true %}")
-            lines.append("            {{- ' ' + system_message + '\\n\\n' }}")
+            lines.append("            {{- ' ' ~ system_message ~ '\\n\\n' }}")
             lines.append("        {%- elif message['content'] is string %}")
             lines.append("            {{- ' '  }}")
             lines.append("        {%- endif %}")
@@ -1253,7 +1379,7 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
                 lines.append("        {%- if loop.index0 == 0 and system_message != '' %}")
             else:
                 lines.append("        {%- if (ns.index == ns.max_idx_user) and system_message != '' %}")
-            lines.append("            {{- system_message + '\\n\\n' }}")
+            lines.append("            {{- system_message ~ '\\n\\n' }}")
             lines.append("        {%- endif %}")
             lines.append("        {%- if message['content'] is string %}")
             # Pre-v7 plain string branch (call site 2 for non-SPM): simple text-only
@@ -1438,13 +1564,13 @@ def _generate_tool_calls_elif_v2_v3(config: TemplateConfig) -> str:
     if config.uses_v2_tool_format:
         # v2: no ID in tool calls
         lines.extend(_emit_argument_normalization("                "))
-        lines.append("                {{- '{\"name\": \"' + name + '\", \"arguments\": ' + arguments + '}' }}")
+        lines.append("                {{- '{\"name\": \"' ~ name ~ '\", \"arguments\": ' ~ arguments ~ '}' }}")
     else:
         # v3_spm: has ID in tool calls
         lines.extend(_emit_call_id_validation("                "))
         lines.extend(_emit_argument_normalization("                "))
         lines.append(
-            '                {{- \'{"name": "\' + name + \'", "arguments": \' + arguments + \', "id": "\' + id + \'"}\' }}'  # noqa: E501
+            '                {{- \'{"name": "\' ~ name ~ \'", "arguments": \' ~ arguments ~ \', "id": "\' ~ id ~ \'"}\' }}'  # noqa: E501
         )
 
     lines.append("                {%- if loop.length > 1 and loop.index < loop.length %}")
@@ -1490,7 +1616,7 @@ def _generate_tool_calls_block(config: TemplateConfig) -> str:
         lines.append("                {%- set name = tool['function']['name'] %}")
         lines.append("                {%- set arguments = tool['function']['arguments'] %}")
         lines.extend(_emit_argument_normalization("                "))
-        lines.append("                {{- name + '" + _ARGS + "' + arguments }}")
+        lines.append("                {{- name ~ '" + _ARGS + "' ~ arguments }}")
         lines.append("            {%- endfor %}")
     elif config.uses_call_id_in_tool_calls:
         lines.append("            {%- for tool in message['tool_calls'] %}")
@@ -1499,7 +1625,7 @@ def _generate_tool_calls_block(config: TemplateConfig) -> str:
         lines.append("                {%- set arguments = tool['function']['arguments'] %}")
         lines.extend(_emit_call_id_validation("                "))
         lines.extend(_emit_argument_normalization("                "))
-        lines.append("                {{- name + '" + _CALL_ID + "' + id + '" + _ARGS + "' + arguments }}")
+        lines.append("                {{- name ~ '" + _CALL_ID + "' ~ id ~ '" + _ARGS + "' ~ arguments }}")
         lines.append("            {%- endfor %}")
     else:
         if config.spm:
@@ -1512,7 +1638,7 @@ def _generate_tool_calls_block(config: TemplateConfig) -> str:
         lines.extend(_emit_call_id_validation("                "))
         lines.extend(_emit_argument_normalization("                "))
         lines.append(
-            '                {{- \'{"name": "\' + name + \'", "arguments": \' + arguments + \', "id": "\' + id + \'"}\' }}'  # noqa: E501
+            '                {{- \'{"name": "\' ~ name ~ \'", "arguments": \' ~ arguments ~ \', "id": "\' ~ id ~ \'"}\' }}'  # noqa: E501
         )
         lines.append("                {%- if loop.length > 1 and loop.index < loop.length %}")
         lines.append("                    {{- ', ' }}")
@@ -1559,6 +1685,11 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         lines.append("        {%- endif %}")
 
     if config.uses_v2_tool_format:
+        lines.append("        {%- if loop.index0 > 0 and loop_messages[loop.index0 - 1]['role'] == 'tool' %}")
+        lines.append(
+            "            {{- raise_exception('Tokenizer v2 does not support multiple tool results for one assistant turn.') }}"  # noqa: E501
+        )
+        lines.append("        {%- endif %}")
         lines.extend(_emit_int_float_parsing("        "))
         lines.append("        ")
         lines.append("        {%- if message['name'] is undefined or message['name'] is none %}")
@@ -1569,11 +1700,11 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         lines.append("        ")
         if config.spm:
             lines.append(
-                "        {{- '" + _BEGIN_TOOL_RESULTS + " [' + (tool_message|tojson) + ']" + _END_TOOL_RESULTS + "' }}"
+                "        {{- '" + _BEGIN_TOOL_RESULTS + " [' ~ (tool_message|tojson) ~ ']" + _END_TOOL_RESULTS + "' }}"
             )  # noqa: E501
         else:
             lines.append(
-                "        {{- '" + _BEGIN_TOOL_RESULTS + "[' + (tool_message|tojson) + ']" + _END_TOOL_RESULTS + "' }}"
+                "        {{- '" + _BEGIN_TOOL_RESULTS + "[' ~ (tool_message|tojson) ~ ']" + _END_TOOL_RESULTS + "' }}"
             )  # noqa: E501
     elif config.uses_json_tool_results:
         lines.extend(_emit_int_float_parsing("        "))
@@ -1583,7 +1714,7 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         lines.append("        {%- set tool_message = {'content': tool_content, 'call_id': tool_id} %}")
         lines.append("        ")
         lines.append(
-            "        {{- '" + _BEGIN_TOOL_RESULTS + " ' + (tool_message|tojson) + '" + _END_TOOL_RESULTS + "' }}"
+            "        {{- '" + _BEGIN_TOOL_RESULTS + " ' ~ (tool_message|tojson) ~ '" + _END_TOOL_RESULTS + "' }}"
         )  # noqa: E501
     elif config.uses_tool_content_format:
         lines.extend(_emit_call_id_resolution("        "))
@@ -1591,9 +1722,9 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
             lines.append(
                 "        {{- '"
                 + _BEGIN_TOOL_RESULTS
-                + " ' + tool_id + '"
+                + " ' ~ tool_id ~ '"
                 + _BEGIN_TOOL_CONTENT
-                + " ' + message['content']|string + '"
+                + " ' ~ message['content']|string ~ '"
                 + _END_TOOL_RESULTS
                 + "' }}"  # noqa: E501
             )
@@ -1601,9 +1732,9 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
             lines.append(
                 "        {{- '"
                 + _BEGIN_TOOL_RESULTS
-                + "' + tool_id + '"
+                + "' ~ tool_id ~ '"
                 + _BEGIN_TOOL_CONTENT
-                + "' + message['content']|string + '"
+                + "' ~ message['content']|string ~ '"
                 + _END_TOOL_RESULTS
                 + "' }}"  # noqa: E501
             )
@@ -1630,7 +1761,7 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
             lines.append("        {{- '" + _END_TOOL_RESULTS + "' }}")
         else:
             lines.append(
-                "        {{- '" + _BEGIN_TOOL_RESULTS + "' + message['content']|string + '" + _END_TOOL_RESULTS + "' }}"
+                "        {{- '" + _BEGIN_TOOL_RESULTS + "' ~ message['content']|string ~ '" + _END_TOOL_RESULTS + "' }}"
             )  # noqa: E501
     else:
         # v3 non-spm style
@@ -1641,7 +1772,7 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         lines.append("        {%- set tool_message = {'content': tool_content, 'call_id': tool_id} %}")
         lines.append("        ")
         lines.append(
-            "        {{- '" + _BEGIN_TOOL_RESULTS + "' + (tool_message|tojson) + '" + _END_TOOL_RESULTS + "' }}"
+            "        {{- '" + _BEGIN_TOOL_RESULTS + "' ~ (tool_message|tojson) ~ '" + _END_TOOL_RESULTS + "' }}"
         )  # noqa: E501
 
     # SPM tracking
@@ -1672,11 +1803,11 @@ def _generate_else_role_block(config: TemplateConfig) -> str:
         lines.append("    {%- else %}")
         if config.has_tools:
             lines.append(
-                "        {{- raise_exception('Only user, assistant, system and tool roles are supported, got ' + message['role'] + '.') }}"  # noqa: E501
+                "        {{- raise_exception('Only user, assistant, system and tool roles are supported, got ' ~ message['role'] ~ '.') }}"  # noqa: E501
             )
         else:
             lines.append(
-                "        {{- raise_exception('Only user, assistant and system roles are supported, got ' + message['role'] + '.') }}"  # noqa: E501
+                "        {{- raise_exception('Only user, assistant and system roles are supported, got ' ~ message['role'] ~ '.') }}"  # noqa: E501
             )
     else:
         # pre-v7: system messages are already filtered out
@@ -1686,12 +1817,12 @@ def _generate_else_role_block(config: TemplateConfig) -> str:
             else:
                 lines.append("    {%- else %}")
             lines.append(
-                "        {{- raise_exception('Only user, assistant and tool roles are supported, got ' + message['role'] + '.') }}"  # noqa: E501
+                "        {{- raise_exception('Only user, assistant and tool roles are supported, got ' ~ message['role'] ~ '.') }}"  # noqa: E501
             )
         else:
             lines.append("    {%- else %}")
             lines.append(
-                "        {{- raise_exception('Only user and assistant roles are supported, got ' + message['role'] + '.') }}"  # noqa: E501
+                "        {{- raise_exception('Only user and assistant roles are supported, got ' ~ message['role'] ~ '.') }}"  # noqa: E501
             )
 
     lines.append("    {%- endif %}")
@@ -1751,7 +1882,7 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("{#- Validates message ordering. #}")
     lines.append("{%- if loop_messages | length > 0 and loop_messages[0]['role'] != 'user' %}")
     lines.append(
-        "    {{- raise_exception('Conversation must start with a user message, got ' + loop_messages[0]['role'] + '.') }}"  # noqa: E501
+        "    {{- raise_exception('Conversation must start with a user message, got ' ~ loop_messages[0]['role'] ~ '.') }}"  # noqa: E501
     )
     lines.append("{%- endif %}")
     lines.append("{%- set ns_order = namespace(previous_role=none) %}")
@@ -1761,13 +1892,13 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("        {%- if ns_order.previous_role == 'user' %}")
     lines.append("            {%- if current_role not in ['assistant', 'user'] %}")
     lines.append(
-        "                {{- raise_exception('Unexpected role \\'' + current_role + '\\' after role \\'' + ns_order.previous_role + '\\'') }}"  # noqa: E501
+        "                {{- raise_exception('Unexpected role \\'' ~ current_role ~ '\\' after role \\'' ~ ns_order.previous_role ~ '\\'') }}"  # noqa: E501
     )
     lines.append("            {%- endif %}")
     lines.append("        {%- elif ns_order.previous_role == 'assistant' %}")
     lines.append("            {%- if current_role not in ['assistant', 'user'] %}")
     lines.append(
-        "                {{- raise_exception('Unexpected role \\'' + current_role + '\\' after role \\'' + ns_order.previous_role + '\\'') }}"  # noqa: E501
+        "                {{- raise_exception('Unexpected role \\'' ~ current_role ~ '\\' after role \\'' ~ ns_order.previous_role ~ '\\'') }}"  # noqa: E501
     )
     lines.append("            {%- endif %}")
     lines.append("        {%- endif %}")
@@ -1784,7 +1915,7 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     else:
         lines.append("        {{- '" + _BEGIN_INST + " ' }}")
     lines.append("        {%- if loop.index0 == 0 and system_message != '' %}")
-    lines.append("            {{- system_message + '\\n\\n' }}")
+    lines.append("            {{- system_message ~ '\\n\\n' }}")
     lines.append("        {%- endif %}")
     lines.append("        {%- if message['content'] is string %}")
     lines.append("            {{- message['content']}}")
@@ -1831,7 +1962,7 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("    {#- Raise exception for unsupported roles. #}")
     lines.append("    {%- else %}")
     lines.append(
-        "        {{- raise_exception('Only user and assistant roles are supported, got ' + message['role'] + '.') }}"
+        "        {{- raise_exception('Only user and assistant roles are supported, got ' ~ message['role'] ~ '.') }}"
     )
     lines.append("    {%- endif %}")
     lines.append("{%- endfor %}")

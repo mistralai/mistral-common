@@ -1,0 +1,118 @@
+name: Downstream Compatibility
+
+permissions:
+  contents: read
+
+# Runs targeted downstream tokenization test suites (vLLM, Transformers) against
+# the mistral-common version in this repo whenever the PR carries the
+# `run-downstream-tests` label (label added, or new push while labeled), or on
+# manual dispatch. CPU only, no GPU required.
+on:
+  pull_request:
+    types:
+      - labeled
+      - synchronize
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || 'manual' }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - name: Check if PR carries the run-downstream-tests label
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels" \
+              --jq 'any(.[]; .name == "run-downstream-tests")' | grep -q true; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "PR does not carry the run-downstream-tests label, skipping."
+          fi
+
+  vllm:
+    needs: gate
+    if: ${{ needs.gate.outputs.should_run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout mistral-common
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout vLLM
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        with:
+          repository: vllm-project/vllm
+          path: vllm
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Run vLLM mistral tokenizer tests against main mistral-common
+        run: |
+          cd vllm
+          uv venv
+          VLLM_TARGET_DEVICE=empty uv pip install vllm \
+            --torch-backend=cpu \
+            --extra-index-url https://wheels.vllm.ai/nightly/cpu \
+            --index-strategy first-index
+          uv pip install pytest pytest-asyncio regex psutil tblib
+          uv pip install ijson partial-json-parser
+          uv pip install --no-deps 'mistral-common @ file://${{ github.workspace }}'
+          uv run --no-sync pytest -v -m 'not gpu' \
+            tests/tokenizers_/test_mistral.py \
+            tests/tokenizers_/test_basic.py \
+            tests/tokenizers_/test_registry.py \
+            tests/parser/mistral/test_tool_calls.py \
+            tests/parser/mistral/test_reasoning.py \
+            tests/renderers/test_mistral.py
+
+  transformers:
+    needs: gate
+    if: ${{ needs.gate.outputs.should_run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout mistral-common
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout transformers
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        with:
+          repository: huggingface/transformers
+          path: transformers
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Run Transformers mistral-common tokenizer tests against main mistral-common
+        run: |
+          cd transformers
+          uv venv
+          uv pip install --torch-backend=cpu -e '.[dev]'
+          uv pip install --no-deps 'mistral-common @ file://${{ github.workspace }}'
+          python3 utils/fetch_hub_objects_for_ci.py
+          uv run --no-sync pytest -v \
+            tests/test_tokenization_mistral_common.py \
+            tests/integrations/mistral/test_tokenizer.py

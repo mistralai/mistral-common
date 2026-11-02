@@ -2,10 +2,9 @@ import base64
 import io
 import logging
 import math
-import re
 import warnings
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, StrEnum, auto
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -13,6 +12,7 @@ import numpy as np
 import requests as _requests_lib
 
 from mistral_common.deprecation import warn_once
+from mistral_common.exceptions import InvalidRequestException, UnsupportedTokenizerFeatureException
 from mistral_common.imports import (
     assert_soundfile_installed,
     assert_soxr_installed,
@@ -20,6 +20,7 @@ from mistral_common.imports import (
     is_soxr_installed,
 )
 from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk, AudioURLType
+from mistral_common.utils.data_url import maybe_strip_base64_data_url_prefix
 
 if is_soxr_installed():
     import soxr
@@ -134,19 +135,27 @@ class Audio:
             An instance of the Audio class.
 
         Raises:
-            ValueError: If the string is not valid base64 or decoding fails.
+            ValueError: If the input is a malformed data URL, is not valid
+                base64, or the payload cannot be decoded as audio.
         """
         assert_soundfile_installed()
 
-        if re.match(r"^data:audio/\w+;base64,", audio_base64):
-            audio_base64 = audio_base64.split(",")[1]
+        audio_base64 = maybe_strip_base64_data_url_prefix(audio_base64)
 
         try:
             audio_bytes = base64.b64decode(audio_base64)
         except Exception as e:
             raise ValueError("base64 decoding failed. Please check the input string is a valid base64.") from e
 
-        return Audio.from_bytes(audio_bytes, strict=strict)
+        try:
+            return Audio.from_bytes(audio_bytes, strict=strict)
+        except RuntimeError as e:
+            # soundfile decode failures (LibsndfileError); the multi-channel
+            # ValueError from from_bytes is a validation error and propagates as is
+            raise ValueError(
+                "Failed to decode the base64 payload as audio. "
+                "Verify that the input is a valid audio file (e.g. wav or mp3)."
+            ) from e
 
     @staticmethod
     def from_file(file: str, strict: bool = True) -> "Audio":
@@ -317,7 +326,7 @@ def _check_mult_of(num_samples: int, mult_of: int) -> None:
     assert num_samples % mult_of == 0, f"{num_samples=} must be a multiple of {mult_of=}"
 
 
-class TranscriptionFormat(str, Enum):
+class TranscriptionFormat(StrEnum):
     r"""Transcription format.
 
     Should be set by the tokenizer for correct encoding.
@@ -327,8 +336,8 @@ class TranscriptionFormat(str, Enum):
         STREAMING: Encode audio incrementally with left and right padding.
     """
 
-    INSTRUCT = "instruct"
-    STREAMING = "streaming"
+    INSTRUCT = auto()
+    STREAMING = auto()
 
 
 @dataclass
@@ -832,21 +841,30 @@ class AudioEncoder:
         Returns:
             AudioEncoding containing the token sequence and optional audio data.
         """
-        assert audio is not None or voice is not None, (
-            f"Either audio or voice must be defined to encode audio, got {audio=} and {voice=}"
-        )
+        if audio is None and voice is None:
+            raise InvalidRequestException("Either audio or voice must be defined to encode speech.")
 
         if audio is not None:
             audio.resample(self.audio_config.sampling_rate)
             num_audio_tokens = self._get_num_audio_token_for_speech_request(len(audio.audio_array))
         else:
-            assert self.audio_config.voice_num_audio_tokens is not None, (
-                "voice_num_audio_tokens must be set in audio config to use voice-based speech requests"
-            )
-            assert voice is not None and voice in self.audio_config.voice_num_audio_tokens, (
-                f"Unknown voice {voice!r}, expected one of {list(self.audio_config.voice_num_audio_tokens)}"
-            )
+            if self.audio_config.voice_num_audio_tokens is None:
+                raise UnsupportedTokenizerFeatureException(
+                    "Preset voices are not configured for this audio configuration."
+                )
+            if voice not in self.audio_config.voice_num_audio_tokens:
+                raise InvalidRequestException(
+                    f"Unknown voice {voice!r}, expected one of {list(self.audio_config.voice_num_audio_tokens)}."
+                )
             num_audio_tokens = self.audio_config.voice_num_audio_tokens[voice]
+        if self.special_ids.begin_audio is None:
+            raise UnsupportedTokenizerFeatureException(
+                "Audio encoder does not provide the begin_audio marker required for speech."
+            )
+        if self.special_ids.audio is None:
+            raise UnsupportedTokenizerFeatureException(
+                "Audio encoder does not provide the audio marker required for speech."
+            )
         tokens = self._encode_audio_tokens_for_speech_request(num_audio_tokens)
 
         return AudioEncoding(
