@@ -8,11 +8,11 @@ DownloadTimeout = float | int | str
 r"""Accepted raw timeout values: any number of seconds, converted to float."""
 
 
-def validate_download_timeout(timeout: object, *, error_message: str) -> float:
+def validate_download_timeout(timeout: DownloadTimeout, *, error_message: str) -> float:
     r"""Convert a timeout to a positive finite float or raise.
 
     Args:
-        timeout: The timeout value, typically an int or float number of seconds.
+        timeout: The timeout value in seconds.
         error_message: The error message used when the value is invalid.
 
     Returns:
@@ -22,7 +22,7 @@ def validate_download_timeout(timeout: object, *, error_message: str) -> float:
         ValueError: If `timeout` is not a number, not finite, or not positive.
     """
     try:
-        value = float(timeout)  # type: ignore[arg-type]
+        value = float(timeout)
     except (TypeError, ValueError) as e:
         raise ValueError(error_message) from e
     if not math.isfinite(value) or value <= 0:
