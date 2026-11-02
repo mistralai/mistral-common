@@ -14,7 +14,7 @@ from mistral_common.integrations.hf_tokenizers.response_template import (
     generate_response_template,
 )
 from mistral_common.protocol.instruct.chunk import TextChunk, ThinkChunk
-from mistral_common.protocol.instruct.messages import AssistantMessage, UserMessage
+from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, UserMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
 from mistral_common.protocol.instruct.validator import ValidationMode
@@ -111,19 +111,22 @@ V13_PR_FIXTURE = """{
 
 
 def test_top_level_keys_and_json_roundtrip() -> None:
-    for version in (
-        TokenizerVersion.v1,
-        TokenizerVersion.v2,
-        TokenizerVersion.v3,
-        TokenizerVersion.v7,
-        TokenizerVersion.v11,
-        TokenizerVersion.v13,
-        TokenizerVersion.v15,
-    ):
+    configurations = (
+        (TokenizerVersion.v1, False, False),
+        (TokenizerVersion.v2, False, False),
+        (TokenizerVersion.v3, False, False),
+        (TokenizerVersion.v7, False, False),
+        (TokenizerVersion.v11, False, False),
+        (TokenizerVersion.v13, False, False),
+        (TokenizerVersion.v15, False, False),
+        (TokenizerVersion.v11, False, True),
+        (TokenizerVersion.v13, True, False),
+    )
+    for version, thinking_support, plain_thinking_support in configurations:
         template = generate_response_template(
             tokenizer_version=version,
-            thinking_support=False,
-            plain_thinking_support=False,
+            thinking_support=thinking_support,
+            plain_thinking_support=plain_thinking_support,
         )
 
         assert json.loads(s=json.dumps(obj=template)) == template
@@ -353,15 +356,19 @@ def test_no_delimiter_string_literals() -> None:
     source = module_path.read_text(encoding="utf-8")
 
     for delimiter in (
-        "[" + "TOOL_CALLS]",
-        "[" + "/INST]",
-        "[" + "TOOL_RESULTS]",
-        "[" + "ARGS]",
-        "[" + "CALL_ID]",
-        "[" + "THINK]",
-        "<" + "/s>",
+        SpecialTokens.tool_calls.value,
+        SpecialTokens.args.value,
+        SpecialTokens.call_id.value,
+        SpecialTokens.begin_think.value,
+        SpecialTokens.end_think.value,
+        SpecialTokens.end_inst.value,
+        SpecialTokens.end_tool_results.value,
+        SpecialTokens.eos.value,
     ):
         assert delimiter not in source
+        escaped_delimiter = re.escape(delimiter)
+        assert escaped_delimiter not in source
+        assert escaped_delimiter.replace("\\", "\\\\") not in source
     assert "re.escape" in source
 
 
@@ -408,25 +415,24 @@ def test_matches_experimental_parser_v13(tmp_path: Path) -> None:
         tokenizer_filename=str(tokenizer_path),
         mode=ValidationMode.test,
     )
-    request = ChatCompletionRequest(
-        messages=[
-            UserMessage(content="hi"),
-            AssistantMessage(
-                content=[TextChunk(text="Sure."), ThinkChunk(thinking="let me check", closed=True)],
-                tool_calls=[
-                    ToolCall(
-                        id="abcdefghi",
-                        function=FunctionCall(name="get_weather", arguments={"city": "Paris"}),
-                    ),
-                    ToolCall(
-                        id="123456789",
-                        function=FunctionCall(name="get_time", arguments={"city": "Paris"}),
-                    ),
-                ],
-                prefix=True,
-            ),
-        ]
-    )
+    messages: list[ChatMessage] = [
+        UserMessage(content="hi"),
+        AssistantMessage(
+            content=[TextChunk(text="Sure."), ThinkChunk(thinking="let me check", closed=True)],
+            tool_calls=[
+                ToolCall(
+                    id="abcdefghi",
+                    function=FunctionCall(name="get_weather", arguments=json.dumps({"city": "Paris"})),
+                ),
+                ToolCall(
+                    id="123456789",
+                    function=FunctionCall(name="get_time", arguments=json.dumps({"city": "Paris"})),
+                ),
+            ],
+            prefix=True,
+        ),
+    ]
+    request = ChatCompletionRequest(messages=messages)
     tokens = mistral_tokenizer.encode_chat_completion(request).tokens
     tokenizer = mistral_tokenizer.instruct_tokenizer.tokenizer
     end_inst_id = tokenizer.get_special_token(SpecialTokens.end_inst.value)
@@ -481,20 +487,19 @@ def test_matches_experimental_parser_v7(tmp_path: Path) -> None:
         tokenizer_filename=str(tokenizer_path),
         mode=ValidationMode.finetuning,
     )
-    request = ChatCompletionRequest(
-        messages=[
-            UserMessage(content="hi"),
-            AssistantMessage(
-                content="Sure.",
-                tool_calls=[
-                    ToolCall(
-                        id="abcdefghi",
-                        function=FunctionCall(name="get_weather", arguments={"city": "Paris"}),
-                    )
-                ],
-            ),
-        ]
-    )
+    messages: list[ChatMessage] = [
+        UserMessage(content="hi"),
+        AssistantMessage(
+            content="Sure.",
+            tool_calls=[
+                ToolCall(
+                    id="abcdefghi",
+                    function=FunctionCall(name="get_weather", arguments=json.dumps({"city": "Paris"})),
+                )
+            ],
+        ),
+    ]
+    request = ChatCompletionRequest(messages=messages)
     tokens = mistral_tokenizer.encode_chat_completion(request).tokens
     tokenizer = mistral_tokenizer.instruct_tokenizer.tokenizer
     end_inst_id = tokenizer.get_special_token(SpecialTokens.end_inst.value)
@@ -505,13 +510,6 @@ def test_matches_experimental_parser_v7(tmp_path: Path) -> None:
     decoded_tool_calls = _decode_tool_calls(tool_call_tokens=tool_call_tokens, tokenizer=tokenizer)
     assert len(decoded_tool_calls) == 1
     assert decoded_tool_calls[0].function.name == "get_weather"
-    decoded_call = decoded_tool_calls[0]
-    transformed_call = {
-        "id": decoded_call.id,
-        "name": decoded_call.function.name,
-        "arguments": json.loads(decoded_call.function.arguments),
-    }
-    assert set(transformed_call) == {"id", "name", "arguments"}
     response_template = generate_response_template(
         tokenizer_version=TokenizerVersion.v7,
         thinking_support=False,
@@ -533,7 +531,7 @@ def test_matches_experimental_parser_v7(tmp_path: Path) -> None:
     call_start = decoded_generation.index(SpecialTokens.tool_calls.value) + len(SpecialTokens.tool_calls.value)
     call_end = decoded_generation.index(SpecialTokens.eos.value, call_start)
     call_array_region = decoded_generation[call_start:call_end]
-    assert json.loads(call_array_region) == [transformed_call]
+    assert json.loads(call_array_region) == [{"id": "abcdefghi", "name": "get_weather", "arguments": {"city": "Paris"}}]
 
 
 def test_matches_experimental_parser_v11_tool_calls(tmp_path: Path) -> None:
@@ -545,24 +543,23 @@ def test_matches_experimental_parser_v11_tool_calls(tmp_path: Path) -> None:
         tokenizer_filename=str(tokenizer_path),
         mode=ValidationMode.test,
     )
-    request = ChatCompletionRequest(
-        messages=[
-            UserMessage(content="hi"),
-            AssistantMessage(
-                tool_calls=[
-                    ToolCall(
-                        id="abcdefghi",
-                        function=FunctionCall(name="get_weather", arguments={"city": "Paris"}),
-                    ),
-                    ToolCall(
-                        id="123456789",
-                        function=FunctionCall(name="get_time", arguments={"city": "Paris"}),
-                    ),
-                ],
-                prefix=True,
-            ),
-        ]
-    )
+    messages: list[ChatMessage] = [
+        UserMessage(content="hi"),
+        AssistantMessage(
+            tool_calls=[
+                ToolCall(
+                    id="abcdefghi",
+                    function=FunctionCall(name="get_weather", arguments=json.dumps({"city": "Paris"})),
+                ),
+                ToolCall(
+                    id="123456789",
+                    function=FunctionCall(name="get_time", arguments=json.dumps({"city": "Paris"})),
+                ),
+            ],
+            prefix=True,
+        ),
+    ]
+    request = ChatCompletionRequest(messages=messages)
     tokens = mistral_tokenizer.encode_chat_completion(request).tokens
     tokenizer = mistral_tokenizer.instruct_tokenizer.tokenizer
     end_inst_id = tokenizer.get_special_token(SpecialTokens.end_inst.value)

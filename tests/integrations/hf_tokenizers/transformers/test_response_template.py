@@ -78,7 +78,7 @@ def test_parse_response_roundtrip(
     parse_response = getattr(hf_tokenizer, "parse_response", None)
     if parse_response is None:
         pytest.skip("The installed transformers version does not expose parse_response")
-    parsed_message = parse_response(generation, prefix=prompt)
+    parsed_message = parse_response(text=generation, prefix=prompt)
 
     assert parsed_message["tool_calls"][0]["function"]["name"] == "get_weather"
     assert parsed_message["tool_calls"][0]["function"]["arguments"] == {"city": "Paris"}
