@@ -116,6 +116,34 @@ def test_from_url() -> None:
         mock_get.return_value = mock_response
         audio_url = Audio.from_url("https://fake-audio-url.com/sample.wav", strict=False)
         assert isinstance(audio_url, Audio)
+        assert mock_get.call_args.kwargs.get("timeout") == 10.0
+
+
+def test_from_url_passes_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    from mistral_common.utils.download import DOWNLOAD_TIMEOUT_ENV_KEY
+
+    monkeypatch.setenv(DOWNLOAD_TIMEOUT_ENV_KEY, "25")
+    with patch("mistral_common.tokens.tokenizers.audio._requests_lib.get") as mock_get:
+        mock_get.side_effect = requests.RequestException("connection failed")
+        with pytest.raises(ValueError, match="Failed to download audio from URL"):
+            Audio.from_url("https://example.com/a.wav")
+    assert mock_get.call_args.kwargs.get("timeout") == 25.0
+
+    with patch("mistral_common.tokens.tokenizers.audio._requests_lib.get") as mock_get:
+        mock_get.side_effect = requests.RequestException("connection failed")
+        with pytest.raises(ValueError, match="Failed to download audio from URL"):
+            Audio.from_url("https://example.com/a.wav", timeout=3)
+    assert mock_get.call_args.kwargs.get("timeout") == 3.0
+
+
+@pytest.mark.parametrize("timeout", [0, -2.5, "nope"])
+def test_from_url_rejects_invalid_timeout(timeout: float | int | str) -> None:
+    with (
+        patch("mistral_common.tokens.tokenizers.audio._requests_lib.get") as mock_get,
+        pytest.raises(ValueError, match="timeout must be a positive finite number"),
+    ):
+        Audio.from_url("https://example.com/a.wav", timeout=timeout)
+    mock_get.assert_not_called()
 
 
 @pytest.mark.parametrize("prefix", [True, False])

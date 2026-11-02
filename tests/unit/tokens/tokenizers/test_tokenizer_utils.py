@@ -71,11 +71,11 @@ def test_download_tokenizer_from_hf_hub_local_files_only_uses_cache_dir(custom_c
 
 @pytest.mark.usefixtures("empty_default_cache")
 @pytest.mark.parametrize("network_error", _NETWORK_ERRORS)
-@patch("huggingface_hub.HfApi.list_repo_files")
+@patch("huggingface_hub.HfApi.list_repo_tree")
 def test_download_tokenizer_from_hf_hub_offline_fallback_uses_cache_dir(
-    mock_list_repo_files: MagicMock, network_error: Exception, custom_cache: Path
+    mock_list_repo_tree: MagicMock, network_error: Exception, custom_cache: Path
 ) -> None:
-    mock_list_repo_files.side_effect = network_error
+    mock_list_repo_tree.side_effect = network_error
 
     tokenizer_path = download_tokenizer_from_hf_hub(repo_id=_REPO_ID, cache_dir=custom_cache)
     assert Path(tokenizer_path) == _cached_tokenizer_path(cache_dir=custom_cache)
@@ -92,11 +92,11 @@ def test_download_tokenizer_from_hf_hub_falls_back_to_cache_on_real_connection_e
 
 
 @pytest.mark.parametrize("network_error", _NETWORK_ERRORS)
-@patch("huggingface_hub.HfApi.list_repo_files")
+@patch("huggingface_hub.HfApi.list_repo_tree")
 def test_download_tokenizer_from_hf_hub_force_download_raises_network_error(
-    mock_list_repo_files: MagicMock, network_error: Exception
+    mock_list_repo_tree: MagicMock, network_error: Exception
 ) -> None:
-    mock_list_repo_files.side_effect = network_error
+    mock_list_repo_tree.side_effect = network_error
 
     with pytest.raises(type(network_error), match=str(network_error)):
         download_tokenizer_from_hf_hub(repo_id=_REPO_ID, force_download=True)
@@ -104,11 +104,11 @@ def test_download_tokenizer_from_hf_hub_force_download_raises_network_error(
 
 @pytest.mark.usefixtures("empty_default_cache")
 @pytest.mark.parametrize("network_error", _NETWORK_ERRORS)
-@patch("huggingface_hub.HfApi.list_repo_files")
+@patch("huggingface_hub.HfApi.list_repo_tree")
 def test_download_tokenizer_from_hf_hub_offline_without_cache_raises(
-    mock_list_repo_files: MagicMock, network_error: Exception
+    mock_list_repo_tree: MagicMock, network_error: Exception
 ) -> None:
-    mock_list_repo_files.side_effect = network_error
+    mock_list_repo_tree.side_effect = network_error
 
     with pytest.raises(FileNotFoundError, match="Could not connect to the Hugging Face Hub and no local files"):
         download_tokenizer_from_hf_hub(repo_id=_REPO_ID)
@@ -118,13 +118,56 @@ def test_download_tokenizer_from_hf_hub_offline_without_cache_raises(
 
 
 @pytest.mark.parametrize("force_download", [False, True])
-@patch("huggingface_hub.HfApi.list_repo_files")
+@patch("huggingface_hub.HfApi.list_repo_tree")
 def test_download_tokenizer_from_hf_hub_unexpected_error_raises_general_error(
-    mock_list_repo_files: MagicMock, force_download: bool
+    mock_list_repo_tree: MagicMock, force_download: bool
 ) -> None:
-    mock_list_repo_files.side_effect = RuntimeError("boom")
+    mock_list_repo_tree.side_effect = RuntimeError("boom")
 
     with pytest.raises(MistralCommonException, match="Something went wrong") as exc_info:
         download_tokenizer_from_hf_hub(repo_id=_REPO_ID, force_download=force_download)
 
     assert isinstance(exc_info.value.__cause__, RuntimeError)
+
+
+@pytest.mark.usefixtures("empty_default_cache")
+def test_download_tokenizer_from_hf_hub_passes_timeout_to_hf_hub_download(custom_cache: Path) -> None:
+    with (
+        patch("huggingface_hub.HfApi.list_repo_tree") as mock_list_repo_tree,
+        patch(
+            "huggingface_hub.hf_hub_download", return_value=str(_cached_tokenizer_path(cache_dir=custom_cache))
+        ) as mock_download,
+    ):
+        mock_list_repo_tree.return_value = [huggingface_hub.RepoFile(path="tekken.json", size=2, oid="x")]
+
+        download_tokenizer_from_hf_hub(repo_id=_REPO_ID, cache_dir=custom_cache, timeout=7)
+
+    assert mock_download.call_args.kwargs.get("etag_timeout") == 7.0
+
+
+@pytest.mark.usefixtures("empty_default_cache")
+def test_download_tokenizer_from_hf_hub_default_timeout(custom_cache: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from mistral_common.utils.download import DOWNLOAD_TIMEOUT_ENV_KEY
+
+    monkeypatch.delenv(DOWNLOAD_TIMEOUT_ENV_KEY, raising=False)
+    with (
+        patch("huggingface_hub.HfApi.list_repo_tree") as mock_list_repo_tree,
+        patch(
+            "huggingface_hub.hf_hub_download", return_value=str(_cached_tokenizer_path(cache_dir=custom_cache))
+        ) as mock_download,
+    ):
+        mock_list_repo_tree.return_value = [huggingface_hub.RepoFile(path="tekken.json", size=2, oid="x")]
+
+        download_tokenizer_from_hf_hub(repo_id=_REPO_ID, cache_dir=custom_cache)
+
+    assert mock_download.call_args.kwargs.get("etag_timeout") == 10.0
+
+
+@pytest.mark.parametrize("timeout", [0, -1.0, "abc"])
+def test_download_tokenizer_from_hf_hub_rejects_invalid_timeout(timeout: float | int | str) -> None:
+    with (
+        patch("huggingface_hub.HfApi.list_repo_tree") as mock_list_repo_tree,
+        pytest.raises(ValueError, match="timeout must be a positive finite number"),
+    ):
+        download_tokenizer_from_hf_hub(repo_id=_REPO_ID, timeout=timeout)
+    mock_list_repo_tree.assert_not_called()

@@ -10,11 +10,7 @@ import requests
 from PIL import Image, UnidentifiedImageError
 
 from mistral_common.exceptions import ImageDecodeException
-from mistral_common.image import (
-    _IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY,
-    _resolve_env_image_download_timeout,
-    download_image,
-)
+from mistral_common.image import download_image
 from mistral_common.protocol.instruct.chunk import (
     ImageChunk,
     ImageURLChunk,
@@ -29,6 +25,10 @@ from mistral_common.tokens.tokenizers.image import (
     image_from_chunk,
     normalize,
     transform_image,
+)
+from mistral_common.utils.download import (
+    DOWNLOAD_TIMEOUT_ENV_KEY,
+    resolve_env_download_timeout,
 )
 
 
@@ -166,20 +166,20 @@ def _mock_png_response() -> Mock:
 
 
 def test_image_download_timeout_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv(_IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY, raising=False)
-    assert _resolve_env_image_download_timeout() == 10.0
+    monkeypatch.delenv(DOWNLOAD_TIMEOUT_ENV_KEY, raising=False)
+    assert resolve_env_download_timeout() == 10.0
 
 
 @pytest.mark.parametrize("value", ["invalid", "0", "-1", "inf", "-inf", "nan"])
 def test_image_download_timeout_rejects_invalid_env(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
-    monkeypatch.setenv(_IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY, value)
+    monkeypatch.setenv(DOWNLOAD_TIMEOUT_ENV_KEY, value)
 
     with pytest.raises(ValueError, match="expected a positive finite number of seconds"):
-        _resolve_env_image_download_timeout()
+        resolve_env_download_timeout()
 
 
 def test_download_image_passes_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv(_IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY, raising=False)
+    monkeypatch.delenv(DOWNLOAD_TIMEOUT_ENV_KEY, raising=False)
     mock_response = _mock_png_response()
 
     with patch("mistral_common.image.requests.get", return_value=mock_response) as mock_get:
@@ -192,7 +192,7 @@ def test_download_image_passes_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
         pytest.raises(
             requests.exceptions.Timeout,
             match=r"timed out after 10\.0 seconds\. Pass a larger `timeout` or set the environment variable "
-            rf"`{_IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY}` to increase the timeout\.",
+            rf"`{DOWNLOAD_TIMEOUT_ENV_KEY}` to increase the timeout\.",
         ) as exc_info,
     ):
         download_image(url="https://example.com/image.png", timeout=10.0)
@@ -225,7 +225,7 @@ def test_download_image_preserves_image_error() -> None:
 
 
 def test_download_image_uses_env_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(_IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY, "30")
+    monkeypatch.setenv(DOWNLOAD_TIMEOUT_ENV_KEY, "30")
 
     with patch("mistral_common.image.requests.get", return_value=_mock_png_response()) as mock_get:
         download_image(url="https://example.com/image.png", timeout=None)
@@ -235,20 +235,27 @@ def test_download_image_uses_env_timeout(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_download_image_explicit_timeout_overrides_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv(_IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY, "30")
+    monkeypatch.setenv(DOWNLOAD_TIMEOUT_ENV_KEY, "30")
 
     with patch("mistral_common.image.requests.get", return_value=_mock_png_response()) as mock_get:
         download_image(url="https://example.com/image.png", timeout=5.0)
     assert mock_get.call_args.kwargs.get("timeout") == 5.0
 
 
-@pytest.mark.parametrize("timeout", [0.0, -1.0, float("inf"), float("-inf"), float("nan")])
-def test_download_image_rejects_invalid_timeout(timeout: float) -> None:
+@pytest.mark.parametrize("timeout", [5, "2.5", 7.0])
+def test_download_image_accepts_numbers_as_timeout(timeout: float | int | str) -> None:
+    with patch("mistral_common.image.requests.get", return_value=_mock_png_response()) as mock_get:
+        download_image(url="https://example.com/image.png", timeout=timeout)
+    assert mock_get.call_args.kwargs.get("timeout") == float(timeout)
+
+
+@pytest.mark.parametrize("timeout", [0, 0.0, -1.0, float("inf"), float("-inf"), float("nan"), "abc", None.__class__])
+def test_download_image_rejects_invalid_timeout(timeout: object) -> None:
     with (
         patch("mistral_common.image.requests.get") as mock_get,
-        pytest.raises(ValueError, match="timeout must be a positive finite float, got timeout="),
+        pytest.raises(ValueError, match="timeout must be a positive finite number, got timeout="),
     ):
-        download_image(url="https://example.com/image.png", timeout=timeout)
+        download_image(url="https://example.com/image.png", timeout=timeout)  # type: ignore[arg-type]
     mock_get.assert_not_called()
 
 

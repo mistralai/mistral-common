@@ -6,6 +6,7 @@ from typing import Iterator
 from mistral_common.exceptions import MistralCommonException
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.image import MultiModalVersion
+from mistral_common.utils.download import resolve_download_timeout
 
 _hub_installed: bool
 try:
@@ -157,6 +158,7 @@ def download_tokenizer_from_hf_hub(
     revision: str | None = None,
     force_download: bool = False,
     local_files_only: bool = False,
+    timeout: float | int | str | None = None,
 ) -> str:
     r"""Download the tokenizer file of a Mistral model from the Hugging Face Hub.
 
@@ -179,6 +181,9 @@ def download_tokenizer_from_hf_hub(
             already cached.
         local_files_only: If `True`, only uses the local cache and never hits
             the network; fails if the tokenizer is not cached.
+        timeout: Seconds to wait for each Hub request, converted to float. If
+            None, uses the `MISTRAL_COMMON_DOWNLOAD_TIMEOUT` environment
+            variable.
 
     Returns:
         The downloaded tokenizer local path for the given model ID.
@@ -197,10 +202,16 @@ def download_tokenizer_from_hf_hub(
     if force_download and local_files_only:
         raise ValueError("You cannot force the download of the tokenizer if you only want to use local files.")
 
+    timeout = resolve_download_timeout(timeout)
+
     if not local_files_only:
         try:
             hf_api = huggingface_hub.HfApi()
-            repo_files = hf_api.list_repo_files(repo_id, revision=revision, token=token)
+            repo_files = [
+                f.rfilename
+                for f in hf_api.list_repo_tree(repo_id, recursive=True, revision=revision, token=token)
+                if isinstance(f, huggingface_hub.RepoFile)
+            ]
             local_files_only = False
         except (_hub_httpx.HTTPError, huggingface_hub.errors.OfflineModeIsEnabled) as e:
             if force_download:
@@ -242,5 +253,6 @@ def download_tokenizer_from_hf_hub(
         revision=revision,
         local_files_only=local_files_only,
         force_download=force_download,
+        etag_timeout=timeout,
     )
     return tokenizer_path

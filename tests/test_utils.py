@@ -107,7 +107,8 @@ def test_get_one_valid_tokenizer_files_abs(files: list[str], expected: str | Non
     ],
 )
 def test_download_tokenizer_from_hf_hub(files: list[str], expected: str | None) -> None:
-    with patch("huggingface_hub.HfApi.list_repo_files", return_value=files):
+    repo_files = [huggingface_hub.RepoFile(path=f, size=1, oid="x") for f in files]
+    with patch("huggingface_hub.HfApi.list_repo_tree", return_value=repo_files):
         if expected is None:
             with pytest.raises(ValueError):
                 download_tokenizer_from_hf_hub(
@@ -140,9 +141,9 @@ def test_download_tokenizer_from_hf_hub(files: list[str], expected: str | None) 
         )
 
 
-@patch("huggingface_hub.HfApi.list_repo_files")
-def test_download_tokenizer_from_hf_hub_offline_mode(mock_list_repo_files: MagicMock) -> None:
-    mock_list_repo_files.side_effect = huggingface_hub.errors.OfflineModeIsEnabled("offline mode is enabled")
+@patch("huggingface_hub.HfApi.list_repo_tree")
+def test_download_tokenizer_from_hf_hub_offline_mode(mock_list_repo_tree: MagicMock) -> None:
+    mock_list_repo_tree.side_effect = huggingface_hub.errors.OfflineModeIsEnabled("offline mode is enabled")
 
     hf_cache = _create_temporary_hf_model_cache("mistralai/Mistral-7B-v0.1")
 

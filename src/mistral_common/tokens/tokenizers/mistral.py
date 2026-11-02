@@ -291,6 +291,7 @@ class MistralTokenizer(
         force_download: bool = False,
         local_files_only: bool = False,
         mode: ValidationMode = ValidationMode.test,
+        timeout: float | int | str | None = None,
     ) -> "MistralTokenizer":
         r"""Download the Mistral tokenizer for a given Hugging Face repository ID.
 
@@ -307,6 +308,9 @@ class MistralTokenizer(
                 already present in the local Hugging Face cache.
             local_files_only: If `True`, only uses the local cache and never hits
                 the network; fails if the tokenizer is not cached.
+            timeout: Seconds to wait for each Hub request, converted to float. If
+                None, uses the `MISTRAL_COMMON_DOWNLOAD_TIMEOUT` environment
+                variable.
 
         Returns:
             The Mistral tokenizer for the given repository.
@@ -317,6 +321,7 @@ class MistralTokenizer(
             revision=revision,
             force_download=force_download,
             local_files_only=local_files_only,
+            timeout=timeout,
         )
         return MistralTokenizer.from_file(tokenizer_path, mode=mode)
 

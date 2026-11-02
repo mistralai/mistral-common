@@ -95,6 +95,7 @@ class TestMistralToknizer:
             revision: str | None = None,
             force_download: bool = False,
             local_files_only: bool = False,
+            timeout: float | int | str | None = None,
         ) -> str:
             if repo_id == "mistralai/Mistral-7B-Instruct-v0.1":
                 return str(MistralTokenizer._data_path() / "tokenizer.model.v1")

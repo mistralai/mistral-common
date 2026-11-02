@@ -1,7 +1,5 @@
 import base64
 import io
-import math
-import os
 from typing import Annotated
 
 import requests
@@ -11,54 +9,22 @@ from pydantic import BeforeValidator, PlainSerializer, SerializationInfo
 from mistral_common import __version__
 from mistral_common.exceptions import ImageDecodeException
 from mistral_common.utils.data_url import maybe_strip_base64_data_url_prefix
-
-_IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY = "MISTRAL_COMMON_IMAGE_DOWNLOAD_TIMEOUT"
-_DEFAULT_IMAGE_DOWNLOAD_TIMEOUT_S = 10.0
+from mistral_common.utils.download import DOWNLOAD_TIMEOUT_ENV_KEY, resolve_download_timeout
 
 
-def _validate_timeout(timeout: object, *, error_message: str) -> float:
-    r"""Return a positive finite floating-point timeout."""
-    if not isinstance(timeout, float) or not math.isfinite(timeout) or timeout <= 0:
-        raise ValueError(error_message)
-    return timeout
-
-
-def _resolve_env_image_download_timeout() -> float:
-    r"""Return the HTTP timeout used when downloading images.
-
-    Reads `MISTRAL_COMMON_IMAGE_DOWNLOAD_TIMEOUT` (seconds). Unset or empty uses 10.
-    """
-    raw = os.getenv(_IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY)
-    if raw is None or raw.strip() == "":
-        return _DEFAULT_IMAGE_DOWNLOAD_TIMEOUT_S
-    error_message = (
-        f"Invalid environment variable {_IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY}: expected a positive finite number of seconds."
-    )
-    try:
-        timeout = float(raw)
-    except ValueError as e:
-        raise ValueError(error_message) from e
-    return _validate_timeout(timeout, error_message=error_message)
-
-
-def download_image(url: str, timeout: float | None) -> Image.Image:
+def download_image(url: str, timeout: float | int | str | None) -> Image.Image:
     r"""Download an image from a URL and return it as a PIL Image.
 
     Args:
         url: The URL of the image to download.
-        timeout: Seconds to wait for the server response. If None, uses the
-            `MISTRAL_COMMON_IMAGE_DOWNLOAD_TIMEOUT` environment variable.
+        timeout: Seconds to wait for the server response, converted to float.
+            If None, uses the `MISTRAL_COMMON_DOWNLOAD_TIMEOUT` environment
+            variable.
 
     Returns:
        The downloaded image as a PIL Image object.
     """
-    if timeout is None:
-        timeout = _resolve_env_image_download_timeout()
-    else:
-        timeout = _validate_timeout(
-            timeout,
-            error_message=f"timeout must be a positive finite float, got {timeout=}",
-        )
+    timeout = resolve_download_timeout(timeout)
 
     headers = {"User-Agent": f"mistral-common/{__version__}"}
     try:
@@ -73,7 +39,7 @@ def download_image(url: str, timeout: float | None) -> Image.Image:
     except requests.exceptions.Timeout as e:
         raise requests.exceptions.Timeout(
             f"Error downloading the image from {url}: timed out after {timeout} seconds. "
-            f"Pass a larger `timeout` or set the environment variable `{_IMAGE_DOWNLOAD_TIMEOUT_ENV_KEY}` "
+            f"Pass a larger `timeout` or set the environment variable `{DOWNLOAD_TIMEOUT_ENV_KEY}` "
             "to increase the timeout.",
             request=e.request,
             response=e.response,
