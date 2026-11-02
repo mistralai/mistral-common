@@ -174,7 +174,17 @@
         {%- endif %}
 
         {%- if message['content'] %}
-            {{- render_content(content=message['content'], context_name='assistant message contents') -}}
+            {%- if message['content'] is string %}
+                {#- Transformers' continue_final_message appends this marker. Keep it so that trailing newlines survive. #}
+                {%- if message['content'].endswith('CONTINUE_FINAL_MESSAGE_TAG ') %}
+                    {%- set assistant_content = message['content'][:-27].rstrip(' ') ~ 'CONTINUE_FINAL_MESSAGE_TAG ' %}
+                {%- else %}
+                    {%- set assistant_content = message['content'].rstrip(' ') %}
+                {%- endif %}
+            {%- else %}
+                {%- set assistant_content = message['content'] %}
+            {%- endif %}
+            {{- render_content(content=assistant_content, context_name='assistant message contents') -}}
         {%- endif %}
 
         {%- if message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}

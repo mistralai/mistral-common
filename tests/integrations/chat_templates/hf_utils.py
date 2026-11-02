@@ -62,14 +62,25 @@ def encode_transformers(
     return _render_via_transformers(chat_template, openai_request)
 
 
-def encode_transformers_from_openai(chat_template: str, openai_request: dict[str, Any]) -> str:
+def encode_transformers_from_openai(
+    chat_template: str, openai_request: dict[str, Any], continue_final_message: bool = False
+) -> str:
     r"""Encode a raw OpenAI-format dict using the transformers render_jinja_template.
 
     Use this for tests with hand-crafted dicts (e.g., invalid input tests)
     that cannot be represented as a ChatCompletionRequest.
+
+    Args:
+        chat_template: Jinja chat template string to render.
+        openai_request: OpenAI-format request dictionary.
+        continue_final_message: Whether transformers should cut the rendered
+            chat at the end of the final message instead of closing it.
+
+    Returns:
+        The rendered chat.
     """
     assert _HAS_TRANSFORMERS, "transformers is required"
-    return _render_via_transformers(chat_template, openai_request)
+    return _render_via_transformers(chat_template, openai_request, continue_final_message=continue_final_message)
 
 
 def build_hf_tokenizer(tekken_path: Path, chat_template: str) -> "PreTrainedTokenizerFast":
@@ -225,7 +236,9 @@ def encode_hf_tokens(
     return cast(list[int], result)
 
 
-def _render_via_transformers(chat_template: str, openai_request: dict[str, Any]) -> str:
+def _render_via_transformers(
+    chat_template: str, openai_request: dict[str, Any], continue_final_message: bool = False
+) -> str:
     r"""Shared rendering logic for transformers-based encoding."""
     for tool in openai_request.get("tools", []):
         tool["function"].pop("strict", False)
@@ -234,6 +247,7 @@ def _render_via_transformers(chat_template: str, openai_request: dict[str, Any])
         [openai_request["messages"]],
         tools=openai_request.get("tools", None),
         chat_template=chat_template,
+        continue_final_message=continue_final_message,
         bos_token="<s>",
         eos_token="</s>",
         **_model_settings_template_kwargs(openai_request),

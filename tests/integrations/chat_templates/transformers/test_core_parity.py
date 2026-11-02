@@ -9,6 +9,7 @@ from mistral_common.integrations.chat_templates.chat_templates import generate_c
 from mistral_common.integrations.chat_templates.template_generator import build_chat_template
 from mistral_common.protocol.instruct.chunk import TextChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage, UserMessage
+from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
@@ -131,6 +132,36 @@ class TestTransformersMistralCommonParity:
             )
 
             assert dict_output == string_output, f"Output mismatch for {config}, mode={mode}, conversation={idx}"
+
+    @pytest.mark.parametrize(
+        "config",
+        ALL_TRANSFORMERS_CONFIGS,
+        ids=[format_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
+    )
+    @pytest.mark.parametrize(
+        "prefix",
+        ["Hello there  ", "Hello\n", "```python\n", "Hello\n "],
+        ids=["trailing_spaces", "newline", "code_fence", "newline_then_space"],
+    )
+    def test_continue_final_message_matches_prefix(self, config: TestConfig, prefix: str, tmp_path: Path) -> None:
+        # Transformers appends a marker to the final message and cuts the render there. If the template trims the
+        # marker's trailing space, Transformers strips all trailing whitespace, newlines included.
+        if config.spm:
+            tokenizer_path = build_spm_path(config=config, output_dir=tmp_path)
+        else:
+            tokenizer_path = build_tekken_json(config=config, output_dir=tmp_path)
+        mistral_tokenizer = MistralTokenizer.from_file(str(tokenizer_path), mode=ValidationMode.test)
+        chat_template = build_chat_template(config=build_template_config(config))
+        request = ChatCompletionRequest(  # type: ignore[type-var]
+            messages=[UserMessage(content="Hi"), AssistantMessage(content=prefix, prefix=True)]
+        )
+
+        transformers_encoded = encode_transformers_from_openai(
+            chat_template=chat_template, openai_request=request.to_openai(), continue_final_message=True
+        )
+        mistral_common_encoded = encode_mistral_common(mistral_tokenizer, request, config.spm)
+
+        assert mistral_common_encoded == transformers_encoded
 
     @pytest.mark.parametrize(
         "config",
