@@ -180,27 +180,19 @@ def test_download_tokenizer_from_hf_hub_rejects_invalid_timeout(timeout: Downloa
     mock_list_remote.assert_not_called()
 
 
-def _fake_tree_response(entries: list[dict], next_url: str | None = None) -> MagicMock:
-    response = MagicMock()
-    response.json.return_value = entries
-    response.links = {"next": {"url": next_url}} if next_url else {}
-    return response
+@patch("huggingface_hub.HfApi.model_info")
+def test_list_remote_hf_repo_files_passes_timeout_to_model_info(mock_model_info: MagicMock) -> None:
+    from huggingface_hub.hf_api import RepoSibling
 
-
-@patch("mistral_common.tokens.tokenizers.utils.http_backoff")
-@patch("mistral_common.tokens.tokenizers.utils.get_session")
-def test_list_remote_hf_repo_files_passes_timeout_to_every_page(
-    mock_get_session: MagicMock, mock_backoff: MagicMock
-) -> None:
-    mock_get_session.return_value.get.return_value = _fake_tree_response(
-        [{"path": "tekken.json", "type": "file"}], next_url="https://next.page"
-    )
-    mock_backoff.return_value = _fake_tree_response(
-        [{"path": "folder", "type": "directory"}, {"path": "other.model", "type": "file"}]
+    mock_model_info.return_value = MagicMock(
+        siblings=[
+            RepoSibling(rfilename="tekken.json"),
+            RepoSibling(rfilename="other.model"),
+        ]
     )
 
     files = _list_remote_hf_repo_files(repo_id=_REPO_ID, revision=None, token=None, timeout=7.0)
 
     assert files == ["tekken.json", "other.model"]
-    assert mock_get_session.return_value.get.call_args.kwargs.get("timeout") == 7.0
-    assert mock_backoff.call_args.kwargs.get("timeout") == 7.0
+    assert mock_model_info.call_args.kwargs.get("timeout") == 7.0
+    assert mock_model_info.call_args.kwargs.get("files_metadata") is True

@@ -10,17 +10,13 @@ from mistral_common.utils.download import DownloadTimeout, resolve_download_time
 
 _hub_installed: bool
 try:
-    from urllib.parse import quote
-
     import huggingface_hub
     import huggingface_hub.constants
     import huggingface_hub.errors
-    from huggingface_hub.utils import build_hf_headers, get_session, hf_raise_for_status, http_backoff
 
     # `huggingface_hub.utils.httpx` re-exports the HTTP module the hub raises network
     # errors from (httpx on 1.x, httpx2 on 2.x), so one HTTPError type covers both stacks.
     from huggingface_hub.utils import httpx as _hub_httpx
-    from huggingface_hub.utils._pagination import _get_next_page
 
     _hub_installed = True
 except ImportError:
@@ -161,39 +157,30 @@ def _list_remote_hf_repo_files(
     token: bool | str | None,
     timeout: float,
 ) -> list[str]:
-    r"""List a Hub repo's files over HTTP with a timeout on every page request.
+    r"""List a Hub repo's files with a timeout on the info request.
 
-    `HfApi.list_repo_files`/`list_repo_tree` do not accept a timeout in
-    huggingface_hub 1.x (they paginate with `timeout=None`), so the tree API
-    is called directly here with the timeout applied to each page.
+    `HfApi.list_repo_files`/`list_repo_tree` do not accept a timeout (they
+    paginate with `timeout=None`), so `HfApi.model_info(files_metadata=True)`,
+    which does, is used instead: its `siblings` carry every file name.
 
     Args:
         repo_id: The Hugging Face repo ID.
         revision: Git branch, tag, or commit hash. If `None`, the default
             revision is used.
         token: Hugging Face access token for private repos.
-        timeout: Seconds to wait for each page request.
+        timeout: Seconds to wait for the request.
 
     Returns:
         The file names in the repo.
     """
-    endpoint = huggingface_hub.constants.ENDPOINT
-    revision = quote(revision, safe="") if revision is not None else huggingface_hub.constants.DEFAULT_REVISION
-    headers = build_hf_headers(token=token)
-    tree_url = f"{endpoint}/api/models/{repo_id}/tree/{revision}"
-    params = {"recursive": "true"}
-
-    files: list[str] = []
-    session = get_session()
-    response = session.get(tree_url, params=params, headers=headers, timeout=timeout)
-    while True:
-        hf_raise_for_status(response)
-        files.extend(entry["path"] for entry in response.json() if entry["type"] == "file")
-        next_page = _get_next_page(response)
-        if next_page is None:
-            return files
-        # next-page URL already carries the query params
-        response = http_backoff("GET", next_page, headers=headers, timeout=timeout)
+    info = huggingface_hub.HfApi().model_info(
+        repo_id,
+        revision=revision,
+        files_metadata=True,
+        token=token,
+        timeout=timeout,
+    )
+    return [sibling.rfilename for sibling in info.siblings or []]
 
 
 def download_tokenizer_from_hf_hub(
