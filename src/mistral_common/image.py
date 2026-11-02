@@ -9,10 +9,10 @@ from pydantic import BeforeValidator, PlainSerializer, SerializationInfo
 from mistral_common import __version__
 from mistral_common.exceptions import ImageDecodeException
 from mistral_common.utils.data_url import maybe_strip_base64_data_url_prefix
-from mistral_common.utils.download import DOWNLOAD_TIMEOUT_ENV_KEY, resolve_download_timeout
+from mistral_common.utils.download import DOWNLOAD_TIMEOUT_ENV_KEY, DownloadTimeout, resolve_download_timeout
 
 
-def download_image(url: str, timeout: float | int | str | None) -> Image.Image:
+def download_image(url: str, timeout: DownloadTimeout | None) -> Image.Image:
     r"""Download an image from a URL and return it as a PIL Image.
 
     Args:

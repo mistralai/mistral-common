@@ -8,6 +8,7 @@ from huggingface_hub.utils import httpx as hub_httpx
 
 from mistral_common.exceptions import MistralCommonException
 from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hub, list_local_hf_repo_files
+from mistral_common.utils.download import DownloadTimeout
 
 _REPO_ID = "mistralai/Mistral-7B-v0.1"
 _COMMIT = "RANDOM_REVISION"
@@ -164,7 +165,7 @@ def test_download_tokenizer_from_hf_hub_default_timeout(custom_cache: Path, monk
 
 
 @pytest.mark.parametrize("timeout", [0, -1.0, "abc"])
-def test_download_tokenizer_from_hf_hub_rejects_invalid_timeout(timeout: float | int | str) -> None:
+def test_download_tokenizer_from_hf_hub_rejects_invalid_timeout(timeout: DownloadTimeout) -> None:
     with (
         patch("huggingface_hub.HfApi.list_repo_tree") as mock_list_repo_tree,
         pytest.raises(ValueError, match="timeout must be a positive finite number"),

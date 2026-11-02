@@ -28,6 +28,7 @@ from mistral_common.tokens.tokenizers.image import (
 )
 from mistral_common.utils.download import (
     DOWNLOAD_TIMEOUT_ENV_KEY,
+    DownloadTimeout,
     resolve_env_download_timeout,
 )
 
@@ -243,7 +244,7 @@ def test_download_image_explicit_timeout_overrides_env(
 
 
 @pytest.mark.parametrize("timeout", [5, "2.5", 7.0])
-def test_download_image_accepts_numbers_as_timeout(timeout: float | int | str) -> None:
+def test_download_image_accepts_numbers_as_timeout(timeout: DownloadTimeout) -> None:
     with patch("mistral_common.image.requests.get", return_value=_mock_png_response()) as mock_get:
         download_image(url="https://example.com/image.png", timeout=timeout)
     assert mock_get.call_args.kwargs.get("timeout") == float(timeout)

@@ -6,7 +6,7 @@ from typing import Iterator
 from mistral_common.exceptions import MistralCommonException
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.image import MultiModalVersion
-from mistral_common.utils.download import resolve_download_timeout
+from mistral_common.utils.download import DownloadTimeout, resolve_download_timeout
 
 _hub_installed: bool
 try:
@@ -158,7 +158,7 @@ def download_tokenizer_from_hf_hub(
     revision: str | None = None,
     force_download: bool = False,
     local_files_only: bool = False,
-    timeout: float | int | str | None = None,
+    timeout: DownloadTimeout | None = None,
 ) -> str:
     r"""Download the tokenizer file of a Mistral model from the Hugging Face Hub.
 

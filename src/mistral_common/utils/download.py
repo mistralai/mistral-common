@@ -4,6 +4,9 @@ import os
 DOWNLOAD_TIMEOUT_ENV_KEY = "MISTRAL_COMMON_DOWNLOAD_TIMEOUT"
 DEFAULT_DOWNLOAD_TIMEOUT_S = 10.0
 
+DownloadTimeout = float | int | str
+r"""Accepted raw timeout values: any number of seconds, converted to float."""
+
 
 def validate_download_timeout(timeout: object, *, error_message: str) -> float:
     r"""Convert a timeout to a positive finite float or raise.
@@ -44,7 +47,7 @@ def resolve_env_download_timeout() -> float:
     return validate_download_timeout(raw, error_message=error_message)
 
 
-def resolve_download_timeout(timeout: float | int | str | None) -> float:
+def resolve_download_timeout(timeout: DownloadTimeout | None) -> float:
     r"""Resolve a caller-provided timeout, falling back to the environment default.
 
     Args:

@@ -53,6 +53,7 @@ from mistral_common.tokens.tokenizers.sentencepiece import (
 )
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekken
 from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hub
+from mistral_common.utils.download import DownloadTimeout
 
 
 def load_image_encoder(image_config: ImageConfig, tokenizer: Tekkenizer | SentencePieceTokenizer) -> ImageEncoder:
@@ -291,7 +292,7 @@ class MistralTokenizer(
         force_download: bool = False,
         local_files_only: bool = False,
         mode: ValidationMode = ValidationMode.test,
-        timeout: float | int | str | None = None,
+        timeout: DownloadTimeout | None = None,
     ) -> "MistralTokenizer":
         r"""Download the Mistral tokenizer for a given Hugging Face repository ID.
 

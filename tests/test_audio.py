@@ -16,6 +16,7 @@ from mistral_common.audio import hertz_to_mel, mel_filter_bank
 from mistral_common.protocol.instruct.chunk import AudioChunk, RawAudio
 from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import Audio, AudioConfig, AudioSpectrogramConfig
+from mistral_common.utils.download import DownloadTimeout
 
 
 def _make_dummy_base64() -> str:
@@ -137,7 +138,7 @@ def test_from_url_passes_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.parametrize("timeout", [0, -2.5, "nope"])
-def test_from_url_rejects_invalid_timeout(timeout: float | int | str) -> None:
+def test_from_url_rejects_invalid_timeout(timeout: DownloadTimeout) -> None:
     with (
         patch("mistral_common.tokens.tokenizers.audio._requests_lib.get") as mock_get,
         pytest.raises(ValueError, match="timeout must be a positive finite number"),

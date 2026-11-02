@@ -21,7 +21,7 @@ from mistral_common.imports import (
 )
 from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURLChunk, AudioURLType
 from mistral_common.utils.data_url import maybe_strip_base64_data_url_prefix
-from mistral_common.utils.download import resolve_download_timeout
+from mistral_common.utils.download import DownloadTimeout, resolve_download_timeout
 
 if is_soxr_installed():
     import soxr
@@ -96,7 +96,7 @@ class Audio:
         return duration
 
     @staticmethod
-    def from_url(url: str, strict: bool = True, timeout: float | int | str | None = None) -> "Audio":
+    def from_url(url: str, strict: bool = True, timeout: DownloadTimeout | None = None) -> "Audio":
         r"""Create an Audio instance from a URL.
 
         Downloads the audio file and decodes it into samples.
