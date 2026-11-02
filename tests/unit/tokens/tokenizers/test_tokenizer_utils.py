@@ -7,12 +7,7 @@ import pytest
 from huggingface_hub.utils import httpx as hub_httpx
 
 from mistral_common.exceptions import MistralCommonException
-from mistral_common.tokens.tokenizers.utils import (
-    _list_remote_hf_repo_files,
-    download_tokenizer_from_hf_hub,
-    list_local_hf_repo_files,
-)
-from mistral_common.utils.download import DownloadTimeout
+from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hub, list_local_hf_repo_files
 
 _REPO_ID = "mistralai/Mistral-7B-v0.1"
 _COMMIT = "RANDOM_REVISION"
@@ -76,11 +71,11 @@ def test_download_tokenizer_from_hf_hub_local_files_only_uses_cache_dir(custom_c
 
 @pytest.mark.usefixtures("empty_default_cache")
 @pytest.mark.parametrize("network_error", _NETWORK_ERRORS)
-@patch("mistral_common.tokens.tokenizers.utils._list_remote_hf_repo_files")
+@patch("huggingface_hub.HfApi.list_repo_files")
 def test_download_tokenizer_from_hf_hub_offline_fallback_uses_cache_dir(
-    mock_list_remote: MagicMock, network_error: Exception, custom_cache: Path
+    mock_list_repo_files: MagicMock, network_error: Exception, custom_cache: Path
 ) -> None:
-    mock_list_remote.side_effect = network_error
+    mock_list_repo_files.side_effect = network_error
 
     tokenizer_path = download_tokenizer_from_hf_hub(repo_id=_REPO_ID, cache_dir=custom_cache)
     assert Path(tokenizer_path) == _cached_tokenizer_path(cache_dir=custom_cache)
@@ -97,11 +92,11 @@ def test_download_tokenizer_from_hf_hub_falls_back_to_cache_on_real_connection_e
 
 
 @pytest.mark.parametrize("network_error", _NETWORK_ERRORS)
-@patch("mistral_common.tokens.tokenizers.utils._list_remote_hf_repo_files")
+@patch("huggingface_hub.HfApi.list_repo_files")
 def test_download_tokenizer_from_hf_hub_force_download_raises_network_error(
-    mock_list_remote: MagicMock, network_error: Exception
+    mock_list_repo_files: MagicMock, network_error: Exception
 ) -> None:
-    mock_list_remote.side_effect = network_error
+    mock_list_repo_files.side_effect = network_error
 
     with pytest.raises(type(network_error), match=str(network_error)):
         download_tokenizer_from_hf_hub(repo_id=_REPO_ID, force_download=True)
@@ -109,11 +104,11 @@ def test_download_tokenizer_from_hf_hub_force_download_raises_network_error(
 
 @pytest.mark.usefixtures("empty_default_cache")
 @pytest.mark.parametrize("network_error", _NETWORK_ERRORS)
-@patch("mistral_common.tokens.tokenizers.utils._list_remote_hf_repo_files")
+@patch("huggingface_hub.HfApi.list_repo_files")
 def test_download_tokenizer_from_hf_hub_offline_without_cache_raises(
-    mock_list_remote: MagicMock, network_error: Exception
+    mock_list_repo_files: MagicMock, network_error: Exception
 ) -> None:
-    mock_list_remote.side_effect = network_error
+    mock_list_repo_files.side_effect = network_error
 
     with pytest.raises(FileNotFoundError, match="Could not connect to the Hugging Face Hub and no local files"):
         download_tokenizer_from_hf_hub(repo_id=_REPO_ID)
@@ -123,76 +118,13 @@ def test_download_tokenizer_from_hf_hub_offline_without_cache_raises(
 
 
 @pytest.mark.parametrize("force_download", [False, True])
-@patch("mistral_common.tokens.tokenizers.utils._list_remote_hf_repo_files")
+@patch("huggingface_hub.HfApi.list_repo_files")
 def test_download_tokenizer_from_hf_hub_unexpected_error_raises_general_error(
-    mock_list_remote: MagicMock, force_download: bool
+    mock_list_repo_files: MagicMock, force_download: bool
 ) -> None:
-    mock_list_remote.side_effect = RuntimeError("boom")
+    mock_list_repo_files.side_effect = RuntimeError("boom")
 
     with pytest.raises(MistralCommonException, match="Something went wrong") as exc_info:
         download_tokenizer_from_hf_hub(repo_id=_REPO_ID, force_download=force_download)
 
     assert isinstance(exc_info.value.__cause__, RuntimeError)
-
-
-@pytest.mark.usefixtures("empty_default_cache")
-def test_download_tokenizer_from_hf_hub_passes_timeout_to_hub_requests(custom_cache: Path) -> None:
-    with (
-        patch(
-            "mistral_common.tokens.tokenizers.utils._list_remote_hf_repo_files", return_value=["tekken.json"]
-        ) as mock_list_remote,
-        patch(
-            "huggingface_hub.hf_hub_download", return_value=str(_cached_tokenizer_path(cache_dir=custom_cache))
-        ) as mock_download,
-    ):
-        download_tokenizer_from_hf_hub(repo_id=_REPO_ID, cache_dir=custom_cache, timeout=7)
-
-    assert mock_list_remote.call_args.kwargs.get("timeout") == 7.0
-    assert mock_download.call_args.kwargs.get("etag_timeout") == 7.0
-
-
-@pytest.mark.usefixtures("empty_default_cache")
-def test_download_tokenizer_from_hf_hub_default_timeout(custom_cache: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from mistral_common.utils.download import DOWNLOAD_TIMEOUT_ENV_KEY
-
-    monkeypatch.delenv(DOWNLOAD_TIMEOUT_ENV_KEY, raising=False)
-    with (
-        patch(
-            "mistral_common.tokens.tokenizers.utils._list_remote_hf_repo_files", return_value=["tekken.json"]
-        ) as mock_list_remote,
-        patch(
-            "huggingface_hub.hf_hub_download", return_value=str(_cached_tokenizer_path(cache_dir=custom_cache))
-        ) as mock_download,
-    ):
-        download_tokenizer_from_hf_hub(repo_id=_REPO_ID, cache_dir=custom_cache)
-
-    assert mock_list_remote.call_args.kwargs.get("timeout") == 10.0
-    assert mock_download.call_args.kwargs.get("etag_timeout") == 10.0
-
-
-@pytest.mark.parametrize("timeout", [0, -1.0, "abc"])
-def test_download_tokenizer_from_hf_hub_rejects_invalid_timeout(timeout: DownloadTimeout) -> None:
-    with (
-        patch("mistral_common.tokens.tokenizers.utils._list_remote_hf_repo_files") as mock_list_remote,
-        pytest.raises(ValueError, match="timeout must be a positive finite number"),
-    ):
-        download_tokenizer_from_hf_hub(repo_id=_REPO_ID, timeout=timeout)
-    mock_list_remote.assert_not_called()
-
-
-@patch("huggingface_hub.HfApi.model_info")
-def test_list_remote_hf_repo_files_passes_timeout_to_model_info(mock_model_info: MagicMock) -> None:
-    from huggingface_hub.hf_api import RepoSibling
-
-    mock_model_info.return_value = MagicMock(
-        siblings=[
-            RepoSibling(rfilename="tekken.json"),
-            RepoSibling(rfilename="other.model"),
-        ]
-    )
-
-    files = _list_remote_hf_repo_files(repo_id=_REPO_ID, revision=None, token=None, timeout=7.0)
-
-    assert files == ["tekken.json", "other.model"]
-    assert mock_model_info.call_args.kwargs.get("timeout") == 7.0
-    assert mock_model_info.call_args.kwargs.get("files_metadata") is True

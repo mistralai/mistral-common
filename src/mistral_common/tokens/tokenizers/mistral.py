@@ -53,7 +53,6 @@ from mistral_common.tokens.tokenizers.sentencepiece import (
 )
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekken
 from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hub
-from mistral_common.utils.download import DownloadTimeout
 
 
 def load_image_encoder(image_config: ImageConfig, tokenizer: Tekkenizer | SentencePieceTokenizer) -> ImageEncoder:
@@ -292,7 +291,6 @@ class MistralTokenizer(
         force_download: bool = False,
         local_files_only: bool = False,
         mode: ValidationMode = ValidationMode.test,
-        timeout: DownloadTimeout | None = None,
     ) -> "MistralTokenizer":
         r"""Download the Mistral tokenizer for a given Hugging Face repository ID.
 
@@ -309,9 +307,6 @@ class MistralTokenizer(
                 already present in the local Hugging Face cache.
             local_files_only: If `True`, only uses the local cache and never hits
                 the network; fails if the tokenizer is not cached.
-            timeout: Seconds to wait for each Hub request, converted to float. If
-                None, uses the `MISTRAL_COMMON_DOWNLOAD_TIMEOUT` environment
-                variable.
 
         Returns:
             The Mistral tokenizer for the given repository.
@@ -322,7 +317,6 @@ class MistralTokenizer(
             revision=revision,
             force_download=force_download,
             local_files_only=local_files_only,
-            timeout=timeout,
         )
         return MistralTokenizer.from_file(tokenizer_path, mode=mode)
 

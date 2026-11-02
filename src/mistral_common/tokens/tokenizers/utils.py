@@ -6,7 +6,6 @@ from typing import Iterator
 from mistral_common.exceptions import MistralCommonException
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.image import MultiModalVersion
-from mistral_common.utils.download import DownloadTimeout, resolve_download_timeout
 
 _hub_installed: bool
 try:
@@ -151,38 +150,6 @@ def get_one_valid_tokenizer_file(files: list[str]) -> str:
     return tokenizer_file
 
 
-def _list_remote_hf_repo_files(
-    repo_id: str,
-    revision: str | None,
-    token: bool | str | None,
-    timeout: float,
-) -> list[str]:
-    r"""List a Hub repo's files with a timeout on the info request.
-
-    `HfApi.list_repo_files`/`list_repo_tree` do not accept a timeout (they
-    paginate with `timeout=None`), so `HfApi.model_info(files_metadata=True)`,
-    which does, is used instead: its `siblings` carry every file name.
-
-    Args:
-        repo_id: The Hugging Face repo ID.
-        revision: Git branch, tag, or commit hash. If `None`, the default
-            revision is used.
-        token: Hugging Face access token for private repos.
-        timeout: Seconds to wait for the request.
-
-    Returns:
-        The file names in the repo.
-    """
-    info = huggingface_hub.HfApi().model_info(
-        repo_id,
-        revision=revision,
-        files_metadata=True,
-        token=token,
-        timeout=timeout,
-    )
-    return [sibling.rfilename for sibling in info.siblings or []]
-
-
 def download_tokenizer_from_hf_hub(
     repo_id: str,
     cache_dir: str | Path | None = None,
@@ -190,7 +157,6 @@ def download_tokenizer_from_hf_hub(
     revision: str | None = None,
     force_download: bool = False,
     local_files_only: bool = False,
-    timeout: DownloadTimeout | None = None,
 ) -> str:
     r"""Download the tokenizer file of a Mistral model from the Hugging Face Hub.
 
@@ -213,9 +179,6 @@ def download_tokenizer_from_hf_hub(
             already cached.
         local_files_only: If `True`, only uses the local cache and never hits
             the network; fails if the tokenizer is not cached.
-        timeout: Seconds to wait for each Hub request, converted to float. If
-            None, uses the `MISTRAL_COMMON_DOWNLOAD_TIMEOUT` environment
-            variable.
 
     Returns:
         The downloaded tokenizer local path for the given model ID.
@@ -234,16 +197,10 @@ def download_tokenizer_from_hf_hub(
     if force_download and local_files_only:
         raise ValueError("You cannot force the download of the tokenizer if you only want to use local files.")
 
-    timeout = resolve_download_timeout(timeout)
-
     if not local_files_only:
         try:
-            repo_files = _list_remote_hf_repo_files(
-                repo_id=repo_id,
-                revision=revision,
-                token=token,
-                timeout=timeout,
-            )
+            hf_api = huggingface_hub.HfApi()
+            repo_files = hf_api.list_repo_files(repo_id, revision=revision, token=token)
             local_files_only = False
         except (_hub_httpx.HTTPError, huggingface_hub.errors.OfflineModeIsEnabled) as e:
             if force_download:
@@ -285,6 +242,5 @@ def download_tokenizer_from_hf_hub(
         revision=revision,
         local_files_only=local_files_only,
         force_download=force_download,
-        etag_timeout=timeout,
     )
     return tokenizer_path
