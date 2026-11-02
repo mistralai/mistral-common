@@ -184,6 +184,187 @@ class TokenizerVersion(StrEnum):
         return int(self.value[1:])
 
     @property
+    def has_tools(self) -> bool:
+        r"""Whether tool definitions are supported.
+
+        Returns:
+            True for v2 and later, False for v1.
+
+        Examples:
+            >>> TokenizerVersion.v1.has_tools
+            False
+            >>> TokenizerVersion.v2.has_tools
+            True
+        """
+        return self >= TokenizerVersion.v2
+
+    @property
+    def uses_system_prompt_tokens(self) -> bool:
+        r"""Whether to use [SYSTEM_PROMPT] tokens vs inline system message.
+
+        Returns:
+            True for v7 and later, False for earlier versions.
+
+        Examples:
+            >>> TokenizerVersion.v3.uses_system_prompt_tokens
+            False
+            >>> TokenizerVersion.v7.uses_system_prompt_tokens
+            True
+        """
+        return self >= TokenizerVersion.v7
+
+    @property
+    def tools_prior_last_user(self) -> bool:
+        r"""Whether the tools definition is emitted before the last user message.
+
+        Returns:
+            True when tools are supported and the version predates v13.
+
+        Examples:
+            >>> TokenizerVersion.v1.tools_prior_last_user
+            False
+            >>> TokenizerVersion.v7.tools_prior_last_user
+            True
+            >>> TokenizerVersion.v13.tools_prior_last_user
+            False
+        """
+        return self.has_tools and self < TokenizerVersion.v13
+
+    @property
+    def uses_pre_v11_tool_format(self) -> bool:
+        r"""Whether tool calls use the pre-v11 JSON-array format ([TOOL_CALLS][{...}]).
+
+        Returns:
+            True for v2 through v7 (tools supported, before v11's name[ARGS] format),
+            False for v1 (no tools) and v11+.
+
+        Examples:
+            >>> TokenizerVersion.v1.uses_pre_v11_tool_format
+            False
+            >>> TokenizerVersion.v7.uses_pre_v11_tool_format
+            True
+            >>> TokenizerVersion.v11.uses_pre_v11_tool_format
+            False
+        """
+        return self.has_tools and self < TokenizerVersion.v11
+
+    @property
+    def uses_v13_tool_format(self) -> bool:
+        r"""Whether to use v13-style tool calls (name[ARGS]arguments).
+
+        Returns:
+            True for v13 and later, False for earlier versions.
+
+        Examples:
+            >>> TokenizerVersion.v11.uses_v13_tool_format
+            False
+            >>> TokenizerVersion.v13.uses_v13_tool_format
+            True
+        """
+        return self >= TokenizerVersion.v13
+
+    @property
+    def uses_tool_content_format(self) -> bool:
+        r"""Whether tool results use [TOOL_RESULTS]id[TOOL_CONTENT]content format.
+
+        Returns:
+            True for v7 through v12, False otherwise.
+
+        Examples:
+            >>> TokenizerVersion.v3.uses_tool_content_format
+            False
+            >>> TokenizerVersion.v7.uses_tool_content_format
+            True
+            >>> TokenizerVersion.v13.uses_tool_content_format
+            False
+        """
+        return self >= TokenizerVersion.v7 and self < TokenizerVersion.v13
+
+    @property
+    def uses_call_id_in_tool_calls(self) -> bool:
+        r"""Whether to include [CALL_ID] in tool calls.
+
+        Returns:
+            True only for v11.
+
+        Examples:
+            >>> TokenizerVersion.v11.uses_call_id_in_tool_calls
+            True
+            >>> TokenizerVersion.v13.uses_call_id_in_tool_calls
+            False
+        """
+        return self == TokenizerVersion.v11
+
+    @property
+    def uses_plain_thinking(self) -> bool:
+        r"""Whether this is the only version where thinking can be encoded as plain `<think>`/`</think>` text.
+
+        v13+ uses [THINK]/[/THINK] special tokens instead. Note this does not
+        by itself imply plain thinking is active: that also depends on the
+        tokenizer configuration (e.g. v11 with audio support cannot use it).
+
+        Returns:
+            True only for v11.
+
+        Examples:
+            >>> TokenizerVersion.v11.uses_plain_thinking
+            True
+            >>> TokenizerVersion.v13.uses_plain_thinking
+            False
+        """
+        return self == TokenizerVersion.v11
+
+    @property
+    def forbids_assistant_content_with_tools(self) -> bool:
+        r"""Whether assistant messages cannot have both content and tool calls.
+
+        Returns:
+            True for v2 and v3, False for other versions.
+
+        Examples:
+            >>> TokenizerVersion.v2.forbids_assistant_content_with_tools
+            True
+            >>> TokenizerVersion.v7.forbids_assistant_content_with_tools
+            False
+        """
+        return self in (TokenizerVersion.v2, TokenizerVersion.v3)
+
+    @property
+    def validates_assistant_non_empty(self) -> bool:
+        r"""Whether to validate that assistant messages have non-empty content or tool calls.
+
+        The SentencePiece (spm) variant of v3 does not validate, so this property
+        assumes the Tekken tokenizer and reports True for v3 and later.
+
+        Returns:
+            True for v3 (Tekken) and v7+, False for v1 and v2.
+
+        Examples:
+            >>> TokenizerVersion.v2.validates_assistant_non_empty
+            False
+            >>> TokenizerVersion.v3.validates_assistant_non_empty
+            True
+            >>> TokenizerVersion.v7.validates_assistant_non_empty
+            True
+        """
+        return self >= TokenizerVersion.v3
+
+    @property
+    def tool_supports_multimodal(self) -> bool:
+        r"""Whether tool messages can contain non-text content chunks.
+
+        Returns:
+            True for v15 and later, False for earlier versions.
+
+        Examples:
+            >>> TokenizerVersion.v13.tool_supports_multimodal
+            False
+            >>> TokenizerVersion.v15.tool_supports_multimodal
+            True
+        """
+        return self >= TokenizerVersion.v15
+
+    @property
     def supports_model_settings(self) -> bool:
         r"""Whether this version supports model settings.
 

@@ -52,5 +52,5 @@ class TestValidConfigs:
     @pytest.mark.parametrize("config", ALL_CONFIGS, ids=[format_config_id(c) for c in ALL_CONFIGS])
     def test_all_configs_are_valid(self, config: TestConfig) -> None:
         template_config = build_template_config(config=config)
-        assert isinstance(template_config.has_tools, bool)
+        assert isinstance(template_config.version.has_tools, bool)
         assert isinstance(template_config.any_thinking_support, bool)

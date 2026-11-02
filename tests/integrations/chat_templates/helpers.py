@@ -79,7 +79,7 @@ def build_template_config(config: TestConfig) -> TemplateConfig:
 def load_golden_template(config: TemplateConfig) -> str:
     r"""Load the static golden template for a config."""
     parts = [config.version.value]
-    if config.supports_model_settings:
+    if config.version.supports_model_settings:
         model_settings_fields = config.model_settings_fields
         assert model_settings_fields is not None
         settings_part = "_".join(
