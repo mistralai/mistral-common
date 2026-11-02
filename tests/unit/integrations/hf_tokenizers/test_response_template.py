@@ -529,10 +529,10 @@ def test_matches_experimental_parser_v7(tmp_path: Path) -> None:
         "transform_each": True,
         "transform": expected_transform,
     }
-    decoded_call_region = tokenizer.decode(tokens=tool_call_tokens[0], special_token_policy=SpecialTokenPolicy.KEEP)
-    call_start = decoded_call_region.index(SpecialTokens.tool_calls.value) + len(SpecialTokens.tool_calls.value)
-    call_end = decoded_call_region.index(SpecialTokens.eos.value, call_start)
-    call_array_region = decoded_call_region[call_start:call_end]
+    decoded_generation = tokenizer.decode(tokens=generation, special_token_policy=SpecialTokenPolicy.KEEP)
+    call_start = decoded_generation.index(SpecialTokens.tool_calls.value) + len(SpecialTokens.tool_calls.value)
+    call_end = decoded_generation.index(SpecialTokens.eos.value, call_start)
+    call_array_region = decoded_generation[call_start:call_end]
     assert json.loads(call_array_region) == [transformed_call]
 
 
