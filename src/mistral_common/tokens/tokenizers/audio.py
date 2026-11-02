@@ -96,7 +96,7 @@ class Audio:
         return duration
 
     @staticmethod
-    def from_url(url: str, strict: bool = True, timeout: DownloadTimeout | None = None) -> "Audio":
+    def from_url(url: str, strict: bool, timeout: DownloadTimeout | None) -> "Audio":
         r"""Create an Audio instance from a URL.
 
         Downloads the audio file and decodes it into samples.
@@ -887,7 +887,7 @@ class AudioEncoder:
         if url_type in {AudioURLType.file, AudioURLType.file_uri}:
             audio = Audio.from_file(content.url)
         elif url_type == AudioURLType.url:
-            audio = Audio.from_url(content.url)
+            audio = Audio.from_url(content.url, strict=True, timeout=None)
         else:
             audio = Audio.from_base64(content.url)
 

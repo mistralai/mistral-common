@@ -87,7 +87,7 @@ def test_from_url() -> None:
             ValueError,
             match="Failed to download audio from URL: https://example.com/invalid_audio.wav",
         ):
-            Audio.from_url("https://example.com/invalid_audio.wav")
+            Audio.from_url("https://example.com/invalid_audio.wav", strict=True, timeout=None)
 
     # Test with an invalid content
     with patch("mistral_common.tokens.tokenizers.audio._requests_lib.get") as mock_get:
@@ -99,7 +99,7 @@ def test_from_url() -> None:
             ValueError,
             match=r"Failed to create Audio instance from URL: https://example\.com \.",
         ):
-            Audio.from_url("https://example.com")
+            Audio.from_url("https://example.com", strict=True, timeout=None)
 
     # Test valid URL
     sampling_rate = 16_000
@@ -115,7 +115,7 @@ def test_from_url() -> None:
         mock_response.status_code = 200
         mock_response.content = wav_bytes
         mock_get.return_value = mock_response
-        audio_url = Audio.from_url("https://fake-audio-url.com/sample.wav", strict=False)
+        audio_url = Audio.from_url("https://fake-audio-url.com/sample.wav", strict=False, timeout=None)
         assert isinstance(audio_url, Audio)
         assert mock_get.call_args.kwargs.get("timeout") == 10.0
 
@@ -127,13 +127,13 @@ def test_from_url_passes_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     with patch("mistral_common.tokens.tokenizers.audio._requests_lib.get") as mock_get:
         mock_get.side_effect = requests.RequestException("connection failed")
         with pytest.raises(ValueError, match="Failed to download audio from URL"):
-            Audio.from_url("https://example.com/a.wav")
+            Audio.from_url("https://example.com/a.wav", strict=True, timeout=None)
     assert mock_get.call_args.kwargs.get("timeout") == 25.0
 
     with patch("mistral_common.tokens.tokenizers.audio._requests_lib.get") as mock_get:
         mock_get.side_effect = requests.RequestException("connection failed")
         with pytest.raises(ValueError, match="Failed to download audio from URL"):
-            Audio.from_url("https://example.com/a.wav", timeout=3)
+            Audio.from_url("https://example.com/a.wav", strict=True, timeout=3)
     assert mock_get.call_args.kwargs.get("timeout") == 3.0
 
 
@@ -143,7 +143,7 @@ def test_from_url_rejects_invalid_timeout(timeout: DownloadTimeout) -> None:
         patch("mistral_common.tokens.tokenizers.audio._requests_lib.get") as mock_get,
         pytest.raises(ValueError, match="timeout must be a positive finite number"),
     ):
-        Audio.from_url("https://example.com/a.wav", timeout=timeout)
+        Audio.from_url("https://example.com/a.wav", strict=True, timeout=timeout)
     mock_get.assert_not_called()
 
 
