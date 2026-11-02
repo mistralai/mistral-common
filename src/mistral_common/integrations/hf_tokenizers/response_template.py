@@ -5,9 +5,6 @@ from typing import Any
 from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
-_PLAIN_THINKING_OPEN = "<think>"
-_PLAIN_THINKING_CLOSE = "</think>"
-
 
 def _build_response_template(version: TokenizerVersion, plain_thinking_support: bool) -> dict[str, Any]:
     r"""Build response-template fields from tokenizer capabilities.
@@ -36,8 +33,8 @@ def _build_response_template(version: TokenizerVersion, plain_thinking_support: 
         }
     elif version.uses_plain_thinking and plain_thinking_support:
         fields["reasoning_content"] = {
-            "open": _PLAIN_THINKING_OPEN,
-            "close": _PLAIN_THINKING_CLOSE,
+            "open": SpecialTokens.plain_begin_think.value,
+            "close": SpecialTokens.plain_end_think.value,
             "content": "text",
         }
 
