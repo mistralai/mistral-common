@@ -99,11 +99,22 @@ warn_unused_ignores = true
 exclude = ["docs", "tools", "build"]
 
 [[tool.mypy.overrides]]
-module = ["sentencepiece.*", "cv2", "cv2.*","soxr", "soundfile", "llguidance", "llguidance.*", "jinja2", "jinja2.*", "tokenizers", "tokenizers.*", "transformers", "transformers.*"]
+module = ["sentencepiece.*", "cv2", "cv2.*","soxr", "soundfile", "llguidance", "llguidance.*", "jinja2", "jinja2.*", "tokenizers", "tokenizers.*", "transformers", "transformers.*", "vllm", "vllm.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Downstream tests import optional runtimes (vllm/transformers) that are only
+# present when run via scripts/run_downstream_tests.sh.
+module = ["tests.integration.downstream.*"]
+disallow_untyped_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["./tests"]
+markers = [
+    "downstream: tests that need an external runtime (latest vLLM / Transformers); run via scripts/run_downstream_tests.sh",
+    "vllm: downstream tests requiring vLLM",
+    "transformers: downstream tests requiring Transformers",
+]
 
 [tool.coverage.run]
 omit = ["tests", "*src/mistral_common/data*"]

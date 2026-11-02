@@ -41,6 +41,35 @@ jobs:
             echo "PR does not carry the run-downstream-tests label, skipping."
           fi
 
+  # Runs OUR downstream tests (tests/integration/downstream) against the LATEST
+  # RELEASED vLLM (CPU wheel) and latest Transformers. The environment setup
+  # lives in scripts/run_downstream_tests.sh so it runs identically locally;
+  # `uv run --with` uses an ephemeral overlay, so uv.lock is never touched.
+  downstream_ours:
+    needs: gate
+    if: ${{ needs.gate.outputs.should_run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout mistral-common
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        run: |
+          uv sync --frozen --all-extras --group dev
+
+      - name: Run downstream tests (latest released vLLM + latest Transformers)
+        run: |
+          bash scripts/run_downstream_tests.sh
+
+  # Runs vLLM's own mistral test suite against this repo's mistral-common.
   vllm:
     needs: gate
     if: ${{ needs.gate.outputs.should_run == 'true' }}
