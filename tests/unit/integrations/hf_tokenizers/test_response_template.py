@@ -175,14 +175,8 @@ def test_start_anchor_per_version() -> None:
         assert template["start_anchor"] == ["[/INST]", "[/TOOL_RESULTS]"]
 
 
-def test_v13_tool_calls_pattern() -> None:
-    template = generate_response_template(
-        tokenizer_version=TokenizerVersion.v13,
-        thinking_support=True,
-        plain_thinking_support=False,
-    )
-
-    assert template["fields"]["tool_calls"] == {
+def test_v13_v15_tool_calls_pattern() -> None:
+    expected_tool_calls = {
         "open_pattern": "\\[TOOL_CALLS\\](?P<name>.+?)\\[ARGS\\]",
         "close_pattern": "(?=\\[TOOL_CALLS\\])|</s>",
         "repeats": True,
@@ -193,6 +187,14 @@ def test_v13_tool_calls_pattern() -> None:
         },
     }
 
+    for version in (TokenizerVersion.v13, TokenizerVersion.v15):
+        template = generate_response_template(
+            tokenizer_version=version,
+            thinking_support=True,
+            plain_thinking_support=False,
+        )
+        assert template["fields"]["tool_calls"] == expected_tool_calls
+
 
 def test_v11_tool_calls_include_call_id() -> None:
     template = generate_response_template(
@@ -202,11 +204,16 @@ def test_v11_tool_calls_include_call_id() -> None:
     )
 
     tool_calls = template["fields"]["tool_calls"]
-    assert "\\[CALL_ID\\](?P<id>.+?)" in tool_calls["open_pattern"]
-    assert tool_calls["transform"] == {
-        "type": "function",
-        "id": "{id}",
-        "function": {"name": "{name}", "arguments": "{content}"},
+    assert tool_calls == {
+        "open_pattern": "\\[TOOL_CALLS\\](?P<name>.+?)\\[CALL_ID\\](?P<id>.+?)\\[ARGS\\]",
+        "close_pattern": "(?=\\[TOOL_CALLS\\])|</s>",
+        "repeats": True,
+        "content": "json",
+        "transform": {
+            "type": "function",
+            "id": "{id}",
+            "function": {"name": "{name}", "arguments": "{content}"},
+        },
     }
     assert template["fields"]["reasoning_content"] == {
         "open": "<think>",
