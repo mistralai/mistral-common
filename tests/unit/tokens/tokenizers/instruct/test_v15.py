@@ -44,6 +44,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_multiturn_audio_request,
     build_multiturn_image_request,
     build_no_tools_pipeline_request,
+    build_non_ascii_call_arguments_request,
     build_none_content_empty_calls_request,
     build_none_content_no_calls_request,
     build_normal_request,
@@ -67,6 +68,10 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_tool_call_and_content_request,
     build_tool_calls_with_two_results_request,
     build_tool_message_request,
+    build_tool_result_image_request,
+    build_tool_result_text_chunks_request,
+    build_tool_result_text_request,
+    build_tools_before_first_user_request,
     build_tools_multiturn_request,
     build_tools_pipeline_request,
     build_tools_singleturn_request,
@@ -244,6 +249,31 @@ _SHARED_PREFIXED_TEXT_TOKENS = [
     1, 37, 223, 134, 214, 201, 197, 215, 211, 210, 205, 210, 203, 195, 201, 202, 202, 211, 214, 216, 134, 158, 132,
     134, 204, 205, 203, 204, 134, 225, 38, 3, 197, 4, 204, 201, 208, 208, 211
 ]
+_TOOL_RESULT_TEXT_TOKENS = [
+    1, 37, 223, 134, 214, 201, 197, 215, 211, 210, 205, 210, 203, 195, 201, 202, 202, 211, 214, 216, 134, 158, 132,
+    134, 204, 205, 203, 204, 134, 225, 38, 3, 197, 4, 9, 170, 149, 32, 223, 225, 2, 7, 182, 149, 8
+]
+_TOOL_RESULT_TEXT_CHUNKS_TOKENS = [
+    1, 37, 223, 134, 214, 201, 197, 215, 211, 210, 205, 210, 203, 195, 201, 202, 202, 211, 214, 216, 134, 158, 132,
+    134, 204, 205, 203, 204, 134, 225, 38, 3, 197, 4, 9, 170, 149, 32, 223, 225, 2, 7, 182, 149, 182, 150, 8
+]
+_TOOL_RESULT_IMAGE_TOKENS = [
+    1, 37, 223, 134, 214, 201, 197, 215, 211, 210, 205, 210, 203, 195, 201, 202, 202, 211, 214, 216, 134, 158, 132,
+    134, 204, 205, 203, 204, 134, 225, 38, 3, 197, 4, 9, 170, 149, 32, 223, 225, 2, 7, 10, 10, 12, 10, 10, 13, 8
+]
+_NON_ASCII_CALL_ARGUMENTS_TOKENS = [
+    1, 37, 223, 134, 214, 201, 197, 215, 211, 210, 205, 210, 203, 195, 201, 202, 202, 211, 214, 216, 134, 158, 132,
+    134, 204, 205, 203, 204, 134, 225, 38, 3, 197, 4, 9, 202, 32, 223, 134, 220, 134, 158, 132, 134, 295, 269, 134,
+    225, 2
+]
+_TOOLS_BEFORE_FIRST_USER_TOKENS = [
+    1, 5, 191, 223, 134, 216, 221, 212, 201, 134, 158, 132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 144,
+    132, 134, 202, 217, 210, 199, 216, 205, 211, 210, 134, 158, 132, 223, 134, 210, 197, 209, 201, 134, 158, 132,
+    134, 202, 134, 144, 132, 134, 200, 201, 215, 199, 214, 205, 212, 216, 205, 211, 210, 134, 158, 132, 134, 134,
+    144, 132, 134, 212, 197, 214, 197, 209, 201, 216, 201, 214, 215, 134, 158, 132, 223, 225, 225, 225, 193, 6, 37,
+    223, 134, 214, 201, 197, 215, 211, 210, 205, 210, 203, 195, 201, 202, 202, 211, 214, 216, 134, 158, 132, 134,
+    204, 205, 203, 204, 134, 225, 38, 3, 197, 4, 198, 2, 3, 199, 4
+]
 # fmt: on
 
 _SHARED_NORMAL_EXPECTED = Tokenized(tokens=_SHARED_NORMAL_TOKENS)
@@ -367,6 +397,11 @@ _SHARED_TOOL_CALLS_WITH_TWO_RESULTS_EXPECTED = Tokenized(tokens=_SHARED_TOOL_CAL
 _SHARED_SYSTEM_LIST_CONTENT_EXPECTED = Tokenized(tokens=_SHARED_SYSTEM_LIST_CONTENT_TOKENS)
 _SHARED_CALL_WITH_ID_BEFORE_LAST_USER_EXPECTED = Tokenized(tokens=_SHARED_CALL_WITH_ID_BEFORE_LAST_USER_TOKENS)
 _SHARED_PREFIXED_TEXT_EXPECTED = Tokenized(tokens=_SHARED_PREFIXED_TEXT_TOKENS, prefix_ids=[204, 201, 208, 208, 211])
+_TOOL_RESULT_TEXT_EXPECTED = Tokenized(tokens=_TOOL_RESULT_TEXT_TOKENS)
+_TOOL_RESULT_TEXT_CHUNKS_EXPECTED = Tokenized(tokens=_TOOL_RESULT_TEXT_CHUNKS_TOKENS)
+_TOOL_RESULT_IMAGE_EXPECTED = Tokenized(tokens=_TOOL_RESULT_IMAGE_TOKENS, images=[_RED_4X4_IMAGE])
+_NON_ASCII_CALL_ARGUMENTS_EXPECTED = Tokenized(tokens=_NON_ASCII_CALL_ARGUMENTS_TOKENS)
+_TOOLS_BEFORE_FIRST_USER_EXPECTED = Tokenized(tokens=_TOOLS_BEFORE_FIRST_USER_TOKENS)
 
 _IMAGE_USER_TEXT = f"<s>{_SETTINGS_BLOCK}[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]a[/INST]"
 _AUDIO_USER_TEXT = f"<s>{_SETTINGS_BLOCK}[INST][BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
@@ -433,6 +468,21 @@ _SHARED_CALL_WITH_ID_BEFORE_LAST_USER_TEXT = (
     'TOOL_CALLS]a_a_a[ARGS]"blabla"</s>[INST]c[/INST]'
 )
 _SHARED_PREFIXED_TEXT_TEXT = '<s>[MODEL_SETTINGS]{"reasoning_effort": "high"}[/MODEL_SETTINGS][INST]a[/INST]hello'
+_TOOL_RESULT_TEXT_TEXT = (
+    f"<s>{_SETTINGS_BLOCK}[INST]a[/INST][TOOL_CALLS]F1[ARGS]{{}}</s>[TOOL_RESULTS]R1[/TOOL_RESULTS]"
+)
+_TOOL_RESULT_TEXT_CHUNKS_TEXT = (
+    f"<s>{_SETTINGS_BLOCK}[INST]a[/INST][TOOL_CALLS]F1[ARGS]{{}}</s>[TOOL_RESULTS]R1R2[/TOOL_RESULTS]"
+)
+_TOOL_RESULT_IMAGE_TEXT = (
+    f"<s>{_SETTINGS_BLOCK}[INST]a[/INST][TOOL_CALLS]F1[ARGS]{{}}</s>"
+    "[TOOL_RESULTS][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END][/TOOL_RESULTS]"
+)
+_NON_ASCII_CALL_ARGUMENTS_TEXT = f'<s>{_SETTINGS_BLOCK}[INST]a[/INST][TOOL_CALLS]f[ARGS]{{"x": "é"}}</s>'
+_TOOLS_BEFORE_FIRST_USER_TEXT = (
+    '<s>[AVAILABLE_TOOLS][{"type": "function", "function": {"name": "f", "description": "", '
+    f'"parameters": {{}}}}}}][/AVAILABLE_TOOLS]{_SETTINGS_BLOCK}[INST]a[/INST]b</s>[INST]c[/INST]'
+)
 
 
 @pytest.fixture(scope="module")
@@ -689,6 +739,48 @@ def audio_tokenizer() -> InstructTokenizerV15:
             id="default-shared-arbitrary-tool-call-id",
         ),
         pytest.param(
+            "default",
+            partial(build_arbitrary_tool_call_id_request, "call/id-1", settings=_SETTINGS),
+            _ARBITRARY_TOOL_CALL_ID_EXPECTED,
+            _ARBITRARY_TOOL_CALL_ID_TEXT,
+            id="default-shared-arbitrary-tool-call-id-slash",
+        ),
+        pytest.param(
+            "default",
+            partial(build_tool_result_text_request, settings=_SETTINGS),
+            _TOOL_RESULT_TEXT_EXPECTED,
+            _TOOL_RESULT_TEXT_TEXT,
+            id="default-shared-tool-result-text",
+        ),
+        pytest.param(
+            "default",
+            partial(build_tool_result_text_chunks_request, settings=_SETTINGS),
+            _TOOL_RESULT_TEXT_CHUNKS_EXPECTED,
+            _TOOL_RESULT_TEXT_CHUNKS_TEXT,
+            id="default-shared-tool-result-text-chunks",
+        ),
+        pytest.param(
+            "image",
+            partial(build_tool_result_image_request, settings=_SETTINGS),
+            _TOOL_RESULT_IMAGE_EXPECTED,
+            _TOOL_RESULT_IMAGE_TEXT,
+            id="image-shared-tool-result-image",
+        ),
+        pytest.param(
+            "default",
+            partial(build_non_ascii_call_arguments_request, "123456789", settings=_SETTINGS),
+            _NON_ASCII_CALL_ARGUMENTS_EXPECTED,
+            _NON_ASCII_CALL_ARGUMENTS_TEXT,
+            id="default-shared-non-ascii-call-arguments",
+        ),
+        pytest.param(
+            "default",
+            partial(build_tools_before_first_user_request, settings=_SETTINGS),
+            _TOOLS_BEFORE_FIRST_USER_EXPECTED,
+            _TOOLS_BEFORE_FIRST_USER_TEXT,
+            id="default-shared-tools-before-first-user",
+        ),
+        pytest.param(
             "audio",
             partial(build_system_audio_request, settings=_SETTINGS),
             _SYSTEM_AUDIO_EXPECTED,
@@ -715,6 +807,13 @@ def audio_tokenizer() -> InstructTokenizerV15:
             _SYSTEM_THEN_AUDIO_USER_EXPECTED_V2,
             _SYSTEM_THEN_AUDIO_USER_TEXT,
             id="audio-shared-system-then-audio-user",
+        ),
+        pytest.param(
+            "audio",
+            partial(build_system_then_audio_user_request, num_samples=1600, sampling_rate=16_000, settings=_SETTINGS),
+            _SYSTEM_THEN_AUDIO_USER_EXPECTED_V2,
+            _SYSTEM_THEN_AUDIO_USER_TEXT,
+            id="audio-shared-system-then-audio-user-1600",
         ),
         pytest.param(
             "default",
