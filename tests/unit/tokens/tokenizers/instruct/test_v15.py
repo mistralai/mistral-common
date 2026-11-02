@@ -22,9 +22,9 @@ from mistral_common.tokens.tokenizers.base import SpecialTokens, Tokenized, Toke
 from mistral_common.tokens.tokenizers.image import DATASET_MEAN, DATASET_STD, ImageConfig, ImageEncoder, SpecialImageIDs
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV15
 from mistral_common.tokens.tokenizers.model_settings_builder import (
-    EnumBuilder,
     JSONSchemaBuilder,
     ModelSettingsBuilder,
+    ReasoningEffortEnumBuilder,
 )
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import get_special_tokens, quick_vocab
@@ -439,9 +439,8 @@ _SHARED_PREFIXED_TEXT_TEXT = '<s>[MODEL_SETTINGS]{"reasoning_effort": "high"}[/M
 def default_tokenizer() -> InstructTokenizerV15:
     r"""Synthetic formatting-only tokenizer; its IDs are not released-vocabulary evidence."""
     model_settings_builder = ModelSettingsBuilder(
-        reasoning_effort=EnumBuilder[ReasoningEffort](
+        reasoning_effort=ReasoningEffortEnumBuilder(
             values=list(ReasoningEffort),
-            accepts_none=True,
             default=list(ReasoningEffort)[0],
         )
     )
@@ -461,9 +460,8 @@ def default_tokenizer() -> InstructTokenizerV15:
 def image_tokenizer() -> InstructTokenizerV15:
     r"""Synthetic v15 tokenizer with an image encoder; its IDs are not released-vocabulary evidence."""
     model_settings_builder = ModelSettingsBuilder(
-        reasoning_effort=EnumBuilder[ReasoningEffort](
+        reasoning_effort=ReasoningEffortEnumBuilder(
             values=list(ReasoningEffort),
-            accepts_none=True,
             default=list(ReasoningEffort)[0],
         )
     )
@@ -493,9 +491,8 @@ def image_tokenizer() -> InstructTokenizerV15:
 def audio_tokenizer() -> InstructTokenizerV15:
     r"""Synthetic v15 tokenizer with an audio encoder; its IDs are not released-vocabulary evidence."""
     model_settings_builder = ModelSettingsBuilder(
-        reasoning_effort=EnumBuilder[ReasoningEffort](
+        reasoning_effort=ReasoningEffortEnumBuilder(
             values=list(ReasoningEffort),
-            accepts_none=True,
             default=list(ReasoningEffort)[0],
         )
     )
@@ -1052,9 +1049,7 @@ def instruct_tokenizer_reasoning_and_json() -> InstructTokenizerV15:
     r"""Synthetic v15 tokenizer with both reasoning effort and JSON schema support."""
     return _build_v15_instruct_tokenizer(
         model_settings_builder=ModelSettingsBuilder(
-            reasoning_effort=EnumBuilder[ReasoningEffort](
-                values=list(ReasoningEffort), accepts_none=True, default=None
-            ),
+            reasoning_effort=ReasoningEffortEnumBuilder(values=list(ReasoningEffort), default=ReasoningEffort.none),
             json_schema=JSONSchemaBuilder(),
         )
     )

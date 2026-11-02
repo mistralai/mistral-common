@@ -22,11 +22,7 @@ from mistral_common.protocol.instruct.validator import ValidationMode, get_valid
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV15
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.tokens.tokenizers.model_settings_builder import (
-    JSONSchemaBuilder,
-    ModelSettingsBuilder,
-    ReasoningEffortEnumBuilder,
-)
+from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder, ReasoningEffortEnumBuilder
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import get_special_tokens, quick_vocab
 from tests.utils import decode_keep
@@ -128,7 +124,6 @@ def messages() -> list[ChatMessage]:
         ("none", (), None, None),
     ],
 )
-
 def test_forbidden_reasoning_effort_raises(
     available_tools: list[Tool],
     messages: list[ChatMessage],
