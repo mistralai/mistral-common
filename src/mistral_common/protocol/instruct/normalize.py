@@ -1,8 +1,5 @@
 import json
-import warnings
-from typing import Generic, Sequence
-
-from typing_extensions import assert_never
+from typing import Generic, Sequence, assert_never
 
 from mistral_common.exceptions import InvalidRequestException
 from mistral_common.protocol.instruct.chunk import (
@@ -284,9 +281,9 @@ class InstructRequestNormalizer(
         return tool_messages
 
     def _normalize_tool_call(self, tool_call: ToolCall) -> ToolCall:
-        normalized_function_aruments = self._normalize_json_content(tool_call.function.arguments)
+        normalized_function_arguments = self._normalize_json_content(tool_call.function.arguments)
         return ToolCall(
-            function=FunctionCall(name=tool_call.function.name, arguments=normalized_function_aruments),
+            function=FunctionCall(name=tool_call.function.name, arguments=normalized_function_arguments),
             id=tool_call.id,
         )
 
@@ -675,18 +672,6 @@ class InstructRequestNormalizerV15(
             request=request,
             settings=settings,
         )
-
-
-def normalizer_for_tokenizer_version(
-    version: TokenizerVersion, model_settings_builder: ModelSettingsBuilder | None = None
-) -> InstructRequestNormalizer:
-    r"""Deprecated in favor to `get_normalizer`, will be removed in 1.12.0."""
-    warnings.warn(
-        "`normalizer_for_tokenizer_version` is deprecated and will be removed in 1.12.0. "
-        "Please call `get_normalizer` instead.",
-        FutureWarning,
-    )
-    return get_normalizer(version=version, model_settings_builder=model_settings_builder)
 
 
 def get_normalizer(

@@ -56,7 +56,10 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.request import (
     ChatCompletionRequest,
+    JsonSchema,
     ReasoningEffort,
+    ResponseFormat,
+    ResponseFormats,
 )
 from mistral_common.protocol.instruct.tool_calls import (
     Function,
@@ -109,6 +112,13 @@ DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX = AudioURLChunk(
     audio_url=AudioURL(url=f"data:audio/wav;base64,{DUMMY_AUDIO_CHUNK.input_audio}")
 )
 DUMMY_AUDIO_URL_CHUNK_URL = AudioURLChunk(audio_url=AudioURL(url=AUDIO_SAMPLE_URL))
+
+assert isinstance(DUMMY_AUDIO_URL_CHUNK_URL.audio_url, AudioURL)
+DUMMY_AUDIO_URL_CHUNK_URL_URL = DUMMY_AUDIO_URL_CHUNK_URL.audio_url.url
+assert isinstance(DUMMY_AUDIO_URL_CHUNK_BASE64.audio_url, AudioURL)
+DUMMY_AUDIO_URL_CHUNK_BASE64_URL = DUMMY_AUDIO_URL_CHUNK_BASE64.audio_url.url
+assert isinstance(DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX.audio_url, AudioURL)
+DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX_URL = DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX.audio_url.url
 
 
 def test_convert_image_chunk() -> None:
@@ -827,6 +837,25 @@ def test_request_to_openai_derives_continuation_flag(messages: list[ChatMessage]
     assert request.to_openai()["continue_final_message"] is expected
 
 
+def test_to_openai_renames_custom_schema_to_schema() -> None:
+    schema = {"type": "object"}
+    rf = ResponseFormat(type=ResponseFormats.json_schema, json_schema=JsonSchema(name="x", schema=schema))
+    out = ChatCompletionRequest(messages=[UserMessage(content="hi")], response_format=rf).to_openai()
+    assert out["response_format"]["json_schema"]["schema"] == schema
+    assert "custom_schema" not in out["response_format"]["json_schema"]
+
+
+def test_from_openai_accepts_schema_key() -> None:
+    schema = {"type": "object"}
+    req = ChatCompletionRequest.from_openai(
+        messages=[{"role": "user", "content": "hi"}],
+        response_format={"type": "json_schema", "json_schema": {"name": "x", "schema": schema}},
+    )
+    assert req.response_format is not None
+    assert req.response_format.json_schema is not None
+    assert req.response_format.json_schema.custom_schema == schema
+
+
 @pytest.mark.parametrize(
     "reasoning_effort",
     [None, ReasoningEffort.none, ReasoningEffort.high],
@@ -1054,19 +1083,19 @@ def test_request_to_openai_derives_continuation_flag(messages: list[ChatMessage]
                         {
                             "type": "audio_url",
                             "audio_url": {
-                                "url": DUMMY_AUDIO_URL_CHUNK_URL.audio_url.url,
+                                "url": DUMMY_AUDIO_URL_CHUNK_URL_URL,
                             },
                         },
                         {
                             "type": "audio_url",
                             "audio_url": {
-                                "url": DUMMY_AUDIO_URL_CHUNK_BASE64.audio_url.url,
+                                "url": DUMMY_AUDIO_URL_CHUNK_BASE64_URL,
                             },
                         },
                         {
                             "type": "audio_url",
                             "audio_url": {
-                                "url": DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX.audio_url.url,
+                                "url": DUMMY_AUDIO_URL_CHUNK_BASE64_PREFIX_URL,
                             },
                         },
                     ],
@@ -1437,6 +1466,37 @@ class TestToolChoice:
         assert reconstructed.tool_choice == expected_reconstructed
 
 
+class TestParallelToolCalls:
+    @pytest.mark.parametrize("parallel_tool_calls", [True, False])
+    def test_to_openai_with_tools_includes_parallel_tool_calls(self, parallel_tool_calls: bool) -> None:
+        request = ChatCompletionRequest(
+            messages=[UserMessage(content="Hello")],
+            tools=[Tool(function=Function(name="get_weather", parameters={}))],
+            parallel_tool_calls=parallel_tool_calls,
+        )
+
+        assert request.to_openai()["parallel_tool_calls"] is parallel_tool_calls
+
+    @pytest.mark.parametrize("tools", [None, []])
+    def test_to_openai_without_tools_omits_parallel_tool_calls(self, tools: list[Tool] | None) -> None:
+        request = ChatCompletionRequest(messages=[UserMessage(content="Hello")], tools=tools, parallel_tool_calls=False)
+
+        assert "parallel_tool_calls" not in request.to_openai()
+
+    def test_parallel_tool_calls_default_true(self) -> None:
+        request = ChatCompletionRequest(messages=[UserMessage(content="Hello")])
+
+        assert request.parallel_tool_calls is True
+
+    @pytest.mark.parametrize(("value", "expected"), [(False, False), (True, True), (None, True)])
+    def test_from_openai_parallel_tool_calls(self, value: bool | None, expected: bool) -> None:
+        request = ChatCompletionRequest.from_openai(
+            messages=[{"role": "user", "content": "Hello"}], parallel_tool_calls=value
+        )
+
+        assert request.parallel_tool_calls is expected
+
+
 @pytest.mark.parametrize(
     ["from_openai_call", "expected"],
     [
@@ -1539,3 +1599,16 @@ def test_from_openai_drops_extra_fields(from_openai_call: Any, expected: Any) ->
 def test_direct_construction_still_strict(constructor: Any) -> None:
     with pytest.raises(Exception):
         constructor()
+
+
+def test_convert_function_from_openai_null_strict() -> None:
+    openai_function: dict[str, Any] = {"name": "get_weather", "parameters": {"type": "object"}, "strict": None}
+    assert Function.from_openai(openai_function) == Function(name="get_weather", parameters={"type": "object"})
+
+
+def test_convert_tool_from_openai_null_strict() -> None:
+    openai_tool: dict[str, Any] = {
+        "type": "function",
+        "function": {"name": "get_weather", "parameters": {"type": "object"}, "strict": None},
+    }
+    assert Tool.from_openai(openai_tool) == Tool(function=Function(name="get_weather", parameters={"type": "object"}))

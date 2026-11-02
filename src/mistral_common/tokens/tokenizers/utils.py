@@ -3,8 +3,7 @@ import os
 from pathlib import Path
 from typing import Iterator
 
-import requests
-
+from mistral_common.exceptions import MistralCommonException
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.image import MultiModalVersion
 
@@ -13,6 +12,10 @@ try:
     import huggingface_hub
     import huggingface_hub.constants
     import huggingface_hub.errors
+
+    # `huggingface_hub.utils.httpx` re-exports the HTTP module the hub raises network
+    # errors from (httpx on 1.x, httpx2 on 2.x), so one HTTPError type covers both stacks.
+    from huggingface_hub.utils import httpx as _hub_httpx
 
     _hub_installed = True
 except ImportError:
@@ -46,7 +49,7 @@ def chunks(lst: list[str], chunk_size: int) -> Iterator[list[str]]:
         yield lst[i : i + chunk_size]
 
 
-def list_local_hf_repo_files(repo_id: str, revision: str | None) -> list[str]:
+def list_local_hf_repo_files(repo_id: str, revision: str | None, cache_dir: str | Path | None = None) -> list[str]:
     r"""List the files of a locally cached Hugging Face repo.
 
     Reads directly from the Hugging Face cache directory without network
@@ -56,6 +59,8 @@ def list_local_hf_repo_files(repo_id: str, revision: str | None) -> list[str]:
         repo_id: The Hugging Face repo ID.
         revision: Git branch, tag, or commit hash. If `None`, the default
             revision (usually "main") is used.
+        cache_dir: Directory where the repo is cached. If `None`, uses the
+            default Hugging Face cache.
 
     Returns:
         The file names in the repo snapshot, or an empty list if the repo or
@@ -66,9 +71,8 @@ def list_local_hf_repo_files(repo_id: str, revision: str | None) -> list[str]:
     """
     _assert_hub_installed()
 
-    repo_cache = Path(huggingface_hub.constants.HF_HUB_CACHE) / huggingface_hub.constants.REPO_ID_SEPARATOR.join(
-        ["models", *repo_id.split("/")]
-    )
+    cache_root = Path(cache_dir) if cache_dir is not None else Path(huggingface_hub.constants.HF_HUB_CACHE)
+    repo_cache = cache_root / huggingface_hub.constants.REPO_ID_SEPARATOR.join(["models", *repo_id.split("/")])
 
     if revision is None:
         revision = huggingface_hub.constants.DEFAULT_REVISION
@@ -134,7 +138,6 @@ def get_one_valid_tokenizer_file(files: list[str]) -> str:
 
     if len(valid_tokenizer_file_names_and_files) == 0:
         raise ValueError("No tokenizer file found.")
-    # If there are multiple tokenizer files, we use tekken.json if it exists, otherwise the versioned one.
     if len(valid_tokenizer_file_names_and_files) > 1:
         for file_name, tokenizer_file in valid_tokenizer_file_names_and_files:
             if "tekken.json" == file_name:
@@ -186,6 +189,8 @@ def download_tokenizer_from_hf_hub(
             no valid tokenizer file exists in the repo.
         FileNotFoundError: If local files were required but none were found
             in the cache.
+        MistralCommonException: If an unexpected error occurs while listing the
+            repo files on the Hugging Face Hub.
     """
     _assert_hub_installed()
 
@@ -197,16 +202,11 @@ def download_tokenizer_from_hf_hub(
             hf_api = huggingface_hub.HfApi()
             repo_files = hf_api.list_repo_files(repo_id, revision=revision, token=token)
             local_files_only = False
-        except (
-            requests.ConnectionError,
-            requests.HTTPError,
-            requests.Timeout,
-            huggingface_hub.errors.OfflineModeIsEnabled,
-        ) as e:
+        except (_hub_httpx.HTTPError, huggingface_hub.errors.OfflineModeIsEnabled) as e:
             if force_download:
                 raise e
 
-            repo_files = list_local_hf_repo_files(repo_id=repo_id, revision=revision)
+            repo_files = list_local_hf_repo_files(repo_id=repo_id, revision=revision, cache_dir=cache_dir)
             local_files_only = True
 
             logger.info("Could not connect to the Hugging Face Hub. Using local files only.")
@@ -216,8 +216,13 @@ def download_tokenizer_from_hf_hub(
                     f"Could not connect to the Hugging Face Hub and no local files were found for the repo ID {repo_id}"
                     f" and revision {revision}. Please check your internet connection and try again."
                 ) from e
+        except Exception as e:
+            raise MistralCommonException(
+                f"Something went wrong while listing the files of the Hugging Face repo {repo_id} "
+                f"(revision: {revision})."
+            ) from e
     else:
-        repo_files = list_local_hf_repo_files(repo_id=repo_id, revision=revision)
+        repo_files = list_local_hf_repo_files(repo_id=repo_id, revision=revision, cache_dir=cache_dir)
         if len(repo_files) == 0:
             raise FileNotFoundError(
                 f"No local files found for the repo ID {repo_id} and revision {revision}. Please check the repo ID and"

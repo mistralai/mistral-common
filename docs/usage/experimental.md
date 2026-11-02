@@ -194,7 +194,7 @@ import requests
 
 response = requests.post("http://localhost:8000/v1/detokenize/string", json={
     "tokens":[1, 3, 22177, 1044, 2606, 1584, 1636, 1063, 4],
-    "special_token_policy": 1,
+    "special_token_policy": "keep",
 })
 print(response.json())
 # <s>[INST]Hello, how are you?[/INST]

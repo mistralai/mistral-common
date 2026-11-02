@@ -1,7 +1,7 @@
 import base64
 import logging
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum, auto
 from io import BytesIO
 
 import numpy as np
@@ -10,6 +10,7 @@ from PIL import Image
 from mistral_common.image import SerializableImage, apply_exif_orientation, download_image
 from mistral_common.imports import assert_opencv_installed, is_opencv_installed
 from mistral_common.protocol.instruct.chunk import ImageChunk, ImageURLChunk
+from mistral_common.utils.data_url import maybe_strip_base64_data_url_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -67,21 +68,33 @@ def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
         The image as a PIL Image object.
 
     Raises:
-        RuntimeError: If the URL scheme is not data:..., file..., or http(s).
+        ValueError: If the URL scheme is unsupported, or a data URL is malformed,
+            its payload is not valid base64, or its payload is not a decodable image.
     """
     if isinstance(chunk, ImageChunk):
         # Already oriented by the `SerializableImage` validator.
         return chunk.image
-    if chunk.get_url().startswith("data:image"):
-        data = chunk.get_url().split(",")[1]
-        image_data = base64.b64decode(data)
-        return apply_exif_orientation(Image.open(BytesIO(image_data)))
-    if chunk.get_url().startswith("file"):
-        return apply_exif_orientation(Image.open(open(chunk.get_url().replace("file://", ""), "rb")))
-    if chunk.get_url().startswith("http"):
-        return download_image(chunk.get_url())
+    url = chunk.get_url()
+    if url.startswith("data:"):
+        data = maybe_strip_base64_data_url_prefix(url)
+        try:
+            image_data = base64.b64decode(data)
+        except ValueError as e:
+            raise ValueError(f"Invalid image data URL {url[:64]}: payload is not valid base64.") from e
+        try:
+            return apply_exif_orientation(Image.open(BytesIO(image_data)))
+        except Exception as e:
+            raise ValueError(f"Invalid image data URL {url[:64]}: payload is not a decodable image.") from e
+    if url.startswith("file://"):
+        with open(url.removeprefix("file://"), "rb") as file:
+            image = apply_exif_orientation(Image.open(file))
+            image.load()
+        return image
+    if url.startswith("http"):
+        # download_image applies EXIF orientation itself.
+        return download_image(url=url, timeout=None)
 
-    raise RuntimeError(f"Unsupported image url scheme {chunk.get_url()}")
+    raise ValueError(f"Unsupported image url scheme {url}")
 
 
 DATASET_MEAN = (0.48145466, 0.4578275, 0.40821073)  # RGB
@@ -89,14 +102,14 @@ DATASET_STD = (0.26862954, 0.26130258, 0.27577711)  # RGB
 
 
 # only relevant for spm
-class MultiModalVersion(str, Enum):
+class MultiModalVersion(StrEnum):
     r"""Version of the image tokenizer.
 
     Attributes:
         m1: The first multimodal version, patch size 16 and max image size 1024.
     """
 
-    m1 = "m1"
+    m1 = auto()
 
     @property
     def config(self) -> "ImageConfig":

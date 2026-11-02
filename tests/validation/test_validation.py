@@ -45,7 +45,9 @@ class TestValidateTools:
             )
 
     def test_tool_function_invalid_schema(self, validator: MistralRequestValidator) -> None:
-        with pytest.raises(InvalidToolSchemaException, match=r"32 is not valid under any of the given schemas"):
+        with pytest.raises(
+            InvalidToolSchemaException, match=r"^Invalid tool schema: 32 is not valid under any of the given schemas"
+        ):
             validator._validate_tools(tools=[Tool(function=Function(name="function_name", parameters={"type": 32}))])
 
 

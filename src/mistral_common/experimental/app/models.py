@@ -1,5 +1,5 @@
 import importlib.metadata
-from enum import Enum
+from enum import StrEnum, auto
 from pathlib import Path
 from typing import Any
 
@@ -46,14 +46,14 @@ class OpenAIChatCompletionRequest(BaseModel):
         return extra_fields
 
 
-class EngineBackend(str, Enum):
+class EngineBackend(StrEnum):
     r"""The engine backend to use.
 
     Attributes:
         llama_cpp: The `llama.cpp` backend.
     """
 
-    llama_cpp = "llama_cpp"
+    llama_cpp = auto()
 
 
 class Settings(BaseSettings):

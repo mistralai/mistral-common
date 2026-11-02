@@ -11,15 +11,25 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.utils import decode_keep
 
 
-def test_special_token_policy_backward_compatibility() -> None:
-    assert SpecialTokenPolicy(0) == SpecialTokenPolicy.IGNORE
-    assert SpecialTokenPolicy(1) == SpecialTokenPolicy.KEEP
-    assert SpecialTokenPolicy(2) == SpecialTokenPolicy.RAISE
+@pytest.mark.parametrize(
+    "policy,expected",
+    [
+        (SpecialTokenPolicy.IGNORE, SpecialTokenPolicy.IGNORE),
+        ("ignore", SpecialTokenPolicy.IGNORE),
+        (SpecialTokenPolicy.KEEP, SpecialTokenPolicy.KEEP),
+        ("keep", SpecialTokenPolicy.KEEP),
+        (SpecialTokenPolicy.RAISE, SpecialTokenPolicy.RAISE),
+        ("raise", SpecialTokenPolicy.RAISE),
+    ],
+)
+def test_special_token_policy_validate(policy: SpecialTokenPolicy | str, expected: SpecialTokenPolicy) -> None:
+    assert SpecialTokenPolicy.validate(policy) == expected
 
-    with pytest.raises(ValueError, match=r"3 is not a valid SpecialTokenPolicy"):
-        SpecialTokenPolicy(3)
-    with pytest.raises(ValueError, match=r"'invalid' is not a valid SpecialTokenPolicy"):
-        SpecialTokenPolicy("invalid")
+
+@pytest.mark.parametrize("policy", [3, "invalid"])
+def test_special_token_policy_validate_rejects_invalid_values(policy: object) -> None:
+    with pytest.raises(ValueError, match=r"Invalid `special_token_policy`"):
+        SpecialTokenPolicy.validate(policy)  # type: ignore[arg-type]
 
 
 @pytest.fixture(autouse=True)

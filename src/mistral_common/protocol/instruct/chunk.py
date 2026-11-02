@@ -1,30 +1,22 @@
 import base64
 import io
-import re
-from enum import Enum
+from enum import StrEnum, auto
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 from urllib.parse import urlparse
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
-from typing_extensions import Annotated
 
 from mistral_common.base import MistralBase
 from mistral_common.deprecation import warn_once
 from mistral_common.image import SerializableImage
 from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
+from mistral_common.utils.data_url import maybe_strip_base64_data_url_prefix
 
 if is_soundfile_installed():
     import soundfile as sf
 if TYPE_CHECKING:
     from mistral_common.tokens.tokenizers.audio import Audio
-
-
-def _strip_audio_data_url_prefix(data: str) -> str:
-    r"""Remove the optional base64 audio data URL prefix."""
-    if re.match(r"^data:audio/\w+;base64,", data):
-        return data.split(",", 1)[1]
-    return data
 
 
 def _detect_audio_format(data: str | bytes) -> str:
@@ -39,12 +31,17 @@ def _detect_audio_format(data: str | bytes) -> str:
         The detected audio format as a lowercase string (e.g. "wav", "mp3").
 
     Raises:
-        ValueError: If the audio format cannot be detected.
+        ValueError: If the input is a malformed data URL, is not valid base64,
+            or the audio format cannot be detected.
     """
     assert_soundfile_installed()
 
     if isinstance(data, str):
-        audio_bytes = base64.b64decode(_strip_audio_data_url_prefix(data))
+        payload = maybe_strip_base64_data_url_prefix(data)
+        try:
+            audio_bytes = base64.b64decode(payload)
+        except ValueError as e:
+            raise ValueError("base64 decoding failed. Please check the input string is a valid base64.") from e
     else:
         audio_bytes = data
 
@@ -56,7 +53,7 @@ def _detect_audio_format(data: str | bytes) -> str:
     return fmt
 
 
-class ChunkTypes(str, Enum):
+class ChunkTypes(StrEnum):
     r"""Enum of the types of content chunks that can be sent to the model.
 
     Attributes:
@@ -72,12 +69,12 @@ class ChunkTypes(str, Enum):
         >>> chunk_type = ChunkTypes.text
     """
 
-    text = "text"
-    image = "image"
-    image_url = "image_url"
-    input_audio = "input_audio"
-    audio_url = "audio_url"
-    thinking = "thinking"
+    text = auto()
+    image = auto()
+    image_url = auto()
+    input_audio = auto()
+    audio_url = auto()
+    thinking = auto()
 
 
 class BaseContentChunk(MistralBase):
@@ -175,15 +172,14 @@ class ImageChunk(BaseContentChunk):
         Raises:
             AssertionError: If the chunk type is not `image_url` or the
                 `image_url` entry is malformed.
+            ValueError: If the URL is a malformed data URL.
         """
         assert openai_chunk.get("type") == "image_url", openai_chunk
 
         image_url_dict = openai_chunk["image_url"]
         assert isinstance(image_url_dict, dict) and "url" in image_url_dict, image_url_dict
 
-        url = image_url_dict["url"]
-        if re.match(r"^data:image/\w+;base64,", url):  # Remove the prefix if it exists
-            url = url.split(",")[1]
+        url = maybe_strip_base64_data_url_prefix(image_url_dict["url"])
 
         return cls.model_validate({"image": url})
 
@@ -326,7 +322,7 @@ class AudioURL(MistralBase):
     url: str
 
 
-class AudioURLType(str, Enum):
+class AudioURLType(StrEnum):
     r"""Enum for the kinds of audio URL references.
 
     Attributes:
@@ -337,10 +333,10 @@ class AudioURLType(str, Enum):
         file_uri: A file URI (e.g., `file:///path/to/file`).
     """
 
-    url = "url"
-    base64 = "base64"
-    file = "file"
-    file_uri = "file_uri"
+    url = auto()
+    base64 = auto()
+    file = auto()
+    file_uri = auto()
 
 
 class AudioURLChunk(BaseContentChunk):
@@ -413,7 +409,7 @@ class AudioURLChunk(BaseContentChunk):
     @classmethod
     def from_openai(cls, openai_chunk: dict[str, Any]) -> "AudioURLChunk":
         r"""Converts the OpenAI chunk to the Mistral format."""
-        return cls.model_validate_ignore_extra(openai_chunk)
+        return cls.model_validate(openai_chunk, extra="ignore")
 
 
 class AudioChunk(BaseContentChunk):
@@ -451,7 +447,7 @@ class AudioChunk(BaseContentChunk):
         if isinstance(raw, MistralBase):
             raw = raw.model_dump()
         if isinstance(raw, dict) and "data" in raw:
-            values["input_audio"] = raw["data"]
+            return {**values, "input_audio": raw["data"]}
         return values
 
     @field_validator("input_audio")
@@ -485,7 +481,7 @@ class AudioChunk(BaseContentChunk):
         if isinstance(self.input_audio, bytes):
             content = base64.b64encode(self.input_audio).decode("utf-8")
         else:
-            content = _strip_audio_data_url_prefix(self.input_audio)
+            content = maybe_strip_base64_data_url_prefix(self.input_audio)
         fmt = _detect_audio_format(self.input_audio)
         return {
             "type": self.type,
@@ -505,7 +501,7 @@ class AudioChunk(BaseContentChunk):
         Returns:
             An AudioChunk instance initialized with the data from the OpenAI chunk.
         """
-        return cls.model_validate_ignore_extra(openai_chunk)
+        return cls.model_validate(openai_chunk, extra="ignore")
 
 
 class TextChunk(BaseContentChunk):
@@ -528,7 +524,7 @@ class TextChunk(BaseContentChunk):
     @classmethod
     def from_openai(cls, openai_chunk: dict[str, Any]) -> "TextChunk":
         r"""Converts the OpenAI chunk to the Mistral format."""
-        return cls.model_validate_ignore_extra(openai_chunk)
+        return cls.model_validate(openai_chunk, extra="ignore")
 
 
 class ThinkChunk(BaseContentChunk):
@@ -555,7 +551,7 @@ class ThinkChunk(BaseContentChunk):
     @classmethod
     def from_openai(cls, openai_chunk: dict[str, Any]) -> "ThinkChunk":
         r"""Converts the OpenAI chunk to the Mistral format."""
-        return cls.model_validate_ignore_extra(openai_chunk)
+        return cls.model_validate(openai_chunk, extra="ignore")
 
 
 ContentChunk = Annotated[

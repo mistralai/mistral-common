@@ -1,5 +1,3 @@
-import sys
-
 import pytest
 from PIL import Image
 
@@ -280,8 +278,7 @@ def test_image_tokenization_integration(mm_tokenizer: MistralTokenizer) -> None:
     # hardcode image_patch_size = 2
     image_encoder.image_config.image_patch_size = 2
 
-    kw_args = dict(strict=True) if sys.version_info >= (3, 10) else {}
-    for r, expected_tokens in zip(requests, expected, **kw_args):
+    for r, expected_tokens in zip(requests, expected, strict=True):
         output: Tokenized = mm_tokenizer.encode_chat_completion(r)
         assert output.tokens == expected_tokens, f"Incorrect tokens for request {r}"
 
