@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -6,11 +7,19 @@ from typing import Any
 
 import pytest
 
+from mistral_common.experimental.think import _split_content_and_think_chunks
+from mistral_common.experimental.tools import _decode_tool_calls, _split_content_and_tool_calls
 from mistral_common.integrations.hf_tokenizers.response_template import (
     convert_tokenizer_to_response_template,
     generate_response_template,
 )
-from mistral_common.tokens.tokenizers.base import TokenizerVersion
+from mistral_common.protocol.instruct.chunk import TextChunk, ThinkChunk
+from mistral_common.protocol.instruct.messages import AssistantMessage, UserMessage
+from mistral_common.protocol.instruct.request import ChatCompletionRequest
+from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
+from mistral_common.protocol.instruct.validator import ValidationMode
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTokens, TokenizerVersion
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.integrations.chat_templates.helpers import TestConfig, build_tekken_json
 
 V1_PR_FIXTURE = """{
@@ -388,3 +397,194 @@ def test_convert_v11_plain_thinking_heuristic(tmp_path: Path) -> None:
         plain_thinking_support=False,
     )
     assert "reasoning_content" not in override_result["fields"]
+
+
+def test_matches_experimental_parser_v13(tmp_path: Path) -> None:
+    tokenizer_path = build_tekken_json(
+        config=TestConfig(version=TokenizerVersion.v13, think=True),
+        output_dir=tmp_path,
+    )
+    mistral_tokenizer = MistralTokenizer.from_file(
+        tokenizer_filename=str(tokenizer_path),
+        mode=ValidationMode.test,
+    )
+    request = ChatCompletionRequest(
+        messages=[
+            UserMessage(content="hi"),
+            AssistantMessage(
+                content=[TextChunk(text="Sure."), ThinkChunk(thinking="let me check", closed=True)],
+                tool_calls=[
+                    ToolCall(
+                        id="abcdefghi",
+                        function=FunctionCall(name="get_weather", arguments={"city": "Paris"}),
+                    ),
+                    ToolCall(
+                        id="123456789",
+                        function=FunctionCall(name="get_time", arguments={"city": "Paris"}),
+                    ),
+                ],
+                prefix=True,
+            ),
+        ]
+    )
+    tokens = mistral_tokenizer.encode_chat_completion(request).tokens
+    tokenizer = mistral_tokenizer.instruct_tokenizer.tokenizer
+    end_inst_id = tokenizer.get_special_token(SpecialTokens.end_inst.value)
+    generation_start = max(index for index, token in enumerate(tokens) if token == end_inst_id) + 1
+    generation = tokens[generation_start:]
+    tool_calls_id = tokenizer.get_special_token(SpecialTokens.tool_calls.value)
+    content_tokens, tool_call_tokens = _split_content_and_tool_calls(
+        tokens=generation,
+        tool_call_token_id=tool_calls_id,
+    )
+    decoded_tool_calls = _decode_tool_calls(tool_call_tokens=tool_call_tokens, tokenizer=tokenizer)
+    assert [call.function.name for call in decoded_tool_calls] == ["get_weather", "get_time"]
+    response_template = generate_response_template(
+        tokenizer_version=TokenizerVersion.v13,
+        thinking_support=True,
+        plain_thinking_support=False,
+    )
+    tool_call_field = response_template["fields"]["tool_calls"]
+    for call_tokens, decoded_tool_call in zip(tool_call_tokens, decoded_tool_calls, strict=True):
+        decoded_call_region = tokenizer.decode(tokens=call_tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+        match = re.fullmatch(
+            pattern=tool_call_field["open_pattern"] + ".*",
+            string=decoded_call_region,
+            flags=re.DOTALL,
+        )
+        assert match is not None
+        assert match.group("name") == decoded_tool_call.function.name
+
+    think_chunks = _split_content_and_think_chunks(
+        tokens=content_tokens,
+        begin_think_token_id=tokenizer.get_special_token(SpecialTokens.begin_think.value),
+        end_think_token_id=tokenizer.get_special_token(SpecialTokens.end_think.value),
+    )
+    decoded_think_chunks = [
+        tokenizer.decode(tokens=chunk_tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+        for chunk_tokens, is_think in think_chunks
+        if is_think
+    ]
+
+    assert decoded_think_chunks == ["[THINK]let me check[/THINK]"]
+    assert response_template["fields"]["reasoning_content"]["open"] == "[THINK]"
+    assert response_template["fields"]["reasoning_content"]["close"] == "[/THINK]"
+    assert response_template["fields"]["content"]["close"] == ["[TOOL_CALLS]", "</s>"]
+
+
+def test_matches_experimental_parser_v7(tmp_path: Path) -> None:
+    tokenizer_path = build_tekken_json(
+        config=TestConfig(version=TokenizerVersion.v7),
+        output_dir=tmp_path,
+    )
+    mistral_tokenizer = MistralTokenizer.from_file(
+        tokenizer_filename=str(tokenizer_path),
+        mode=ValidationMode.finetuning,
+    )
+    request = ChatCompletionRequest(
+        messages=[
+            UserMessage(content="hi"),
+            AssistantMessage(
+                content="Sure.",
+                tool_calls=[
+                    ToolCall(
+                        id="abcdefghi",
+                        function=FunctionCall(name="get_weather", arguments={"city": "Paris"}),
+                    )
+                ],
+            ),
+        ]
+    )
+    tokens = mistral_tokenizer.encode_chat_completion(request).tokens
+    tokenizer = mistral_tokenizer.instruct_tokenizer.tokenizer
+    end_inst_id = tokenizer.get_special_token(SpecialTokens.end_inst.value)
+    generation_start = max(index for index, token in enumerate(tokens) if token == end_inst_id) + 1
+    generation = tokens[generation_start:]
+    tool_calls_id = tokenizer.get_special_token(SpecialTokens.tool_calls.value)
+    _, tool_call_tokens = _split_content_and_tool_calls(tokens=generation, tool_call_token_id=tool_calls_id)
+    decoded_tool_calls = _decode_tool_calls(tool_call_tokens=tool_call_tokens, tokenizer=tokenizer)
+    assert len(decoded_tool_calls) == 1
+    assert decoded_tool_calls[0].function.name == "get_weather"
+    decoded_call = decoded_tool_calls[0]
+    transformed_call = {
+        "id": decoded_call.id,
+        "name": decoded_call.function.name,
+        "arguments": json.loads(decoded_call.function.arguments),
+    }
+    assert set(transformed_call) == {"id", "name", "arguments"}
+    response_template = generate_response_template(
+        tokenizer_version=TokenizerVersion.v7,
+        thinking_support=False,
+        plain_thinking_support=False,
+    )
+    expected_transform = {
+        "id": "{id}",
+        "type": "function",
+        "function": {"name": "{name}", "arguments": "{arguments}"},
+    }
+    assert response_template["fields"]["tool_calls"] == {
+        "open": "[TOOL_CALLS]",
+        "close": "</s>",
+        "content": "json",
+        "transform_each": True,
+        "transform": expected_transform,
+    }
+    decoded_call_region = tokenizer.decode(tokens=tool_call_tokens[0], special_token_policy=SpecialTokenPolicy.KEEP)
+    call_start = decoded_call_region.index(SpecialTokens.tool_calls.value) + len(SpecialTokens.tool_calls.value)
+    call_end = decoded_call_region.index(SpecialTokens.eos.value, call_start)
+    call_array_region = decoded_call_region[call_start:call_end]
+    assert json.loads(call_array_region) == [transformed_call]
+
+
+def test_matches_experimental_parser_v11_tool_calls(tmp_path: Path) -> None:
+    tokenizer_path = build_tekken_json(
+        config=TestConfig(version=TokenizerVersion.v11),
+        output_dir=tmp_path,
+    )
+    mistral_tokenizer = MistralTokenizer.from_file(
+        tokenizer_filename=str(tokenizer_path),
+        mode=ValidationMode.test,
+    )
+    request = ChatCompletionRequest(
+        messages=[
+            UserMessage(content="hi"),
+            AssistantMessage(
+                tool_calls=[
+                    ToolCall(
+                        id="abcdefghi",
+                        function=FunctionCall(name="get_weather", arguments={"city": "Paris"}),
+                    ),
+                    ToolCall(
+                        id="123456789",
+                        function=FunctionCall(name="get_time", arguments={"city": "Paris"}),
+                    ),
+                ],
+                prefix=True,
+            ),
+        ]
+    )
+    tokens = mistral_tokenizer.encode_chat_completion(request).tokens
+    tokenizer = mistral_tokenizer.instruct_tokenizer.tokenizer
+    end_inst_id = tokenizer.get_special_token(SpecialTokens.end_inst.value)
+    generation_start = max(index for index, token in enumerate(tokens) if token == end_inst_id) + 1
+    generation = tokens[generation_start:]
+    tool_calls_id = tokenizer.get_special_token(SpecialTokens.tool_calls.value)
+    _, tool_call_tokens = _split_content_and_tool_calls(tokens=generation, tool_call_token_id=tool_calls_id)
+    decoded_tool_calls = _decode_tool_calls(tool_call_tokens=tool_call_tokens, tokenizer=tokenizer)
+    assert [call.function.name for call in decoded_tool_calls] == ["get_weather", "get_time"]
+    tool_call_field = generate_response_template(
+        tokenizer_version=TokenizerVersion.v11,
+        thinking_support=False,
+        plain_thinking_support=False,
+    )["fields"]["tool_calls"]
+
+    for call_tokens, decoded_tool_call in zip(tool_call_tokens, decoded_tool_calls, strict=True):
+        decoded_call_region = tokenizer.decode(tokens=call_tokens, special_token_policy=SpecialTokenPolicy.KEEP)
+        match = re.fullmatch(
+            pattern=tool_call_field["open_pattern"] + ".*",
+            string=decoded_call_region,
+            flags=re.DOTALL,
+        )
+        assert match is not None
+        assert match.group("name") == decoded_tool_call.function.name
+        assert match.group("id") == decoded_tool_call.id
