@@ -20,7 +20,8 @@ def convert_openai_messages(
 
     Args:
         messages: Message dicts matching OpenAI's chat schema. Each must have
-            a "role" key of "user", "assistant", "tool", or "system".
+            a "role" key of "user", "assistant", "tool", or "system". The
+            OpenAI "developer" role is accepted and remapped to "system".
 
     Returns:
         The Mistral message instances, one per input dict.
@@ -38,8 +39,8 @@ def convert_openai_messages(
             message = AssistantMessage.from_openai(openai_message)
         elif message_role == "tool":
             message = ToolMessage.from_openai(openai_message)
-        elif message_role == "system":
-            message = SystemMessage.from_openai(openai_message)
+        elif message_role in ("system", "developer"):
+            message = SystemMessage.from_openai({**openai_message, "role": "system"})
         else:
             raise ValueError(f"Unknown message role: {message_role}")
         converted_messages.append(message)
