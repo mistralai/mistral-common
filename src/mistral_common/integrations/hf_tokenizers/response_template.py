@@ -9,14 +9,11 @@ _PLAIN_THINKING_OPEN = "<think>"
 _PLAIN_THINKING_CLOSE = "</think>"
 
 
-def _build_response_template(
-    version: TokenizerVersion, thinking_support: bool, plain_thinking_support: bool
-) -> dict[str, Any]:
+def _build_response_template(version: TokenizerVersion, plain_thinking_support: bool) -> dict[str, Any]:
     r"""Build response-template fields from tokenizer capabilities.
 
     Args:
         version: Tokenizer version used to select field formats.
-        thinking_support: Whether special-token thinking is supported.
         plain_thinking_support: Whether plain-text thinking is supported.
 
     Returns:
@@ -25,7 +22,6 @@ def _build_response_template(
     Examples:
         >>> _build_response_template(
         ...     version=TokenizerVersion.v13,
-        ...     thinking_support=True,
         ...     plain_thinking_support=False,
         ... )["defaults"]
         {'role': 'assistant'}
@@ -144,7 +140,6 @@ def generate_response_template(
 
     return _build_response_template(
         version=tokenizer_version,
-        thinking_support=thinking_support,
         plain_thinking_support=plain_thinking_support,
     )
 
