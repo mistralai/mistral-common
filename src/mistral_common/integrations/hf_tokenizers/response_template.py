@@ -2,7 +2,12 @@ import re
 from pathlib import Path
 from typing import Any
 
-from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
+from mistral_common.tokens.tokenizers.base import (
+    PLAIN_BEGIN_THINK,
+    PLAIN_END_THINK,
+    SpecialTokens,
+    TokenizerVersion,
+)
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 
@@ -33,8 +38,8 @@ def _build_response_template(version: TokenizerVersion, plain_thinking_support: 
         }
     elif version.uses_plain_thinking and plain_thinking_support:
         fields["reasoning_content"] = {
-            "open": SpecialTokens.plain_begin_think.value,
-            "close": SpecialTokens.plain_end_think.value,
+            "open": PLAIN_BEGIN_THINK,
+            "close": PLAIN_END_THINK,
             "content": "text",
         }
 

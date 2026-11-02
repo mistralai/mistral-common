@@ -64,8 +64,6 @@ class SpecialTokens(StrEnum):
         transcribe: The transcribe token.
         begin_think: The beginning of think token.
         end_think: The end of think token.
-        plain_begin_think: Plain-text opening think tag (v11 plain thinking, not a special token).
-        plain_end_think: Plain-text closing think tag (v11 plain thinking, not a special token).
         streaming_pad: The streaming pad token.
         streaming_word: The streaming word token.
         text_to_audio: The text to audio token.
@@ -104,8 +102,6 @@ class SpecialTokens(StrEnum):
     transcribe = "[TRANSCRIBE]"
     begin_think = "[THINK]"
     end_think = "[/THINK]"
-    plain_begin_think = "<think>"
-    plain_end_think = "</think>"
     streaming_pad = "[STREAMING_PAD]"
     streaming_word = "[STREAMING_WORD]"
     text_to_audio = "[NEXT_AUDIO_TEXT]"

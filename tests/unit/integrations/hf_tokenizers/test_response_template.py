@@ -18,7 +18,13 @@ from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMess
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
 from mistral_common.protocol.instruct.validator import ValidationMode
-from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTokens, TokenizerVersion
+from mistral_common.tokens.tokenizers.base import (
+    PLAIN_BEGIN_THINK,
+    PLAIN_END_THINK,
+    SpecialTokenPolicy,
+    SpecialTokens,
+    TokenizerVersion,
+)
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.integrations.chat_templates.helpers import TestConfig, build_tekken_json
 
@@ -216,8 +222,8 @@ def test_v11_tool_calls_include_call_id() -> None:
         },
     }
     assert template["fields"]["reasoning_content"] == {
-        "open": "<think>",
-        "close": "</think>",
+        "open": PLAIN_BEGIN_THINK,
+        "close": PLAIN_END_THINK,
         "content": "text",
     }
 

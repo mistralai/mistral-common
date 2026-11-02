@@ -1,7 +1,12 @@
 from dataclasses import dataclass
 
 from mistral_common.protocol.instruct.request import ReasoningEffort
-from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
+from mistral_common.tokens.tokenizers.base import (
+    PLAIN_BEGIN_THINK,
+    PLAIN_END_THINK,
+    SpecialTokens,
+    TokenizerVersion,
+)
 
 # Generated templates join text with Jinja `~`, never `+`: stock Jinja's `tojson` and `safe` return Markup,
 # and `+` with a Markup operand HTML-escapes the other one.
@@ -595,8 +600,8 @@ def _generate_macros(config: TemplateConfig) -> str:
 
     # Thinking branch
     if config.any_thinking_support:
-        begin_tag = SpecialTokens.plain_begin_think.value if config.plain_thinking_support else _BEGIN_THINK
-        end_tag = SpecialTokens.plain_end_think.value if config.plain_thinking_support else _END_THINK
+        begin_tag = PLAIN_BEGIN_THINK if config.plain_thinking_support else _BEGIN_THINK
+        end_tag = PLAIN_END_THINK if config.plain_thinking_support else _END_THINK
         lines.extend(
             [
                 "            {%- elif support_thinking and block['type'] == 'thinking' -%}",
