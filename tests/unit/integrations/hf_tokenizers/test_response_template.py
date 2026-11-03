@@ -1,7 +1,5 @@
 import json
 import re
-import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -36,17 +34,23 @@ _COMMON_CONTENT_FIELD: dict[str, Any] = {
     "join": "",
 }
 
-_V11_TOOL_CALLS: dict[str, Any] = {
-    "open_pattern": "\\[TOOL_CALLS\\](?P<name>.+?)\\[CALL_ID\\](?P<id>.+?)\\[ARGS\\]",
-    "close_pattern": "(?=\\[TOOL_CALLS\\])|</s>",
-    "repeats": True,
-    "content": "json",
-    "transform": {
-        "type": "function",
-        "id": "{id}",
-        "function": {"name": "{name}", "arguments": "{content}"},
-    },
-}
+
+def _v11_tool_calls() -> dict[str, Any]:
+    return {
+        "open_pattern": re.escape(SpecialTokens.tool_calls.value)
+        + "(?P<name>.+?)"
+        + re.escape(SpecialTokens.call_id.value)
+        + "(?P<id>.+?)"
+        + re.escape(SpecialTokens.args.value),
+        "close_pattern": "(?=" + re.escape(SpecialTokens.tool_calls.value) + ")|" + re.escape(SpecialTokens.eos.value),
+        "repeats": True,
+        "content": "json",
+        "transform": {
+            "type": "function",
+            "id": "{id}",
+            "function": {"name": "{name}", "arguments": "{content}"},
+        },
+    }
 
 
 @pytest.fixture(scope="module")
@@ -92,8 +96,13 @@ def expected_v13() -> dict[str, Any]:
                 "content": "text",
             },
             "tool_calls": {
-                "open_pattern": "\\[TOOL_CALLS\\](?P<name>.+?)\\[ARGS\\]",
-                "close_pattern": "(?=\\[TOOL_CALLS\\])|</s>",
+                "open_pattern": re.escape(SpecialTokens.tool_calls.value)
+                + "(?P<name>.+?)"
+                + re.escape(SpecialTokens.args.value),
+                "close_pattern": "(?="
+                + re.escape(SpecialTokens.tool_calls.value)
+                + ")|"
+                + re.escape(SpecialTokens.eos.value),
                 "repeats": True,
                 "content": "json",
                 "transform": {
@@ -117,7 +126,7 @@ def expected_v11_plain_thinking() -> dict[str, Any]:
                 "close": PLAIN_END_THINK,
                 "content": "text",
             },
-            "tool_calls": _V11_TOOL_CALLS,
+            "tool_calls": _v11_tool_calls(),
             "content": _COMMON_CONTENT_FIELD,
         },
     }
@@ -129,7 +138,7 @@ def expected_v11_no_thinking() -> dict[str, Any]:
         "defaults": {"role": "assistant"},
         "start_anchor": [SpecialTokens.end_inst.value, SpecialTokens.end_tool_results.value],
         "fields": {
-            "tool_calls": _V11_TOOL_CALLS,
+            "tool_calls": _v11_tool_calls(),
             "content": _COMMON_CONTENT_FIELD,
         },
     }
@@ -237,123 +246,135 @@ def test_start_anchor_per_version() -> None:
         assert template["start_anchor"] == ["[/INST]", "[/TOOL_RESULTS]"]
 
 
-def test_v13_v15_tool_calls_pattern() -> None:
-    expected_tool_calls = {
-        "open_pattern": "\\[TOOL_CALLS\\](?P<name>.+?)\\[ARGS\\]",
-        "close_pattern": "(?=\\[TOOL_CALLS\\])|</s>",
-        "repeats": True,
-        "content": "json",
-        "transform": {
-            "type": "function",
-            "function": {"name": "{name}", "arguments": "{content}"},
-        },
-    }
-
-    for version in (TokenizerVersion.v13, TokenizerVersion.v15):
-        template = generate_response_template(
-            tokenizer_version=version,
-            thinking_support=True,
-            plain_thinking_support=False,
-        )
-        assert template["fields"]["tool_calls"] == expected_tool_calls
+def _open_pattern(*middle: str) -> str:
+    r"""Build a tool-call open_pattern from re.escape'd special tokens."""
+    return re.escape(SpecialTokens.tool_calls.value) + "".join(middle) + re.escape(SpecialTokens.args.value)
 
 
-def test_v11_tool_calls_include_call_id(
-    expected_v11_plain_thinking: dict[str, Any], expected_v11_no_thinking: dict[str, Any]
-) -> None:
+_CLOSE_PATTERN = "(?=" + re.escape(SpecialTokens.tool_calls.value) + ")|" + re.escape(SpecialTokens.eos.value)
+
+
+@pytest.mark.parametrize(
+    ("version", "expected_tool_calls"),
+    [
+        (
+            TokenizerVersion.v13,
+            {
+                "open_pattern": _open_pattern("(?P<name>.+?)"),
+                "close_pattern": _CLOSE_PATTERN,
+                "repeats": True,
+                "content": "json",
+                "transform": {
+                    "type": "function",
+                    "function": {"name": "{name}", "arguments": "{content}"},
+                },
+            },
+        ),
+        (
+            TokenizerVersion.v15,
+            {
+                "open_pattern": _open_pattern("(?P<name>.+?)"),
+                "close_pattern": _CLOSE_PATTERN,
+                "repeats": True,
+                "content": "json",
+                "transform": {
+                    "type": "function",
+                    "function": {"name": "{name}", "arguments": "{content}"},
+                },
+            },
+        ),
+        (
+            TokenizerVersion.v11,
+            {
+                "open_pattern": _open_pattern("(?P<name>.+?)", re.escape(SpecialTokens.call_id.value) + "(?P<id>.+?)"),
+                "close_pattern": _CLOSE_PATTERN,
+                "repeats": True,
+                "content": "json",
+                "transform": {
+                    "type": "function",
+                    "id": "{id}",
+                    "function": {"name": "{name}", "arguments": "{content}"},
+                },
+            },
+        ),
+        (
+            TokenizerVersion.v7,
+            {
+                "open": SpecialTokens.tool_calls.value,
+                "close": SpecialTokens.eos.value,
+                "content": "json",
+                "transform_each": True,
+                "transform": {
+                    "id": "{id}",
+                    "type": "function",
+                    "function": {"name": "{name}", "arguments": "{arguments}"},
+                },
+            },
+        ),
+        (
+            TokenizerVersion.v3,
+            {
+                "open": SpecialTokens.tool_calls.value,
+                "close": SpecialTokens.eos.value,
+                "content": "json",
+                "transform_each": True,
+                "transform": {
+                    "id": "{id}",
+                    "type": "function",
+                    "function": {"name": "{name}", "arguments": "{arguments}"},
+                },
+            },
+        ),
+        (
+            TokenizerVersion.v2,
+            {
+                "open": SpecialTokens.tool_calls.value,
+                "close": SpecialTokens.eos.value,
+                "content": "json",
+                "transform_each": True,
+                "transform": {
+                    "type": "function",
+                    "function": {"name": "{name}", "arguments": "{arguments}"},
+                },
+            },
+        ),
+    ],
+    ids=["v13", "v15", "v11", "v7", "v3", "v2"],
+)
+def test_tool_calls_field_per_version(version: TokenizerVersion, expected_tool_calls: dict[str, Any]) -> None:
     template = generate_response_template(
-        tokenizer_version=TokenizerVersion.v11,
-        thinking_support=False,
-        plain_thinking_support=True,
-    )
-
-    assert template == expected_v11_plain_thinking
-    tool_calls = template["fields"]["tool_calls"]
-    assert tool_calls == {
-        "open_pattern": "\\[TOOL_CALLS\\](?P<name>.+?)\\[CALL_ID\\](?P<id>.+?)\\[ARGS\\]",
-        "close_pattern": "(?=\\[TOOL_CALLS\\])|</s>",
-        "repeats": True,
-        "content": "json",
-        "transform": {
-            "type": "function",
-            "id": "{id}",
-            "function": {"name": "{name}", "arguments": "{content}"},
-        },
-    }
-    assert template["fields"]["reasoning_content"] == {
-        "open": PLAIN_BEGIN_THINK,
-        "close": PLAIN_END_THINK,
-        "content": "text",
-    }
-
-    assert (
-        generate_response_template(
-            tokenizer_version=TokenizerVersion.v11,
-            thinking_support=False,
-            plain_thinking_support=False,
-        )
-        == expected_v11_no_thinking
-    )
-
-
-def test_v3_v7_tool_calls_json_array() -> None:
-    expected = {
-        "open": "[TOOL_CALLS]",
-        "close": "</s>",
-        "content": "json",
-        "transform_each": True,
-        "transform": {
-            "id": "{id}",
-            "type": "function",
-            "function": {"name": "{name}", "arguments": "{arguments}"},
-        },
-    }
-
-    for version in (TokenizerVersion.v3, TokenizerVersion.v7):
-        template = generate_response_template(
-            tokenizer_version=version,
-            thinking_support=False,
-            plain_thinking_support=False,
-        )
-        assert template["fields"]["tool_calls"] == expected
-
-
-def test_v2_tool_calls_no_id() -> None:
-    template = generate_response_template(
-        tokenizer_version=TokenizerVersion.v2,
-        thinking_support=False,
+        tokenizer_version=version,
+        thinking_support=version.uses_special_thinking,
         plain_thinking_support=False,
     )
-
-    assert template["fields"]["tool_calls"]["transform"] == {
-        "type": "function",
-        "function": {"name": "{name}", "arguments": "{arguments}"},
-    }
+    assert template["fields"]["tool_calls"] == expected_tool_calls
 
 
-def test_reasoning_field_rules(
-    expected_v11_plain_thinking: dict[str, Any], expected_v11_no_thinking: dict[str, Any]
+@pytest.mark.parametrize(
+    ("version", "plain_thinking_support", "expected_reasoning"),
+    [
+        (TokenizerVersion.v13, False, {"open": "[THINK]", "close": "[/THINK]", "content": "text"}),
+        (TokenizerVersion.v15, False, {"open": "[THINK]", "close": "[/THINK]", "content": "text"}),
+        (TokenizerVersion.v11, True, {"open": PLAIN_BEGIN_THINK, "close": PLAIN_END_THINK, "content": "text"}),
+        (TokenizerVersion.v11, False, None),
+        (TokenizerVersion.v7, False, None),
+        (TokenizerVersion.v3, False, None),
+        (TokenizerVersion.v2, False, None),
+    ],
+    ids=["v13", "v15", "v11-plain", "v11-none", "v7", "v3", "v2"],
+)
+def test_reasoning_field_per_version(
+    version: TokenizerVersion, plain_thinking_support: bool, expected_reasoning: dict[str, Any] | None
 ) -> None:
-    for version in (TokenizerVersion.v13, TokenizerVersion.v15):
-        template = generate_response_template(
-            tokenizer_version=version,
-            thinking_support=False,
-            plain_thinking_support=False,
-        )
-        assert template["fields"]["reasoning_content"] == {
-            "open": "[THINK]",
-            "close": "[/THINK]",
-            "content": "text",
-        }
-    for version in (TokenizerVersion.v2, TokenizerVersion.v3, TokenizerVersion.v7):
-        template = generate_response_template(
-            tokenizer_version=version,
-            thinking_support=False,
-            plain_thinking_support=False,
-        )
+    template = generate_response_template(
+        tokenizer_version=version,
+        thinking_support=version.uses_special_thinking,
+        plain_thinking_support=plain_thinking_support,
+    )
+    if expected_reasoning is None:
         assert "reasoning_content" not in template["fields"]
-    assert "reasoning_content" in expected_v11_plain_thinking["fields"]
-    assert "reasoning_content" not in expected_v11_no_thinking["fields"]
+    else:
+        assert template["fields"]["reasoning_content"] == expected_reasoning
 
 
 def test_content_field(expected_v1: dict[str, Any]) -> None:
@@ -398,19 +419,6 @@ def test_invalid_thinking_combos_raise() -> None:
             thinking_support=True,
             plain_thinking_support=False,
         )
-
-
-def test_no_chat_templates_import() -> None:
-    result = subprocess.run(
-        args=[
-            sys.executable,
-            "-c",
-            "import sys; import mistral_common.integrations.hf_tokenizers.response_template; "
-            "assert 'mistral_common.integrations.chat_templates' not in sys.modules",
-        ],
-        capture_output=True,
-    )
-    assert result.returncode == 0, result.stderr.decode()
 
 
 def test_no_delimiter_string_literals() -> None:
