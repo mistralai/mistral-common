@@ -3,7 +3,6 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from types import MappingProxyType
 from typing import Any
 
 import pytest
@@ -30,150 +29,164 @@ from mistral_common.tokens.tokenizers.base import (
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.integrations.chat_templates.helpers import TestConfig, build_tekken_json
 
+_COMMON_CONTENT_FIELD: dict[str, Any] = {
+    "close": [SpecialTokens.tool_calls.value, SpecialTokens.eos.value],
+    "content": "text",
+    "repeats": True,
+    "join": "",
+}
 
-def _freeze(obj: Any) -> Any:
-    r"""Recursively wrap dicts in MappingProxyType (lists stay lists)."""
-    if isinstance(obj, dict):
-        return MappingProxyType({key: _freeze(value) for key, value in obj.items()})
-    if isinstance(obj, list):
-        return [_freeze(item) for item in obj]
-    return obj
+_V11_TOOL_CALLS: dict[str, Any] = {
+    "open_pattern": "\\[TOOL_CALLS\\](?P<name>.+?)\\[CALL_ID\\](?P<id>.+?)\\[ARGS\\]",
+    "close_pattern": "(?=\\[TOOL_CALLS\\])|</s>",
+    "repeats": True,
+    "content": "json",
+    "transform": {
+        "type": "function",
+        "id": "{id}",
+        "function": {"name": "{name}", "arguments": "{content}"},
+    },
+}
 
 
 @pytest.fixture(scope="module")
-def expected_templates() -> dict[str, MappingProxyType[str, Any]]:
-    r"""Named, immutable expected response templates per configuration.
+def expected_v1() -> dict[str, Any]:
+    return {
+        "defaults": {"role": "assistant"},
+        "start_anchor": SpecialTokens.end_inst.value,
+        "fields": {"content": {"close": SpecialTokens.eos.value, "content": "text"}},
+    }
 
-    Written as literals (delimiters via SpecialTokens / PLAIN_*_THINK), frozen
-    with MappingProxyType. Byte-for-byte comparison against the HF PR JSON is
-    done by a side script, not committed tests.
-    """
-    common_fields_tail: dict[str, Any] = {
-        "content": {
-            "close": [SpecialTokens.tool_calls.value, SpecialTokens.eos.value],
-            "content": "text",
-            "repeats": True,
-            "join": "",
+
+@pytest.fixture(scope="module")
+def expected_v7() -> dict[str, Any]:
+    return {
+        "defaults": {"role": "assistant"},
+        "start_anchor": [SpecialTokens.end_inst.value, SpecialTokens.end_tool_results.value],
+        "fields": {
+            "tool_calls": {
+                "open": SpecialTokens.tool_calls.value,
+                "close": SpecialTokens.eos.value,
+                "content": "json",
+                "transform_each": True,
+                "transform": {
+                    "id": "{id}",
+                    "type": "function",
+                    "function": {"name": "{name}", "arguments": "{arguments}"},
+                },
+            },
+            "content": _COMMON_CONTENT_FIELD,
         },
     }
-    v11_tool_calls: dict[str, Any] = {
-        "open_pattern": "\\[TOOL_CALLS\\](?P<name>.+?)\\[CALL_ID\\](?P<id>.+?)\\[ARGS\\]",
-        "close_pattern": "(?=\\[TOOL_CALLS\\])|</s>",
-        "repeats": True,
-        "content": "json",
-        "transform": {
-            "type": "function",
-            "id": "{id}",
-            "function": {"name": "{name}", "arguments": "{content}"},
+
+
+@pytest.fixture(scope="module")
+def expected_v13() -> dict[str, Any]:
+    return {
+        "defaults": {"role": "assistant"},
+        "start_anchor": [SpecialTokens.end_inst.value, SpecialTokens.end_tool_results.value],
+        "fields": {
+            "reasoning_content": {
+                "open": SpecialTokens.begin_think.value,
+                "close": SpecialTokens.end_think.value,
+                "content": "text",
+            },
+            "tool_calls": {
+                "open_pattern": "\\[TOOL_CALLS\\](?P<name>.+?)\\[ARGS\\]",
+                "close_pattern": "(?=\\[TOOL_CALLS\\])|</s>",
+                "repeats": True,
+                "content": "json",
+                "transform": {
+                    "type": "function",
+                    "function": {"name": "{name}", "arguments": "{content}"},
+                },
+            },
+            "content": _COMMON_CONTENT_FIELD,
         },
     }
-    raw: dict[str, dict[str, Any]] = {
-        "v1": {
-            "defaults": {"role": "assistant"},
-            "start_anchor": SpecialTokens.end_inst.value,
-            "fields": {"content": {"close": SpecialTokens.eos.value, "content": "text"}},
-        },
-        "v7": {
-            "defaults": {"role": "assistant"},
-            "start_anchor": [SpecialTokens.end_inst.value, SpecialTokens.end_tool_results.value],
-            "fields": {
-                "tool_calls": {
-                    "open": SpecialTokens.tool_calls.value,
-                    "close": SpecialTokens.eos.value,
-                    "content": "json",
-                    "transform_each": True,
-                    "transform": {
-                        "id": "{id}",
-                        "type": "function",
-                        "function": {"name": "{name}", "arguments": "{arguments}"},
-                    },
-                },
-                **common_fields_tail,
+
+
+@pytest.fixture(scope="module")
+def expected_v11_plain_thinking() -> dict[str, Any]:
+    return {
+        "defaults": {"role": "assistant"},
+        "start_anchor": [SpecialTokens.end_inst.value, SpecialTokens.end_tool_results.value],
+        "fields": {
+            "reasoning_content": {
+                "open": PLAIN_BEGIN_THINK,
+                "close": PLAIN_END_THINK,
+                "content": "text",
             },
-        },
-        "v13": {
-            "defaults": {"role": "assistant"},
-            "start_anchor": [SpecialTokens.end_inst.value, SpecialTokens.end_tool_results.value],
-            "fields": {
-                "reasoning_content": {
-                    "open": SpecialTokens.begin_think.value,
-                    "close": SpecialTokens.end_think.value,
-                    "content": "text",
-                },
-                "tool_calls": {
-                    "open_pattern": "\\[TOOL_CALLS\\](?P<name>.+?)\\[ARGS\\]",
-                    "close_pattern": "(?=\\[TOOL_CALLS\\])|</s>",
-                    "repeats": True,
-                    "content": "json",
-                    "transform": {
-                        "type": "function",
-                        "function": {"name": "{name}", "arguments": "{content}"},
-                    },
-                },
-                **common_fields_tail,
-            },
-        },
-        "v11_plain_thinking": {
-            "defaults": {"role": "assistant"},
-            "start_anchor": [SpecialTokens.end_inst.value, SpecialTokens.end_tool_results.value],
-            "fields": {
-                "reasoning_content": {
-                    "open": PLAIN_BEGIN_THINK,
-                    "close": PLAIN_END_THINK,
-                    "content": "text",
-                },
-                "tool_calls": v11_tool_calls,
-                **common_fields_tail,
-            },
-        },
-        "v11_no_thinking": {
-            "defaults": {"role": "assistant"},
-            "start_anchor": [SpecialTokens.end_inst.value, SpecialTokens.end_tool_results.value],
-            "fields": {
-                "tool_calls": v11_tool_calls,
-                **common_fields_tail,
-            },
+            "tool_calls": _V11_TOOL_CALLS,
+            "content": _COMMON_CONTENT_FIELD,
         },
     }
-    return {name: _freeze(value) for name, value in raw.items()}
 
 
-EXPECTED_CONFIGS: tuple[tuple[str, TokenizerVersion, bool, bool], ...] = (
-    ("v1", TokenizerVersion.v1, False, False),
-    ("v7", TokenizerVersion.v7, False, False),
-    ("v13", TokenizerVersion.v13, True, False),
-    ("v11_plain_thinking", TokenizerVersion.v11, False, True),
-    ("v11_no_thinking", TokenizerVersion.v11, False, False),
-)
+@pytest.fixture(scope="module")
+def expected_v11_no_thinking() -> dict[str, Any]:
+    return {
+        "defaults": {"role": "assistant"},
+        "start_anchor": [SpecialTokens.end_inst.value, SpecialTokens.end_tool_results.value],
+        "fields": {
+            "tool_calls": _V11_TOOL_CALLS,
+            "content": _COMMON_CONTENT_FIELD,
+        },
+    }
 
 
-@pytest.mark.parametrize(
-    ("fixture_name", "version", "thinking_support", "plain_thinking_support"),
-    EXPECTED_CONFIGS,
-    ids=[name for name, _, _, _ in EXPECTED_CONFIGS],
-)
-def test_expected_templates(
-    expected_templates: dict[str, MappingProxyType[str, Any]],
-    fixture_name: str,
-    version: TokenizerVersion,
-    thinking_support: bool,
-    plain_thinking_support: bool,
-) -> None:
-    template = generate_response_template(
-        tokenizer_version=version,
-        thinking_support=thinking_support,
-        plain_thinking_support=plain_thinking_support,
+def test_expected_v1(expected_v1: dict[str, Any]) -> None:
+    assert (
+        generate_response_template(
+            tokenizer_version=TokenizerVersion.v1,
+            thinking_support=False,
+            plain_thinking_support=False,
+        )
+        == expected_v1
     )
-    assert template == expected_templates[fixture_name]
 
 
-def test_expected_templates_are_immutable(expected_templates: dict[str, MappingProxyType[str, Any]]) -> None:
-    with pytest.raises(TypeError):
-        expected_templates["v13"]["defaults"] = {"role": "user"}  # type: ignore[index]
-    with pytest.raises(TypeError):
-        expected_templates["v7"]["fields"]["content"]["close"] = []
-    with pytest.raises(TypeError):
-        expected_templates["v11_plain_thinking"]["fields"]["reasoning_content"]["open"] = "x"
+def test_expected_v7(expected_v7: dict[str, Any]) -> None:
+    assert (
+        generate_response_template(
+            tokenizer_version=TokenizerVersion.v7,
+            thinking_support=False,
+            plain_thinking_support=False,
+        )
+        == expected_v7
+    )
+
+
+def test_expected_v13(expected_v13: dict[str, Any]) -> None:
+    assert (
+        generate_response_template(
+            tokenizer_version=TokenizerVersion.v13,
+            thinking_support=True,
+            plain_thinking_support=False,
+        )
+        == expected_v13
+    )
+
+
+def test_expected_v11_plain_thinking(expected_v11_plain_thinking: dict[str, Any]) -> None:
+    assert (
+        generate_response_template(
+            tokenizer_version=TokenizerVersion.v11,
+            thinking_support=False,
+            plain_thinking_support=True,
+        )
+        == expected_v11_plain_thinking
+    )
+
+
+def test_expected_v11_no_thinking(expected_v11_no_thinking: dict[str, Any]) -> None:
+    template = generate_response_template(
+        tokenizer_version=TokenizerVersion.v11,
+        thinking_support=False,
+        plain_thinking_support=False,
+    )
+    assert template == expected_v11_no_thinking
+    assert "reasoning_content" not in template["fields"]
 
 
 def test_top_level_keys_and_json_roundtrip() -> None:
@@ -245,14 +258,16 @@ def test_v13_v15_tool_calls_pattern() -> None:
         assert template["fields"]["tool_calls"] == expected_tool_calls
 
 
-def test_v11_tool_calls_include_call_id(expected_templates: dict[str, MappingProxyType[str, Any]]) -> None:
+def test_v11_tool_calls_include_call_id(
+    expected_v11_plain_thinking: dict[str, Any], expected_v11_no_thinking: dict[str, Any]
+) -> None:
     template = generate_response_template(
         tokenizer_version=TokenizerVersion.v11,
         thinking_support=False,
         plain_thinking_support=True,
     )
 
-    assert template == expected_templates["v11_plain_thinking"]
+    assert template == expected_v11_plain_thinking
     tool_calls = template["fields"]["tool_calls"]
     assert tool_calls == {
         "open_pattern": "\\[TOOL_CALLS\\](?P<name>.+?)\\[CALL_ID\\](?P<id>.+?)\\[ARGS\\]",
@@ -277,9 +292,8 @@ def test_v11_tool_calls_include_call_id(expected_templates: dict[str, MappingPro
             thinking_support=False,
             plain_thinking_support=False,
         )
-        == expected_templates["v11_no_thinking"]
+        == expected_v11_no_thinking
     )
-    assert "reasoning_content" not in expected_templates["v11_no_thinking"]["fields"]
 
 
 def test_v3_v7_tool_calls_json_array() -> None:
@@ -317,7 +331,9 @@ def test_v2_tool_calls_no_id() -> None:
     }
 
 
-def test_reasoning_field_rules(expected_templates: dict[str, MappingProxyType[str, Any]]) -> None:
+def test_reasoning_field_rules(
+    expected_v11_plain_thinking: dict[str, Any], expected_v11_no_thinking: dict[str, Any]
+) -> None:
     for version in (TokenizerVersion.v13, TokenizerVersion.v15):
         template = generate_response_template(
             tokenizer_version=version,
@@ -336,18 +352,18 @@ def test_reasoning_field_rules(expected_templates: dict[str, MappingProxyType[st
             plain_thinking_support=False,
         )
         assert "reasoning_content" not in template["fields"]
-    assert "reasoning_content" in expected_templates["v11_plain_thinking"]["fields"]
-    assert "reasoning_content" not in expected_templates["v11_no_thinking"]["fields"]
+    assert "reasoning_content" in expected_v11_plain_thinking["fields"]
+    assert "reasoning_content" not in expected_v11_no_thinking["fields"]
 
 
-def test_content_field(expected_templates: dict[str, MappingProxyType[str, Any]]) -> None:
+def test_content_field(expected_v1: dict[str, Any]) -> None:
     v1 = generate_response_template(
         tokenizer_version=TokenizerVersion.v1,
         thinking_support=False,
         plain_thinking_support=False,
     )
     assert v1["fields"]["content"] == {"close": "</s>", "content": "text"}
-    assert v1 == expected_templates["v1"]
+    assert v1 == expected_v1
 
     for version in (TokenizerVersion.v2, TokenizerVersion.v3, TokenizerVersion.v7, TokenizerVersion.v11):
         template = generate_response_template(
@@ -426,13 +442,13 @@ def test_convert_tokenizer_to_response_template_tekken_v13(tmp_path: Path) -> No
 
 
 def test_convert_v11_plain_thinking_heuristic(
-    tmp_path: Path, expected_templates: dict[str, MappingProxyType[str, Any]]
+    tmp_path: Path, expected_v11_plain_thinking: dict[str, Any], expected_v11_no_thinking: dict[str, Any]
 ) -> None:
     path = build_tekken_json(TestConfig(version=TokenizerVersion.v11), output_dir=tmp_path)
     auto = convert_tokenizer_to_response_template(tokenizer_file=path, plain_thinking_support=None)
-    assert auto == expected_templates["v11_plain_thinking"]
+    assert auto == expected_v11_plain_thinking
     forced_off = convert_tokenizer_to_response_template(tokenizer_file=path, plain_thinking_support=False)
-    assert forced_off == expected_templates["v11_no_thinking"]
+    assert forced_off == expected_v11_no_thinking
 
 
 def _encode_assistant_generation(
