@@ -46,8 +46,9 @@ def _build_response_template(version: TokenizerVersion, plain_thinking_support: 
     if version.has_tools:
         close_pattern = "(?=" + re.escape(SpecialTokens.tool_calls.value) + ")|" + re.escape(SpecialTokens.eos.value)
         if version.uses_v13_tool_format:
-            open_pattern = re.escape(SpecialTokens.tool_calls.value) + "(?P<name>.+?)"
-            open_pattern += re.escape(SpecialTokens.args.value)
+            open_pattern = (
+                re.escape(SpecialTokens.tool_calls.value) + "(?P<name>.+?)" + re.escape(SpecialTokens.args.value)
+            )
             fields["tool_calls"] = {
                 "open_pattern": open_pattern,
                 "close_pattern": close_pattern,
@@ -147,9 +148,11 @@ def generate_response_template(
 
 
 def convert_tokenizer_to_response_template(
-    tokenizer_file: str | Path, plain_thinking_support: bool | None
+    tokenizer: str | Path | MistralTokenizer, plain_thinking_support: bool | None
 ) -> dict[str, Any]:
     r"""Load a tokenizer and generate its Hugging Face response template.
+
+    Accepts either a tokenizer file path or an already-loaded `MistralTokenizer`.
 
     Special-token thinking is detected by checking for both thinking delimiters.
     Plain thinking cannot be reliably detected from a tokenizer file: reasoning
@@ -162,7 +165,7 @@ def convert_tokenizer_to_response_template(
     Transformers response parsing schema.
 
     Args:
-        tokenizer_file: Path to a tokenizer file.
+        tokenizer: Path to a tokenizer file, or a loaded `MistralTokenizer`.
         plain_thinking_support: Whether to enable plain thinking, or `None` to
             use the v11-without-audio heuristic.
 
@@ -173,12 +176,16 @@ def convert_tokenizer_to_response_template(
         ValueError: If thinking support is unsupported by the tokenizer version or both thinking
             modes are enabled.
     """
-    mistral_tokenizer = MistralTokenizer.from_file(tokenizer_filename=tokenizer_file)
+    mistral_tokenizer = (
+        tokenizer
+        if isinstance(tokenizer, MistralTokenizer)
+        else MistralTokenizer.from_file(tokenizer_filename=tokenizer)
+    )
     instruct_tokenizer = mistral_tokenizer.instruct_tokenizer
-    tokenizer = instruct_tokenizer.tokenizer
+    inner_tokenizer = instruct_tokenizer.tokenizer
     version = mistral_tokenizer.version
     audio_support = instruct_tokenizer.audio_encoder is not None
-    thinking_support = tokenizer.is_special(SpecialTokens.begin_think.value) and tokenizer.is_special(
+    thinking_support = inner_tokenizer.is_special(SpecialTokens.begin_think.value) and inner_tokenizer.is_special(
         SpecialTokens.end_think.value
     )
 
