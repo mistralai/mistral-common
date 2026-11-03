@@ -144,58 +144,33 @@ def expected_v11_no_thinking() -> dict[str, Any]:
     }
 
 
-def test_expected_v1(expected_v1: dict[str, Any]) -> None:
-    assert (
-        generate_response_template(
-            tokenizer_version=TokenizerVersion.v1,
-            thinking_support=False,
-            plain_thinking_support=False,
-        )
-        == expected_v1
-    )
-
-
-def test_expected_v7(expected_v7: dict[str, Any]) -> None:
-    assert (
-        generate_response_template(
-            tokenizer_version=TokenizerVersion.v7,
-            thinking_support=False,
-            plain_thinking_support=False,
-        )
-        == expected_v7
-    )
-
-
-def test_expected_v13(expected_v13: dict[str, Any]) -> None:
-    assert (
-        generate_response_template(
-            tokenizer_version=TokenizerVersion.v13,
-            thinking_support=True,
-            plain_thinking_support=False,
-        )
-        == expected_v13
-    )
-
-
-def test_expected_v11_plain_thinking(expected_v11_plain_thinking: dict[str, Any]) -> None:
-    assert (
-        generate_response_template(
-            tokenizer_version=TokenizerVersion.v11,
-            thinking_support=False,
-            plain_thinking_support=True,
-        )
-        == expected_v11_plain_thinking
-    )
-
-
-def test_expected_v11_no_thinking(expected_v11_no_thinking: dict[str, Any]) -> None:
+@pytest.mark.parametrize(
+    ("version", "thinking_support", "plain_thinking_support", "fixture_name"),
+    [
+        (TokenizerVersion.v1, False, False, "expected_v1"),
+        (TokenizerVersion.v7, False, False, "expected_v7"),
+        (TokenizerVersion.v13, True, False, "expected_v13"),
+        (TokenizerVersion.v11, False, True, "expected_v11_plain_thinking"),
+        (TokenizerVersion.v11, False, False, "expected_v11_no_thinking"),
+    ],
+    ids=["v1", "v7", "v13", "v11-plain-thinking", "v11-no-thinking"],
+)
+def test_expected_templates(
+    request: pytest.FixtureRequest,
+    version: TokenizerVersion,
+    thinking_support: bool,
+    plain_thinking_support: bool,
+    fixture_name: str,
+) -> None:
+    expected = request.getfixturevalue(fixture_name)
     template = generate_response_template(
-        tokenizer_version=TokenizerVersion.v11,
-        thinking_support=False,
-        plain_thinking_support=False,
+        tokenizer_version=version,
+        thinking_support=thinking_support,
+        plain_thinking_support=plain_thinking_support,
     )
-    assert template == expected_v11_no_thinking
-    assert "reasoning_content" not in template["fields"]
+    assert template == expected
+    if version == TokenizerVersion.v11 and not plain_thinking_support:
+        assert "reasoning_content" not in template["fields"]
 
 
 def test_top_level_keys_and_json_roundtrip() -> None:
@@ -485,72 +460,57 @@ def _sample_tool_calls() -> list[ToolCall]:
     ]
 
 
-def test_matches_experimental_parser_v13(tmp_path: Path) -> None:
-    assistant = AssistantMessage(
-        content=[TextChunk(text="Sure."), ThinkChunk(thinking="let me check")],
-        tool_calls=_sample_tool_calls(),
-        prefix=True,
-    )
-    tokenizer, generation, decoded = _encode_assistant_generation(TokenizerVersion.v13, True, tmp_path, assistant)
+@pytest.mark.parametrize(
+    ("version", "think", "n_tool_calls", "with_thinking"),
+    [
+        (TokenizerVersion.v13, True, 2, True),
+        (TokenizerVersion.v7, False, 1, False),
+        (TokenizerVersion.v11, False, 2, False),
+    ],
+    ids=["v13", "v7", "v11"],
+)
+def test_matches_experimental_parser(
+    version: TokenizerVersion, think: bool, n_tool_calls: int, with_thinking: bool, tmp_path: Path
+) -> None:
+    content: Any = [ThinkChunk(thinking="let me check"), TextChunk(text="Sure.")] if with_thinking else "Checking."
+    assistant = AssistantMessage(content=content, tool_calls=_sample_tool_calls()[:n_tool_calls], prefix=True)
+    tokenizer, generation, _ = _encode_assistant_generation(version, think, tmp_path, assistant)
     template = generate_response_template(
-        tokenizer_version=TokenizerVersion.v13, thinking_support=True, plain_thinking_support=False
+        tokenizer_version=version,
+        thinking_support=version.uses_special_thinking,
+        plain_thinking_support=False,
     )
 
     tool_call_id = tokenizer.instruct_tokenizer.tokenizer.get_special_token(SpecialTokens.tool_calls.value)
     content_tokens, tool_call_tokens = _split_content_and_tool_calls(generation, tool_call_id)
-    think_id = tokenizer.instruct_tokenizer.tokenizer.get_special_token(SpecialTokens.begin_think.value)
-    end_think_id = tokenizer.instruct_tokenizer.tokenizer.get_special_token(SpecialTokens.end_think.value)
-    chunks = _split_content_and_think_chunks(content_tokens, think_id, end_think_id)
     tool_calls = _decode_tool_calls(tool_call_tokens, tokenizer.instruct_tokenizer.tokenizer)
+    assert len(tool_calls) == n_tool_calls
 
-    open_pattern = template["fields"]["tool_calls"]["open_pattern"]
-    for tool_call_tokens_i, tool_call in zip(tool_call_tokens, tool_calls):
-        region = tokenizer.decode(tool_call_tokens_i, special_token_policy=SpecialTokenPolicy.KEEP)
-        match = re.fullmatch(open_pattern + ".*", region)
-        assert match is not None
-        assert match.group("name") == tool_call.function.name
-    assert template["fields"]["reasoning_content"]["open"] == SpecialTokens.begin_think.value
+    tool_calls_field = template["fields"]["tool_calls"]
+    if "open_pattern" in tool_calls_field:
+        open_pattern = tool_calls_field["open_pattern"]
+        for tool_call_tokens_i, tool_call in zip(tool_call_tokens, tool_calls):
+            region = tokenizer.decode(tool_call_tokens_i, special_token_policy=SpecialTokenPolicy.KEEP)
+            match = re.fullmatch(open_pattern + ".*", region)
+            assert match is not None
+            assert match.group("name") == tool_call.function.name
+            if "id" in (match.re.groupindex or {}):
+                assert match.group("id") == tool_call.id
+    else:
+        assert tool_calls_field["open"] == SpecialTokens.tool_calls.value
+        assert tool_calls_field["transform_each"] is True
+        region = tokenizer.decode(tool_call_tokens[0], special_token_policy=SpecialTokenPolicy.KEEP)
+        payload = json.loads(region[len(SpecialTokens.tool_calls.value) :].strip().rstrip(SpecialTokens.eos.value))
+        assert isinstance(payload, list) and len(payload) == len(tool_calls)
+        for decoded_element, tool_call in zip(payload, tool_calls):
+            assert set(decoded_element) == {"id", "name", "arguments"}
+            assert decoded_element["name"] == tool_call.function.name
+            assert decoded_element["id"] == tool_call.id
+
+    if with_thinking:
+        think_id = tokenizer.instruct_tokenizer.tokenizer.get_special_token(SpecialTokens.begin_think.value)
+        end_think_id = tokenizer.instruct_tokenizer.tokenizer.get_special_token(SpecialTokens.end_think.value)
+        chunks = _split_content_and_think_chunks(content_tokens, think_id, end_think_id)
+        assert any(is_think for _, is_think in chunks)
+        assert template["fields"]["reasoning_content"]["open"] == SpecialTokens.begin_think.value
     assert template["fields"]["content"]["close"][0] == SpecialTokens.tool_calls.value
-    assert any(is_think for _, is_think in chunks)
-
-
-def test_matches_experimental_parser_v7(tmp_path: Path) -> None:
-    assistant = AssistantMessage(content="Checking.", tool_calls=_sample_tool_calls()[:1], prefix=True)
-    tokenizer, generation, decoded = _encode_assistant_generation(TokenizerVersion.v7, False, tmp_path, assistant)
-    template = generate_response_template(
-        tokenizer_version=TokenizerVersion.v7, thinking_support=False, plain_thinking_support=False
-    )
-
-    tool_call_id = tokenizer.instruct_tokenizer.tokenizer.get_special_token(SpecialTokens.tool_calls.value)
-    _, tool_call_tokens = _split_content_and_tool_calls(generation, tool_call_id)
-    tool_calls = _decode_tool_calls(tool_call_tokens, tokenizer.instruct_tokenizer.tokenizer)
-
-    assert template["fields"]["tool_calls"]["open"] == SpecialTokens.tool_calls.value
-    assert template["fields"]["tool_calls"]["transform_each"] is True
-    region = tokenizer.decode(tool_call_tokens[0], special_token_policy=SpecialTokenPolicy.KEEP)
-    payload = json.loads(region[len(SpecialTokens.tool_calls.value) :].strip().rstrip(SpecialTokens.eos.value))
-    assert isinstance(payload, list) and len(payload) == len(tool_calls)
-    for decoded_element, tool_call in zip(payload, tool_calls):
-        assert set(decoded_element) == {"id", "name", "arguments"}
-        assert decoded_element["name"] == tool_call.function.name
-        assert decoded_element["id"] == tool_call.id
-
-
-def test_matches_experimental_parser_v11_tool_calls(tmp_path: Path) -> None:
-    assistant = AssistantMessage(content="Checking.", tool_calls=_sample_tool_calls(), prefix=True)
-    tokenizer, generation, decoded = _encode_assistant_generation(TokenizerVersion.v11, False, tmp_path, assistant)
-    template = generate_response_template(
-        tokenizer_version=TokenizerVersion.v11, thinking_support=False, plain_thinking_support=False
-    )
-
-    tool_call_id = tokenizer.instruct_tokenizer.tokenizer.get_special_token(SpecialTokens.tool_calls.value)
-    _, tool_call_tokens = _split_content_and_tool_calls(generation, tool_call_id)
-    tool_calls = _decode_tool_calls(tool_call_tokens, tokenizer.instruct_tokenizer.tokenizer)
-
-    open_pattern = template["fields"]["tool_calls"]["open_pattern"]
-    for tool_call_tokens_i, tool_call in zip(tool_call_tokens, tool_calls):
-        region = tokenizer.decode(tool_call_tokens_i, special_token_policy=SpecialTokenPolicy.KEEP)
-        match = re.fullmatch(open_pattern + ".*", region)
-        assert match is not None
-        assert match.group("name") == tool_call.function.name
-        assert match.group("id") == tool_call.id
