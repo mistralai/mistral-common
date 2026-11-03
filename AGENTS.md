@@ -174,7 +174,41 @@ uv run pre-commit install
 - When adding dependencies, modify root `pyproject.toml`, then run `uv lock` followed by `uv sync --frozen`
 - Backward Compatibility: Don't break existing functionality
 
-3. Run linter, formatter (Ruff), type checker (mypy) and tests (pytest), including doctests
+3. Run checks
+
+   - Lint and check formatting:
+
+   ```bash
+   uv run ruff check .
+   uv run ruff format . --check
+   ```
+
+   - Run the type checker:
+
+   ```bash
+   uv run mypy .
+   ```
+
+   - Run unit tests with coverage:
+
+   ```bash
+   uv run pytest --cov=mistral_common tests/ --ignore=tests/integrations --ignore=tests/integration -n auto --dist loadfile
+   ```
+
+   - Run doctests:
+
+   ```bash
+   uv run pytest --doctest-modules ./src
+   ```
+
+   - Run integration tests when changing chat templates, integrations, or
+     tokenizer behavior those templates cover. Install the `test-integrations`
+     dependency group first, otherwise the Transformers tests are skipped:
+
+   ```bash
+   uv sync --frozen --all-extras --group dev --group test-integrations
+   uv run pytest tests/integrations/ -n auto --dist loadfile
+   ```
 
 ### Build documentation locally
 
