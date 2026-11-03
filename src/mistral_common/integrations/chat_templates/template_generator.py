@@ -136,7 +136,7 @@ class TemplateConfig:
             raise ValueError("Image support is only available for tokenizer versions v3 and above")
         if self.audio_support and self.version < TokenizerVersion.v7:
             raise ValueError("Audio support is only available for tokenizer versions v7 and above")
-        if self.thinking_support and self.version < TokenizerVersion.v13:
+        if self.thinking_support and not self.version.uses_special_thinking:
             raise ValueError("Thinking support is only available for tokenizer versions v13 and above")
         if self.audio_support and self.thinking_support:
             raise ValueError("Audio and thinking support are mutually exclusive")

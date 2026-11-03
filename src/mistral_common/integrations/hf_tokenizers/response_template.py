@@ -30,7 +30,7 @@ def _build_response_template(version: TokenizerVersion, plain_thinking_support: 
     """
     fields: dict[str, Any] = {}
 
-    if version.uses_v13_tool_format:
+    if version.uses_special_thinking:
         fields["reasoning_content"] = {
             "open": SpecialTokens.begin_think.value,
             "close": SpecialTokens.end_think.value,
@@ -137,7 +137,7 @@ def generate_response_template(
         raise ValueError("thinking_support and plain_thinking_support are mutually exclusive")
     if plain_thinking_support and not tokenizer_version.uses_plain_thinking:
         raise ValueError("Plain thinking support is only available for tokenizer version v11")
-    if thinking_support and not tokenizer_version.uses_v13_tool_format:
+    if thinking_support and not tokenizer_version.uses_special_thinking:
         raise ValueError("Special-token thinking support requires tokenizer version v13 or above")
 
     return _build_response_template(
