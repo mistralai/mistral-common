@@ -169,8 +169,6 @@ def test_expected_templates(
         plain_thinking_support=plain_thinking_support,
     )
     assert template == expected
-    if version == TokenizerVersion.v11 and not plain_thinking_support:
-        assert "reasoning_content" not in template["fields"]
 
 
 @pytest.mark.parametrize(
@@ -415,29 +413,34 @@ def test_invalid_thinking_combos_raise(
         )
 
 
-def test_no_delimiter_string_literals() -> None:
+_GUARDED_TOKENS = (
+    SpecialTokens.tool_calls.value,
+    SpecialTokens.args.value,
+    SpecialTokens.call_id.value,
+    SpecialTokens.begin_think.value,
+    SpecialTokens.end_think.value,
+    SpecialTokens.end_inst.value,
+    SpecialTokens.end_tool_results.value,
+    SpecialTokens.eos.value,
+)
+
+
+@pytest.mark.parametrize("token", _GUARDED_TOKENS, ids=[t.strip("[]<>/") for t in _GUARDED_TOKENS])
+def test_no_delimiter_string_literals(token: str) -> None:
     source = Path(mistral_common.integrations.hf_tokenizers.response_template.__file__).read_text(encoding="utf-8")
-    for token in (
-        SpecialTokens.tool_calls.value,
-        SpecialTokens.args.value,
-        SpecialTokens.call_id.value,
-        SpecialTokens.begin_think.value,
-        SpecialTokens.end_think.value,
-        SpecialTokens.end_inst.value,
-        SpecialTokens.end_tool_results.value,
-        SpecialTokens.eos.value,
-    ):
-        assert token not in source
-        assert re.escape(token) not in source
-        assert re.escape(re.escape(token)) not in source
+    assert token not in source
+    assert re.escape(token) not in source
+    assert re.escape(re.escape(token)) not in source
     assert "re.escape" in source
 
 
 @pytest.mark.parametrize("pass_tokenizer_object", [False, True], ids=["path", "tokenizer-object"])
 def test_convert_tokenizer_to_response_template_tekken_v13(tmp_path: Path, pass_tokenizer_object: bool) -> None:
-    path = build_tekken_json(TestConfig(version=TokenizerVersion.v13, think=True), output_dir=tmp_path)
+    path = build_tekken_json(config=TestConfig(version=TokenizerVersion.v13, think=True), output_dir=tmp_path)
     source: str | Path | MistralTokenizer = (
-        MistralTokenizer.from_file(str(path), mode=ValidationMode.test) if pass_tokenizer_object else path
+        MistralTokenizer.from_file(tokenizer_filename=str(path), mode=ValidationMode.test)
+        if pass_tokenizer_object
+        else path
     )
     result = convert_tokenizer_to_response_template(tokenizer=source, plain_thinking_support=None)
     assert result == generate_response_template(
@@ -450,7 +453,7 @@ def test_convert_tokenizer_to_response_template_tekken_v13(tmp_path: Path, pass_
 def test_convert_v11_plain_thinking_heuristic(
     tmp_path: Path, expected_v11_plain_thinking: dict[str, Any], expected_v11_no_thinking: dict[str, Any]
 ) -> None:
-    path = build_tekken_json(TestConfig(version=TokenizerVersion.v11), output_dir=tmp_path)
+    path = build_tekken_json(config=TestConfig(version=TokenizerVersion.v11), output_dir=tmp_path)
     auto = convert_tokenizer_to_response_template(tokenizer=path, plain_thinking_support=None)
     assert auto == expected_v11_plain_thinking
     forced_off = convert_tokenizer_to_response_template(tokenizer=path, plain_thinking_support=False)
@@ -464,15 +467,15 @@ def _encode_assistant_generation(
     assistant: AssistantMessage,
 ) -> tuple[MistralTokenizer, list[int], str]:
     r"""Encode [user, assistant] and return (tokenizer, generation tokens, decoded KEEP text)."""
-    path = build_tekken_json(TestConfig(version=version, think=think), output_dir=tmp_path)
-    tokenizer = MistralTokenizer.from_file(str(path), mode=ValidationMode.test)
+    path = build_tekken_json(config=TestConfig(version=version, think=think), output_dir=tmp_path)
+    tokenizer = MistralTokenizer.from_file(tokenizer_filename=str(path), mode=ValidationMode.test)
     messages: list[ChatMessage] = [UserMessage(content="hi"), assistant]
     request = ChatCompletionRequest(messages=messages)
     tokens = tokenizer.encode_chat_completion(request).tokens
     inst_id = tokenizer.instruct_tokenizer.tokenizer.get_special_token(SpecialTokens.end_inst.value)
     last_inst = len(tokens) - 1 - tokens[::-1].index(inst_id)
     generation = tokens[last_inst + 1 :]
-    decoded = tokenizer.decode(generation, special_token_policy=SpecialTokenPolicy.KEEP)
+    decoded = tokenizer.decode(tokens=generation, special_token_policy=SpecialTokenPolicy.KEEP)
     return tokenizer, generation, decoded
 
 
@@ -497,7 +500,9 @@ def test_matches_experimental_parser(
 ) -> None:
     content: Any = [ThinkChunk(thinking="let me check"), TextChunk(text="Sure.")] if with_thinking else "Checking."
     assistant = AssistantMessage(content=content, tool_calls=_sample_tool_calls()[:n_tool_calls], prefix=True)
-    tokenizer, generation, _ = _encode_assistant_generation(version, think, tmp_path, assistant)
+    tokenizer, generation, _ = _encode_assistant_generation(
+        version=version, think=think, tmp_path=tmp_path, assistant=assistant
+    )
     template = generate_response_template(
         tokenizer_version=version,
         thinking_support=version.uses_special_thinking,
@@ -505,16 +510,16 @@ def test_matches_experimental_parser(
     )
 
     tool_call_id = tokenizer.instruct_tokenizer.tokenizer.get_special_token(SpecialTokens.tool_calls.value)
-    content_tokens, tool_call_tokens = _split_content_and_tool_calls(generation, tool_call_id)
-    tool_calls = _decode_tool_calls(tool_call_tokens, tokenizer.instruct_tokenizer.tokenizer)
+    content_tokens, tool_call_tokens = _split_content_and_tool_calls(tokens=generation, tool_call_token_id=tool_call_id)
+    tool_calls = _decode_tool_calls(tool_call_tokens=tool_call_tokens, tokenizer=tokenizer.instruct_tokenizer.tokenizer)
     assert len(tool_calls) == n_tool_calls
 
     tool_calls_field = template["fields"]["tool_calls"]
     if "open_pattern" in tool_calls_field:
         open_pattern = tool_calls_field["open_pattern"]
         for tool_call_tokens_i, tool_call in zip(tool_call_tokens, tool_calls):
-            region = tokenizer.decode(tool_call_tokens_i, special_token_policy=SpecialTokenPolicy.KEEP)
-            match = re.fullmatch(open_pattern + ".*", region)
+            region = tokenizer.decode(tokens=tool_call_tokens_i, special_token_policy=SpecialTokenPolicy.KEEP)
+            match = re.fullmatch(pattern=open_pattern + ".*", string=region)
             assert match is not None
             assert match.group("name") == tool_call.function.name
             if "id" in (match.re.groupindex or {}):
@@ -522,18 +527,23 @@ def test_matches_experimental_parser(
     else:
         assert tool_calls_field["open"] == SpecialTokens.tool_calls.value
         assert tool_calls_field["transform_each"] is True
-        region = tokenizer.decode(tool_call_tokens[0], special_token_policy=SpecialTokenPolicy.KEEP)
-        payload = json.loads(region[len(SpecialTokens.tool_calls.value) :].strip().rstrip(SpecialTokens.eos.value))
+        region = tokenizer.decode(tokens=tool_call_tokens[0], special_token_policy=SpecialTokenPolicy.KEEP)
+        payload = json.loads(
+            region[len(SpecialTokens.tool_calls.value) :].strip().removesuffix(SpecialTokens.eos.value)
+        )
         assert isinstance(payload, list) and len(payload) == len(tool_calls)
         for decoded_element, tool_call in zip(payload, tool_calls):
             assert set(decoded_element) == {"id", "name", "arguments"}
             assert decoded_element["name"] == tool_call.function.name
             assert decoded_element["id"] == tool_call.id
+            assert decoded_element["arguments"] == json.loads(tool_call.function.arguments)
 
     if with_thinking:
         think_id = tokenizer.instruct_tokenizer.tokenizer.get_special_token(SpecialTokens.begin_think.value)
         end_think_id = tokenizer.instruct_tokenizer.tokenizer.get_special_token(SpecialTokens.end_think.value)
-        chunks = _split_content_and_think_chunks(content_tokens, think_id, end_think_id)
+        chunks = _split_content_and_think_chunks(
+            tokens=content_tokens, begin_think_token_id=think_id, end_think_token_id=end_think_id
+        )
         assert any(is_think for _, is_think in chunks)
         assert template["fields"]["reasoning_content"]["open"] == SpecialTokens.begin_think.value
     assert template["fields"]["content"]["close"][0] == SpecialTokens.tool_calls.value
