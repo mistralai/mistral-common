@@ -27,93 +27,16 @@ from mistral_common.tokens.tokenizers.base import (
 )
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.integrations.chat_templates.helpers import TestConfig, build_tekken_json
-
-V1_PR_FIXTURE = """{
-  "defaults": {
-    "role": "assistant"
-  },
-  "start_anchor": "[/INST]",
-  "fields": {
-    "content": {
-      "close": "</s>",
-      "content": "text"
-    }
-  }
-}"""
-
-V7_PR_FIXTURE = """{
-  "defaults": {
-    "role": "assistant"
-  },
-  "start_anchor": [
-    "[/INST]",
-    "[/TOOL_RESULTS]"
-  ],
-  "fields": {
-    "tool_calls": {
-      "open": "[TOOL_CALLS]",
-      "close": "</s>",
-      "content": "json",
-      "transform_each": true,
-      "transform": {
-        "id": "{id}",
-        "type": "function",
-        "function": {
-          "name": "{name}",
-          "arguments": "{arguments}"
-        }
-      }
-    },
-    "content": {
-      "close": [
-        "[TOOL_CALLS]",
-        "</s>"
-      ],
-      "content": "text",
-      "repeats": true,
-      "join": ""
-    }
-  }
-}"""
-
-V13_PR_FIXTURE = """{
-  "defaults": {
-    "role": "assistant"
-  },
-  "start_anchor": [
-    "[/INST]",
-    "[/TOOL_RESULTS]"
-  ],
-  "fields": {
-    "reasoning_content": {
-      "open": "[THINK]",
-      "close": "[/THINK]",
-      "content": "text"
-    },
-    "tool_calls": {
-      "open_pattern": "\\\\[TOOL_CALLS\\\\](?P<name>.+?)\\\\[ARGS\\\\]",
-      "close_pattern": "(?=\\\\[TOOL_CALLS\\\\])|</s>",
-      "repeats": true,
-      "content": "json",
-      "transform": {
-        "type": "function",
-        "function": {
-          "name": "{name}",
-          "arguments": "{content}"
-        }
-      }
-    },
-    "content": {
-      "close": [
-        "[TOOL_CALLS]",
-        "</s>"
-      ],
-      "content": "text",
-      "repeats": true,
-      "join": ""
-    }
-  }
-}"""
+from tests.unit.integrations.hf_tokenizers.fixtures_response_template import (
+    PR_V1,
+    PR_V1_JSON,
+    PR_V7,
+    PR_V7_JSON,
+    PR_V13,
+    PR_V13_JSON,
+    V11_NO_THINKING,
+    V11_PLAIN_THINKING,
+)
 
 
 def test_top_level_keys_and_json_roundtrip() -> None:
@@ -140,21 +63,41 @@ def test_top_level_keys_and_json_roundtrip() -> None:
         assert template["defaults"] == {"role": "assistant"}
 
 
-def test_byte_for_byte_pr_fixtures() -> None:
-    fixtures: tuple[tuple[TokenizerVersion, bool, bool, str], ...] = (
-        (TokenizerVersion.v1, False, False, V1_PR_FIXTURE),
-        (TokenizerVersion.v7, False, False, V7_PR_FIXTURE),
-        (TokenizerVersion.v13, True, False, V13_PR_FIXTURE),
+@pytest.mark.parametrize(
+    ("version", "thinking_support", "plain_thinking_support", "expected", "expected_json"),
+    [
+        (TokenizerVersion.v1, False, False, PR_V1, PR_V1_JSON),
+        (TokenizerVersion.v7, False, False, PR_V7, PR_V7_JSON),
+        (TokenizerVersion.v13, True, False, PR_V13, PR_V13_JSON),
+        (TokenizerVersion.v11, False, True, V11_PLAIN_THINKING, None),
+        (TokenizerVersion.v11, False, False, V11_NO_THINKING, None),
+    ],
+    ids=["v1-pr", "v7-pr", "v13-pr", "v11-plain-thinking", "v11-no-thinking"],
+)
+def test_expected_fixtures(
+    version: TokenizerVersion,
+    thinking_support: bool,
+    plain_thinking_support: bool,
+    expected: Any,
+    expected_json: str | None,
+) -> None:
+    template = generate_response_template(
+        tokenizer_version=version,
+        thinking_support=thinking_support,
+        plain_thinking_support=plain_thinking_support,
     )
+    assert template == expected
+    if expected_json is not None:
+        assert json.dumps(obj=template, indent=2) == expected_json
 
-    for version, thinking_support, plain_thinking_support, fixture in fixtures:
-        template = generate_response_template(
-            tokenizer_version=version,
-            thinking_support=thinking_support,
-            plain_thinking_support=plain_thinking_support,
-        )
 
-        assert json.dumps(obj=template, indent=2) == fixture
+def test_fixtures_are_immutable() -> None:
+    with pytest.raises(TypeError):
+        PR_V13["defaults"] = {"role": "user"}  # type: ignore[index]
+    with pytest.raises(TypeError):
+        PR_V7["fields"]["content"]["close"] = []
+    with pytest.raises(TypeError):
+        V11_PLAIN_THINKING["fields"]["reasoning_content"]["open"] = "x"
 
 
 def test_start_anchor_per_version() -> None:
@@ -209,6 +152,7 @@ def test_v11_tool_calls_include_call_id() -> None:
         plain_thinking_support=True,
     )
 
+    assert template == V11_PLAIN_THINKING
     tool_calls = template["fields"]["tool_calls"]
     assert tool_calls == {
         "open_pattern": "\\[TOOL_CALLS\\](?P<name>.+?)\\[CALL_ID\\](?P<id>.+?)\\[ARGS\\]",
@@ -227,12 +171,15 @@ def test_v11_tool_calls_include_call_id() -> None:
         "content": "text",
     }
 
-    without_plain_thinking = generate_response_template(
-        tokenizer_version=TokenizerVersion.v11,
-        thinking_support=False,
-        plain_thinking_support=False,
+    assert (
+        generate_response_template(
+            tokenizer_version=TokenizerVersion.v11,
+            thinking_support=False,
+            plain_thinking_support=False,
+        )
+        == V11_NO_THINKING
     )
-    assert "reasoning_content" not in without_plain_thinking["fields"]
+    assert "reasoning_content" not in V11_NO_THINKING["fields"]
 
 
 def test_v3_v7_tool_calls_json_array() -> None:
