@@ -471,7 +471,7 @@ def _encode_assistant_generation(
     tokenizer = MistralTokenizer.from_file(tokenizer_filename=str(path), mode=ValidationMode.test)
     messages: list[ChatMessage] = [UserMessage(content="hi"), assistant]
     request = ChatCompletionRequest(messages=messages)
-    tokens = tokenizer.encode_chat_completion(request).tokens
+    tokens = tokenizer.encode_chat_completion(request=request).tokens
     inst_id = tokenizer.instruct_tokenizer.tokenizer.get_special_token(SpecialTokens.end_inst.value)
     last_inst = len(tokens) - 1 - tokens[::-1].index(inst_id)
     generation = tokens[last_inst + 1 :]
@@ -481,22 +481,29 @@ def _encode_assistant_generation(
 
 def _sample_tool_calls() -> list[ToolCall]:
     return [
-        ToolCall(id="abcdefghi", function=FunctionCall(name="get_weather", arguments=json.dumps({"city": "Paris"}))),
-        ToolCall(id="abcdefghj", function=FunctionCall(name="get_time", arguments=json.dumps({"tz": "CET"}))),
+        ToolCall(
+            id="abcdefghi", function=FunctionCall(name="get_weather", arguments=json.dumps(obj={"city": "Paris"}))
+        ),
+        ToolCall(id="abcdefghj", function=FunctionCall(name="get_time", arguments=json.dumps(obj={"tz": "CET"}))),
     ]
 
 
 @pytest.mark.parametrize(
-    ("version", "think", "n_tool_calls", "with_thinking"),
+    ("version", "think", "n_tool_calls", "with_thinking", "format_kind"),
     [
-        (TokenizerVersion.v13, True, 2, True),
-        (TokenizerVersion.v7, False, 1, False),
-        (TokenizerVersion.v11, False, 2, False),
+        (TokenizerVersion.v13, True, 2, True, "pattern-no-id"),
+        (TokenizerVersion.v7, False, 1, False, "json-array"),
+        (TokenizerVersion.v11, False, 2, False, "pattern-with-id"),
     ],
     ids=["v13", "v7", "v11"],
 )
 def test_matches_experimental_parser(
-    version: TokenizerVersion, think: bool, n_tool_calls: int, with_thinking: bool, tmp_path: Path
+    version: TokenizerVersion,
+    think: bool,
+    n_tool_calls: int,
+    with_thinking: bool,
+    format_kind: str,
+    tmp_path: Path,
 ) -> None:
     content: Any = [ThinkChunk(thinking="let me check"), TextChunk(text="Sure.")] if with_thinking else "Checking."
     assistant = AssistantMessage(content=content, tool_calls=_sample_tool_calls()[:n_tool_calls], prefix=True)
@@ -515,28 +522,31 @@ def test_matches_experimental_parser(
     assert len(tool_calls) == n_tool_calls
 
     tool_calls_field = template["fields"]["tool_calls"]
-    if "open_pattern" in tool_calls_field:
-        open_pattern = tool_calls_field["open_pattern"]
-        for tool_call_tokens_i, tool_call in zip(tool_call_tokens, tool_calls):
-            region = tokenizer.decode(tokens=tool_call_tokens_i, special_token_policy=SpecialTokenPolicy.KEEP)
-            match = re.fullmatch(pattern=open_pattern + ".*", string=region)
-            assert match is not None
-            assert match.group("name") == tool_call.function.name
-            if "id" in (match.re.groupindex or {}):
-                assert match.group("id") == tool_call.id
-    else:
+    if format_kind == "json-array":
+        assert "open_pattern" not in tool_calls_field
         assert tool_calls_field["open"] == SpecialTokens.tool_calls.value
         assert tool_calls_field["transform_each"] is True
         region = tokenizer.decode(tokens=tool_call_tokens[0], special_token_policy=SpecialTokenPolicy.KEEP)
         payload = json.loads(
-            region[len(SpecialTokens.tool_calls.value) :].strip().removesuffix(SpecialTokens.eos.value)
+            s=region[len(SpecialTokens.tool_calls.value) :].strip().removesuffix(SpecialTokens.eos.value)
         )
         assert isinstance(payload, list) and len(payload) == len(tool_calls)
         for decoded_element, tool_call in zip(payload, tool_calls):
             assert set(decoded_element) == {"id", "name", "arguments"}
             assert decoded_element["name"] == tool_call.function.name
             assert decoded_element["id"] == tool_call.id
-            assert decoded_element["arguments"] == json.loads(tool_call.function.arguments)
+            assert decoded_element["arguments"] == json.loads(s=tool_call.function.arguments)
+    else:
+        assert "open" not in tool_calls_field
+        open_pattern = tool_calls_field["open_pattern"]
+        assert (re.escape(SpecialTokens.call_id.value) in open_pattern) == (format_kind == "pattern-with-id")
+        for tool_call_tokens_i, tool_call in zip(tool_call_tokens, tool_calls):
+            region = tokenizer.decode(tokens=tool_call_tokens_i, special_token_policy=SpecialTokenPolicy.KEEP)
+            match = re.fullmatch(pattern=open_pattern + ".*", string=region)
+            assert match is not None
+            assert match.group("name") == tool_call.function.name
+            if format_kind == "pattern-with-id":
+                assert match.group("id") == tool_call.id
 
     if with_thinking:
         think_id = tokenizer.instruct_tokenizer.tokenizer.get_special_token(SpecialTokens.begin_think.value)
