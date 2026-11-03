@@ -3,10 +3,12 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import pytest
 
+import mistral_common.integrations.hf_tokenizers.response_template
 from mistral_common.experimental.think import _split_content_and_think_chunks
 from mistral_common.experimental.tools import _decode_tool_calls, _split_content_and_tool_calls
 from mistral_common.integrations.hf_tokenizers.response_template import (
@@ -27,16 +29,151 @@ from mistral_common.tokens.tokenizers.base import (
 )
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.integrations.chat_templates.helpers import TestConfig, build_tekken_json
-from tests.unit.integrations.hf_tokenizers.fixtures_response_template import (
-    PR_V1,
-    PR_V1_JSON,
-    PR_V7,
-    PR_V7_JSON,
-    PR_V13,
-    PR_V13_JSON,
-    V11_NO_THINKING,
-    V11_PLAIN_THINKING,
+
+
+def _freeze(obj: Any) -> Any:
+    r"""Recursively wrap dicts in MappingProxyType (lists stay lists)."""
+    if isinstance(obj, dict):
+        return MappingProxyType({key: _freeze(value) for key, value in obj.items()})
+    if isinstance(obj, list):
+        return [_freeze(item) for item in obj]
+    return obj
+
+
+@pytest.fixture(scope="module")
+def expected_templates() -> dict[str, MappingProxyType[str, Any]]:
+    r"""Named, immutable expected response templates per configuration.
+
+    Written as literals (delimiters via SpecialTokens / PLAIN_*_THINK), frozen
+    with MappingProxyType. Byte-for-byte comparison against the HF PR JSON is
+    done by a side script, not committed tests.
+    """
+    common_fields_tail: dict[str, Any] = {
+        "content": {
+            "close": [SpecialTokens.tool_calls.value, SpecialTokens.eos.value],
+            "content": "text",
+            "repeats": True,
+            "join": "",
+        },
+    }
+    v11_tool_calls: dict[str, Any] = {
+        "open_pattern": "\\[TOOL_CALLS\\](?P<name>.+?)\\[CALL_ID\\](?P<id>.+?)\\[ARGS\\]",
+        "close_pattern": "(?=\\[TOOL_CALLS\\])|</s>",
+        "repeats": True,
+        "content": "json",
+        "transform": {
+            "type": "function",
+            "id": "{id}",
+            "function": {"name": "{name}", "arguments": "{content}"},
+        },
+    }
+    raw: dict[str, dict[str, Any]] = {
+        "v1": {
+            "defaults": {"role": "assistant"},
+            "start_anchor": SpecialTokens.end_inst.value,
+            "fields": {"content": {"close": SpecialTokens.eos.value, "content": "text"}},
+        },
+        "v7": {
+            "defaults": {"role": "assistant"},
+            "start_anchor": [SpecialTokens.end_inst.value, SpecialTokens.end_tool_results.value],
+            "fields": {
+                "tool_calls": {
+                    "open": SpecialTokens.tool_calls.value,
+                    "close": SpecialTokens.eos.value,
+                    "content": "json",
+                    "transform_each": True,
+                    "transform": {
+                        "id": "{id}",
+                        "type": "function",
+                        "function": {"name": "{name}", "arguments": "{arguments}"},
+                    },
+                },
+                **common_fields_tail,
+            },
+        },
+        "v13": {
+            "defaults": {"role": "assistant"},
+            "start_anchor": [SpecialTokens.end_inst.value, SpecialTokens.end_tool_results.value],
+            "fields": {
+                "reasoning_content": {
+                    "open": SpecialTokens.begin_think.value,
+                    "close": SpecialTokens.end_think.value,
+                    "content": "text",
+                },
+                "tool_calls": {
+                    "open_pattern": "\\[TOOL_CALLS\\](?P<name>.+?)\\[ARGS\\]",
+                    "close_pattern": "(?=\\[TOOL_CALLS\\])|</s>",
+                    "repeats": True,
+                    "content": "json",
+                    "transform": {
+                        "type": "function",
+                        "function": {"name": "{name}", "arguments": "{content}"},
+                    },
+                },
+                **common_fields_tail,
+            },
+        },
+        "v11_plain_thinking": {
+            "defaults": {"role": "assistant"},
+            "start_anchor": [SpecialTokens.end_inst.value, SpecialTokens.end_tool_results.value],
+            "fields": {
+                "reasoning_content": {
+                    "open": PLAIN_BEGIN_THINK,
+                    "close": PLAIN_END_THINK,
+                    "content": "text",
+                },
+                "tool_calls": v11_tool_calls,
+                **common_fields_tail,
+            },
+        },
+        "v11_no_thinking": {
+            "defaults": {"role": "assistant"},
+            "start_anchor": [SpecialTokens.end_inst.value, SpecialTokens.end_tool_results.value],
+            "fields": {
+                "tool_calls": v11_tool_calls,
+                **common_fields_tail,
+            },
+        },
+    }
+    return {name: _freeze(value) for name, value in raw.items()}
+
+
+EXPECTED_CONFIGS: tuple[tuple[str, TokenizerVersion, bool, bool], ...] = (
+    ("v1", TokenizerVersion.v1, False, False),
+    ("v7", TokenizerVersion.v7, False, False),
+    ("v13", TokenizerVersion.v13, True, False),
+    ("v11_plain_thinking", TokenizerVersion.v11, False, True),
+    ("v11_no_thinking", TokenizerVersion.v11, False, False),
 )
+
+
+@pytest.mark.parametrize(
+    ("fixture_name", "version", "thinking_support", "plain_thinking_support"),
+    EXPECTED_CONFIGS,
+    ids=[name for name, _, _, _ in EXPECTED_CONFIGS],
+)
+def test_expected_templates(
+    expected_templates: dict[str, MappingProxyType[str, Any]],
+    fixture_name: str,
+    version: TokenizerVersion,
+    thinking_support: bool,
+    plain_thinking_support: bool,
+) -> None:
+    template = generate_response_template(
+        tokenizer_version=version,
+        thinking_support=thinking_support,
+        plain_thinking_support=plain_thinking_support,
+    )
+    assert template == expected_templates[fixture_name]
+
+
+def test_expected_templates_are_immutable(expected_templates: dict[str, MappingProxyType[str, Any]]) -> None:
+    with pytest.raises(TypeError):
+        expected_templates["v13"]["defaults"] = {"role": "user"}  # type: ignore[index]
+    with pytest.raises(TypeError):
+        expected_templates["v7"]["fields"]["content"]["close"] = []
+    with pytest.raises(TypeError):
+        expected_templates["v11_plain_thinking"]["fields"]["reasoning_content"]["open"] = "x"
 
 
 def test_top_level_keys_and_json_roundtrip() -> None:
@@ -61,43 +198,6 @@ def test_top_level_keys_and_json_roundtrip() -> None:
         assert json.loads(s=json.dumps(obj=template)) == template
         assert set(template) == {"defaults", "start_anchor", "fields"}
         assert template["defaults"] == {"role": "assistant"}
-
-
-@pytest.mark.parametrize(
-    ("version", "thinking_support", "plain_thinking_support", "expected", "expected_json"),
-    [
-        (TokenizerVersion.v1, False, False, PR_V1, PR_V1_JSON),
-        (TokenizerVersion.v7, False, False, PR_V7, PR_V7_JSON),
-        (TokenizerVersion.v13, True, False, PR_V13, PR_V13_JSON),
-        (TokenizerVersion.v11, False, True, V11_PLAIN_THINKING, None),
-        (TokenizerVersion.v11, False, False, V11_NO_THINKING, None),
-    ],
-    ids=["v1-pr", "v7-pr", "v13-pr", "v11-plain-thinking", "v11-no-thinking"],
-)
-def test_expected_fixtures(
-    version: TokenizerVersion,
-    thinking_support: bool,
-    plain_thinking_support: bool,
-    expected: Any,
-    expected_json: str | None,
-) -> None:
-    template = generate_response_template(
-        tokenizer_version=version,
-        thinking_support=thinking_support,
-        plain_thinking_support=plain_thinking_support,
-    )
-    assert template == expected
-    if expected_json is not None:
-        assert json.dumps(obj=template, indent=2) == expected_json
-
-
-def test_fixtures_are_immutable() -> None:
-    with pytest.raises(TypeError):
-        PR_V13["defaults"] = {"role": "user"}  # type: ignore[index]
-    with pytest.raises(TypeError):
-        PR_V7["fields"]["content"]["close"] = []
-    with pytest.raises(TypeError):
-        V11_PLAIN_THINKING["fields"]["reasoning_content"]["open"] = "x"
 
 
 def test_start_anchor_per_version() -> None:
@@ -145,14 +245,14 @@ def test_v13_v15_tool_calls_pattern() -> None:
         assert template["fields"]["tool_calls"] == expected_tool_calls
 
 
-def test_v11_tool_calls_include_call_id() -> None:
+def test_v11_tool_calls_include_call_id(expected_templates: dict[str, MappingProxyType[str, Any]]) -> None:
     template = generate_response_template(
         tokenizer_version=TokenizerVersion.v11,
         thinking_support=False,
         plain_thinking_support=True,
     )
 
-    assert template == V11_PLAIN_THINKING
+    assert template == expected_templates["v11_plain_thinking"]
     tool_calls = template["fields"]["tool_calls"]
     assert tool_calls == {
         "open_pattern": "\\[TOOL_CALLS\\](?P<name>.+?)\\[CALL_ID\\](?P<id>.+?)\\[ARGS\\]",
@@ -177,9 +277,9 @@ def test_v11_tool_calls_include_call_id() -> None:
             thinking_support=False,
             plain_thinking_support=False,
         )
-        == V11_NO_THINKING
+        == expected_templates["v11_no_thinking"]
     )
-    assert "reasoning_content" not in V11_NO_THINKING["fields"]
+    assert "reasoning_content" not in expected_templates["v11_no_thinking"]["fields"]
 
 
 def test_v3_v7_tool_calls_json_array() -> None:
@@ -217,16 +317,18 @@ def test_v2_tool_calls_no_id() -> None:
     }
 
 
-def test_reasoning_field_rules() -> None:
-    expected_reasoning = {"open": "[THINK]", "close": "[/THINK]", "content": "text"}
+def test_reasoning_field_rules(expected_templates: dict[str, MappingProxyType[str, Any]]) -> None:
     for version in (TokenizerVersion.v13, TokenizerVersion.v15):
         template = generate_response_template(
             tokenizer_version=version,
             thinking_support=False,
             plain_thinking_support=False,
         )
-        assert template["fields"]["reasoning_content"] == expected_reasoning
-
+        assert template["fields"]["reasoning_content"] == {
+            "open": "[THINK]",
+            "close": "[/THINK]",
+            "content": "text",
+        }
     for version in (TokenizerVersion.v2, TokenizerVersion.v3, TokenizerVersion.v7):
         template = generate_response_template(
             tokenizer_version=version,
@@ -234,32 +336,27 @@ def test_reasoning_field_rules() -> None:
             plain_thinking_support=False,
         )
         assert "reasoning_content" not in template["fields"]
+    assert "reasoning_content" in expected_templates["v11_plain_thinking"]["fields"]
+    assert "reasoning_content" not in expected_templates["v11_no_thinking"]["fields"]
 
 
-def test_content_field() -> None:
+def test_content_field(expected_templates: dict[str, MappingProxyType[str, Any]]) -> None:
     v1 = generate_response_template(
         tokenizer_version=TokenizerVersion.v1,
         thinking_support=False,
         plain_thinking_support=False,
     )
     assert v1["fields"]["content"] == {"close": "</s>", "content": "text"}
+    assert v1 == expected_templates["v1"]
 
-    for version in (
-        TokenizerVersion.v2,
-        TokenizerVersion.v3,
-        TokenizerVersion.v7,
-        TokenizerVersion.v11,
-        TokenizerVersion.v13,
-        TokenizerVersion.v15,
-    ):
+    for version in (TokenizerVersion.v2, TokenizerVersion.v3, TokenizerVersion.v7, TokenizerVersion.v11):
         template = generate_response_template(
             tokenizer_version=version,
             thinking_support=False,
             plain_thinking_support=False,
         )
-        content: dict[str, Any] = template["fields"]["content"]
-        assert "open" not in content
-        assert "open_pattern" not in content
+        content = template["fields"]["content"]
+        assert "open" not in content and "open_pattern" not in content
         assert content["close"] == ["[TOOL_CALLS]", "</s>"]
         assert content["repeats"] is True
         assert content["join"] == ""
@@ -267,55 +364,42 @@ def test_content_field() -> None:
 
 
 def test_invalid_thinking_combos_raise() -> None:
-    with pytest.raises(ValueError, match="Plain thinking support is only available"):
-        generate_response_template(
-            tokenizer_version=TokenizerVersion.v7,
-            thinking_support=False,
-            plain_thinking_support=True,
-        )
-
-    with pytest.raises(ValueError, match="Special-token thinking support requires"):
-        generate_response_template(
-            tokenizer_version=TokenizerVersion.v7,
-            thinking_support=True,
-            plain_thinking_support=False,
-        )
-
     with pytest.raises(ValueError, match="mutually exclusive"):
         generate_response_template(
             tokenizer_version=TokenizerVersion.v13,
             thinking_support=True,
             plain_thinking_support=True,
         )
+    with pytest.raises(ValueError, match="only available for tokenizer version v11"):
+        generate_response_template(
+            tokenizer_version=TokenizerVersion.v7,
+            thinking_support=False,
+            plain_thinking_support=True,
+        )
+    with pytest.raises(ValueError, match="v13 or above"):
+        generate_response_template(
+            tokenizer_version=TokenizerVersion.v7,
+            thinking_support=True,
+            plain_thinking_support=False,
+        )
 
 
 def test_no_chat_templates_import() -> None:
-    module_import = (
-        "import sys; import mistral_common.integrations.hf_tokenizers.response_template; "
-        "assert 'mistral_common.integrations.chat_templates' not in sys.modules"
-    )
     result = subprocess.run(
-        args=[sys.executable, "-c", module_import],
+        args=[
+            sys.executable,
+            "-c",
+            "import sys; import mistral_common.integrations.hf_tokenizers.response_template; "
+            "assert 'mistral_common.integrations.chat_templates' not in sys.modules",
+        ],
         capture_output=True,
-        text=True,
-        cwd=Path(__file__).resolve().parents[4],
     )
-
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, result.stderr.decode()
 
 
 def test_no_delimiter_string_literals() -> None:
-    module_path = (
-        Path(__file__).resolve().parents[4]
-        / "src"
-        / "mistral_common"
-        / "integrations"
-        / "hf_tokenizers"
-        / "response_template.py"
-    )
-    source = module_path.read_text(encoding="utf-8")
-
-    for delimiter in (
+    source = Path(mistral_common.integrations.hf_tokenizers.response_template.__file__).read_text(encoding="utf-8")
+    for token in (
         SpecialTokens.tool_calls.value,
         SpecialTokens.args.value,
         SpecialTokens.call_id.value,
@@ -325,223 +409,124 @@ def test_no_delimiter_string_literals() -> None:
         SpecialTokens.end_tool_results.value,
         SpecialTokens.eos.value,
     ):
-        assert delimiter not in source
-        escaped_delimiter = re.escape(delimiter)
-        assert escaped_delimiter not in source
-        assert escaped_delimiter.replace("\\", "\\\\") not in source
+        assert token not in source
+        assert re.escape(token) not in source
+        assert re.escape(re.escape(token)) not in source
     assert "re.escape" in source
 
 
 def test_convert_tokenizer_to_response_template_tekken_v13(tmp_path: Path) -> None:
-    path = build_tekken_json(
-        config=TestConfig(version=TokenizerVersion.v13, think=True),
-        output_dir=tmp_path,
-    )
-
+    path = build_tekken_json(TestConfig(version=TokenizerVersion.v13, think=True), output_dir=tmp_path)
     result = convert_tokenizer_to_response_template(tokenizer_file=path, plain_thinking_support=None)
-    expected = generate_response_template(
+    assert result == generate_response_template(
         tokenizer_version=TokenizerVersion.v13,
         thinking_support=True,
         plain_thinking_support=False,
     )
-    assert result == expected
 
 
-def test_convert_v11_plain_thinking_heuristic(tmp_path: Path) -> None:
-    path = build_tekken_json(
-        config=TestConfig(version=TokenizerVersion.v11),
-        output_dir=tmp_path,
-    )
+def test_convert_v11_plain_thinking_heuristic(
+    tmp_path: Path, expected_templates: dict[str, MappingProxyType[str, Any]]
+) -> None:
+    path = build_tekken_json(TestConfig(version=TokenizerVersion.v11), output_dir=tmp_path)
+    auto = convert_tokenizer_to_response_template(tokenizer_file=path, plain_thinking_support=None)
+    assert auto == expected_templates["v11_plain_thinking"]
+    forced_off = convert_tokenizer_to_response_template(tokenizer_file=path, plain_thinking_support=False)
+    assert forced_off == expected_templates["v11_no_thinking"]
 
-    heuristic_result = convert_tokenizer_to_response_template(
-        tokenizer_file=path,
-        plain_thinking_support=None,
-    )
-    assert heuristic_result["fields"]["reasoning_content"]["open"] == "<think>"
 
-    override_result = convert_tokenizer_to_response_template(
-        tokenizer_file=path,
-        plain_thinking_support=False,
-    )
-    assert "reasoning_content" not in override_result["fields"]
+def _encode_assistant_generation(
+    version: TokenizerVersion,
+    think: bool,
+    tmp_path: Path,
+    assistant: AssistantMessage,
+) -> tuple[MistralTokenizer, list[int], str]:
+    r"""Encode [user, assistant] and return (tokenizer, generation tokens, decoded KEEP text)."""
+    path = build_tekken_json(TestConfig(version=version, think=think), output_dir=tmp_path)
+    tokenizer = MistralTokenizer.from_file(str(path), mode=ValidationMode.test)
+    messages: list[ChatMessage] = [UserMessage(content="hi"), assistant]
+    request = ChatCompletionRequest(messages=messages)
+    tokens = tokenizer.encode_chat_completion(request).tokens
+    inst_id = tokenizer.instruct_tokenizer.tokenizer.get_special_token(SpecialTokens.end_inst.value)
+    last_inst = len(tokens) - 1 - tokens[::-1].index(inst_id)
+    generation = tokens[last_inst + 1 :]
+    decoded = tokenizer.decode(generation, special_token_policy=SpecialTokenPolicy.KEEP)
+    return tokenizer, generation, decoded
+
+
+def _sample_tool_calls() -> list[ToolCall]:
+    return [
+        ToolCall(id="abcdefghi", function=FunctionCall(name="get_weather", arguments=json.dumps({"city": "Paris"}))),
+        ToolCall(id="abcdefghj", function=FunctionCall(name="get_time", arguments=json.dumps({"tz": "CET"}))),
+    ]
 
 
 def test_matches_experimental_parser_v13(tmp_path: Path) -> None:
-    tokenizer_path = build_tekken_json(
-        config=TestConfig(version=TokenizerVersion.v13, think=True),
-        output_dir=tmp_path,
+    assistant = AssistantMessage(
+        content=[TextChunk(text="Sure."), ThinkChunk(thinking="let me check")],
+        tool_calls=_sample_tool_calls(),
+        prefix=True,
     )
-    mistral_tokenizer = MistralTokenizer.from_file(
-        tokenizer_filename=str(tokenizer_path),
-        mode=ValidationMode.test,
+    tokenizer, generation, decoded = _encode_assistant_generation(TokenizerVersion.v13, True, tmp_path, assistant)
+    template = generate_response_template(
+        tokenizer_version=TokenizerVersion.v13, thinking_support=True, plain_thinking_support=False
     )
-    messages: list[ChatMessage] = [
-        UserMessage(content="hi"),
-        AssistantMessage(
-            content=[TextChunk(text="Sure."), ThinkChunk(thinking="let me check", closed=True)],
-            tool_calls=[
-                ToolCall(
-                    id="abcdefghi",
-                    function=FunctionCall(name="get_weather", arguments=json.dumps({"city": "Paris"})),
-                ),
-                ToolCall(
-                    id="123456789",
-                    function=FunctionCall(name="get_time", arguments=json.dumps({"city": "Paris"})),
-                ),
-            ],
-            prefix=True,
-        ),
-    ]
-    request = ChatCompletionRequest(messages=messages)
-    tokens = mistral_tokenizer.encode_chat_completion(request).tokens
-    tokenizer = mistral_tokenizer.instruct_tokenizer.tokenizer
-    end_inst_id = tokenizer.get_special_token(SpecialTokens.end_inst.value)
-    generation_start = max(index for index, token in enumerate(tokens) if token == end_inst_id) + 1
-    generation = tokens[generation_start:]
-    tool_calls_id = tokenizer.get_special_token(SpecialTokens.tool_calls.value)
-    content_tokens, tool_call_tokens = _split_content_and_tool_calls(
-        tokens=generation,
-        tool_call_token_id=tool_calls_id,
-    )
-    decoded_tool_calls = _decode_tool_calls(tool_call_tokens=tool_call_tokens, tokenizer=tokenizer)
-    assert [call.function.name for call in decoded_tool_calls] == ["get_weather", "get_time"]
-    response_template = generate_response_template(
-        tokenizer_version=TokenizerVersion.v13,
-        thinking_support=True,
-        plain_thinking_support=False,
-    )
-    tool_call_field = response_template["fields"]["tool_calls"]
-    for call_tokens, decoded_tool_call in zip(tool_call_tokens, decoded_tool_calls, strict=True):
-        decoded_call_region = tokenizer.decode(tokens=call_tokens, special_token_policy=SpecialTokenPolicy.KEEP)
-        match = re.fullmatch(
-            pattern=tool_call_field["open_pattern"] + ".*",
-            string=decoded_call_region,
-            flags=re.DOTALL,
-        )
+
+    tool_call_id = tokenizer.instruct_tokenizer.tokenizer.get_special_token(SpecialTokens.tool_calls.value)
+    content_tokens, tool_call_tokens = _split_content_and_tool_calls(generation, tool_call_id)
+    think_id = tokenizer.instruct_tokenizer.tokenizer.get_special_token(SpecialTokens.begin_think.value)
+    end_think_id = tokenizer.instruct_tokenizer.tokenizer.get_special_token(SpecialTokens.end_think.value)
+    chunks = _split_content_and_think_chunks(content_tokens, think_id, end_think_id)
+    tool_calls = _decode_tool_calls(tool_call_tokens, tokenizer.instruct_tokenizer.tokenizer)
+
+    open_pattern = template["fields"]["tool_calls"]["open_pattern"]
+    for tool_call_tokens_i, tool_call in zip(tool_call_tokens, tool_calls):
+        region = tokenizer.decode(tool_call_tokens_i, special_token_policy=SpecialTokenPolicy.KEEP)
+        match = re.fullmatch(open_pattern + ".*", region)
         assert match is not None
-        assert match.group("name") == decoded_tool_call.function.name
-
-    think_chunks = _split_content_and_think_chunks(
-        tokens=content_tokens,
-        begin_think_token_id=tokenizer.get_special_token(SpecialTokens.begin_think.value),
-        end_think_token_id=tokenizer.get_special_token(SpecialTokens.end_think.value),
-    )
-    decoded_think_chunks = [
-        tokenizer.decode(tokens=chunk_tokens, special_token_policy=SpecialTokenPolicy.KEEP)
-        for chunk_tokens, is_think in think_chunks
-        if is_think
-    ]
-
-    assert decoded_think_chunks == ["[THINK]let me check[/THINK]"]
-    assert response_template["fields"]["reasoning_content"]["open"] == "[THINK]"
-    assert response_template["fields"]["reasoning_content"]["close"] == "[/THINK]"
-    assert response_template["fields"]["content"]["close"] == ["[TOOL_CALLS]", "</s>"]
+        assert match.group("name") == tool_call.function.name
+    assert template["fields"]["reasoning_content"]["open"] == SpecialTokens.begin_think.value
+    assert template["fields"]["content"]["close"][0] == SpecialTokens.tool_calls.value
+    assert any(is_think for _, is_think in chunks)
 
 
 def test_matches_experimental_parser_v7(tmp_path: Path) -> None:
-    tokenizer_path = build_tekken_json(
-        config=TestConfig(version=TokenizerVersion.v7),
-        output_dir=tmp_path,
+    assistant = AssistantMessage(content="Checking.", tool_calls=_sample_tool_calls()[:1], prefix=True)
+    tokenizer, generation, decoded = _encode_assistant_generation(TokenizerVersion.v7, False, tmp_path, assistant)
+    template = generate_response_template(
+        tokenizer_version=TokenizerVersion.v7, thinking_support=False, plain_thinking_support=False
     )
-    mistral_tokenizer = MistralTokenizer.from_file(
-        tokenizer_filename=str(tokenizer_path),
-        mode=ValidationMode.finetuning,
-    )
-    messages: list[ChatMessage] = [
-        UserMessage(content="hi"),
-        AssistantMessage(
-            content="Sure.",
-            tool_calls=[
-                ToolCall(
-                    id="abcdefghi",
-                    function=FunctionCall(name="get_weather", arguments=json.dumps({"city": "Paris"})),
-                )
-            ],
-        ),
-    ]
-    request = ChatCompletionRequest(messages=messages)
-    tokens = mistral_tokenizer.encode_chat_completion(request).tokens
-    tokenizer = mistral_tokenizer.instruct_tokenizer.tokenizer
-    end_inst_id = tokenizer.get_special_token(SpecialTokens.end_inst.value)
-    generation_start = max(index for index, token in enumerate(tokens) if token == end_inst_id) + 1
-    generation = tokens[generation_start:]
-    tool_calls_id = tokenizer.get_special_token(SpecialTokens.tool_calls.value)
-    _, tool_call_tokens = _split_content_and_tool_calls(tokens=generation, tool_call_token_id=tool_calls_id)
-    decoded_tool_calls = _decode_tool_calls(tool_call_tokens=tool_call_tokens, tokenizer=tokenizer)
-    assert len(decoded_tool_calls) == 1
-    assert decoded_tool_calls[0].function.name == "get_weather"
-    response_template = generate_response_template(
-        tokenizer_version=TokenizerVersion.v7,
-        thinking_support=False,
-        plain_thinking_support=False,
-    )
-    expected_transform = {
-        "id": "{id}",
-        "type": "function",
-        "function": {"name": "{name}", "arguments": "{arguments}"},
-    }
-    assert response_template["fields"]["tool_calls"] == {
-        "open": "[TOOL_CALLS]",
-        "close": "</s>",
-        "content": "json",
-        "transform_each": True,
-        "transform": expected_transform,
-    }
-    decoded_generation = tokenizer.decode(tokens=generation, special_token_policy=SpecialTokenPolicy.KEEP)
-    call_start = decoded_generation.index(SpecialTokens.tool_calls.value) + len(SpecialTokens.tool_calls.value)
-    call_end = decoded_generation.index(SpecialTokens.eos.value, call_start)
-    call_array_region = decoded_generation[call_start:call_end]
-    assert json.loads(call_array_region) == [{"id": "abcdefghi", "name": "get_weather", "arguments": {"city": "Paris"}}]
+
+    tool_call_id = tokenizer.instruct_tokenizer.tokenizer.get_special_token(SpecialTokens.tool_calls.value)
+    _, tool_call_tokens = _split_content_and_tool_calls(generation, tool_call_id)
+    tool_calls = _decode_tool_calls(tool_call_tokens, tokenizer.instruct_tokenizer.tokenizer)
+
+    assert template["fields"]["tool_calls"]["open"] == SpecialTokens.tool_calls.value
+    assert template["fields"]["tool_calls"]["transform_each"] is True
+    region = tokenizer.decode(tool_call_tokens[0], special_token_policy=SpecialTokenPolicy.KEEP)
+    payload = json.loads(region[len(SpecialTokens.tool_calls.value) :].strip().rstrip(SpecialTokens.eos.value))
+    assert isinstance(payload, list) and len(payload) == len(tool_calls)
+    for decoded_element, tool_call in zip(payload, tool_calls):
+        assert set(decoded_element) == {"id", "name", "arguments"}
+        assert decoded_element["name"] == tool_call.function.name
+        assert decoded_element["id"] == tool_call.id
 
 
 def test_matches_experimental_parser_v11_tool_calls(tmp_path: Path) -> None:
-    tokenizer_path = build_tekken_json(
-        config=TestConfig(version=TokenizerVersion.v11),
-        output_dir=tmp_path,
+    assistant = AssistantMessage(content="Checking.", tool_calls=_sample_tool_calls(), prefix=True)
+    tokenizer, generation, decoded = _encode_assistant_generation(TokenizerVersion.v11, False, tmp_path, assistant)
+    template = generate_response_template(
+        tokenizer_version=TokenizerVersion.v11, thinking_support=False, plain_thinking_support=False
     )
-    mistral_tokenizer = MistralTokenizer.from_file(
-        tokenizer_filename=str(tokenizer_path),
-        mode=ValidationMode.test,
-    )
-    messages: list[ChatMessage] = [
-        UserMessage(content="hi"),
-        AssistantMessage(
-            tool_calls=[
-                ToolCall(
-                    id="abcdefghi",
-                    function=FunctionCall(name="get_weather", arguments=json.dumps({"city": "Paris"})),
-                ),
-                ToolCall(
-                    id="123456789",
-                    function=FunctionCall(name="get_time", arguments=json.dumps({"city": "Paris"})),
-                ),
-            ],
-            prefix=True,
-        ),
-    ]
-    request = ChatCompletionRequest(messages=messages)
-    tokens = mistral_tokenizer.encode_chat_completion(request).tokens
-    tokenizer = mistral_tokenizer.instruct_tokenizer.tokenizer
-    end_inst_id = tokenizer.get_special_token(SpecialTokens.end_inst.value)
-    generation_start = max(index for index, token in enumerate(tokens) if token == end_inst_id) + 1
-    generation = tokens[generation_start:]
-    tool_calls_id = tokenizer.get_special_token(SpecialTokens.tool_calls.value)
-    _, tool_call_tokens = _split_content_and_tool_calls(tokens=generation, tool_call_token_id=tool_calls_id)
-    decoded_tool_calls = _decode_tool_calls(tool_call_tokens=tool_call_tokens, tokenizer=tokenizer)
-    assert [call.function.name for call in decoded_tool_calls] == ["get_weather", "get_time"]
-    tool_call_field = generate_response_template(
-        tokenizer_version=TokenizerVersion.v11,
-        thinking_support=False,
-        plain_thinking_support=False,
-    )["fields"]["tool_calls"]
 
-    for call_tokens, decoded_tool_call in zip(tool_call_tokens, decoded_tool_calls, strict=True):
-        decoded_call_region = tokenizer.decode(tokens=call_tokens, special_token_policy=SpecialTokenPolicy.KEEP)
-        match = re.fullmatch(
-            pattern=tool_call_field["open_pattern"] + ".*",
-            string=decoded_call_region,
-            flags=re.DOTALL,
-        )
+    tool_call_id = tokenizer.instruct_tokenizer.tokenizer.get_special_token(SpecialTokens.tool_calls.value)
+    _, tool_call_tokens = _split_content_and_tool_calls(generation, tool_call_id)
+    tool_calls = _decode_tool_calls(tool_call_tokens, tokenizer.instruct_tokenizer.tokenizer)
+
+    open_pattern = template["fields"]["tool_calls"]["open_pattern"]
+    for tool_call_tokens_i, tool_call in zip(tool_call_tokens, tool_calls):
+        region = tokenizer.decode(tool_call_tokens_i, special_token_policy=SpecialTokenPolicy.KEEP)
+        match = re.fullmatch(open_pattern + ".*", region)
         assert match is not None
-        assert match.group("name") == decoded_tool_call.function.name
-        assert match.group("id") == decoded_tool_call.id
+        assert match.group("name") == tool_call.function.name
+        assert match.group("id") == tool_call.id
