@@ -30,6 +30,18 @@ class StreamingMode(StrEnum):
     OFFLINE = auto()
 
 
+# Fields of `TranscriptionRequest` that are specific to mistral-common / Mistral's
+# transcription API and are not part of the OpenAI transcription API. They are dropped
+# by `TranscriptionRequest.to_openai`.
+_MISTRAL_TRANSCRIPTION_ONLY_FIELDS: tuple[str, ...] = (
+    "id",
+    "max_tokens",
+    "strict_audio_validation",
+    "streaming",
+    "target_streaming_delay_ms",
+)
+
+
 class TranscriptionRequest(BaseCompletionRequest):
     r"""A request for audio transcription.
 
@@ -118,21 +130,18 @@ class TranscriptionRequest(BaseCompletionRequest):
             raise ValueError("ONLINE streaming audio must be a base64 text value or empty prefill; received bytes.")
         return self
 
-    def to_openai(self, exclude: tuple = (), **kwargs: Any) -> dict[str, list[dict[str, Any]]]:
+    def to_openai(self, **kwargs: Any) -> dict[str, list[dict[str, Any]]]:
         r"""Convert the transcription request into the OpenAI format.
 
         Audio is converted into an in-memory file buffer with the correct format
         extension, and mistral-specific fields are dropped.
 
         Args:
-            exclude: Extra field names to exclude from the output, in addition to
-                the mistral-specific defaults ("id", `max_tokens`,
-                `strict_audio_validation`, "streaming").
             kwargs: Additional OpenAI parameters merged into the output.
 
         Returns:
-            The request in the OpenAI format, with the audio under the "file" key
-            and `random_seed` renamed to "seed".
+            The request in the OpenAI-compatible format, with the audio under the "file"
+            key and `random_seed` renamed to "seed".
 
         Raises:
             ImportError: If soundfile is not installed.
@@ -163,11 +172,9 @@ class TranscriptionRequest(BaseCompletionRequest):
         openai_request["seed"] = openai_request.pop("random_seed")
         openai_request.update(kwargs)
 
-        # remove mistral-specific
-        # TODO: revisit which fields to expose in the OpenAI format
-        default_exclude = ("id", "max_tokens", "strict_audio_validation", "streaming")
-        default_exclude += exclude
-        for k in default_exclude:
+        # Drop fields that are specific to mistral-common / Mistral's transcription API
+        # and are not part of the OpenAI transcription API.
+        for k in _MISTRAL_TRANSCRIPTION_ONLY_FIELDS:
             openai_request.pop(k, None)
 
         return openai_request
