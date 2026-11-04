@@ -164,13 +164,16 @@ def test_is_tekken_accepts_existing_json_file_with_marker(tmp_path: Path, filena
 
 @pytest.mark.parametrize(
     "filename",
-    ["model.json", "sentencepiece.json", "model.tekken.bin", "missing.tekken.json", "directory.tekken.json"],
-    ids=["plain-json", "wrong-name", "wrong-suffix", "missing-file", "directory"],
+    ["model.json", "sentencepiece.json", "model.tekken.bin", "missing.tekken.json"],
+    ids=["plain-json", "wrong-name", "wrong-suffix", "missing-file"],
 )
 def test_is_tekken_rejects_wrong_name_suffix_or_missing_file(tmp_path: Path, filename: str) -> None:
-    path = tmp_path / filename
-    if filename.startswith("directory"):
-        path.mkdir()
+    assert not is_tekken(tmp_path / filename)
+
+
+def test_is_tekken_rejects_directory_with_tekken_name(tmp_path: Path) -> None:
+    path = tmp_path / "directory.tekken.json"
+    path.mkdir()
 
     assert not is_tekken(path)
 
@@ -456,7 +459,7 @@ def test_decode_accepts_policy_values_and_enums(
 
 def test_decode_rejects_invalid_policy(tekkenizer: Tekkenizer) -> None:
     with pytest.raises(ValueError, match=r"Invalid `special_token_policy` 'keeep'"):
-        tekkenizer.decode([276], special_token_policy="keeep")  # type: ignore[arg-type]
+        tekkenizer.decode(tokens=[276], special_token_policy="keeep")  # type: ignore[arg-type]
 
 
 def test_string_and_piece_helpers_keep_special_token_text(tekkenizer: Tekkenizer) -> None:
