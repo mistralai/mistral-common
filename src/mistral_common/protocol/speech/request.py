@@ -54,7 +54,8 @@ class SpeechRequest(BaseCompletionRequest):
         r"""Convert this SpeechRequest to an OpenAI-compatible request dictionary.
 
         Reference audio is converted into an in-memory file buffer with the
-        correct format extension, and `random_seed` is renamed to "seed".
+        correct format extension, `random_seed` is renamed to "seed", and the
+        mistral-specific fields "id" and `max_tokens` are dropped.
 
         Args:
             **kwargs: Additional key-value pairs merged into the output.
@@ -65,7 +66,7 @@ class SpeechRequest(BaseCompletionRequest):
         Raises:
             ImportError: If soundfile is not installed and `ref_audio` is provided.
         """
-        openai_request: dict[str, Any] = self.model_dump(exclude={"ref_audio"})
+        openai_request: dict[str, Any] = self.model_dump(exclude={"ref_audio", "id", "max_tokens"})
 
         assert_soundfile_installed()
 
