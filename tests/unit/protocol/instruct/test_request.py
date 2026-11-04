@@ -228,14 +228,6 @@ class TestChatCompletionRequest:
 
         assert exc_info.value.errors()[0]["loc"] == ("random_seed",)
 
-    def test_from_openai_preserves_zero_seed(self) -> None:
-        request = ChatCompletionRequest.from_openai(
-            messages=[{"role": "user", "content": "hello"}],
-            seed=0,
-        )
-
-        assert request.random_seed == 0
-
     def test_request_openai_round_trip_preserves_zero_seed_messages_and_tools(self) -> None:
         parameters: dict[str, Any] = {
             "type": "object",

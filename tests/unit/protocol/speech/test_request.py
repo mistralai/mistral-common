@@ -7,7 +7,7 @@ import pytest
 
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.tokens.tokenizers.audio import Audio
-from tests.unit.protocol.audio_conversion import assert_audio_buffer, audio_bytes
+from tests.unit.protocol.utils import assert_audio_buffer, audio_bytes
 
 
 def test_speech_request_from_openai_filters_instructions_and_decodes_reference_audio(audio_samples: np.ndarray) -> None:
