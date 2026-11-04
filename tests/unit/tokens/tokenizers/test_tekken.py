@@ -20,7 +20,7 @@ from mistral_common.tokens.tokenizers.tekken import (
 )
 
 
-def quick_vocab(extra_toks: Sequence[bytes] = ()) -> list[TokenInfo]:
+def quick_vocab(extra_toks: Sequence[bytes]) -> list[TokenInfo]:
     r"""Synthetic 256-byte vocab plus `extra_toks`; identical contract to the legacy shared builder."""
     vocab = [TokenInfo(rank=i, token_bytes=base64.b64encode(bytes([i])).decode(), token_str=chr(i)) for i in range(256)]
     vocab.extend(
@@ -49,10 +49,10 @@ def build_tekkenizer(
     num_special_tokens: int,
     special_tokens: list[SpecialTokenInfo],
     vocab: list[TokenInfo],
-    image_config: ImageConfig | None = None,
-    audio_config: AudioConfig | None = None,
-    model_settings_builder: ModelSettingsBuilder | None = None,
-    path: str | Path | None = None,
+    image_config: ImageConfig,
+    audio_config: AudioConfig,
+    model_settings_builder: ModelSettingsBuilder,
+    path: str | Path,
 ) -> Tekkenizer:
     return Tekkenizer(
         vocab=vocab,
@@ -101,22 +101,19 @@ def audio_config() -> AudioConfig:
 def write_tokenizer_file(
     path: Path,
     *,
-    version: str | None = "v3",
-    special_tokens: list[SpecialTokenInfo] | None = None,
-    num_special_tokens: int = 20,
-    image: dict[str, int] | None = None,
-    multimodal: dict[str, int] | None = None,
-    audio: dict[str, object] | None = None,
-    model_settings: dict[str, object] | None = None,
-    vocab: list[TokenInfo] | None = None,
-    default_vocab_size: int | None = None,
+    version: str | None,
+    special_tokens: list[SpecialTokenInfo] | None,
+    num_special_tokens: int,
+    vocab: list[TokenInfo],
+    image: dict[str, int],
+    multimodal: dict[str, int],
+    audio: dict[str, object],
+    model_settings: dict[str, object],
 ) -> None:
-    if vocab is None:
-        vocab = quick_vocab(extra_toks=[b"hello", b"world"])
     config: dict[str, object] = {
         "pattern": r".+",
         "num_vocab_tokens": len(vocab),
-        "default_vocab_size": default_vocab_size or len(vocab) + num_special_tokens,
+        "default_vocab_size": len(vocab) + num_special_tokens,
         "default_num_special_tokens": num_special_tokens,
     }
     model: dict[str, object] = {
@@ -128,13 +125,13 @@ def write_tokenizer_file(
     }
     if version is not None:
         config["version"] = version
-    if image is not None:
+    if image:
         model["image"] = image
-    if multimodal is not None:
+    if multimodal:
         model["multimodal"] = multimodal
-    if audio is not None:
+    if audio:
         model["audio"] = audio
-    if model_settings is not None:
+    if model_settings:
         model["model_settings_builder"] = model_settings
     path.write_text(json.dumps(model), encoding="utf-8")
 
@@ -145,6 +142,10 @@ def tekkenizer_source() -> Tekkenizer:
         num_special_tokens=20,
         special_tokens=deprecated_special_tokens(),
         vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
+        image_config=ImageConfig(image_patch_size=16, max_image_size=1024),
+        audio_config=audio_config(),
+        model_settings_builder=cast(ModelSettingsBuilder, None),
+        path="synthetic-v3.tekken.json",
     )
 
 
@@ -188,14 +189,17 @@ def test_is_tekken_rejects_directory_with_tekken_name(tmp_path: Path) -> None:
     ids=["legacy-v3", "modern-v15"],
 )
 def test_init_exposes_configured_values(version: TokenizerVersion, has_builder: bool) -> None:
-    builder = model_settings_builder() if has_builder else None
     tokenizer = build_tekkenizer(
         version=version,
         num_special_tokens=22,
         special_tokens=special_tokens_with_fillers(22),
         vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
-        model_settings_builder=builder,
+        image_config=ImageConfig(image_patch_size=16, max_image_size=1024),
+        audio_config=audio_config(),
+        model_settings_builder=(model_settings_builder() if has_builder else cast(ModelSettingsBuilder, None)),
+        path="synthetic.tekken.json",
     )
+    builder = tokenizer.model_settings_builder
 
     assert tokenizer.n_words == 280
     assert tokenizer.num_special_tokens == 22
@@ -218,12 +222,15 @@ def test_init_rejects_model_settings_for_unsupported_version() -> None:
             num_special_tokens=20,
             special_tokens=deprecated_special_tokens(),
             vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
+            image_config=ImageConfig(image_patch_size=16, max_image_size=1024),
+            audio_config=audio_config(),
             model_settings_builder=builder,
+            path="synthetic-v3.tekken.json",
         )
 
 
 def test_init_rejects_oversized_vocab() -> None:
-    vocab = quick_vocab(extra_toks=[])
+    vocab = quick_vocab(extra_toks=())
 
     with pytest.raises(AssertionError, match=r"\(277, 256, 20\)"):
         Tekkenizer(
@@ -246,6 +253,10 @@ def test_init_rejects_duplicate_special_tokens() -> None:
             num_special_tokens=20,
             special_tokens=special_tokens,
             vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
+            image_config=ImageConfig(image_patch_size=16, max_image_size=1024),
+            audio_config=audio_config(),
+            model_settings_builder=cast(ModelSettingsBuilder, None),
+            path="synthetic-v3.tekken.json",
         )
 
 
@@ -279,12 +290,30 @@ def test_deprecated_special_tokens_are_frozen() -> None:
 
 def test_file_path_requires_file_loaded_instance(tmp_path: Path) -> None:
     path = tmp_path / "model.tekken.json"
-    write_tokenizer_file(path=path)
+    write_tokenizer_file(
+        path=path,
+        version="v3",
+        special_tokens=deprecated_special_tokens(),
+        num_special_tokens=20,
+        vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
+        image={},
+        multimodal={},
+        audio={},
+        model_settings={},
+    )
     loaded = Tekkenizer.from_file(str(path))
 
     assert loaded.file_path == path
+    without_path = Tekkenizer(
+        vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
+        special_tokens=deprecated_special_tokens(),
+        pattern=r".+",
+        vocab_size=258 + 20,
+        num_special_tokens=20,
+        version=TokenizerVersion.v3,
+    )
     with pytest.raises(ValueError, match="The tokenizer was not loaded from a file"):
-        tekkenizer_source().file_path
+        without_path.file_path
 
 
 def test_image_and_audio_properties_are_read_only(tekkenizer: Tekkenizer) -> None:
@@ -299,7 +328,17 @@ def test_image_and_audio_properties_are_read_only(tekkenizer: Tekkenizer) -> Non
 
 def test_from_file_loads_legacy_defaults_and_modern_configuration(tmp_path: Path) -> None:
     legacy_path = tmp_path / "legacy.tekken.json"
-    write_tokenizer_file(path=legacy_path, special_tokens=None)
+    write_tokenizer_file(
+        path=legacy_path,
+        version="v3",
+        special_tokens=None,
+        num_special_tokens=20,
+        vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
+        image={},
+        multimodal={},
+        audio={},
+        model_settings={},
+    )
     legacy = Tekkenizer.from_file(legacy_path)
     assert legacy.version is TokenizerVersion.v3
     assert legacy.special_ids == set(range(20))
@@ -310,7 +349,9 @@ def test_from_file_loads_legacy_defaults_and_modern_configuration(tmp_path: Path
         version="v15",
         special_tokens=special_tokens_with_fillers(22),
         num_special_tokens=22,
+        vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
         image={"image_patch_size": 16, "max_image_size": 1024},
+        multimodal={},
         audio={
             "sampling_rate": 24_000,
             "frame_rate": 12.5,
@@ -327,7 +368,17 @@ def test_from_file_loads_legacy_defaults_and_modern_configuration(tmp_path: Path
 
 def test_from_file_loaded_tokenizer_encodes_like_the_synthetic_source(tmp_path: Path) -> None:
     path = tmp_path / "loaded.tekken.json"
-    write_tokenizer_file(path=path, version="v3", special_tokens=deprecated_special_tokens(), num_special_tokens=20)
+    write_tokenizer_file(
+        path=path,
+        version="v3",
+        special_tokens=deprecated_special_tokens(),
+        num_special_tokens=20,
+        vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
+        image={},
+        multimodal={},
+        audio={},
+        model_settings={},
+    )
     loaded = Tekkenizer.from_file(path)
     source = tekkenizer_source()
 
@@ -349,7 +400,11 @@ def test_from_file_loads_each_known_version_with_synthetic_file(tmp_path: Path, 
         version=version.value,
         special_tokens=deprecated_special_tokens(),
         num_special_tokens=20,
-        model_settings=model_settings_builder().model_dump(mode="json") if version.supports_model_settings else None,
+        vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
+        image={},
+        multimodal={},
+        audio={},
+        model_settings=model_settings_builder().model_dump(mode="json") if version.supports_model_settings else {},
     )
 
     loaded = Tekkenizer.from_file(path)
@@ -359,7 +414,17 @@ def test_from_file_loads_each_known_version_with_synthetic_file(tmp_path: Path, 
 
 def test_from_file_loads_deprecated_multimodal_configuration_for_legacy_version(tmp_path: Path) -> None:
     path = tmp_path / "legacy-mm.tekken.json"
-    write_tokenizer_file(path=path, multimodal={"image_patch_size": 16, "max_image_size": 1024})
+    write_tokenizer_file(
+        path=path,
+        version="v3",
+        special_tokens=deprecated_special_tokens(),
+        num_special_tokens=20,
+        vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
+        multimodal={"image_patch_size": 16, "max_image_size": 1024},
+        image={},
+        audio={},
+        model_settings={},
+    )
 
     assert Tekkenizer.from_file(path).image == ImageConfig(image_patch_size=16, max_image_size=1024)
 
@@ -427,9 +492,12 @@ def test_from_file_rejects_defined_invalid_inputs(
         path=path,
         version=version,
         special_tokens=special_tokens,
-        multimodal=multimodal,
-        audio=audio,
-        model_settings=model_settings,
+        num_special_tokens=20,
+        vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
+        image={},
+        multimodal=multimodal if multimodal is not None else {},
+        audio=audio if audio is not None else {},
+        model_settings=model_settings if model_settings is not None else {},
     )
     with pytest.raises(exception, match=message):
         Tekkenizer.from_file(path)
@@ -592,7 +660,7 @@ def test_init_rejects_invalid_byte_invariant() -> None:
 
 
 def test_init_rejects_duplicate_mergeable_ranks() -> None:
-    vocab = quick_vocab(extra_toks=[])
+    vocab = quick_vocab(extra_toks=())
     vocab.extend(
         [
             TokenInfo(rank=256, token_bytes="AA==", token_str=None),
@@ -607,7 +675,7 @@ def test_init_rejects_duplicate_mergeable_ranks() -> None:
 def test_init_rejects_vocab_smaller_than_inner_vocab_size() -> None:
     # 256 byte tokens cannot fill an inner vocab of 257 mergeable ranks
     with pytest.raises(AssertionError, match=r"\(277, 256, 20\)"):
-        build_tekkenizer_with_vocab(vocab=quick_vocab(extra_toks=[]), vocab_size=257 + 20)
+        build_tekkenizer_with_vocab(vocab=quick_vocab(extra_toks=()), vocab_size=257 + 20)
 
 
 def test_is_tekkenizer_distinguishes_tekken_from_other_tokenizers(tekkenizer: Tekkenizer) -> None:
