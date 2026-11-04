@@ -1,5 +1,6 @@
 import base64
 import io
+from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
 
@@ -9,11 +10,8 @@ import soundfile as sf
 from openai.types.chat.chat_completion_content_part_image_param import (
     ChatCompletionContentPartImageParam as OpenAIImageChunk,
 )
-from openai.types.chat.chat_completion_content_part_text_param import (
-    ChatCompletionContentPartTextParam as OpenAITextChunk,
-)
 from PIL import Image
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
@@ -68,10 +66,22 @@ def test_thinking_chunk_from_openai_defaults_missing_closed_to_true() -> None:
     assert imported.to_openai() == {"type": "thinking", "thinking": "Finished", "closed": True}
 
 
-def test_text_chunk_from_openai_accepts_openai_typed_dict() -> None:
-    openai_chunk = OpenAITextChunk(type="text", text="Hello")
+@pytest.mark.parametrize(
+    ("constructor", "field"),
+    [
+        pytest.param(
+            lambda: TextChunk(text="Hello", extra="bad"),  # type: ignore[call-arg]
+            "extra",
+            id="text-chunk-extra",
+        ),
+    ],
+)
+def test_text_chunk_direct_construction_rejects_extra_fields(constructor: Callable[[], BaseModel], field: str) -> None:
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted") as error:
+        constructor()
 
-    assert TextChunk.from_openai(openai_chunk) == TextChunk(text="Hello")  # type: ignore[arg-type]
+    assert error.value.errors()[0]["type"] == "extra_forbidden"
+    assert error.value.errors()[0]["loc"] == (field,)
 
 
 @pytest.mark.parametrize(

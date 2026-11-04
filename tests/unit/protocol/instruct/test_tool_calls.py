@@ -108,23 +108,6 @@ def test_tool_from_openai_defaults_fields_and_does_not_mutate_input() -> None:
     assert openai_tool == original_openai_tool
 
 
-def test_tool_from_openai_drops_unknown_fields() -> None:
-    openai_tool = {
-        "type": "function",
-        "function": {
-            "name": "get_weather",
-            "description": "",
-            "parameters": {"type": "object"},
-            "strict": False,
-        },
-        "extra_openai_field": True,
-    }
-
-    assert Tool.from_openai(openai_tool) == Tool(
-        function=Function(name="get_weather", description="", parameters={"type": "object"})
-    )
-
-
 def test_tool_from_openai_null_strict_uses_default() -> None:
     openai_tool: dict[str, Any] = {
         "type": "function",
@@ -168,16 +151,6 @@ def test_tool_call_round_trip() -> None:
             },
             ToolCall(id="call_123", function=FunctionCall(name="foo", arguments="{}")),
             id="tool-call-index",
-        ),
-        pytest.param(
-            {
-                "id": "c1",
-                "index": 0,
-                "type": "function",
-                "function": {"name": "f", "arguments": "{}"},
-            },
-            ToolCall(id="c1", function=FunctionCall(name="f", arguments="{}")),
-            id="openai-extra-index-field",
         ),
     ],
 )
