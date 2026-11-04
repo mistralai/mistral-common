@@ -10,7 +10,7 @@ from mistral_common.protocol.instruct.request import ReasoningEffort
 from mistral_common.tokens.tokenizers.audio import AudioConfig, AudioSpectrogramConfig
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTokens, Tokenizer, TokenizerVersion
 from mistral_common.tokens.tokenizers.image import ImageConfig
-from mistral_common.tokens.tokenizers.model_settings_builder import EnumBuilder, ModelSettingsBuilder
+from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder, ReasoningEffortEnumBuilder
 from mistral_common.tokens.tokenizers.tekken import (
     SpecialTokenInfo,
     Tekkenizer,
@@ -81,9 +81,8 @@ def build_tekkenizer_with_vocab(*, vocab: list[TokenInfo], vocab_size: int) -> T
 
 def build_none_only_reasoning_effort_model_settings_builder() -> ModelSettingsBuilder:
     return ModelSettingsBuilder(
-        reasoning_effort=EnumBuilder[ReasoningEffort](
+        reasoning_effort=ReasoningEffortEnumBuilder(
             values=[ReasoningEffort.none],
-            accepts_none=True,
             default=ReasoningEffort.none,
         )
     )
@@ -631,7 +630,7 @@ def test_id_to_byte_piece_returns_ordinary_bytes_and_raises_for_special_tokens(t
     assert tekkenizer.id_to_byte_piece(token_id=276) == b"hello"
     with pytest.raises(ValueError, match="1 is a special token"):
         tekkenizer.id_to_byte_piece(token_id=1, special_token_policy=SpecialTokenPolicy.RAISE)
-    with pytest.raises(ValueError, match="Unknown special token policy invalid"):
+    with pytest.raises(ValueError, match=r"Invalid `special_token_policy` 'invalid'"):
         tekkenizer.id_to_byte_piece(token_id=1, special_token_policy="invalid")  # type: ignore[arg-type]
 
 
