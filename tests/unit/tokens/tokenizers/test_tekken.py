@@ -43,9 +43,8 @@ def special_tokens_with_fillers(num_special_tokens: int) -> list[SpecialTokenInf
     return special_tokens
 
 
-def build_tekkenizer(
+def build_tekkenizer_v3(
     *,
-    version: TokenizerVersion,
     num_special_tokens: int,
     special_tokens: list[SpecialTokenInfo],
     vocab: list[TokenInfo],
@@ -60,7 +59,7 @@ def build_tekkenizer(
         pattern=r".+",
         vocab_size=len(vocab) + num_special_tokens,
         num_special_tokens=num_special_tokens,
-        version=version,
+        version=TokenizerVersion.v3,
         image_config=image_config,
         audio_config=audio_config,
         model_settings_builder=model_settings_builder,
@@ -80,7 +79,7 @@ def build_tekkenizer_with_vocab(*, vocab: list[TokenInfo], vocab_size: int) -> T
     )
 
 
-def model_settings_builder() -> ModelSettingsBuilder:
+def build_none_only_reasoning_effort_model_settings_builder() -> ModelSettingsBuilder:
     return ModelSettingsBuilder(
         reasoning_effort=EnumBuilder[ReasoningEffort](
             values=[ReasoningEffort.none],
@@ -98,7 +97,7 @@ def audio_config() -> AudioConfig:
     )
 
 
-def write_tokenizer_file(
+def write_tekkenizer_file(
     path: Path,
     *,
     version: str | None,
@@ -136,9 +135,8 @@ def write_tokenizer_file(
     path.write_text(json.dumps(model), encoding="utf-8")
 
 
-def tekkenizer_source() -> Tekkenizer:
-    return build_tekkenizer(
-        version=TokenizerVersion.v3,
+def tekkenizer_v3() -> Tekkenizer:
+    return build_tekkenizer_v3(
         num_special_tokens=20,
         special_tokens=deprecated_special_tokens(),
         vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
@@ -151,7 +149,7 @@ def tekkenizer_source() -> Tekkenizer:
 
 @pytest.fixture(scope="module")
 def tekkenizer() -> Tekkenizer:
-    return tekkenizer_source()
+    return tekkenizer_v3()
 
 
 @pytest.mark.parametrize(
@@ -184,20 +182,27 @@ def test_is_tekken_rejects_directory_with_tekken_name(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("version", "has_builder"),
-    [(TokenizerVersion.v3, False), (TokenizerVersion.v15, True)],
+    ("version", "model_settings_builder", "expected_builder"),
+    [
+        (TokenizerVersion.v3, cast(ModelSettingsBuilder, None), None),
+        (TokenizerVersion.v15, build_none_only_reasoning_effort_model_settings_builder(), True),
+    ],
     ids=["legacy-v3", "modern-v15"],
 )
-def test_init_exposes_configured_values(version: TokenizerVersion, has_builder: bool) -> None:
-    tokenizer = build_tekkenizer(
-        version=version,
-        num_special_tokens=22,
-        special_tokens=special_tokens_with_fillers(22),
+def test_init_exposes_configured_values(
+    version: TokenizerVersion, model_settings_builder: ModelSettingsBuilder, expected_builder: bool | None
+) -> None:
+    tokenizer = Tekkenizer(
         vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
+        special_tokens=special_tokens_with_fillers(22),
+        pattern=r".+",
+        vocab_size=258 + 22,
+        num_special_tokens=22,
+        version=version,
         image_config=ImageConfig(image_patch_size=16, max_image_size=1024),
         audio_config=audio_config(),
-        model_settings_builder=(model_settings_builder() if has_builder else cast(ModelSettingsBuilder, None)),
-        path="synthetic.tekken.json",
+        model_settings_builder=model_settings_builder,
+        _path="synthetic.tekken.json",
     )
     builder = tokenizer.model_settings_builder
 
@@ -214,11 +219,10 @@ def test_init_exposes_configured_values(version: TokenizerVersion, has_builder: 
 
 
 def test_init_rejects_model_settings_for_unsupported_version() -> None:
-    builder = model_settings_builder()
+    builder = build_none_only_reasoning_effort_model_settings_builder()
 
     with pytest.raises(ValueError, match=r"model_settings_builder is not supported for version=<TokenizerVersion.v3:"):
-        build_tekkenizer(
-            version=TokenizerVersion.v3,
+        build_tekkenizer_v3(
             num_special_tokens=20,
             special_tokens=deprecated_special_tokens(),
             vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
@@ -248,8 +252,7 @@ def test_init_rejects_duplicate_special_tokens() -> None:
     special_tokens[1] = special_tokens[0]
 
     with pytest.raises(AssertionError, match="Special tokens must be unique"):
-        build_tekkenizer(
-            version=TokenizerVersion.v3,
+        build_tekkenizer_v3(
             num_special_tokens=20,
             special_tokens=special_tokens,
             vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
@@ -290,7 +293,7 @@ def test_deprecated_special_tokens_are_frozen() -> None:
 
 def test_file_path_requires_file_loaded_instance(tmp_path: Path) -> None:
     path = tmp_path / "model.tekken.json"
-    write_tokenizer_file(
+    write_tekkenizer_file(
         path=path,
         version="v3",
         special_tokens=deprecated_special_tokens(),
@@ -328,7 +331,7 @@ def test_image_and_audio_properties_are_read_only(tekkenizer: Tekkenizer) -> Non
 
 def test_from_file_loads_legacy_defaults_and_modern_configuration(tmp_path: Path) -> None:
     legacy_path = tmp_path / "legacy.tekken.json"
-    write_tokenizer_file(
+    write_tekkenizer_file(
         path=legacy_path,
         version="v3",
         special_tokens=None,
@@ -344,7 +347,7 @@ def test_from_file_loads_legacy_defaults_and_modern_configuration(tmp_path: Path
     assert legacy.special_ids == set(range(20))
 
     modern_path = tmp_path / "modern.tekken.json"
-    write_tokenizer_file(
+    write_tekkenizer_file(
         path=modern_path,
         version="v15",
         special_tokens=special_tokens_with_fillers(22),
@@ -357,18 +360,18 @@ def test_from_file_loads_legacy_defaults_and_modern_configuration(tmp_path: Path
             "frame_rate": 12.5,
             "audio_encoding_config": {"num_mel_bins": 128, "hop_length": 160, "window_size": 400},
         },
-        model_settings=model_settings_builder().model_dump(mode="json"),
+        model_settings=build_none_only_reasoning_effort_model_settings_builder().model_dump(mode="json"),
     )
     modern = Tekkenizer.from_file(modern_path)
 
     assert modern.image == ImageConfig(image_patch_size=16, max_image_size=1024)
     assert modern.audio == audio_config()
-    assert modern.model_settings_builder == model_settings_builder()
+    assert modern.model_settings_builder == build_none_only_reasoning_effort_model_settings_builder()
 
 
 def test_from_file_loaded_tokenizer_encodes_like_the_synthetic_source(tmp_path: Path) -> None:
     path = tmp_path / "loaded.tekken.json"
-    write_tokenizer_file(
+    write_tekkenizer_file(
         path=path,
         version="v3",
         special_tokens=deprecated_special_tokens(),
@@ -380,7 +383,7 @@ def test_from_file_loaded_tokenizer_encodes_like_the_synthetic_source(tmp_path: 
         model_settings={},
     )
     loaded = Tekkenizer.from_file(path)
-    source = tekkenizer_source()
+    source = tekkenizer_v3()
 
     inputs = "My very beautiful string"
 
@@ -395,7 +398,12 @@ def test_from_file_loaded_tokenizer_encodes_like_the_synthetic_source(tmp_path: 
 @pytest.mark.parametrize("version", list(TokenizerVersion), ids=[f"synthetic-{v.value}" for v in TokenizerVersion])
 def test_from_file_loads_each_known_version_with_synthetic_file(tmp_path: Path, version: TokenizerVersion) -> None:
     path = tmp_path / f"{version.value}.tekken.json"
-    write_tokenizer_file(
+    model_settings = (
+        build_none_only_reasoning_effort_model_settings_builder().model_dump(mode="json")
+        if version.supports_model_settings
+        else {}
+    )
+    write_tekkenizer_file(
         path=path,
         version=version.value,
         special_tokens=deprecated_special_tokens(),
@@ -404,7 +412,7 @@ def test_from_file_loads_each_known_version_with_synthetic_file(tmp_path: Path, 
         image={},
         multimodal={},
         audio={},
-        model_settings=model_settings_builder().model_dump(mode="json") if version.supports_model_settings else {},
+        model_settings=model_settings,
     )
 
     loaded = Tekkenizer.from_file(path)
@@ -414,7 +422,7 @@ def test_from_file_loads_each_known_version_with_synthetic_file(tmp_path: Path, 
 
 def test_from_file_loads_deprecated_multimodal_configuration_for_legacy_version(tmp_path: Path) -> None:
     path = tmp_path / "legacy-mm.tekken.json"
-    write_tokenizer_file(
+    write_tekkenizer_file(
         path=path,
         version="v3",
         special_tokens=deprecated_special_tokens(),
@@ -463,7 +471,7 @@ def test_from_file_rejects_missing_file(tmp_path: Path) -> None:
             deprecated_special_tokens(),
             None,
             None,
-            model_settings_builder().model_dump(mode="json"),
+            build_none_only_reasoning_effort_model_settings_builder().model_dump(mode="json"),
             ValueError,
             "model_settings_builder is not supported",
         ),
@@ -488,7 +496,7 @@ def test_from_file_rejects_defined_invalid_inputs(
     message: str,
 ) -> None:
     path = tmp_path / "invalid.tekken.json"
-    write_tokenizer_file(
+    write_tekkenizer_file(
         path=path,
         version=version,
         special_tokens=special_tokens,
