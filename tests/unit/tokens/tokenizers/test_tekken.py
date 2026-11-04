@@ -181,15 +181,15 @@ def test_is_tekken_rejects_directory_with_tekken_name(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("version", "model_settings_builder", "expected_builder"),
+    ("version", "model_settings_builder"),
     [
-        (TokenizerVersion.v3, cast(ModelSettingsBuilder, None), None),
-        (TokenizerVersion.v15, build_none_only_reasoning_effort_model_settings_builder(), True),
+        (TokenizerVersion.v3, cast(ModelSettingsBuilder, None)),
+        (TokenizerVersion.v15, build_none_only_reasoning_effort_model_settings_builder()),
     ],
     ids=["legacy-v3", "modern-v15"],
 )
 def test_init_exposes_configured_values(
-    version: TokenizerVersion, model_settings_builder: ModelSettingsBuilder, expected_builder: bool | None
+    version: TokenizerVersion, model_settings_builder: ModelSettingsBuilder
 ) -> None:
     tokenizer = Tekkenizer(
         vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
@@ -203,13 +203,12 @@ def test_init_exposes_configured_values(
         model_settings_builder=model_settings_builder,
         _path="synthetic.tekken.json",
     )
-    builder = tokenizer.model_settings_builder
 
     assert tokenizer.n_words == 280
     assert tokenizer.num_special_tokens == 22
     assert tokenizer.special_ids == set(range(22))
     assert tokenizer.version is version
-    assert tokenizer.model_settings_builder is builder
+    assert tokenizer.model_settings_builder is model_settings_builder
     assert tokenizer.bos_id == 1
     assert tokenizer.eos_id == 2
     assert tokenizer.pad_id == 11
