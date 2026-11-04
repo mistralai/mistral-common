@@ -110,6 +110,12 @@ class SpecialTokens(StrEnum):
     end_model_settings = "[/MODEL_SETTINGS]"
 
 
+# Plain-text thinking tags used by v11 reasoning models. They are NOT special
+# tokens (no token id); they exist only so every consumer shares one definition.
+PLAIN_BEGIN_THINK = "<think>"
+PLAIN_END_THINK = "</think>"
+
+
 class SpecialTokenPolicy(StrEnum):
     r"""What to do with special tokens when encoding/decoding.
 
@@ -182,6 +188,39 @@ class TokenizerVersion(StrEnum):
             The integer version, e.g. 13 for `TokenizerVersion.v13`.
         """
         return int(self.value[1:])
+
+    @property
+    def has_tools(self) -> bool:
+        r"""Whether tool calls are supported at all.
+
+        Returns:
+            True for v2 and later, False for v1.
+
+        Examples:
+            >>> TokenizerVersion.v1.has_tools
+            False
+            >>> TokenizerVersion.v2.has_tools
+            True
+        """
+        return self >= TokenizerVersion.v2
+
+    @property
+    def uses_pre_v11_tool_format(self) -> bool:
+        r"""Whether tool calls use the pre-v11 JSON-array format ([TOOL_CALLS][{...}]).
+
+        Returns:
+            True for v2 through v7 (tools supported, before v11's name[ARGS] format),
+            False for v1 (no tools) and v11+.
+
+        Examples:
+            >>> TokenizerVersion.v1.uses_pre_v11_tool_format
+            False
+            >>> TokenizerVersion.v7.uses_pre_v11_tool_format
+            True
+            >>> TokenizerVersion.v11.uses_pre_v11_tool_format
+            False
+        """
+        return self.has_tools and self < TokenizerVersion.v11
 
     @property
     def supports_model_settings(self) -> bool:

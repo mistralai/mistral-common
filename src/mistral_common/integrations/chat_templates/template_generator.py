@@ -1,7 +1,12 @@
 from dataclasses import dataclass
 
 from mistral_common.protocol.instruct.request import ReasoningEffort
-from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
+from mistral_common.tokens.tokenizers.base import (
+    PLAIN_BEGIN_THINK,
+    PLAIN_END_THINK,
+    SpecialTokens,
+    TokenizerVersion,
+)
 
 # Generated templates join text with Jinja `~`, never `+`: stock Jinja's `tojson` and `safe` return Markup,
 # and `+` with a Markup operand HTML-escapes the other one.
@@ -108,7 +113,7 @@ class TemplateConfig:
         explicit_model_settings_fields = self.model_settings_fields is not None
         if self.model_settings_fields is None:
             self.model_settings_fields = (
-                frozenset({"reasoning_effort"}) if self.supports_model_settings else frozenset()
+                frozenset({"reasoning_effort"}) if self.version.supports_model_settings else frozenset()
             )
 
         unknown_model_settings_fields = self.model_settings_fields - set(MODEL_SETTINGS_FIELD_CHOICES)
@@ -116,7 +121,7 @@ class TemplateConfig:
             unknown_names = ", ".join(sorted(unknown_model_settings_fields))
             allowed_names = ", ".join(MODEL_SETTINGS_FIELD_CHOICES)
             raise ValueError(f"Unknown model settings fields: {unknown_names}. Allowed fields are: {allowed_names}.")
-        if explicit_model_settings_fields and not self.supports_model_settings:
+        if explicit_model_settings_fields and not self.version.supports_model_settings:
             raise ValueError("Model settings fields are only available for tokenizer versions v15 and above")
         if explicit_model_settings_fields and not self.model_settings_fields:
             raise ValueError("Model settings fields must be None (automatic) or a non-empty set")
@@ -190,121 +195,6 @@ class TemplateConfig:
         r"""Whether any form of thinking support is enabled."""
         return self.thinking_support or self.plain_thinking_support
 
-    @property
-    def has_tools(self) -> bool:
-        r"""Whether tool definitions are supported."""
-        return self.version >= TokenizerVersion.v2
-
-    @property
-    def uses_system_prompt_tokens(self) -> bool:
-        r"""Whether to use [SYSTEM_PROMPT] tokens vs inline system message."""
-        return self.version >= TokenizerVersion.v7
-
-    @property
-    def tracks_max_idx_user(self) -> bool:
-        r"""Whether to track max user index for tools definition placement."""
-        return self.has_tools and self.version < TokenizerVersion.v13
-
-    @property
-    def tools_at_beginning(self) -> bool:
-        r"""Whether tools definition is emitted at the beginning."""
-        return self.version >= TokenizerVersion.v13
-
-    @property
-    def uses_v13_tool_format(self) -> bool:
-        r"""Whether to use v13-style tool calls (name[ARGS]arguments)."""
-        return self.version >= TokenizerVersion.v13
-
-    @property
-    def uses_json_tool_results(self) -> bool:
-        r"""Whether tool results use JSON format with `content`/`call_id`."""
-        return self.version == TokenizerVersion.v3 and self.spm
-
-    @property
-    def uses_tool_content_format(self) -> bool:
-        r"""Whether tool results use [TOOL_RESULTS]id[TOOL_CONTENT]content format."""
-        return self.version >= TokenizerVersion.v7 and self.version < TokenizerVersion.v13
-
-    @property
-    def uses_simple_tool_results(self) -> bool:
-        r"""Whether tool results use simple [TOOL_RESULTS]content format."""
-        return self.version >= TokenizerVersion.v13
-
-    @property
-    def uses_v2_spm_tool_format(self) -> bool:
-        r"""Whether to use `v2_spm` tool format (no ID, uses name in results)."""
-        return self.version == TokenizerVersion.v2 and self.spm
-
-    @property
-    def uses_v2_tool_format(self) -> bool:
-        r"""Whether to use v2 tool format (no ID, uses name in results, elif branch)."""
-        return self.version == TokenizerVersion.v2
-
-    @property
-    def uses_spm_space_tracking(self) -> bool:
-        r"""Whether to track `add_space` for SPM formatting."""
-        return self.spm and self.version >= TokenizerVersion.v2
-
-    @property
-    def uses_spm_prev_img_tracking(self) -> bool:
-        r"""Whether to track `prev_img` for SPM image formatting."""
-        return self.spm and self.image_support
-
-    @property
-    def spm_system_prompt_has_space(self) -> bool:
-        r"""Whether SPM system prompt tokens have trailing space."""
-        return self.spm and self.version >= TokenizerVersion.v7
-
-    @property
-    def uses_call_id_in_tool_calls(self) -> bool:
-        r"""Whether to include [CALL_ID] in tool calls."""
-        return self.version == TokenizerVersion.v11
-
-    @property
-    def tracks_has_sp_for_audio(self) -> bool:
-        r"""Whether to track `has_sp` for audio constraint. V15+ allows audio with system prompts."""
-        return self.audio_support and self.version < TokenizerVersion.v15
-
-    @property
-    def supports_model_settings(self) -> bool:
-        r"""Whether model settings are supported. V15+."""
-        return self.version >= TokenizerVersion.v15
-
-    @property
-    def is_v1(self) -> bool:
-        r"""Whether this is a v1 template with minimal features."""
-        return self.version == TokenizerVersion.v1
-
-    @property
-    def system_supports_thinking(self) -> bool:
-        r"""Whether system messages support thinking chunks. Pre-v15 only."""
-        return self.any_thinking_support and self.version < TokenizerVersion.v15
-
-    @property
-    def uses_v2_v3spm_tool_branch(self) -> bool:
-        r"""Whether assistant tool calls use the v2/v3-SPM inline elif branch."""
-        return self.version == TokenizerVersion.v2 or (self.spm and self.version == TokenizerVersion.v3)
-
-    @property
-    def forbids_assistant_content_with_tools(self) -> bool:
-        r"""Whether assistant messages cannot have both content and tool calls."""
-        return self.version in [TokenizerVersion.v2, TokenizerVersion.v3]
-
-    @property
-    def validates_assistant_non_empty(self) -> bool:
-        r"""Whether to validate that assistant messages have non-empty content or tool calls."""
-        return self.version >= TokenizerVersion.v7 or (self.version >= TokenizerVersion.v3 and not self.spm)
-
-    @property
-    def tool_supports_multimodal(self) -> bool:
-        r"""Whether tool messages can contain non-text content chunks. V15+."""
-        return self.version >= TokenizerVersion.v15
-
-    @property
-    def system_supports_audio(self) -> bool:
-        r"""Whether system messages can contain audio. V15+ with audio support."""
-        return self.audio_support and self.version >= TokenizerVersion.v15
-
 
 def _join_types_desc(parts: list[str]) -> str:
     r"""Join type names into a human-readable description string.
@@ -354,7 +244,7 @@ def _render_content_call(
         support_audio: Whether audio/`audio_url` chunks are allowed at this call site.
             Only emitted when `config.audio_support` is `True`.
         initial_prev_img: Initial value for SPM prev-image tracking namespace.
-            Only emitted when `config.uses_spm_prev_img_tracking` is `True`.
+            Only emitted when the config has SPM image support (`spm and image_support`).
 
     Returns:
         A Jinja call string of the form `render_content(<args>)` with all
@@ -393,7 +283,7 @@ def _render_content_call(
     if config.audio_support:
         args.append(f"support_audio={'true' if support_audio else 'false'}")
 
-    if config.uses_spm_prev_img_tracking:
+    if config.spm and config.image_support:
         args.append(f"initial_prev_img={initial_prev_img}")
 
     return "render_content(" + ", ".join(args) + ")"
@@ -441,7 +331,7 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
         "{#- Handle system prompt if it exists. #}",
     ]
 
-    if config.uses_system_prompt_tokens:
+    if config.version >= TokenizerVersion.v7:
         lines.extend(_generate_system_prompt_handling_v7_plus(config))
     else:
         lines.extend(_generate_system_prompt_handling_pre_v7(config))
@@ -515,7 +405,7 @@ def _generate_system_prompt_handling_v7_plus(config: TemplateConfig) -> list[str
         "{%- endif %}",
     ]
 
-    if config.tracks_has_sp_for_audio:
+    if config.audio_support and config.version < TokenizerVersion.v15:
         lines.extend(
             [
                 "{%- if messages[0]['role'] == 'system' or default_system_message != '' %}",
@@ -545,7 +435,7 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
     Returns:
         The tools and settings definition section of the chat template.
     """
-    if config.supports_model_settings:
+    if config.version.supports_model_settings:
         comment = "{#- Tools and model settings definition #}"
     else:
         comment = "{#- Tools definition #}"
@@ -558,7 +448,7 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
         "{%- set has_tools = false %}",
     ]
 
-    if config.has_tools:
+    if config.version >= TokenizerVersion.v2:
         lines.append("{%- if tools is defined and tools is not none and tools|length > 0 %}")
         lines.append("    {%- set has_tools = true %}")
         if config.spm:
@@ -658,7 +548,7 @@ def _generate_macros(config: TemplateConfig) -> str:
         The macro definitions section of the chat template. Returns empty
         string only for v1 templates.
     """
-    if config.is_v1:
+    if config.version == TokenizerVersion.v1:
         return ""
 
     has_extra_types = config.any_thinking_support or config.image_support or config.audio_support
@@ -673,7 +563,7 @@ def _generate_macros(config: TemplateConfig) -> str:
         params.append("support_images")
     if config.audio_support:
         params.append("support_audio")
-    if config.uses_spm_prev_img_tracking:
+    if config.spm and config.image_support:
         params.append("initial_prev_img")
 
     lines = [
@@ -686,13 +576,13 @@ def _generate_macros(config: TemplateConfig) -> str:
     ]
 
     # SPM prev_img tracking: create local namespace
-    if config.uses_spm_prev_img_tracking:
+    if config.spm and config.image_support:
         lines.append("        {%- set _ns = namespace(prev_img=initial_prev_img) -%}")
 
     lines.append("        {%- for block in content -%}")
 
     # SPM prev_img: add space before text if previous block was image
-    if config.uses_spm_prev_img_tracking:
+    if config.spm and config.image_support:
         lines.append("            {%- if _ns.prev_img and block['type'] == 'text' -%}")
         lines.append("                {{- ' ' -}}")
         lines.append("            {%- endif -%}")
@@ -705,13 +595,13 @@ def _generate_macros(config: TemplateConfig) -> str:
     )
 
     # SPM prev_img: reset after text block
-    if config.uses_spm_prev_img_tracking:
+    if config.spm and config.image_support:
         lines.append("                {%- set _ns.prev_img = false -%}")
 
     # Thinking branch
     if config.any_thinking_support:
-        begin_tag = "<think>" if config.plain_thinking_support else _BEGIN_THINK
-        end_tag = "</think>" if config.plain_thinking_support else _END_THINK
+        begin_tag = PLAIN_BEGIN_THINK if config.plain_thinking_support else _BEGIN_THINK
+        end_tag = PLAIN_END_THINK if config.plain_thinking_support else _END_THINK
         lines.extend(
             [
                 "            {%- elif support_thinking and block['type'] == 'thinking' -%}",
@@ -724,13 +614,13 @@ def _generate_macros(config: TemplateConfig) -> str:
     if config.image_support:
         lines.append("            {%- elif support_images and block['type'] in ['image', 'image_url'] -%}")
         lines.append("                {{- '[IMG]' -}}")
-        if config.uses_spm_prev_img_tracking:
+        if config.spm and config.image_support:
             lines.append("                {%- set _ns.prev_img = true -%}")
 
     # Audio branch
     if config.audio_support:
         lines.append("            {%- elif support_audio and block['type'] in ['input_audio', 'audio_url'] -%}")
-        if config.tracks_has_sp_for_audio:
+        if config.audio_support and config.version < TokenizerVersion.v15:
             lines.append("                {%- if has_sp -%}")
             lines.append(
                 "                    {{- raise_exception('Audio chunks are not supported in user message content when system prompt is provided.') -}}"  # noqa: E501
@@ -1082,7 +972,7 @@ def _generate_system_message_handling(config: TemplateConfig) -> str:
     Returns:
         The system message handling section for the message loop, or empty string for pre-v7.
     """
-    if not config.uses_system_prompt_tokens:
+    if config.version < TokenizerVersion.v7:
         return ""
 
     lines = [
@@ -1091,14 +981,16 @@ def _generate_system_message_handling(config: TemplateConfig) -> str:
         "    {%- elif message['role'] == 'system' %}",
     ]
 
-    if config.spm_system_prompt_has_space:
+    if config.spm and config.version >= TokenizerVersion.v7:
         lines.append("        {{- '" + _BEGIN_SYSTEM + " ' -}}")
     else:
         lines.append("        {{- '" + _BEGIN_SYSTEM + "' -}}")
 
-    if config.system_supports_thinking:
+    system_supports_thinking = config.any_thinking_support and config.version < TokenizerVersion.v15
+    system_supports_audio = config.audio_support and config.version >= TokenizerVersion.v15
+    if system_supports_thinking:
         sys_types_desc = "text and thinking"
-    elif config.system_supports_audio:
+    elif system_supports_audio:
         sys_types_desc = "text and audio"
     else:
         sys_types_desc = "text"
@@ -1108,9 +1000,9 @@ def _generate_system_message_handling(config: TemplateConfig) -> str:
         content_expr="message['content']",
         context_name="system message contents",
         supported_types_desc=sys_types_desc,
-        support_thinking=config.system_supports_thinking,
+        support_thinking=system_supports_thinking,
         support_images=False,
-        support_audio=config.system_supports_audio,
+        support_audio=system_supports_audio,
         initial_prev_img="false",
     )
     lines.append("        {{- " + rc + " -}}")
@@ -1148,22 +1040,24 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
     ]
 
     ns_vars: list[str] = []
-    if config.tracks_max_idx_user:
+    if config.version >= TokenizerVersion.v2 and config.version < TokenizerVersion.v13:
         ns_vars.append("max_idx_user=-1")
-    if config.uses_spm_space_tracking:
+    if config.spm and config.version >= TokenizerVersion.v2:
         ns_vars.append("add_space=false")
-    if config.uses_v2_spm_tool_format:
+    if config.version == TokenizerVersion.v2 and config.spm:
         ns_vars.append("prev_tool=false")
-    if config.tools_at_beginning:
+    if config.version >= TokenizerVersion.v13:
         emitted_var = (
-            "available_tools_and_settings_emitted" if config.supports_model_settings else "available_tools_emitted"
+            "available_tools_and_settings_emitted"
+            if config.version.supports_model_settings
+            else "available_tools_emitted"
         )
         ns_vars.append(f"{emitted_var}=false")
 
     lines.append("{%- set ns = namespace(" + ", ".join(ns_vars) + ") %}")
 
     # First-message constraint
-    if config.uses_system_prompt_tokens:
+    if config.version >= TokenizerVersion.v7:
         # v7+: system messages remain in loop_messages, so first message can be user or system
         first_msg_cond = "{%- if loop_messages | length > 0 and loop_messages[0]['role'] not in ['user', 'system'] %}"
         first_msg_err = "    {{- raise_exception('Conversation must start with a user or system message, got ' ~ loop_messages[0]['role'] ~ '.') }}"  # noqa: E501
@@ -1183,7 +1077,7 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
 
     transition_error = "                {{- raise_exception('Unexpected role \\'' ~ current_role ~ '\\' after role \\'' ~ ns_order.previous_role ~ '\\'') }}"  # noqa: E501
 
-    if config.uses_system_prompt_tokens:
+    if config.version >= TokenizerVersion.v7:
         # v7+: full transition table including system
         lines.append("        {%- if ns_order.previous_role == 'system' %}")
         lines.append("            {%- if current_role not in ['user', 'assistant', 'system'] %}")
@@ -1210,7 +1104,7 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
     lines.append("    {%- endif %}")
 
     # Track max_idx_user in the same loop
-    if config.tracks_max_idx_user:
+    if config.version >= TokenizerVersion.v2 and config.version < TokenizerVersion.v13:
         lines.append("    {%- if message.role == 'user' %}")
         lines.append("        {%- set ns.max_idx_user = ns.max_idx_user + 1 %}")
         lines.append("    {%- endif %}")
@@ -1245,24 +1139,26 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
     lines.append("    {%- if message['role'] == 'user' %}")
 
     # Tools and model settings placement
-    if config.tracks_max_idx_user:
+    if config.version >= TokenizerVersion.v2 and config.version < TokenizerVersion.v13:
         # Pre-v13: emit before the last user message
         lines.append("        {%- if (ns.index == ns.max_idx_user) and has_tools %}")
         lines.append("            {{- available_tools }}")
         lines.append("        {%- endif %}")
-    elif config.tools_at_beginning:
+    elif config.version >= TokenizerVersion.v13:
         # v13+: emit tools and settings before the first user message
         emitted_var = (
-            "available_tools_and_settings_emitted" if config.supports_model_settings else "available_tools_emitted"
+            "available_tools_and_settings_emitted"
+            if config.version.supports_model_settings
+            else "available_tools_emitted"
         )
         lines.append(f"        {{%- if not ns.{emitted_var} %}}")
         lines.append("            {{- available_tools }}")
-        if config.supports_model_settings:
+        if config.version.supports_model_settings:
             lines.append("            {{- model_settings }}")
         lines.append(f"            {{%- set ns.{emitted_var} = true %}}")
         lines.append("        {%- endif %}")
 
-    if config.spm and not config.uses_spm_prev_img_tracking:
+    if config.spm and not config.image_support:
         inst_open = _BEGIN_INST + " "
         inst_close = _END_INST
     else:
@@ -1276,7 +1172,7 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
     else:
         user_types_desc = "text"
 
-    if config.uses_system_prompt_tokens:
+    if config.version >= TokenizerVersion.v7:
         # =================================================================
         # v7+ path: self-contained, no tag/render_content duplication
         # =================================================================
@@ -1304,21 +1200,21 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
                 # v13+ non-audio: sort blocks by type
                 lines.append("            {%- set user_content = message['content'] | sort(attribute='type') %}")
 
-            if config.uses_spm_prev_img_tracking:
+            if config.spm and config.image_support:
                 # SPM + prev_img: list content gets [INST] without space
                 lines.append("            {%- set inst_tag = '" + _BEGIN_INST + "' %}")
 
             lines.append("        {%- else %}")
             lines.append("            {%- set user_content = message['content'] %}")
 
-            if config.uses_spm_prev_img_tracking:
+            if config.spm and config.image_support:
                 # SPM + prev_img: string content gets [INST] with space
                 lines.append("            {%- set inst_tag = '" + _BEGIN_INST + " ' %}")
 
             lines.append("        {%- endif %}")
 
         # --- Emit [INST] tag ---
-        if config.uses_spm_prev_img_tracking:
+        if config.spm and config.image_support:
             lines.append("        {{- inst_tag -}}")
         elif config.spm:
             lines.append("        {{- '" + _BEGIN_INST + " ' -}}")
@@ -1347,7 +1243,7 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
         # Pre-v7 paths: uses_spm_prev_img_tracking (v3_image_spm) or plain
         # Keep existing structure with shared image/sorting code
         # =================================================================
-        if config.uses_spm_prev_img_tracking:
+        if config.spm and config.image_support:
             lines.append(f"        {{{{- '{inst_open}' }}}}")
             lines.append("        {%- set added_sp = false %}")
             lines.append("        {%- if (ns.index == ns.max_idx_user) and system_message != '' %}")
@@ -1375,7 +1271,7 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
             lines.append("        {%- elif message['content'] | length > 0 %}")
         else:
             lines.append(f"        {{{{- '{inst_open}' }}}}")
-            if config.is_v1:
+            if config.version == TokenizerVersion.v1:
                 lines.append("        {%- if loop.index0 == 0 and system_message != '' %}")
             else:
                 lines.append("        {%- if (ns.index == ns.max_idx_user) and system_message != '' %}")
@@ -1429,7 +1325,7 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
         lines.append("        {%- endif %}")
         lines.append(f"        {{{{- '{inst_close}' }}}}")
 
-    if config.uses_spm_space_tracking:
+    if config.spm and config.version >= TokenizerVersion.v2:
         lines.append("        {%- if loop.index < loop.length %}")
         lines.append("            {%- set ns.add_space=true %}")
         lines.append("        {%- endif %}")
@@ -1459,7 +1355,7 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     lines.append(f"    {comment}")
     lines.append("    {%- elif message['role'] == 'assistant' %}")
 
-    if config.forbids_assistant_content_with_tools:
+    if config.version in [TokenizerVersion.v2, TokenizerVersion.v3]:
         lines.append(
             "        {%- if message['content'] is not none and message['content'] | length > 0 and message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}"  # noqa: E501
         )
@@ -1467,7 +1363,7 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
         lines.append("        {%- endif %}")
         lines.append("")
 
-    if config.validates_assistant_non_empty:
+    if config.version >= TokenizerVersion.v7 or (config.version >= TokenizerVersion.v3 and not config.spm):
         lines.append(
             "        {%- if (message['content'] is none or message['content'] == '' or message['content']|length == 0) and (message['tool_calls'] is not defined or message['tool_calls'] is none or message['tool_calls']|length == 0) %}"  # noqa: E501
         )
@@ -1495,7 +1391,7 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
 
     lines.append("        {%- if message['content'] %}")
 
-    if config.uses_spm_space_tracking:
+    if config.spm and config.version >= TokenizerVersion.v2:
         lines.append("            {%- if ns.add_space %}")
         lines.append("                {{- ' ' }}")
         lines.append("                {%- set ns.add_space=false %}")
@@ -1503,10 +1399,10 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
 
     lines.append("            {{- " + rc + " -}}")
 
-    if config.uses_v2_tool_format:
+    if config.version == TokenizerVersion.v2:
         lines.append("            {{- " + config.eos_expr + " }}")
 
-    if config.uses_v2_v3spm_tool_branch:
+    if config.version == TokenizerVersion.v2 or (config.spm and config.version == TokenizerVersion.v3):
         lines.append(_generate_tool_calls_elif_v2_v3(config))
         lines.append("        {%- else %}")
         lines.append(
@@ -1516,15 +1412,17 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     else:
         lines.append("        {%- endif %}")
 
-    if config.has_tools and not config.uses_v2_v3spm_tool_branch:
+    if config.version >= TokenizerVersion.v2 and not (
+        config.version == TokenizerVersion.v2 or (config.spm and config.version == TokenizerVersion.v3)
+    ):
         lines.append("")
         lines.append(_generate_tool_calls_block(config))
 
-    if not config.uses_v2_tool_format:
+    if config.version != TokenizerVersion.v2:
         lines.append("")
         lines.append("        {{- " + config.eos_expr + " }}")
 
-    if config.uses_spm_space_tracking:
+    if config.spm and config.version >= TokenizerVersion.v2:
         lines.append("        {%- set ns.prev_tool=false %}")
 
     return "\n".join(lines)
@@ -1541,7 +1439,7 @@ def _generate_tool_calls_elif_v2_v3(config: TemplateConfig) -> str:
     """
     lines = []
 
-    if config.uses_v2_tool_format:
+    if config.version == TokenizerVersion.v2:
         lines.append(
             "        {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 and ns.index > ns.max_idx_user %}"  # noqa: E501
         )
@@ -1561,7 +1459,7 @@ def _generate_tool_calls_elif_v2_v3(config: TemplateConfig) -> str:
     lines.append("                {%- set name = tool['function']['name'] %}")
     lines.append("                {%- set arguments = tool['function']['arguments'] %}")
 
-    if config.uses_v2_tool_format:
+    if config.version == TokenizerVersion.v2:
         # v2: no ID in tool calls
         lines.extend(_emit_argument_normalization("                "))
         lines.append("                {{- '{\"name\": \"' ~ name ~ '\", \"arguments\": ' ~ arguments ~ '}' }}")
@@ -1579,10 +1477,10 @@ def _generate_tool_calls_elif_v2_v3(config: TemplateConfig) -> str:
     lines.append("            {%- endfor %}")
     lines.append("            {{- ']' }}")
     # v2 has EOS inside the elif, v3_spm has EOS after the endif
-    if config.uses_v2_tool_format:
+    if config.version == TokenizerVersion.v2:
         lines.append("            {{- " + config.eos_expr + " }}")
 
-    if config.uses_v2_tool_format:
+    if config.version == TokenizerVersion.v2:
         # v2: additional elif for tool calls during user messages (ignored)
         lines.append(
             "        {%- elif message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 and ns.index <= ns.max_idx_user %}"  # noqa: E501
@@ -1605,12 +1503,12 @@ def _generate_tool_calls_block(config: TemplateConfig) -> str:
         "        {%- if message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}"  # noqa: E501
     )
 
-    if config.uses_spm_space_tracking:
+    if config.spm and config.version >= TokenizerVersion.v2:
         lines.append("            {%- if ns.add_space %}")
         lines.append("                {%- set ns.add_space=false %}")
         lines.append("            {%- endif %}")
 
-    if config.uses_v13_tool_format:
+    if config.version >= TokenizerVersion.v13:
         lines.append("            {%- for tool in message['tool_calls'] %}")
         lines.append("                {{- '" + _TOOL_CALLS + "' }}")
         lines.append("                {%- set name = tool['function']['name'] %}")
@@ -1618,7 +1516,7 @@ def _generate_tool_calls_block(config: TemplateConfig) -> str:
         lines.extend(_emit_argument_normalization("                "))
         lines.append("                {{- name ~ '" + _ARGS + "' ~ arguments }}")
         lines.append("            {%- endfor %}")
-    elif config.uses_call_id_in_tool_calls:
+    elif config.version == TokenizerVersion.v11:
         lines.append("            {%- for tool in message['tool_calls'] %}")
         lines.append("                {{- '" + _TOOL_CALLS + "' }}")
         lines.append("                {%- set name = tool['function']['name'] %}")
@@ -1660,23 +1558,23 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
     Returns:
         Jinja2 template lines for tool result message processing.
     """
-    if not config.has_tools:
+    if config.version < TokenizerVersion.v2:
         return ""
 
     lines = []
     lines.append("")
 
-    if config.uses_v2_tool_format:
+    if config.version == TokenizerVersion.v2:
         lines.append("    {#- Tool messages supports int, float or text content. #}")
         lines.append("    {%- elif message['role'] == 'tool' and ns.index > ns.max_idx_user %}")
     else:
-        if config.tool_supports_multimodal:
+        if config.version >= TokenizerVersion.v15:
             lines.append("    {#- Tool messages (multimodal). #}")
         else:
             lines.append("    {#- Tool messages only supports text content. #}")
         lines.append("    {%- elif message['role'] == 'tool' %}")
 
-    if config.uses_spm_space_tracking:
+    if config.spm and config.version >= TokenizerVersion.v2:
         lines.append("        {%- if ns.add_space %}")
         lines.append("            {%- if not ns.prev_tool %}")
         lines.append("                {{- ' '}}")
@@ -1684,7 +1582,7 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         lines.append("            {%- set ns.add_space=false %}")
         lines.append("        {%- endif %}")
 
-    if config.uses_v2_tool_format:
+    if config.version == TokenizerVersion.v2:
         lines.append("        {%- if loop.index0 > 0 and loop_messages[loop.index0 - 1]['role'] == 'tool' %}")
         lines.append(
             "            {{- raise_exception('Tokenizer v2 does not support multiple tool results for one assistant turn.') }}"  # noqa: E501
@@ -1706,7 +1604,7 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
             lines.append(
                 "        {{- '" + _BEGIN_TOOL_RESULTS + "[' ~ (tool_message|tojson) ~ ']" + _END_TOOL_RESULTS + "' }}"
             )  # noqa: E501
-    elif config.uses_json_tool_results:
+    elif config.version == TokenizerVersion.v3 and config.spm:
         lines.extend(_emit_int_float_parsing("        "))
         lines.append("        ")
         lines.extend(_emit_call_id_resolution("        "))
@@ -1716,7 +1614,7 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         lines.append(
             "        {{- '" + _BEGIN_TOOL_RESULTS + " ' ~ (tool_message|tojson) ~ '" + _END_TOOL_RESULTS + "' }}"
         )  # noqa: E501
-    elif config.uses_tool_content_format:
+    elif config.version >= TokenizerVersion.v7 and config.version < TokenizerVersion.v13:
         lines.extend(_emit_call_id_resolution("        "))
         if config.spm:
             lines.append(
@@ -1738,8 +1636,8 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
                 + _END_TOOL_RESULTS
                 + "' }}"  # noqa: E501
             )
-    elif config.uses_simple_tool_results:
-        if config.tool_supports_multimodal:
+    elif config.version >= TokenizerVersion.v13:
+        if config.version >= TokenizerVersion.v15:
             tool_desc_parts: list[str] = ["text"]
             if config.image_support:
                 tool_desc_parts.append("image")
@@ -1776,7 +1674,7 @@ def _generate_tool_message_handling(config: TemplateConfig) -> str:
         )  # noqa: E501
 
     # SPM tracking
-    if config.uses_spm_space_tracking:
+    if config.spm and config.version >= TokenizerVersion.v2:
         lines.append("        {%- set ns.prev_tool=true %}")
         lines.append("        {%- set ns.add_space=true %}")
 
@@ -1796,12 +1694,12 @@ def _generate_else_role_block(config: TemplateConfig) -> str:
     lines.append("")
     lines.append("    {#- Raise exception for unsupported roles. #}")
 
-    if config.uses_system_prompt_tokens:
+    if config.version >= TokenizerVersion.v7:
         # v7+: system messages are handled in the loop, so 'system' is a valid role.
         # v7+ always has tools (has_tools is True for v2+), but we keep the branch
         # for clarity in case the property semantics change.
         lines.append("    {%- else %}")
-        if config.has_tools:
+        if config.version >= TokenizerVersion.v2:
             lines.append(
                 "        {{- raise_exception('Only user, assistant, system and tool roles are supported, got ' ~ message['role'] ~ '.') }}"  # noqa: E501
             )
@@ -1811,8 +1709,8 @@ def _generate_else_role_block(config: TemplateConfig) -> str:
             )
     else:
         # pre-v7: system messages are already filtered out
-        if config.has_tools:
-            if config.uses_v2_v3spm_tool_branch:
+        if config.version >= TokenizerVersion.v2:
+            if config.version == TokenizerVersion.v2 or (config.spm and config.version == TokenizerVersion.v3):
                 lines.append("    {%- elif message['role'] != 'tool' or ns.index > ns.max_idx_user %}")
             else:
                 lines.append("    {%- else %}")
@@ -1841,7 +1739,7 @@ def _generate_message_loop(config: TemplateConfig) -> str:
     """
     lines = []
 
-    if config.tracks_max_idx_user:
+    if config.version >= TokenizerVersion.v2 and config.version < TokenizerVersion.v13:
         lines.append("")
         lines.append("{%- set ns.index = 0 %}")
 
@@ -1855,7 +1753,7 @@ def _generate_message_loop(config: TemplateConfig) -> str:
     lines.append(_generate_else_role_block(config))
 
     # Index tracking for v3/v7 style
-    if config.tracks_max_idx_user:
+    if config.version >= TokenizerVersion.v2 and config.version < TokenizerVersion.v13:
         lines.append("    {%- if message['role'] == 'user' %}")
         lines.append("        {%- set ns.index = ns.index + 1 %}")
         lines.append("    {%- endif %}")
@@ -1985,7 +1883,7 @@ def build_chat_template(config: TemplateConfig) -> str:
         >>> "bos_token" in template
         True
     """
-    if config.is_v1:
+    if config.version == TokenizerVersion.v1:
         return _generate_v1_template(config)
 
     parts = []
