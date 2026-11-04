@@ -43,19 +43,17 @@ def special_tokens_with_fillers(num_special_tokens: int) -> list[SpecialTokenInf
     return special_tokens
 
 
-def build_tokenizer(
+def build_tekkenizer(
     *,
-    version: TokenizerVersion = TokenizerVersion.v3,
-    num_special_tokens: int = 20,
-    special_tokens: list[SpecialTokenInfo] | None = None,
+    version: TokenizerVersion,
+    num_special_tokens: int,
+    special_tokens: list[SpecialTokenInfo],
+    vocab: list[TokenInfo],
     image_config: ImageConfig | None = None,
     audio_config: AudioConfig | None = None,
     model_settings_builder: ModelSettingsBuilder | None = None,
     path: str | Path | None = None,
 ) -> Tekkenizer:
-    vocab = quick_vocab(extra_toks=[b"hello", b"world"])
-    if special_tokens is None:
-        special_tokens = deprecated_special_tokens()
     return Tekkenizer(
         vocab=vocab,
         special_tokens=special_tokens,
@@ -70,17 +68,14 @@ def build_tokenizer(
     )
 
 
-def build_tokenizer_with_vocab(*, vocab: list[TokenInfo], vocab_size: int | None = None) -> Tekkenizer:
+def build_tekkenizer_with_vocab(*, vocab: list[TokenInfo], vocab_size: int) -> Tekkenizer:
     r"""Build a v3 tokenizer from a raw vocab with an explicit total vocab size."""
-    num_special_tokens = 20
-    if vocab_size is None:
-        vocab_size = len(vocab) + num_special_tokens
     return Tekkenizer(
         vocab=vocab,
         special_tokens=deprecated_special_tokens(),
         pattern=r".+",
         vocab_size=vocab_size,
-        num_special_tokens=num_special_tokens,
+        num_special_tokens=20,
         version=TokenizerVersion.v3,
     )
 
@@ -144,9 +139,18 @@ def write_tokenizer_file(
     path.write_text(json.dumps(model), encoding="utf-8")
 
 
+def tekkenizer_source() -> Tekkenizer:
+    return build_tekkenizer(
+        version=TokenizerVersion.v3,
+        num_special_tokens=20,
+        special_tokens=deprecated_special_tokens(),
+        vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
+    )
+
+
 @pytest.fixture(scope="module")
 def tekkenizer() -> Tekkenizer:
-    return build_tokenizer()
+    return tekkenizer_source()
 
 
 @pytest.mark.parametrize(
@@ -185,7 +189,13 @@ def test_is_tekken_rejects_directory_with_tekken_name(tmp_path: Path) -> None:
 )
 def test_init_exposes_configured_values(version: TokenizerVersion, has_builder: bool) -> None:
     builder = model_settings_builder() if has_builder else None
-    tokenizer = build_tokenizer(version=version, num_special_tokens=22, model_settings_builder=builder)
+    tokenizer = build_tekkenizer(
+        version=version,
+        num_special_tokens=22,
+        special_tokens=special_tokens_with_fillers(22),
+        vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
+        model_settings_builder=builder,
+    )
 
     assert tokenizer.n_words == 280
     assert tokenizer.num_special_tokens == 22
@@ -203,7 +213,13 @@ def test_init_rejects_model_settings_for_unsupported_version() -> None:
     builder = model_settings_builder()
 
     with pytest.raises(ValueError, match=r"model_settings_builder is not supported for version=<TokenizerVersion.v3:"):
-        build_tokenizer(model_settings_builder=builder)
+        build_tekkenizer(
+            version=TokenizerVersion.v3,
+            num_special_tokens=20,
+            special_tokens=deprecated_special_tokens(),
+            vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
+            model_settings_builder=builder,
+        )
 
 
 def test_init_rejects_oversized_vocab() -> None:
@@ -225,7 +241,12 @@ def test_init_rejects_duplicate_special_tokens() -> None:
     special_tokens[1] = special_tokens[0]
 
     with pytest.raises(AssertionError, match="Special tokens must be unique"):
-        build_tokenizer(special_tokens=special_tokens)
+        build_tekkenizer(
+            version=TokenizerVersion.v3,
+            num_special_tokens=20,
+            special_tokens=special_tokens,
+            vocab=quick_vocab(extra_toks=[b"hello", b"world"]),
+        )
 
 
 def test_deprecated_special_tokens_are_frozen() -> None:
@@ -263,7 +284,7 @@ def test_file_path_requires_file_loaded_instance(tmp_path: Path) -> None:
 
     assert loaded.file_path == path
     with pytest.raises(ValueError, match="The tokenizer was not loaded from a file"):
-        build_tokenizer().file_path
+        tekkenizer_source().file_path
 
 
 def test_image_and_audio_properties_are_read_only(tekkenizer: Tekkenizer) -> None:
@@ -308,7 +329,7 @@ def test_from_file_loaded_tokenizer_encodes_like_the_synthetic_source(tmp_path: 
     path = tmp_path / "loaded.tekken.json"
     write_tokenizer_file(path=path, version="v3", special_tokens=deprecated_special_tokens(), num_special_tokens=20)
     loaded = Tekkenizer.from_file(path)
-    source = build_tokenizer()
+    source = tekkenizer_source()
 
     inputs = "My very beautiful string"
 
@@ -540,8 +561,8 @@ def test_id_to_byte_piece_returns_ordinary_bytes_and_raises_for_special_tokens(t
 
 def test_init_truncates_vocab_to_inner_vocab_size() -> None:
     vocab = quick_vocab(extra_toks=[b"hello", b"world"])
-    truncated = build_tokenizer_with_vocab(vocab=vocab, vocab_size=256 + 20)
-    full = build_tokenizer_with_vocab(vocab=vocab, vocab_size=258 + 20)
+    truncated = build_tekkenizer_with_vocab(vocab=vocab, vocab_size=256 + 20)
+    full = build_tekkenizer_with_vocab(vocab=vocab, vocab_size=258 + 20)
 
     # with only the 256 byte tokens kept, "hello"/"world" fall back to identical byte sequences offset by 20
     assert truncated.encode(s="hello", bos=False, eos=False) == [20 + ord(c) for c in "hello"]
@@ -553,21 +574,21 @@ def test_init_rejects_malformed_vocab_entry_missing_key() -> None:
     malformed_vocab = [cast(TokenInfo, {"rank": 0, "token_bytes": "AA=="})]
 
     with pytest.raises(AssertionError):
-        build_tokenizer_with_vocab(vocab=malformed_vocab)
+        build_tekkenizer_with_vocab(vocab=malformed_vocab, vocab_size=len(malformed_vocab) + 20)
 
 
 def test_init_rejects_non_contiguous_rank() -> None:
     malformed_vocab = [TokenInfo(rank=1, token_bytes="AA==", token_str=None)]
 
     with pytest.raises(AssertionError):
-        build_tokenizer_with_vocab(vocab=malformed_vocab)
+        build_tekkenizer_with_vocab(vocab=malformed_vocab, vocab_size=len(malformed_vocab) + 20)
 
 
 def test_init_rejects_invalid_byte_invariant() -> None:
     malformed_vocab = [TokenInfo(rank=0, token_bytes="%%%", token_str=None)]
 
     with pytest.raises(AssertionError, match=r"\(0, b''\)"):
-        build_tokenizer_with_vocab(vocab=malformed_vocab)
+        build_tekkenizer_with_vocab(vocab=malformed_vocab, vocab_size=len(malformed_vocab) + 20)
 
 
 def test_init_rejects_duplicate_mergeable_ranks() -> None:
@@ -580,13 +601,13 @@ def test_init_rejects_duplicate_mergeable_ranks() -> None:
     )
 
     with pytest.raises(AssertionError):
-        build_tokenizer_with_vocab(vocab=vocab, vocab_size=258 + 20)
+        build_tekkenizer_with_vocab(vocab=vocab, vocab_size=258 + 20)
 
 
 def test_init_rejects_vocab_smaller_than_inner_vocab_size() -> None:
     # 256 byte tokens cannot fill an inner vocab of 257 mergeable ranks
     with pytest.raises(AssertionError, match=r"\(277, 256, 20\)"):
-        build_tokenizer_with_vocab(vocab=quick_vocab(extra_toks=[]), vocab_size=257 + 20)
+        build_tekkenizer_with_vocab(vocab=quick_vocab(extra_toks=[]), vocab_size=257 + 20)
 
 
 def test_is_tekkenizer_distinguishes_tekken_from_other_tokenizers(tekkenizer: Tekkenizer) -> None:
