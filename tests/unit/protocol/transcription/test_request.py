@@ -40,7 +40,6 @@ def test_transcription_request_openai_round_trip(
         "top_p": 1.0,
         "model": "model",
         "language": language,
-        "target_streaming_delay_ms": 150,
         "seed": 43,
         "stream": stream,
     }
@@ -52,7 +51,7 @@ def test_transcription_request_openai_round_trip(
         language=language,
         model="model",
         random_seed=43,
-        target_streaming_delay_ms=150,
+        target_streaming_delay_ms=None,
         streaming=StreamingMode.DISABLED,
     )
     assert TranscriptionRequest.from_openai(exported) == expected_import
@@ -83,7 +82,6 @@ def test_transcription_request_to_openai_preserves_buffer_and_from_openai_canoni
         "top_p": 1.0,
         "model": "model",
         "language": None,
-        "target_streaming_delay_ms": None,
         "seed": None,
     }
     assert_audio_buffer(buffer=exported["file"], raw_audio=raw_audio, fmt=fmt, samples=audio_samples)
