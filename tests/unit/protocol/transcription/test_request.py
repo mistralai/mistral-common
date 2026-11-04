@@ -6,7 +6,7 @@ from openai.types.audio.transcription_create_params import TranscriptionCreatePa
 from pydantic_extra_types.language_code import LanguageAlpha2
 
 from mistral_common.protocol.transcription.request import StreamingMode, TranscriptionRequest
-from tests.unit.protocol.utils import assert_audio_buffer, audio_bytes
+from tests.unit.protocol.audio_helpers import assert_audio_buffer, audio_bytes
 
 
 @pytest.mark.parametrize(
