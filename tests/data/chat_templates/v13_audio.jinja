@@ -10,11 +10,6 @@
 {%- if messages[0]['role'] != 'system' and default_system_message != '' %}
     {{- '[SYSTEM_PROMPT]' ~ default_system_message ~ '[/SYSTEM_PROMPT]' }}
 {%- endif %}
-{%- if messages[0]['role'] == 'system' or default_system_message != '' %}
-    {%- set has_sp = true %}
-{%- else %}
-    {%- set has_sp = false %}
-{%- endif %}
 
 
 {#- Tools definition #}
@@ -41,9 +36,6 @@
             {%- if block['type'] == 'text' -%}
                 {{- block['text'] -}}
             {%- elif support_audio and block['type'] in ['input_audio', 'audio_url'] -%}
-                {%- if has_sp -%}
-                    {{- raise_exception('Audio chunks are not supported in user message content when system prompt is provided.') -}}
-                {%- endif -%}
                 {{- '[AUDIO]' -}}
             {%- else -%}
                 {{- raise_exception('Only ' ~ supported_types_desc ~ ' chunks are supported in ' ~ context_name ~ '.') -}}

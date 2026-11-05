@@ -12,7 +12,7 @@ from tests.utils.chat_templates.helpers import build_render_args, build_test_tem
 class TestAudioSystemPrompt:
     @pytest.mark.parametrize(
         "version",
-        [TokenizerVersion.v7, TokenizerVersion.v11, TokenizerVersion.v13],
+        [TokenizerVersion.v7, TokenizerVersion.v11],
     )
     def test_audio_with_system_prompt_raises(self, version: TokenizerVersion) -> None:
         template = build_test_template(TestConfig(version=version, audio=True))
@@ -29,8 +29,9 @@ class TestAudioSystemPrompt:
         ):
             render_template(template, **build_render_args(request))
 
-    def test_v15_audio_with_system_prompt_succeeds(self) -> None:
-        template = build_test_template(TestConfig(version=TokenizerVersion.v15, audio=True))
+    @pytest.mark.parametrize("version", [TokenizerVersion.v13, TokenizerVersion.v15])
+    def test_audio_with_system_prompt_succeeds(self, version: TokenizerVersion) -> None:
+        template = build_test_template(TestConfig(version=version, audio=True))
         request = build_conversation_request(
             messages=[
                 SystemMessage(content="You are helpful."),

@@ -623,6 +623,31 @@ REQUEST_MULTI_TURN_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var
     ]
 )
 
+REQUEST_SYSTEM_THEN_AUDIO_TEST = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are an audio assistant."),
+        UserMessage(
+            content=[
+                TextChunk(text="Users asks what is this audio ?"),
+                get_dummy_audio_chunk(),
+            ]
+        ),
+    ]
+)
+
+REQUEST_SYSTEM_THEN_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are an audio assistant."),
+        UserMessage(
+            content=[
+                TextChunk(text="Users asks what is this audio ?"),
+                get_dummy_audio_chunk(),
+            ]
+        ),
+        AssistantMessage(content="Assistant answers it is a music."),
+    ]
+)
+
 REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TEST = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         SystemMessage(
@@ -1135,6 +1160,13 @@ def get_conversations(
             conversations.extend([REQUEST_MULTI_TURN_AUDIO_URL_TEST, REQUEST_MULTI_TURN_AUDIO_TEST])
         else:
             conversations.extend([REQUEST_MULTI_TURN_AUDIO_URL_TRAIN, REQUEST_MULTI_TURN_AUDIO_TRAIN])
+        # v13+ accept a system prompt alongside audio
+        if tokenizer_version >= TokenizerVersion.v13:
+            conversations.append(
+                REQUEST_SYSTEM_THEN_AUDIO_TEST
+                if validation_mode == ValidationMode.test
+                else REQUEST_SYSTEM_THEN_AUDIO_TRAIN
+            )
 
     if think:
         if validation_mode == ValidationMode.test:
