@@ -183,7 +183,7 @@
         {%- if (ns.index == ns.max_idx_user) and system_message != '' %}
             {%- set added_sp = true %}
             {{- ' ' ~ system_message ~ '\n\n' }}
-        {%- elif message['content'] is string %}
+        {%- elif message['content'] is string and message['content'] %}
             {{- ' '  }}
         {%- endif %}
 

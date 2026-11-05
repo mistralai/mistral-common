@@ -170,9 +170,11 @@
         {%- if (ns.index == ns.max_idx_user) and has_tools %}
             {{- available_tools }}
         {%- endif %}
-        {{- '[INST] ' }}
+        {{- '[INST]' }}
         {%- if (ns.index == ns.max_idx_user) and system_message != '' %}
-            {{- system_message ~ '\n\n' }}
+            {{- ' ' ~ system_message ~ '\n\n' }}
+        {%- elif message['content'] %}
+            {{- ' ' }}
         {%- endif %}
         {%- if message['content'] is string %}
             {{- render_content(content=message['content'], context_name='user message content') -}}

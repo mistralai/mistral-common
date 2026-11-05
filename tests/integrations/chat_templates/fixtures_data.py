@@ -963,6 +963,16 @@ REQUEST_EMPTY_SYSTEM_TEXT_CHUNK_TRAIN = ChatCompletionRequest(  # type: ignore[t
     ]
 )
 
+REQUEST_EMPTY_TURN_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content=""),
+        UserMessage(content=""),
+        AssistantMessage(content="Hi"),
+        UserMessage(content="Hello"),
+        AssistantMessage(content="Hey"),
+    ]
+)
+
 REQUEST_EMPTY_SYSTEM_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         SystemMessage(content="You are helpful."),
@@ -1356,7 +1366,9 @@ def get_conversations(
 
     # Empty content is skipped when same-role messages are merged (finetuning only)
     if validation_mode == ValidationMode.finetuning:
-        conversations.extend([REQUEST_EMPTY_CONTENT_TRAIN, REQUEST_EMPTY_SYSTEM_TEXT_CHUNK_TRAIN])
+        conversations.extend(
+            [REQUEST_EMPTY_CONTENT_TRAIN, REQUEST_EMPTY_SYSTEM_TEXT_CHUNK_TRAIN, REQUEST_EMPTY_TURN_TRAIN]
+        )
         if tokenizer_version >= TokenizerVersion.v3:
             conversations.append(REQUEST_EMPTY_TEXT_CHUNKS_TRAIN)
         if tokenizer_version < TokenizerVersion.v7:

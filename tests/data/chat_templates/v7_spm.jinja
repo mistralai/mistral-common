@@ -145,7 +145,7 @@
         {%- if (ns.index == ns.max_idx_user) and has_tools %}
             {{- available_tools }}
         {%- endif %}
-        {{- '[INST] ' -}}
+        {{- '[INST]' ~ (' ' if message['content'] else '') -}}
         {{- render_content(content=message['content'], context_name='user message content') -}}
         {{- '[/INST]' }}
         {%- if loop.index < loop.length %}
@@ -216,7 +216,7 @@
 
     {#- System messages. #}
     {%- elif message['role'] == 'system' %}
-        {{- '[SYSTEM_PROMPT] ' -}}
+        {{- '[SYSTEM_PROMPT]' ~ (' ' if message['content'] else '') -}}
         {{- render_content(content=message['content'], context_name='system message contents') -}}
         {{- '[/SYSTEM_PROMPT]' -}}
 
