@@ -5,6 +5,11 @@
 {{- bos_token }}
 
 
+{#- Reject an empty conversation, as the tokenizer does. #}
+{%- if messages | length == 0 %}
+    {{- raise_exception('Conversation must have at least one message') }}
+{%- endif %}
+
 {#- Handle system prompt if it exists. #}
 {%- set loop_messages = messages %}
 {%- if messages[0]['role'] != 'system' and default_system_message != '' %}

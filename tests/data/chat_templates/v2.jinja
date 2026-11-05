@@ -5,6 +5,11 @@
 {{- bos_token }}
 
 
+{#- Reject an empty conversation, as the tokenizer does. #}
+{%- if messages | length == 0 %}
+    {{- raise_exception('Conversation must have at least one message') }}
+{%- endif %}
+
 {#- Handle system prompt if it exists. #}
 {#- Extract all system messages and merge into system prompt. #}
 {%- set ns_sys = namespace(system_parts=[], filtered=[], previous_role=none) %}

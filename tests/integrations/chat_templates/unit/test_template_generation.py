@@ -104,7 +104,7 @@ class TestGenerateChatTemplateAPI:
     def test_empty_messages_raises(self) -> None:
         config = TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=frozenset({"json_schema"}))
         template = build_chat_template(config)
-        with pytest.raises(Exception, match="list object has no element 0"):
+        with pytest.raises(ValueError, match="Conversation must have at least one message"):
             render_template(template, messages=[])
 
     def test_double_quotes_in_default_system_prompt(self) -> None:

@@ -5,10 +5,12 @@ from typing import Any
 import pytest
 from jinja2.exceptions import TemplateError
 
+from mistral_common.exceptions import InvalidMessageStructureException
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.integrations.chat_templates.template_generator import build_chat_template
 from mistral_common.protocol.instruct.chunk import TextChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage, UserMessage
+from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
@@ -226,6 +228,42 @@ class TestTransformersMistralCommonParity:
             }
             with pytest.raises(TemplateError, match=r"Unexpected role 'system' after role 'tool'"):
                 encode_transformers_from_openai(chat_template, invalid_system_after_tool)
+
+    @pytest.mark.parametrize(
+        "config",
+        ALL_TRANSFORMERS_CONFIGS,
+        ids=[format_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
+    )
+    def test_empty_conversation_raises(self, config: TestConfig, tmp_path: Path) -> None:
+        # The tokenizer rejects an empty conversation in every mode; the template does too, default prompt or not.
+        if config.spm:
+            tokenizer_path = build_spm_path(config=config, output_dir=tmp_path)
+        else:
+            tokenizer_path = build_tekken_json(config=config, output_dir=tmp_path)
+        for mode in [ValidationMode.test, ValidationMode.finetuning]:
+            mistral_tokenizer = MistralTokenizer.from_file(str(tokenizer_path), mode=mode)
+            with pytest.raises(InvalidMessageStructureException, match="Conversation must have at least one message"):
+                mistral_tokenizer.encode_chat_completion(ChatCompletionRequest(messages=[]))
+
+        has_reasoning_effort = config.version.supports_model_settings and (
+            config.model_settings_fields is None or "reasoning_effort" in config.model_settings_fields
+        )
+        for default_system_prompt in [None, "Default prompt."]:
+            chat_template = generate_chat_template(
+                spm=config.spm,
+                tokenizer_version=config.version,
+                image_support=config.image,
+                audio_support=config.audio,
+                thinking_support=config.think,
+                default_system_prompt=default_system_prompt,
+                plain_thinking_support=False,
+                use_special_token_variables=True,
+                model_settings_fields=config.model_settings_fields,
+                reasoning_effort_default="none" if has_reasoning_effort else None,
+                reasoning_effort_values=("none", "high") if has_reasoning_effort else None,
+            )
+            with pytest.raises(TemplateError, match="Conversation must have at least one message"):
+                encode_transformers_from_openai(chat_template, {"messages": []})
 
     @pytest.mark.parametrize(
         "config",
