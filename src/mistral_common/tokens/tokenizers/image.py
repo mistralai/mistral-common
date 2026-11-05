@@ -3,6 +3,8 @@ import logging
 from dataclasses import dataclass
 from enum import StrEnum, auto
 from io import BytesIO
+from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 import numpy as np
 from PIL import Image
@@ -71,8 +73,8 @@ def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
         The image as a PIL Image object.
 
     Raises:
-        ValueError: If the URL scheme is unsupported, or a data URL is malformed,
-            its payload is not valid base64, or its payload is not a decodable image.
+        ValueError: If the URL scheme is unsupported, a file URI points to a non-local host,
+            or a data URL is malformed, its payload is not valid base64, or its payload is not a decodable image.
     """
     if isinstance(chunk, ImageChunk):
         return chunk.image
@@ -88,7 +90,10 @@ def image_from_chunk(chunk: ImageURLChunk | ImageChunk) -> SerializableImage:
         except Exception as e:
             raise ValueError(f"Invalid image data URL {url[:64]}: payload is not a decodable image.") from e
     if url.startswith("file://"):
-        with open(url.removeprefix("file://"), "rb") as file:
+        parsed = urlparse(url)
+        if parsed.netloc not in ("", "localhost"):
+            raise ValueError(f"Unsupported file URI host {parsed.netloc!r}: only local files are supported.")
+        with open(url2pathname(parsed.path), "rb") as file:
             image = Image.open(file)
             image.load()
         return image

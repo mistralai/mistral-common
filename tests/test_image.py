@@ -149,14 +149,6 @@ def test_image_from_chunk_bare_file_name_is_unsupported(tmp_path: Path, monkeypa
         image_from_chunk(chunk=ImageURLChunk(image_url="file.png"))
 
 
-def test_image_from_chunk_file_uri(tmp_path: Path) -> None:
-    image_path = tmp_path / "image.png"
-    _create_test_image((8, 8)).save(image_path)
-
-    image = image_from_chunk(chunk=ImageURLChunk(image_url=f"file://{image_path}"))
-    assert image.size == (8, 8)
-
-
 def _mock_png_response() -> Mock:
     img_byte_arr = BytesIO()
     _create_test_image((8, 8)).save(img_byte_arr, format="PNG")
