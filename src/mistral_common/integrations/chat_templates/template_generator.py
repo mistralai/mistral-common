@@ -320,6 +320,8 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
     in the message processing loop. Only emit default system prompt if no system
     message is at position 0.
 
+    An empty conversation is rejected for every version, as the tokenizer does.
+
     Args:
         config: The template configuration.
 
@@ -327,6 +329,11 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
         The system prompt handling section of the chat template.
     """
     lines = [
+        "",
+        "{#- Reject an empty conversation, as the tokenizer does. #}",
+        "{%- if messages | length == 0 %}",
+        "    {{- raise_exception('Conversation must have at least one message') }}",
+        "{%- endif %}",
         "",
         "{#- Handle system prompt if it exists. #}",
     ]
