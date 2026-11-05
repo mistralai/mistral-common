@@ -349,9 +349,11 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
 def _generate_system_prompt_handling_pre_v7(config: TemplateConfig) -> list[str]:
     r"""Generate pre-v7 system prompt handling that extracts all system messages.
 
-    Loops through all messages to collect system content and filters them
-    out of `loop_messages`. A system message after an `assistant` or `tool`
-    message is rejected, as in `_validate_message_order`.
+    Loops through all messages to collect system content. System messages stay
+    in `loop_messages` so that, as in the mistral-common normalizer, they split
+    the surrounding user messages; the aggregation then drops them. A system
+    message after an `assistant` or `tool` message is rejected, as in
+    `_validate_message_order`.
 
     Args:
         config: The template configuration.
@@ -361,7 +363,7 @@ def _generate_system_prompt_handling_pre_v7(config: TemplateConfig) -> list[str]
     """
     lines = [
         "{#- Extract all system messages and merge into system prompt. #}",
-        "{%- set ns_sys = namespace(system_parts=[], filtered=[], previous_role=none) %}",
+        "{%- set ns_sys = namespace(system_parts=[], previous_role=none) %}",
         "{%- for message in messages %}",
         "    {%- if message['role'] == 'system' %}",
         "        {%- if ns_sys.previous_role in ['assistant', 'tool'] %}",
@@ -378,8 +380,6 @@ def _generate_system_prompt_handling_pre_v7(config: TemplateConfig) -> list[str]
         "            {#- Like the tokenizer: join the non-empty text chunks. #}",
         "            {%- set ns_sys.system_parts = ns_sys.system_parts + [message['content'] | map(attribute='text') | select | join('\\n\\n')] %}",  # noqa: E501
         "        {%- endif %}",
-        "    {%- else %}",
-        "        {%- set ns_sys.filtered = ns_sys.filtered + [message] %}",
         "    {%- endif %}",
         "    {%- set ns_sys.previous_role = message['role'] %}",
         "{%- endfor %}",
@@ -388,7 +388,7 @@ def _generate_system_prompt_handling_pre_v7(config: TemplateConfig) -> list[str]
         "{%- else %}",
         "    {%- set system_message = default_system_message %}",
         "{%- endif %}",
-        "{%- set loop_messages = ns_sys.filtered %}",
+        "{%- set loop_messages = messages %}",
     ]
     return lines
 
@@ -842,7 +842,8 @@ def _generate_message_aggregation(config: TemplateConfig) -> str:
     - **Assistant messages**: consecutive messages merged into one, text content joined
       with `"\\n\\n"`, `tool_calls` lists concatenated.
     - **System messages**: each message coalesced individually (adjacent `TextChunks`
-      joined with `"\\n\\n"`), but NOT merged across consecutive messages.
+      joined with `"\\n\\n"`), but NOT merged across consecutive messages. Before v7
+      they are dropped after the aggregation, since the system prompt holds their content.
     - **Tool messages**: passed through as-is.
 
     Non-text chunk type validation is deferred to the message rendering loop.
@@ -884,8 +885,11 @@ def _generate_message_aggregation(config: TemplateConfig) -> str:
 
     if config.version < TokenizerVersion.v7:
         # Like the mistral-common normalizer, render system-only conversations as an empty user message.
+        # System messages are dropped here: they only split user messages, and the system prompt holds their content.
         lines.extend(
             [
+                "{#- System messages split user messages but are rendered with the system prompt. #}",
+                "{%- set loop_messages = loop_messages | rejectattr('role', 'equalto', 'system') | list %}",
                 "{#- A conversation with only system messages gets an empty user message for the system prompt. #}",
                 "{%- if messages | length > 0 and loop_messages | length == 0 %}",
                 "    {%- set loop_messages = [{'role': 'user', 'content': ''}] %}",
@@ -1887,7 +1891,8 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("        {%- endif %}")
     lines.append("        {{- ' " + _END_INST + "' }}")
     if config.spm:
-        lines.append("        {%- if loop.index < loop.length %}")
+        # SentencePiece prefixes the assistant content with a space. A following user message has its own.
+        lines.append("        {%- if loop.index < loop.length and loop_messages[loop.index]['role'] == 'assistant' %}")
         lines.append('            {{- " " }}')
         lines.append("        {%- endif %}")
     lines.append("")
