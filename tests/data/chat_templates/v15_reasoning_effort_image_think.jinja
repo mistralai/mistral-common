@@ -96,12 +96,12 @@
                     {%- endif %}
                 {%- endif %}
                 {%- if msg['content'] is string %}
-                    {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}
+                    {%- set ns_c.text_parts = ns_c.text_parts + ([msg['content']] if msg['content'] else []) %}
                 {%- elif msg['content'] is not none %}
                     {%- set ns_msg = namespace(msg_text_parts=[]) %}
                     {%- for block in msg['content'] %}
                         {%- if block['type'] == 'text' %}
-                            {%- set ns_msg.msg_text_parts = ns_msg.msg_text_parts + [block['text']] %}
+                            {%- set ns_msg.msg_text_parts = ns_msg.msg_text_parts + ([block['text']] if block['text'] else []) %}
                         {%- else %}
                             {%- if ns_msg.msg_text_parts | length > 0 %}
                                 {%- set ns_c.text_parts = ns_c.text_parts + [ns_msg.msg_text_parts | join('')] %}

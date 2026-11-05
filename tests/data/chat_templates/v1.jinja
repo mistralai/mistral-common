@@ -14,7 +14,7 @@
             {{- raise_exception('Unexpected role \'system\' after role \'' ~ ns_sys.previous_role ~ '\'') }}
         {%- endif %}
         {%- if message['content'] is string %}
-            {%- set ns_sys.system_parts = ns_sys.system_parts + [message['content']] %}
+            {%- set ns_sys.system_parts = ns_sys.system_parts + ([message['content']] if message['content'] else []) %}
         {%- else %}
             {%- for block in message['content'] %}
                 {%- if block['type'] == 'text' %}
@@ -47,11 +47,11 @@
             {%- set ns_c = namespace(text_parts=[], chunks=[], has_non_text=false, tool_calls=[]) %}
             {%- for msg in ns_agg.current_group %}
                 {%- if msg['content'] is string %}
-                    {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}
+                    {%- set ns_c.text_parts = ns_c.text_parts + ([msg['content']] if msg['content'] else []) %}
                 {%- elif msg['content'] is not none %}
                     {%- for block in msg['content'] %}
                         {%- if block['type'] == 'text' %}
-                            {%- set ns_c.text_parts = ns_c.text_parts + [block['text']] %}
+                            {%- set ns_c.text_parts = ns_c.text_parts + ([block['text']] if block['text'] else []) %}
                         {%- else %}
                             {%- if ns_c.text_parts | length > 0 %}
                                 {%- set ns_c.chunks = ns_c.chunks + [{'type': 'text', 'text': ns_c.text_parts | join('\n\n')}] %}

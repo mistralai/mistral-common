@@ -361,7 +361,7 @@ def _generate_system_prompt_handling_pre_v7(config: TemplateConfig) -> list[str]
         "            {{- raise_exception('Unexpected role \\'system\\' after role \\'' ~ ns_sys.previous_role ~ '\\'') }}",  # noqa: E501
         "        {%- endif %}",
         "        {%- if message['content'] is string %}",
-        "            {%- set ns_sys.system_parts = ns_sys.system_parts + [message['content']] %}",
+        "            {%- set ns_sys.system_parts = ns_sys.system_parts + ([message['content']] if message['content'] else []) %}",  # noqa: E501
         "        {%- else %}",
         "            {%- for block in message['content'] %}",
         "                {%- if block['type'] == 'text' %}",
@@ -922,7 +922,7 @@ def _generate_flush_logic(config: TemplateConfig) -> list[str]:
             "                    {%- set ns_msg = namespace(msg_text_parts=[]) %}",
             "                    {%- for block in msg['content'] %}",
             "                        {%- if block['type'] == 'text' %}",
-            "                            {%- set ns_msg.msg_text_parts = ns_msg.msg_text_parts + [block['text']] %}",
+            "                            {%- set ns_msg.msg_text_parts = ns_msg.msg_text_parts + ([block['text']] if block['text'] else []) %}",  # noqa: E501
             "                        {%- else %}",
             "                            {%- if ns_msg.msg_text_parts | length > 0 %}",
             "                                {%- set ns_c.text_parts = ns_c.text_parts + [ns_msg.msg_text_parts | join('')] %}",  # noqa: E501
@@ -946,7 +946,7 @@ def _generate_flush_logic(config: TemplateConfig) -> list[str]:
             "                {%- elif msg['content'] is not none %}",
             "                    {%- for block in msg['content'] %}",
             "                        {%- if block['type'] == 'text' %}",
-            "                            {%- set ns_c.text_parts = ns_c.text_parts + [block['text']] %}",
+            "                            {%- set ns_c.text_parts = ns_c.text_parts + ([block['text']] if block['text'] else []) %}",  # noqa: E501
             "                        {%- else %}",
             "                            {%- if ns_c.text_parts | length > 0 %}",
             "                                {%- set ns_c.chunks = ns_c.chunks + [{'type': 'text', 'text': ns_c.text_parts | join('\\n\\n')}] %}",  # noqa: E501
@@ -962,7 +962,7 @@ def _generate_flush_logic(config: TemplateConfig) -> list[str]:
     lines.extend(
         [
             "                {%- if msg['content'] is string %}",
-            "                    {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}",
+            "                    {%- set ns_c.text_parts = ns_c.text_parts + ([msg['content']] if msg['content'] else []) %}",  # noqa: E501
             *list_content_lines,
             "                {%- if msg['tool_calls'] is defined and msg['tool_calls'] is not none %}",
             "                    {%- set ns_c.tool_calls = ns_c.tool_calls + msg['tool_calls'] | list %}",
