@@ -72,7 +72,8 @@ def generate_chat_template(
     if default_system_prompt is not None:
         # Thinking chunks are not a concern here because default system prompts
         # are plain text strings, not structured content with chunk types.
-        escaped_prompt = default_system_prompt.replace("\\", "\\\\").replace("'", "\\'")
+        # Carriage returns are escaped because Jinja normalizes raw newlines in string literals.
+        escaped_prompt = default_system_prompt.replace("\\", "\\\\").replace("'", "\\'").replace("\r", "\\r")
         template = template.replace(
             "{%- set default_system_message = '' %}",
             "{%- set default_system_message = '" + escaped_prompt + "' %}",

@@ -186,6 +186,7 @@ class TestSystemPromptEscaping:
             "You're a helpful assistant! Use \"quotes\" and 'apostrophes'.",
             "use \\ for escaping",
             "Line 1\nLine 2\nLine 3",
+            "Line 1\r\nLine 2\rLine 3",
             r"Step \1: initialize, Step \2: run",
             "Use {{ variable }} and {% if true %}block{% endif %}",
         ],
