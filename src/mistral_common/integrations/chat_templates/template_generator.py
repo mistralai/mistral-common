@@ -451,13 +451,29 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
     if config.version >= TokenizerVersion.v2:
         lines.append("{%- if tools is defined and tools is not none and tools|length > 0 %}")
         lines.append("    {%- set has_tools = true %}")
+        # Render tools like the tokenizer: drop `strict` and unknown keys, default a null or missing
+        # `description`/`parameters`, and use the `Tool` field order.
+        lines.extend(
+            [
+                "    {%- set ns_t = namespace(tools=[]) %}",
+                "    {%- for tool in tools %}",
+                "        {%- set tool_function = tool['function'] %}",
+                "        {%- set description = tool_function.get('description') %}",
+                "        {%- set parameters = tool_function.get('parameters') %}",
+                "        {%- set ns_t.tools = ns_t.tools + [{'type': tool.get('type', 'function'), "
+                "'function': {'name': tool_function['name'], "
+                "'description': description if description is not none else '', "
+                "'parameters': parameters if parameters is not none else {}}}] %}",
+                "    {%- endfor %}",
+            ]
+        )
         if config.spm:
             lines.append(
-                "    {%- set available_tools = '" + _BEGIN_TOOLS + " ' ~ (tools| tojson) ~ '" + _END_TOOLS + "' %}"
+                "    {%- set available_tools = '" + _BEGIN_TOOLS + " ' ~ (ns_t.tools| tojson) ~ '" + _END_TOOLS + "' %}"
             )
         else:
             lines.append(
-                "    {%- set available_tools = '" + _BEGIN_TOOLS + "' ~ (tools| tojson) ~ '" + _END_TOOLS + "' %}"
+                "    {%- set available_tools = '" + _BEGIN_TOOLS + "' ~ (ns_t.tools| tojson) ~ '" + _END_TOOLS + "' %}"
             )
         lines.append("{%- endif %}")
 

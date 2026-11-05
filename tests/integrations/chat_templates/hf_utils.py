@@ -209,9 +209,6 @@ def encode_hf_tokens(
     messages = openai_request["messages"]
 
     tools = openai_request.get("tools", None)
-    if tools is not None:
-        for tool in tools:
-            tool["function"].pop("strict", None)
 
     result = hf_tokenizer.apply_chat_template(
         conversation=messages,
@@ -227,9 +224,6 @@ def encode_hf_tokens(
 
 def _render_via_transformers(chat_template: str, openai_request: dict[str, Any]) -> str:
     r"""Shared rendering logic for transformers-based encoding."""
-    for tool in openai_request.get("tools", []):
-        tool["function"].pop("strict", False)
-
     encoded = render_jinja_template(
         [openai_request["messages"]],
         tools=openai_request.get("tools", None),
