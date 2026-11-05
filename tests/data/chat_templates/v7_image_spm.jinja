@@ -8,7 +8,7 @@
 {#- Handle system prompt if it exists. #}
 {%- set loop_messages = messages %}
 {%- if messages[0]['role'] != 'system' and default_system_message != '' %}
-    {{- '[SYSTEM_PROMPT]' ~ default_system_message ~ '[/SYSTEM_PROMPT]' }}
+    {{- '[SYSTEM_PROMPT] ' ~ default_system_message ~ '[/SYSTEM_PROMPT]' }}
 {%- endif %}
 
 

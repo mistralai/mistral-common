@@ -403,10 +403,11 @@ def _generate_system_prompt_handling_v7_plus(config: TemplateConfig) -> list[str
     Returns:
         Lines of Jinja2 template code for v7+ system prompt handling.
     """
+    begin_system = _BEGIN_SYSTEM + " " if config.spm else _BEGIN_SYSTEM
     lines = [
         "{%- set loop_messages = messages %}",
         "{%- if messages[0]['role'] != 'system' and default_system_message != '' %}",
-        "    {{- '" + _BEGIN_SYSTEM + "' ~ default_system_message ~ '" + _END_SYSTEM + "' }}",
+        "    {{- '" + begin_system + "' ~ default_system_message ~ '" + _END_SYSTEM + "' }}",
         "{%- endif %}",
     ]
 
