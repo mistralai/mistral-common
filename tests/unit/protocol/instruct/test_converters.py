@@ -30,7 +30,7 @@ def test_from_openai_chat_completion_request_with_developer_role() -> None:
         {"role": "user", "content": "And in place?"},
     ]
 
-    request = ChatCompletionRequest.from_openai(
+    request: ChatCompletionRequest = ChatCompletionRequest.from_openai(
         messages=openai_messages,
         model="gpt-5",
         temperature=0.2,

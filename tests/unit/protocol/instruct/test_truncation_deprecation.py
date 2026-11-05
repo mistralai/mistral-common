@@ -101,7 +101,7 @@ def test_no_truncation_warning_without_deprecated_arguments() -> None:
 
     def use_defaults() -> None:
         request = ChatCompletionRequest(messages=_MESSAGES)
-        round_trip = ChatCompletionRequest.from_openai(**request.to_openai())
+        round_trip: ChatCompletionRequest = ChatCompletionRequest.from_openai(**request.to_openai())
         ChatCompletionRequest.from_openai(_OPENAI_MESSAGES)
         InstructRequest(messages=_MESSAGES)
         tokenizer.encode_chat_completion(round_trip)

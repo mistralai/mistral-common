@@ -1,5 +1,5 @@
 import json
-from typing import Annotated, cast
+from typing import Annotated
 
 import requests
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -40,7 +40,7 @@ async def tokenize_request(
     if isinstance(request, OpenAIChatCompletionRequest):
         try:
             request.drop_extra_fields()
-            request = cast(EngineChatCompletionRequest, EngineChatCompletionRequest.from_openai(**request.model_dump()))
+            request = EngineChatCompletionRequest.from_openai(**request.model_dump())
         except (ValidationError, ValueError) as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -182,7 +182,7 @@ async def generate(
     """
     if isinstance(request, OpenAIChatCompletionRequest):
         extra_fields = request.drop_extra_fields()
-        request = cast(EngineChatCompletionRequest, EngineChatCompletionRequest.from_openai(**request.model_dump()))
+        request = EngineChatCompletionRequest.from_openai(**request.model_dump())
     else:
         extra_fields = {}
     tokens_ids = await tokenize_request(request, settings)

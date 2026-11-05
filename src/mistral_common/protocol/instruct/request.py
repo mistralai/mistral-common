@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 from enum import StrEnum, auto
-from typing import Any, ClassVar, Generic
+from typing import Any, ClassVar, Generic, Self
 
 from pydantic import ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
@@ -384,7 +384,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         tools: list[dict[str, Any]] | None = None,
         continue_final_message: bool = False,
         **kwargs: Any,
-    ) -> "ChatCompletionRequest":
+    ) -> Self:
         r"""Create a ChatCompletionRequest from OpenAI ChatCompletion request format.
 
         Args:
