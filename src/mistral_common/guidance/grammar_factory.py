@@ -7,7 +7,6 @@ from typing import Any, Callable
 
 from typing_extensions import assert_never
 
-from mistral_common.deprecation import warn_once
 from mistral_common.exceptions import InvalidRequestException
 from mistral_common.guidance.tokenizer import from_mistral_tokenizer
 from mistral_common.imports import (
@@ -379,7 +378,7 @@ class GrammarFactory:
         """
         return self._llg_tokenizer
 
-    def select_jinja_template(self, reasoning: bool | None = None) -> str:
+    def select_jinja_template(self) -> str:
         r"""Selects and returns the appropriate jinja template content.
 
         Selection derives from the tokenizer version and presence of think tokens:
@@ -387,22 +386,9 @@ class GrammarFactory:
           `[THINK]` and `[/THINK]` special tokens are registered.
         - Returns the `base` template in all other cases.
 
-        Args:
-            reasoning: Deprecated and ignored. Template selection is determined solely
-                by the tokenizer version and presence of think tokens. Will be removed
-                in 1.13.0.
-
         Returns:
             The jinja template content as a string.
         """
-        if reasoning is not None:
-            warn_once(
-                "select_jinja_template.reasoning",
-                "The reasoning parameter of select_jinja_template is deprecated, "
-                "no longer has any effect, and will be removed in 1.13.0.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
         has_begin_think = SpecialTokens.begin_think.value in self._special_token_map
         has_end_think = SpecialTokens.end_think.value in self._special_token_map
         assert has_begin_think == has_end_think, (

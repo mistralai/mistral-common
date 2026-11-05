@@ -1,6 +1,5 @@
 import inspect
 import re
-import warnings
 from pathlib import Path
 from typing import Any, Literal
 
@@ -8,7 +7,6 @@ import llguidance as llg
 import pytest
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-import mistral_common.deprecation
 from mistral_common.exceptions import InvalidRequestException
 from mistral_common.guidance.grammar_factory import (
     JINJA_PATHS,
@@ -990,21 +988,6 @@ class TestSelectJinjaTemplate:
         factory = GrammarFactory(tokenizer=_V13_NO_THINK_TOKENIZER)
         factory._special_token_map[think_token.value] = "<[99]>"
         with pytest.raises(AssertionError, match=r"both \[THINK\] and \[/THINK\] should be defined or none of them\."):
-            factory.select_jinja_template()
-
-    @pytest.mark.parametrize("reasoning", [True, False])
-    def test_select_jinja_template_reasoning_warns_and_is_ignored(self, reasoning: bool) -> None:
-        factory = _factory_for(version=TokenizerVersion.v11)
-        expected = factory.select_jinja_template()
-        mistral_common.deprecation._warned_keys.discard("select_jinja_template.reasoning")
-
-        with pytest.warns(DeprecationWarning):
-            assert factory.select_jinja_template(reasoning=reasoning) == expected
-
-    def test_select_jinja_template_reasoning_none_no_warn(self) -> None:
-        factory = _factory_for(version=TokenizerVersion.v11)
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", DeprecationWarning)
             factory.select_jinja_template()
 
     @pytest.mark.parametrize(

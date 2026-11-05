@@ -3,12 +3,10 @@ from unittest.mock import patch
 
 import pytest
 
-from mistral_common.exceptions import TokenizerException
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV1,
-    InstructTokenizerV2,
     InstructTokenizerV3,
 )
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
@@ -18,28 +16,6 @@ SPM_WHITESPACE = "▁"
 
 
 class TestMistralToknizer:
-    def test_from_model(self) -> None:
-        with pytest.warns(FutureWarning, match="from_model.*deprecated"):
-            assert isinstance(
-                MistralTokenizer.from_model("mistral-medium-2312").instruct_tokenizer, InstructTokenizerV1
-            )
-        with pytest.warns(FutureWarning):
-            assert isinstance(MistralTokenizer.from_model("mistral-tiny-2312").instruct_tokenizer, InstructTokenizerV2)
-        with pytest.warns(FutureWarning):
-            assert isinstance(MistralTokenizer.from_model("mistral-large-2402").instruct_tokenizer, InstructTokenizerV2)
-        with pytest.warns(FutureWarning):
-            assert isinstance(
-                MistralTokenizer.from_model("open-mixtral-8x22b-2404").instruct_tokenizer, InstructTokenizerV3
-            )
-
-        with pytest.warns(FutureWarning), pytest.raises(TokenizerException) as exc_info:
-            MistralTokenizer.from_model("unknown-model")
-
-        msg = str(exc_info.value)
-        assert "unknown-model" in msg
-        assert "from_hf_hub" in msg
-        assert "from_file" in msg
-
     @pytest.mark.parametrize(
         ["special_token_policy", "is_tekken"],
         [

@@ -1,4 +1,3 @@
-import warnings
 from pathlib import Path
 from typing import Any, Callable, Generic
 
@@ -249,40 +248,6 @@ class MistralTokenizer(
                 str(cls._data_path() / "mistral_instruct_tokenizer_241114.model.v7"), mode=ValidationMode.test
             )
 
-    @classmethod
-    def from_model(cls, model: str, strict: bool = True) -> "MistralTokenizer":
-        r"""Deprecated in favor of `from_hf_hub` or `from_file`, will be removed in 1.13.0.
-
-        Args:
-            model: The model name. Must be one of the known legacy model names
-                (e.g., "mistral-small-2402", "codestral-2405"); newer models are
-                not registered here.
-            strict: Has to be `True`, not used.
-
-        Returns:
-            The Mistral tokenizer for the given model.
-
-        Raises:
-            ValueError: If strict is `False`.
-            TokenizerException: If the model name is not recognized.
-        """
-        warnings.warn(
-            "`MistralTokenizer.from_model` is deprecated and will be removed in 1.13.0. "
-            "Use `MistralTokenizer.from_hf_hub(...)` or `MistralTokenizer.from_file(...)` instead.",
-            FutureWarning,
-        )
-
-        if not strict:
-            raise ValueError("strict has to be `True` since v1.10.0.")
-
-        if model not in MODEL_NAME_TO_TOKENIZER_CLS:
-            raise TokenizerException(
-                f"Unrecognized model: {model}. Use `MistralTokenizer.from_hf_hub(...)` "
-                f"or `MistralTokenizer.from_file(...)` to load newer or custom models."
-            )
-
-        return MODEL_NAME_TO_TOKENIZER_CLS[model]()
-
     @staticmethod
     def from_hf_hub(
         repo_id: str,
@@ -516,23 +481,3 @@ class MistralTokenizer(
 
     def _to_string(self, tokens: list[int]) -> str:
         return self.instruct_tokenizer._to_string(tokens)
-
-
-MODEL_NAME_TO_TOKENIZER_CLS: dict[str, Callable[[], MistralTokenizer]] = {
-    "ministral-8b-2410": lambda: MistralTokenizer.v3(is_tekken=True),
-    "mistral-tiny-2312": MistralTokenizer.v2,
-    "open-mistral-nemo-2407": lambda: MistralTokenizer.v3(is_tekken=True),
-    "mistral-tiny-2407": MistralTokenizer.v3,
-    "mistral-small-2312": MistralTokenizer.v2,
-    "open-mixtral-8x22b-2404": MistralTokenizer.v3,
-    "mistral-small-2402": MistralTokenizer.v2,
-    "mistral-small-2409": lambda: MistralTokenizer.v3(is_tekken=True),
-    "mistral-medium-2312": MistralTokenizer.v1,
-    "mistral-large-2402": MistralTokenizer.v2,
-    "mistral-large-2407": MistralTokenizer.v3,
-    "mistral-large-2411": MistralTokenizer.v7,
-    "pixtral-large-2411": lambda: MistralTokenizer.v7(is_mm=True),
-    "codestral-2405": MistralTokenizer.v3,
-    "codestral-mamba-2407": MistralTokenizer.v3,
-    "pixtral-12b-2409": lambda: MistralTokenizer.v3(is_tekken=True, is_mm=True),
-}

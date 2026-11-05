@@ -2,16 +2,14 @@ import base64
 import io
 import logging
 import math
-import warnings
 from dataclasses import dataclass
 from enum import Enum, StrEnum, auto
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 import requests as _requests_lib
 
-from mistral_common.deprecation import warn_once
 from mistral_common.exceptions import InvalidRequestException, UnsupportedTokenizerFeatureException
 from mistral_common.imports import (
     assert_soundfile_installed,
@@ -30,7 +28,6 @@ if is_soundfile_installed():
     import soundfile as sf
 
 if TYPE_CHECKING:
-    from mistral_common.protocol.instruct.chunk import RawAudio
 
     class AudioFormat(Enum):
         r"""Dynamic enum whose members depend on soundfile availability at runtime."""
@@ -256,34 +253,6 @@ class Audio:
         return base64_str
 
     @staticmethod
-    def from_raw_audio(audio: "RawAudio") -> "Audio":
-        r"""Create an Audio instance from a RawAudio object.
-
-        Deprecated: Use `from_base64()` or `from_bytes()` instead. Will be removed in 1.13.0.
-
-        Args:
-            audio: The RawAudio object containing audio data.
-
-        Returns:
-            An instance of the Audio class.
-        """
-
-        warn_once(
-            "Audio.from_raw_audio",
-            "Audio.from_raw_audio() is deprecated. "
-            "Use Audio.from_base64() or Audio.from_bytes() instead. "
-            "Will be removed in 1.13.0.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        if isinstance(audio.data, bytes):
-            return Audio.from_bytes(audio.data)
-        elif isinstance(audio.data, str):
-            return Audio.from_base64(audio.data)
-        else:
-            raise ValueError(f"Unsupported audio data type: {type(audio.data)}")
-
-    @staticmethod
     def from_audio_chunk(chunk: "AudioChunk") -> "Audio":
         r"""Create an Audio instance from an AudioChunk.
 
@@ -476,18 +445,6 @@ class AudioConfig:
 
         return math.ceil(audio_len / self.audio_length_per_tok)
 
-    @property
-    def num_delay_tokens(self) -> int:
-        r"""Deprecated in favor of `get_num_delay_tokens`. Will be removed in 1.13.0.
-
-        Returns:
-            The number of delay tokens for this config's `transcription_delay_ms`.
-        """
-        # TODO(Patrick) - delete in 1.13.0
-        # only used in vLLM in voxtral_realtime.py
-        warnings.warn("Use get_num_delay_tokens instead of num_delay_tokens", DeprecationWarning)
-        return self.get_num_delay_tokens()
-
     def get_num_delay_tokens(self, transcription_delay_ms: float | None = None) -> int:
         r"""Compute the number of tokens covering the streaming transcription delay.
 
@@ -650,7 +607,6 @@ class AudioEncoder:
         audio_array: np.ndarray,
         sampling_rate: int,
         transcription_delay_ms: float | None = None,
-        **kwargs: Any,
     ) -> np.ndarray:
         r"""Pad the audio array to the desired length.
 
@@ -665,8 +621,6 @@ class AudioEncoder:
                 and text streams for streaming transcription. Controls how much
                 right padding is added so the model transcribes the induced delay.
                 If `None`, falls back to the audio config's `transcription_delay_ms`.
-            **kwargs: Ignored. Only present to swallow deprecated keyword arguments
-                from callers; will be removed in 1.13.0.
 
         Returns:
             The padded audio array.
@@ -675,9 +629,6 @@ class AudioEncoder:
             AssertionError: If streaming and no delay is set on either the argument
                 or the audio config.
         """
-        # TODO(Patrick) - remove **kwargs as it's just there to swallow deprecated
-        # keyword args from voxtral_realtime in vLLM. It was
-        # relevant for the release. Remove in mistral_common version 1.13.0
         if self.audio_config.chunk_length_s:
             next_multiple_of_chunk_frames = self.next_multiple_of_chunk_frames(audio_array.shape[-1], sampling_rate)
             audio_array = np.pad(audio_array, (0, next_multiple_of_chunk_frames - audio_array.shape[-1]))

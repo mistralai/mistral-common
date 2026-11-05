@@ -1,9 +1,4 @@
-import subprocess
-import sys
 import tempfile
-import textwrap
-import warnings
-from typing import Literal
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -13,7 +8,7 @@ import soundfile as sf
 from pydantic import ValidationError
 
 from mistral_common.audio import hertz_to_mel, mel_filter_bank
-from mistral_common.protocol.instruct.chunk import AudioChunk, RawAudio
+from mistral_common.protocol.instruct.chunk import AudioChunk
 from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import Audio, AudioConfig, AudioSpectrogramConfig
 from mistral_common.utils.download import DownloadTimeout
@@ -257,125 +252,8 @@ def test_mel_filter_bank() -> None:
     assert (diff < 1e-5).all()
 
 
-class TestDeprecationWarnings:
-    """Each test runs in a fresh subprocess to avoid module-level _warned flags."""
-
-    @staticmethod
-    def _run_code(code: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [sys.executable, "-W", "all", "-c", textwrap.dedent(code)],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-    def test_rawaudio_instantiation_warns_once(self) -> None:
-        result = self._run_code("""\
-            import warnings
-            with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter("always")
-                from mistral_common.protocol.instruct.chunk import RawAudio
-                _ = RawAudio(data="abc", format="wav")
-                _ = RawAudio(data="xyz", format="wav")
-            dep = [x for x in w if issubclass(x.category, DeprecationWarning) and "RawAudio" in str(x.message)]
-            assert len(dep) == 1, f"Expected 1 DeprecationWarning, got {len(dep)}: {dep}"
-            print("OK")
-        """)
-        assert result.returncode == 0, result.stderr
-        assert "OK" in result.stdout
-
-    def test_audio_from_raw_audio_warns(self) -> None:
-        result = self._run_code("""\
-            import warnings
-            import numpy as np
-            with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter("always")
-                from mistral_common.tokens.tokenizers.audio import Audio
-                from mistral_common.protocol.instruct.chunk import RawAudio
-                audio_obj = Audio(audio_array=np.zeros(1600, dtype=np.float32), sampling_rate=16000, format="wav")
-                b64 = audio_obj.to_base64("wav")
-                ra = RawAudio(data=b64, format="wav")
-                result = Audio.from_raw_audio(ra)
-            dep = [x for x in w if issubclass(x.category, DeprecationWarning) and "from_raw_audio" in str(x.message)]
-            assert len(dep) == 1, f"Expected 1 from_raw_audio warning, got {len(dep)}: {dep}"
-            assert hasattr(result, "audio_array")
-            assert result.sampling_rate > 0
-            print("OK")
-        """)
-        assert result.returncode == 0, result.stderr
-        assert "OK" in result.stdout
-
-    @pytest.mark.parametrize("deprecated_name", ["Audio", "AudioFormat", "EXPECTED_FORMAT_VALUES"])
-    def test_audio_import_from_old_location_warns(
-        self, deprecated_name: Literal["Audio", "AudioFormat", "EXPECTED_FORMAT_VALUES"]
-    ) -> None:
-        code = (
-            "import warnings\n"
-            "import numpy as np\n"
-            "with warnings.catch_warnings(record=True) as w:\n"
-            '    warnings.simplefilter("always")\n'
-            f"    from mistral_common.audio import {deprecated_name}\n"
-            "dep = [\n"
-            "    x for x in w\n"
-            "    if issubclass(x.category, DeprecationWarning)\n"
-            '    and "mistral_common.audio" in str(x.message)\n'
-            "]\n"
-            'assert len(dep) == 1, f"Expected 1 import warning, got {len(dep)}: {dep}"\n'
-            "# Verify the class is usable\n"
-        )
-        if deprecated_name == "Audio":
-            code += (
-                'a = Audio(audio_array=np.zeros(1600, dtype=np.float32), sampling_rate=16000, format="wav")\n'
-                "assert a.sampling_rate == 16000\n"
-            )
-        elif deprecated_name == "AudioFormat":
-            code += "assert isinstance(AudioFormat.MP3, AudioFormat)\n"
-        else:
-            code += 'assert "mp3" in EXPECTED_FORMAT_VALUES\n'
-        code += 'print("OK")\n'
-
-        result = self._run_code(code)
-        assert result.returncode == 0, result.stderr
-        assert "OK" in result.stdout
-
-    def test_rawaudio_import_from_chunk_still_works(self) -> None:
-        result = self._run_code("""\
-            import warnings
-            with warnings.catch_warnings(record=True):
-                warnings.simplefilter("always")
-                from mistral_common.protocol.instruct.chunk import RawAudio
-                ra_str = RawAudio(data="hello", format="wav")
-                assert ra_str.data == "hello"
-                ra_bytes = RawAudio(data=b"world", format="wav")
-                assert ra_bytes.data == b"world"
-            print("OK")
-        """)
-        assert result.returncode == 0, result.stderr
-        assert "OK" in result.stdout
-
-
-class TestRawAudioBackwardCompat:
-    def test_rawaudio_still_works(self) -> None:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            ra = RawAudio(data="some_data", format="wav")
-        assert ra.data == "some_data"
-
-    def test_rawaudio_format_accepted_silently(self) -> None:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            ra = RawAudio(data="data", format="wav")
-        assert ra.format == "wav"
-
-    def test_audiochunk_with_rawaudio_backward_compat(self) -> None:
-        b64 = _make_dummy_base64()
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            ra = RawAudio(data=b64, format="wav")
-            chunk = AudioChunk(input_audio=ra)  # type: ignore[arg-type]
-        assert chunk.input_audio == b64
-
-    def test_audiochunk_with_rawaudio_dict_backward_compat(self) -> None:
+class TestAudioChunkInput:
+    def test_audiochunk_with_openai_dict(self) -> None:
         b64 = _make_dummy_base64()
         chunk = AudioChunk.model_validate({"input_audio": {"data": b64, "format": "wav"}})
         assert chunk.input_audio == b64
@@ -394,11 +272,9 @@ class TestRawAudioBackwardCompat:
             AudioChunk(input_audio=empty_audio)
 
 
-def test_transcription_request_with_rawaudio_backward_compat() -> None:
+def test_transcription_request_with_openai_dict() -> None:
     b64 = _make_dummy_base64()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        ra = RawAudio(data=b64, format="wav")
-        req = TranscriptionRequest(audio=ra, language=None, target_streaming_delay_ms=None)  # type: ignore[arg-type]
-    assert isinstance(req.audio, str)
+    req = TranscriptionRequest.model_validate(
+        {"audio": {"data": b64, "format": "wav"}, "language": None, "target_streaming_delay_ms": None}
+    )
     assert req.audio == b64

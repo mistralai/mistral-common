@@ -1,14 +1,12 @@
-import warnings
 from abc import ABC, abstractmethod
 from enum import StrEnum, auto
 from pathlib import Path
 from typing import Generic, TypeVar
 
 import numpy as np
-from pydantic import ConfigDict, Field, PrivateAttr
+from pydantic import ConfigDict, Field
 
 from mistral_common.base import MistralBase
-from mistral_common.deprecation import warn_once
 from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.instruct.chunk import ContentChunk
 from mistral_common.protocol.instruct.messages import SystemMessage, UserMessage
@@ -173,14 +171,6 @@ class TokenizerVersion(StrEnum):
     """
 
     @property
-    def _version_num(self) -> int:
-        warnings.warn(
-            "`TokenizerVersion._version_num` is deprecated in favor to `TokenizerVersion.version_num` and will "
-            "be removed in 1.13.0."
-        )
-        return self.version_num
-
-    @property
     def version_num(self) -> int:
         r"""Numeric part of the version string.
 
@@ -281,28 +271,6 @@ class Tokenized(MistralBase):
     prefix_ids: list[int] | None = None
     images: list[np.ndarray] = Field(default_factory=list)
     audios: list[Audio] = Field(default_factory=list)
-    _text: str | None = PrivateAttr(default=None)
-
-    @property
-    def text(self) -> str | None:
-        r"""The text representation of the tokens, decoded with special tokens kept.
-
-        Deprecated: Use `tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)`
-        instead. Will be removed in 1.13.0.
-
-        Returns:
-            The decoded string, or `None` if it was not set by the tokenizer that produced this `Tokenized`.
-        """
-        warn_once(
-            key="Tokenized.text",
-            message=(
-                "`text` property of `Tokenized` will be removed in 1.13.0. To decode the token ids, use "
-                "`tokenizer.decode(tokens=tokenized.tokens, special_token_policy=SpecialTokenPolicy.KEEP)`."
-            ),
-            category=DeprecationWarning,
-            stacklevel=2,
-        )
-        return self._text
 
 
 class Tokenizer(ABC):

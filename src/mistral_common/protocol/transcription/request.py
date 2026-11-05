@@ -5,7 +5,6 @@ from typing import Any
 from pydantic import Field, model_validator
 from pydantic_extra_types.language_code import LanguageAlpha2
 
-from mistral_common.base import MistralBase
 from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
 from mistral_common.protocol.base import BaseCompletionRequest
 from mistral_common.protocol.instruct.chunk import _detect_audio_format
@@ -95,10 +94,10 @@ class TranscriptionRequest(BaseCompletionRequest):
     @model_validator(mode="before")
     @classmethod
     def _flatten_audio_dict(cls, values: dict[str, Any]) -> dict[str, Any]:
-        r"""Extract audio data from a nested dict or legacy RawAudio payload.
+        r"""Extract audio data from a nested dict.
 
-        Accepts audio provided as {"audio": {"data": ...}} or a legacy RawAudio
-        model and flattens it to a plain audio value.
+        Accepts audio provided as {"audio": {"data": ...}} and flattens it to a
+        plain audio value.
 
         Args:
             values: The raw input values being validated.
@@ -110,8 +109,6 @@ class TranscriptionRequest(BaseCompletionRequest):
         if not isinstance(values, dict):
             return values
         raw = values.get("audio")
-        if isinstance(raw, MistralBase):
-            raw = raw.model_dump()
         if isinstance(raw, dict) and "data" in raw:
             return {**values, "audio": raw["data"]}
         return values
