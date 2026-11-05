@@ -164,7 +164,7 @@
             {%- set inst_tag = '[INST]' %}
         {%- else %}
             {%- set user_content = message['content'] %}
-            {%- set inst_tag = '[INST] ' %}
+            {%- set inst_tag = '[INST]' ~ (' ' if message['content'] else '') %}
         {%- endif %}
         {{- inst_tag -}}
         {{- render_content(content=user_content, context_name='user message content', supported_types_desc='text, image and image_url', support_images=true, initial_prev_img=not added_sp) -}}
@@ -237,7 +237,7 @@
 
     {#- System messages. #}
     {%- elif message['role'] == 'system' %}
-        {{- '[SYSTEM_PROMPT] ' -}}
+        {{- '[SYSTEM_PROMPT]' ~ (' ' if message['content'] else '') -}}
         {{- render_content(content=message['content'], context_name='system message contents', supported_types_desc='text', support_images=false, initial_prev_img=false) -}}
         {{- '[/SYSTEM_PROMPT]' -}}
 

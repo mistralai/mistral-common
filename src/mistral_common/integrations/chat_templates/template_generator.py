@@ -1029,7 +1029,8 @@ def _generate_system_message_handling(config: TemplateConfig) -> str:
     ]
 
     if config.spm and config.version >= TokenizerVersion.v7:
-        lines.append("        {{- '" + _BEGIN_SYSTEM + " ' -}}")
+        # SentencePiece encodes empty text to no tokens, so there is no space before empty content.
+        lines.append("        {{- '" + _BEGIN_SYSTEM + "' ~ (' ' if message['content'] else '') -}}")
     else:
         lines.append("        {{- '" + _BEGIN_SYSTEM + "' -}}")
 
@@ -1255,8 +1256,10 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
             lines.append("            {%- set user_content = message['content'] %}")
 
             if config.spm and config.image_support:
-                # SPM + prev_img: string content gets [INST] with space
-                lines.append("            {%- set inst_tag = '" + _BEGIN_INST + " ' %}")
+                # SPM + prev_img: string content gets [INST] with a space, unless it is empty
+                lines.append(
+                    "            {%- set inst_tag = '" + _BEGIN_INST + "' ~ (' ' if message['content'] else '') %}"
+                )
 
             lines.append("        {%- endif %}")
 
@@ -1264,7 +1267,7 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
         if config.spm and config.image_support:
             lines.append("        {{- inst_tag -}}")
         elif config.spm:
-            lines.append("        {{- '" + _BEGIN_INST + " ' -}}")
+            lines.append("        {{- '" + _BEGIN_INST + "' ~ (' ' if message['content'] else '') -}}")
         else:
             lines.append("        {{- '" + _BEGIN_INST + "' -}}")
 
@@ -1296,7 +1299,7 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
             lines.append("        {%- if (ns.index == ns.max_idx_user) and system_message != '' %}")
             lines.append("            {%- set added_sp = true %}")
             lines.append("            {{- ' ' ~ system_message ~ '\\n\\n' }}")
-            lines.append("        {%- elif message['content'] is string %}")
+            lines.append("        {%- elif message['content'] is string and message['content'] %}")
             lines.append("            {{- ' '  }}")
             lines.append("        {%- endif %}")
             lines.append("")
@@ -1317,12 +1320,17 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
             lines.append("            {{- " + rc_str + " -}}")
             lines.append("        {%- elif message['content'] | length > 0 %}")
         else:
-            lines.append(f"        {{{{- '{inst_open}' }}}}")
+            # v2+ SentencePiece encodes empty text to no tokens, so there is no space before empty content.
+            spm_space = config.spm and config.version >= TokenizerVersion.v2
+            lines.append(f"        {{{{- '{_BEGIN_INST if spm_space else inst_open}' }}}}")
             if config.version == TokenizerVersion.v1:
                 lines.append("        {%- if loop.index0 == 0 and system_message != '' %}")
             else:
                 lines.append("        {%- if (ns.index == ns.max_idx_user) and system_message != '' %}")
-            lines.append("            {{- system_message ~ '\\n\\n' }}")
+            lines.append("            {{- " + ("' ' ~ " if spm_space else "") + "system_message ~ '\\n\\n' }}")
+            if spm_space:
+                lines.append("        {%- elif message['content'] %}")
+                lines.append("            {{- ' ' }}")
             lines.append("        {%- endif %}")
             lines.append("        {%- if message['content'] is string %}")
             # Pre-v7 plain string branch (call site 2 for non-SPM): simple text-only
