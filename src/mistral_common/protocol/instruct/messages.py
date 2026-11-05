@@ -1,4 +1,3 @@
-import warnings
 from collections.abc import Sequence
 from enum import StrEnum, auto
 from typing import Annotated, Any, ClassVar, Literal, TypeAlias, TypeGuard, TypeVar
@@ -19,12 +18,6 @@ from mistral_common.protocol.instruct.chunk import (
     _convert_openai_content_chunks,
 )
 from mistral_common.protocol.instruct.tool_calls import ToolCall
-
-warnings.filterwarnings(
-    action="once",
-    category=FutureWarning,
-    message=r".*`convert_thinking_format` defaults to 'thinking_chunks'.*",
-)
 
 
 def _are_think_chunks(chunks: Sequence[ContentChunk]) -> TypeGuard[list[ThinkChunk]]:
@@ -315,8 +308,7 @@ class AssistantMessage(BaseMessage):
 
         Args:
             reasoning_field_format: Format for serializing thinking content:
-                - `None`: Defaults to `thinking_chunks` but emits FutureWarning if
-                  content contains ThinkChunk (will change to reasoning in 1.13.0)
+                - `None`: Same as `reasoning`
                 - `thinking_chunks`: Keep thinking as inline chunks
                 - reasoning: Use flat "reasoning" field (vLLM convention)
                 - `reasoning_content`: Use flat `reasoning_content` field (SGLang)
@@ -353,16 +345,11 @@ class AssistantMessage(BaseMessage):
                     )
                 last_think_idx = i
 
-        if reasoning_field_format is None and last_think_idx >= 0:
-            warnings.warn(
-                "`convert_thinking_format` defaults to 'thinking_chunks' but will change to 'reasoning' "
-                "in 1.13.0. Pass `reasoning_field_format` explicitly to silence this warning.",
-                FutureWarning,
-                stacklevel=2,
-            )
+        if reasoning_field_format is None:
+            reasoning_field_format = ReasoningFieldFormat.reasoning
 
         match reasoning_field_format:
-            case None | ReasoningFieldFormat.thinking_chunks:
+            case ReasoningFieldFormat.thinking_chunks:
                 out_dict["content"] = self._content_to_openai(self.content)
             case ReasoningFieldFormat.reasoning | ReasoningFieldFormat.reasoning_content:
                 think_chunks, content_chunks = self.content[: last_think_idx + 1], self.content[last_think_idx + 1 :]

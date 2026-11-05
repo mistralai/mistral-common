@@ -246,7 +246,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
 
         Args:
             reasoning_field_format: Format for converting thinking/thinking chunks in
-                assistant messages to OpenAI's reasoning field. If `None`, uses default.
+                assistant messages to OpenAI's reasoning field. If `None`, uses `reasoning`.
                 See `AssistantMessage.to_openai` for available formats.
             **kwargs: Additional OpenAI-specific parameters to include in the output
                 (e.g., stream, temperature, `top_p`). Must not conflict with existing fields.

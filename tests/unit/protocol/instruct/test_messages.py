@@ -106,7 +106,7 @@ def test_message_rejects_forbidden_chunk_for_role(
 
 
 @pytest.mark.parametrize(
-    ("openai_message", "message", "warn_on_export"),
+    ("openai_message", "message", "export_thinking_chunks"),
     [
         pytest.param(
             {"role": "user", "content": "Hello"},
@@ -244,14 +244,17 @@ def test_message_rejects_forbidden_chunk_for_role(
         ),
     ],
 )
-def test_openai_message_round_trip(openai_message: dict[str, Any], message: ChatMessage, warn_on_export: bool) -> None:
+def test_openai_message_round_trip(
+    openai_message: dict[str, Any], message: ChatMessage, export_thinking_chunks: bool
+) -> None:
     assert type(message).from_openai(deepcopy(openai_message)) == message
 
-    if warn_on_export:
-        with pytest.warns(FutureWarning, match=r"convert_thinking_format.*defaults to 'thinking_chunks'"):
-            assert deepcopy(message).to_openai() == openai_message
+    if export_thinking_chunks:
+        assert isinstance(message, AssistantMessage)
+        exported = deepcopy(message).to_openai(reasoning_field_format=ReasoningFieldFormat.thinking_chunks)
     else:
-        assert deepcopy(message).to_openai() == openai_message
+        exported = deepcopy(message).to_openai()
+    assert exported == openai_message
 
 
 def test_image_message_export_import_canonicalizes_image_chunk_to_image_url_chunk() -> None:
@@ -531,19 +534,27 @@ def test_to_openai_converts_thinking_format(
     assert deepcopy(message).to_openai(reasoning_field_format=reasoning_field_format) == expected
 
 
-def test_to_openai_warns_when_thinking_format_is_omitted_with_think_chunks() -> None:
-    message = AssistantMessage(content=[ThinkChunk(thinking="Hmm", closed=True), TextChunk(text="Answer")])
+@pytest.mark.parametrize(
+    ("content", "expected"),
+    [
+        pytest.param(
+            [ThinkChunk(thinking="Hmm", closed=True), TextChunk(text="Answer")],
+            {"role": "assistant", "reasoning": "Hmm", "content": "Answer"},
+            id="think-and-text",
+        ),
+        pytest.param([TextChunk(text="Answer")], {"role": "assistant", "content": "Answer"}, id="single-text-chunk"),
+        pytest.param([], {"role": "assistant"}, id="empty-list"),
+    ],
+)
+def test_to_openai_defaults_to_reasoning_format(content: list[Any], expected: dict[str, Any]) -> None:
+    message = AssistantMessage(content=content)
 
-    with pytest.warns(FutureWarning, match=r"convert_thinking_format.*defaults to 'thinking_chunks'"):
-        result = message.to_openai()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        result = deepcopy(message).to_openai()
 
-    assert result == {
-        "role": "assistant",
-        "content": [
-            {"type": "thinking", "thinking": "Hmm", "closed": True},
-            {"type": "text", "text": "Answer"},
-        ],
-    }
+    assert result == expected
+    assert result == deepcopy(message).to_openai(reasoning_field_format=ReasoningFieldFormat.reasoning)
 
 
 def test_to_openai_does_not_warn_without_think_chunks() -> None:
