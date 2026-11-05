@@ -257,6 +257,46 @@ def test_openai_message_round_trip(
     assert exported == openai_message
 
 
+@pytest.mark.parametrize("image_prefix", ["", "data:image/png;base64,"], ids=["base64", "data-url"])
+def test_from_openai_imports_image_chunk_dump(image_prefix: str) -> None:
+    image = Image.new(mode="RGB", size=(2, 1))
+    image.putpixel((0, 0), (255, 0, 0))
+    image.putpixel((1, 0), (0, 0, 255))
+    image_chunk = ImageChunk(image=image).model_dump()
+    openai_image_chunk = {**image_chunk, "image": image_prefix + image_chunk["image"]}
+
+    message = UserMessage.from_openai(
+        {"role": "user", "content": [{"type": "text", "text": "Before"}, openai_image_chunk]}
+    )
+
+    assert isinstance(message.content, list)
+    assert message.content[0] == TextChunk(text="Before")
+    imported_chunk = message.content[1]
+    assert isinstance(imported_chunk, ImageChunk)
+    assert imported_chunk.image.size == (2, 1)
+    assert [imported_chunk.image.getpixel((0, 0)), imported_chunk.image.getpixel((1, 0))] == [
+        (255, 0, 0),
+        (0, 0, 255),
+    ]
+    assert imported_chunk.model_dump() == image_chunk
+
+
+@pytest.mark.parametrize(
+    ("openai_image_chunk", "error"),
+    [
+        pytest.param({"type": "image"}, r"image\n  Field required", id="missing-image"),
+        pytest.param(
+            {"type": "image", "image": "data:image/png;base64"},
+            r"Invalid base64 data URL data:image/png;base64",
+            id="malformed-data-url",
+        ),
+    ],
+)
+def test_from_openai_rejects_malformed_image_chunk(openai_image_chunk: dict[str, Any], error: str) -> None:
+    with pytest.raises(ValidationError, match=error):
+        UserMessage.from_openai({"role": "user", "content": [openai_image_chunk]})
+
+
 def test_image_message_export_import_canonicalizes_image_chunk_to_image_url_chunk() -> None:
     image = Image.new(mode="RGB", size=(2, 1))
     image.putpixel((0, 0), (255, 0, 0))
@@ -419,11 +459,14 @@ def test_non_leading_think_chunks_are_allowed_at_construction() -> None:
         ),
     ],
 )
-def test_non_leading_think_chunks_are_rejected_by_to_openai(content: list[Any]) -> None:
+@pytest.mark.parametrize("reasoning_field_format", [None, *ReasoningFieldFormat])
+def test_non_leading_think_chunks_are_rejected_by_to_openai(
+    content: list[Any], reasoning_field_format: ReasoningFieldFormat | None
+) -> None:
     message = AssistantMessage(content=deepcopy(content))
 
-    with pytest.raises(InvalidAssistantMessageException, match="ThinkChunks must be leading"):
-        message.to_openai()
+    with pytest.raises(InvalidAssistantMessageException, match="to_openai does not support interleaved thinking"):
+        message.to_openai(reasoning_field_format=reasoning_field_format)
 
 
 @pytest.mark.parametrize(
