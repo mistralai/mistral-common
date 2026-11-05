@@ -17,7 +17,14 @@
 {%- set has_tools = false %}
 {%- if tools is defined and tools is not none and tools|length > 0 %}
     {%- set has_tools = true %}
-    {%- set available_tools = '[AVAILABLE_TOOLS] ' ~ (tools| tojson) ~ '[/AVAILABLE_TOOLS]' %}
+    {%- set ns_t = namespace(tools=[]) %}
+    {%- for tool in tools %}
+        {%- set tool_function = tool['function'] %}
+        {%- set description = tool_function.get('description') %}
+        {%- set parameters = tool_function.get('parameters') %}
+        {%- set ns_t.tools = ns_t.tools + [{'type': tool.get('type', 'function'), 'function': {'name': tool_function['name'], 'description': description if description is not none else '', 'parameters': parameters if parameters is not none else {}}}] %}
+    {%- endfor %}
+    {%- set available_tools = '[AVAILABLE_TOOLS] ' ~ (ns_t.tools| tojson) ~ '[/AVAILABLE_TOOLS]' %}
 {%- endif %}
 
 {#- Macros #}

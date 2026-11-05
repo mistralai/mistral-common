@@ -149,6 +149,33 @@ REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN = ChatCompletionRequest(  # type: ignore[typ
     tools=_TOOLS,
 )
 
+REQUEST_STRICT_TOOLS_TEST = ChatCompletionRequest(
+    messages=[UserMessage(content="User says hello")],
+    tools=[
+        Tool(function=Function(name="tool1", description="Tool 1", parameters={}, strict=True)),
+        Tool(function=Function(name="tool2", description="Tool 2", parameters={}, strict=False)),
+    ],
+)
+
+# Tool definitions as clients send them rather than as `ChatCompletionRequest.to_openai()` writes them:
+# `strict` set or null, `description`/`parameters` missing or null, another key order, a missing `type`
+# and an extra key (`return`, as written by `transformers.utils.get_json_schema`).
+OPENAI_REQUEST_NON_CANONICAL_TOOLS: dict[str, Any] = {
+    "messages": [{"role": "user", "content": "User says hello"}],
+    "tools": [
+        {"type": "function", "function": {"name": "tool1", "description": "Tool 1", "parameters": {}, "strict": True}},
+        {"type": "function", "function": {"name": "tool2", "parameters": {"type": "object", "properties": {}}}},
+        {"type": "function", "function": {"name": "tool3", "description": "Tool 3"}},
+        {"type": "function", "function": {"name": "tool4", "description": None, "parameters": None, "strict": None}},
+        {"function": {"parameters": {}, "strict": False, "description": "Tool 5", "name": "tool5"}, "type": "function"},
+        {"function": {"name": "tool6", "description": "Tool 6", "parameters": {}}},
+        {
+            "type": "function",
+            "function": {"name": "tool7", "description": "Tool 7", "parameters": {}, "return": {"type": "string"}},
+        },
+    ],
+}
+
 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         SystemMessage(content="You are a helpful assistant."),
@@ -1095,6 +1122,7 @@ def get_conversations(
             conversations.extend(
                 [
                     REQUEST_MULTI_TURN_WITH_TOOLS_TEST,
+                    REQUEST_STRICT_TOOLS_TEST,
                     REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST,
                     REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2,
                     REQUEST_TOOL_THEN_USER_TEST,
