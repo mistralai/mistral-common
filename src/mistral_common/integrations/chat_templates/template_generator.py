@@ -411,7 +411,7 @@ def _generate_system_prompt_handling_v7_plus(config: TemplateConfig) -> list[str
         "{%- endif %}",
     ]
 
-    if config.audio_support and config.version < TokenizerVersion.v15:
+    if config.audio_support and config.version < TokenizerVersion.v13:
         lines.extend(
             [
                 "{%- if messages[0]['role'] == 'system' or default_system_message != '' %}",
@@ -648,7 +648,7 @@ def _generate_macros(config: TemplateConfig) -> str:
     # Audio branch
     if config.audio_support:
         lines.append("            {%- elif support_audio and block['type'] in ['input_audio', 'audio_url'] -%}")
-        if config.audio_support and config.version < TokenizerVersion.v15:
+        if config.audio_support and config.version < TokenizerVersion.v13:
             lines.append("                {%- if has_sp -%}")
             lines.append(
                 "                    {{- raise_exception('Audio chunks are not supported in user message content when system prompt is provided.') -}}"  # noqa: E501
