@@ -258,6 +258,12 @@ class TestSystemPromptEscaping:
         ],
     )
     def test_special_chars_preserved(self, prompt: str) -> None:
+        result = self._render_default_prompt(prompt)
+
+        assert prompt in result
+
+    @staticmethod
+    def _render_default_prompt(prompt: str) -> str:
         template = generate_chat_template(
             spm=False,
             tokenizer_version=TokenizerVersion.v7,
@@ -271,7 +277,24 @@ class TestSystemPromptEscaping:
             reasoning_effort_values=None,
             reasoning_effort_default=None,
         )
+        return encode_transformers_from_openai(template, CONV_NO_SYSTEM)
 
-        result = encode_transformers_from_openai(template, CONV_NO_SYSTEM)
+    @pytest.mark.parametrize(
+        "prompt",
+        [
+            "use \\ for escaping",
+            "You're \"quoted\" and 'apostrophes'",
+            "a\r\nb\rc\nd",
+            "tab\there",
+            "nul\x00here",
+            "emoji \U0001f600 caf\u00e9",
+            "%} {{ }} {# #}",
+            "ls\u2028ps\u2029end",
+            r"literal \n here",
+            "trailing\\",
+        ],
+    )
+    def test_default_prompt_round_trips_exactly(self, prompt: str) -> None:
+        result = self._render_default_prompt(prompt)
 
-        assert prompt in result
+        assert f"[SYSTEM_PROMPT]{prompt}[/SYSTEM_PROMPT]" in result
