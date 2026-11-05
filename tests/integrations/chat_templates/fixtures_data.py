@@ -900,6 +900,43 @@ REQUEST_CONSECUTIVE_ASSISTANTS_TEXT_CHUNKS_TRAIN = ChatCompletionRequest(  # typ
     ]
 )
 
+REQUEST_EMPTY_CONTENT_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="Hello"),
+        UserMessage(content=""),
+        UserMessage(content="World"),
+        AssistantMessage(content="Hi there"),
+    ]
+)
+
+REQUEST_EMPTY_TEXT_CHUNKS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content=[TextChunk(text="Hello"), TextChunk(text=""), TextChunk(text="World")]),
+        UserMessage(content=[TextChunk(text="")]),
+        AssistantMessage(content="Hi there"),
+    ]
+)
+
+REQUEST_EMPTY_SYSTEM_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are helpful."),
+        SystemMessage(content=""),
+        UserMessage(content="Hello"),
+        AssistantMessage(content="Hi"),
+    ]
+)
+
+REQUEST_EMPTY_ASSISTANT_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="Hello"),
+        AssistantMessage(content="Hi"),
+        AssistantMessage(content=""),
+        AssistantMessage(content="How can I help?"),
+        UserMessage(content="Thanks"),
+        AssistantMessage(content="You're welcome"),
+    ]
+)
+
 REQUEST_CONSECUTIVE_USERS_MULTI_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         UserMessage(
@@ -1259,6 +1296,16 @@ def get_conversations(
         if audio:
             conversations.append(REQUEST_SYSTEM_AUDIO_TRAIN)
             conversations.append(REQUEST_TOOL_AUDIO_TRAIN)
+
+    # Empty content is skipped when same-role messages are merged (finetuning only)
+    if validation_mode == ValidationMode.finetuning:
+        conversations.append(REQUEST_EMPTY_CONTENT_TRAIN)
+        if tokenizer_version >= TokenizerVersion.v3:
+            conversations.append(REQUEST_EMPTY_TEXT_CHUNKS_TRAIN)
+        if tokenizer_version < TokenizerVersion.v7:
+            conversations.append(REQUEST_EMPTY_SYSTEM_TRAIN)
+        else:
+            conversations.append(REQUEST_EMPTY_ASSISTANT_TRAIN)
 
     conversations = [c.model_copy(deep=True) for c in conversations]
 
