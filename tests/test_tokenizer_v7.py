@@ -1,7 +1,6 @@
 import pytest
 from PIL import Image
 
-from mistral_common.exceptions import TokenizerException
 from mistral_common.protocol.instruct.chunk import (
     ImageChunk,
     TextChunk,
@@ -90,36 +89,6 @@ def test_encode_chat_completion() -> None:
         decode_keep(tokenizer, encoded)
         == '<s>[SYSTEM_PROMPT]▁a[/SYSTEM_PROMPT][AVAILABLE_TOOLS]▁[{"type":▁"function",▁"function":▁{"name":▁"t",▁"description":▁"",▁"parameters":▁{"type":▁"object",▁"properties":▁{"g":▁{"type":▁"string"},▁"h":▁{"type":▁"string"}}}}}][/AVAILABLE_TOOLS][INST][IMG][IMG_END]▁a[/INST]▁b</s>[TOOL_RESULTS]▁123456789[TOOL_CONTENT]▁f[/TOOL_RESULTS]'  # noqa
     )
-
-
-def test_from_model() -> None:
-    with pytest.warns(FutureWarning, match="from_model.*deprecated"):
-        tokenizer = MistralTokenizer.from_model("ministral-8b-2410")
-        assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v3
-        assert tokenizer.instruct_tokenizer.image_encoder is None
-
-        tokenizer = MistralTokenizer.from_model("mistral-small-2402")
-        assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v2
-        assert tokenizer.instruct_tokenizer.image_encoder is None
-
-        tokenizer = MistralTokenizer.from_model("mistral-small-2409")
-        assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v3
-        assert tokenizer.instruct_tokenizer.image_encoder is None
-
-        tokenizer = MistralTokenizer.from_model("mistral-large-2411")
-        assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v7
-        assert tokenizer.instruct_tokenizer.image_encoder is None
-
-        tokenizer = MistralTokenizer.from_model("pixtral-large-2411")
-        assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v7
-        assert tokenizer.instruct_tokenizer.image_encoder is not None
-
-        tokenizer = MistralTokenizer.from_model("pixtral-12b-2409")
-        assert tokenizer.instruct_tokenizer.tokenizer.version == TokenizerVersion.v3
-        assert tokenizer.instruct_tokenizer.image_encoder is not None
-
-    with pytest.warns(FutureWarning), pytest.raises(TokenizerException):
-        MistralTokenizer.from_model("unknown-model")
 
 
 @pytest.mark.parametrize("tekkenizer", ["no_audio_tekkenizer", "with_audio_tekkenizer"])

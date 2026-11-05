@@ -38,11 +38,6 @@ def _unchanged(tokenized: Tokenized) -> None:
     r"""Leave the reference as it is."""
 
 
-def _set_private_text(tokenized: Tokenized) -> None:
-    r"""Set the deprecated private text."""
-    tokenized._text = "other text"
-
-
 def _change_second_token(tokenized: Tokenized) -> None:
     r"""Replace the second token ID with 9."""
     tokenized.tokens[1] = 9
@@ -197,7 +192,6 @@ def _add_extra_attribute_to_first_audio(tokenized: Tokenized) -> None:
     argnames="actual_change, expected_change",
     argvalues=[
         pytest.param(_unchanged, _unchanged, id="identical"),
-        pytest.param(_set_private_text, _unchanged, id="private-text-differs"),
         pytest.param(_set_prefix_ids_to_none, _set_prefix_ids_to_none, id="prefix-ids-both-none"),
         pytest.param(_shift_first_image_within_tolerance, _unchanged, id="images-value-within-tolerance"),
         pytest.param(_shift_first_audio_within_tolerance, _unchanged, id="audios-value-within-tolerance"),

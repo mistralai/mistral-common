@@ -1,11 +1,10 @@
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from enum import StrEnum, auto
 from typing import Any, Generic
 
 from pydantic import ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
 from mistral_common.base import MistralBase
-from mistral_common.deprecation import warn_once
 from mistral_common.exceptions import InvalidMessageStructureException
 from mistral_common.protocol.base import BaseCompletionRequest
 from mistral_common.protocol.instruct.converters import (
@@ -21,34 +20,21 @@ from mistral_common.protocol.instruct.messages import (
 from mistral_common.protocol.instruct.tool_calls import Tool, ToolChoice, ToolChoiceEnum, ToolType
 from mistral_common.utils.json_utils import validate_json_schema_by_draft7
 
-_CONTINUE_FINAL_MESSAGE_KEY = "continue_final_message"
 _CONTINUE_FINAL_MESSAGE_ERROR = "continue_final_message=True requires final message to be an assistant."
 
 _JSON_OBJECT_OR_ARRAY_SCHEMA: dict[str, Any] = {"anyOf": [{"type": "object"}, {"type": "array"}]}
 
 
-def _map_continue_final_message(
-    messages: Iterable[dict[str, Any] | ChatMessageType], continue_final_message: bool
-) -> list[Any]:
+def _map_continue_final_message(messages: Iterable[ChatMessage], continue_final_message: bool) -> list[ChatMessage]:
     r"""Copy messages and apply continuation to the final assistant message."""
     copied_messages = list(messages)
     if not continue_final_message:
         return copied_messages
 
-    if not copied_messages:
+    if not copied_messages or not isinstance(copied_messages[-1], AssistantMessage):
         raise InvalidMessageStructureException(_CONTINUE_FINAL_MESSAGE_ERROR)
 
-    if isinstance(copied_messages[-1], dict):
-        if copied_messages[-1].get("role") != "assistant":
-            raise InvalidMessageStructureException(_CONTINUE_FINAL_MESSAGE_ERROR)
-        if "prefix" in copied_messages[-1]:
-            TypeAdapter(bool).validate_python(copied_messages[-1]["prefix"])
-        copied_messages[-1] = {**copied_messages[-1], "prefix": True}
-    elif isinstance(copied_messages[-1], AssistantMessage):
-        copied_messages[-1] = copied_messages[-1].model_copy(update={"prefix": True})
-    else:
-        raise InvalidMessageStructureException(_CONTINUE_FINAL_MESSAGE_ERROR)
-
+    copied_messages[-1] = copied_messages[-1].model_copy(update={"prefix": True})
     return copied_messages
 
 
@@ -251,44 +237,6 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     truncate_for_context_length: bool = False
     reasoning_effort: ReasoningEffort | None = None
 
-    @model_validator(mode="before")
-    @classmethod
-    def _handle_legacy_continue_final_message(cls, values: Any) -> Any:
-        r"""Translate legacy `continue_final_message` parameter into `AssistantMessage.prefix`.
-
-        This validator handles the deprecated `continue_final_message` parameter by
-        converting it to the new `AssistantMessage.prefix` format.
-
-        Args:
-            values: The raw input values being validated.
-
-        Returns:
-            The values with `continue_final_message` translated to message prefix.
-        """
-        if not isinstance(values, dict) or _CONTINUE_FINAL_MESSAGE_KEY not in values:
-            return values
-
-        copied_values = dict(values)
-        continue_final_message = TypeAdapter(bool).validate_python(copied_values.pop(_CONTINUE_FINAL_MESSAGE_KEY))
-        warn_once(
-            key="ChatCompletionRequest.continue_final_message",
-            message=(
-                "`continue_final_message` passed directly to ChatCompletionRequest is deprecated. "
-                "Set `AssistantMessage.prefix` instead. Will be removed in 1.13.0."
-            ),
-            category=DeprecationWarning,
-            stacklevel=4,
-        )
-        messages = copied_values.get("messages")
-        if isinstance(messages, Iterable) and not isinstance(messages, (str, bytes, Mapping)):
-            copied_values["messages"] = _map_continue_final_message(
-                messages=messages,
-                continue_final_message=continue_final_message,
-            )
-        elif continue_final_message:
-            raise InvalidMessageStructureException(_CONTINUE_FINAL_MESSAGE_ERROR)
-        return copied_values
-
     def to_openai(
         self,
         reasoning_field_format: ReasoningFieldFormat | None = None,
@@ -298,7 +246,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
 
         Args:
             reasoning_field_format: Format for converting thinking/thinking chunks in
-                assistant messages to OpenAI's reasoning field. If `None`, uses default.
+                assistant messages to OpenAI's reasoning field. If `None`, uses `reasoning`.
                 See `AssistantMessage.to_openai` for available formats.
             **kwargs: Additional OpenAI-specific parameters to include in the output
                 (e.g., stream, temperature, `top_p`). Must not conflict with existing fields.

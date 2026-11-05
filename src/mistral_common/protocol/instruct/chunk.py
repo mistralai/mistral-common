@@ -8,7 +8,6 @@ from urllib.parse import urlparse
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from mistral_common.base import MistralBase
-from mistral_common.deprecation import warn_once
 from mistral_common.image import SerializableImage
 from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
 from mistral_common.utils.data_url import maybe_strip_base64_data_url_prefix
@@ -260,58 +259,6 @@ class ImageURLChunk(BaseContentChunk):
         return cls.model_validate({"image_url": openai_chunk["image_url"]})
 
 
-class RawAudio(MistralBase):
-    r"""Audio data with an explicit format.
-
-    Deprecated: Use `str | bytes` directly. Will be removed in 1.13.0.
-
-    Attributes:
-        data: The audio data as raw bytes or a base64-encoded string.
-        format: The audio format (e.g., "wav", "mp3"). Must not be empty.
-    """
-
-    data: str | bytes
-    format: str
-
-    def model_post_init(self, __context: Any) -> None:
-        r"""Emit a one-shot deprecation warning for `RawAudio`."""
-        warn_once(
-            "RawAudio",
-            "RawAudio is deprecated. Use str | bytes directly for audio data. Will be removed in 1.13.0.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
-    @classmethod
-    def from_audio(cls, audio: "Audio") -> "RawAudio":
-        r"""Create a RawAudio instance from an Audio object.
-
-        Args:
-            audio: An Audio object containing audio data, format, and duration.
-
-        Returns:
-            A RawAudio instance initialized with the audio data.
-        """
-        format = audio.format
-        data = audio.to_base64(format, False)
-        return cls(data=data, format=format)
-
-    @field_validator("format")
-    def should_not_be_empty(cls, v: str) -> str:
-        r"""Reject empty format strings.
-
-        Returns:
-            The unchanged format string if non-empty.
-
-        Raises:
-            ValueError: If `format` is empty or whitespace.
-        """
-        if not v.strip():
-            raise ValueError("`format` should not be empty")
-
-        return v
-
-
 class AudioURL(MistralBase):
     r"""Audio URL reference.
 
@@ -430,12 +377,11 @@ class AudioChunk(BaseContentChunk):
     @model_validator(mode="before")
     @classmethod
     def _flatten_audio_dict(cls, values: dict[str, Any]) -> dict[str, Any]:
-        r"""Extract audio data from a nested dict or legacy RawAudio payload.
+        r"""Extract audio data from a nested dict.
 
         Handles the OpenAI format where `input_audio` is a dict with a
-        `data` key (e.g. `{"data": "...", "format": "wav"}`) as well as
-        deprecated `RawAudio` instances, flattening them to a plain
-        `str | bytes` value.
+        `data` key (e.g. `{"data": "...", "format": "wav"}`), flattening it
+        to a plain `str | bytes` value.
 
         Returns:
             The values with a flattened `input_audio` key, or the input unchanged
@@ -444,8 +390,6 @@ class AudioChunk(BaseContentChunk):
         if not isinstance(values, dict):
             return values
         raw = values.get("input_audio")
-        if isinstance(raw, MistralBase):
-            raw = raw.model_dump()
         if isinstance(raw, dict) and "data" in raw:
             return {**values, "input_audio": raw["data"]}
         return values

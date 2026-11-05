@@ -3,8 +3,6 @@ from functools import cache
 
 import numpy as np
 
-from mistral_common.deprecation import deprecated_import
-
 logger = logging.getLogger(__name__)
 
 
@@ -132,14 +130,3 @@ def mel_filter_bank(
             f"({num_frequency_bins}) may be set too low."
         )
     return mel_filters
-
-
-def __getattr__(name: str) -> object:
-    if name in ("Audio", "AudioFormat", "EXPECTED_FORMAT_VALUES"):
-        return deprecated_import(
-            old_path="mistral_common.audio",
-            new_module="mistral_common.tokens.tokenizers.audio",
-            name=name,
-            version="1.13.0",
-        )
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
