@@ -192,18 +192,36 @@ class TestTransformersMistralCommonParity:
             with pytest.raises(TemplateError, match=r"Unexpected role 'tool' after role 'user'"):
                 encode_transformers_from_openai(chat_template, invalid_tool_after_user)
 
-        # System after assistant is rejected for v7+ (system stays in loop_messages)
-        if config.version >= TokenizerVersion.v7:
-            invalid_system_after_assistant = {
+        # System after assistant is rejected
+        invalid_system_after_assistant = {
+            "messages": [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi"},
+                {"role": "system", "content": "New system prompt"},
+                {"role": "user", "content": "World"},
+            ]
+        }
+        with pytest.raises(TemplateError, match=r"Unexpected role 'system' after role 'assistant'"):
+            encode_transformers_from_openai(chat_template, invalid_system_after_assistant)
+
+        # System after tool is rejected
+        if config.version >= TokenizerVersion.v2:
+            invalid_system_after_tool = {
                 "messages": [
                     {"role": "user", "content": "Hello"},
-                    {"role": "assistant", "content": "Hi"},
+                    {
+                        "role": "assistant",
+                        "tool_calls": [
+                            {"id": "123456789", "type": "function", "function": {"name": "f", "arguments": "{}"}}
+                        ],
+                    },
+                    {"role": "tool", "content": "result", "tool_call_id": "123456789", "name": "f"},
                     {"role": "system", "content": "New system prompt"},
                     {"role": "user", "content": "World"},
                 ]
             }
-            with pytest.raises(TemplateError, match=r"Unexpected role 'system' after role 'assistant'"):
-                encode_transformers_from_openai(chat_template, invalid_system_after_assistant)
+            with pytest.raises(TemplateError, match=r"Unexpected role 'system' after role 'tool'"):
+                encode_transformers_from_openai(chat_template, invalid_system_after_tool)
 
     @pytest.mark.parametrize(
         "config",

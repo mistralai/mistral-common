@@ -343,7 +343,8 @@ def _generate_system_prompt_handling_pre_v7(config: TemplateConfig) -> list[str]
     r"""Generate pre-v7 system prompt handling that extracts all system messages.
 
     Loops through all messages to collect system content and filters them
-    out of `loop_messages`.
+    out of `loop_messages`. A system message after an `assistant` or `tool`
+    message is rejected, as in `_validate_message_order`.
 
     Args:
         config: The template configuration.
@@ -353,9 +354,12 @@ def _generate_system_prompt_handling_pre_v7(config: TemplateConfig) -> list[str]
     """
     lines = [
         "{#- Extract all system messages and merge into system prompt. #}",
-        "{%- set ns_sys = namespace(system_parts=[], filtered=[]) %}",
+        "{%- set ns_sys = namespace(system_parts=[], filtered=[], previous_role=none) %}",
         "{%- for message in messages %}",
         "    {%- if message['role'] == 'system' %}",
+        "        {%- if ns_sys.previous_role in ['assistant', 'tool'] %}",
+        "            {{- raise_exception('Unexpected role \\'system\\' after role \\'' ~ ns_sys.previous_role ~ '\\'') }}",  # noqa: E501
+        "        {%- endif %}",
         "        {%- if message['content'] is string %}",
         "            {%- set ns_sys.system_parts = ns_sys.system_parts + [message['content']] %}",
         "        {%- else %}",
@@ -370,6 +374,7 @@ def _generate_system_prompt_handling_pre_v7(config: TemplateConfig) -> list[str]
         "    {%- else %}",
         "        {%- set ns_sys.filtered = ns_sys.filtered + [message] %}",
         "    {%- endif %}",
+        "    {%- set ns_sys.previous_role = message['role'] %}",
         "{%- endfor %}",
         "{%- if ns_sys.system_parts | length > 0 %}",
         "    {%- set system_message = ns_sys.system_parts | join('\\n\\n') %}",
@@ -1048,8 +1053,8 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
     - After `assistant`: `assistant`, `user`, `tool`
     - After `tool`: `assistant`, `tool`, `user`
 
-    For pre-v7 templates, system messages are extracted before this check,
-    so only `user`, `assistant`, and `tool` roles are seen.
+    For pre-v7 templates, system messages are extracted (and their position
+    checked) before this check, so only `user`, `assistant`, and `tool` roles are seen.
 
     Args:
         config: The template configuration.
