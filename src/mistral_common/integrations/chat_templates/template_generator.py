@@ -875,6 +875,17 @@ def _generate_message_aggregation(config: TemplateConfig) -> str:
         ]
     )
 
+    if config.version < TokenizerVersion.v7:
+        # Like the mistral-common normalizer, render system-only conversations as an empty user message.
+        lines.extend(
+            [
+                "{#- A conversation with only system messages gets an empty user message for the system prompt. #}",
+                "{%- if messages | length > 0 and loop_messages | length == 0 %}",
+                "    {%- set loop_messages = [{'role': 'user', 'content': ''}] %}",
+                "{%- endif %}",
+            ]
+        )
+
     return "\n".join(lines)
 
 
