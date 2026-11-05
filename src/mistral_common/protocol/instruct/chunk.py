@@ -528,7 +528,9 @@ def _convert_openai_content_chunks(openai_content_chunks: dict[str, Any]) -> Con
     elif content_type == ChunkTypes.image_url:
         return ImageURLChunk.from_openai(openai_content_chunks)
     elif content_type == ChunkTypes.image:
-        return ImageChunk.from_openai(openai_content_chunks)
+        # {"type": "image"} is not an OpenAI content part. It is accepted only so that
+        # mistral-common's own `ImageChunk.model_dump()` output can be loaded back.
+        return ImageChunk.model_validate(openai_content_chunks, extra="ignore")
     elif content_type == ChunkTypes.input_audio:
         return AudioChunk.from_openai(openai_content_chunks)
     elif content_type == ChunkTypes.audio_url:

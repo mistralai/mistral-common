@@ -306,6 +306,10 @@ class AssistantMessage(BaseMessage):
 
         Handles conversion of thinking chunks to various OpenAI-compatible formats.
 
+        Note:
+            Interleaved thinking (a ThinkChunk after other content) is not supported:
+            only leading ThinkChunks can be converted, whatever the `reasoning_field_format`.
+
         Args:
             reasoning_field_format: Format for serializing thinking content:
                 - `None`: Same as `reasoning`
@@ -341,7 +345,8 @@ class AssistantMessage(BaseMessage):
             if isinstance(chunk, ThinkChunk):
                 if (i - last_think_idx) > 1:
                     raise InvalidAssistantMessageException(
-                        "ThinkChunks must be leading: all ThinkChunks must appear before any other content chunk."
+                        "to_openai does not support interleaved thinking: "
+                        "all ThinkChunks must appear before any other content chunk."
                     )
                 last_think_idx = i
 

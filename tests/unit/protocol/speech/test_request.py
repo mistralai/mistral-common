@@ -1,10 +1,12 @@
 import base64
 import io
+from collections.abc import Iterator
 from typing import Any
 
 import numpy as np
 import pytest
 
+from mistral_common import imports
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.tokens.tokenizers.audio import Audio
 from tests.unit.protocol.audio_helpers import assert_audio_buffer, audio_bytes
@@ -46,6 +48,13 @@ def test_speech_request_from_openai_filters_instructions_and_decodes_reference_a
     assert voice_object == {"input": "Hello", "voice": {"id": "custom-voice-123"}}
 
 
+@pytest.mark.parametrize("field", ["temperature", "top_p"])
+def test_speech_request_from_openai_null_sampling_param_maps_to_default(field: str) -> None:
+    request = SpeechRequest.from_openai({"input": "Hello", "voice": "female", field: None})
+
+    assert request == SpeechRequest(input="Hello", voice="female")
+
+
 @pytest.mark.parametrize(
     ("fmt", "representation"),
     [
@@ -81,6 +90,36 @@ def test_speech_request_to_openai_rejects_invalid_reference_audio_bytes() -> Non
     request = SpeechRequest(input="Hello world", ref_audio=b"not valid audio data")
 
     with pytest.raises(ValueError, match="Failed to detect audio format"):
+        request.to_openai()
+
+
+@pytest.fixture
+def soundfile_not_installed(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    monkeypatch.setattr(imports, "is_package_installed", lambda package_name: package_name != "soundfile")
+    imports.assert_soundfile_installed.cache_clear()
+    yield
+    imports.assert_soundfile_installed.cache_clear()
+
+
+@pytest.mark.usefixtures("soundfile_not_installed")
+def test_speech_request_to_openai_voice_only_does_not_require_soundfile() -> None:
+    request = SpeechRequest(input="Hello", voice="female", random_seed=3)
+
+    assert request.to_openai() == {
+        "temperature": 0.7,
+        "top_p": 1.0,
+        "model": None,
+        "input": "Hello",
+        "voice": "female",
+        "seed": 3,
+    }
+
+
+@pytest.mark.usefixtures("soundfile_not_installed")
+def test_speech_request_to_openai_reference_audio_requires_soundfile() -> None:
+    request = SpeechRequest(input="Hello", ref_audio=b"not valid audio data")
+
+    with pytest.raises(ImportError, match="soundfile"):
         request.to_openai()
 
 

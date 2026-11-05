@@ -6,7 +6,7 @@ from typing import Any, TypeAlias
 import pytest
 from pydantic import ValidationError
 
-from mistral_common.exceptions import InvalidMessageStructureException
+from mistral_common.exceptions import InvalidAssistantMessageException, InvalidMessageStructureException
 from mistral_common.protocol.instruct.chunk import AudioURL, AudioURLChunk, TextChunk, ThinkChunk
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
@@ -398,6 +398,17 @@ def test_request_to_openai_forwards_reasoning_field_format() -> None:
     assert assistant_message == {"role": "assistant", "reasoning": "Let me think", "content": "Done"}
 
 
+def test_request_to_openai_rejects_interleaved_thinking() -> None:
+    messages: list[ChatMessage] = [
+        UserMessage(content="Hi"),
+        AssistantMessage(content=[TextChunk(text="Done"), ThinkChunk(thinking="Let me think", closed=True)]),
+    ]
+    request = ChatCompletionRequest(messages=messages)
+
+    with pytest.raises(InvalidAssistantMessageException, match="to_openai does not support interleaved thinking"):
+        request.to_openai()
+
+
 def test_request_from_openai_maps_continuation_without_warning() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error")
@@ -641,6 +652,14 @@ def test_request_from_openai_parallel_tool_calls(value: bool | None, expected: b
     )
 
     assert request.parallel_tool_calls is expected
+
+
+@pytest.mark.parametrize("field", ["temperature", "top_p"])
+def test_request_from_openai_null_sampling_param_maps_to_default(field: str) -> None:
+    null_param: dict[str, Any] = {field: None}
+    request = ChatCompletionRequest.from_openai(messages=[{"role": "user", "content": "Hello"}], **null_param)
+
+    assert request == ChatCompletionRequest(messages=[UserMessage(content="Hello")])
 
 
 def test_request_to_openai_renames_custom_schema_to_schema() -> None:

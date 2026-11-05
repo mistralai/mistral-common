@@ -244,6 +244,10 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     ) -> dict[str, Any]:
         r"""Convert this request to OpenAI ChatCompletion API format.
 
+        Note:
+            Interleaved thinking (a ThinkChunk after other content in an assistant message)
+            is not supported: only leading ThinkChunks can be converted.
+
         Args:
             reasoning_field_format: Format for converting thinking/thinking chunks in
                 assistant messages to OpenAI's reasoning field. If `None`, uses `reasoning`.
@@ -255,6 +259,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             Dictionary matching the OpenAI ChatCompletion request schema.
 
         Raises:
+            InvalidAssistantMessageException: If an assistant message has interleaved thinking.
             ValueError: If kwargs contains duplicate or conflicting keys.
             NotImplementedError: If `truncate_for_context_length` is `True` (not implemented).
 
@@ -380,6 +385,9 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         # OpenAI clients send `parallel_tool_calls: null` to mean the default.
         if "parallel_tool_calls" in kwargs and kwargs["parallel_tool_calls"] is None:
             kwargs["parallel_tool_calls"] = True
+
+        # OpenAI clients send `temperature: null` and `top_p: null` to mean the default.
+        kwargs = {k: v for k, v in kwargs.items() if not (v is None and k in ["temperature", "top_p"])}
 
         converted_messages: list[ChatMessage] = convert_openai_messages(messages)
         converted_messages = _map_continue_final_message(

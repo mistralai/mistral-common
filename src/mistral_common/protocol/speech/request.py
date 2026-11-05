@@ -68,9 +68,9 @@ class SpeechRequest(BaseCompletionRequest):
         """
         openai_request: dict[str, Any] = self.model_dump(exclude={"ref_audio", "id", "max_tokens"})
 
-        assert_soundfile_installed()
-
         if self.ref_audio is not None:
+            assert_soundfile_installed()
+
             if isinstance(self.ref_audio, bytes):
                 buffer = io.BytesIO(self.ref_audio)
                 fmt = _detect_audio_format(self.ref_audio)
@@ -112,7 +112,11 @@ class SpeechRequest(BaseCompletionRequest):
             ValidationError: If neither ref_audio nor voice is provided.
         """
         seed = openai_request.get("seed")
-        converted_dict: dict[str, Any] = {k: v for k, v in openai_request.items() if k in cls.model_fields}
+        converted_dict: dict[str, Any] = {
+            k: v
+            for k, v in openai_request.items()
+            if (k in cls.model_fields and not (v is None and k in ["temperature", "top_p"]))
+        }
 
         if (ref_audio := openai_request.get("ref_audio")) is not None:
             if isinstance(ref_audio, io.BytesIO):
