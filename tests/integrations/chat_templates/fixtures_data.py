@@ -854,6 +854,14 @@ REQUEST_CONSECUTIVE_USERS_TEST = ChatCompletionRequest(
     ]
 )
 
+REQUEST_SYSTEM_BETWEEN_USERS_TEST = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="Hello"),
+        SystemMessage(content="Be concise."),
+        UserMessage(content="World"),
+    ]
+)
+
 REQUEST_SYSTEM_ONLY_TEST = ChatCompletionRequest(
     messages=[
         SystemMessage(content="You are a helpful assistant."),
@@ -879,6 +887,15 @@ REQUEST_CONSECUTIVE_USERS_WITH_SYSTEM_TRAIN = ChatCompletionRequest(  # type: ig
     messages=[
         SystemMessage(content="You are helpful."),
         UserMessage(content="Hello"),
+        UserMessage(content="World"),
+        AssistantMessage(content="Hi there"),
+    ]
+)
+
+REQUEST_SYSTEM_BETWEEN_USERS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="Hello"),
+        SystemMessage(content="Be concise."),
         UserMessage(content="World"),
         AssistantMessage(content="Hi there"),
     ]
@@ -1307,6 +1324,7 @@ def get_conversations(
             [
                 REQUEST_CONSECUTIVE_USERS_TRAIN,
                 REQUEST_CONSECUTIVE_USERS_WITH_SYSTEM_TRAIN,
+                REQUEST_SYSTEM_BETWEEN_USERS_TRAIN,
                 REQUEST_CONSECUTIVE_ASSISTANTS_TRAIN,
                 REQUEST_MULTIPLE_SYSTEMS_TRAIN,
             ]
@@ -1337,6 +1355,7 @@ def get_conversations(
             )
     else:
         conversations.append(REQUEST_CONSECUTIVE_USERS_TEST)
+        conversations.append(REQUEST_SYSTEM_BETWEEN_USERS_TEST)
         conversations.append(REQUEST_SYSTEM_ONLY_TEST)
         # v1-v3 skip the empty system message and render the rest as an empty user message
         if tokenizer_version < TokenizerVersion.v7:
