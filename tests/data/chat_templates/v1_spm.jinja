@@ -89,6 +89,10 @@
     {%- endif %}
 {%- endfor %}
 {%- set loop_messages = ns_agg.messages %}
+{#- A conversation with only system messages gets an empty user message for the system prompt. #}
+{%- if messages | length > 0 and loop_messages | length == 0 %}
+    {%- set loop_messages = [{'role': 'user', 'content': ''}] %}
+{%- endif %}
 
 {#- Validates message ordering. #}
 {%- if loop_messages | length > 0 and loop_messages[0]['role'] != 'user' %}
