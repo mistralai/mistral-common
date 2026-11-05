@@ -7,9 +7,12 @@
 
 {#- Handle system prompt if it exists. #}
 {#- Extract all system messages and merge into system prompt. #}
-{%- set ns_sys = namespace(system_parts=[], filtered=[]) %}
+{%- set ns_sys = namespace(system_parts=[], filtered=[], previous_role=none) %}
 {%- for message in messages %}
     {%- if message['role'] == 'system' %}
+        {%- if ns_sys.previous_role in ['assistant', 'tool'] %}
+            {{- raise_exception('Unexpected role \'system\' after role \'' ~ ns_sys.previous_role ~ '\'') }}
+        {%- endif %}
         {%- if message['content'] is string %}
             {%- set ns_sys.system_parts = ns_sys.system_parts + [message['content']] %}
         {%- else %}
@@ -24,6 +27,7 @@
     {%- else %}
         {%- set ns_sys.filtered = ns_sys.filtered + [message] %}
     {%- endif %}
+    {%- set ns_sys.previous_role = message['role'] %}
 {%- endfor %}
 {%- if ns_sys.system_parts | length > 0 %}
     {%- set system_message = ns_sys.system_parts | join('\n\n') %}
