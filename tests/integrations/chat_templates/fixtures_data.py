@@ -835,6 +835,13 @@ REQUEST_SYSTEM_ONLY_TEST = ChatCompletionRequest(
     ]
 )
 
+REQUEST_SYSTEM_ONLY_WITH_EMPTY_SYSTEM_TEST = ChatCompletionRequest(
+    messages=[
+        SystemMessage(content=""),
+        SystemMessage(content="You are a helpful assistant."),
+    ]
+)
+
 REQUEST_CONSECUTIVE_USERS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         UserMessage(content="Hello"),
@@ -1281,6 +1288,9 @@ def get_conversations(
     else:
         conversations.append(REQUEST_CONSECUTIVE_USERS_TEST)
         conversations.append(REQUEST_SYSTEM_ONLY_TEST)
+        # v1-v3 skip the empty system message and render the rest as an empty user message
+        if tokenizer_version < TokenizerVersion.v7:
+            conversations.append(REQUEST_SYSTEM_ONLY_WITH_EMPTY_SYSTEM_TEST)
 
     # v7+ only: mid-conversation system messages and combined aggregation scenarios
     if tokenizer_version >= TokenizerVersion.v7 and validation_mode == ValidationMode.finetuning:

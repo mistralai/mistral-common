@@ -232,6 +232,38 @@ class TestTransformersMistralCommonParity:
         ALL_TRANSFORMERS_CONFIGS,
         ids=[format_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
     )
+    def test_empty_messages_keep_system_order_check(self, config: TestConfig) -> None:
+        # Skipping empty content must not hide a misplaced system message, nor flag a well-placed one.
+        chat_template = build_chat_template(config=build_template_config(config))
+
+        for empty_content in ["", [{"type": "text", "text": ""}]]:
+            invalid_empty_system_after_assistant = {
+                "messages": [
+                    {"role": "user", "content": "Hello"},
+                    {"role": "assistant", "content": "Hi"},
+                    {"role": "system", "content": empty_content},
+                    {"role": "user", "content": "World"},
+                ]
+            }
+            with pytest.raises(TemplateError, match=r"Unexpected role 'system' after role 'assistant'"):
+                encode_transformers_from_openai(chat_template, invalid_empty_system_after_assistant)
+
+        system_after_empty_user = {
+            "messages": [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi"},
+                {"role": "user", "content": ""},
+                {"role": "system", "content": "New system prompt"},
+                {"role": "user", "content": "World"},
+            ]
+        }
+        assert "New system prompt" in encode_transformers_from_openai(chat_template, system_after_empty_user)
+
+    @pytest.mark.parametrize(
+        "config",
+        ALL_TRANSFORMERS_CONFIGS,
+        ids=[format_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
+    )
     def test_invalid_chunks(
         self,
         config: TestConfig,

@@ -115,6 +115,72 @@ class TestDefaultSystemPromptInjection:
 
         assert default_output == explicit_output
 
+    @pytest.mark.parametrize(
+        ("version", "spm"),
+        [
+            (TokenizerVersion.v3, False),
+            (TokenizerVersion.v3, True),
+            (TokenizerVersion.v7, False),
+            (TokenizerVersion.v7, True),
+            (TokenizerVersion.v13, False),
+        ],
+    )
+    def test_default_prompt_with_carriage_returns_matches_explicit_system_message(
+        self, version: TokenizerVersion, spm: bool
+    ) -> None:
+        default_system_prompt = "Line 1\r\nLine 2\rLine 3"
+        chat_template = generate_chat_template(
+            spm=spm,
+            tokenizer_version=version,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=default_system_prompt,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+            model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
+        )
+        system_message = {"role": "system", "content": default_system_prompt}
+        explicit_conv = {"messages": [system_message, *CONV_NO_SYSTEM["messages"]]}
+
+        default_output = encode_transformers_from_openai(chat_template, CONV_NO_SYSTEM)
+        explicit_output = encode_transformers_from_openai(chat_template, explicit_conv)
+
+        assert default_output == explicit_output
+
+    @pytest.mark.parametrize(
+        ("version", "spm"),
+        [
+            (TokenizerVersion.v1, False),
+            (TokenizerVersion.v3, False),
+            (TokenizerVersion.v3, True),
+        ],
+    )
+    def test_default_prompt_used_for_empty_system_only_conversation(self, version: TokenizerVersion, spm: bool) -> None:
+        chat_template = generate_chat_template(
+            spm=spm,
+            tokenizer_version=version,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=self.DEFAULT_SYSTEM_PROMPT,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+            model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
+        )
+        empty_system_conv = {"messages": [{"role": "system", "content": ""}]}
+        explicit_conv = {"messages": [{"role": "system", "content": self.DEFAULT_SYSTEM_PROMPT}]}
+
+        default_output = encode_transformers_from_openai(chat_template, empty_system_conv)
+        explicit_output = encode_transformers_from_openai(chat_template, explicit_conv)
+
+        assert self.DEFAULT_SYSTEM_PROMPT in default_output
+        assert default_output == explicit_output
+
     def test_legacy_no_default_prompt(self) -> None:
         chat_template = generate_chat_template(
             spm=False,
