@@ -369,14 +369,14 @@ def _generate_system_prompt_handling_pre_v7(config: TemplateConfig) -> list[str]
         "        {%- endif %}",
         "        {%- if message['content'] is string %}",
         "            {%- set ns_sys.system_parts = ns_sys.system_parts + ([message['content']] if message['content'] else []) %}",  # noqa: E501
-        "        {%- else %}",
+        "        {%- elif message['content'] %}",
         "            {%- for block in message['content'] %}",
-        "                {%- if block['type'] == 'text' %}",
-        "                    {%- set ns_sys.system_parts = ns_sys.system_parts + [block['text']] %}",
-        "                {%- else %}",
+        "                {%- if block['type'] != 'text' %}",
         "                    {{- raise_exception('Only text chunks are supported in system message content.') }}",
         "                {%- endif %}",
         "            {%- endfor %}",
+        "            {#- Like the tokenizer: join the non-empty text chunks. #}",
+        "            {%- set ns_sys.system_parts = ns_sys.system_parts + [message['content'] | map(attribute='text') | select | join('\\n\\n')] %}",  # noqa: E501
         "        {%- endif %}",
         "    {%- else %}",
         "        {%- set ns_sys.filtered = ns_sys.filtered + [message] %}",
