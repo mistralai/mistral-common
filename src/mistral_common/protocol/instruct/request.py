@@ -5,6 +5,7 @@ from typing import Any, Generic
 from pydantic import ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
 from mistral_common.base import MistralBase
+from mistral_common.deprecation import warn_once
 from mistral_common.exceptions import InvalidMessageStructureException
 from mistral_common.protocol.base import BaseCompletionRequest
 from mistral_common.protocol.instruct.converters import (
@@ -23,6 +24,16 @@ from mistral_common.utils.json_utils import validate_json_schema_by_draft7
 _CONTINUE_FINAL_MESSAGE_ERROR = "continue_final_message=True requires final message to be an assistant."
 
 _JSON_OBJECT_OR_ARRAY_SCHEMA: dict[str, Any] = {"anyOf": [{"type": "object"}, {"type": "array"}]}
+
+_TRUNCATE_FOR_CONTEXT_LENGTH_KEY = "truncate_for_context_length"
+_TRUNCATE_FOR_CONTEXT_LENGTH_DEPRECATION = (
+    "`ChatCompletionRequest.truncate_for_context_length` is deprecated and will be removed in 1.15.0. "
+    "Truncate the conversation before encoding instead."
+)
+_TRUNCATE_AT_MAX_TOKENS_DEPRECATION = (
+    "`InstructRequest.truncate_at_max_tokens` is deprecated and will be removed in 1.15.0. "
+    "Truncate the conversation before encoding instead."
+)
 
 
 def _map_continue_final_message(messages: Iterable[ChatMessage], continue_final_message: bool) -> list[ChatMessage]:
@@ -208,8 +219,10 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             none (no tools), any/required (deprecated, use required). Default: auto.
         parallel_tool_calls: Whether the model may call multiple tools in one
             response. Defaults to `True`.
-        truncate_for_context_length: If `True`, automatically truncate messages to
-            fit within the model's context length. Default: `False`.
+        truncate_for_context_length: Deprecated and will be removed in 1.15.0: truncate the
+            conversation before encoding instead. Setting it, to any value, emits a
+            `DeprecationWarning`. If `True`, automatically truncate messages to fit within
+            the model's context length. Default: `False`.
         reasoning_effort: Controls reasoning effort (one of "none", "minimal", "low", "medium", "high",
             "xhigh", or "max"). Requires tokenizer >= v15. If `None`, uses model default.
 
@@ -224,7 +237,6 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         ...     response_format=ResponseFormat(type=ResponseFormats.text),
         ...     tools=[Tool(type=ToolTypes.function, function=Function(name="get_weather", parameters={}))],
         ...     tool_choice=ToolChoiceEnum.auto,
-        ...     truncate_for_context_length=True,
         ... )
     """
 
@@ -236,6 +248,19 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     parallel_tool_calls: bool = True
     truncate_for_context_length: bool = False
     reasoning_effort: ReasoningEffort | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_truncate_for_context_length(cls, values: Any) -> Any:
+        r"""Warn when the deprecated `truncate_for_context_length` is set explicitly."""
+        if isinstance(values, dict) and _TRUNCATE_FOR_CONTEXT_LENGTH_KEY in values:
+            warn_once(
+                key="ChatCompletionRequest.truncate_for_context_length",
+                message=_TRUNCATE_FOR_CONTEXT_LENGTH_DEPRECATION,
+                category=DeprecationWarning,
+                stacklevel=4,
+            )
+        return values
 
     def to_openai(
         self,
@@ -379,6 +404,15 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         if "seed" in kwargs and "random_seed" in kwargs:
             raise ValueError("Cannot specify both `seed` and `random_seed`.")
 
+        if _TRUNCATE_FOR_CONTEXT_LENGTH_KEY in kwargs:
+            # Warn here so that the warning points at the caller of `from_openai`.
+            warn_once(
+                key="ChatCompletionRequest.truncate_for_context_length",
+                message=_TRUNCATE_FOR_CONTEXT_LENGTH_DEPRECATION,
+                category=DeprecationWarning,
+                stacklevel=3,
+            )
+
         random_seed = kwargs.pop("seed", None)
         if random_seed is None:
             random_seed = kwargs.pop("random_seed", None)
@@ -442,7 +476,9 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
         system_prompt: System prompt string, or `None` if no system prompt.
         available_tools: List of tools available to the assistant. If `None`, no tools
             are available. Tools are separate from messages here.
-        truncate_at_max_tokens: Maximum token count for truncation. If `None`, no
+        truncate_at_max_tokens: Deprecated and will be removed in 1.15.0: truncate the
+            conversation before encoding instead. Setting it, to any value, emits a
+            `DeprecationWarning`. Maximum token count for truncation. If `None`, no
             truncation is performed. If set, messages will be truncated from the
             beginning to fit within this limit.
         settings: Model configuration settings. Defaults to all `None` values.
@@ -460,3 +496,16 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
     available_tools: list[ToolType] | None = None
     truncate_at_max_tokens: int | None = None
     settings: ModelSettings = Field(default_factory=ModelSettings.none)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_truncate_at_max_tokens(cls, values: Any) -> Any:
+        r"""Warn when the deprecated `truncate_at_max_tokens` is set explicitly."""
+        if isinstance(values, dict) and "truncate_at_max_tokens" in values:
+            warn_once(
+                key="InstructRequest.truncate_at_max_tokens",
+                message=_TRUNCATE_AT_MAX_TOKENS_DEPRECATION,
+                category=DeprecationWarning,
+                stacklevel=4,
+            )
+        return values

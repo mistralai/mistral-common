@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Any, Callable, Generic
 
+from mistral_common.deprecation import warn_once
 from mistral_common.exceptions import (
     TokenizerException,
 )
@@ -396,8 +397,10 @@ class MistralTokenizer(
 
         Args:
             request: The chat completion request to encode.
-            max_model_input_len: Maximum number of input tokens the model accepts.
-                Used only when `request.truncate_for_context_length` is `True` to
+            max_model_input_len: Deprecated and will be removed in 1.15.0: truncate the
+                conversation before encoding instead. Passing a value other than `None`
+                emits a `DeprecationWarning`. Maximum number of input tokens the model
+                accepts. Used only when `request.truncate_for_context_length` is `True` to
                 truncate the conversation from the start. If `None`, no truncation
                 is applied.
 
@@ -410,6 +413,16 @@ class MistralTokenizer(
                 `max_model_input_len` is `None`.
             MistralCommonException: If request validation fails.
         """
+        if max_model_input_len is not None:
+            warn_once(
+                key="MistralTokenizer.encode_chat_completion.max_model_input_len",
+                message=(
+                    "`MistralTokenizer.encode_chat_completion(max_model_input_len=...)` is deprecated and will be "
+                    "removed in 1.15.0. Truncate the conversation before encoding instead."
+                ),
+                category=DeprecationWarning,
+                stacklevel=3,
+            )
 
         validated_request = self._chat_completion_request_validator.validate_request(request)
 
