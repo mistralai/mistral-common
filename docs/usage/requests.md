@@ -126,7 +126,7 @@ tokenizer = MistralTokenizer.from_hf_hub(repo_id)
 obama_file = hf_hub_download("patrickvonplaten/audio_samples", "obama.mp3", repo_type="dataset")
 audio = Audio.from_file(obama_file, strict=False)
 
-request = TranscriptionRequest(model=repo_id, audio=audio.to_base64(audio.format), language="en")
+request = TranscriptionRequest(audio=audio.to_base64(audio.format), language="en")
 
 tokenizer.encode_transcription(request)
 ```

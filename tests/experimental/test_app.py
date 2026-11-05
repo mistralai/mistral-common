@@ -7,7 +7,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.testclient import TestClient
 
 from mistral_common.experimental.app.main import create_app
-from mistral_common.experimental.app.models import OpenAIChatCompletionRequest
+from mistral_common.experimental.app.models import EngineChatCompletionRequest, OpenAIChatCompletionRequest
 from mistral_common.protocol.instruct.chunk import (
     TextChunk,
     ThinkChunk,
@@ -432,7 +432,7 @@ class MockResponse:
             "messages": [{"role": "user", "content": "Hello, world!"}],
             "temperature": 0.1,
         },
-        ChatCompletionRequest(messages=[UserMessage(content="Hello, world!")], temperature=0.1),
+        EngineChatCompletionRequest(messages=[UserMessage(content="Hello, world!")], temperature=0.1),
         OpenAIChatCompletionRequest(
             messages=[{"role": "user", "content": "Hello, world!"}],
             tools=[{"type": "function", "function": {"name": "get_current_weather", "parameters": {}}}],

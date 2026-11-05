@@ -1,5 +1,5 @@
 import json
-from typing import Annotated
+from typing import Annotated, cast
 
 import requests
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -8,6 +8,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from mistral_common.experimental.app.models import (
     EngineBackend,
+    EngineChatCompletionRequest,
     OpenAIChatCompletionRequest,
     Settings,
     get_settings,
@@ -16,7 +17,6 @@ from mistral_common.experimental.think import _split_content_and_think_chunks
 from mistral_common.experimental.tools import _decode_tool_calls, _split_content_and_tool_calls
 from mistral_common.protocol.instruct.chunk import ContentChunk, TextChunk, ThinkChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage
-from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenized, TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13
 
@@ -33,14 +33,14 @@ async def redirect_to_docs() -> RedirectResponse:
 
 @tokenize_router.post("/")
 async def tokenize_request(
-    request: ChatCompletionRequest | OpenAIChatCompletionRequest,
+    request: EngineChatCompletionRequest | OpenAIChatCompletionRequest,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> list[int]:
     r"""Tokenize a chat completion request."""
     if isinstance(request, OpenAIChatCompletionRequest):
         try:
             request.drop_extra_fields()
-            request = ChatCompletionRequest.from_openai(**request.model_dump())
+            request = cast(EngineChatCompletionRequest, EngineChatCompletionRequest.from_openai(**request.model_dump()))
         except (ValidationError, ValueError) as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -160,7 +160,7 @@ async def detokenize_to_assistant_message(
 
 @main_router.post("/v1/chat/completions", tags=["chat", "completions"])
 async def generate(
-    request: ChatCompletionRequest | OpenAIChatCompletionRequest,
+    request: EngineChatCompletionRequest | OpenAIChatCompletionRequest,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AssistantMessage:
     r"""Generate a chat completion by proxying to the configured engine.
@@ -182,7 +182,7 @@ async def generate(
     """
     if isinstance(request, OpenAIChatCompletionRequest):
         extra_fields = request.drop_extra_fields()
-        request = ChatCompletionRequest.from_openai(**request.model_dump())
+        request = cast(EngineChatCompletionRequest, EngineChatCompletionRequest.from_openai(**request.model_dump()))
     else:
         extra_fields = {}
     tokens_ids = await tokenize_request(request, settings)

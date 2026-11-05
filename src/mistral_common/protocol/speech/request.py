@@ -1,10 +1,10 @@
 import io
-from typing import Any
+from typing import Any, ClassVar
 
 from pydantic import model_validator
 
 from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
-from mistral_common.protocol.base import BaseCompletionRequest
+from mistral_common.protocol.base import _FROM_OPENAI, _SAMPLING_FIELDS, BaseCompletionRequest, _deprecations
 from mistral_common.protocol.instruct.chunk import _detect_audio_format
 from mistral_common.tokens.tokenizers.audio import Audio
 
@@ -18,8 +18,18 @@ class SpeechRequest(BaseCompletionRequest):
     Supports both preset voices and voice cloning via reference audio.
 
     Attributes:
-        id: Optional unique identifier for the speech request.
-        model: Optional model identifier for the speech synthesis. If `None`, the
+        temperature: Deprecated and will be removed in 1.15.0: mistral-common does not use it.
+            See `BaseCompletionRequest`.
+        top_p: Deprecated and will be removed in 1.15.0: mistral-common does not use it.
+            See `BaseCompletionRequest`.
+        max_tokens: Deprecated and will be removed in 1.15.0: mistral-common does not use it.
+            See `BaseCompletionRequest`.
+        random_seed: Deprecated and will be removed in 1.15.0: mistral-common does not use it.
+            See `BaseCompletionRequest`.
+        id: Deprecated and will be removed in 1.15.0: mistral-common does not use it.
+            Optional unique identifier for the speech request.
+        model: Deprecated and will be removed in 1.15.0: mistral-common does not use it.
+            Optional model identifier for the speech synthesis. If `None`, the
             serving side default speech model is used.
         input: Text to convert to speech.
         voice: Optional preset voice identifier (e.g., 'Neutral Male', 'Neutral
@@ -29,6 +39,8 @@ class SpeechRequest(BaseCompletionRequest):
             base64-encoded string or raw bytes. Takes precedence over voice when
             both are provided.
     """
+
+    _deprecated_fields: ClassVar[dict[str, str]] = _deprecations("SpeechRequest", ("id", "model", *_SAMPLING_FIELDS))
 
     id: str | None = None
     model: str | None = None
@@ -65,6 +77,11 @@ class SpeechRequest(BaseCompletionRequest):
 
         Raises:
             ImportError: If soundfile is not installed and `ref_audio` is provided.
+
+        Note:
+            The output includes "model", "temperature", "top_p" and "seed". These keys
+            will no longer be emitted from 1.15.0, when the deprecated fields are
+            removed: pass them as keyword arguments instead.
         """
         openai_request: dict[str, Any] = self.model_dump(exclude={"ref_audio", "id", "max_tokens"})
 
@@ -105,7 +122,9 @@ class SpeechRequest(BaseCompletionRequest):
                 decoding.
 
         Returns:
-            A SpeechRequest instance with "seed" mapped to `random_seed`.
+            A SpeechRequest instance with "seed" mapped to `random_seed`. The
+            deprecated fields do not emit deprecation warnings here; from 1.15.0
+            they will be ignored like other unknown keys.
 
         Raises:
             AssertionError: If decoded reference audio has no detectable format.
@@ -141,4 +160,4 @@ class SpeechRequest(BaseCompletionRequest):
 
         converted_dict["random_seed"] = seed
 
-        return cls(**converted_dict)
+        return cls.model_validate(converted_dict, context={_FROM_OPENAI: True})

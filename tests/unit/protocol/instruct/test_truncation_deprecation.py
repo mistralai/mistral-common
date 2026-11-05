@@ -14,7 +14,7 @@ _CHAT_FIELD_WARNING = f"`ChatCompletionRequest.truncate_for_context_length` {_RE
 _INSTRUCT_FIELD_WARNING = f"`InstructRequest.truncate_at_max_tokens` {_REMOVAL}"
 _ENCODE_ARG_WARNING = f"`MistralTokenizer.encode_chat_completion(max_model_input_len=...)` {_REMOVAL}"
 _WARNED_KEYS = (
-    "ChatCompletionRequest.truncate_for_context_length",
+    _CHAT_FIELD_WARNING,
     "InstructRequest.truncate_at_max_tokens",
     "MistralTokenizer.encode_chat_completion.max_model_input_len",
 )

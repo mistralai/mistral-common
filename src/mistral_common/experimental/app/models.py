@@ -1,11 +1,13 @@
 import importlib.metadata
 from enum import StrEnum, auto
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_settings import BaseSettings
 
+from mistral_common.protocol.base import _SAMPLING_FIELDS
+from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
@@ -44,6 +46,29 @@ class OpenAIChatCompletionRequest(BaseModel):
 
         self.__dict__ = {k: v for k, v in self.__dict__.items() if k not in extra_fields}
         return extra_fields
+
+
+class EngineChatCompletionRequest(ChatCompletionRequest):
+    r"""Chat completion request forwarded to the engine.
+
+    Declares the sampling parameters that `ChatCompletionRequest` deprecates, so
+    they keep being validated and forwarded to the engine without warnings.
+
+    Attributes:
+        temperature: Sampling temperature in [0, 1]. Defaults to 0.7.
+        top_p: Nucleus sampling probability mass in [0, 1]. Defaults to 1.0.
+        max_tokens: Maximum number of tokens to generate. If `None`, the engine decides.
+        random_seed: Seed for reproducible sampling. If `None`, sampling is not reproducible.
+    """
+
+    _deprecated_fields: ClassVar[dict[str, str]] = {
+        k: v for k, v in ChatCompletionRequest._deprecated_fields.items() if k not in _SAMPLING_FIELDS
+    }
+
+    temperature: float = Field(default=0.7, ge=0.0, le=1.0)
+    top_p: float = Field(default=1.0, ge=0.0, le=1.0)
+    max_tokens: int | None = Field(default=None, ge=0)
+    random_seed: int | None = Field(default=None, ge=0)
 
 
 class EngineBackend(StrEnum):

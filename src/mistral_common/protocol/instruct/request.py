@@ -1,13 +1,13 @@
 from collections.abc import Iterable
 from enum import StrEnum, auto
-from typing import Any, Generic
+from typing import Any, ClassVar, Generic
 
 from pydantic import ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
 from mistral_common.base import MistralBase
 from mistral_common.deprecation import warn_once
 from mistral_common.exceptions import InvalidMessageStructureException
-from mistral_common.protocol.base import BaseCompletionRequest
+from mistral_common.protocol.base import _FROM_OPENAI, _SAMPLING_FIELDS, BaseCompletionRequest, _deprecations
 from mistral_common.protocol.instruct.converters import (
     convert_openai_messages,
     convert_openai_tools,
@@ -210,6 +210,14 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     for a single chat completion including messages, tools, and model settings.
 
     Attributes:
+        temperature: Deprecated and will be removed in 1.15.0: mistral-common does not use it.
+            See `BaseCompletionRequest`.
+        top_p: Deprecated and will be removed in 1.15.0: mistral-common does not use it.
+            See `BaseCompletionRequest`.
+        max_tokens: Deprecated and will be removed in 1.15.0: mistral-common does not use it.
+            See `BaseCompletionRequest`.
+        random_seed: Deprecated and will be removed in 1.15.0: mistral-common does not use it.
+            See `BaseCompletionRequest`.
         model: Name of the model to use. Required in serving mode; optional in
             other modes. If `None`, the default model will be used.
         messages: List of chat messages (user, assistant, system, tool). Must not be empty.
@@ -240,6 +248,11 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         ... )
     """
 
+    _deprecated_fields: ClassVar[dict[str, str]] = {
+        **_deprecations("ChatCompletionRequest", _SAMPLING_FIELDS),
+        _TRUNCATE_FOR_CONTEXT_LENGTH_KEY: _TRUNCATE_FOR_CONTEXT_LENGTH_DEPRECATION,
+    }
+
     model: str | None = None
     messages: list[ChatMessageType]
     response_format: ResponseFormat = Field(default_factory=ResponseFormat)
@@ -248,19 +261,6 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
     parallel_tool_calls: bool = True
     truncate_for_context_length: bool = False
     reasoning_effort: ReasoningEffort | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def _warn_truncate_for_context_length(cls, values: Any) -> Any:
-        r"""Warn when the deprecated `truncate_for_context_length` is set explicitly."""
-        if isinstance(values, dict) and _TRUNCATE_FOR_CONTEXT_LENGTH_KEY in values:
-            warn_once(
-                key="ChatCompletionRequest.truncate_for_context_length",
-                message=_TRUNCATE_FOR_CONTEXT_LENGTH_DEPRECATION,
-                category=DeprecationWarning,
-                stacklevel=4,
-            )
-        return values
 
     def to_openai(
         self,
@@ -288,12 +288,17 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             ValueError: If kwargs contains duplicate or conflicting keys.
             NotImplementedError: If `truncate_for_context_length` is `True` (not implemented).
 
+        Note:
+            The output includes "temperature" and "top_p", and "seed" when `random_seed`
+            is set. These keys will no longer be emitted from 1.15.0, when the
+            deprecated fields are removed.
+
         Examples:
             >>> from mistral_common.protocol.instruct.messages import UserMessage
             >>> from mistral_common.protocol.instruct.tool_calls import Tool, Function
-            >>> request = ChatCompletionRequest(messages=[UserMessage(content="Hello, how are you?")], temperature=0.15)
+            >>> request = ChatCompletionRequest(messages=[UserMessage(content="Hello, how are you?")])
             >>> request.to_openai(stream=True)
-            {'temperature': 0.15, 'top_p': 1.0, 'response_format': {'type': 'text'}, 'continue_final_message': False, 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'stream': True}
+            {'temperature': 0.7, 'top_p': 1.0, 'response_format': {'type': 'text'}, 'continue_final_message': False, 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'stream': True}
             >>> request = ChatCompletionRequest(messages=[UserMessage(content="Hello, how are you?")], tools=[
             ...     Tool(function=Function(
             ...         name="get_current_weather",
@@ -391,7 +396,9 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
                 sets `AssistantMessage.prefix=True` on it.
             **kwargs: Additional request parameters. Supports both OpenAI names
                 (e.g., "seed") and mistral-common names (e.g., `random_seed`).
-                Cannot specify both "seed" and `random_seed`.
+                Cannot specify both "seed" and `random_seed`. Unknown keys are ignored.
+                The sampling parameters do not emit deprecation warnings here; from
+                1.15.0 they will be ignored like other unknown keys.
 
         Returns:
             A ChatCompletionRequest instance with messages and tools converted
@@ -407,7 +414,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         if _TRUNCATE_FOR_CONTEXT_LENGTH_KEY in kwargs:
             # Warn here so that the warning points at the caller of `from_openai`.
             warn_once(
-                key="ChatCompletionRequest.truncate_for_context_length",
+                key=_TRUNCATE_FOR_CONTEXT_LENGTH_DEPRECATION,
                 message=_TRUNCATE_FOR_CONTEXT_LENGTH_DEPRECATION,
                 category=DeprecationWarning,
                 stacklevel=3,
@@ -457,6 +464,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
                 **kwargs,
             },
             extra="ignore",
+            context={_FROM_OPENAI: True},
         )
 
 

@@ -365,7 +365,8 @@ def test_request_from_openai_drops_unsupported_fields() -> None:
         unknown_field="value",
     )
 
-    assert request == ChatCompletionRequest(messages=[UserMessage(content="Hello")], temperature=0.5)
+    expected = ChatCompletionRequest(messages=[UserMessage(content="Hello")])
+    assert request == expected.model_copy(update={"temperature": 0.5})
 
 
 def test_request_from_openai_rejects_conflicting_seed_names() -> None:
