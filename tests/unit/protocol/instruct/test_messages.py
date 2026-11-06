@@ -7,7 +7,7 @@ import pytest
 from PIL import Image
 from pydantic import BaseModel, ValidationError
 
-from mistral_common.exceptions import InvalidAssistantMessageException
+from mistral_common.exceptions import InvalidAssistantMessageException, InvalidRequestException
 from mistral_common.protocol.instruct.chunk import ImageChunk, ImageURL, ImageURLChunk, TextChunk, ThinkChunk
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
@@ -80,6 +80,22 @@ def test_tool_preserves_non_thinking_content() -> None:
     assert message.model_dump(exclude={"content"}) == {"role": "tool", "tool_call_id": "c1", "name": None}
     assert isinstance(message.content, list)
     assert tuple(message.content) == expected_content
+
+
+def test_tool_message_from_openai_rejects_missing_tool_call_id() -> None:
+    with pytest.raises(InvalidRequestException, match="tool_call_id must be provided for tool messages."):
+        ToolMessage.from_openai({"role": "tool", "content": "sunny"})
+
+
+def test_tool_message_from_openai_accepts_explicit_none_tool_call_id() -> None:
+    message = ToolMessage.from_openai({"role": "tool", "content": "sunny", "tool_call_id": None})
+
+    assert message == ToolMessage(content="sunny")
+
+
+def test_tool_message_to_openai_rejects_missing_tool_call_id() -> None:
+    with pytest.raises(InvalidRequestException, match="tool_call_id must be provided for tool messages."):
+        ToolMessage(content="sunny").to_openai()
 
 
 @pytest.mark.parametrize(
