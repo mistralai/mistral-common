@@ -187,13 +187,15 @@ def normalize(
         std: Standard deviation for each channel, values in [0, 1].
 
     Returns:
-        Normalized image with shape (C, H, W), scaled to unit variance.
+        Normalized image with shape (C, H, W), scaled to unit variance. Float
+        inputs keep their dtype; integer inputs give float32.
 
     Raises:
         AssertionError: If `np_image` is not (H, W, C) or the channel count does
             not match mean and std.
     """
-    np_image = np.divide(np_image, np.float32(255.0), dtype=np_image.dtype)
+    dtype = np_image.dtype if np.issubdtype(np_image.dtype, np.floating) else np.float32
+    np_image = np.divide(np_image, np.float32(255.0), dtype=dtype)
 
     assert len(np_image.shape) == 3, f"{np_image.shape=}"
     assert np_image.shape[2] == len(mean) == len(std), f"{np_image.shape=}, {mean=}, {std=}"
