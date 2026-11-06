@@ -401,11 +401,16 @@ def test_image_encoder_formats(spatial_merge_size: int, special_token_ids: Speci
         assert output.tokens == outputs[0].tokens
 
 
-@pytest.mark.parametrize("dtype", [np.float32, np.float64])
-def test_normalize_dtype_preservation(dtype: type) -> None:
-    image: np.ndarray = np.zeros((64, 64, 3), dtype=dtype)
+@pytest.mark.parametrize(
+    ("dtype", "expected_dtype"),
+    [(np.float32, np.float32), (np.float64, np.float64), (np.uint8, np.float32), (np.int64, np.float32)],
+)
+def test_normalize_dtype_preservation(dtype: type, expected_dtype: type) -> None:
+    image: np.ndarray = np.full((64, 64, 3), 255, dtype=dtype)
     normalized = normalize(image, DATASET_MEAN, DATASET_STD)
-    assert normalized.dtype == dtype, f"Expected {dtype} but got {normalized.dtype}"
+    assert normalized.dtype == expected_dtype, f"Expected {expected_dtype} but got {normalized.dtype}"
+    expected = (1 - np.array(DATASET_MEAN)) / np.array(DATASET_STD)
+    np.testing.assert_allclose(normalized[:, 0, 0], expected, rtol=1e-6)
 
 
 def test_transform_image_returns_float32() -> None:
