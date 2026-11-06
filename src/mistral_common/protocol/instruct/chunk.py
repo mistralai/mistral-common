@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from mistral_common.base import MistralBase
+from mistral_common.deprecation import warn_once
 from mistral_common.exceptions import InvalidRequestException
 from mistral_common.image import SerializableImage
 from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
@@ -282,7 +283,8 @@ class AudioURLType(StrEnum):
         url: An http(s) URL.
         base64: A base64-encoded audio string. May be prefixed with
             `data:audio/<format>;base64,`.
-        file: A local file path (e.g., /path/to/file).
+        file: A local file path without a scheme (e.g., /path/to/file). Deprecated and will be
+            removed in 1.15.0: use a file URI instead.
         file_uri: A file URI (e.g., `file:///path/to/file`).
     """
 
@@ -290,6 +292,12 @@ class AudioURLType(StrEnum):
     base64 = auto()
     file = auto()
     file_uri = auto()
+
+
+_BARE_AUDIO_PATH_DEPRECATION = (
+    "Passing a local file path to `AudioURLChunk` without the `file://` scheme is deprecated "
+    "and will be removed in 1.15.0. Use a file URI instead, e.g. `file:///path/to/audio.wav`."
+)
 
 
 class AudioURLChunk(BaseContentChunk):
@@ -300,7 +308,7 @@ class AudioURLChunk(BaseContentChunk):
 
     Attributes:
         audio_url: The audio reference. Either an AudioURL instance or a
-            plain string (URL, file path, file URI, or base64).
+            plain string (URL, file URI, base64, or a local file path, which is deprecated).
 
     Examples:
         >>> audio_url_chunk = AudioURLChunk(audio_url="https://example.com/audio.mp3")
@@ -326,7 +334,7 @@ class AudioURLChunk(BaseContentChunk):
         Note:
             URLs should be either:
             - a valid URL (http:// or https://)
-            - a valid file path (e.g. /path/to/file)
+            - a valid file path (e.g. /path/to/file); deprecated and will be removed in 1.15.0, use a file URI
             - a valid file URI (e.g. file:///path/to/file)
             - a base64 encoded audio. It is assumed to be base64 encoded if it is not a valid URL or file path.
 
@@ -348,6 +356,13 @@ class AudioURLChunk(BaseContentChunk):
             exist_path = False
 
         if exist_path:
+            # Warn here so that the warning points at the caller of `get_url_type`.
+            warn_once(
+                key=_BARE_AUDIO_PATH_DEPRECATION,
+                message=_BARE_AUDIO_PATH_DEPRECATION,
+                category=FutureWarning,
+                stacklevel=3,
+            )
             return AudioURLType.file
 
         return AudioURLType.base64
