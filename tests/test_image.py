@@ -405,7 +405,7 @@ def test_image_encoder_formats(spatial_merge_size: int, special_token_ids: Speci
     ("dtype", "expected_dtype"),
     [(np.float32, np.float32), (np.float64, np.float64), (np.uint8, np.float32), (np.int64, np.float32)],
 )
-def test_normalize_dtype_preservation(dtype: type, expected_dtype: type) -> None:
+def test_normalize_dtype(dtype: type, expected_dtype: type) -> None:
     image: np.ndarray = np.full((64, 64, 3), 255, dtype=dtype)
     normalized = normalize(image, DATASET_MEAN, DATASET_STD)
     assert normalized.dtype == expected_dtype, f"Expected {expected_dtype} but got {normalized.dtype}"
