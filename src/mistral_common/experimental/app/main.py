@@ -38,13 +38,14 @@ def create_app(
             Only used when tokenizer is a path.
         engine_url: The URL of the engine API used for chat completions.
         engine_backend: The backend type of the engine API.
-        timeout: The timeout of the engine API in seconds.
+        timeout: The timeout of the engine API in seconds. Must be positive.
 
     Returns:
         The configured FastAPI application.
 
     Raises:
         ValueError: If tokenizer is neither a path nor a MistralTokenizer.
+        ValidationError: If timeout is not positive.
     """
     if not isinstance(tokenizer, (MistralTokenizer, str, Path)):
         raise ValueError("Tokenizer must be a path or a MistralTokenizer instance.")
@@ -116,7 +117,7 @@ def cli() -> None:
 )
 @click.option(
     "--timeout",
-    type=int,
+    type=click.IntRange(min=1),
     default=60,
     help="Timeout",
     show_default=True,

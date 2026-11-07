@@ -56,7 +56,7 @@ mistral_common serve mistralai/Magistral-Small-2507 [validation_mode] \
 - `--port`: API port (default: `0` - auto-selects available port)
 - `--engine-url`: URL of the engine (default: `http://127.0.0.1:8080`)
 - `--engine-backend`: Engine backend to use (default: `llama_cpp`)
-- `--timeout`: Timeout for the engine (default: `60`)
+- `--timeout`: Timeout for the engine in seconds, must be positive (default: `60`)
 
 ## Available Routes
 

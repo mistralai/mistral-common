@@ -3,7 +3,7 @@ from enum import StrEnum, auto
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_settings import BaseSettings
 
 from mistral_common.protocol.instruct.validator import ValidationMode
@@ -65,7 +65,7 @@ class Settings(BaseSettings):
         engine_url: The URL of the engine, with any trailing slash stripped.
         engine_backend: The backend to use for the engine.
         api_key: The API key for the engine, or an empty string if none.
-        timeout: The timeout for the engine API in seconds.
+        timeout: The timeout for the engine API in seconds. Must be positive.
     """
 
     app_name: str = "Mistral-common API"
@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     engine_url: str = "127.0.0.1"
     engine_backend: EngineBackend = EngineBackend.llama_cpp
     api_key: str = ""
-    timeout: int = 60
+    timeout: int = Field(default=60, gt=0)
 
     @field_validator("engine_url", mode="before")
     @classmethod
