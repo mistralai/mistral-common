@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-opencv = ["opencv-python-headless>=4.0.0"]
+opencv = ["opencv-python-headless>=4.10.0.84"]
 sentencepiece = ["sentencepiece>=0.2.0"]
 soundfile = ["soundfile>=0.12.1"]
 soxr = ["soxr>=0.5.0"]
