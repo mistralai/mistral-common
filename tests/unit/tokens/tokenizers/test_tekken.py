@@ -557,6 +557,13 @@ def test_decode_rejects_invalid_policy(tekkenizer: Tekkenizer) -> None:
         tekkenizer.decode(tokens=[276], special_token_policy="keeep")  # type: ignore[arg-type]
 
 
+def test_decode_raise_message_recommends_policy_argument(tekkenizer: Tekkenizer) -> None:
+    with pytest.raises(
+        ValueError, match=r"tokenizer\.decode\(tokens, special_token_policy=SpecialTokenPolicy\.IGNORE\)"
+    ):
+        tekkenizer.decode(tokens=[1, 276], special_token_policy=SpecialTokenPolicy.RAISE)
+
+
 def test_string_and_piece_helpers_keep_special_token_text(tekkenizer: Tekkenizer) -> None:
     assert tekkenizer._to_string(tokens=[1, 276, 2]) == "<s>hello</s>"
     assert tekkenizer.id_to_piece(token_id=1) == "<s>"
