@@ -220,7 +220,7 @@ class InstructRequestNormalizer(
         try:
             parsed_json = json.loads(content)
             normalized_content = json.dumps(parsed_json, ensure_ascii=False)
-        except json.JSONDecodeError:
+        except ValueError:  # JSONDecodeError, or an integer over the int digit limit
             normalized_content = content
         return normalized_content
 
