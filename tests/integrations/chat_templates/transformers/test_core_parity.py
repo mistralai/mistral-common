@@ -31,6 +31,7 @@ from tests.integrations.chat_templates.helpers import (
     encode_mistral_common,
 )
 from tests.integrations.chat_templates.hf_utils import (
+    _to_openai_request,
     build_hf_tokenizer,
     encode_hf_tokens,
     encode_transformers,
@@ -99,6 +100,13 @@ class TestTransformersMistralCommonParity:
             # Run transformers first since encode_mistral_common may mutate the conversation in-place
             transformers_encoded = encode_transformers(chat_template, conversation, keep_name_for_tools=True)
 
+            # `ChatCompletionRequest.from_openai` reads the OpenAI `developer` role as `system`; so must the template.
+            developer_request = _to_openai_request(conversation, keep_name_for_tools=True)
+            for openai_message in developer_request["messages"]:
+                if openai_message["role"] == "system":
+                    openai_message["role"] = "developer"
+            developer_encoded = encode_transformers_from_openai(chat_template, developer_request)
+
             # Token ID comparison: apply_chat_template(tokenize=True) vs mistral-common
             # Skipped for image/audio configs because multimodal tokens are generated
             # by encoders (not from text), so token IDs won't match.
@@ -114,6 +122,7 @@ class TestTransformersMistralCommonParity:
 
             mistral_common_encoded = encode_mistral_common(mistral_tokenizer, conversation, config.spm)
             assert mistral_common_encoded == transformers_encoded
+            assert mistral_common_encoded == developer_encoded
 
     @pytest.mark.parametrize(
         "config",
