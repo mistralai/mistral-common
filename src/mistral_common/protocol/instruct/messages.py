@@ -223,7 +223,12 @@ class UserMessage(BaseMessage):
 
         Returns:
             UserMessage instance with content deserialized from OpenAI format.
+
+        Raises:
+            InvalidRequestException: If the "content" key is missing.
         """
+        if "content" not in openai_message:
+            raise InvalidRequestException("content must be provided for user messages.")
         return cls.model_validate(
             {"role": openai_message["role"], "content": cls._content_from_openai(openai_message["content"])}
         )
@@ -266,7 +271,12 @@ class SystemMessage(BaseMessage):
 
         Returns:
             SystemMessage instance with content deserialized from OpenAI format.
+
+        Raises:
+            InvalidRequestException: If the "content" key is missing.
         """
+        if "content" not in openai_message:
+            raise InvalidRequestException("content must be provided for system messages.")
         return cls.model_validate(
             {"role": openai_message["role"], "content": cls._content_from_openai(openai_message["content"])}
         )
@@ -525,10 +535,12 @@ class ToolMessage(BaseMessage):
             ToolMessage instance with content and `tool_call_id` parsed from OpenAI format.
 
         Raises:
-            InvalidRequestException: If the `tool_call_id` key is missing.
+            InvalidRequestException: If the `tool_call_id` or "content" key is missing.
         """
         if "tool_call_id" not in openai_message:
             raise InvalidRequestException("tool_call_id must be provided for tool messages.")
+        if "content" not in openai_message:
+            raise InvalidRequestException("content must be provided for tool messages.")
         content = cls._content_from_openai(openai_message["content"])
         tool_message = cls.model_validate(
             {

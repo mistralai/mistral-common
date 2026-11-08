@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from mistral_common.base import MistralBase
+from mistral_common.exceptions import InvalidRequestException
 from mistral_common.image import SerializableImage
 from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
 from mistral_common.utils.data_url import maybe_strip_base64_data_url_prefix
@@ -255,7 +256,12 @@ class ImageURLChunk(BaseContentChunk):
 
         Returns:
             An ImageURLChunk with the `image_url` parsed from the OpenAI format.
+
+        Raises:
+            InvalidRequestException: If the `image_url` key is missing.
         """
+        if "image_url" not in openai_chunk:
+            raise InvalidRequestException("image_url must be provided for image_url chunks.")
         return cls.model_validate({"image_url": openai_chunk["image_url"]})
 
 

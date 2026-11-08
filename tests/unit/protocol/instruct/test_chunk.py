@@ -13,6 +13,7 @@ from openai.types.chat.chat_completion_content_part_image_param import (
 from PIL import Image
 from pydantic import BaseModel, ValidationError
 
+from mistral_common.exceptions import InvalidRequestException
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURL,
@@ -306,3 +307,8 @@ def test_image_url_chunk_conversion(
     assert image_url_chunk.to_openai() == openai_chunk
     assert ImageURLChunk.from_openai(openai_chunk) == canonical_chunk
     assert ImageURLChunk.from_openai(OpenAIImageChunk(**openai_chunk)) == canonical_chunk  # type: ignore[typeddict-item]
+
+
+def test_image_url_chunk_from_openai_rejects_missing_image_url() -> None:
+    with pytest.raises(InvalidRequestException, match="image_url must be provided for image_url chunks."):
+        ImageURLChunk.from_openai({"type": "image_url"})

@@ -99,6 +99,22 @@ def test_tool_message_to_openai_rejects_missing_tool_call_id() -> None:
 
 
 @pytest.mark.parametrize(
+    ("message_cls", "openai_message"),
+    [
+        pytest.param(UserMessage, {"role": "user"}, id="user"),
+        pytest.param(SystemMessage, {"role": "system"}, id="system"),
+        pytest.param(ToolMessage, {"role": "tool", "tool_call_id": "c1"}, id="tool"),
+    ],
+)
+def test_message_from_openai_rejects_missing_content(
+    message_cls: type[UserMessage | SystemMessage | ToolMessage], openai_message: dict[str, Any]
+) -> None:
+    role = openai_message["role"]
+    with pytest.raises(InvalidRequestException, match=f"content must be provided for {role} messages."):
+        message_cls.from_openai(openai_message)
+
+
+@pytest.mark.parametrize(
     ("role", "chunk_name", "chunk_type"),
     [
         pytest.param("assistant", "image", "ImageChunk", id="assistant-image"),
