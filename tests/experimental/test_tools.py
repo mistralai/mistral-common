@@ -260,6 +260,14 @@ def test_decode_tool_calls(tokenizer: MistralTokenizer, tool_calls: list[ToolCal
         ('[{"arguments": {}}]', InvalidToolCallError, "Expected a dict with a name."),
         ('[{"name": "f"}]', InvalidArgsToolCallError, "Expected a dict."),
         ('[{"name": "f", "arguments": 1}]', InvalidArgsToolCallError, "Expected a dict."),
+        # Valid JSON that `json.loads` rejects without a JSONDecodeError.
+        pytest.param(
+            '[{"name": "f", "arguments": {"a": ' + "1" * 5000 + "}}]",
+            InvalidToolCallError,
+            "Expected a JSON list",
+            id="oversized-int",
+        ),
+        pytest.param("[" * 100_000 + "]" * 100_000, InvalidToolCallError, "Expected a JSON list", id="deep-nesting"),
     ),
 )
 def test_decode_tool_calls_up_to_v7_malformed(

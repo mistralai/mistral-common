@@ -78,7 +78,7 @@ def _decode_tool_calls_v2_up_to_v7(tool_call_tokens: list[int], tokenizer: Token
     tool_calls_list_string = tokenizer.decode(tool_call_tokens, special_token_policy=SpecialTokenPolicy.IGNORE)
     try:
         tool_calls_decoded_list = json.loads(tool_calls_list_string)
-    except json.JSONDecodeError as e:
+    except (ValueError, RecursionError) as e:  # JSONDecodeError, an integer over the int digit limit, or deep nesting
         raise InvalidToolCallError(
             "Invalid tool call tokenization. Expected a JSON list of tool calls.",
         ) from e
