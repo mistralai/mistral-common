@@ -320,7 +320,8 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
     in the message processing loop. Only emit default system prompt if no system
     message is at position 0.
 
-    An empty conversation is rejected for every version, as the tokenizer does.
+    An empty conversation is rejected for every version, as the tokenizer does, and the
+    OpenAI `developer` role is read as `system`, as `ChatCompletionRequest.from_openai` does.
 
     Args:
         config: The template configuration.
@@ -334,6 +335,17 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
         "{%- if messages | length == 0 %}",
         "    {{- raise_exception('Conversation must have at least one message') }}",
         "{%- endif %}",
+        "",
+        "{#- Read the developer role as system, as the tokenizer does. #}",
+        "{%- set ns_dev = namespace(messages=[]) %}",
+        "{%- for message in messages %}",
+        "    {%- if message['role'] == 'developer' %}",
+        "        {%- set ns_dev.messages = ns_dev.messages + [{'role': 'system', 'content': message['content']}] %}",
+        "    {%- else %}",
+        "        {%- set ns_dev.messages = ns_dev.messages + [message] %}",
+        "    {%- endif %}",
+        "{%- endfor %}",
+        "{%- set messages = ns_dev.messages %}",
         "",
         "{#- Handle system prompt if it exists. #}",
     ]

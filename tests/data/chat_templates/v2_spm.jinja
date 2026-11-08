@@ -10,6 +10,17 @@
     {{- raise_exception('Conversation must have at least one message') }}
 {%- endif %}
 
+{#- Read the developer role as system, as the tokenizer does. #}
+{%- set ns_dev = namespace(messages=[]) %}
+{%- for message in messages %}
+    {%- if message['role'] == 'developer' %}
+        {%- set ns_dev.messages = ns_dev.messages + [{'role': 'system', 'content': message['content']}] %}
+    {%- else %}
+        {%- set ns_dev.messages = ns_dev.messages + [message] %}
+    {%- endif %}
+{%- endfor %}
+{%- set messages = ns_dev.messages %}
+
 {#- Handle system prompt if it exists. #}
 {#- Extract all system messages and merge into system prompt. #}
 {%- set ns_sys = namespace(system_parts=[], previous_role=none) %}
