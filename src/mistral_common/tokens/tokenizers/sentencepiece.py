@@ -237,18 +237,6 @@ class SentencePieceTokenizer(Tokenizer):
         """
         return self._model.piece_to_id(s)
 
-    def get_control_token(self, s: str) -> int:
-        r"""Get the token ID of a control token. Deprecated: use `get_special_token()` instead.
-
-        Args:
-            s: The special token string.
-
-        Returns:
-            The token ID for the special token.
-        """
-        warnings.warn("`get_control_token` is deprecated. Use `get_special_token` instead.", FutureWarning)
-        return self.get_special_token(s)
-
     @property
     def n_words(self) -> int:
         r"""Vocabulary size of the tokenizer."""
@@ -374,9 +362,6 @@ class SentencePieceTokenizer(Tokenizer):
                 text_list.extend([self.id_to_piece(t) for t in curr_tokens])
 
         return "".join(text_list)
-
-    def _to_string(self, tokens: list[int]) -> str:
-        return self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP)
 
     @property
     def pad_id(self) -> int:

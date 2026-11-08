@@ -1,3 +1,4 @@
+import warnings
 from abc import ABC, abstractmethod
 from enum import StrEnum, auto
 from pathlib import Path
@@ -357,6 +358,18 @@ class Tokenizer(ABC):
     def get_special_token(self, s: str) -> int:
         r"""Get the id of a control token."""
 
+    def get_control_token(self, s: str) -> int:
+        r"""Get the token ID of a control token. Deprecated: use `get_special_token()` instead.
+
+        Args:
+            s: The string representation of the control token.
+
+        Returns:
+            The integer token ID for the control token.
+        """
+        warnings.warn("`get_control_token` is deprecated. Use `get_special_token` instead.", FutureWarning)
+        return self.get_special_token(s)
+
     @abstractmethod
     def is_special(self, token: int | np.integer | str) -> bool:
         r"""Check if token id or token str is a special token."""
@@ -366,8 +379,8 @@ class Tokenizer(ABC):
     def version(self) -> TokenizerVersion:
         r"""Get the version of the tokenizer."""
 
-    @abstractmethod
-    def _to_string(self, tokens: list[int]) -> str: ...
+    def _to_string(self, tokens: list[int]) -> str:
+        return self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP)
 
     @property
     @abstractmethod
