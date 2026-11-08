@@ -983,25 +983,29 @@ def test_encode_instruct(
     assert decode_keep(tokenizer=tokenizer, tokenized=tokenized) == expected_text
 
 
+@pytest.mark.parametrize(
+    argnames="payload",
+    argvalues=[
+        # Valid JSON that `json.loads` rejects without a JSONDecodeError.
+        pytest.param('{"a":' + "1" * 5000 + "}", id="oversized-int"),  # ValueError: over the int digit limit
+        pytest.param("[" * 100_000 + "]" * 100_000, id="deep-nesting"),  # RecursionError
+    ],
+)
 @pytest.mark.parametrize(argnames="backend", argvalues=["spm", "tekken"])
-def test_encodes_json_with_oversized_int_as_string(request: pytest.FixtureRequest, backend: str) -> None:
+def test_encodes_unloadable_json_as_string(request: pytest.FixtureRequest, backend: str, payload: str) -> None:
     r"""Encode tool-call arguments and tool content that json.loads rejects as plain strings."""
     tokenizer: InstructTokenizer = request.getfixturevalue(argname=f"{backend}_tokenizer")
-    # Valid JSON that `json.loads` rejects with a plain ValueError (integer over the int digit limit).
-    oversized_int_json = '{"a":' + "1" * 5000 + "}"
     instruct_request = InstructRequest[ChatMessage, Tool](
         messages=[
             UserMessage(content="a"),
-            AssistantMessage(
-                tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="b", arguments=oversized_int_json))]
-            ),
-            ToolMessage(name="b", content=oversized_int_json, tool_call_id="123456789"),
+            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="b", arguments=payload))]),
+            ToolMessage(name="b", content=payload, tool_call_id="123456789"),
         ]
     )
 
     text = decode_keep(tokenizer=tokenizer, tokenized=tokenizer.encode_instruct(request=instruct_request))
 
-    assert text.count(json.dumps(oversized_int_json)) == 2
+    assert text.count(json.dumps(payload)) == 2
 
 
 @pytest.mark.parametrize(

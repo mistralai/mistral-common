@@ -43,26 +43,28 @@ def test_normalizer_and_instruct_request_pickle(version: TokenizerVersion) -> No
     assert restored_normalizer.from_chat_completion_request(REQUEST) == instruct_request
 
 
-# Valid JSON that `json.loads` rejects with a plain ValueError (integer over the int digit limit).
-_OVERSIZED_INT_JSON = '{"a":' + "1" * 5000 + "}"
+# Valid JSON that `json.loads` rejects without a JSONDecodeError.
+_UNLOADABLE_JSON = [
+    pytest.param('{"a":' + "1" * 5000 + "}", id="oversized-int"),  # ValueError: over the int digit limit
+    pytest.param("[" * 100_000 + "]" * 100_000, id="deep-nesting"),  # RecursionError
+]
 
 
+@pytest.mark.parametrize(argnames="payload", argvalues=_UNLOADABLE_JSON)
 @pytest.mark.parametrize(argnames="version", argvalues=[TokenizerVersion.v3, TokenizerVersion.v7, TokenizerVersion.v13])
-def test_keeps_json_with_oversized_int_unchanged(version: TokenizerVersion) -> None:
+def test_keeps_unloadable_json_unchanged(version: TokenizerVersion, payload: str) -> None:
     r"""Pass tool-call arguments and tool content that json.loads rejects through unchanged."""
     request = ChatCompletionRequest[ChatMessage](
         messages=[
             UserMessage(content="a"),
-            AssistantMessage(
-                tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="b", arguments=_OVERSIZED_INT_JSON))]
-            ),
-            ToolMessage(content=_OVERSIZED_INT_JSON, tool_call_id="123456789"),
+            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="b", arguments=payload))]),
+            ToolMessage(content=payload, tool_call_id="123456789"),
         ]
     )
 
     _, assistant, tool = get_normalizer(version=version).from_chat_completion_request(request).messages
 
     assert isinstance(assistant, AssistantMessage) and assistant.tool_calls is not None
-    assert assistant.tool_calls[0].function.arguments == _OVERSIZED_INT_JSON
+    assert assistant.tool_calls[0].function.arguments == payload
     assert isinstance(tool, ToolMessage)
-    assert tool.content == _OVERSIZED_INT_JSON
+    assert tool.content == payload
