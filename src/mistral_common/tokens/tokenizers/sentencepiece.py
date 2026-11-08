@@ -1,12 +1,12 @@
 import logging
 import os
-import warnings
 from functools import cached_property
 from pathlib import Path
 from typing import Protocol, TypeGuard, cast
 
 import numpy as np
 
+from mistral_common.deprecation import warn_once
 from mistral_common.exceptions import TokenizerException
 from mistral_common.imports import assert_sentencepiece_installed, is_sentencepiece_installed
 from mistral_common.tokens.tokenizers.base import (
@@ -16,18 +16,6 @@ from mistral_common.tokens.tokenizers.base import (
 )
 from mistral_common.tokens.tokenizers.image import ImageConfig, MultiModalVersion
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
-
-warnings.filterwarnings(
-    action="once",
-    category=FutureWarning,
-    message=r".*`get_control_token` is deprecated.*",
-)
-warnings.filterwarnings(
-    action="once",
-    category=FutureWarning,
-    message=r".*`_control_tokens` is deprecated.*",
-)
-
 
 if is_sentencepiece_installed():
     from sentencepiece import SentencePieceProcessor
@@ -283,8 +271,11 @@ class SentencePieceTokenizer(Tokenizer):
 
     @cached_property
     def _control_tokens(self) -> set[int]:
-        warnings.warn(
-            "`_control_tokens` is deprecated. Make use of `is_special` or `special_ids` instead.", FutureWarning
+        warn_once(
+            key="_control_tokens",
+            message="`_control_tokens` is deprecated. Make use of `is_special` or `special_ids` instead.",
+            category=FutureWarning,
+            stacklevel=4,  # cached_property adds a frame between the caller and this getter.
         )
         return self.special_ids
 

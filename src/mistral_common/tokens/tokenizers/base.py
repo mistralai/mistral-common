@@ -1,4 +1,3 @@
-import warnings
 from abc import ABC, abstractmethod
 from enum import StrEnum, auto
 from pathlib import Path
@@ -8,6 +7,7 @@ import numpy as np
 from pydantic import ConfigDict, Field
 
 from mistral_common.base import MistralBase
+from mistral_common.deprecation import warn_once
 from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.instruct.chunk import ContentChunk
 from mistral_common.protocol.instruct.messages import SystemMessage, UserMessage
@@ -367,7 +367,12 @@ class Tokenizer(ABC):
         Returns:
             The integer token ID for the control token.
         """
-        warnings.warn("`get_control_token` is deprecated. Use `get_special_token` instead.", FutureWarning)
+        warn_once(
+            key="get_control_token",
+            message="`get_control_token` is deprecated. Use `get_special_token` instead.",
+            category=FutureWarning,
+            stacklevel=3,
+        )
         return self.get_special_token(s)
 
     @abstractmethod

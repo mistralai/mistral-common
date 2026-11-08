@@ -1,7 +1,6 @@
 import base64
 import json
 import logging
-import warnings
 from functools import cached_property
 from itertools import groupby
 from pathlib import Path
@@ -19,13 +18,6 @@ from mistral_common.tokens.tokenizers.base import (
 )
 from mistral_common.tokens.tokenizers.image import ImageConfig
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
-
-warnings.filterwarnings(
-    action="once",
-    category=FutureWarning,
-    message=r".*`get_control_token` is deprecated.*",
-)
-
 
 logger = logging.getLogger(__name__)
 
