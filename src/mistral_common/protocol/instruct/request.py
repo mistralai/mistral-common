@@ -268,7 +268,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             >>> from mistral_common.protocol.instruct.tool_calls import Tool, Function
             >>> request = ChatCompletionRequest(messages=[UserMessage(content="Hello, how are you?")], temperature=0.15)
             >>> request.to_openai(stream=True)
-            {'temperature': 0.15, 'top_p': 1.0, 'response_format': {'type': 'text'}, 'continue_final_message': False, 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'tool_choice': 'auto', 'stream': True}
+            {'temperature': 0.15, 'top_p': 1.0, 'response_format': {'type': 'text'}, 'continue_final_message': False, 'messages': [{'role': 'user', 'content': 'Hello, how are you?'}], 'stream': True}
             >>> request = ChatCompletionRequest(messages=[UserMessage(content="Hello, how are you?")], tools=[
             ...     Tool(function=Function(
             ...         name="get_current_weather",
@@ -328,20 +328,20 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         openai_request["messages"] = openai_messages
         if self.tools is not None:
             openai_request["tools"] = [tool.to_openai() for tool in self.tools]
-        # OpenAI rejects `parallel_tool_calls` when no tools are given.
+        # OpenAI rejects `parallel_tool_calls` and `tool_choice` when no tools are given.
         if self.tools:
             openai_request["parallel_tool_calls"] = self.parallel_tool_calls
 
-        openai_tool_choice: str | dict[str, Any]
-        match self.tool_choice:
-            case ToolChoiceEnum.auto | ToolChoiceEnum.none:
-                openai_tool_choice = self.tool_choice
-            case ToolChoiceEnum.required | ToolChoiceEnum.any:
-                openai_tool_choice = ToolChoiceEnum.required.value
-            case _:
-                openai_tool_choice = self.tool_choice.model_dump()
+            openai_tool_choice: str | dict[str, Any]
+            match self.tool_choice:
+                case ToolChoiceEnum.auto | ToolChoiceEnum.none:
+                    openai_tool_choice = self.tool_choice
+                case ToolChoiceEnum.required | ToolChoiceEnum.any:
+                    openai_tool_choice = ToolChoiceEnum.required.value
+                case _:
+                    openai_tool_choice = self.tool_choice.model_dump()
 
-        openai_request["tool_choice"] = openai_tool_choice
+            openai_request["tool_choice"] = openai_tool_choice
 
         openai_request.update(kwargs)
 

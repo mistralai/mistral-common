@@ -543,7 +543,6 @@ def test_prefixed_assistant_request_exports_continuation_without_message_prefix(
             {"role": "user", "content": "foo"},
             {"role": "assistant", "content": "bar"},
         ],
-        "tool_choice": "auto",
     }
 
     exported = request.to_openai()
@@ -573,7 +572,11 @@ def test_request_tool_choice_round_trip(
     expected_openai: str | dict[str, Any],
     expected_reconstructed: str | NamedToolChoice,
 ) -> None:
-    request = ChatCompletionRequest(messages=[UserMessage(content="Hello")], tool_choice=deepcopy(tool_choice))
+    request = ChatCompletionRequest(
+        messages=[UserMessage(content="Hello")],
+        tools=[Tool(function=Function(name="get_weather", parameters={}))],
+        tool_choice=deepcopy(tool_choice),
+    )
     openai_request = request.to_openai()
 
     assert openai_request["tool_choice"] == expected_openai
@@ -615,12 +618,12 @@ def test_request_openai_round_trip_preserves_message_scenarios(
         "response_format": {"type": "text"},
         "continue_final_message": False,
         "messages": expected_openai_messages,
-        "tool_choice": "auto",
         "stream": True,
     }
     if expected_openai_tools is not None:
         expected_openai_request["tools"] = expected_openai_tools
         expected_openai_request["parallel_tool_calls"] = True
+        expected_openai_request["tool_choice"] = "auto"
     if reasoning_effort is not None:
         expected_openai_request["reasoning_effort"] = reasoning_effort.value
     assert openai_request == expected_openai_request
@@ -657,6 +660,27 @@ def test_request_to_openai_without_tools_omits_parallel_tool_calls(tools: list[T
     request = ChatCompletionRequest(messages=[UserMessage(content="Hello")], tools=tools, parallel_tool_calls=False)
 
     assert "parallel_tool_calls" not in request.to_openai()
+
+
+@pytest.mark.parametrize("tools", [None, []], ids=["no-tools", "empty-tools"])
+@pytest.mark.parametrize(
+    "tool_choice",
+    [
+        pytest.param(ToolChoiceEnum.auto, id="auto"),
+        pytest.param(ToolChoiceEnum.none, id="none"),
+        pytest.param(ToolChoiceEnum.required, id="required"),
+        pytest.param(NamedToolChoice(function=FunctionName(name="get_weather")), id="named-tool"),
+    ],
+)
+def test_request_to_openai_without_tools_omits_tool_choice(
+    tools: list[Tool] | None, tool_choice: ToolChoiceEnum | NamedToolChoice
+) -> None:
+    request = ChatCompletionRequest(messages=[UserMessage(content="Hello")], tools=tools, tool_choice=tool_choice)
+
+    openai_request = request.to_openai()
+
+    assert "tool_choice" not in openai_request
+    assert ChatCompletionRequest.from_openai(**openai_request).tool_choice == ToolChoiceEnum.auto
 
 
 def test_request_parallel_tool_calls_defaults_to_true() -> None:
