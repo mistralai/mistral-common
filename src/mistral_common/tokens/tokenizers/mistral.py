@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Callable, Generic
+from typing import Generic
 
 from mistral_common.exceptions import (
     TokenizerException,
@@ -150,21 +150,6 @@ class MistralTokenizer(
         self._chat_completion_request_validator = validator
         self._instruct_request_normalizer = request_normalizer
         self.instruct_tokenizer: InstructTokenizer[InstructRequest, FIMRequest, TokenizedType] = instruct_tokenizer
-
-    def __reduce__(self) -> tuple[Callable, tuple[Any, ...]]:
-        r"""Provide a pickling recipe so the tokenizer survives multiprocessing.
-
-        The tokenizer is serialized as a (`from_file`, (path, mode)) pair, so the
-        object is reconstructed from its source file rather than pickling internal state.
-
-        Returns:
-            A tuple of the `from_file` factory and its arguments (file path, validation mode).
-
-        Raises:
-            ValueError: If the tokenizer was not loaded from a file, in which case
-                there is no path to reconstruct from.
-        """
-        return MistralTokenizer.from_file, (self.instruct_tokenizer.tokenizer.file_path, self.mode)
 
     @property
     def mode(self) -> ValidationMode:
