@@ -3,11 +3,13 @@ from enum import StrEnum, auto
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 from pydantic_settings import BaseSettings
 
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from mistral_common.types import TimeoutType
+from mistral_common.utils.download import validate_download_timeout
 
 
 class OpenAIChatCompletionRequest(BaseModel):
@@ -46,6 +48,23 @@ class OpenAIChatCompletionRequest(BaseModel):
         return extra_fields
 
 
+def resolve_engine_timeout(timeout: TimeoutType) -> float:
+    r"""Convert an engine timeout to a positive finite float.
+
+    Args:
+        timeout: The timeout in seconds, as a number or a string that converts to one.
+
+    Returns:
+        The timeout as a positive finite float.
+
+    Raises:
+        ValueError: If `timeout` is not a positive finite number.
+    """
+    return validate_download_timeout(
+        timeout, error_message=f"timeout must be a positive finite number of seconds, got {timeout!r}."
+    )
+
+
 class EngineBackend(StrEnum):
     r"""The engine backend to use.
 
@@ -65,7 +84,8 @@ class Settings(BaseSettings):
         engine_url: The URL of the engine, with any trailing slash stripped.
         engine_backend: The backend to use for the engine.
         api_key: The API key for the engine, or an empty string if none.
-        timeout: The timeout for the engine API in seconds. Must be positive.
+        timeout: The timeout for the engine API in seconds, as a positive finite float. Numbers and numeric
+            strings are accepted.
     """
 
     app_name: str = "Mistral-common API"
@@ -73,7 +93,7 @@ class Settings(BaseSettings):
     engine_url: str = "http://127.0.0.1:8080"
     engine_backend: EngineBackend = EngineBackend.llama_cpp
     api_key: str = ""
-    timeout: int = Field(default=60, gt=0)
+    timeout: float = 60.0
 
     @field_validator("engine_url", mode="before")
     @classmethod
@@ -81,6 +101,11 @@ class Settings(BaseSettings):
         if isinstance(value, str) and value.endswith("/"):
             value = value[:-1]
         return value
+
+    @field_validator("timeout", mode="before")
+    @classmethod
+    def _validate_timeout(cls, value: TimeoutType) -> float:
+        return resolve_engine_timeout(value)
 
     @field_validator("engine_backend", mode="before")
     @classmethod

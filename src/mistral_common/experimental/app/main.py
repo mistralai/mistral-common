@@ -9,6 +9,7 @@ from mistral_common.experimental.app.models import (
     EngineBackend,
     Settings,
     get_settings,
+    resolve_engine_timeout,
 )
 from mistral_common.experimental.app.routers import (
     decode_router,
@@ -17,6 +18,7 @@ from mistral_common.experimental.app.routers import (
 )
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from mistral_common.types import TimeoutType
 
 
 def create_app(
@@ -24,7 +26,7 @@ def create_app(
     validation_mode: ValidationMode = ValidationMode.test,
     engine_url: str = "http://127.0.0.1:8080",
     engine_backend: EngineBackend = EngineBackend.llama_cpp,
-    timeout: int = 60,
+    timeout: TimeoutType = 60,
 ) -> FastAPI:
     r"""Create a Mistral-common FastAPI app with the given tokenizer and validation mode.
 
@@ -38,14 +40,15 @@ def create_app(
             Only used when tokenizer is a path.
         engine_url: The URL of the engine API used for chat completions.
         engine_backend: The backend type of the engine API.
-        timeout: The timeout of the engine API in seconds. Must be positive.
+        timeout: The timeout of the engine API in seconds: a positive finite number, or a string that
+            converts to one.
 
     Returns:
         The configured FastAPI application.
 
     Raises:
-        ValueError: If tokenizer is neither a path nor a MistralTokenizer.
-        ValidationError: If timeout is not positive.
+        ValueError: If tokenizer is neither a path nor a MistralTokenizer, or if timeout is not a positive
+            finite number.
     """
     if not isinstance(tokenizer, (MistralTokenizer, str, Path)):
         raise ValueError("Tokenizer must be a path or a MistralTokenizer instance.")
@@ -60,7 +63,7 @@ def create_app(
         settings = Settings(
             engine_url=engine_url,
             engine_backend=engine_backend,
-            timeout=timeout,
+            timeout=resolve_engine_timeout(timeout),
         )
         if isinstance(tokenizer, MistralTokenizer):
             settings.tokenizer = tokenizer
@@ -72,6 +75,13 @@ def create_app(
     app.dependency_overrides[get_settings] = get_settings_override
 
     return app
+
+
+def _validate_timeout_option(ctx: click.Context, param: click.Parameter, value: float) -> float:
+    try:
+        return resolve_engine_timeout(value)
+    except ValueError as e:
+        raise click.BadParameter(str(e), ctx=ctx, param=param) from e
 
 
 @click.group()
@@ -117,9 +127,10 @@ def cli() -> None:
 )
 @click.option(
     "--timeout",
-    type=click.IntRange(min=1),
+    type=float,
     default=60,
-    help="Timeout",
+    callback=_validate_timeout_option,
+    help="Engine timeout in seconds",
     show_default=True,
 )
 def serve(
@@ -129,7 +140,7 @@ def serve(
     port: int = 0,
     engine_url: str = "http://127.0.0.1:8080",
     engine_backend: str = EngineBackend.llama_cpp.value,
-    timeout: int = 60,
+    timeout: float = 60,
 ) -> None:
     r"""Serve the Mistral-common API with the given tokenizer path and validation mode."""
     app = create_app(

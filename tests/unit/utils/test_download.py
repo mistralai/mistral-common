@@ -1,5 +1,6 @@
 import pytest
 
+from mistral_common.types import TimeoutType
 from mistral_common.utils.download import (
     DEFAULT_DOWNLOAD_TIMEOUT_S,
     DOWNLOAD_TIMEOUT_ENV_KEY,
@@ -8,6 +9,10 @@ from mistral_common.utils.download import (
     resolve_env_download_timeout,
     validate_download_timeout,
 )
+
+
+def test_download_timeout_is_kept_as_alias_of_timeout_type() -> None:
+    assert DownloadTimeout is TimeoutType
 
 
 def test_resolve_env_download_timeout_default(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -35,7 +40,7 @@ def test_resolve_env_download_timeout_rejects_invalid(monkeypatch: pytest.Monkey
 
 
 @pytest.mark.parametrize("timeout", [5, 2.5, "7", "0.5"])
-def test_resolve_download_timeout_converts_numbers_to_float(timeout: DownloadTimeout) -> None:
+def test_resolve_download_timeout_converts_numbers_to_float(timeout: TimeoutType) -> None:
     assert resolve_download_timeout(timeout) == float(timeout)
     assert isinstance(resolve_download_timeout(timeout), float)
 
