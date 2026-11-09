@@ -389,6 +389,12 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         # OpenAI clients send `temperature: null` and `top_p: null` to mean the default.
         kwargs = {k: v for k, v in kwargs.items() if not (v is None and k in ["temperature", "top_p"])}
 
+        # OpenAI clients send `strict: null` in a JSON schema response format to mean the default.
+        response_format = kwargs.get("response_format")
+        if isinstance(response_format, dict) and isinstance(response_format.get("json_schema"), dict):
+            json_schema = {k: v for k, v in response_format["json_schema"].items() if not (k == "strict" and v is None)}
+            kwargs["response_format"] = {**response_format, "json_schema": json_schema}
+
         converted_messages: list[ChatMessage] = convert_openai_messages(messages)
         converted_messages = _map_continue_final_message(
             messages=converted_messages,

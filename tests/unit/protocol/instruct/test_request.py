@@ -685,6 +685,33 @@ def test_request_from_openai_accepts_schema_key() -> None:
     assert request.response_format.json_schema.custom_schema == schema
 
 
+@pytest.mark.parametrize(
+    ("strict", "expected"),
+    [
+        pytest.param({"strict": True}, True, id="true"),
+        pytest.param({"strict": False}, False, id="false"),
+        pytest.param({"strict": None}, False, id="none-maps-to-default-false"),
+        pytest.param({}, False, id="absent"),
+    ],
+)
+def test_request_from_openai_json_schema_strict(strict: dict[str, bool | None], expected: bool) -> None:
+    response_format: dict[str, Any] = {
+        "type": "json_schema",
+        "json_schema": {"name": "x", "schema": {"type": "object"}, **strict},
+    }
+    original = deepcopy(response_format)
+
+    request = ChatCompletionRequest.from_openai(
+        messages=[{"role": "user", "content": "hi"}], response_format=response_format
+    )
+
+    assert response_format == original
+    assert request.response_format is not None
+    assert request.response_format.json_schema is not None
+    assert request.response_format.json_schema.strict is expected
+    assert ChatCompletionRequest.from_openai(**request.to_openai()) == request
+
+
 def test_reasoning_effort_order() -> None:
     assert list(ReasoningEffort) == [
         ReasoningEffort.none,
