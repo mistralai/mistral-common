@@ -373,7 +373,8 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             from OpenAI format.
 
         Raises:
-            ValueError: If both "seed" and `random_seed` are specified in kwargs.
+            ValueError: If both "seed" and `random_seed` are specified in kwargs, or if
+                `max_tokens` and "max_completion_tokens" are both set to different values.
         """
         if "seed" in kwargs and "random_seed" in kwargs:
             raise ValueError("Cannot specify both `seed` and `random_seed`.")
@@ -381,6 +382,17 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         random_seed = kwargs.pop("seed", None)
         if random_seed is None:
             random_seed = kwargs.pop("random_seed", None)
+
+        # OpenAI deprecates `max_tokens` in favor of `max_completion_tokens`.
+        max_completion_tokens = kwargs.pop("max_completion_tokens", None)
+        if max_completion_tokens is not None:
+            max_tokens = kwargs.get("max_tokens")
+            if max_tokens is not None and max_tokens != max_completion_tokens:
+                raise ValueError(
+                    f"Cannot specify different values for `max_tokens` ({max_tokens}) "
+                    f"and `max_completion_tokens` ({max_completion_tokens})."
+                )
+            kwargs["max_tokens"] = max_completion_tokens
 
         # OpenAI clients send `parallel_tool_calls: null` to mean the default.
         if "parallel_tool_calls" in kwargs and kwargs["parallel_tool_calls"] is None:

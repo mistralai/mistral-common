@@ -377,6 +377,33 @@ def test_request_from_openai_rejects_conflicting_seed_names() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("limits", "expected"),
+    [
+        pytest.param({}, None, id="absent"),
+        pytest.param({"max_tokens": 5}, 5, id="max-tokens-only"),
+        pytest.param({"max_completion_tokens": 7}, 7, id="max-completion-tokens-only"),
+        pytest.param({"max_completion_tokens": None}, None, id="max-completion-tokens-null"),
+        pytest.param({"max_tokens": 7, "max_completion_tokens": 7}, 7, id="both-equal"),
+        pytest.param({"max_tokens": 7, "max_completion_tokens": None}, 7, id="null-alias-keeps-max-tokens"),
+    ],
+)
+def test_request_from_openai_max_completion_tokens(limits: dict[str, Any], expected: int | None) -> None:
+    request = ChatCompletionRequest.from_openai(messages=[{"role": "user", "content": "hi"}], **limits)
+
+    assert request.max_tokens == expected
+    assert ChatCompletionRequest.from_openai(**request.to_openai()) == request
+
+
+def test_request_from_openai_rejects_conflicting_max_tokens() -> None:
+    with pytest.raises(ValueError, match=r"`max_tokens` \(5\) and `max_completion_tokens` \(7\)"):
+        ChatCompletionRequest.from_openai(
+            messages=[{"role": "user", "content": "hi"}],
+            max_tokens=5,
+            max_completion_tokens=7,
+        )
+
+
 def test_request_from_openai_rejects_invalid_recognized_value() -> None:
     with pytest.raises(ValidationError, match="temperature"):
         ChatCompletionRequest.from_openai(
