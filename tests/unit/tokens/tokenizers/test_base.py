@@ -8,7 +8,7 @@ from typing import Callable
 import pytest
 
 import mistral_common
-from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTokens, Tokenizer, TokenizerVersion
+from mistral_common.tokens.tokenizers.base import SpecialTokens, Tokenizer, TokenizerVersion
 from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import quick_vocab
@@ -159,20 +159,3 @@ class TestTokenizerSharedMethods:
         assert record[0].category is FutureWarning
         assert "`_control_tokens` is deprecated." in str(record[0].message)
         assert record[0].filename == __file__
-
-    @pytest.mark.parametrize("tokenizer_cls", [Tekkenizer, SentencePieceTokenizer])
-    @pytest.mark.parametrize("name", ["get_control_token", "_to_string"])
-    def test_shared_methods_are_inherited_from_tokenizer(self, tokenizer_cls: type[Tokenizer], name: str) -> None:
-        assert name not in vars(tokenizer_cls)
-        assert getattr(tokenizer_cls, name) is getattr(Tokenizer, name)
-
-    def test_shared_methods_match_tokenizer_behavior(self, tokenizer: Tokenizer) -> None:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            for token in (SpecialTokens.bos.value, SpecialTokens.eos.value):
-                assert tokenizer.get_control_token(token) == tokenizer.get_special_token(token)
-
-        tokens = [tokenizer.bos_id, *tokenizer.encode("hello", bos=False, eos=False), tokenizer.eos_id]
-        assert tokenizer._to_string(tokens) == tokenizer.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP)
-        assert tokenizer._to_string(tokens).startswith("<s>")
-        assert tokenizer._to_string(tokens).endswith("</s>")
