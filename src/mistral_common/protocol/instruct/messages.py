@@ -5,7 +5,7 @@ from typing import Annotated, Any, ClassVar, Literal, TypeAlias, TypeGuard, Type
 from pydantic import Field, model_validator
 
 from mistral_common.base import MistralBase
-from mistral_common.exceptions import InvalidAssistantMessageException
+from mistral_common.exceptions import InvalidAssistantMessageException, InvalidRequestException
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURLChunk,
@@ -223,7 +223,12 @@ class UserMessage(BaseMessage):
 
         Returns:
             UserMessage instance with content deserialized from OpenAI format.
+
+        Raises:
+            InvalidRequestException: If the "content" key is missing.
         """
+        if "content" not in openai_message:
+            raise InvalidRequestException("content must be provided for user messages.")
         return cls.model_validate(
             {"role": openai_message["role"], "content": cls._content_from_openai(openai_message["content"])}
         )
@@ -266,7 +271,12 @@ class SystemMessage(BaseMessage):
 
         Returns:
             SystemMessage instance with content deserialized from OpenAI format.
+
+        Raises:
+            InvalidRequestException: If the "content" key is missing.
         """
+        if "content" not in openai_message:
+            raise InvalidRequestException("content must be provided for system messages.")
         return cls.model_validate(
             {"role": openai_message["role"], "content": cls._content_from_openai(openai_message["content"])}
         )
@@ -503,9 +513,10 @@ class ToolMessage(BaseMessage):
             Dictionary with "role" set to "tool", `tool_call_id`, and "content".
 
         Raises:
-            AssertionError: If `tool_call_id` is `None` (required for tool messages).
+            InvalidRequestException: If `tool_call_id` is `None` (required for tool messages).
         """
-        assert self.tool_call_id is not None, "tool_call_id must be provided for tool messages."
+        if self.tool_call_id is None:
+            raise InvalidRequestException("tool_call_id must be provided for tool messages.")
         return {
             "role": self.role,
             "tool_call_id": self.tool_call_id,
@@ -522,7 +533,14 @@ class ToolMessage(BaseMessage):
 
         Returns:
             ToolMessage instance with content and `tool_call_id` parsed from OpenAI format.
+
+        Raises:
+            InvalidRequestException: If the `tool_call_id` or "content" key is missing.
         """
+        if "tool_call_id" not in openai_message:
+            raise InvalidRequestException("tool_call_id must be provided for tool messages.")
+        if "content" not in openai_message:
+            raise InvalidRequestException("content must be provided for tool messages.")
         content = cls._content_from_openai(openai_message["content"])
         tool_message = cls.model_validate(
             {
