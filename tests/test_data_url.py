@@ -1,10 +1,11 @@
 import base64
+import binascii
 import io
 
 import numpy as np
 import pytest
 import soundfile as sf
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from pydantic import ValidationError
 
 from mistral_common.image import maybe_load_image_from_str_or_bytes
@@ -84,11 +85,42 @@ def test_image_chunk_rejects_malformed_data_url() -> None:
         ImageChunk(image="data:text/plain,hello")  # type: ignore[arg-type]
 
 
-def test_image_chunk_garbage_base64_still_raises_runtime_error() -> None:
-    # Inputs that are not data URLs keep the historical contract: the
-    # validator reports undecodable payloads as RuntimeError.
-    with pytest.raises(RuntimeError, match="Encountered an error when loading image"):
-        ImageChunk(image="aGVsbG8gd29ybGQ=")  # type: ignore[arg-type]
+_UNDECODABLE_IMAGES = [
+    pytest.param("not base64 at all!!", "starting with 'not base64 at all!!'", binascii.Error, id="not-base64"),
+    pytest.param("aGVsbG8gd29ybGQ=", "starting with 'aGVsbG8gd29ybGQ='", UnidentifiedImageError, id="not-an-image"),
+    pytest.param(b"notanimage", "from bytes", UnidentifiedImageError, id="bytes-not-an-image"),
+]
+_UNSUPPORTED_IMAGES = [
+    pytest.param(42, "got int", id="int"),
+    pytest.param(None, "got NoneType", id="none"),
+]
+
+
+@pytest.mark.parametrize("image, match, cause", _UNDECODABLE_IMAGES)
+def test_image_chunk_rejects_undecodable_image(image: str | bytes, match: str, cause: type[Exception]) -> None:
+    with pytest.raises(ValidationError, match=match):
+        ImageChunk(image=image)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("image, match", _UNSUPPORTED_IMAGES)
+def test_image_chunk_rejects_unsupported_image_type(image: object, match: str) -> None:
+    with pytest.raises(ValidationError, match=match):
+        ImageChunk(image=image)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("image, match, cause", _UNDECODABLE_IMAGES)
+def test_maybe_load_image_from_str_or_bytes_chains_decode_error(
+    image: str | bytes, match: str, cause: type[Exception]
+) -> None:
+    with pytest.raises(ValueError, match=match) as exc_info:
+        maybe_load_image_from_str_or_bytes(image)
+    assert isinstance(exc_info.value.__cause__, cause)
+
+
+@pytest.mark.parametrize("image, match", _UNSUPPORTED_IMAGES)
+def test_maybe_load_image_from_str_or_bytes_rejects_unsupported_type(image: object, match: str) -> None:
+    with pytest.raises(ValueError, match=match):
+        maybe_load_image_from_str_or_bytes(image)  # type: ignore[arg-type]
 
 
 def test_maybe_load_image_from_str_or_bytes_rejects_malformed_data_url() -> None:
