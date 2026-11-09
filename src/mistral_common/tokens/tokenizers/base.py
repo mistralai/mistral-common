@@ -222,25 +222,23 @@ class TokenizerVersion(StrEnum):
         """
         return self >= TokenizerVersion.v15
 
-    def __lt__(self, other: "str | TokenizerVersion") -> bool:
+    @staticmethod
+    def _other_version_num(other: "str | TokenizerVersion") -> int:
         if isinstance(other, str):
             other = TokenizerVersion(other)
-        return self.version_num < other.version_num
+        return other.version_num
+
+    def __lt__(self, other: "str | TokenizerVersion") -> bool:
+        return self.version_num < self._other_version_num(other)
 
     def __le__(self, other: "str | TokenizerVersion") -> bool:
-        if isinstance(other, str):
-            other = TokenizerVersion(other)
-        return self.version_num <= other.version_num
+        return self.version_num <= self._other_version_num(other)
 
     def __gt__(self, other: "str | TokenizerVersion") -> bool:
-        if isinstance(other, str):
-            other = TokenizerVersion(other)
-        return self.version_num > other.version_num
+        return self.version_num > self._other_version_num(other)
 
     def __ge__(self, other: "str | TokenizerVersion") -> bool:
-        if isinstance(other, str):
-            other = TokenizerVersion(other)
-        return self.version_num >= other.version_num
+        return self.version_num >= self._other_version_num(other)
 
     v1 = auto()  # vocab_size = 32000
     v2 = auto()  # vocab_size = 32768 with special control tokens [INST], [\INST]
