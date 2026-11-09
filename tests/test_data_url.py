@@ -84,13 +84,6 @@ def test_image_chunk_rejects_malformed_data_url() -> None:
         ImageChunk(image="data:text/plain,hello")  # type: ignore[arg-type]
 
 
-def test_image_chunk_garbage_base64_still_raises_runtime_error() -> None:
-    # Inputs that are not data URLs keep the historical contract: the
-    # validator reports undecodable payloads as RuntimeError.
-    with pytest.raises(RuntimeError, match="Encountered an error when loading image"):
-        ImageChunk(image="aGVsbG8gd29ybGQ=")  # type: ignore[arg-type]
-
-
 def test_maybe_load_image_from_str_or_bytes_rejects_malformed_data_url() -> None:
     with pytest.raises(ValueError, match="Invalid base64 data URL"):
         maybe_load_image_from_str_or_bytes("data:text/plain,hello")

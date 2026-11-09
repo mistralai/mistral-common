@@ -66,23 +66,27 @@ def maybe_load_image_from_str_or_bytes(x: Image.Image | str | bytes) -> Image.Im
        The loaded image as a PIL Image object.
 
     Raises:
-        ValueError: If the input is a malformed data URL.
-        RuntimeError: If the input cannot be decoded into an image.
+        ValueError: If the input is a malformed data URL, cannot be decoded
+            into an image, or is not a PIL Image, a string or bytes.
     """
     if isinstance(x, Image.Image):
         return x
     if isinstance(x, bytes):
         try:
             return Image.open(io.BytesIO(x))
-        except Exception:
-            raise RuntimeError("Encountered an error when loading image from bytes.")
+        except Exception as e:
+            raise ValueError("Encountered an error when loading image from bytes.") from e
+    if not isinstance(x, str):
+        raise ValueError(
+            f"Expected either a PIL.Image.Image, bytes or a base64 encoded string of bytes, got {type(x).__name__}."
+        )
 
     x = maybe_strip_base64_data_url_prefix(x)
     try:
         image = Image.open(io.BytesIO(base64.b64decode(x.encode("ascii"))))
         return image
     except Exception as e:
-        raise RuntimeError(
+        raise ValueError(
             f"Encountered an error when loading image from bytes starting "
             f"with '{x[:20]}'. Expected either a PIL.Image.Image or a base64 "
             f"encoded string of bytes."
