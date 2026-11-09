@@ -1,5 +1,5 @@
 from enum import Enum, StrEnum, auto
-from typing import Any, ClassVar, Generic, Literal, TypeAlias, TypeVar, final
+from typing import ClassVar, Generic, Literal, TypeVar, final
 
 from pydantic import model_validator
 
@@ -12,6 +12,7 @@ from mistral_common.protocol.instruct.request import (
     ResponseFormat,
     SchemaRenderingMode,
 )
+from mistral_common.types import JSONSchemaDict as JSONSchemaDict
 from mistral_common.utils.json_utils import validate_json_schema_by_draft7
 
 
@@ -29,7 +30,6 @@ class ValidatorType(StrEnum):
 
 InputT = TypeVar("InputT")
 OutputT = TypeVar("OutputT")
-JSONSchemaDict: TypeAlias = dict[str, Any] | None
 
 
 class FieldBuilder(MistralBase, Generic[InputT, OutputT]):
