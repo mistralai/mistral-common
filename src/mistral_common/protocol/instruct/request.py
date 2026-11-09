@@ -332,16 +332,15 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         if self.tools:
             openai_request["parallel_tool_calls"] = self.parallel_tool_calls
 
-        openai_tool_choice: str | dict[str, Any]
-        match self.tool_choice:
-            case ToolChoiceEnum.auto | ToolChoiceEnum.none:
-                openai_tool_choice = self.tool_choice
-            case ToolChoiceEnum.required | ToolChoiceEnum.any:
-                openai_tool_choice = ToolChoiceEnum.required.value
-            case _:
-                openai_tool_choice = self.tool_choice.model_dump()
+            openai_tool_choice: str | dict[str, Any]
+            match self.tool_choice:
+                case ToolChoiceEnum.auto | ToolChoiceEnum.none:
+                    openai_tool_choice = self.tool_choice
+                case ToolChoiceEnum.required | ToolChoiceEnum.any:
+                    openai_tool_choice = ToolChoiceEnum.required.value
+                case _:
+                    openai_tool_choice = self.tool_choice.model_dump()
 
-        if self.tools:
             openai_request["tool_choice"] = openai_tool_choice
 
         openai_request.update(kwargs)
