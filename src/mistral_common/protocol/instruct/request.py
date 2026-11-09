@@ -373,7 +373,8 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
             from OpenAI format.
 
         Raises:
-            ValueError: If both "seed" and `random_seed` are specified in kwargs.
+            ValueError: If both "seed" and `random_seed` are specified in kwargs, or if
+                `max_tokens` and "max_completion_tokens" are both set to different values.
         """
         if "seed" in kwargs and "random_seed" in kwargs:
             raise ValueError("Cannot specify both `seed` and `random_seed`.")
@@ -382,12 +383,29 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         if random_seed is None:
             random_seed = kwargs.pop("random_seed", None)
 
+        # OpenAI deprecates `max_tokens` in favor of `max_completion_tokens`.
+        max_completion_tokens = kwargs.pop("max_completion_tokens", None)
+        if max_completion_tokens is not None:
+            max_tokens = kwargs.get("max_tokens")
+            if max_tokens is not None and max_tokens != max_completion_tokens:
+                raise ValueError(
+                    f"Cannot specify different values for `max_tokens` ({max_tokens}) "
+                    f"and `max_completion_tokens` ({max_completion_tokens})."
+                )
+            kwargs["max_tokens"] = max_completion_tokens
+
         # OpenAI clients send `parallel_tool_calls: null` to mean the default.
         if "parallel_tool_calls" in kwargs and kwargs["parallel_tool_calls"] is None:
             kwargs["parallel_tool_calls"] = True
 
         # OpenAI clients send `temperature: null` and `top_p: null` to mean the default.
         kwargs = {k: v for k, v in kwargs.items() if not (v is None and k in ["temperature", "top_p"])}
+
+        # OpenAI clients send `strict: null` in a JSON schema response format to mean the default.
+        response_format = kwargs.get("response_format")
+        if isinstance(response_format, dict) and isinstance(response_format.get("json_schema"), dict):
+            json_schema = {k: v for k, v in response_format["json_schema"].items() if not (k == "strict" and v is None)}
+            kwargs["response_format"] = {**response_format, "json_schema": json_schema}
 
         converted_messages: list[ChatMessage] = convert_openai_messages(messages)
         converted_messages = _map_continue_final_message(
