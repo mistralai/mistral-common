@@ -6,7 +6,7 @@ from pydantic import Field, model_validator
 from pydantic_extra_types.language_code import LanguageAlpha2
 
 from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
-from mistral_common.protocol.base import _FROM_OPENAI, _SAMPLING_FIELDS, BaseCompletionRequest, _deprecations
+from mistral_common.protocol.base import _DEPRECATED_FIELDS, _FROM_OPENAI, BaseCompletionRequest
 from mistral_common.protocol.instruct.chunk import _detect_audio_format
 from mistral_common.tokens.tokenizers.audio import Audio
 
@@ -71,10 +71,7 @@ class TranscriptionRequest(BaseCompletionRequest):
             is a request, not a guarantee; unsupported models ignore it.
     """
 
-    _deprecated_fields: ClassVar[dict[str, str]] = {
-        **_deprecations("TranscriptionRequest", ("id", "model", *_SAMPLING_FIELDS)),
-        **_deprecations("TranscriptionRequest", ("strict_audio_validation",), hint="It has no effect."),
-    }
+    _deprecated_fields: ClassVar[tuple[str, ...]] = _DEPRECATED_FIELDS["TranscriptionRequest"]
 
     id: str | None = None
     model: str | None = None

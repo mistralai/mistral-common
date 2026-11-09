@@ -5,9 +5,13 @@ from typing import Any, ClassVar, Generic, Self
 from pydantic import ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
 from mistral_common.base import MistralBase
-from mistral_common.deprecation import warn_once
 from mistral_common.exceptions import InvalidMessageStructureException
-from mistral_common.protocol.base import _FROM_OPENAI, _SAMPLING_FIELDS, BaseCompletionRequest, _deprecations
+from mistral_common.protocol.base import (
+    _DEPRECATED_FIELDS,
+    _FROM_OPENAI,
+    BaseCompletionRequest,
+    _warn_once_for_deprecated_fields,
+)
 from mistral_common.protocol.instruct.converters import (
     convert_openai_messages,
     convert_openai_tools,
@@ -24,16 +28,6 @@ from mistral_common.utils.json_utils import validate_json_schema_by_draft7
 _CONTINUE_FINAL_MESSAGE_ERROR = "continue_final_message=True requires final message to be an assistant."
 
 _JSON_OBJECT_OR_ARRAY_SCHEMA: dict[str, Any] = {"anyOf": [{"type": "object"}, {"type": "array"}]}
-
-_TRUNCATE_FOR_CONTEXT_LENGTH_KEY = "truncate_for_context_length"
-_TRUNCATE_FOR_CONTEXT_LENGTH_DEPRECATION = (
-    "`ChatCompletionRequest.truncate_for_context_length` is deprecated and will be removed in 1.15.0. "
-    "Truncate the conversation before encoding instead."
-)
-_TRUNCATE_AT_MAX_TOKENS_DEPRECATION = (
-    "`InstructRequest.truncate_at_max_tokens` is deprecated and will be removed in 1.15.0. "
-    "Truncate the conversation before encoding instead."
-)
 
 
 def _map_continue_final_message(messages: Iterable[ChatMessage], continue_final_message: bool) -> list[ChatMessage]:
@@ -248,10 +242,7 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         ... )
     """
 
-    _deprecated_fields: ClassVar[dict[str, str]] = {
-        **_deprecations("ChatCompletionRequest", _SAMPLING_FIELDS),
-        _TRUNCATE_FOR_CONTEXT_LENGTH_KEY: _TRUNCATE_FOR_CONTEXT_LENGTH_DEPRECATION,
-    }
+    _deprecated_fields: ClassVar[tuple[str, ...]] = _DEPRECATED_FIELDS["ChatCompletionRequest"]
 
     model: str | None = None
     messages: list[ChatMessageType]
@@ -411,14 +402,8 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         if "seed" in kwargs and "random_seed" in kwargs:
             raise ValueError("Cannot specify both `seed` and `random_seed`.")
 
-        if _TRUNCATE_FOR_CONTEXT_LENGTH_KEY in kwargs:
-            # Warn here so that the warning points at the caller of `from_openai`.
-            warn_once(
-                key=_TRUNCATE_FOR_CONTEXT_LENGTH_DEPRECATION,
-                message=_TRUNCATE_FOR_CONTEXT_LENGTH_DEPRECATION,
-                category=DeprecationWarning,
-                stacklevel=3,
-            )
+        # Warn here so that the warning points at the caller of `from_openai`.
+        _warn_once_for_deprecated_fields(("truncate_for_context_length",), kwargs, stacklevel=2)
 
         random_seed = kwargs.pop("seed", None)
         if random_seed is None:
@@ -509,11 +494,5 @@ class InstructRequest(MistralBase, Generic[ChatMessageType, ToolType]):
     @classmethod
     def _warn_truncate_at_max_tokens(cls, values: Any) -> Any:
         r"""Warn when the deprecated `truncate_at_max_tokens` is set explicitly."""
-        if isinstance(values, dict) and "truncate_at_max_tokens" in values:
-            warn_once(
-                key="InstructRequest.truncate_at_max_tokens",
-                message=_TRUNCATE_AT_MAX_TOKENS_DEPRECATION,
-                category=DeprecationWarning,
-                stacklevel=4,
-            )
+        _warn_once_for_deprecated_fields(_DEPRECATED_FIELDS["InstructRequest"], values, stacklevel=3)
         return values

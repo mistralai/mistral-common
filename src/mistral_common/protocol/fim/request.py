@@ -1,6 +1,6 @@
 from typing import ClassVar
 
-from mistral_common.protocol.base import _SAMPLING_FIELDS, BaseCompletionRequest, _deprecations
+from mistral_common.protocol.base import _DEPRECATED_FIELDS, BaseCompletionRequest
 
 
 class FIMRequest(BaseCompletionRequest):
@@ -27,7 +27,7 @@ class FIMRequest(BaseCompletionRequest):
         >>> request = FIMRequest(prompt="Hello, my name is", suffix=" and I live in New York.")
     """
 
-    _deprecated_fields: ClassVar[dict[str, str]] = _deprecations("FIMRequest", _SAMPLING_FIELDS)
+    _deprecated_fields: ClassVar[tuple[str, ...]] = _DEPRECATED_FIELDS["FIMRequest"]
 
     prompt: str
     suffix: str | None = None

@@ -4,7 +4,7 @@ from typing import Any, ClassVar
 from pydantic import model_validator
 
 from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
-from mistral_common.protocol.base import _FROM_OPENAI, _SAMPLING_FIELDS, BaseCompletionRequest, _deprecations
+from mistral_common.protocol.base import _DEPRECATED_FIELDS, _FROM_OPENAI, BaseCompletionRequest
 from mistral_common.protocol.instruct.chunk import _detect_audio_format
 from mistral_common.tokens.tokenizers.audio import Audio
 
@@ -40,7 +40,7 @@ class SpeechRequest(BaseCompletionRequest):
             both are provided.
     """
 
-    _deprecated_fields: ClassVar[dict[str, str]] = _deprecations("SpeechRequest", ("id", "model", *_SAMPLING_FIELDS))
+    _deprecated_fields: ClassVar[tuple[str, ...]] = _DEPRECATED_FIELDS["SpeechRequest"]
 
     id: str | None = None
     model: str | None = None

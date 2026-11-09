@@ -5,19 +5,16 @@ from typing import Any
 import pytest
 
 import mistral_common.deprecation
+from mistral_common.protocol.base import _DEPRECATED_FIELDS_MESSAGE
 from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, UserMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
-_REMOVAL = "is deprecated and will be removed in 1.15.0. Truncate the conversation before encoding instead."
-_CHAT_FIELD_WARNING = f"`ChatCompletionRequest.truncate_for_context_length` {_REMOVAL}"
-_INSTRUCT_FIELD_WARNING = f"`InstructRequest.truncate_at_max_tokens` {_REMOVAL}"
-_ENCODE_ARG_WARNING = f"`MistralTokenizer.encode_chat_completion(max_model_input_len=...)` {_REMOVAL}"
-_WARNED_KEYS = (
-    _CHAT_FIELD_WARNING,
-    "InstructRequest.truncate_at_max_tokens",
-    "MistralTokenizer.encode_chat_completion.max_model_input_len",
+_ENCODE_ARG_WARNING = (
+    "`MistralTokenizer.encode_chat_completion(max_model_input_len=...)` is deprecated and will be removed in 1.15.0. "
+    "Truncate the conversation before encoding instead."
 )
+_WARNED_KEYS = (_DEPRECATED_FIELDS_MESSAGE, "MistralTokenizer.encode_chat_completion.max_model_input_len")
 
 _MESSAGES: list[ChatMessage] = [
     UserMessage(content="first question " * 10),
@@ -56,24 +53,23 @@ def _record_warnings(call: Callable[[], Any]) -> list[str]:
         ),
         lambda: ChatCompletionRequest.from_openai(_OPENAI_MESSAGES, truncate_for_context_length=True),
         lambda: ChatCompletionRequest.from_openai(_OPENAI_MESSAGES, truncate_for_context_length=False),
-    ],
-    ids=["init_true", "init_false", "model_validate", "from_openai_true", "from_openai_false"],
-)
-def test_truncate_for_context_length_warns(build: Callable[[], Any]) -> None:
-    assert _record_warnings(build) == [_CHAT_FIELD_WARNING]
-
-
-@pytest.mark.parametrize(
-    "build",
-    [
         lambda: InstructRequest(messages=_MESSAGES, truncate_at_max_tokens=10),
         lambda: InstructRequest(messages=_MESSAGES, truncate_at_max_tokens=None),
         lambda: InstructRequest.model_validate({"messages": _OPENAI_MESSAGES, "truncate_at_max_tokens": 10}),
     ],
-    ids=["init_int", "init_none", "model_validate"],
+    ids=[
+        "chat_init_true",
+        "chat_init_false",
+        "chat_model_validate",
+        "chat_from_openai_true",
+        "chat_from_openai_false",
+        "instruct_init_int",
+        "instruct_init_none",
+        "instruct_model_validate",
+    ],
 )
-def test_truncate_at_max_tokens_warns(build: Callable[[], Any]) -> None:
-    assert _record_warnings(build) == [_INSTRUCT_FIELD_WARNING]
+def test_truncation_field_warns(build: Callable[[], Any]) -> None:
+    assert _record_warnings(build) == [_DEPRECATED_FIELDS_MESSAGE]
 
 
 def test_encode_chat_completion_max_model_input_len_warns_once_per_deprecated_name() -> None:
@@ -85,8 +81,9 @@ def test_encode_chat_completion_max_model_input_len_warns_once_per_deprecated_na
         request = ChatCompletionRequest(messages=_MESSAGES, truncate_for_context_length=True)
         return tokenizer.encode_chat_completion(request, max_model_input_len=budget)
 
-    # One warning per deprecated name: building the InstructRequest internally does not warn.
-    assert _record_warnings(encode) == [_CHAT_FIELD_WARNING, _ENCODE_ARG_WARNING]
+    # One warning for the deprecated fields and one for the deprecated argument: building the
+    # InstructRequest internally does not warn again.
+    assert _record_warnings(encode) == [_DEPRECATED_FIELDS_MESSAGE, _ENCODE_ARG_WARNING]
 
     # Warnings are emitted once per process, and truncation still applies.
     with warnings.catch_warnings():

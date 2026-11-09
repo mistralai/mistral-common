@@ -5,36 +5,58 @@ from typing import Any
 
 import numpy as np
 import pytest
+from pydantic import BaseModel
 from pydantic_extra_types.language_code import LanguageAlpha2
 
 import mistral_common.deprecation
-from mistral_common.protocol.base import BaseCompletionRequest
+from mistral_common.protocol.base import _DEPRECATED_FIELDS_MESSAGE, BaseCompletionRequest
 from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.instruct.messages import UserMessage
-from mistral_common.protocol.instruct.request import ChatCompletionRequest, ReasoningEffort
+from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest, ReasoningEffort
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import TranscriptionRequest
 from tests.unit.protocol.audio_helpers import audio_bytes
 
-_UNUSED = (
-    "is deprecated and will be removed in 1.15.0. "
-    "mistral-common does not use it; pass it to your inference engine instead."
+_MESSAGE = (
+    "The following mistral-common request fields are deprecated and will be removed in 1.15.0:\n"
+    "- ChatCompletionRequest: temperature, top_p, max_tokens, random_seed, truncate_for_context_length\n"
+    "- FIMRequest: temperature, top_p, max_tokens, random_seed\n"
+    "- InstructRequest: truncate_at_max_tokens\n"
+    "- SpeechRequest: id, model, temperature, top_p, max_tokens, random_seed\n"
+    "- TranscriptionRequest: id, model, temperature, top_p, max_tokens, random_seed, strict_audio_validation\n"
+    "mistral-common does not use id, model, temperature, top_p, max_tokens or random_seed: pass them to your "
+    "inference engine instead. Instead of truncate_for_context_length and truncate_at_max_tokens, truncate the "
+    "conversation before encoding. strict_audio_validation has no effect.\n"
+    "If you do not set these fields through mistral-common, you can ignore this warning."
 )
 _SAMPLING: dict[str, Any] = {"temperature": 0.2, "top_p": 0.9, "max_tokens": 16, "random_seed": 7}
+_UNUSED: dict[str, Any] = {"id": "1", "model": "m", **_SAMPLING}
 _OPENAI_SAMPLING: dict[str, Any] = {"model": "my-model", "temperature": 0.2, "top_p": 0.9, "max_tokens": 16, "seed": 7}
-_CLASSES = (ChatCompletionRequest, FIMRequest, SpeechRequest, TranscriptionRequest)
 
-
-def _sampling_warnings(owner: str) -> list[str]:
-    return [f"`{owner}.{field}` {_UNUSED}" for field in _SAMPLING]
+_REQUIRED: dict[type[BaseModel], dict[str, Any]] = {
+    ChatCompletionRequest: {"messages": [UserMessage(content="Hi")]},
+    FIMRequest: {"prompt": "def"},
+    InstructRequest: {"messages": [UserMessage(content="Hi")]},
+    SpeechRequest: {"input": "Hi", "voice": "v"},
+    TranscriptionRequest: {"audio": ""},
+}
+# Every deprecated request field, with a value to set it to (defaults included: any explicit value warns).
+_DEPRECATED: list[tuple[type[BaseModel], str, Any]] = [
+    *[(ChatCompletionRequest, field, value) for field, value in _SAMPLING.items()],
+    (ChatCompletionRequest, "truncate_for_context_length", False),
+    *[(FIMRequest, field, value) for field, value in _SAMPLING.items()],
+    (InstructRequest, "truncate_at_max_tokens", None),
+    *[(SpeechRequest, field, value) for field, value in _UNUSED.items()],
+    *[(TranscriptionRequest, field, value) for field, value in _UNUSED.items()],
+    (TranscriptionRequest, "strict_audio_validation", True),
+]
 
 
 @pytest.fixture(autouse=True)
 def _reset_warnings() -> Generator[None, None, None]:
-    keys = {message for cls in _CLASSES for message in cls._deprecated_fields.values()}
-    mistral_common.deprecation._warned_keys.difference_update(keys)
+    mistral_common.deprecation._warned_keys.discard(_DEPRECATED_FIELDS_MESSAGE)
     yield
-    mistral_common.deprecation._warned_keys.difference_update(keys)
+    mistral_common.deprecation._warned_keys.discard(_DEPRECATED_FIELDS_MESSAGE)
 
 
 def _record_warnings(call: Callable[[], Any]) -> list[str]:
@@ -52,52 +74,20 @@ def wav(audio_samples: np.ndarray) -> bytes:
     return audio_bytes(samples=audio_samples, fmt="wav")
 
 
-@pytest.mark.parametrize("via", ["init", "model_validate"])
-def test_chat_sampling_fields_warn_once_each(via: str) -> None:
-    values: dict[str, Any] = {"messages": [UserMessage(content="Hi")], **_SAMPLING}
+@pytest.mark.parametrize(
+    ("cls", "field", "value"), _DEPRECATED, ids=[f"{cls.__name__}.{field}" for cls, field, _ in _DEPRECATED]
+)
+def test_deprecated_field_warns_once_for_all_fields(cls: type[BaseModel], field: str, value: Any) -> None:
+    requests: list[Any] = []
+    assert _record_warnings(lambda: requests.append(cls(**_REQUIRED[cls], **{field: value}))) == [_MESSAGE]
+    assert getattr(requests[0], field) == value
 
-    def build() -> Any:
-        return ChatCompletionRequest(**values) if via == "init" else ChatCompletionRequest.model_validate(values)
+    # One warning per process for all deprecated fields: setting any of them again is silent.
+    def set_every_deprecated_field() -> None:
+        for other_cls, other_field, other_value in _DEPRECATED:
+            other_cls.model_validate({**_REQUIRED[other_cls], other_field: other_value})
 
-    assert _record_warnings(build) == _sampling_warnings("ChatCompletionRequest")
-    # Once per process, and the values are still applied.
-    assert _record_warnings(build) == []
-    assert build().model_dump(include=set(_SAMPLING)) == _SAMPLING
-
-
-@pytest.mark.parametrize("value", [None, 0.7, 1.0])
-def test_chat_explicit_value_warns(value: float | None) -> None:
-    field = "max_tokens" if value is None else "temperature"
-    values: dict[str, Any] = {field: value}
-    warnings_ = _record_warnings(lambda: ChatCompletionRequest(messages=[UserMessage(content="Hi")], **values))
-    assert warnings_ == [f"`ChatCompletionRequest.{field}` {_UNUSED}"]
-
-
-def test_fim_sampling_fields_warn() -> None:
-    assert _record_warnings(lambda: FIMRequest(prompt="def", **_SAMPLING)) == _sampling_warnings("FIMRequest")
-
-
-def test_speech_unused_fields_warn() -> None:
-    warnings_ = _record_warnings(lambda: SpeechRequest(input="Hi", voice="v", id="1", model="tts", **_SAMPLING))
-    assert warnings_ == [
-        f"`SpeechRequest.id` {_UNUSED}",
-        f"`SpeechRequest.model` {_UNUSED}",
-        *_sampling_warnings("SpeechRequest"),
-    ]
-
-
-def test_transcription_unused_fields_warn() -> None:
-    def build() -> TranscriptionRequest:
-        return TranscriptionRequest.model_validate(
-            {"audio": "", "id": "1", "model": "stt", "strict_audio_validation": False, **_SAMPLING}
-        )
-
-    assert _record_warnings(build) == [
-        f"`TranscriptionRequest.id` {_UNUSED}",
-        f"`TranscriptionRequest.model` {_UNUSED}",
-        *_sampling_warnings("TranscriptionRequest"),
-        "`TranscriptionRequest.strict_audio_validation` is deprecated and will be removed in 1.15.0. It has no effect.",
-    ]
+    assert _record_warnings(set_every_deprecated_field) == []
 
 
 def test_no_warning_on_defaults_or_used_fields(wav: bytes) -> None:

@@ -61,9 +61,9 @@ class EngineChatCompletionRequest(ChatCompletionRequest):
         random_seed: Seed for reproducible sampling. If `None`, sampling is not reproducible.
     """
 
-    _deprecated_fields: ClassVar[dict[str, str]] = {
-        k: v for k, v in ChatCompletionRequest._deprecated_fields.items() if k not in _SAMPLING_FIELDS
-    }
+    _deprecated_fields: ClassVar[tuple[str, ...]] = tuple(
+        field for field in ChatCompletionRequest._deprecated_fields if field not in _SAMPLING_FIELDS
+    )
 
     temperature: float = Field(default=0.7, ge=0.0, le=1.0)
     top_p: float = Field(default=1.0, ge=0.0, le=1.0)

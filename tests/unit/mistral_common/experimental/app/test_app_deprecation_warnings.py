@@ -1,4 +1,5 @@
 import warnings
+from collections.abc import Generator
 from typing import Any
 from unittest.mock import patch
 
@@ -8,12 +9,19 @@ from fastapi.testclient import TestClient
 import mistral_common.deprecation
 from mistral_common.experimental.app.main import create_app
 from mistral_common.experimental.app.models import EngineChatCompletionRequest
+from mistral_common.protocol.base import _DEPRECATED_FIELDS_MESSAGE
 from mistral_common.protocol.instruct.messages import AssistantMessage, UserMessage
-from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.experimental.test_app import MockResponse
 
 _TEKKEN = MistralTokenizer._data_path() / "tekken_240911.json"
+
+
+@pytest.fixture(autouse=True)
+def _reset_warnings() -> Generator[None, None, None]:
+    mistral_common.deprecation._warned_keys.discard(_DEPRECATED_FIELDS_MESSAGE)
+    yield
+    mistral_common.deprecation._warned_keys.discard(_DEPRECATED_FIELDS_MESSAGE)
 
 
 @pytest.mark.parametrize(
@@ -24,8 +32,6 @@ _TEKKEN = MistralTokenizer._data_path() / "tekken_240911.json"
     ],
 )
 def test_app_forwards_sampling_fields_without_deprecation_warnings(sampling: dict[str, Any]) -> None:
-    deprecations = set(ChatCompletionRequest._deprecated_fields.values())
-    mistral_common.deprecation._warned_keys.difference_update(deprecations)
     tokenizer = MistralTokenizer.from_file(_TEKKEN)
     client = TestClient(create_app(tokenizer))
     body = {"messages": [{"role": "user", "content": "Hello, world!"}], **sampling}
@@ -41,7 +47,7 @@ def test_app_forwards_sampling_fields_without_deprecation_warnings(sampling: dic
     assert response.status_code == 200
     sent = mock_generate.call_args.kwargs["json"]
     assert {key: sent[key] for key in sampling} == sampling
-    assert not deprecations & mistral_common.deprecation._warned_keys
+    assert _DEPRECATED_FIELDS_MESSAGE not in mistral_common.deprecation._warned_keys
 
 
 def test_engine_request_keeps_sampling_fields_without_warnings() -> None:
@@ -52,3 +58,13 @@ def test_engine_request_keeps_sampling_fields_without_warnings() -> None:
 
     assert request.model_dump(include=set(sampling)) == sampling
     assert set(sampling) <= set(EngineChatCompletionRequest.model_fields)
+
+
+def test_engine_request_warns_for_truncate_for_context_length() -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        EngineChatCompletionRequest(messages=[UserMessage(content="Hi")], truncate_for_context_length=False)
+
+    assert [str(warning.message) for warning in caught] == [_DEPRECATED_FIELDS_MESSAGE]
+    assert caught[0].category is DeprecationWarning
+    assert caught[0].filename == __file__
