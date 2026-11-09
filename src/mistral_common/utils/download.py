@@ -6,9 +6,6 @@ from mistral_common.types import TimeoutType
 DOWNLOAD_TIMEOUT_ENV_KEY = "MISTRAL_COMMON_DOWNLOAD_TIMEOUT"
 DEFAULT_DOWNLOAD_TIMEOUT_S = 10.0
 
-# Kept for backward compatibility: `DownloadTimeout` was public in v1.13.1.
-DownloadTimeout = TimeoutType
-
 
 def validate_download_timeout(timeout: TimeoutType, *, error_message: str) -> float:
     r"""Convert a timeout to a positive finite float or raise.
