@@ -41,8 +41,6 @@ def mock_chat_completion(messages: list[ChatMessage]) -> ChatCompletionRequest:
     return ChatCompletionRequest(
         model="test",
         messages=messages,
-        top_p=1.0,
-        temperature=0.7,
     )
 
 
@@ -306,8 +304,6 @@ class TestChatCompletionRequestNormalization:
                 UserMessage(content="user"),
                 SystemMessage(content="system"),
             ],
-            top_p=1.0,
-            temperature=0.7,
         )
 
         parsed_request = normalizer.from_chat_completion_request(chat_completion_request)
@@ -761,8 +757,6 @@ class TestChatCompletionRequestNormalizationV13:
         return ChatCompletionRequest(
             model="test",
             messages=messages,
-            top_p=1.0,
-            temperature=0.7,
         )
 
     def test_no_reorder_tool_messages(self, normalizer_v13: InstructRequestNormalizerV13) -> None:

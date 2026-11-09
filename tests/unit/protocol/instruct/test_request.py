@@ -332,7 +332,7 @@ class TestChatCompletionRequest:
             "parallel_tool_calls": True,
         }
 
-        request = ChatCompletionRequest.from_openai(**openai_request)
+        request: ChatCompletionRequest = ChatCompletionRequest.from_openai(**openai_request)
 
         assert request.messages == expected_messages
         assert request.tools == expected_tools
@@ -355,7 +355,7 @@ class TestChatCompletionRequest:
 
 
 def test_request_from_openai_drops_unsupported_fields() -> None:
-    request = ChatCompletionRequest.from_openai(
+    request: ChatCompletionRequest = ChatCompletionRequest.from_openai(
         messages=[{"role": "user", "content": "Hello"}],
         temperature=0.5,
         stream=False,
@@ -365,7 +365,8 @@ def test_request_from_openai_drops_unsupported_fields() -> None:
         unknown_field="value",
     )
 
-    assert request == ChatCompletionRequest(messages=[UserMessage(content="Hello")], temperature=0.5)
+    expected = ChatCompletionRequest(messages=[UserMessage(content="Hello")])
+    assert request == expected.model_copy(update={"temperature": 0.5})
 
 
 def test_request_from_openai_rejects_conflicting_seed_names() -> None:
@@ -389,7 +390,9 @@ def test_request_from_openai_rejects_conflicting_seed_names() -> None:
     ],
 )
 def test_request_from_openai_max_completion_tokens(limits: dict[str, Any], expected: int | None) -> None:
-    request = ChatCompletionRequest.from_openai(messages=[{"role": "user", "content": "hi"}], **limits)
+    request: ChatCompletionRequest = ChatCompletionRequest.from_openai(
+        messages=[{"role": "user", "content": "hi"}], **limits
+    )
 
     assert request.max_tokens == expected
     assert ChatCompletionRequest.from_openai(**request.to_openai()) == request
@@ -439,7 +442,7 @@ def test_request_to_openai_rejects_interleaved_thinking() -> None:
 def test_request_from_openai_maps_continuation_without_warning() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        request = ChatCompletionRequest.from_openai(
+        request: ChatCompletionRequest = ChatCompletionRequest.from_openai(
             messages=[
                 {"role": "user", "content": "foo"},
                 {"role": "assistant", "content": "bar"},
@@ -465,7 +468,7 @@ def test_request_from_openai_preserves_legacy_boolean_coercion(
 ) -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        request = ChatCompletionRequest.from_openai(
+        request: ChatCompletionRequest = ChatCompletionRequest.from_openai(
             messages=[
                 {"role": "user", "content": "foo"},
                 {"role": "assistant", "content": "bar"},
@@ -581,7 +584,7 @@ def test_request_tool_choice_round_trip(
 
     assert openai_request["tool_choice"] == expected_openai
 
-    reconstructed = ChatCompletionRequest.from_openai(**openai_request)
+    reconstructed: ChatCompletionRequest = ChatCompletionRequest.from_openai(**openai_request)
     assert reconstructed.tool_choice == expected_reconstructed
 
 
@@ -628,7 +631,7 @@ def test_request_openai_round_trip_preserves_message_scenarios(
         expected_openai_request["reasoning_effort"] = reasoning_effort.value
     assert openai_request == expected_openai_request
 
-    reconstructed_request = ChatCompletionRequest.from_openai(**openai_request)
+    reconstructed_request: ChatCompletionRequest = ChatCompletionRequest.from_openai(**openai_request)
 
     assert "stream" not in reconstructed_request.model_dump()
     assert reconstructed_request.temperature == 0.7
@@ -698,7 +701,7 @@ def test_request_parallel_tool_calls_defaults_to_true() -> None:
     ],
 )
 def test_request_from_openai_parallel_tool_calls(value: bool | None, expected: bool) -> None:
-    request = ChatCompletionRequest.from_openai(
+    request: ChatCompletionRequest = ChatCompletionRequest.from_openai(
         messages=[{"role": "user", "content": "Hello"}], parallel_tool_calls=value
     )
 
@@ -708,7 +711,9 @@ def test_request_from_openai_parallel_tool_calls(value: bool | None, expected: b
 @pytest.mark.parametrize("field", ["temperature", "top_p"])
 def test_request_from_openai_null_sampling_param_maps_to_default(field: str) -> None:
     null_param: dict[str, Any] = {field: None}
-    request = ChatCompletionRequest.from_openai(messages=[{"role": "user", "content": "Hello"}], **null_param)
+    request: ChatCompletionRequest = ChatCompletionRequest.from_openai(
+        messages=[{"role": "user", "content": "Hello"}], **null_param
+    )
 
     assert request == ChatCompletionRequest(messages=[UserMessage(content="Hello")])
 
@@ -726,7 +731,7 @@ def test_request_to_openai_renames_custom_schema_to_schema() -> None:
 def test_request_from_openai_accepts_schema_key() -> None:
     schema: dict[str, Any] = {"type": "object"}
 
-    request = ChatCompletionRequest.from_openai(
+    request: ChatCompletionRequest = ChatCompletionRequest.from_openai(
         messages=[{"role": "user", "content": "hi"}],
         response_format={"type": "json_schema", "json_schema": {"name": "x", "schema": schema}},
     )
@@ -752,7 +757,7 @@ def test_request_from_openai_json_schema_strict(strict: dict[str, bool | None], 
     }
     original = deepcopy(response_format)
 
-    request = ChatCompletionRequest.from_openai(
+    request: ChatCompletionRequest = ChatCompletionRequest.from_openai(
         messages=[{"role": "user", "content": "hi"}], response_format=response_format
     )
 

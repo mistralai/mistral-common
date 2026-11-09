@@ -1,12 +1,12 @@
 import io
 from enum import StrEnum, auto
-from typing import Any
+from typing import Any, ClassVar
 
 from pydantic import Field, model_validator
 from pydantic_extra_types.language_code import LanguageAlpha2
 
 from mistral_common.imports import assert_soundfile_installed, is_soundfile_installed
-from mistral_common.protocol.base import BaseCompletionRequest
+from mistral_common.protocol.base import _DEPRECATED_FIELDS, _FROM_OPENAI, BaseCompletionRequest
 from mistral_common.protocol.instruct.chunk import _detect_audio_format
 from mistral_common.tokens.tokenizers.audio import Audio
 
@@ -45,22 +45,33 @@ class TranscriptionRequest(BaseCompletionRequest):
     r"""A request for audio transcription.
 
     Attributes:
-        id: Optional identifier for this transcription request.
-        model: The model to use for transcription. If `None`, the serving side
+        temperature: Deprecated and will be removed in 1.15.0: mistral-common does not use it.
+            See `BaseCompletionRequest`.
+        top_p: Deprecated and will be removed in 1.15.0: mistral-common does not use it.
+            See `BaseCompletionRequest`.
+        max_tokens: Deprecated and will be removed in 1.15.0: mistral-common does not use it.
+            See `BaseCompletionRequest`.
+        random_seed: Deprecated and will be removed in 1.15.0: mistral-common does not use it.
+            See `BaseCompletionRequest`.
+        id: Deprecated and will be removed in 1.15.0: mistral-common does not use it.
+            Optional identifier for this transcription request.
+        model: Deprecated and will be removed in 1.15.0: mistral-common does not use it.
+            The model to use for transcription. If `None`, the serving side
             default transcription model is used.
         audio: Audio data to transcribe. Either raw audio bytes or a base64-encoded
             string (decoded automatically). With `ONLINE` streaming, nonempty
             audio must be base64 text; nonempty bytes are rejected.
         language: Language of the input audio in ISO-639-1 format (e.g., "en").
             If provided, improves language adherence of the transcript.
-        strict_audio_validation: If `True` (default), audio data is validated against
-            the expected format and raises on invalid input. If `False`, best-effort
-            decoding is attempted.
+        strict_audio_validation: Deprecated and will be removed in 1.15.0: it has no
+            effect. Defaults to `True`.
         streaming: The streaming mode for the request. See StreamingMode.
         target_streaming_delay_ms: When streaming is enabled, the target delay in
             milliseconds between hearing a word and producing its transcript. This
             is a request, not a guarantee; unsupported models ignore it.
     """
+
+    _deprecated_fields: ClassVar[tuple[str, ...]] = _DEPRECATED_FIELDS["TranscriptionRequest"]
 
     id: str | None = None
     model: str | None = None
@@ -142,6 +153,11 @@ class TranscriptionRequest(BaseCompletionRequest):
 
         Raises:
             ImportError: If soundfile is not installed.
+
+        Note:
+            The output includes "model", "temperature", "top_p" and "seed". These keys
+            will no longer be emitted from 1.15.0, when the deprecated fields are
+            removed: pass them as keyword arguments instead.
         """
         openai_request: dict[str, Any] = self.model_dump(exclude={"audio"})
 
@@ -189,7 +205,9 @@ class TranscriptionRequest(BaseCompletionRequest):
             strict: If `True`, audio data is strictly validated during decoding.
 
         Returns:
-            A TranscriptionRequest instance with the audio base64-encoded.
+            A TranscriptionRequest instance with the audio base64-encoded. The
+            deprecated fields do not emit deprecation warnings here; from 1.15.0
+            they will be ignored like other unknown keys.
 
         Raises:
             AssertionError: If no "file" entry is present.
@@ -214,4 +232,4 @@ class TranscriptionRequest(BaseCompletionRequest):
 
         converted_dict["audio"] = audio_str
         converted_dict["random_seed"] = seed
-        return cls(**converted_dict)
+        return cls.model_validate(converted_dict, context={_FROM_OPENAI: True})

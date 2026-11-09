@@ -197,7 +197,7 @@ class InstructTokenizerBase(InstructTokenizer, Generic[InstructRequestType, FIMR
 
         Walks the message list, encoding each message with its version-specific
         encoder, and aggregates the resulting tokens, images, and audio into a
-        single Tokenized object. Applies truncation when
+        single Tokenized object. Applies truncation when the deprecated
         `request.truncate_at_max_tokens` is set.
 
         Args:
