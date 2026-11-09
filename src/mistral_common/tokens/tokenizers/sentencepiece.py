@@ -1,4 +1,3 @@
-import logging
 import os
 from functools import cached_property
 from pathlib import Path
@@ -179,7 +178,6 @@ class SentencePieceTokenizer(Tokenizer):
         """
         assert_sentencepiece_installed()
 
-        self._logger = logging.getLogger(self.__class__.__name__)
         # reload tokenizer
         assert os.path.isfile(model_path), model_path
         # SentencePiece is optional and conditionally imported, so narrow its dynamic result to this local protocol.
