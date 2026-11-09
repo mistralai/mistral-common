@@ -480,6 +480,35 @@ def test_generate(
     assert AssistantMessage(**response.json()) == output_assistant_message
 
 
+@pytest.mark.parametrize(
+    "engine_json",
+    [
+        None,  # body is not JSON, e.g. an HTML page from a proxy
+        {"content": "Hello"},
+        [1, 2],
+        {"tokens": None},
+        {"tokens": "abc"},
+        {"tokens": [[1]]},
+        {"tokens": [1.5]},
+        {"tokens": ["1"]},
+        {"tokens": [True]},
+    ],
+)
+@pytest.mark.parametrize(
+    ["client_fixture", "request_fixture"], [("tekken_client", "tekken_request"), ("spm_client", "spm_request")]
+)
+def test_generate_invalid_engine_response(
+    engine_json: list | dict | None, client_fixture: str, request_fixture: str, request: pytest.FixtureRequest
+) -> None:
+    client: TestClient = request.getfixturevalue(client_fixture)
+    chat_request: ChatCompletionRequest = request.getfixturevalue(request_fixture)
+    with patch("mistral_common.experimental.app.routers.requests.post") as mock_generate:
+        mock_generate.return_value = MockResponse(200, engine_json, text="<html>Bad Gateway</html>")
+        response = client.post("/v1/chat/completions", json=jsonable_encoder(chat_request))
+    assert response.status_code == 502
+    assert response.json()["detail"].startswith("Engine returned an invalid response")
+
+
 def test_generate_error(tekken_v13_client: TestClient) -> None:
     with patch("mistral_common.experimental.app.routers.requests.post") as mock_generate:
         mock_generate.return_value = MockResponse(400, text="Error")

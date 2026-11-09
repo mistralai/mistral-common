@@ -4,7 +4,7 @@ from typing import Annotated
 import requests
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import RedirectResponse
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from mistral_common.experimental.app.models import (
     EngineBackend,
@@ -218,5 +218,8 @@ async def generate(
     if response.status_code != 200:
         raise HTTPException(status_code=response.status_code, detail=response.text)
 
-    response_json = response.json()
-    return await detokenize_to_assistant_message(settings, response_json["tokens"])
+    try:
+        tokens = TypeAdapter(list[int]).validate_python(response.json()["tokens"], strict=True)
+    except (ValueError, KeyError, TypeError) as e:
+        raise HTTPException(status_code=502, detail=f"Engine returned an invalid response: {e!r}")
+    return await detokenize_to_assistant_message(settings, tokens)
