@@ -20,7 +20,7 @@ from mistral_common.protocol.instruct.messages import (
     UserMessageType,
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, InstructRequest, ModelSettings
-from mistral_common.protocol.instruct.tool_calls import FunctionCall, Tool, ToolCall
+from mistral_common.protocol.instruct.tool_calls import FunctionCall, ToolCall
 from mistral_common.tokens.tokenizers.base import InstructRequestType, TokenizerVersion
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
 
@@ -163,7 +163,7 @@ class InstructRequestNormalizer(
                 f"model_settings_builder must be None for InstructRequestNormalizer, got {model_settings_builder}"
             )
         return InstructRequestNormalizer(
-            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest[UATS, Tool], None
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
         )
 
     def build_settings(self, request: ChatCompletionRequest) -> ModelSettings:
@@ -461,7 +461,7 @@ class InstructRequestNormalizerV7(
                 f"model_settings_builder must be None for InstructRequestNormalizerV7, got {model_settings_builder}"
             )
         return InstructRequestNormalizerV7(
-            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest[UATS, Tool], None
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
         )
 
     def _aggregate_tool_messages(self, messages: list[UATS], latest_call_ids: list[str]) -> list[ToolMessageType]:
@@ -572,7 +572,7 @@ class InstructRequestNormalizerV13(
                 f"model_settings_builder must be None for InstructRequestNormalizerV13, got {model_settings_builder}"
             )
         return InstructRequestNormalizerV13(
-            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest[UATS, Tool], None
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
         )
 
     @staticmethod
