@@ -70,7 +70,7 @@ class Settings(BaseSettings):
 
     app_name: str = "Mistral-common API"
     app_version: str = importlib.metadata.version("mistral-common")
-    engine_url: str = "127.0.0.1"
+    engine_url: str = "http://127.0.0.1:8080"
     engine_backend: EngineBackend = EngineBackend.llama_cpp
     api_key: str = ""
     timeout: int = Field(default=60, gt=0)

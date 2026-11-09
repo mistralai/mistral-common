@@ -22,7 +22,7 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 def create_app(
     tokenizer: str | Path | MistralTokenizer,
     validation_mode: ValidationMode = ValidationMode.test,
-    engine_url: str = "127.0.0.1",
+    engine_url: str = "http://127.0.0.1:8080",
     engine_backend: EngineBackend = EngineBackend.llama_cpp,
     timeout: int = 60,
 ) -> FastAPI:
