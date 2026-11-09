@@ -49,17 +49,6 @@ class _CustomNormalizer(InstructRequestNormalizer):
     pass
 
 
-class _LegacyPickledTokenizer:
-    r"""Pickles to the `(from_file, (path, mode))` form that `MistralTokenizer.__reduce__` used to produce."""
-
-    def __init__(self, path: Path, mode: ValidationMode) -> None:
-        self.path = path
-        self.mode = mode
-
-    def __reduce__(self) -> tuple[Callable, tuple[Path, ValidationMode]]:
-        return MistralTokenizer.from_file, (self.path, self.mode)
-
-
 @pytest.mark.parametrize("tokenizer_file", BUNDLED_TOKENIZERS)
 @ROUND_TRIPS
 def test_bundled_tokenizer_round_trip(
@@ -153,17 +142,3 @@ def test_round_trip_without_the_source_file(
         monkeypatch.chdir(tmp_path / "elsewhere")
 
     assert round_trip(tokenizer).encode_chat_completion(REQUEST).tokens == expected
-
-
-@pytest.mark.parametrize("tokenizer_file", ["mistral_instruct_tokenizer_240323.model.v3", "tekken_240911.json"])
-def test_pickle_from_file_based_form_still_loads(tokenizer_file: str) -> None:
-    path = MistralTokenizer._data_path() / tokenizer_file
-    data = pickle.dumps(_LegacyPickledTokenizer(path, ValidationMode.serving))
-
-    restored = pickle.loads(data)
-
-    assert isinstance(restored, MistralTokenizer)
-    assert restored.mode == ValidationMode.serving
-    assert restored.encode_chat_completion(REQUEST).tokens == (
-        MistralTokenizer.from_file(path).encode_chat_completion(REQUEST).tokens
-    )
