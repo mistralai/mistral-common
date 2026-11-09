@@ -4,15 +4,10 @@ from mistral_common.types import TimeoutType
 from mistral_common.utils.download import (
     DEFAULT_DOWNLOAD_TIMEOUT_S,
     DOWNLOAD_TIMEOUT_ENV_KEY,
-    DownloadTimeout,
     resolve_download_timeout,
     resolve_env_download_timeout,
     validate_download_timeout,
 )
-
-
-def test_download_timeout_is_kept_as_alias_of_timeout_type() -> None:
-    assert DownloadTimeout is TimeoutType
 
 
 def test_resolve_env_download_timeout_default(monkeypatch: pytest.MonkeyPatch) -> None:
