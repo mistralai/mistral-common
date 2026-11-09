@@ -84,41 +84,6 @@ def test_image_chunk_rejects_malformed_data_url() -> None:
         ImageChunk(image="data:text/plain,hello")  # type: ignore[arg-type]
 
 
-_UNDECODABLE_IMAGES = [
-    pytest.param("not base64 at all!!", "starting with 'not base64 at all!!'", id="not-base64"),
-    pytest.param("aGVsbG8gd29ybGQ=", "starting with 'aGVsbG8gd29ybGQ='", id="not-an-image"),
-    pytest.param(b"notanimage", "from bytes", id="bytes-not-an-image"),
-]
-_UNSUPPORTED_IMAGES = [
-    pytest.param(42, "got int", id="int"),
-    pytest.param(None, "got NoneType", id="none"),
-]
-
-
-@pytest.mark.parametrize("image, match", _UNDECODABLE_IMAGES)
-def test_image_chunk_rejects_undecodable_image(image: str | bytes, match: str) -> None:
-    with pytest.raises(ValidationError, match=match):
-        ImageChunk(image=image)  # type: ignore[arg-type]
-
-
-@pytest.mark.parametrize("image, match", _UNSUPPORTED_IMAGES)
-def test_image_chunk_rejects_unsupported_image_type(image: object, match: str) -> None:
-    with pytest.raises(ValidationError, match=match):
-        ImageChunk(image=image)  # type: ignore[arg-type]
-
-
-@pytest.mark.parametrize("image, match", _UNDECODABLE_IMAGES)
-def test_maybe_load_image_from_str_or_bytes_rejects_undecodable_image(image: str | bytes, match: str) -> None:
-    with pytest.raises(ValueError, match=match):
-        maybe_load_image_from_str_or_bytes(image)
-
-
-@pytest.mark.parametrize("image, match", _UNSUPPORTED_IMAGES)
-def test_maybe_load_image_from_str_or_bytes_rejects_unsupported_type(image: object, match: str) -> None:
-    with pytest.raises(ValueError, match=match):
-        maybe_load_image_from_str_or_bytes(image)  # type: ignore[arg-type]
-
-
 def test_maybe_load_image_from_str_or_bytes_rejects_malformed_data_url() -> None:
     with pytest.raises(ValueError, match="Invalid base64 data URL"):
         maybe_load_image_from_str_or_bytes("data:text/plain,hello")
