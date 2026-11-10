@@ -1,7 +1,9 @@
 import base64
 import io
+import warnings
 from collections.abc import Callable
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -13,11 +15,13 @@ from openai.types.chat.chat_completion_content_part_image_param import (
 from PIL import Image
 from pydantic import BaseModel, ValidationError
 
+import mistral_common.deprecation
 from mistral_common.exceptions import InvalidRequestException
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURL,
     AudioURLChunk,
+    AudioURLType,
     ImageChunk,
     ImageURL,
     ImageURLChunk,
@@ -187,6 +191,48 @@ def test_audio_url_chunk_from_openai_rejects_invalid_known_url() -> None:
 
     with pytest.raises(ValidationError, match="url"):
         AudioURLChunk.from_openai(openai_chunk)
+
+
+_BARE_PATH_WARNING = (
+    "Passing a local file path to `AudioURLChunk` without the `file://` scheme is deprecated "
+    "and will be removed in 1.15.0. Use a file URI instead, e.g. `file:///path/to/audio.wav`."
+)
+
+
+def _get_url_type_with_warnings(url: str) -> tuple[AudioURLType, list[str]]:
+    mistral_common.deprecation._warned_keys.discard(_BARE_PATH_WARNING)
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            url_type = AudioURLChunk(audio_url=url).get_url_type()
+    finally:
+        mistral_common.deprecation._warned_keys.discard(_BARE_PATH_WARNING)
+    for warning in caught:
+        assert warning.category is FutureWarning
+        assert warning.filename == __file__
+    return url_type, [str(warning.message) for warning in caught]
+
+
+def test_audio_url_chunk_bare_file_path_is_deprecated(tmp_path: Path) -> None:
+    audio_path = tmp_path / "audio.wav"
+    audio_path.write_bytes(b"")
+
+    assert _get_url_type_with_warnings(str(audio_path)) == (AudioURLType.file, [_BARE_PATH_WARNING])
+    assert _get_url_type_with_warnings(audio_path.as_uri()) == (AudioURLType.file_uri, [])
+
+
+@pytest.mark.parametrize(
+    ("url", "url_type"),
+    [
+        pytest.param("https://example.com/audio.wav", AudioURLType.url, id="https"),
+        pytest.param("http://example.com/audio.wav", AudioURLType.url, id="http"),
+        pytest.param("file:///path/to/audio.wav", AudioURLType.file_uri, id="file-uri"),
+        pytest.param("data:audio/wav;base64,UklGRg==", AudioURLType.base64, id="data-url"),
+        pytest.param("UklGRg==", AudioURLType.base64, id="base64"),
+    ],
+)
+def test_audio_url_chunk_non_path_urls_do_not_warn(url: str, url_type: AudioURLType) -> None:
+    assert _get_url_type_with_warnings(url) == (url_type, [])
 
 
 @pytest.mark.parametrize(
