@@ -7,6 +7,7 @@ import numpy as np
 from pydantic import ConfigDict, Field
 
 from mistral_common.base import MistralBase
+from mistral_common.deprecation import warn_once
 from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.instruct.chunk import ContentChunk
 from mistral_common.protocol.instruct.messages import SystemMessage, UserMessage
@@ -221,25 +222,23 @@ class TokenizerVersion(StrEnum):
         """
         return self >= TokenizerVersion.v15
 
-    def __lt__(self, other: "str | TokenizerVersion") -> bool:
+    @staticmethod
+    def _other_version_num(other: "str | TokenizerVersion") -> int:
         if isinstance(other, str):
             other = TokenizerVersion(other)
-        return self.version_num < other.version_num
+        return other.version_num
+
+    def __lt__(self, other: "str | TokenizerVersion") -> bool:
+        return self.version_num < self._other_version_num(other)
 
     def __le__(self, other: "str | TokenizerVersion") -> bool:
-        if isinstance(other, str):
-            other = TokenizerVersion(other)
-        return self.version_num <= other.version_num
+        return self.version_num <= self._other_version_num(other)
 
     def __gt__(self, other: "str | TokenizerVersion") -> bool:
-        if isinstance(other, str):
-            other = TokenizerVersion(other)
-        return self.version_num > other.version_num
+        return self.version_num > self._other_version_num(other)
 
     def __ge__(self, other: "str | TokenizerVersion") -> bool:
-        if isinstance(other, str):
-            other = TokenizerVersion(other)
-        return self.version_num >= other.version_num
+        return self.version_num >= self._other_version_num(other)
 
     v1 = auto()  # vocab_size = 32000
     v2 = auto()  # vocab_size = 32768 with special control tokens [INST], [\INST]
@@ -357,6 +356,23 @@ class Tokenizer(ABC):
     def get_special_token(self, s: str) -> int:
         r"""Get the id of a control token."""
 
+    def get_control_token(self, s: str) -> int:
+        r"""Get the token ID of a control token. Deprecated: use `get_special_token()` instead.
+
+        Args:
+            s: The string representation of the control token.
+
+        Returns:
+            The integer token ID for the control token.
+        """
+        warn_once(
+            key="get_control_token",
+            message="`get_control_token` is deprecated. Use `get_special_token` instead.",
+            category=FutureWarning,
+            stacklevel=3,
+        )
+        return self.get_special_token(s)
+
     @abstractmethod
     def is_special(self, token: int | np.integer | str) -> bool:
         r"""Check if token id or token str is a special token."""
@@ -366,8 +382,8 @@ class Tokenizer(ABC):
     def version(self) -> TokenizerVersion:
         r"""Get the version of the tokenizer."""
 
-    @abstractmethod
-    def _to_string(self, tokens: list[int]) -> str: ...
+    def _to_string(self, tokens: list[int]) -> str:
+        return self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP)
 
     @property
     @abstractmethod
