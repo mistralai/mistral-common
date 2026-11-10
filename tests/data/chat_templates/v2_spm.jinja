@@ -10,6 +10,11 @@
     {{- raise_exception('Conversation must have at least one message') }}
 {%- endif %}
 
+{#- A single message must be a user or system message, as the tokenizer requires. #}
+{%- if messages | length == 1 and messages[0]['role'] not in ['user', 'system', 'developer'] %}
+    {{- raise_exception('Conversation must start with a user message or system message') }}
+{%- endif %}
+
 {#- Handle system prompt if it exists. #}
 {#- Extract all system messages and merge into system prompt. #}
 {%- set ns_sys = namespace(system_parts=[], text_parts=[], previous_role='') %}
@@ -131,13 +136,13 @@
 {%- set loop_messages = ns_agg.messages %}
 {#- System messages split user messages but are rendered with the system prompt. #}
 {%- set loop_messages = loop_messages | rejectattr('role', 'equalto', 'system') | list %}
-{#- A conversation with only system messages gets an empty user message for the system prompt. #}
-{%- if messages | length > 0 and loop_messages | length == 0 %}
-    {%- set loop_messages = [{'role': 'user', 'content': ''}] %}
+{#- A conversation with only system messages or starting with an assistant message gets an empty user message first. #}
+{%- if loop_messages | length == 0 or loop_messages[0]['role'] == 'assistant' %}
+    {%- set loop_messages = [{'role': 'user', 'content': ''}] + loop_messages %}
 {%- endif %}
 
 {#- Validates message ordering. #}
-{%- set ns = namespace(max_idx_user=-1, add_space=false, prev_tool=false) %}
+{%- set ns = namespace(max_idx_user=-1, add_space=true, prev_tool=false) %}
 {%- if loop_messages | length > 0 and loop_messages[0]['role'] != 'user' %}
     {{- raise_exception('Conversation must start with a user message, got ' ~ loop_messages[0]['role'] ~ '.') }}
 {%- endif %}

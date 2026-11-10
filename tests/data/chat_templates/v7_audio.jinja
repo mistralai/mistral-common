@@ -10,6 +10,11 @@
     {{- raise_exception('Conversation must have at least one message') }}
 {%- endif %}
 
+{#- A single message must be a user or system message, as the tokenizer requires. #}
+{%- if messages | length == 1 and messages[0]['role'] not in ['user', 'system', 'developer'] %}
+    {{- raise_exception('Conversation must start with a user message or system message') }}
+{%- endif %}
+
 {#- Handle system prompt if it exists. #}
 {%- set loop_messages = messages %}
 {%- if messages[0]['role'] not in ['system', 'developer'] and default_system_message != '' %}
@@ -117,8 +122,8 @@
 
 {#- Validates message ordering. #}
 {%- set ns = namespace(max_idx_user=-1) %}
-{%- if loop_messages | length > 0 and loop_messages[0]['role'] not in ['user', 'system'] %}
-    {{- raise_exception('Conversation must start with a user or system message, got ' ~ loop_messages[0]['role'] ~ '.') }}
+{%- if loop_messages | length > 0 and loop_messages[0]['role'] not in ['user', 'system', 'assistant'] %}
+    {{- raise_exception('Conversation must start with a user, system or assistant message, got ' ~ loop_messages[0]['role'] ~ '.') }}
 {%- endif %}
 {%- set ns_order = namespace(previous_role=none) %}
 {%- for message in loop_messages %}
