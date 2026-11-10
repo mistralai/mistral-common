@@ -713,6 +713,34 @@ def test_request_from_openai_null_sampling_param_maps_to_default(field: str) -> 
     assert request == ChatCompletionRequest(messages=[UserMessage(content="Hello")])
 
 
+@pytest.mark.parametrize(
+    ("field", "default"),
+    [
+        pytest.param("tool_choice", ToolChoiceEnum.auto, id="tool-choice"),
+        pytest.param("response_format", ResponseFormat(type=ResponseFormats.text), id="response-format"),
+    ],
+)
+def test_request_from_openai_null_tool_choice_or_response_format_maps_to_default(
+    field: str, default: ToolChoiceEnum | ResponseFormat
+) -> None:
+    null_param: dict[str, Any] = {field: None}
+    request = ChatCompletionRequest.from_openai(messages=[{"role": "user", "content": "Hello"}], **null_param)
+
+    assert getattr(request, field) == default
+    assert request == ChatCompletionRequest(messages=[UserMessage(content="Hello")])
+
+
+def test_request_from_openai_keeps_explicit_tool_choice_and_response_format() -> None:
+    request = ChatCompletionRequest.from_openai(
+        messages=[{"role": "user", "content": "Hello"}],
+        tool_choice="none",
+        response_format={"type": "json_object"},
+    )
+
+    assert request.tool_choice == ToolChoiceEnum.none
+    assert request.response_format == ResponseFormat(type=ResponseFormats.json_object)
+
+
 def test_request_to_openai_renames_custom_schema_to_schema() -> None:
     schema: dict[str, Any] = {"type": "object"}
     response_format = ResponseFormat(type=ResponseFormats.json_schema, json_schema=JsonSchema(name="x", schema=schema))
