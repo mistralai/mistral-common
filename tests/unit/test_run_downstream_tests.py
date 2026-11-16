@@ -237,6 +237,21 @@ def test_ours_lane_install_failure_is_a_setup_error(monkeypatch: pytest.MonkeyPa
         rdt._run_lane(lane=lane, work=tmp_path)
 
 
+def test_ours_transformers_installs_the_pinned_release(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    commands: list[list[str]] = []
+
+    def fake_run(args: list[str], cwd: Path | None, env: dict[str, str], check: bool) -> subprocess.CompletedProcess:
+        commands.append(args)
+        return subprocess.CompletedProcess(args=args, returncode=0)
+
+    monkeypatch.setattr(rdt.subprocess, "run", fake_run)
+    monkeypatch.setenv("TRANSFORMERS_VERSION", "5.23.0")
+    assert rdt._run_lane(lane="ours-transformers", work=tmp_path) == "passed"
+    installs = [command for command in commands if command[:3] == ["uv", "pip", "install"]]
+    assert len(installs) == 1
+    assert "transformers==5.23.0" in installs[0]
+
+
 def test_unknown_lane_is_a_usage_error() -> None:
     completed = subprocess.run(
         args=[sys.executable, str(SCRIPT_PATH), "--only", "bogus"], capture_output=True, check=False

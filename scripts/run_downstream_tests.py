@@ -308,10 +308,11 @@ def lane_ours_vllm(wheel: str, work: Path) -> str:
     )
 
 
-def lane_ours_transformers(work: Path) -> str:
+def lane_ours_transformers(version: str, work: Path) -> str:
     r"""Run this repository's downstream tests that need Transformers.
 
     Args:
+        version: The Transformers release.
         work: A temporary directory for the lane's environment.
 
     Returns:
@@ -319,7 +320,9 @@ def lane_ours_transformers(work: Path) -> str:
     """
     python = _create_venv(path=work / "ours-transformers")
     _uv_pip_install(
-        python=python, requirements=["transformers", "pytest", _mistral_common_requirement()], cwd=PROJECT_ROOT
+        python=python,
+        requirements=[f"transformers=={version}", "pytest", _mistral_common_requirement()],
+        cwd=PROJECT_ROOT,
     )
     return _test(
         command=[
@@ -382,6 +385,20 @@ def lane_upstream_transformers(version: str, work: Path) -> str:
     return _test(command=[str(python), "-m", "pytest", "-v", *TRANSFORMERS_UPSTREAM_TESTS], cwd=checkout)
 
 
+def _resolve_transformers() -> str:
+    r"""Resolve the Transformers release under test.
+
+    Returns:
+        The release.
+
+    Raises:
+        SetupError: If the release cannot be resolved.
+    """
+    version = os.environ.get("TRANSFORMERS_VERSION") or resolve_latest_version(package="transformers")
+    print(f"==> Transformers release under test: {version}", flush=True)
+    return version
+
+
 @functools.cache
 def _resolve_vllm() -> tuple[str, str | None]:
     r"""Resolve the vLLM release under test and its +cpu wheel for this host.
@@ -415,11 +432,9 @@ def _run_lane(lane: str, work: Path) -> str:
         SetupError: If the lane cannot be set up.
     """
     if lane == "ours-transformers":
-        return lane_ours_transformers(work=work)
+        return lane_ours_transformers(version=_resolve_transformers(), work=work)
     if lane == "upstream-transformers":
-        version = os.environ.get("TRANSFORMERS_VERSION") or resolve_latest_version(package="transformers")
-        print(f"==> Transformers release under test: {version}", flush=True)
-        return lane_upstream_transformers(version=version, work=work)
+        return lane_upstream_transformers(version=_resolve_transformers(), work=work)
     vllm_version, wheel = _resolve_vllm()
     if wheel is None:
         return "skipped (no vLLM +cpu wheel for this platform)"
