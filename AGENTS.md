@@ -155,6 +155,7 @@ mistral-common/
 ### Test organization
 
 - New unit tests belong under `tests/unit/` and mirror the source package structure.
+- Tests for scripts in `scripts/` live under `tests/scripts/`.
 - New integration tests belong under `tests/integration/` and exercise public workflows.
 - Existing tests elsewhere are legacy during the ongoing migration and are removed as their replacements land.
 
