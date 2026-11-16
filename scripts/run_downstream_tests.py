@@ -495,7 +495,9 @@ def main(argv: list[str] | None = None) -> ExitCode:
     args = parser.parse_args(args=argv)
     only = Lane(args.only)
 
-    selected = [lane for lane in Lane if lane is not Lane.ALL and only in (Lane.ALL, lane)]
+    selected: list[Lane] = [
+        candidate for candidate in Lane if candidate is not Lane.ALL and only in (Lane.ALL, candidate)
+    ]
     outcomes: dict[Lane, str] = {}
     with tempfile.TemporaryDirectory(prefix="mistral-common-downstream-") as temporary:
         for lane in selected:
