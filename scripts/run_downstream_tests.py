@@ -21,7 +21,8 @@ Exit codes:
     0  every selected lane passed, or was skipped because the platform has no vLLM +cpu wheel
     1  at least one lane's tests failed
     2  usage error
-    3  at least one lane could not be set up (release lookup, wheel resolution, clone or install)
+    3  at least one lane could not be set up (release lookup, wheel resolution, clone or install),
+       including when the vLLM +cpu wheel needs a newer glibc than the host's
 """
 
 import argparse
@@ -103,7 +104,7 @@ def vllm_wheel_platform_pattern(system: str, machine: str) -> str | None:
     r"""Return a regex matching the platform tag of vLLM +cpu wheels for this host.
 
     The glibc version of the manylinux tag is left open so a new vLLM release that
-    raises it is still found.
+    raises it is still found; `resolve_vllm_cpu_wheel` checks it against the host's glibc.
 
     Args:
         system: The OS name, as returned by `platform.system()`.
@@ -121,7 +122,16 @@ def vllm_wheel_platform_pattern(system: str, machine: str) -> str | None:
     return None
 
 
-def resolve_vllm_cpu_wheel(version: str, platform_pattern: str) -> str:
+def _host_glibc() -> tuple[int, int] | None:
+    r"""Return the host's glibc version, or `None` when the host does not use glibc."""
+    library, version = platform.libc_ver()
+    match = re.match(pattern=r"(\d+)\.(\d+)", string=version)
+    if library != "glibc" or match is None:
+        return None
+    return int(match.group(1)), int(match.group(2))
+
+
+def resolve_vllm_cpu_wheel(version: str, platform_pattern: str, glibc: tuple[int, int] | None = None) -> str:
     r"""Return the URL of the vLLM +cpu wheel for a release and platform.
 
     The index hrefs are relative to a commit directory and percent-encode the `+`,
@@ -130,12 +140,13 @@ def resolve_vllm_cpu_wheel(version: str, platform_pattern: str) -> str:
     Args:
         version: The exact vLLM release, e.g. `0.33.0`; release candidates of it do not match.
         platform_pattern: The platform tag regex from `vllm_wheel_platform_pattern`.
+        glibc: The host's glibc version; manylinux wheels that need a newer one are skipped.
 
     Returns:
         The absolute wheel URL, including any `#sha256=` fragment the index provides.
 
     Raises:
-        SetupError: If the index is unreachable or lists no matching wheel.
+        SetupError: If the index is unreachable or lists no matching wheel the host can install.
     """
     index = f"https://wheels.vllm.ai/{version}/cpu/vllm/"
     try:
@@ -144,11 +155,22 @@ def resolve_vllm_cpu_wheel(version: str, platform_pattern: str) -> str:
     except urllib.error.URLError as exc:
         raise SetupError(f"cannot list {index}: {exc}") from exc
     wheel_name = re.compile(pattern=rf"vllm-{re.escape(version)}\+cpu-.+-(?:{platform_pattern})\.whl")
+    too_new: tuple[int, int] | None = None
     for href in re.findall(pattern=r'href="([^"]+)"', string=page):
         filename = urllib.parse.unquote(string=href.split(sep="#")[0].rsplit(sep="/", maxsplit=1)[-1])
-        if wheel_name.fullmatch(filename):
-            wheel: str = urllib.parse.urljoin(base=index, url=href)
-            return wheel
+        if not wheel_name.fullmatch(filename):
+            continue
+        tag = re.search(pattern=r"-manylinux_(\d+)_(\d+)_", string=filename)
+        required = (int(tag.group(1)), int(tag.group(2))) if tag else None
+        if glibc is not None and required is not None and required > glibc:
+            too_new = required if too_new is None else min(too_new, required)
+            continue
+        wheel: str = urllib.parse.urljoin(base=index, url=href)
+        return wheel
+    if too_new is not None and glibc is not None:
+        raise SetupError(
+            f"vLLM {version} +cpu wheels need glibc >= {too_new[0]}.{too_new[1]}, this host has {glibc[0]}.{glibc[1]}"
+        )
     raise SetupError(f"no vLLM {version} +cpu wheel matching {platform_pattern} in {index}")
 
 
@@ -376,7 +398,7 @@ def _resolve_vllm() -> tuple[str, str | None]:
     if pattern is None:
         print(f"==> vLLM publishes no +cpu wheel for {platform.system()}-{platform.machine()}", flush=True)
         return version, None
-    return version, resolve_vllm_cpu_wheel(version=version, platform_pattern=pattern)
+    return version, resolve_vllm_cpu_wheel(version=version, platform_pattern=pattern, glibc=_host_glibc())
 
 
 def _run_lane(lane: str, work: Path) -> str:

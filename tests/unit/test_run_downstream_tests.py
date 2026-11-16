@@ -130,6 +130,44 @@ def test_resolve_vllm_cpu_wheel_ignores_other_releases(monkeypatch: pytest.Monke
         rdt.resolve_vllm_cpu_wheel(version="0.33", platform_pattern=pattern)
 
 
+@pytest.mark.parametrize(
+    ("glibc", "expected_name"),
+    [
+        ((2, 39), "vllm-0.33.0%2Bcpu-cp38-abi3-manylinux_2_39_x86_64.whl#sha256=x86-new"),
+        ((2, 36), "vllm-0.33.0%2Bcpu-cp38-abi3-manylinux_2_28_x86_64.whl#sha256=x86-old"),
+    ],
+)
+def test_resolve_vllm_cpu_wheel_skips_wheels_for_newer_glibc(
+    monkeypatch: pytest.MonkeyPatch, glibc: tuple[int, int], expected_name: str
+) -> None:
+    page = """
+<a href="../../../abc/vllm-0.33.0%2Bcpu-cp38-abi3-manylinux_2_39_x86_64.whl#sha256=x86-new">new</a>
+<a href="../../../abc/vllm-0.33.0%2Bcpu-cp38-abi3-manylinux_2_28_x86_64.whl#sha256=x86-old">old</a>
+"""
+    _serve(monkeypatch=monkeypatch, payload=page.encode())
+    pattern = rdt.vllm_wheel_platform_pattern(system="Linux", machine="x86_64")
+    wheel = rdt.resolve_vllm_cpu_wheel(version="0.33.0", platform_pattern=pattern, glibc=glibc)
+    assert wheel == f"https://wheels.vllm.ai/abc/{expected_name}"
+
+
+def test_resolve_vllm_cpu_wheel_host_glibc_too_old(monkeypatch: pytest.MonkeyPatch) -> None:
+    _serve(monkeypatch=monkeypatch, payload=INDEX_PAGE.encode())
+    pattern = rdt.vllm_wheel_platform_pattern(system="Linux", machine="x86_64")
+    with pytest.raises(rdt.SetupError, match="vLLM 0.33.0 \\+cpu wheels need glibc >= 2.39, this host has 2.36"):
+        rdt.resolve_vllm_cpu_wheel(version="0.33.0", platform_pattern=pattern, glibc=(2, 36))
+
+
+@pytest.mark.parametrize(
+    ("libc_ver", "expected"),
+    [(("glibc", "2.36"), (2, 36)), (("glibc", "2.39.1"), (2, 39)), (("", ""), None), (("libc", "1.2"), None)],
+)
+def test_host_glibc(
+    monkeypatch: pytest.MonkeyPatch, libc_ver: tuple[str, str], expected: tuple[int, int] | None
+) -> None:
+    monkeypatch.setattr(rdt.platform, "libc_ver", lambda: libc_ver)
+    assert rdt._host_glibc() == expected
+
+
 def test_resolve_vllm_cpu_wheel_unreachable(monkeypatch: pytest.MonkeyPatch) -> None:
     _unreachable(monkeypatch=monkeypatch)
     with pytest.raises(rdt.SetupError, match="cannot list"):
