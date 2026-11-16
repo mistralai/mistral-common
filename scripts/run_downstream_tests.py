@@ -7,11 +7,10 @@ Lanes:
   upstream-vllm          vLLM's own Mistral test files, cloned at the release tag
   upstream-transformers  Transformers' own Mistral test files, cloned at the release tag
 
-Every lane installs into an ephemeral environment (``uv run --isolated`` or a fresh
-venv in a temporary directory) with this checkout's mistral-common, so ``uv.lock``
-is never touched and the runtimes are the latest releases at run time. The script
-only uses the standard library and the ``uv`` and ``git`` executables, so it runs
-the same way locally and in GitHub Actions.
+Every lane installs into a fresh virtual environment in a temporary directory with
+this checkout's mistral-common, so ``uv.lock`` is never touched and the runtimes are
+the latest releases at run time. The script only uses the standard library and the
+``uv`` and ``git`` executables, so it runs the same way locally and in GitHub Actions.
 
 Usage:
     python3 scripts/run_downstream_tests.py                       # all lanes
@@ -50,7 +49,6 @@ EXIT_TEST_FAILURE = 1
 EXIT_USAGE = 2
 EXIT_SETUP = 3
 
-TORCH_CPU_INDEX = "https://download.pytorch.org/whl/cpu"
 VLLM_UPSTREAM_TEST_PACKAGES = (
     "pytest",
     "pytest-asyncio",
@@ -257,36 +255,25 @@ def _mistral_common_requirement() -> str:
     return f"mistral-common @ {PROJECT_ROOT.as_uri()}"
 
 
-def lane_ours_vllm(wheel: str) -> str:
+def lane_ours_vllm(wheel: str, work: Path) -> str:
     r"""Run this repository's downstream tests that need vLLM.
 
     Args:
         wheel: The vLLM +cpu wheel URL.
+        work: A temporary directory for the lane's environment.
 
     Returns:
         The lane outcome.
     """
-    # `--no-config --isolated --no-project` keeps the project's lock, uv settings and
-    # `exclude-newer` window out of the resolution. The PyTorch CPU index provides
-    # CPU-only torch builds instead of the CUDA wheels PyPI serves on Linux.
+    python = _create_venv(path=work / "ours-vllm")
+    _uv_pip_install(
+        python=python,
+        requirements=["--torch-backend", "cpu", wheel, "pytest", _mistral_common_requirement()],
+        cwd=PROJECT_ROOT,
+    )
     return _test(
         command=[
-            "uv",
-            "run",
-            "--no-config",
-            "--isolated",
-            "--no-project",
-            "--with",
-            wheel,
-            "--with",
-            "pytest",
-            "--with",
-            _mistral_common_requirement(),
-            "--extra-index-url",
-            TORCH_CPU_INDEX,
-            "--index-strategy",
-            "unsafe-best-match",
-            "python",
+            str(python),
             "-m",
             "pytest",
             "-o",
@@ -299,26 +286,22 @@ def lane_ours_vllm(wheel: str) -> str:
     )
 
 
-def lane_ours_transformers() -> str:
+def lane_ours_transformers(work: Path) -> str:
     r"""Run this repository's downstream tests that need Transformers.
+
+    Args:
+        work: A temporary directory for the lane's environment.
 
     Returns:
         The lane outcome.
     """
+    python = _create_venv(path=work / "ours-transformers")
+    _uv_pip_install(
+        python=python, requirements=["transformers", "pytest", _mistral_common_requirement()], cwd=PROJECT_ROOT
+    )
     return _test(
         command=[
-            "uv",
-            "run",
-            "--no-config",
-            "--isolated",
-            "--no-project",
-            "--with",
-            "transformers",
-            "--with",
-            "pytest",
-            "--with",
-            _mistral_common_requirement(),
-            "python",
+            str(python),
             "-m",
             "pytest",
             "-o",
@@ -410,7 +393,7 @@ def _run_lane(lane: str, work: Path) -> str:
         SetupError: If the lane cannot be set up.
     """
     if lane == "ours-transformers":
-        return lane_ours_transformers()
+        return lane_ours_transformers(work=work)
     if lane == "upstream-transformers":
         version = os.environ.get("TRANSFORMERS_VERSION") or resolve_latest_version(package="transformers")
         print(f"==> Transformers release under test: {version}", flush=True)
@@ -419,7 +402,7 @@ def _run_lane(lane: str, work: Path) -> str:
     if wheel is None:
         return "skipped (no vLLM +cpu wheel for this platform)"
     if lane == "ours-vllm":
-        return lane_ours_vllm(wheel=wheel)
+        return lane_ours_vllm(wheel=wheel, work=work)
     return lane_upstream_vllm(version=vllm_version, wheel=wheel, work=work)
 
 

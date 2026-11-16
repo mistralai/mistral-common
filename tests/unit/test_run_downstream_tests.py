@@ -185,6 +185,20 @@ def test_run_lane_reports_failed_setup_command(monkeypatch: pytest.MonkeyPatch, 
         rdt._run_lane(lane="upstream-transformers", work=tmp_path)
 
 
+@pytest.mark.parametrize("lane", ["ours-vllm", "ours-transformers"])
+def test_ours_lane_install_failure_is_a_setup_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, lane: str) -> None:
+    def fake_run(args: list[str], cwd: Path | None, env: dict[str, str], check: bool) -> subprocess.CompletedProcess:
+        if args[:3] == ["uv", "pip", "install"]:
+            raise subprocess.CalledProcessError(returncode=1, cmd=args)
+        return subprocess.CompletedProcess(args=args, returncode=0)
+
+    monkeypatch.setattr(rdt.subprocess, "run", fake_run)
+    monkeypatch.setattr(rdt, "_resolve_vllm", lambda: ("0.33.0", "https://wheels.vllm.ai/vllm.whl"))
+    monkeypatch.setenv("TRANSFORMERS_VERSION", "5.23.0")
+    with pytest.raises(rdt.SetupError, match="uv pip install --no-config ... exited with status 1"):
+        rdt._run_lane(lane=lane, work=tmp_path)
+
+
 def test_unknown_lane_is_a_usage_error() -> None:
     completed = subprocess.run(
         args=[sys.executable, str(SCRIPT_PATH), "--only", "bogus"], capture_output=True, check=False
