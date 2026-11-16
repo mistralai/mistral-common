@@ -1,8 +1,7 @@
-r"""Smoke test proving the downstream Transformers lane works end to end.
+r"""Smoke test that the `ours-transformers` lane imports Transformers.
 
-Runs only via scripts/run_downstream_tests.py --only transformers (marker:
-downstream + transformers), which installs the latest Transformers from PyPI
-into a uv overlay.
+Run with `python3 scripts/run_downstream_tests.py --only ours-transformers`, which installs
+the latest Transformers release next to this checkout's mistral-common.
 """
 
 import pytest

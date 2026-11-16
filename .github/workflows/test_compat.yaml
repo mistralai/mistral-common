@@ -41,15 +41,19 @@ jobs:
             echo "PR does not carry the run-downstream-tests label, skipping."
           fi
 
-  # All downstream tests run through one script so local and CI are identical:
-  # our tests (tests/integration/downstream) plus vLLM's and Transformers' own
-  # mistral suites, all against the LATEST RELEASED runtimes. The script uses
-  # `uv run --with` / ephemeral venvs, so uv.lock is never touched.
+  # Every lane runs through scripts/run_downstream_tests.py, exactly as locally,
+  # against the latest released vLLM and Transformers. One matrix entry per lane
+  # keeps them parallel and reports each lane's result separately. The script
+  # installs into ephemeral environments and needs only Python, uv and git.
   downstream:
     needs: gate
     if: ${{ needs.gate.outputs.should_run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: [ours-vllm, ours-transformers, upstream-vllm, upstream-transformers]
     steps:
       - name: Checkout mistral-common
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -61,10 +65,5 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install Dependencies
-        run: |
-          uv sync --frozen --all-extras --group dev
-
-      - name: Run all downstream tests (latest released vLLM + Transformers)
-        run: |
-          uv run --no-sync python scripts/run_downstream_tests.py
+      - name: Run downstream lane
+        run: python3 scripts/run_downstream_tests.py --only ${{ matrix.lane }}

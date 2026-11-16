@@ -1,7 +1,7 @@
-r"""Smoke test proving the downstream vLLM lane works end to end.
+r"""Smoke test that the `ours-vllm` lane imports vLLM.
 
-Runs only via scripts/run_downstream_tests.py --only vllm (marker: downstream + vllm),
-which installs the latest released vLLM +cpu wheel into a uv overlay.
+Run with `python3 scripts/run_downstream_tests.py --only ours-vllm`, which installs
+the latest vLLM +cpu wheel next to this checkout's mistral-common.
 """
 
 import pytest
