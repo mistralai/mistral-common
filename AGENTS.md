@@ -201,6 +201,15 @@ uv run pre-commit install
    uv run pytest --doctest-modules ./src
    ```
 
+   - Run downstream compatibility tests (latest released vLLM + Transformers,
+     via one script usable locally and in CI; needs the `run-downstream-tests`
+     PR label in CI):
+
+   ```bash
+   uv run python scripts/run_downstream_tests.py            # all lanes
+   uv run python scripts/run_downstream_tests.py --only ours-vllm
+   ```
+
    - Run integration tests when changing chat templates, integrations, or
      tokenizer behavior those templates cover. Install the `test-integrations`
      dependency group first, otherwise the Transformers tests are skipped:
