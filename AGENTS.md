@@ -205,7 +205,8 @@ uv run pre-commit install
    - Run downstream compatibility tests against the latest released vLLM and
      Transformers. CI runs the same script on PRs labeled
      `run-downstream-tests`. `VLLM_VERSION` and `TRANSFORMERS_VERSION` pin a
-     release; exit code 1 means a test failed and 3 a setup step failed:
+     release, as do the `vllm_version` and `transformers_version` inputs of a
+     manual CI run; exit code 1 means a test failed and 3 a setup step failed:
 
    ```bash
    python3 scripts/run_downstream_tests.py                    # all lanes

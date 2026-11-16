@@ -6,13 +6,23 @@ permissions:
 # Runs targeted downstream tokenization test suites (vLLM, Transformers) against
 # the mistral-common version in this repo whenever the PR carries the
 # `run-downstream-tests` label (label added, or new push while labeled), or on
-# manual dispatch. CPU only, no GPU required.
+# manual dispatch, which can pin the releases under test. CPU only, no GPU
+# required.
 on:
   pull_request:
     types:
       - labeled
       - synchronize
   workflow_dispatch:
+    inputs:
+      vllm_version:
+        description: "vLLM release to test, e.g. 0.34.0 (default: latest on PyPI)"
+        required: false
+        default: ""
+      transformers_version:
+        description: "Transformers release to test, e.g. 5.23.0 (default: latest on PyPI)"
+        required: false
+        default: ""
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -47,4 +57,7 @@ jobs:
           python-version: "3.12"
 
       - name: Run downstream lane
+        env:
+          VLLM_VERSION: ${{ inputs.vllm_version }}
+          TRANSFORMERS_VERSION: ${{ inputs.transformers_version }}
         run: python3 scripts/run_downstream_tests.py --only ${{ matrix.lane }}
