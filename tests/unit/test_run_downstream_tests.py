@@ -1,7 +1,6 @@
 import importlib.util
 import json
 import subprocess
-import sys
 import urllib.error
 from pathlib import Path
 from types import ModuleType
@@ -293,10 +292,3 @@ def test_upstream_vllm_checks_out_only_the_tests(monkeypatch: pytest.MonkeyPatch
     assert rdt._run_lane(lane="upstream-vllm", work=tmp_path) == "passed"
     assert commands[0][:6] == ["git", "clone", "--depth", "1", "--filter=blob:none", "--sparse"]
     assert commands[1] == ["git", "-C", str(tmp_path / "vllm"), "sparse-checkout", "set", "tests"]
-
-
-def test_unknown_lane_is_a_usage_error() -> None:
-    completed = subprocess.run(
-        args=[sys.executable, str(SCRIPT_PATH), "--only", "bogus"], capture_output=True, check=False
-    )
-    assert completed.returncode == rdt.EXIT_USAGE

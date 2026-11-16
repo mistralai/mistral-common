@@ -8,11 +8,10 @@ import pytest
 
 pytestmark = [pytest.mark.downstream, pytest.mark.vllm]
 
-vllm = pytest.importorskip("vllm")
+pytest.importorskip("vllm")
 
 
 def test_vllm_runtime_available() -> None:
     from vllm.multimodal.image import normalize_image
 
     assert callable(normalize_image)
-    print(f"vllm version under test: {vllm.__version__}")

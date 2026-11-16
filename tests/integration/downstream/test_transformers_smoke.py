@@ -8,11 +8,10 @@ import pytest
 
 pytestmark = [pytest.mark.downstream, pytest.mark.transformers]
 
-transformers = pytest.importorskip("transformers")
+pytest.importorskip("transformers")
 
 
 def test_transformers_runtime_available() -> None:
     from transformers.image_utils import load_image
 
     assert callable(load_image)
-    print(f"transformers version under test: {transformers.__version__}")

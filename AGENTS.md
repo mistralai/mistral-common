@@ -203,7 +203,7 @@ uv run pre-commit install
    ```
 
    - Run downstream compatibility tests against the latest released vLLM and
-     Transformers. CI runs the same script on PRs labelled
+     Transformers. CI runs the same script on PRs labeled
      `run-downstream-tests`. `VLLM_VERSION` and `TRANSFORMERS_VERSION` pin a
      release; exit code 1 means a test failed and 3 a setup step failed:
 

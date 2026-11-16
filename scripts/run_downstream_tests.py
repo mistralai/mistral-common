@@ -43,11 +43,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DOWNSTREAM_TESTS = PROJECT_ROOT / "tests" / "integration" / "downstream"
 
 LANES = ("all", "ours-vllm", "ours-transformers", "upstream-vllm", "upstream-transformers")
-VLLM_LANES = ("ours-vllm", "upstream-vllm")
 
 EXIT_OK = 0
 EXIT_TEST_FAILURE = 1
-EXIT_USAGE = 2
 EXIT_SETUP = 3
 
 VLLM_UPSTREAM_TEST_PACKAGES = (

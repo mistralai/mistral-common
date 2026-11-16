@@ -102,12 +102,6 @@ exclude = ["docs", "tools", "build"]
 module = ["sentencepiece.*", "cv2", "cv2.*","soxr", "soundfile", "llguidance", "llguidance.*", "jinja2", "jinja2.*", "tokenizers", "tokenizers.*", "transformers", "transformers.*", "vllm", "vllm.*"]
 ignore_missing_imports = true
 
-[[tool.mypy.overrides]]
-# Downstream tests import optional runtimes (vllm/transformers) that are only
-# present when run via scripts/run_downstream_tests.py.
-module = ["tests.integration.downstream.*"]
-disallow_untyped_defs = false
-
 [tool.pytest.ini_options]
 testpaths = ["./tests"]
 # Downstream tests need an external runtime (latest vLLM / Transformers) and are
