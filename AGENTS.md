@@ -88,6 +88,7 @@ mistral-common/
 
 ### Scripts
 - `scripts/generate_chat_template.py`: CLI for generating and saving chat templates
+- `scripts/run_downstream_tests.py`: Runs this repository's downstream tests (`tests/integration/downstream/`) and vLLM's and Transformers' own Mistral tests against the latest releases
 
 ## Experimental
 - `src/mistral_common/experimental/`: Experimental features
@@ -154,6 +155,7 @@ mistral-common/
 ### Test organization
 
 - New unit tests belong under `tests/unit/` and mirror the source package structure.
+- Tests for scripts in `scripts/` live under `tests/scripts/`.
 - New integration tests belong under `tests/integration/` and exercise public workflows.
 - Existing tests elsewhere are legacy during the ongoing migration and are removed as their replacements land.
 
@@ -199,6 +201,17 @@ uv run pre-commit install
 
    ```bash
    uv run pytest --doctest-modules ./src
+   ```
+
+   - Run downstream compatibility tests against the latest released vLLM and
+     Transformers. CI runs the same script on PRs labeled
+     `run-downstream-tests`. `VLLM_VERSION` and `TRANSFORMERS_VERSION` pin a
+     release, as do the `vllm_version` and `transformers_version` inputs of a
+     manual CI run; exit code 1 means a test failed and 3 a setup step failed:
+
+   ```bash
+   python3 scripts/run_downstream_tests.py                    # all lanes
+   python3 scripts/run_downstream_tests.py --only upstream-vllm
    ```
 
    - Run integration tests when changing chat templates, integrations, or
