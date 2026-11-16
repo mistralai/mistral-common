@@ -37,16 +37,30 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
+from enum import IntEnum, StrEnum
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DOWNSTREAM_TESTS = PROJECT_ROOT / "tests" / "integration" / "downstream"
 
-LANES = ("all", "ours-vllm", "ours-transformers", "upstream-vllm", "upstream-transformers")
 
-EXIT_OK = 0
-EXIT_TEST_FAILURE = 1
-EXIT_SETUP = 3
+class Lane(StrEnum):
+    r"""A downstream test lane."""
+
+    ALL = "all"
+    OURS_VLLM = "ours-vllm"
+    OURS_TRANSFORMERS = "ours-transformers"
+    UPSTREAM_VLLM = "upstream-vllm"
+    UPSTREAM_TRANSFORMERS = "upstream-transformers"
+
+
+class ExitCode(IntEnum):
+    r"""The script's exit codes."""
+
+    OK = 0
+    TEST_FAILURE = 1
+    SETUP = 3
+
 
 VLLM_UPSTREAM_TEST_PACKAGES = (
     "pytest",
@@ -440,11 +454,11 @@ def _resolve_vllm() -> tuple[str, str | None]:
     return version, resolve_vllm_cpu_wheel(version=version, platform_pattern=pattern, glibc=_host_glibc())
 
 
-def _run_lane(lane: str, work: Path) -> str:
+def _run_lane(lane: Lane, work: Path) -> str:
     r"""Set up and run one lane.
 
     Args:
-        lane: The lane name.
+        lane: The lane.
         work: A temporary directory for clones.
 
     Returns:
@@ -453,19 +467,19 @@ def _run_lane(lane: str, work: Path) -> str:
     Raises:
         SetupError: If the lane cannot be set up.
     """
-    if lane == "ours-transformers":
+    if lane == Lane.OURS_TRANSFORMERS:
         return lane_ours_transformers(version=_resolve_transformers(), work=work)
-    if lane == "upstream-transformers":
+    if lane == Lane.UPSTREAM_TRANSFORMERS:
         return lane_upstream_transformers(version=_resolve_transformers(), work=work)
     vllm_version, wheel = _resolve_vllm()
     if wheel is None:
         return "skipped (no vLLM +cpu wheel for this platform)"
-    if lane == "ours-vllm":
+    if lane == Lane.OURS_VLLM:
         return lane_ours_vllm(wheel=wheel, work=work)
     return lane_upstream_vllm(version=vllm_version, wheel=wheel, work=work)
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> ExitCode:
     r"""Run the selected lanes and return the script's exit code.
 
     Args:
@@ -475,11 +489,14 @@ def main(argv: list[str] | None = None) -> int:
         The exit code described in the module docstring.
     """
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--only", choices=LANES, default="all", help="run a single lane (default: all)")
+    parser.add_argument(
+        "--only", choices=[lane.value for lane in Lane], default=Lane.ALL.value, help="run a single lane (default: all)"
+    )
     args = parser.parse_args(args=argv)
+    only = Lane(args.only)
 
-    selected = [lane for lane in LANES[1:] if args.only in ("all", lane)]
-    outcomes: dict[str, str] = {}
+    selected = [lane for lane in Lane if lane is not Lane.ALL and only in (Lane.ALL, lane)]
+    outcomes: dict[Lane, str] = {}
     with tempfile.TemporaryDirectory(prefix="mistral-common-downstream-") as temporary:
         for lane in selected:
             print(f"==> lane {lane}", flush=True)
@@ -493,10 +510,10 @@ def main(argv: list[str] | None = None) -> int:
     for lane, outcome in outcomes.items():
         print(f"    {lane}: {outcome}", flush=True)
     if "setup-error" in outcomes.values():
-        return EXIT_SETUP
+        return ExitCode.SETUP
     if "failed" in outcomes.values():
-        return EXIT_TEST_FAILURE
-    return EXIT_OK
+        return ExitCode.TEST_FAILURE
+    return ExitCode.OK
 
 
 if __name__ == "__main__":
