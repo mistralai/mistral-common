@@ -236,26 +236,31 @@ def _create_venv(path: Path) -> Path:
     return path / "bin" / "python"
 
 
-def _clone(repository: str, tag: str, destination: Path) -> None:
+def _clone(repository: str, tag: str, destination: Path, sparse_paths: tuple[str, ...] = ()) -> None:
     r"""Shallow-clone one tag of a GitHub repository.
 
     Args:
         repository: The `owner/name` of the repository.
         tag: The tag to check out.
         destination: The clone directory.
+        sparse_paths: When set, only these directories and the files at the root are checked out.
     """
+    sparse = ["--filter=blob:none", "--sparse"] if sparse_paths else []
     _setup(
         command=[
             "git",
             "clone",
             "--depth",
             "1",
+            *sparse,
             "--branch",
             tag,
             f"https://github.com/{repository}.git",
             str(destination),
         ]
     )
+    if sparse_paths:
+        _setup(command=["git", "-C", str(destination), "sparse-checkout", "set", *sparse_paths])
 
 
 def _check_test_files(checkout: Path, paths: tuple[str, ...]) -> None:
@@ -366,7 +371,9 @@ def lane_upstream_vllm(version: str, wheel: str, work: Path) -> str:
         The lane outcome.
     """
     checkout = work / "vllm"
-    _clone(repository="vllm-project/vllm", tag=f"v{version}", destination=checkout)
+    # Only `tests/` is checked out, so `import vllm` resolves to the installed wheel
+    # rather than to the clone's source tree, which lacks the compiled extensions.
+    _clone(repository="vllm-project/vllm", tag=f"v{version}", destination=checkout, sparse_paths=("tests",))
     _check_test_files(checkout=checkout, paths=VLLM_UPSTREAM_TESTS)
     python = _create_venv(path=checkout / ".venv")
     _uv_pip_install(python=python, requirements=["--torch-backend", "cpu", wheel], cwd=checkout)

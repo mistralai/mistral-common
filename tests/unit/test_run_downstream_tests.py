@@ -277,6 +277,24 @@ def test_upstream_lane_missing_test_file_is_a_setup_error(
         rdt._run_lane(lane=lane, work=tmp_path)
 
 
+def test_upstream_vllm_checks_out_only_the_tests(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    commands: list[list[str]] = []
+
+    def fake_run(args: list[str], cwd: Path | None, env: dict[str, str], check: bool) -> subprocess.CompletedProcess:
+        commands.append(args)
+        if args[:2] == ["git", "clone"]:
+            for path in rdt.VLLM_UPSTREAM_TESTS:
+                (Path(args[-1]) / path).parent.mkdir(parents=True, exist_ok=True)
+                (Path(args[-1]) / path).touch()
+        return subprocess.CompletedProcess(args=args, returncode=0)
+
+    monkeypatch.setattr(rdt.subprocess, "run", fake_run)
+    monkeypatch.setattr(rdt, "_resolve_vllm", lambda: ("0.33.0", "https://wheels.vllm.ai/vllm.whl"))
+    assert rdt._run_lane(lane="upstream-vllm", work=tmp_path) == "passed"
+    assert commands[0][:6] == ["git", "clone", "--depth", "1", "--filter=blob:none", "--sparse"]
+    assert commands[1] == ["git", "-C", str(tmp_path / "vllm"), "sparse-checkout", "set", "tests"]
+
+
 def test_unknown_lane_is_a_usage_error() -> None:
     completed = subprocess.run(
         args=[sys.executable, str(SCRIPT_PATH), "--only", "bogus"], capture_output=True, check=False
