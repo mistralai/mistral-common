@@ -252,6 +252,31 @@ def test_ours_transformers_installs_the_pinned_release(monkeypatch: pytest.Monke
     assert "transformers==5.23.0" in installs[0]
 
 
+@pytest.mark.parametrize(
+    ("lane", "missing"),
+    [
+        ("upstream-vllm", "tests/renderers/test_mistral.py"),
+        ("upstream-transformers", "tests/integrations/mistral/test_tokenizer.py"),
+    ],
+)
+def test_upstream_lane_missing_test_file_is_a_setup_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, lane: str, missing: str
+) -> None:
+    def fake_run(args: list[str], cwd: Path | None, env: dict[str, str], check: bool) -> subprocess.CompletedProcess:
+        if args[:2] == ["git", "clone"]:
+            for path in (*rdt.VLLM_UPSTREAM_TESTS, *rdt.TRANSFORMERS_UPSTREAM_TESTS):
+                if path != missing:
+                    (Path(args[-1]) / path).parent.mkdir(parents=True, exist_ok=True)
+                    (Path(args[-1]) / path).touch()
+        return subprocess.CompletedProcess(args=args, returncode=0)
+
+    monkeypatch.setattr(rdt.subprocess, "run", fake_run)
+    monkeypatch.setattr(rdt, "_resolve_vllm", lambda: ("0.33.0", "https://wheels.vllm.ai/vllm.whl"))
+    monkeypatch.setenv("TRANSFORMERS_VERSION", "5.23.0")
+    with pytest.raises(rdt.SetupError, match=f"test files missing from the .* clone: {missing}$"):
+        rdt._run_lane(lane=lane, work=tmp_path)
+
+
 def test_unknown_lane_is_a_usage_error() -> None:
     completed = subprocess.run(
         args=[sys.executable, str(SCRIPT_PATH), "--only", "bogus"], capture_output=True, check=False

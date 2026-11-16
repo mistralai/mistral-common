@@ -258,6 +258,21 @@ def _clone(repository: str, tag: str, destination: Path) -> None:
     )
 
 
+def _check_test_files(checkout: Path, paths: tuple[str, ...]) -> None:
+    r"""Check that a clone has the test files a lane runs.
+
+    Args:
+        checkout: The clone directory.
+        paths: The test files, relative to the clone.
+
+    Raises:
+        SetupError: If any of them is missing, e.g. because the release moved it.
+    """
+    missing = [path for path in paths if not (checkout / path).is_file()]
+    if missing:
+        raise SetupError(f"test files missing from the {checkout.name} clone: {', '.join(missing)}")
+
+
 def _uv_pip_install(python: Path, requirements: list[str], cwd: Path) -> None:
     r"""Install requirements into a lane's virtual environment.
 
@@ -352,6 +367,7 @@ def lane_upstream_vllm(version: str, wheel: str, work: Path) -> str:
     """
     checkout = work / "vllm"
     _clone(repository="vllm-project/vllm", tag=f"v{version}", destination=checkout)
+    _check_test_files(checkout=checkout, paths=VLLM_UPSTREAM_TESTS)
     python = _create_venv(path=checkout / ".venv")
     _uv_pip_install(python=python, requirements=["--torch-backend", "cpu", wheel], cwd=checkout)
     _uv_pip_install(python=python, requirements=list(VLLM_UPSTREAM_TEST_PACKAGES), cwd=checkout)
@@ -374,6 +390,7 @@ def lane_upstream_transformers(version: str, work: Path) -> str:
     """
     checkout = work / "transformers"
     _clone(repository="huggingface/transformers", tag=f"v{version}", destination=checkout)
+    _check_test_files(checkout=checkout, paths=TRANSFORMERS_UPSTREAM_TESTS)
     python = _create_venv(path=checkout / ".venv")
     _uv_pip_install(python=python, requirements=["--torch-backend", "cpu", "-e", ".[dev]"], cwd=checkout)
     # The fixture fetcher imports PyArrow, which needs NumPy 2, while `.[dev]` can
