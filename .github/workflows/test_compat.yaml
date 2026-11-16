@@ -19,35 +19,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  gate:
-    runs-on: ubuntu-latest
-    outputs:
-      should_run: ${{ steps.check.outputs.should_run }}
-    steps:
-      - name: Check if PR carries the run-downstream-tests label
-        id: check
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels" \
-              --jq 'any(.[]; .name == "run-downstream-tests")' | grep -q true; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-            echo "PR does not carry the run-downstream-tests label, skipping."
-          fi
-
   # Every lane runs through scripts/run_downstream_tests.py, exactly as locally,
   # against the latest released vLLM and Transformers. One matrix entry per lane
   # keeps them parallel and reports each lane's result separately. The script
   # installs into ephemeral environments and needs only Python, uv and git.
+  # The labels come from the event payload, which lists the PR's current labels on
+  # both `labeled` and `synchronize` events, so no API call or token is needed.
   downstream:
-    needs: gate
-    if: ${{ needs.gate.outputs.should_run == 'true' }}
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'run-downstream-tests')
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
