@@ -97,7 +97,7 @@ jobs:
           uv run python docs/gen_api_pages.py
           uv run zensical build
 
-  integration_tests:
+  integration_tests_legacy:
     if: ${{ github.event.pull_request.draft != true }}
     runs-on: ubuntu-latest
     strategy:
@@ -126,7 +126,7 @@ jobs:
         run: |
           uv run --no-sync pytest tests/integrations/ -n auto --dist loadfile -v
 
-  integration_tests_new_root:
+  integration_tests:
     if: ${{ github.event.pull_request.draft != true }}
     runs-on: ubuntu-latest
     strategy:
