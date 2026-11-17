@@ -24,6 +24,7 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_arbitrary_tool_call_id_request,
     build_assistant_tool_calls_request,
+    build_audio_user_request,
     build_empty_assistant_request,
     build_image_user_request,
     build_multi_image_user_request,
@@ -1105,6 +1106,13 @@ def test_encodes_unloadable_json_as_string(request: pytest.FixtureRequest, backe
             NotImplementedError,
             _SYSTEM_MESSAGE_NOT_IMPLEMENTED_MESSAGE,
             id="tekken-system-message-tools-multiturn",
+        ),
+        pytest.param(
+            "tekken",
+            partial(build_audio_user_request, settings=None),
+            AssertionError,
+            r"^Make sure to define a audio encoder at init$",
+            id="tekken-audio-user-without-audio-encoder",
         ),
     ],
 )
