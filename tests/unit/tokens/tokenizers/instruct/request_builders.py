@@ -1017,6 +1017,25 @@ def build_assistant_text_chunk_request(*, settings: ModelSettings | None) -> Ins
     )
 
 
+def build_assistant_list_content_trailing_space_request(
+    *, settings: ModelSettings | None
+) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a request whose assistant message holds a single text chunk with trailing spaces."""
+    return build_user_then_assistant_request(
+        assistant=AssistantMessage(content=[TextChunk(text="A1 ")]), settings=settings
+    )
+
+
+def build_closed_think_then_text_trailing_space_request(
+    *, settings: ModelSettings | None
+) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a closed think chunk followed by assistant text with trailing spaces."""
+    return build_user_then_assistant_request(
+        assistant=AssistantMessage(content=[ThinkChunk(thinking="T1"), TextChunk(text="A1 ")]),
+        settings=settings,
+    )
+
+
 def build_closed_think_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
     r"""Build a closed assistant think chunk request."""
     return build_user_then_assistant_request(

@@ -34,6 +34,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_call_with_id_before_last_user_request,
     build_closed_think_request,
     build_closed_think_then_text_request,
+    build_closed_think_then_text_trailing_space_request,
     build_empty_assistant_request,
     build_empty_content_empty_calls_request,
     build_empty_content_no_calls_request,
@@ -97,6 +98,7 @@ _ASSISTANT_TEXT_TOKENS = [1, 3, 197, 4, 165, 149, 2]
 _PREFIXED_ASSISTANT_TEXT_TOKENS = [1, 3, 197, 4, 165, 149]
 _PREFIXED_ASSISTANT_TEXT_PREFIX_IDS = [165, 149]
 _CLOSED_THINK_THEN_TEXT_TOKENS = [1, 3, 197, 4, 35, 184, 149, 36, 165, 149, 2]
+_CLOSED_THINK_THEN_TEXT_TRAILING_SPACE_TOKENS = [1, 3, 197, 4, 35, 184, 149, 36, 165, 149, 2]
 _OPEN_THINK_TEXT_AND_CALL_TOKENS = [
     1, 3, 197, 4, 35, 182, 149, 165, 149, 9, 170, 149, 32, 134, 223, 139, 197, 139, 158, 132, 149, 225, 134, 2
 ]
@@ -163,6 +165,7 @@ _PREFIXED_ASSISTANT_TEXT_EXPECTED = Tokenized(
     tokens=_PREFIXED_ASSISTANT_TEXT_TOKENS, prefix_ids=_PREFIXED_ASSISTANT_TEXT_PREFIX_IDS
 )
 _CLOSED_THINK_THEN_TEXT_EXPECTED = Tokenized(tokens=_CLOSED_THINK_THEN_TEXT_TOKENS)
+_CLOSED_THINK_THEN_TEXT_TRAILING_SPACE_EXPECTED = Tokenized(tokens=_CLOSED_THINK_THEN_TEXT_TRAILING_SPACE_TOKENS)
 _OPEN_THINK_TEXT_AND_CALL_EXPECTED = Tokenized(tokens=_OPEN_THINK_TEXT_AND_CALL_TOKENS)
 _SYSTEM_TEXT_EXPECTED = Tokenized(tokens=_SYSTEM_TEXT_TOKENS)
 _SYSTEM_THINK_BETWEEN_TEXT_EXPECTED = Tokenized(tokens=_SYSTEM_THINK_BETWEEN_TEXT_TOKENS)
@@ -185,6 +188,7 @@ _OPEN_THINK_TEXT = "<s>[INST]a[/INST][THINK]T1</s>"
 _ASSISTANT_TEXT_TEXT = "<s>[INST]a[/INST]A1</s>"
 _PREFIXED_ASSISTANT_TEXT_TEXT = "<s>[INST]a[/INST]A1"
 _CLOSED_THINK_THEN_TEXT_TEXT = "<s>[INST]a[/INST][THINK]T1[/THINK]A1</s>"
+_CLOSED_THINK_THEN_TEXT_TRAILING_SPACE_TEXT = "<s>[INST]a[/INST][THINK]T1[/THINK]A1</s>"
 _OPEN_THINK_TEXT_AND_CALL_TEXT = "<s>[INST]a[/INST][THINK]R1A1[TOOL_CALLS]F1[ARGS]\"{'a': 1}\"</s>"
 _SYSTEM_TEXT_TEXT = "<s>[SYSTEM_PROMPT]S1[/SYSTEM_PROMPT][INST]a[/INST]"
 _SYSTEM_THINK_BETWEEN_TEXT_TEXT = "<s>[SYSTEM_PROMPT]S1[THINK]TS[/THINK]S2[/SYSTEM_PROMPT][INST]a[/INST]"
@@ -555,6 +559,13 @@ def image_tokenizer() -> InstructTokenizerV13:
             _CLOSED_THINK_THEN_TEXT_EXPECTED,
             _CLOSED_THINK_THEN_TEXT_TEXT,
             id="with-think-closed-think-then-text",
+        ),
+        pytest.param(
+            "with_think",
+            partial(build_closed_think_then_text_trailing_space_request, settings=None),
+            _CLOSED_THINK_THEN_TEXT_TRAILING_SPACE_EXPECTED,
+            _CLOSED_THINK_THEN_TEXT_TRAILING_SPACE_TEXT,
+            id="with-think-closed-think-then-text-trailing-space",
         ),
         pytest.param(
             "with_think",

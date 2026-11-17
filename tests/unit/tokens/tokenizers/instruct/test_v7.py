@@ -23,6 +23,7 @@ from tests.test_tokenizer_v7_audio import get_tekkenizer_with_audio
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_arbitrary_tool_call_id_request,
     build_assistant_list_content_request,
+    build_assistant_list_content_trailing_space_request,
     build_assistant_think_request,
     build_assistant_tool_calls_request,
     build_audio_user_request,
@@ -166,6 +167,7 @@ _TEXT_THEN_TWO_IMAGES_TOKENS = [1, 3, 2086, 10, 10, 14, 10, 10, 15, 10, 10, 10, 
 _ONE_IMAGE_WITH_TEXT_TOKENS = [1, 3, 10, 10, 14, 10, 10, 15, 2086, 4]
 _SYSTEM_LIST_CONTENT_TOKENS = [1, 16, 1036, 17, 3, 1032, 4]
 _ASSISTANT_LIST_CONTENT_TOKENS = [1, 3, 1032, 4, 1055, 2]
+_ASSISTANT_LIST_CONTENT_TRAILING_SPACE_TOKENS = [1, 3, 1032, 4, 1098, 29508, 2]
 _SYSTEM_AND_USER_WORDS_TOKENS = [1, 16, 7080, 29477, 2294, 17, 3, 1947, 2138, 4]
 _TRUNCATION_LAST_USER_AT_LIMIT_TOKENS = [1, 3, 197, 197, 197, 197, 197, 197, 197, 4]
 # fmt: on
@@ -213,6 +215,7 @@ _TEXT_THEN_TWO_IMAGES_EXPECTED = Tokenized(
 _ONE_IMAGE_WITH_TEXT_EXPECTED = Tokenized(tokens=_ONE_IMAGE_WITH_TEXT_TOKENS, images=[_RED_4X4_IMAGE])
 _SYSTEM_LIST_CONTENT_EXPECTED = Tokenized(tokens=_SYSTEM_LIST_CONTENT_TOKENS)
 _ASSISTANT_LIST_CONTENT_EXPECTED = Tokenized(tokens=_ASSISTANT_LIST_CONTENT_TOKENS)
+_ASSISTANT_LIST_CONTENT_TRAILING_SPACE_EXPECTED = Tokenized(tokens=_ASSISTANT_LIST_CONTENT_TRAILING_SPACE_TOKENS)
 _SYSTEM_AND_USER_WORDS_EXPECTED = Tokenized(tokens=_SYSTEM_AND_USER_WORDS_TOKENS)
 _TRUNCATION_LAST_USER_AT_LIMIT_EXPECTED = Tokenized(tokens=_TRUNCATION_LAST_USER_AT_LIMIT_TOKENS)
 
@@ -279,6 +282,7 @@ _TEXT_THEN_TWO_IMAGES_TEXT = (
 _ONE_IMAGE_WITH_TEXT_TEXT = "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁x[/INST]"
 _SYSTEM_LIST_CONTENT_TEXT = "<s>[SYSTEM_PROMPT]▁s[/SYSTEM_PROMPT][INST]▁a[/INST]"
 _ASSISTANT_LIST_CONTENT_TEXT = "<s>[INST]▁a[/INST]▁b</s>"
+_ASSISTANT_LIST_CONTENT_TRAILING_SPACE_TEXT = "<s>[INST]▁a[/INST]▁A1</s>"
 _SYSTEM_AND_USER_WORDS_TEXT = "<s>[SYSTEM_PROMPT]▁hello▁world[/SYSTEM_PROMPT][INST]▁good▁day[/INST]"
 _TRUNCATION_LAST_USER_AT_LIMIT_TEXT = "<s>[INST]aaaaaaa[/INST]"
 
@@ -761,6 +765,13 @@ def with_audio_tokenizer() -> InstructTokenizer:
             _ASSISTANT_LIST_CONTENT_EXPECTED,
             _ASSISTANT_LIST_CONTENT_TEXT,
             id="spm-shared-assistant-list-content",
+        ),
+        pytest.param(
+            "spm",
+            partial(build_assistant_list_content_trailing_space_request, settings=None),
+            _ASSISTANT_LIST_CONTENT_TRAILING_SPACE_EXPECTED,
+            _ASSISTANT_LIST_CONTENT_TRAILING_SPACE_TEXT,
+            id="spm-shared-assistant-list-content-trailing-space",
         ),
         pytest.param(
             "spm",

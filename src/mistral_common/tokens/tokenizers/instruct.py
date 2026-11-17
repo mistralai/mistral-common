@@ -838,6 +838,17 @@ class InstructTokenizerV3(InstructTokenizerV2, Generic[InstructRequestType, FIMR
             return [content[-1], *content[:-1]]
         return content
 
+    @staticmethod
+    def _strip_trailing_spaces_assistant_content(content: Sequence[ContentChunk]) -> list[ContentChunk]:
+        r"""Strip trailing spaces from the final text chunk of assistant content.
+
+        Mirrors the string path of `_encode_normal_content_assistant_message`, which strips trailing spaces
+        so that the same answer text encodes identically whether or not the turn contains a think chunk.
+        """
+        if content and isinstance(content[-1], TextChunk) and content[-1].text:
+            return [*content[:-1], TextChunk(text=content[-1].text.rstrip(" "))]
+        return list(content)
+
     def _encode_content_chunks(
         self, content: Sequence[ContentChunk]
     ) -> tuple[list[int], list[np.ndarray], list[Audio]]:
@@ -1265,7 +1276,9 @@ class InstructTokenizerV7(InstructTokenizerV3):
             if isinstance(message.content, str):
                 curr_tokens = self._encode_normal_content_assistant_message(message)
             elif isinstance(message.content, list):
-                content_tokens, images, audios = self._encode_content_chunks(message.content)
+                content_tokens, images, audios = self._encode_content_chunks(
+                    self._strip_trailing_spaces_assistant_content(message.content)
+                )
                 assert not images and not audios, (
                     f"Assistant messages cannot contain images or audios, got {len(images)} images "
                     f"and {len(audios)} audios."
