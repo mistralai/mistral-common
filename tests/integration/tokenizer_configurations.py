@@ -16,13 +16,19 @@ from pathlib import Path
 from mistral_common.protocol.instruct.normalize import InstructRequestNormalizerV13, get_normalizer
 from mistral_common.protocol.instruct.request import ReasoningEffort
 from mistral_common.protocol.instruct.validator import MistralRequestValidatorV13, ValidationMode, get_validator
-from mistral_common.tokens.tokenizers.audio import AudioConfig, AudioEncoder, AudioSpectrogramConfig, SpecialAudioIDs
+from mistral_common.tokens.tokenizers.audio import (
+    AudioConfig,
+    AudioEncoder,
+    AudioSpectrogramConfig,
+    SpecialAudioIDs,
+    TranscriptionFormat,
+)
 from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersion
 from mistral_common.tokens.tokenizers.image import ImageEncoder
-from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13, InstructTokenizerV15
-from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7, InstructTokenizerV13, InstructTokenizerV15
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer, load_audio_encoder
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder, ReasoningEffortEnumBuilder
-from mistral_common.tokens.tokenizers.tekken import Tekkenizer
+from mistral_common.tokens.tokenizers.tekken import SpecialTokenInfo, Tekkenizer
 from tests.integration.provision_tokenizers import PINNED_TOKENIZERS
 from tests.utils import get_special_tokens, quick_vocab
 
@@ -448,4 +454,117 @@ SYNTHETIC_V15_AUDIO_TEST = TokenizerConfiguration(
         reasoning_effort=(tuple(ReasoningEffort), ReasoningEffort.none),
         add_audio=True,
     ),
+)
+
+
+def _synthetic_v7_audio_loader(
+    *,
+    streaming: bool,
+    omit_streaming_pad: bool = False,
+    omit_text_to_audio: bool = False,
+) -> Callable[[ValidationMode], MistralTokenizer]:
+    r"""Capture immutable v7 audio profile settings for a lazy synthetic configuration.
+
+    Args:
+        streaming: Whether the audio config uses the streaming transcription format.
+        omit_streaming_pad: Whether to omit the streaming_pad marker.
+        omit_text_to_audio: Whether to omit the text_to_audio marker.
+
+    Returns:
+        A loader creating the synthetic v7 audio tokenizer in the requested mode.
+    """
+
+    def load(mode: ValidationMode) -> MistralTokenizer:
+        special_tokens = get_special_tokens(tokenizer_version=TokenizerVersion.v7, add_audio=True)
+        if streaming:
+            special_tokens += [
+                SpecialTokenInfo(rank=37, token_str="<SPCECIAL_37>", is_control=True),
+                SpecialTokenInfo(rank=38, token_str="<SPCECIAL_38>", is_control=True),
+                SpecialTokenInfo(rank=39, token_str=SpecialTokens.streaming_pad.value, is_control=True),
+                SpecialTokenInfo(rank=40, token_str=SpecialTokens.streaming_word.value, is_control=True),
+            ]
+        if omit_streaming_pad:
+            special_tokens = [
+                SpecialTokenInfo(rank=token["rank"], token_str=f"<OMITTED_{token['rank']}>", is_control=True)
+                if token["token_str"] == SpecialTokens.streaming_pad.value
+                else token
+                for token in special_tokens
+            ]
+        if omit_text_to_audio:
+            special_tokens = [
+                SpecialTokenInfo(rank=token["rank"], token_str=f"<OMITTED_{token['rank']}>", is_control=True)
+                if token["token_str"] == SpecialTokens.text_to_audio.value
+                else token
+                for token in special_tokens
+            ]
+        audio_config = AudioConfig(
+            sampling_rate=24_000,
+            frame_rate=12.5,
+            encoding_config=AudioSpectrogramConfig(num_mel_bins=128, window_size=400, hop_length=160),
+            transcription_format=TranscriptionFormat.STREAMING if streaming else TranscriptionFormat.INSTRUCT,
+            transcription_delay_ms=480.0 if streaming else None,
+            streaming_look_ahead_ms=2.5 if streaming else None,
+            streaming_look_back_ms=52.5 if streaming else None,
+            streaming_n_left_pad_tokens=16 if streaming else None,
+            voice_num_audio_tokens={"preset": 5},
+        )
+        tekkenizer = Tekkenizer(
+            vocab=quick_vocab(extra_toks=[b"synthetic"]),
+            special_tokens=special_tokens,
+            pattern=r".+",
+            vocab_size=356,
+            num_special_tokens=100,
+            version=TokenizerVersion.v7,
+            audio_config=audio_config,
+        )
+        audio_encoder = load_audio_encoder(audio_config=audio_config, tokenizer=tekkenizer)
+        instruct_tokenizer = InstructTokenizerV7(tokenizer=tekkenizer, audio_encoder=audio_encoder)
+        return MistralTokenizer(
+            instruct_tokenizer=instruct_tokenizer,
+            validator=get_validator(version=TokenizerVersion.v7, mode=mode),
+            request_normalizer=get_normalizer(version=TokenizerVersion.v7),
+        )
+
+    return load
+
+
+SYNTHETIC_V7_INSTRUCT_AUDIO_TEST = TokenizerConfiguration(
+    configuration_id="synthetic-v7-instruct-audio-test",
+    tokenizer_path=None,
+    mode=ValidationMode.test,
+    sha256=None,
+    provenance=Provenance.SYNTHETIC,
+    synthetic_loader=_synthetic_v7_audio_loader(streaming=False),
+)
+SYNTHETIC_V7_STREAMING_AUDIO_TEST = TokenizerConfiguration(
+    configuration_id="synthetic-v7-streaming-audio-test",
+    tokenizer_path=None,
+    mode=ValidationMode.test,
+    sha256=None,
+    provenance=Provenance.SYNTHETIC,
+    synthetic_loader=_synthetic_v7_audio_loader(streaming=True),
+)
+SYNTHETIC_V7_STREAMING_NO_PAD_AUDIO_TEST = TokenizerConfiguration(
+    configuration_id="synthetic-v7-streaming-no-pad-audio-test",
+    tokenizer_path=None,
+    mode=ValidationMode.test,
+    sha256=None,
+    provenance=Provenance.SYNTHETIC,
+    synthetic_loader=_synthetic_v7_audio_loader(streaming=True, omit_streaming_pad=True),
+)
+SYNTHETIC_V7_SPEECH_AUDIO_TEST = TokenizerConfiguration(
+    configuration_id="synthetic-v7-speech-audio-test",
+    tokenizer_path=None,
+    mode=ValidationMode.test,
+    sha256=None,
+    provenance=Provenance.SYNTHETIC,
+    synthetic_loader=_synthetic_v7_audio_loader(streaming=False),
+)
+SYNTHETIC_V7_SPEECH_NO_MARKER_AUDIO_TEST = TokenizerConfiguration(
+    configuration_id="synthetic-v7-speech-no-marker-audio-test",
+    tokenizer_path=None,
+    mode=ValidationMode.test,
+    sha256=None,
+    provenance=Provenance.SYNTHETIC,
+    synthetic_loader=_synthetic_v7_audio_loader(streaming=False, omit_text_to_audio=True),
 )
