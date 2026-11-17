@@ -458,9 +458,11 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
                 "    {%- set ns_t = namespace(tools=[]) %}",
                 "    {%- for tool in tools %}",
                 "        {%- set tool_function = tool['function'] %}",
-                "        {%- set description = tool_function.get('description') %}",
-                "        {%- set parameters = tool_function.get('parameters') %}",
-                "        {%- set ns_t.tools = ns_t.tools + [{'type': tool.get('type', 'function'), "
+                "        {%- set description = "
+                "tool_function['description'] if 'description' in tool_function else none %}",
+                "        {%- set parameters = "
+                "tool_function['parameters'] if 'parameters' in tool_function else none %}",
+                "        {%- set ns_t.tools = ns_t.tools + [{'type': tool['type'] if 'type' in tool else 'function', "
                 "'function': {'name': tool_function['name'], "
                 "'description': description if description is not none else '', "
                 "'parameters': parameters if parameters is not none else {}}}] %}",
@@ -486,13 +488,16 @@ def _generate_available_tools_definition(config: TemplateConfig) -> str:
             [
                 "{%- set json_schema = none %}",
                 "{%- if response_format is defined and response_format is not none %}",
-                "    {%- set response_format_type = response_format.get('type', 'text') %}",
-                "    {%- set response_json_schema = response_format.get('json_schema') %}",
+                "    {%- set response_format_type = "
+                "response_format['type'] if 'type' in response_format else 'text' %}",
+                "    {%- set response_json_schema = "
+                "response_format['json_schema'] if 'json_schema' in response_format else none %}",
                 "    {%- if response_format_type not in ['text', 'json_object', 'json_schema'] %}",
                 "        {{- raise_exception('Response format type must be one of text, json_object or json_schema, "
                 "got ' ~ response_format_type ~ '.') }}",
                 "    {%- elif response_format_type == 'json_schema' %}",
-                "        {%- if response_json_schema is none or response_json_schema.get('schema') is none %}",
+                "        {%- if response_json_schema is none or "
+                "('schema' not in response_json_schema or response_json_schema['schema'] is none) %}",
                 "            {{- raise_exception('Response format `json_schema` must define the schema') }}",
                 "        {%- else %}",
                 "            {%- set json_schema = response_json_schema['schema'] %}",
@@ -622,7 +627,8 @@ def _generate_macros(config: TemplateConfig) -> str:
             [
                 "            {%- elif support_thinking and block['type'] == 'thinking' -%}",
                 "                {{- '" + begin_tag + "' ~ block['thinking'] -}}",
-                "                {%- if block.get('closed', true) -%}{{- '" + end_tag + "' -}}{%- endif -%}",
+                "                {%- if (block['closed'] if 'closed' in block else true) -%}"
+                "{{- '" + end_tag + "' -}}{%- endif -%}",
             ]
         )
 
@@ -785,7 +791,8 @@ def _generate_reasoning_to_thinking_inline() -> list[str]:
     """
     return [
         "                {#- Convert reasoning / reasoning_content to a leading thinking chunk. #}",
-        "                {%- set reasoning = msg.get('reasoning_content', msg.get('reasoning', none)) %}",
+        "                {%- set reasoning = msg['reasoning_content'] if 'reasoning_content' in msg "
+        "else (msg['reasoning'] if 'reasoning' in msg else none) %}",
         "                {%- if reasoning is not none and reasoning != '' %}",
         "                    {%- if msg['content'] is not none and msg['content'] is not string %}",
         "                        {%- for block in msg['content'] %}",
