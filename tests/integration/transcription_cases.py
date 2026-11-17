@@ -1,10 +1,10 @@
-r"""Public transcription decode-error cases for synthetic v7 audio profiles.
+r"""Public transcription cases for pinned and synthetic v7 audio profiles.
 
 One executable case pairs one reusable Python recipe with one identified
-tokenizer configuration and exactly one expected raw decode error. The
-requests are constructed before the public call, so a construction failure
-cannot satisfy an encode-rejection case. All cases are errors and have no
-success manifest.
+tokenizer configuration and exactly one expected outcome: a reviewed success
+manifest for success cases, or one expected raw decode error for error cases.
+The requests are constructed before the public call, so a construction failure
+cannot satisfy an encode-rejection case. Error cases have no success manifest.
 """
 
 from dataclasses import dataclass
@@ -14,6 +14,8 @@ from pydantic import ValidationError
 
 from mistral_common.exceptions import UnsupportedTokenizerFeatureException
 from tests.integration.tokenizer_configurations import (
+    PINNED_V7_AUDIO_TEST,
+    PINNED_V7_REALTIME_TEST,
     SYNTHETIC_V7_INSTRUCT_AUDIO_TEST,
     SYNTHETIC_V7_STREAMING_AUDIO_TEST,
     SYNTHETIC_V7_STREAMING_NO_PAD_AUDIO_TEST,
@@ -21,14 +23,28 @@ from tests.integration.tokenizer_configurations import (
 )
 from tests.integration.transcription_recipes import (
     TRANSCRIPTION_EMPTY_BYTES,
+    TRANSCRIPTION_INSTRUCT_EN,
+    TRANSCRIPTION_INSTRUCT_NO_LANGUAGE,
     TRANSCRIPTION_INVALID_BASE64,
     TRANSCRIPTION_MULTICHANNEL,
     TRANSCRIPTION_NON_AUDIO_BYTES,
     TRANSCRIPTION_OFFLINE_INVALID_BASE64,
     TRANSCRIPTION_OFFLINE_MULTICHANNEL,
     TRANSCRIPTION_OFFLINE_NON_AUDIO_BYTES,
+    TRANSCRIPTION_REALTIME_OFFLINE_DEFAULT_DELAY,
+    TRANSCRIPTION_REALTIME_OFFLINE_DELAY_0MS,
+    TRANSCRIPTION_REALTIME_ONLINE_EMPTY_PREFILL_DEFAULT_DELAY,
     TranscriptionRecipe,
 )
+
+
+@dataclass(frozen=True)
+class PublicTranscriptionSuccessCase:
+    """One executable public transcription success case identified by its semantic id."""
+
+    case_id: str
+    recipe: TranscriptionRecipe
+    configuration: TokenizerConfiguration
 
 
 @dataclass(frozen=True)
@@ -40,6 +56,35 @@ class PublicTranscriptionErrorCase:
     configuration: TokenizerConfiguration
     expected_exception: type[Exception]
     message_pattern: str
+
+
+TRANSCRIPTION_SUCCESS_CASES: tuple[PublicTranscriptionSuccessCase, ...] = (
+    PublicTranscriptionSuccessCase(
+        case_id="transcription-pinned-v7-audio-instruct-no-language",
+        recipe=TRANSCRIPTION_INSTRUCT_NO_LANGUAGE,
+        configuration=PINNED_V7_AUDIO_TEST,
+    ),
+    PublicTranscriptionSuccessCase(
+        case_id="transcription-pinned-v7-audio-instruct-en",
+        recipe=TRANSCRIPTION_INSTRUCT_EN,
+        configuration=PINNED_V7_AUDIO_TEST,
+    ),
+    PublicTranscriptionSuccessCase(
+        case_id="transcription-pinned-v7-realtime-offline-default-delay",
+        recipe=TRANSCRIPTION_REALTIME_OFFLINE_DEFAULT_DELAY,
+        configuration=PINNED_V7_REALTIME_TEST,
+    ),
+    PublicTranscriptionSuccessCase(
+        case_id="transcription-pinned-v7-realtime-offline-delay-0ms",
+        recipe=TRANSCRIPTION_REALTIME_OFFLINE_DELAY_0MS,
+        configuration=PINNED_V7_REALTIME_TEST,
+    ),
+    PublicTranscriptionSuccessCase(
+        case_id="transcription-pinned-v7-realtime-online-empty-prefill-default-delay",
+        recipe=TRANSCRIPTION_REALTIME_ONLINE_EMPTY_PREFILL_DEFAULT_DELAY,
+        configuration=PINNED_V7_REALTIME_TEST,
+    ),
+)
 
 
 TRANSCRIPTION_ERROR_CASES: tuple[PublicTranscriptionErrorCase, ...] = (

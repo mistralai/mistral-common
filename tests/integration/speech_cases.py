@@ -1,10 +1,15 @@
-r"""Public speech decode-error cases for synthetic v7 audio profiles.
+r"""Public speech cases for the synthetic v7 speech profile.
 
 One executable case pairs one reusable Python recipe with one identified
-tokenizer configuration and exactly one expected raw decode error. The
-requests are constructed before the public call, so a construction failure
-cannot satisfy an encode-rejection case. All cases are errors and have no
-success manifest.
+tokenizer configuration and exactly one expected outcome: a reviewed success
+manifest for success cases, or one expected raw decode error for error cases.
+The requests are constructed before the public call, so a construction failure
+cannot satisfy an encode-rejection case. Error cases have no success manifest.
+
+All success cases bind the explicitly synthetic ``synthetic-v7-speech-test``
+configuration: the verified pinned v7 transcription profiles lack the speech
+markers, and the only released speech artifact is excluded by its CC-BY-NC
+license. Synthetic preset mappings establish no released voice fidelity.
 """
 
 from dataclasses import dataclass
@@ -15,6 +20,9 @@ from tests.integration.speech_recipes import (
     SPEECH_INVALID_BASE64,
     SPEECH_MULTICHANNEL,
     SPEECH_NON_AUDIO_BYTES,
+    SPEECH_REFERENCE_AUDIO,
+    SPEECH_REFERENCE_OVER_PRESET,
+    SPEECH_SYNTHETIC_PRESET,
     SpeechRecipe,
 )
 from tests.integration.tokenizer_configurations import (
@@ -22,6 +30,15 @@ from tests.integration.tokenizer_configurations import (
     SYNTHETIC_V7_SPEECH_NO_MARKER_AUDIO_TEST,
     TokenizerConfiguration,
 )
+
+
+@dataclass(frozen=True)
+class PublicSpeechSuccessCase:
+    """One executable public speech success case identified by its semantic id."""
+
+    case_id: str
+    recipe: SpeechRecipe
+    configuration: TokenizerConfiguration
 
 
 @dataclass(frozen=True)
@@ -33,6 +50,25 @@ class PublicSpeechErrorCase:
     configuration: TokenizerConfiguration
     expected_exception: type[Exception]
     message_pattern: str
+
+
+SPEECH_SUCCESS_CASES: tuple[PublicSpeechSuccessCase, ...] = (
+    PublicSpeechSuccessCase(
+        case_id="speech-synthetic-v7-reference-audio",
+        recipe=SPEECH_REFERENCE_AUDIO,
+        configuration=SYNTHETIC_V7_SPEECH_AUDIO_TEST,
+    ),
+    PublicSpeechSuccessCase(
+        case_id="speech-synthetic-v7-preset",
+        recipe=SPEECH_SYNTHETIC_PRESET,
+        configuration=SYNTHETIC_V7_SPEECH_AUDIO_TEST,
+    ),
+    PublicSpeechSuccessCase(
+        case_id="speech-synthetic-v7-reference-over-preset",
+        recipe=SPEECH_REFERENCE_OVER_PRESET,
+        configuration=SYNTHETIC_V7_SPEECH_AUDIO_TEST,
+    ),
+)
 
 
 SPEECH_ERROR_CASES: tuple[PublicSpeechErrorCase, ...] = (

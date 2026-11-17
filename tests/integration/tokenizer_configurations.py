@@ -254,6 +254,11 @@ PINNED_V7_AUDIO_SERVING = _pinned(
     sha256=_PINNED_SHA256_BY_PROFILE["v7-audio"],
     mode=ValidationMode.serving,
 )
+PINNED_V7_REALTIME_TEST = _pinned(
+    profile_id="v7-realtime",
+    sha256=_PINNED_SHA256_BY_PROFILE["v7-realtime"],
+    mode=ValidationMode.test,
+)
 PINNED_V11_IMAGE_TEST = _pinned(
     profile_id="v11-image",
     sha256=_PINNED_SHA256_BY_PROFILE["v11-image"],
