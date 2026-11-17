@@ -48,7 +48,7 @@ def _assistant_message(
     with_thinking: bool, with_tool_calls: bool = True, with_id: bool = True, with_content: bool = True
 ) -> dict[str, Any]:
     if with_thinking:
-        assistant_content: str | list[dict[str, str]] = [
+        assistant_content: str | list[dict[str, str]] | None = [
             {"type": "thinking", "thinking": "let me check"},
             {"type": "text", "text": "Sure."},
         ]

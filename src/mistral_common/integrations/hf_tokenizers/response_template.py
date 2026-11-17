@@ -182,7 +182,7 @@ def generate_response_template(tokenizer_version: TokenizerVersion, thinking_mod
 
 
 def convert_tokenizer_to_response_template(
-    tokenizer: MistralTokenizer, plain_thinking_support: bool | None = None
+    tokenizer: MistralTokenizer, plain_thinking_support: bool | None
 ) -> dict[str, Any]:
     r"""Generate the Hugging Face response template for a loaded `MistralTokenizer`.
 
@@ -216,9 +216,11 @@ def convert_tokenizer_to_response_template(
     )
 
     if plain_thinking_support is None:
-        plain_thinking_support = version == TokenizerVersion.v11 and not audio_support
+        resolve_plain_thinking_support = version == TokenizerVersion.v11 and not audio_support
+    else:
+        resolve_plain_thinking_support = plain_thinking_support
 
-    if plain_thinking_support:
+    if resolve_plain_thinking_support:
         if version != TokenizerVersion.v11:
             raise ValueError("Plain thinking support is only available for tokenizer version v11")
         if audio_support:

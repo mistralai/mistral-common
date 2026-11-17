@@ -295,7 +295,7 @@ def test_convert_tokenizer_to_response_template_tekken_v13(
 ) -> None:
     path = build_tekken_json(config=TestConfig(version=TokenizerVersion.v13, think=True), output_dir=tmp_path)
     tokenizer = MistralTokenizer.from_file(tokenizer_filename=str(path), mode=ValidationMode.test)
-    result = convert_tokenizer_to_response_template(tokenizer=tokenizer)
+    result = convert_tokenizer_to_response_template(tokenizer=tokenizer, plain_thinking_support=None)
     assert result == expected_v13
 
 
@@ -305,7 +305,7 @@ def test_convert_v11_plain_thinking_heuristic(
     # Matches the chat-template converter: v11 without audio defaults to plain thinking on.
     path = build_tekken_json(config=TestConfig(version=TokenizerVersion.v11), output_dir=tmp_path)
     tokenizer = MistralTokenizer.from_file(tokenizer_filename=str(path), mode=ValidationMode.test)
-    auto = convert_tokenizer_to_response_template(tokenizer=tokenizer)
+    auto = convert_tokenizer_to_response_template(tokenizer=tokenizer, plain_thinking_support=None)
     assert auto == expected_v11_plain_thinking
     forced_off = convert_tokenizer_to_response_template(tokenizer=tokenizer, plain_thinking_support=False)
     assert forced_off == expected_v11_no_thinking
