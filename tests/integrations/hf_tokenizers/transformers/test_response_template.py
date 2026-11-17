@@ -11,12 +11,17 @@ from tests.integrations.chat_templates.hf_utils import build_hf_tokenizer
 
 
 def _build(
-    version: TokenizerVersion, thinking_mode: ThinkingMode, tmp_path: Path, with_system: bool = False
+    version: TokenizerVersion,
+    thinking_mode: ThinkingMode,
+    tmp_path: Path,
+    with_system: bool = False,
+    model_settings_fields: frozenset[str] | None = None,
 ) -> tuple[str, Any, list[dict[str, Any]]]:
     tokenizer_config = TestConfig(
         version=version,
         think=thinking_mode is ThinkingMode.special,
         plain_think=thinking_mode is ThinkingMode.plain,
+        model_settings_fields=model_settings_fields,
     )
     tokenizer_path = build_tekken_json(config=tokenizer_config, output_dir=tmp_path)
     chat_template = generate_chat_template(
@@ -28,9 +33,9 @@ def _build(
         default_system_prompt=None,
         plain_thinking_support=thinking_mode is ThinkingMode.plain,
         use_special_token_variables=True,
-        model_settings_fields=None,
-        reasoning_effort_values=None,
-        reasoning_effort_default=None,
+        model_settings_fields=model_settings_fields,
+        reasoning_effort_values=("none", "high") if model_settings_fields else None,
+        reasoning_effort_default="none" if model_settings_fields else None,
     )
     hf_tokenizer = build_hf_tokenizer(tekken_path=tokenizer_path, chat_template=chat_template)
     hf_tokenizer.response_template = generate_response_template(
@@ -114,6 +119,7 @@ def test_parse_response_roundtrip(
         if version >= TokenizerVersion.v3 and version != TokenizerVersion.v13:
             assert parsed_message["tool_calls"][0]["id"] == "abcdefghi"
         else:
+            # v13+ has no call id on the wire; v1 has no tool calls at all.
             assert "id" not in parsed_message["tool_calls"][0]
     else:
         assert "tool_calls" not in parsed_message
@@ -154,3 +160,111 @@ def test_parse_response_system_then_assistant(tmp_path: Path) -> None:
 
     assert parsed_message["content"] == "Hello"
     assert parsed_message["tool_calls"][0]["function"]["name"] == "get_weather"
+
+
+def _agentic_prefix_messages() -> list[dict[str, Any]]:
+    r"""system + user + assistant tool call + tool result + user."""
+    return [
+        {"role": "system", "content": "be brief"},
+        {"role": "user", "content": "weather in Paris?"},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "type": "function",
+                    "id": "abcdefghi",
+                    "function": {"name": "get_weather", "arguments": {"city": "Paris"}},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "abcdefghi", "content": "sunny, 22C"},
+        {"role": "user", "content": "and London?"},
+    ]
+
+
+@pytest.mark.parametrize(
+    ("version", "thinking_mode"),
+    [
+        (TokenizerVersion.v13, ThinkingMode.special),
+        (TokenizerVersion.v11, ThinkingMode.plain),
+        (TokenizerVersion.v7, ThinkingMode.none),
+    ],
+    ids=["v13", "v11", "v7"],
+)
+def test_parse_response_multi_turn_with_tool_results(
+    version: TokenizerVersion, thinking_mode: ThinkingMode, tmp_path: Path
+) -> None:
+    # Full agentic prefix: the [/TOOL_RESULTS] start anchor must keep the earlier
+    # tool call and tool result out of the parsed final turn.
+    chat_template, hf_tokenizer, _ = _build(version=version, thinking_mode=thinking_mode, tmp_path=tmp_path)
+    messages = _agentic_prefix_messages()
+    final_assistant: dict[str, Any] = {"role": "assistant", "content": "London is rainy, 18C."}
+
+    prompt = render_template(template=chat_template, messages=messages)
+    full_response = render_template(template=chat_template, messages=[*messages, final_assistant])
+    generation = full_response[len(prompt) :]
+
+    parsed_message = hf_tokenizer.parse_response(response=generation, prefix=prompt)
+
+    assert parsed_message["content"] == "London is rainy, 18C."
+    assert "tool_calls" not in parsed_message
+    assert "reasoning_content" not in parsed_message
+
+
+def test_parse_response_multi_turn_final_tool_call_with_thinking(tmp_path: Path) -> None:
+    # Multi-turn prefix whose final assistant turn carries both thinking and a tool
+    # call: all three fields must be parsed from the same generation.
+    chat_template, hf_tokenizer, _ = _build(
+        version=TokenizerVersion.v13, thinking_mode=ThinkingMode.special, tmp_path=tmp_path
+    )
+    messages = _agentic_prefix_messages()
+    final_assistant: dict[str, Any] = {
+        "role": "assistant",
+        "content": [
+            {"type": "thinking", "thinking": "need London weather"},
+            {"type": "text", "text": "Let me check."},
+        ],
+        "tool_calls": [
+            {
+                "type": "function",
+                "id": "jkl012mno",
+                "function": {"name": "get_weather", "arguments": {"city": "London"}},
+            }
+        ],
+    }
+
+    prompt = render_template(template=chat_template, messages=messages)
+    full_response = render_template(template=chat_template, messages=[*messages, final_assistant])
+    generation = full_response[len(prompt) :]
+
+    parsed_message = hf_tokenizer.parse_response(response=generation, prefix=prompt)
+
+    assert parsed_message["reasoning_content"] == "need London weather"
+    assert parsed_message["content"] == "Let me check."
+    assert parsed_message["tool_calls"][0]["function"]["name"] == "get_weather"
+    assert parsed_message["tool_calls"][0]["function"]["arguments"] == {"city": "London"}
+    assert "id" not in parsed_message["tool_calls"][0]
+
+
+def test_parse_response_v15_with_thinking_and_tool_call(tmp_path: Path) -> None:
+    # v15 (model settings): same wire format as v13, exercised end to end.
+    chat_template, hf_tokenizer, messages = _build(
+        version=TokenizerVersion.v15,
+        thinking_mode=ThinkingMode.special,
+        tmp_path=tmp_path,
+        model_settings_fields=frozenset({"reasoning_effort"}),
+    )
+    assistant_message = _assistant_message(with_thinking=True, with_tool_calls=True)
+
+    prompt = render_template(template=chat_template, messages=messages)
+    full_response = render_template(template=chat_template, messages=[*messages, assistant_message])
+    generation = full_response[len(prompt) :]
+
+    parsed_message = hf_tokenizer.parse_response(response=generation, prefix=prompt)
+
+    assert parsed_message["reasoning_content"] == "let me check"
+    assert parsed_message["content"] == "Sure."
+    assert parsed_message["tool_calls"][0]["function"]["name"] == "get_weather"
+    assert parsed_message["tool_calls"][0]["function"]["arguments"] == {"city": "Paris"}
+    assert "id" not in parsed_message["tool_calls"][0]
