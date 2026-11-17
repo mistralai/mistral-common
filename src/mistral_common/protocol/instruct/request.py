@@ -366,7 +366,9 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
                 sets `AssistantMessage.prefix=True` on it.
             **kwargs: Additional request parameters. Supports both OpenAI names
                 (e.g., "seed") and mistral-common names (e.g., `random_seed`).
-                Cannot specify both "seed" and `random_seed`.
+                Cannot specify both "seed" and `random_seed`. A `None` value for
+                `temperature`, `top_p`, `tool_choice`, `response_format` or
+                `parallel_tool_calls` selects the default.
 
         Returns:
             A ChatCompletionRequest instance with messages and tools converted
@@ -398,8 +400,10 @@ class ChatCompletionRequest(BaseCompletionRequest, Generic[ChatMessageType]):
         if "parallel_tool_calls" in kwargs and kwargs["parallel_tool_calls"] is None:
             kwargs["parallel_tool_calls"] = True
 
-        # OpenAI clients send `temperature: null` and `top_p: null` to mean the default.
-        kwargs = {k: v for k, v in kwargs.items() if not (v is None and k in ["temperature", "top_p"])}
+        # OpenAI clients send `temperature: null`, `top_p: null`, `tool_choice: null` and
+        # `response_format: null` to mean the default.
+        null_means_default = ["temperature", "top_p", "tool_choice", "response_format"]
+        kwargs = {k: v for k, v in kwargs.items() if not (v is None and k in null_means_default)}
 
         # OpenAI clients send `strict: null` in a JSON schema response format to mean the default.
         response_format = kwargs.get("response_format")
