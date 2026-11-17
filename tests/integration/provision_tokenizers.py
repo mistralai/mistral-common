@@ -1,6 +1,6 @@
 r"""Provision pinned released tokenizer files for offline public-workflow tests.
 
-Downloads the seven released tokenizer artifacts selected by the approved public
+Downloads the released tokenizer artifacts selected by the approved public
 chat workflow test specification at immutable Hugging Face revisions, verifies
 their exact byte size and SHA-256, and stores them under a gitignored cache
 directory. The step fails closed: a missing or mismatched file is an error,
@@ -54,6 +54,14 @@ PINNED_TOKENIZERS: list[PinnedTokenizer] = [
         filename="tekken.json",
         size=14894206,
         sha256="4aaf3836c2a5332f029ce85a7a62255c966f47b6797ef81dedd0ade9c862e4a8",
+    ),
+    PinnedTokenizer(
+        profile_id="v7-realtime",
+        repo="mistralai/Voxtral-Mini-4B-Realtime-2602",
+        revision="2769294da9567371363522aac9bbcfdd19447add",
+        filename="tekken.json",
+        size=14910348,
+        sha256="8434af1d39eba99f0ef46cf1450bf1a63fa941a26933a1ef5dbbf4adf0d00e44",
     ),
     PinnedTokenizer(
         profile_id="v11-image",

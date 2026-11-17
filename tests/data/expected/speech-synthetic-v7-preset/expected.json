@@ -1,0 +1,24 @@
+{
+  "case_id": "speech-synthetic-v7-preset",
+  "tokenizer_configuration_id": "synthetic-v7-speech-audio-test",
+  "token_ids": [
+    1,
+    25,
+    24,
+    24,
+    24,
+    24,
+    24,
+    35,
+    204,
+    201,
+    208,
+    208,
+    211,
+    36,
+    25
+  ],
+  "decoded_text": "<s>[BEGIN_AUDIO][AUDIO][AUDIO][AUDIO][AUDIO][AUDIO][NEXT_AUDIO_TEXT]hello[REPEAT_AUDIO_TEXT][BEGIN_AUDIO]",
+  "images": [],
+  "audios": []
+}
