@@ -20,7 +20,10 @@ from mistral_common.protocol.instruct.request import (
 from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
 from tests.integration.chat_cases import PublicChatErrorCase, PublicChatSuccessCase
 from tests.integration.chat_recipes import (
+    EMPTY_SYSTEM,
+    MID_CONVERSATION_SYSTEM,
     PREFIXED_FINAL,
+    REASONING_EFFORT_UNSUPPORTED,
     SYSTEM_THEN_AUDIO_USER,
     SYSTEM_THINK,
     WEATHER_FULL,
@@ -222,6 +225,11 @@ RELEASED_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
         case_id="chat-v13-released-system-think", recipe=SYSTEM_THINK, configuration=PINNED_V13_TEXT_TEST
     ),
     PublicChatSuccessCase(
+        case_id="chat-v13-released-mid-conversation-system",
+        recipe=MID_CONVERSATION_SYSTEM,
+        configuration=PINNED_V13_TEXT_TEST,
+    ),
+    PublicChatSuccessCase(
         case_id="chat-v15-released-user-image-p15j",
         recipe=_USER_IMAGE,
         configuration=PINNED_V15_IMAGE_JSON_SCHEMA_TEST,
@@ -328,5 +336,26 @@ RELEASED_ERROR_CASES: tuple[PublicChatErrorCase, ...] = (
         configuration=PINNED_V15_IMAGE_JSON_SCHEMA_TEST,
         expected_exception=InvalidRequestException,
         message_pattern=r"json_schema is not a valid JSON schema",
+    ),
+    PublicChatErrorCase(
+        case_id="chat-v13-released-empty-system-rejected",
+        recipe=EMPTY_SYSTEM,
+        configuration=PINNED_V13_TEXT_TEST,
+        expected_exception=InvalidSystemPromptException,
+        message_pattern=r"System prompt must have content",
+    ),
+    PublicChatErrorCase(
+        case_id="chat-v13-released-reasoning-effort-unsupported",
+        recipe=REASONING_EFFORT_UNSUPPORTED,
+        configuration=PINNED_V13_TEXT_TEST,
+        expected_exception=InvalidRequestException,
+        message_pattern=r"reasoning_effort='high' is not supported for this model",
+    ),
+    PublicChatErrorCase(
+        case_id="chat-v7-released-reasoning-effort-unsupported",
+        recipe=REASONING_EFFORT_UNSUPPORTED,
+        configuration=PINNED_V7_IMAGE_TEST,
+        expected_exception=InvalidRequestException,
+        message_pattern=r"reasoning_effort='high' is not supported for this model",
     ),
 )

@@ -23,6 +23,7 @@ from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13, Inst
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder, ReasoningEffortEnumBuilder
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
+from tests.integration.provision_tokenizers import PINNED_TOKENIZERS
 from tests.utils import get_special_tokens, quick_vocab
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -138,13 +139,8 @@ def _pinned(*, profile_id: str, sha256: str, mode: ValidationMode) -> TokenizerC
     )
 
 
-_PINNED_V7_IMAGE_SHA256 = "c604f35d1035f534519622c0ec83fed6184978d4fdee92a5bd2a50bc05438094"
-_PINNED_V7_AUDIO_SHA256 = "4aaf3836c2a5332f029ce85a7a62255c966f47b6797ef81dedd0ade9c862e4a8"
-_PINNED_V11_IMAGE_SHA256 = "6e2501687ccd0e1f30f36319eaf2b46958b897811e246cd8eb5d385b9e3de7d1"
-_PINNED_V13_TEXT_SHA256 = "93a2d5af491c61f0b8f5233a1c0b91e5edb7332bf6000038f06a9b3ab92bfe8d"
-_PINNED_V13_IMAGE_SHA256 = "600bb27946565481ecf51ba8aee252e49b9a68507866080ac9c30185bb312843"
-_PINNED_V15_IMAGE_SETTINGS_SHA256 = "b1272b956bd6edd2d2c674c76896c7661308c9e723997b0afb55ecb429cb5dc7"
-_PINNED_V15_IMAGE_JSON_SCHEMA_SHA256 = "cc05cc0f7d8ef11e61151df069ffa99499b040e29309006f7bac5a470b8ddb67"
+# Single source of truth for pinned artifact digests: provision_tokenizers.PINNED_TOKENIZERS.
+_PINNED_SHA256_BY_PROFILE: dict[str, str] = {pinned.profile_id: pinned.sha256 for pinned in PINNED_TOKENIZERS}
 
 
 BUNDLED_SPM_V1_TEST = _bundled_spm(
@@ -224,72 +220,72 @@ BUNDLED_TEKKEN_V3_MM_PATCH2_TEST = TokenizerConfiguration(
 # Pinned released profiles provisioned by tests/integration/provision_tokenizers.py.
 PINNED_V7_IMAGE_TEST = _pinned(
     profile_id="v7-image",
-    sha256=_PINNED_V7_IMAGE_SHA256,
+    sha256=_PINNED_SHA256_BY_PROFILE["v7-image"],
     mode=ValidationMode.test,
 )
 PINNED_V7_AUDIO_TEST = _pinned(
     profile_id="v7-audio",
-    sha256=_PINNED_V7_AUDIO_SHA256,
+    sha256=_PINNED_SHA256_BY_PROFILE["v7-audio"],
     mode=ValidationMode.test,
 )
 PINNED_V7_IMAGE_FINETUNING = _pinned(
     profile_id="v7-image",
-    sha256=_PINNED_V7_IMAGE_SHA256,
+    sha256=_PINNED_SHA256_BY_PROFILE["v7-image"],
     mode=ValidationMode.finetuning,
 )
 PINNED_V7_IMAGE_SERVING = _pinned(
     profile_id="v7-image",
-    sha256=_PINNED_V7_IMAGE_SHA256,
+    sha256=_PINNED_SHA256_BY_PROFILE["v7-image"],
     mode=ValidationMode.serving,
 )
 PINNED_V7_AUDIO_FINETUNING = _pinned(
     profile_id="v7-audio",
-    sha256=_PINNED_V7_AUDIO_SHA256,
+    sha256=_PINNED_SHA256_BY_PROFILE["v7-audio"],
     mode=ValidationMode.finetuning,
 )
 PINNED_V7_AUDIO_SERVING = _pinned(
     profile_id="v7-audio",
-    sha256=_PINNED_V7_AUDIO_SHA256,
+    sha256=_PINNED_SHA256_BY_PROFILE["v7-audio"],
     mode=ValidationMode.serving,
 )
 PINNED_V11_IMAGE_TEST = _pinned(
     profile_id="v11-image",
-    sha256=_PINNED_V11_IMAGE_SHA256,
+    sha256=_PINNED_SHA256_BY_PROFILE["v11-image"],
     mode=ValidationMode.test,
 )
 PINNED_V11_IMAGE_FINETUNING = _pinned(
     profile_id="v11-image",
-    sha256=_PINNED_V11_IMAGE_SHA256,
+    sha256=_PINNED_SHA256_BY_PROFILE["v11-image"],
     mode=ValidationMode.finetuning,
 )
 PINNED_V13_TEXT_TEST = _pinned(
     profile_id="v13-text",
-    sha256=_PINNED_V13_TEXT_SHA256,
+    sha256=_PINNED_SHA256_BY_PROFILE["v13-text"],
     mode=ValidationMode.test,
 )
 PINNED_V13_TEXT_FINETUNING = _pinned(
     profile_id="v13-text",
-    sha256=_PINNED_V13_TEXT_SHA256,
+    sha256=_PINNED_SHA256_BY_PROFILE["v13-text"],
     mode=ValidationMode.finetuning,
 )
 PINNED_V13_IMAGE_TEST = _pinned(
     profile_id="v13-image",
-    sha256=_PINNED_V13_IMAGE_SHA256,
+    sha256=_PINNED_SHA256_BY_PROFILE["v13-image"],
     mode=ValidationMode.test,
 )
 PINNED_V15_IMAGE_SETTINGS_TEST = _pinned(
     profile_id="v15-image-settings",
-    sha256=_PINNED_V15_IMAGE_SETTINGS_SHA256,
+    sha256=_PINNED_SHA256_BY_PROFILE["v15-image-settings"],
     mode=ValidationMode.test,
 )
 PINNED_V15_IMAGE_SETTINGS_FINETUNING = _pinned(
     profile_id="v15-image-settings",
-    sha256=_PINNED_V15_IMAGE_SETTINGS_SHA256,
+    sha256=_PINNED_SHA256_BY_PROFILE["v15-image-settings"],
     mode=ValidationMode.finetuning,
 )
 PINNED_V15_IMAGE_JSON_SCHEMA_TEST = _pinned(
     profile_id="v15-image-json-schema",
-    sha256=_PINNED_V15_IMAGE_JSON_SCHEMA_SHA256,
+    sha256=_PINNED_SHA256_BY_PROFILE["v15-image-json-schema"],
     mode=ValidationMode.test,
 )
 

@@ -30,7 +30,7 @@ from mistral_common.protocol.instruct.messages import (
     ToolMessage,
     UserMessage,
 )
-from mistral_common.protocol.instruct.request import ChatCompletionRequest
+from mistral_common.protocol.instruct.request import ChatCompletionRequest, ReasoningEffort
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from tests.fixtures.audio import get_dummy_audio_chunk
 
@@ -634,5 +634,42 @@ def _build_system_then_audio_user() -> ChatCompletionRequest[ChatMessage]:
 
 
 SYSTEM_THEN_AUDIO_USER = ChatRecipe(recipe_id="system-then-audio-user", build=_build_system_then_audio_user)
+
+
+def _build_mid_conversation_system() -> ChatCompletionRequest[ChatMessage]:
+    r"""Build a conversation with a system message after the first user message."""
+    return ChatCompletionRequest[ChatMessage](
+        messages=[
+            UserMessage(content="first"),
+            SystemMessage(content="mid-conversation system"),
+            UserMessage(content="second"),
+        ]
+    )
+
+
+def _build_empty_system() -> ChatCompletionRequest[ChatMessage]:
+    r"""Build a request whose system message has `None` content.
+
+    `SystemMessage.model_construct` bypasses request-model validation so the
+    empty system reaches the validator's own check, which is the
+    project-owned rejection under test.
+    """
+    empty_system = SystemMessage.model_construct(role="system", content=None)
+    return ChatCompletionRequest[ChatMessage](messages=[empty_system, UserMessage(content="hi")])
+
+
+def _build_reasoning_effort_unsupported() -> ChatCompletionRequest[ChatMessage]:
+    r"""Build a plain request carrying a reasoning effort, for pre-v15 profiles."""
+    return ChatCompletionRequest[ChatMessage](
+        messages=[UserMessage(content="hi")],
+        reasoning_effort=ReasoningEffort.high,
+    )
+
+
+MID_CONVERSATION_SYSTEM = ChatRecipe(recipe_id="mid-conversation-system", build=_build_mid_conversation_system)
+EMPTY_SYSTEM = ChatRecipe(recipe_id="empty-system", build=_build_empty_system)
+REASONING_EFFORT_UNSUPPORTED = ChatRecipe(
+    recipe_id="reasoning-effort-unsupported", build=_build_reasoning_effort_unsupported
+)
 CALL_ID_X = _call_id_recipe(recipe_id="call-id-x", tool_call_id="x")
 CALL_ID_SLASH = _call_id_recipe(recipe_id="call-id-slash", tool_call_id="call/id-1")
