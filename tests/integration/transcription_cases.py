@@ -1,4 +1,4 @@
-r"""Public transcription and speech decode-error cases for synthetic v7 audio profiles.
+r"""Public transcription decode-error cases for synthetic v7 audio profiles.
 
 One executable case pairs one reusable Python recipe with one identified
 tokenizer configuration and exactly one expected raw decode error. The
@@ -15,16 +15,11 @@ from pydantic import ValidationError
 from mistral_common.exceptions import UnsupportedTokenizerFeatureException
 from tests.integration.tokenizer_configurations import (
     SYNTHETIC_V7_INSTRUCT_AUDIO_TEST,
-    SYNTHETIC_V7_SPEECH_AUDIO_TEST,
-    SYNTHETIC_V7_SPEECH_NO_MARKER_AUDIO_TEST,
     SYNTHETIC_V7_STREAMING_AUDIO_TEST,
     SYNTHETIC_V7_STREAMING_NO_PAD_AUDIO_TEST,
     TokenizerConfiguration,
 )
-from tests.integration.transcription_speech_recipes import (
-    SPEECH_INVALID_BASE64,
-    SPEECH_MULTICHANNEL,
-    SPEECH_NON_AUDIO_BYTES,
+from tests.integration.transcription_recipes import (
     TRANSCRIPTION_EMPTY_BYTES,
     TRANSCRIPTION_INVALID_BASE64,
     TRANSCRIPTION_MULTICHANNEL,
@@ -32,7 +27,6 @@ from tests.integration.transcription_speech_recipes import (
     TRANSCRIPTION_OFFLINE_INVALID_BASE64,
     TRANSCRIPTION_OFFLINE_MULTICHANNEL,
     TRANSCRIPTION_OFFLINE_NON_AUDIO_BYTES,
-    SpeechRecipe,
     TranscriptionRecipe,
 )
 
@@ -43,17 +37,6 @@ class PublicTranscriptionErrorCase:
 
     case_id: str
     recipe: TranscriptionRecipe
-    configuration: TokenizerConfiguration
-    expected_exception: type[Exception]
-    message_pattern: str
-
-
-@dataclass(frozen=True)
-class PublicSpeechErrorCase:
-    """One executable public speech rejection case identified by its semantic id."""
-
-    case_id: str
-    recipe: SpeechRecipe
     configuration: TokenizerConfiguration
     expected_exception: type[Exception]
     message_pattern: str
@@ -116,40 +99,4 @@ TRANSCRIPTION_ERROR_CASES: tuple[PublicTranscriptionErrorCase, ...] = (
         expected_exception=UnsupportedTokenizerFeatureException,
         message_pattern=r"^Audio encoder does not provide the streaming_pad marker required for transcription\.$",
     ),
-)
-
-SPEECH_ERROR_CASES: tuple[PublicSpeechErrorCase, ...] = (
-    PublicSpeechErrorCase(
-        case_id="audio-v7-speech-invalid-base64-rejected-test",
-        recipe=SPEECH_INVALID_BASE64,
-        configuration=SYNTHETIC_V7_SPEECH_AUDIO_TEST,
-        expected_exception=ValueError,
-        message_pattern=r"^base64 decoding failed",
-    ),
-    PublicSpeechErrorCase(
-        case_id="audio-v7-speech-non-audio-bytes-rejected-test",
-        recipe=SPEECH_NON_AUDIO_BYTES,
-        configuration=SYNTHETIC_V7_SPEECH_AUDIO_TEST,
-        expected_exception=sf.LibsndfileError,
-        message_pattern=r"Format not recognised",
-    ),
-    PublicSpeechErrorCase(
-        case_id="audio-v7-speech-multichannel-rejected-test",
-        recipe=SPEECH_MULTICHANNEL,
-        configuration=SYNTHETIC_V7_SPEECH_AUDIO_TEST,
-        expected_exception=ValueError,
-        message_pattern=r"^audio_array\.ndim=2$",
-    ),
-    PublicSpeechErrorCase(
-        case_id="audio-v7-speech-decoding-precedes-marker-test",
-        recipe=SPEECH_INVALID_BASE64,
-        configuration=SYNTHETIC_V7_SPEECH_NO_MARKER_AUDIO_TEST,
-        expected_exception=ValueError,
-        message_pattern=r"^base64 decoding failed",
-    ),
-)
-
-ALL_TRANSCRIPTION_SPEECH_ERROR_CASES: tuple[PublicTranscriptionErrorCase | PublicSpeechErrorCase, ...] = (
-    *TRANSCRIPTION_ERROR_CASES,
-    *SPEECH_ERROR_CASES,
 )
