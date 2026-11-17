@@ -126,7 +126,7 @@ jobs:
         run: |
           uv run --no-sync pytest tests/integrations/ -n auto --dist loadfile -v
 
-  integration_tests_singular:
+  integration_tests_new_root:
     if: ${{ github.event.pull_request.draft != true }}
     runs-on: ubuntu-latest
     strategy:
