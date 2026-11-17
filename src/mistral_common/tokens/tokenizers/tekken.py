@@ -1,7 +1,6 @@
 import base64
 import json
 import logging
-import warnings
 from functools import cached_property
 from itertools import groupby
 from pathlib import Path
@@ -19,13 +18,6 @@ from mistral_common.tokens.tokenizers.base import (
 )
 from mistral_common.tokens.tokenizers.image import ImageConfig
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
-
-warnings.filterwarnings(
-    action="once",
-    category=FutureWarning,
-    message=r".*`get_control_token` is deprecated.*",
-)
-
 
 logger = logging.getLogger(__name__)
 
@@ -565,20 +557,6 @@ class Tekkenizer(Tokenizer):
         else:
             raise TypeError(f"Expected int or str, got {type(token).__name__}")
 
-    def get_control_token(self, s: str) -> int:
-        r"""Get the token ID of a control token. Deprecated: use `get_special_token()` instead.
-
-        Deprecated: Use `get_special_token()` instead.
-
-        Args:
-            s: The string representation of the control token.
-
-        Returns:
-            The integer token ID for the control token.
-        """
-        warnings.warn("`get_control_token` is deprecated. Use `get_special_token` instead.", FutureWarning)
-        return self.get_special_token(s)
-
     def decode(self, tokens: list[int], special_token_policy: SpecialTokenPolicy = SpecialTokenPolicy.IGNORE) -> str:
         r"""Decode a list of token IDs into a string.
 
@@ -599,9 +577,6 @@ class Tekkenizer(Tokenizer):
         special_token_policy = SpecialTokenPolicy.validate(special_token_policy)
 
         return "".join(self._decode_all(tokens, special_token_policy=special_token_policy))
-
-    def _to_string(self, tokens: list[int]) -> str:
-        return self.decode(tokens, special_token_policy=SpecialTokenPolicy.KEEP)
 
     def id_to_piece(self, token_id: int) -> str:
         r"""Convert a token ID to its string representation.
