@@ -10,6 +10,7 @@ import pytest
 import requests
 import soundfile as sf
 
+from mistral_common.exceptions import UnsupportedTokenizerFeatureException
 from mistral_common.protocol.instruct.chunk import (
     AudioChunk,
     AudioURL,
@@ -529,7 +530,10 @@ def test_no_audio_in_system_message_before_v7() -> None:
             )
         )
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(
+        UnsupportedTokenizerFeatureException,
+        match=r"^Tokenizer v3 does not provide an audio encoder for audio chunks\.$",
+    ):
         # we don't allow audio
         tokenizer.encode_instruct(
             InstructRequest(

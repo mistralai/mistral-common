@@ -1,17 +1,28 @@
 r"""Direct formatting tests for the v13 instruct tokenizer."""
 
+import re
 from collections.abc import Callable
 from functools import partial
 
 import numpy as np
 import pytest
 
-from mistral_common.exceptions import TokenizerException
+from mistral_common.exceptions import (
+    InvalidAssistantMessageException,
+    InvalidFunctionCallException,
+    InvalidToolMessageException,
+    TokenizerException,
+    UnsupportedTokenizerFeatureException,
+)
 from mistral_common.protocol.instruct.messages import (
+    AssistantMessage,
     ChatMessage,
+    ToolMessage,
+    UserMessage,
 )
 from mistral_common.protocol.instruct.request import InstructRequest
-from mistral_common.protocol.instruct.tool_calls import Tool
+from mistral_common.protocol.instruct.tool_calls import FunctionCall, Tool, ToolCall
+from mistral_common.protocol.instruct.validator import _INVALID_TOOL_CALL_ID_MESSAGE
 from mistral_common.tokens.tokenizers.audio import (
     Audio,
     AudioConfig,
@@ -85,6 +96,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_truncation_system_prompt_too_long_request,
     build_user_audio_url_request,
     build_user_image_url_request,
+    build_user_then_assistant_request,
 )
 from tests.utils import assert_tokenized_equal, decode_keep
 
@@ -234,6 +246,12 @@ _TOOL_RESULT_IMAGE_TEXT = (
 
 _INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
 _TRUNCATION_FAILED_MESSAGE = r"^Input couldn't fit in truncate_at_max_token$"
+_NO_THINK_TOKENS_MESSAGE = (
+    r"^Tokenizer v13 does not provide the \[THINK\] and \[/THINK\] special tokens required for think chunks\.$"
+)
+_INVALID_TOOL_CALL_ID_MESSAGE_PATTERN = r"^" + re.escape(_INVALID_TOOL_CALL_ID_MESSAGE) + r"$"
+_TOOL_NO_ID_MESSAGE = r"^Tool message must have a tool_call_id for tokenizer v13\.$"
+_NO_IMAGE_ENCODER_MESSAGE = r"^Tokenizer v13 does not provide an image encoder for image chunks\.$"
 
 # fmt: off
 _SHARED_NORMAL_TOKENS = [1, 3, 197, 4, 198, 2, 3, 199, 4, 200, 2]
@@ -413,6 +431,17 @@ _SYSTEM_AUDIO_TEXT = (
 _USER_AUDIO_URL_TEXT = "<s>[INST]Here is content[BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
 _USER_IMAGE_URL_TEXT = "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]Here is content[/INST]"
 _SYSTEM_THEN_AUDIO_USER_TEXT = "<s>[SYSTEM_PROMPT]hello[/SYSTEM_PROMPT][INST][BEGIN_AUDIO][AUDIO][AUDIO][/INST]"
+
+
+def _build_tool_result_without_id_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v13 one-call request whose tool result has no tool_call_id."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="F1", arguments="{}"))]),
+            ToolMessage(content="R1"),
+        ]
+    )
 
 
 @pytest.fixture(scope="module")
@@ -1054,28 +1083,28 @@ def test_encode_instruct(
         pytest.param(
             "no_think",
             partial(build_none_content_no_calls_request, settings=None),
-            TokenizerException,
+            InvalidAssistantMessageException,
             _INVALID_ASSISTANT_MESSAGE,
             id="no-think-shared-none-content-no-calls",
         ),
         pytest.param(
             "no_think",
             partial(build_none_content_empty_calls_request, settings=None),
-            TokenizerException,
+            InvalidAssistantMessageException,
             _INVALID_ASSISTANT_MESSAGE,
             id="no-think-shared-none-content-empty-calls",
         ),
         pytest.param(
             "no_think",
             partial(build_empty_content_no_calls_request, settings=None),
-            TokenizerException,
+            InvalidAssistantMessageException,
             _INVALID_ASSISTANT_MESSAGE,
             id="no-think-shared-empty-content-no-calls",
         ),
         pytest.param(
             "no_think",
             partial(build_empty_content_empty_calls_request, settings=None),
-            TokenizerException,
+            InvalidAssistantMessageException,
             _INVALID_ASSISTANT_MESSAGE,
             id="no-think-shared-empty-content-empty-calls",
         ),
@@ -1124,23 +1153,75 @@ def test_encode_instruct(
         pytest.param(
             "no_think",
             partial(build_empty_assistant_request, settings=None),
-            TokenizerException,
+            InvalidAssistantMessageException,
             _INVALID_ASSISTANT_MESSAGE,
             id="no-think-shared-empty-assistant",
         ),
         pytest.param(
             "with_think",
             partial(build_empty_assistant_request, settings=None),
-            TokenizerException,
+            InvalidAssistantMessageException,
             _INVALID_ASSISTANT_MESSAGE,
             id="with-think-shared-empty-assistant",
         ),
         pytest.param(
             "audio",
             partial(build_empty_assistant_request, settings=None),
-            TokenizerException,
+            InvalidAssistantMessageException,
             _INVALID_ASSISTANT_MESSAGE,
             id="audio-shared-empty-assistant",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_closed_think_request, settings=None),
+            UnsupportedTokenizerFeatureException,
+            _NO_THINK_TOKENS_MESSAGE,
+            id="no-think-assistant-think",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_system_think_between_text_request, settings=None),
+            UnsupportedTokenizerFeatureException,
+            _NO_THINK_TOKENS_MESSAGE,
+            id="no-think-system-think",
+        ),
+        pytest.param(
+            "with_think",
+            partial(
+                build_user_then_assistant_request,
+                assistant=AssistantMessage(tool_calls=[ToolCall(function=FunctionCall(name="F1", arguments="{}"))]),
+                settings=None,
+            ),
+            InvalidFunctionCallException,
+            _INVALID_TOOL_CALL_ID_MESSAGE_PATTERN,
+            id="with-think-tool-call-null-id",
+        ),
+        pytest.param(
+            "with_think",
+            partial(
+                build_user_then_assistant_request,
+                assistant=AssistantMessage(
+                    tool_calls=[ToolCall(id="", function=FunctionCall(name="F1", arguments="{}"))]
+                ),
+                settings=None,
+            ),
+            InvalidFunctionCallException,
+            _INVALID_TOOL_CALL_ID_MESSAGE_PATTERN,
+            id="with-think-tool-call-empty-id",
+        ),
+        pytest.param(
+            "with_think",
+            _build_tool_result_without_id_request,
+            InvalidToolMessageException,
+            _TOOL_NO_ID_MESSAGE,
+            id="with-think-tool-message-without-id",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_image_user_request, settings=None),
+            UnsupportedTokenizerFeatureException,
+            _NO_IMAGE_ENCODER_MESSAGE,
+            id="no-think-user-image-without-encoder",
         ),
     ],
 )

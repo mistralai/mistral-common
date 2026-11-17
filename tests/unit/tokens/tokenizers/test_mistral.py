@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from mistral_common.exceptions import TokenizerException
+from mistral_common.exceptions import TokenizerException, UnsupportedTokenizerFeatureException
 from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.instruct.chunk import ImageChunk, TextChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage, SystemMessage, ToolMessage, UserMessage
@@ -187,6 +187,11 @@ _V3_SPM_WITHOUT_SUFFIX_TEXT = "<s>[SUFFIX][PREFIX]▁def▁f("
 _DECODE_SPECIAL_TOKENS_MESSAGE = r"^Decoding `tokens` that contain special tokens"
 _NO_MAX_MODEL_LEN_MESSAGE = r"^encoding a chat completion request with truncation, but no max model len was provided$"
 _FIM_NOT_AVAILABLE_MESSAGE = r"^FIM not available for v1$"
+_V2_FIM_MISSING_MARKERS_MESSAGE = (
+    r"^Tokenizer v2 does not provide the \[PREFIX\] and \[SUFFIX\] special tokens required for FIM\.$"
+)
+_V3_FIM_MISSING_SUFFIX_MESSAGE = r"^Tokenizer v3 does not provide the \[SUFFIX\] special token required for FIM\.$"
+_V3_FIM_MISSING_PREFIX_MESSAGE = r"^Tokenizer v3 does not provide the \[PREFIX\] special token required for FIM\.$"
 _UNRECOGNIZED_FILE_MESSAGE = r"^Unrecognized tokenizer file: .+[/\\]tokenizer\.json$"
 _MULTIMODAL_SPM_MESSAGE = r"^Multimodal tokenizer is currently only supported for tekken$"
 
@@ -559,4 +564,51 @@ def test_encode_fim_rejected(request: pytest.FixtureRequest) -> None:
     tokenizer: MistralTokenizer = request.getfixturevalue(argname="v1_tokenizer")
     fim_request = _build_with_suffix_request()
     with pytest.raises(expected_exception=TokenizerException, match=_FIM_NOT_AVAILABLE_MESSAGE):
+        tokenizer.encode_fim(request=fim_request)
+
+
+@pytest.mark.parametrize(
+    argnames="tokenizer_builder, missing_marker, expected_message",
+    argvalues=[
+        pytest.param(
+            MistralTokenizer.v2,
+            None,
+            _V2_FIM_MISSING_MARKERS_MESSAGE,
+            id="v2-bundled",
+        ),
+        pytest.param(
+            MistralTokenizer.v3,
+            "[SUFFIX]",
+            _V3_FIM_MISSING_SUFFIX_MESSAGE,
+            id="v3-without-suffix-marker",
+        ),
+        pytest.param(
+            MistralTokenizer.v3,
+            "[PREFIX]",
+            _V3_FIM_MISSING_PREFIX_MESSAGE,
+            id="v3-without-prefix-marker",
+        ),
+    ],
+)
+def test_encode_fim_rejects_missing_markers(
+    monkeypatch: pytest.MonkeyPatch,
+    tokenizer_builder: Callable[[], MistralTokenizer],
+    missing_marker: str | None,
+    expected_message: str,
+) -> None:
+    r"""Reject a FIM request whose tokenizer lacks the [PREFIX]/[SUFFIX] markers.
+
+    The v3 rows patch `is_special` on a fresh bundled v3 tokenizer (labelled
+    synthetic): the bundled v3 SentencePiece provides both markers, so only
+    the patched instance lacks one.
+    """
+    tokenizer = tokenizer_builder()
+    if missing_marker is not None:
+        monkeypatch.setattr(
+            target=tokenizer.instruct_tokenizer.tokenizer,
+            name="is_special",
+            value=lambda token: token != missing_marker,
+        )
+    fim_request = _build_with_suffix_request()
+    with pytest.raises(expected_exception=UnsupportedTokenizerFeatureException, match=expected_message):
         tokenizer.encode_fim(request=fim_request)

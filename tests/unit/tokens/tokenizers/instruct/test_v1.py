@@ -5,9 +5,14 @@ from functools import partial
 
 import pytest
 
-from mistral_common.exceptions import TokenizerException
-from mistral_common.protocol.instruct.messages import ChatMessage
-from mistral_common.protocol.instruct.request import InstructRequest
+from mistral_common.exceptions import (
+    InvalidAssistantMessageException,
+    InvalidUserMessageException,
+    TokenizerException,
+)
+from mistral_common.protocol.instruct.chunk import TextChunk, ThinkChunk
+from mistral_common.protocol.instruct.messages import AssistantMessage, ChatMessage, UserMessage
+from mistral_common.protocol.instruct.request import InstructRequest, ModelSettings
 from mistral_common.protocol.instruct.tool_calls import Tool
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
@@ -26,6 +31,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_tool_message_request,
     build_tools_multiturn_request,
     build_tools_singleturn_request,
+    build_user_then_assistant_request,
 )
 from tests.utils import assert_tokenized_equal, decode_keep
 
@@ -60,6 +66,10 @@ _TOOLS_SINGLETURN_TEXT = "<s>▁[INST]▁a▁[/INST]"
 
 _TOOLS_NOT_IMPLEMENTED_MESSAGE = r"^Tools not implemented for tokenizer V1$"
 _SYSTEM_MESSAGE_NOT_IMPLEMENTED_MESSAGE = r"^System message encoding not implemented for InstructTokenizerV1$"
+_EMPTY_ASSISTANT_MESSAGE = r"^Invalid assistant message: $"
+_NONE_ASSISTANT_MESSAGE = r"^Invalid assistant message: None$"
+_ASSISTANT_LIST_MESSAGE = r"^Assistant message content must be a string for tokenizer v1, got a list\.$"
+_USER_LIST_MESSAGE = r"^User message content must be a string for tokenizer v1, got a list\.$"
 
 
 @pytest.fixture(scope="module")
@@ -138,7 +148,51 @@ def test_encode_instruct(
             id="assistant-tool-calls",
         ),
         pytest.param(
-            partial(build_empty_assistant_request, settings=None), TokenizerException, None, id="empty-assistant"
+            partial(build_empty_assistant_request, settings=None),
+            InvalidAssistantMessageException,
+            _EMPTY_ASSISTANT_MESSAGE,
+            id="empty-assistant",
+        ),
+        pytest.param(
+            partial(
+                build_user_then_assistant_request,
+                assistant=AssistantMessage(content=None),
+                settings=None,
+            ),
+            InvalidAssistantMessageException,
+            _NONE_ASSISTANT_MESSAGE,
+            id="none-assistant",
+        ),
+        pytest.param(
+            partial(
+                build_user_then_assistant_request,
+                assistant=AssistantMessage(content=[ThinkChunk(thinking="t")]),
+                settings=None,
+            ),
+            InvalidAssistantMessageException,
+            _ASSISTANT_LIST_MESSAGE,
+            id="think-chunk-assistant",
+        ),
+        pytest.param(
+            partial(
+                build_user_then_assistant_request,
+                assistant=AssistantMessage(content=[TextChunk(text="t")]),
+                settings=None,
+            ),
+            InvalidAssistantMessageException,
+            _ASSISTANT_LIST_MESSAGE,
+            id="text-chunk-assistant",
+        ),
+        pytest.param(
+            partial(
+                lambda *, settings: InstructRequest[ChatMessage, Tool](
+                    messages=[UserMessage(content=[TextChunk(text="a")])], settings=settings or ModelSettings.none()
+                ),
+                settings=None,
+            ),
+            InvalidUserMessageException,
+            _USER_LIST_MESSAGE,
+            id="text-chunk-user",
         ),
         pytest.param(
             partial(build_system_message_request, settings=None),

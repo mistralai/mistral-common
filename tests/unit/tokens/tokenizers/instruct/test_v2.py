@@ -4,16 +4,22 @@ from collections.abc import Callable
 from functools import partial
 
 import pytest
+from PIL import Image
 
-from mistral_common.exceptions import TokenizerException, UnsupportedTokenizerFeatureException
-from mistral_common.protocol.instruct.chunk import ContentChunk, TextChunk
+from mistral_common.exceptions import (
+    InvalidAssistantMessageException,
+    InvalidToolMessageException,
+    InvalidUserMessageException,
+    UnsupportedTokenizerFeatureException,
+)
+from mistral_common.protocol.instruct.chunk import ContentChunk, ImageChunk, TextChunk, ThinkChunk
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     ChatMessage,
     ToolMessage,
     UserMessage,
 )
-from mistral_common.protocol.instruct.request import InstructRequest
+from mistral_common.protocol.instruct.request import InstructRequest, ModelSettings
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.tokens.tokenizers.base import InstructTokenizer, Tokenized
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
@@ -33,6 +39,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_tool_message_request,
     build_tools_multiturn_request,
     build_tools_singleturn_request,
+    build_user_then_assistant_request,
 )
 from tests.utils import assert_tokenized_equal, decode_keep
 
@@ -205,6 +212,10 @@ _ARBITRARY_TOOL_CALL_ID_TEXT = (
 _PARALLEL_RESULTS_MESSAGE = r"v2.*multiple tool results.*assistant turn"
 _INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
 _SYSTEM_MESSAGE_NOT_IMPLEMENTED_MESSAGE = r"^System message encoding not implemented for InstructTokenizerV2$"
+_NON_FINAL_PREFIXED_MESSAGE = r"^Assistant message with prefix True must be last message$"
+_ASSISTANT_LIST_MESSAGE = r"^Assistant message content must be a string for tokenizer v2, got a list\.$"
+_USER_LIST_MESSAGE = r"^User message content must be a string for tokenizer v2, got a list\.$"
+_TOOL_IMAGE_CHUNK_MESSAGE = r"^Tool message content only supports text chunks for tokenizer v2, got ImageChunk\.$"
 
 
 @pytest.fixture(scope="module")
@@ -514,13 +525,56 @@ def test_encode_instruct(
     argnames="request_builder, expected_exception, expected_message",
     argvalues=[
         pytest.param(
-            _build_non_final_prefixed_assistant_request, AssertionError, None, id="non-final-prefixed-assistant"
+            _build_non_final_prefixed_assistant_request,
+            InvalidAssistantMessageException,
+            _NON_FINAL_PREFIXED_MESSAGE,
+            id="non-final-prefixed-assistant",
         ),
         pytest.param(
             partial(build_empty_assistant_request, settings=None),
-            TokenizerException,
+            InvalidAssistantMessageException,
             _INVALID_ASSISTANT_MESSAGE,
             id="empty-assistant",
+        ),
+        pytest.param(
+            partial(
+                lambda *, settings: InstructRequest[ChatMessage, Tool](
+                    messages=[UserMessage(content=[TextChunk(text="a")])], settings=settings or ModelSettings.none()
+                ),
+                settings=None,
+            ),
+            InvalidUserMessageException,
+            _USER_LIST_MESSAGE,
+            id="text-chunk-user",
+        ),
+        pytest.param(
+            partial(
+                build_user_then_assistant_request,
+                assistant=AssistantMessage(content=[TextChunk(text="t")]),
+                settings=None,
+            ),
+            InvalidAssistantMessageException,
+            _ASSISTANT_LIST_MESSAGE,
+            id="text-chunk-assistant",
+        ),
+        pytest.param(
+            partial(
+                build_user_then_assistant_request,
+                assistant=AssistantMessage(content=[ThinkChunk(thinking="t")]),
+                settings=None,
+            ),
+            InvalidAssistantMessageException,
+            _ASSISTANT_LIST_MESSAGE,
+            id="think-chunk-assistant",
+        ),
+        pytest.param(
+            partial(
+                _build_tool_result_request,
+                content=[ImageChunk(image=Image.new(mode="RGB", size=(4, 4), color="red"))],
+            ),
+            InvalidToolMessageException,
+            _TOOL_IMAGE_CHUNK_MESSAGE,
+            id="tool-image-chunk",
         ),
         pytest.param(
             partial(build_system_message_request, settings=None),

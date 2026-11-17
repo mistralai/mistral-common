@@ -14,13 +14,17 @@ import soundfile as sf
 from pydantic import ValidationError
 
 from mistral_common.exceptions import (
+    InvalidAssistantMessageException,
     InvalidRequestException,
+    InvalidToolMessageException,
     TokenizerException,
     UnsupportedTokenizerFeatureException,
 )
-from mistral_common.protocol.instruct.chunk import AudioChunk
+from mistral_common.protocol.instruct.chunk import AudioChunk, TextChunk
 from mistral_common.protocol.instruct.messages import (
+    AssistantMessage,
     ChatMessage,
+    ToolMessage,
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import (
@@ -29,7 +33,7 @@ from mistral_common.protocol.instruct.request import (
     ModelSettings,
     ReasoningEffort,
 )
-from mistral_common.protocol.instruct.tool_calls import Tool
+from mistral_common.protocol.instruct.tool_calls import FunctionCall, Tool, ToolCall
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.protocol.speech.request import SpeechRequest
 from mistral_common.protocol.transcription.request import StreamingMode, TranscriptionRequest
@@ -82,6 +86,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_normal_request,
     build_prefixed_assistant_after_image_request,
     build_prefixed_tool_call_and_content_request,
+    build_red_image_chunk,
     build_system_and_user_words_request,
     build_system_audio_request,
     build_system_list_content_request,
@@ -534,6 +539,40 @@ _INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
 _SYSTEM_AUDIO_NOT_ALLOWED_MESSAGE = r"^System messages are not yet allowed when audio is present$"
 _TRUNCATION_FAILED_MESSAGE = r"^Input couldn't fit in truncate_at_max_token$"
 _THINK_NOT_IMPLEMENTED_MESSAGE = r"^Think not implemented for tokenizer < V13\.$"
+_NO_AUDIO_ENCODER_MESSAGE = r"^Tokenizer v7 does not provide an audio encoder for audio chunks\.$"
+_NO_IMAGE_ENCODER_MESSAGE = r"^Tokenizer v7 does not provide an image encoder for image chunks\.$"
+_TOOL_NO_ID_MESSAGE = r"^Tool message must have a tool_call_id for tokenizer v7\.$"
+_TOOL_LIST_MESSAGE = r"^Tool message content must be a string for tokenizer v7, got a list\.$"
+_NO_SYSTEM_PROMPT_MESSAGE = (
+    r"^Tokenizer v7 does not encode InstructRequest\.system_prompt; use a SystemMessage instead\.$"
+)
+
+
+def _build_tool_result_list_request(content: list) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v7 one-call request whose tool result holds the supplied chunk list."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="b", arguments="{}"))]),
+            ToolMessage(content=content, tool_call_id="123456789"),
+        ]
+    )
+
+
+def _build_tool_result_without_id_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v7 one-call request whose tool result has no tool_call_id."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="b", arguments="{}"))]),
+            ToolMessage(content="r"),
+        ]
+    )
+
+
+def _build_system_prompt_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v7 request carrying an InstructRequest-level system prompt."""
+    return InstructRequest[ChatMessage, Tool](messages=[UserMessage(content="a")], system_prompt="s")
 
 
 @pytest.fixture(scope="module")
@@ -1060,28 +1099,28 @@ def test_encode_instruct(
         pytest.param(
             "spm",
             partial(build_none_content_no_calls_request, settings=None),
-            TokenizerException,
+            InvalidAssistantMessageException,
             _INVALID_ASSISTANT_MESSAGE,
             id="spm-shared-none-content-no-calls",
         ),
         pytest.param(
             "spm",
             partial(build_none_content_empty_calls_request, settings=None),
-            TokenizerException,
+            InvalidAssistantMessageException,
             _INVALID_ASSISTANT_MESSAGE,
             id="spm-shared-none-content-empty-calls",
         ),
         pytest.param(
             "spm",
             partial(build_empty_content_no_calls_request, settings=None),
-            TokenizerException,
+            InvalidAssistantMessageException,
             _INVALID_ASSISTANT_MESSAGE,
             id="spm-shared-empty-content-no-calls",
         ),
         pytest.param(
             "spm",
             partial(build_empty_content_empty_calls_request, settings=None),
-            TokenizerException,
+            InvalidAssistantMessageException,
             _INVALID_ASSISTANT_MESSAGE,
             id="spm-shared-empty-content-empty-calls",
         ),
@@ -1137,14 +1176,14 @@ def test_encode_instruct(
         pytest.param(
             "spm",
             partial(build_empty_assistant_request, settings=None),
-            TokenizerException,
+            InvalidAssistantMessageException,
             _INVALID_ASSISTANT_MESSAGE,
             id="spm-shared-empty-assistant",
         ),
         pytest.param(
             "no_audio",
             partial(build_empty_assistant_request, settings=None),
-            TokenizerException,
+            InvalidAssistantMessageException,
             _INVALID_ASSISTANT_MESSAGE,
             id="no-audio-shared-empty-assistant",
         ),
@@ -1154,6 +1193,55 @@ def test_encode_instruct(
             ValueError,
             _SYSTEM_AUDIO_NOT_ALLOWED_MESSAGE,
             id="with-audio-shared-system-then-audio-user-rejected",
+        ),
+        pytest.param(
+            "spm",
+            partial(build_system_audio_request, settings=None),
+            UnsupportedTokenizerFeatureException,
+            _NO_AUDIO_ENCODER_MESSAGE,
+            id="spm-system-audio-without-encoder",
+        ),
+        pytest.param(
+            "spm",
+            partial(build_audio_user_request, settings=None),
+            UnsupportedTokenizerFeatureException,
+            _NO_AUDIO_ENCODER_MESSAGE,
+            id="spm-user-audio-without-encoder",
+        ),
+        pytest.param(
+            "no_audio",
+            partial(build_image_user_request, settings=None),
+            UnsupportedTokenizerFeatureException,
+            _NO_IMAGE_ENCODER_MESSAGE,
+            id="no-audio-user-image-without-encoder",
+        ),
+        pytest.param(
+            "spm",
+            partial(_build_tool_result_list_request, content=[TextChunk(text="r")]),
+            InvalidToolMessageException,
+            _TOOL_LIST_MESSAGE,
+            id="spm-tool-text-chunk",
+        ),
+        pytest.param(
+            "spm",
+            partial(_build_tool_result_list_request, content=[build_red_image_chunk()]),
+            InvalidToolMessageException,
+            _TOOL_LIST_MESSAGE,
+            id="spm-tool-image-chunk",
+        ),
+        pytest.param(
+            "spm",
+            _build_tool_result_without_id_request,
+            InvalidToolMessageException,
+            _TOOL_NO_ID_MESSAGE,
+            id="spm-tool-without-id",
+        ),
+        pytest.param(
+            "spm",
+            _build_system_prompt_request,
+            InvalidRequestException,
+            _NO_SYSTEM_PROMPT_MESSAGE,
+            id="spm-system-prompt",
         ),
     ],
 )
@@ -1170,6 +1258,12 @@ def test_encode_instruct_rejected(
 
     with pytest.raises(expected_exception=expected_exception, match=expected_message):
         tokenizer.encode_instruct(request=instruct_request)
+
+
+def test_encode_user_content_rejects_system_prompt(spm_tokenizer: InstructTokenizer) -> None:
+    r"""Reject a system prompt passed directly to encode_user_content on v7."""
+    with pytest.raises(expected_exception=InvalidRequestException, match=_NO_SYSTEM_PROMPT_MESSAGE):
+        spm_tokenizer.encode_user_content(content="a", is_last=True, system_prompt="s")
 
 
 # --- Audio decode-error cases (transcription and speech request paths) ---

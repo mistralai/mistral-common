@@ -7,7 +7,12 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from mistral_common.exceptions import TokenizerException
+from mistral_common.exceptions import (
+    InvalidAssistantMessageException,
+    InvalidRequestException,
+    InvalidToolMessageException,
+    UnsupportedTokenizerFeatureException,
+)
 from mistral_common.protocol.instruct.chunk import ContentChunk, ImageChunk, TextChunk
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
@@ -23,12 +28,14 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_arbitrary_tool_call_id_request,
     build_assistant_tool_calls_request,
+    build_audio_user_request,
     build_empty_assistant_request,
     build_image_user_request,
     build_multi_image_user_request,
     build_multiturn_image_request,
     build_normal_request,
     build_prefixed_final_message_request,
+    build_silent_audio_chunk,
     build_system_message_multiturn_request,
     build_system_message_prefixed_final_request,
     build_system_message_request,
@@ -42,6 +49,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_tools_multiturn_request,
     build_tools_singleturn_request,
     build_user_image_url_request,
+    build_user_then_assistant_request,
 )
 from tests.utils import assert_tokenized_equal, decode_keep
 
@@ -445,6 +453,14 @@ _TEKKEN_MM_USER_IMAGE_URL_TEXT = "<s>[INST][IMG][IMG_END]Here is content[/INST]"
 _TOOL_CALL_AND_CONTENT_MESSAGE = r"^Cannot have tool calls and content defined in the same assistant message"
 _INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
 _SYSTEM_MESSAGE_NOT_IMPLEMENTED_MESSAGE = r"^System message encoding not implemented for InstructTokenizerV3$"
+_TOOL_NO_ID_MESSAGE = r"^Tool message must have a tool_call_id for tokenizer v3\.$"
+_TOOL_IMAGE_CHUNK_MESSAGE = r"^Tool message content only supports text chunks for tokenizer v3, got ImageChunk\.$"
+_ASSISTANT_LIST_MESSAGE = r"^Assistant message content must be a string for tokenizer v3, got a list\.$"
+_NO_IMAGE_ENCODER_MESSAGE = r"^Tokenizer v3 does not provide an image encoder for image chunks\.$"
+_NO_AUDIO_ENCODER_MESSAGE = r"^Tokenizer v3 does not provide an audio encoder for audio chunks\.$"
+_SYSTEM_PROMPT_BEFORE_AUDIO_MESSAGE = (
+    r"^System prompt cannot precede an audio chunk in the last user message for tokenizer v3\.$"
+)
 
 
 @pytest.fixture(scope="module")
@@ -530,6 +546,25 @@ def _build_tool_message_request(content: str | list[ContentChunk]) -> InstructRe
             AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="b", arguments="{}"))]),
             ToolMessage(name="b", content=content, tool_call_id="123456789"),
         ]
+    )
+
+
+def _build_tool_message_without_id_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v3 one-call request whose tool result has no tool_call_id."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="b", arguments="{}"))]),
+            ToolMessage(name="b", content="d"),
+        ]
+    )
+
+
+def _build_system_prompt_before_audio_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v3 request with a system prompt and an audio chunk in the last user message."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[UserMessage(content=[build_silent_audio_chunk()])],
+        system_prompt="s",
     )
 
 
@@ -995,7 +1030,7 @@ def test_encode_instruct(
         pytest.param(
             "spm",
             partial(build_empty_assistant_request, settings=None),
-            TokenizerException,
+            InvalidAssistantMessageException,
             _INVALID_ASSISTANT_MESSAGE,
             id="spm-empty-assistant",
         ),
@@ -1009,9 +1044,65 @@ def test_encode_instruct(
         pytest.param(
             "tekken",
             partial(build_empty_assistant_request, settings=None),
-            TokenizerException,
+            InvalidAssistantMessageException,
             _INVALID_ASSISTANT_MESSAGE,
             id="tekken-empty-assistant",
+        ),
+        pytest.param(
+            "spm",
+            _build_tool_message_without_id_request,
+            InvalidToolMessageException,
+            _TOOL_NO_ID_MESSAGE,
+            id="spm-tool-without-id",
+        ),
+        pytest.param(
+            "spm",
+            partial(
+                _build_tool_message_request,
+                content=[ImageChunk(image=Image.new(mode="RGB", size=(4, 4), color="red"))],
+            ),
+            InvalidToolMessageException,
+            _TOOL_IMAGE_CHUNK_MESSAGE,
+            id="spm-tool-image-chunk",
+        ),
+        pytest.param(
+            "spm",
+            partial(build_image_user_request, settings=None),
+            UnsupportedTokenizerFeatureException,
+            _NO_IMAGE_ENCODER_MESSAGE,
+            id="spm-user-image-without-encoder",
+        ),
+        pytest.param(
+            "tekken",
+            partial(build_image_user_request, settings=None),
+            UnsupportedTokenizerFeatureException,
+            _NO_IMAGE_ENCODER_MESSAGE,
+            id="tekken-user-image-without-encoder",
+        ),
+        pytest.param(
+            "spm",
+            partial(build_audio_user_request, settings=None),
+            UnsupportedTokenizerFeatureException,
+            _NO_AUDIO_ENCODER_MESSAGE,
+            id="spm-user-audio-without-encoder",
+        ),
+        pytest.param(
+            "spm",
+            _build_system_prompt_before_audio_request,
+            InvalidRequestException,
+            _SYSTEM_PROMPT_BEFORE_AUDIO_MESSAGE,
+            id="spm-system-prompt-before-audio",
+        ),
+        pytest.param(
+            "spm",
+            partial(
+                build_user_then_assistant_request,
+                assistant=AssistantMessage(content=[TextChunk(text="t")]),
+                settings=None,
+            ),
+            InvalidAssistantMessageException,
+            _ASSISTANT_LIST_MESSAGE,
+            id="spm-text-chunk-assistant",
         ),
         pytest.param(
             "spm",
