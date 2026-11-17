@@ -97,9 +97,17 @@ def _build_settings_request(
     )
 
 
-def _build_json_schema_low_effort() -> ChatCompletionRequest[ChatMessage]:
+def _build_json_schema_request(*, reasoning_effort: ReasoningEffort) -> ChatCompletionRequest[ChatMessage]:
+    r"""Build a prefixed-final request with a custom JSON schema at the given effort.
+
+    Args:
+        reasoning_effort: Requested reasoning effort.
+
+    Returns:
+        A fresh public chat request with a json_schema response format.
+    """
     return _build_settings_request(
-        reasoning_effort=ReasoningEffort.low,
+        reasoning_effort=reasoning_effort,
         response_format=ResponseFormat(
             type=ResponseFormats.json_schema,
             json_schema=JsonSchema(
@@ -107,6 +115,14 @@ def _build_json_schema_low_effort() -> ChatCompletionRequest[ChatMessage]:
                 schema={"type": "object", "properties": {"temperature": {"type": "number"}}},
             ),
         ),
+    )
+
+
+def _json_schema_recipe(*, recipe_id: str, reasoning_effort: ReasoningEffort) -> ChatRecipe:
+    r"""Bind a json-schema request at a fixed effort to a recipe."""
+    return ChatRecipe(
+        recipe_id=recipe_id,
+        build=lambda: _build_json_schema_request(reasoning_effort=reasoning_effort),
     )
 
 
@@ -144,7 +160,10 @@ _USER_IMAGE = ChatRecipe(recipe_id="released-user-image", build=_build_user_imag
 _USER_AUDIO = ChatRecipe(recipe_id="released-user-audio", build=_build_user_audio)
 _USER_AUDIO_URL = ChatRecipe(recipe_id="released-user-audio-url", build=_build_user_audio_url)
 _TWO_USER_IMAGES = ChatRecipe(recipe_id="released-two-user-images", build=_build_two_user_images)
-_JSON_SCHEMA_LOW_EFFORT = ChatRecipe(recipe_id="released-json-schema-low-effort", build=_build_json_schema_low_effort)
+_JSON_SCHEMA_BY_EFFORT = {
+    effort: _json_schema_recipe(recipe_id=f"released-json-schema-{effort.value}", reasoning_effort=effort)
+    for effort in (ReasoningEffort.low, ReasoningEffort.medium, ReasoningEffort.high)
+}
 _JSON_OBJECT = ChatRecipe(recipe_id="released-json-object", build=_build_json_object)
 _INVALID_JSON_SCHEMA = ChatRecipe(recipe_id="released-invalid-json-schema", build=_build_invalid_json_schema)
 _EFFORT_MEDIUM = ChatRecipe(recipe_id="released-effort-medium", build=_build_effort_medium)
@@ -217,10 +236,13 @@ RELEASED_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
         recipe=_EFFORT_MEDIUM,
         configuration=PINNED_V15_IMAGE_JSON_SCHEMA_TEST,
     ),
-    PublicChatSuccessCase(
-        case_id="chat-v15-released-json-schema-low-p15j",
-        recipe=_JSON_SCHEMA_LOW_EFFORT,
-        configuration=PINNED_V15_IMAGE_JSON_SCHEMA_TEST,
+    *(
+        PublicChatSuccessCase(
+            case_id=f"chat-v15-released-json-schema-{effort.value}-p15j",
+            recipe=_JSON_SCHEMA_BY_EFFORT[effort],
+            configuration=PINNED_V15_IMAGE_JSON_SCHEMA_TEST,
+        )
+        for effort in (ReasoningEffort.low, ReasoningEffort.medium, ReasoningEffort.high)
     ),
     PublicChatSuccessCase(
         case_id="chat-v15-released-json-object-p15j",
