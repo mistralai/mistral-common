@@ -97,7 +97,7 @@ jobs:
           uv run python docs/gen_api_pages.py
           uv run zensical build
 
-  integration_tests:
+  integration_tests_legacy:
     if: ${{ github.event.pull_request.draft != true }}
     runs-on: ubuntu-latest
     strategy:
@@ -125,3 +125,44 @@ jobs:
       - name: Integration Tests
         run: |
           uv run --no-sync pytest tests/integrations/ -n auto --dist loadfile -v
+
+  integration_tests:
+    if: ${{ github.event.pull_request.draft != true }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [
+          "3.11",
+          "3.12",
+          "3.13",
+          "3.14",
+          "3.15",
+        ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Dependencies
+        run: |
+          uv sync --frozen --all-extras --group dev
+
+      # The pinned revisions and digests live in the provisioning script, so its hash keys the cache;
+      # restored files are still size- and SHA-256-checked by the script before tests run.
+      - name: Cache Test Tokenizers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .cache/test-tokenizers
+          key: test-tokenizers-${{ hashFiles('tests/integration/provision_tokenizers.py') }}
+
+      - name: Provision Test Tokenizers
+        run: |
+          uv run --no-sync python tests/integration/provision_tokenizers.py
+
+      - name: Integration Tests
+        run: |
+          HF_HUB_OFFLINE=1 uv run --no-sync pytest tests/integration/ -n auto --dist loadfile -v

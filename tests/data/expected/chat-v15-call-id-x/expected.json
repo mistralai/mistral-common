@@ -1,0 +1,33 @@
+{
+  "case_id": "chat-v15-call-id-x",
+  "tokenizer_configuration_id": "pinned-v15-image-settings-test",
+  "token_ids": [
+    1,
+    36,
+    19227,
+    80277,
+    1302,
+    13196,
+    1609,
+    1449,
+    2811,
+    1429,
+    17670,
+    46005,
+    37,
+    3,
+    1097,
+    4,
+    9,
+    1102,
+    32,
+    30620,
+    2,
+    7,
+    1098,
+    8
+  ],
+  "decoded_text": "<s>[MODEL_SETTINGS]{\"reasoning_effort\": \"none\"}[/MODEL_SETTINGS][INST]a[/INST][TOOL_CALLS]f[ARGS]{}</s>[TOOL_RESULTS]b[/TOOL_RESULTS]",
+  "images": [],
+  "audios": []
+}

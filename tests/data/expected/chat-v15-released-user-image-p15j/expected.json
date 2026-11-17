@@ -1,0 +1,40 @@
+{
+  "case_id": "chat-v15-released-user-image-p15j",
+  "tokenizer_configuration_id": "pinned-v15-image-json-schema-test",
+  "token_ids": [
+    1,
+    36,
+    3745,
+    69242,
+    1322,
+    7435,
+    1719,
+    1449,
+    1557,
+    1418,
+    34037,
+    23665,
+    37,
+    3,
+    10,
+    13,
+    159287,
+    1769,
+    6040,
+    1046,
+    4
+  ],
+  "decoded_text": "<s>[MODEL_SETTINGS]{\"reasoning_effort\": \"high\"}[/MODEL_SETTINGS][INST][IMG][IMG_END]Describe this image.[/INST]",
+  "images": [
+    {
+      "path": "images/0.npy",
+      "shape": [
+        3,
+        28,
+        28
+      ],
+      "dtype": "float32"
+    }
+  ],
+  "audios": []
+}
