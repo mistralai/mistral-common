@@ -32,6 +32,7 @@ from mistral_common.protocol.instruct.messages import (
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
+from tests.fixtures.audio import get_dummy_audio_chunk
 
 
 @dataclass(frozen=True)
@@ -620,5 +621,18 @@ MISMATCHED_TOOL_RESULTS_FINETUNING = ChatRecipe(
 )
 PREFIXED_FINAL = ChatRecipe(recipe_id="prefixed-final", build=_build_prefixed_final_request)
 SYSTEM_THINK = ChatRecipe(recipe_id="released-system-think", build=_build_system_think)
+
+
+def _build_system_then_audio_user() -> ChatCompletionRequest[ChatMessage]:
+    r"""Build a system message followed by a user message carrying an audio chunk."""
+    return ChatCompletionRequest[ChatMessage](
+        messages=[
+            SystemMessage(content="S"),
+            UserMessage(content=[TextChunk(text="Transcribe this audio."), get_dummy_audio_chunk()]),
+        ]
+    )
+
+
+SYSTEM_THEN_AUDIO_USER = ChatRecipe(recipe_id="system-then-audio-user", build=_build_system_then_audio_user)
 CALL_ID_X = _call_id_recipe(recipe_id="call-id-x", tool_call_id="x")
 CALL_ID_SLASH = _call_id_recipe(recipe_id="call-id-slash", tool_call_id="call/id-1")

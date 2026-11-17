@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from mistral_common.exceptions import (
     InvalidMessageStructureException,
     InvalidSystemPromptException,
-    MistralCommonException,
     TokenizerException,
     UnsupportedTokenizerFeatureException,
 )
@@ -57,7 +56,7 @@ class PublicChatErrorCase:
     case_id: str
     recipe: ChatRecipe
     configuration: TokenizerConfiguration
-    expected_exception: type[MistralCommonException]
+    expected_exception: type[Exception]
     message_pattern: str
 
 

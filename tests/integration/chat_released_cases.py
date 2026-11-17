@@ -21,6 +21,7 @@ from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chun
 from tests.integration.chat_cases import PublicChatErrorCase, PublicChatSuccessCase
 from tests.integration.chat_recipes import (
     PREFIXED_FINAL,
+    SYSTEM_THEN_AUDIO_USER,
     SYSTEM_THINK,
     WEATHER_FULL,
     ChatRecipe,
@@ -109,6 +110,28 @@ def _build_json_schema_low_effort() -> ChatCompletionRequest[ChatMessage]:
     )
 
 
+def _build_json_object() -> ChatCompletionRequest[ChatMessage]:
+    r"""Build a prefixed-final request asking for any valid JSON object."""
+    return _build_settings_request(
+        reasoning_effort=ReasoningEffort.high,
+        response_format=ResponseFormat(type=ResponseFormats.json_object),
+    )
+
+
+def _build_invalid_json_schema() -> ChatCompletionRequest[ChatMessage]:
+    r"""Build a request whose JSON schema is invalid under Draft 7.
+
+    `JsonSchema.model_construct` bypasses the request-model validation so the
+    invalid schema reaches the tokenizer's model-settings validation, which is
+    the project-owned rejection under test.
+    """
+    invalid_schema = JsonSchema.model_construct(name="bad", custom_schema={"type": 123}, strict=True)
+    return _build_settings_request(
+        reasoning_effort=ReasoningEffort.high,
+        response_format=ResponseFormat(type=ResponseFormats.json_schema, json_schema=invalid_schema),
+    )
+
+
 def _build_effort_medium() -> ChatCompletionRequest[ChatMessage]:
     return _build_settings_request(reasoning_effort=ReasoningEffort.medium, response_format=ResponseFormat())
 
@@ -122,6 +145,8 @@ _USER_AUDIO = ChatRecipe(recipe_id="released-user-audio", build=_build_user_audi
 _USER_AUDIO_URL = ChatRecipe(recipe_id="released-user-audio-url", build=_build_user_audio_url)
 _TWO_USER_IMAGES = ChatRecipe(recipe_id="released-two-user-images", build=_build_two_user_images)
 _JSON_SCHEMA_LOW_EFFORT = ChatRecipe(recipe_id="released-json-schema-low-effort", build=_build_json_schema_low_effort)
+_JSON_OBJECT = ChatRecipe(recipe_id="released-json-object", build=_build_json_object)
+_INVALID_JSON_SCHEMA = ChatRecipe(recipe_id="released-invalid-json-schema", build=_build_invalid_json_schema)
 _EFFORT_MEDIUM = ChatRecipe(recipe_id="released-effort-medium", build=_build_effort_medium)
 _EFFORT_NONE = ChatRecipe(recipe_id="released-effort-none", build=_build_effort_none)
 
@@ -197,6 +222,11 @@ RELEASED_SUCCESS_CASES: tuple[PublicChatSuccessCase, ...] = (
         recipe=_JSON_SCHEMA_LOW_EFFORT,
         configuration=PINNED_V15_IMAGE_JSON_SCHEMA_TEST,
     ),
+    PublicChatSuccessCase(
+        case_id="chat-v15-released-json-object-p15j",
+        recipe=_JSON_OBJECT,
+        configuration=PINNED_V15_IMAGE_JSON_SCHEMA_TEST,
+    ),
 )
 
 RELEASED_ERROR_CASES: tuple[PublicChatErrorCase, ...] = (
@@ -255,5 +285,26 @@ RELEASED_ERROR_CASES: tuple[PublicChatErrorCase, ...] = (
         configuration=PINNED_V15_IMAGE_SETTINGS_FINETUNING,
         expected_exception=InvalidMessageStructureException,
         message_pattern=r"Expected last role Assistant for finetuning but got tool",
+    ),
+    PublicChatErrorCase(
+        case_id="chat-v7-released-system-then-audio-user-rejected",
+        recipe=SYSTEM_THEN_AUDIO_USER,
+        configuration=PINNED_V7_AUDIO_TEST,
+        expected_exception=ValueError,
+        message_pattern=r"Found system messages at indexes .* and audio chunks in messages at indexes",
+    ),
+    PublicChatErrorCase(
+        case_id="chat-v11-released-system-then-audio-user-rejected",
+        recipe=SYSTEM_THEN_AUDIO_USER,
+        configuration=PINNED_V11_IMAGE_TEST,
+        expected_exception=ValueError,
+        message_pattern=r"System messages are not yet allowed when audio is present",
+    ),
+    PublicChatErrorCase(
+        case_id="chat-v15-released-invalid-json-schema-rejected-p15j",
+        recipe=_INVALID_JSON_SCHEMA,
+        configuration=PINNED_V15_IMAGE_JSON_SCHEMA_TEST,
+        expected_exception=InvalidRequestException,
+        message_pattern=r"json_schema is not a valid JSON schema",
     ),
 )
