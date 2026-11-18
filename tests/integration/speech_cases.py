@@ -14,8 +14,7 @@ license. Synthetic preset mappings establish no released voice fidelity.
 
 from dataclasses import dataclass
 
-import soundfile as sf
-
+from mistral_common.exceptions import AudioDecodeException
 from tests.integration.speech_recipes import (
     SPEECH_INVALID_BASE64,
     SPEECH_MULTICHANNEL,
@@ -76,28 +75,28 @@ SPEECH_ERROR_CASES: tuple[PublicSpeechErrorCase, ...] = (
         case_id="audio-v7-speech-invalid-base64-rejected-test",
         recipe=SPEECH_INVALID_BASE64,
         configuration=SYNTHETIC_V7_SPEECH_AUDIO_TEST,
-        expected_exception=ValueError,
-        message_pattern=r"^base64 decoding failed",
+        expected_exception=AudioDecodeException,
+        message_pattern=r"^Could not decode the audio",
     ),
     PublicSpeechErrorCase(
         case_id="audio-v7-speech-non-audio-bytes-rejected-test",
         recipe=SPEECH_NON_AUDIO_BYTES,
         configuration=SYNTHETIC_V7_SPEECH_AUDIO_TEST,
-        expected_exception=sf.LibsndfileError,
-        message_pattern=r"Format not recognised",
+        expected_exception=AudioDecodeException,
+        message_pattern=r"^Could not decode the audio",
     ),
     PublicSpeechErrorCase(
         case_id="audio-v7-speech-multichannel-rejected-test",
         recipe=SPEECH_MULTICHANNEL,
         configuration=SYNTHETIC_V7_SPEECH_AUDIO_TEST,
-        expected_exception=ValueError,
-        message_pattern=r"^audio_array\.ndim=2$",
+        expected_exception=AudioDecodeException,
+        message_pattern=r"^Could not decode the audio",
     ),
     PublicSpeechErrorCase(
         case_id="audio-v7-speech-decoding-precedes-marker-test",
         recipe=SPEECH_INVALID_BASE64,
         configuration=SYNTHETIC_V7_SPEECH_NO_MARKER_AUDIO_TEST,
-        expected_exception=ValueError,
-        message_pattern=r"^base64 decoding failed",
+        expected_exception=AudioDecodeException,
+        message_pattern=r"^Could not decode the audio",
     ),
 )

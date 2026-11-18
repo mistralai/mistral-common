@@ -19,7 +19,12 @@ import requests
 from pydantic import ValidationError
 from pydantic_extra_types.language_code import LanguageAlpha2
 
-from mistral_common.exceptions import InvalidRequestException, TokenizerException, UnsupportedTokenizerFeatureException
+from mistral_common.exceptions import (
+    AudioDecodeException,
+    InvalidRequestException,
+    TokenizerException,
+    UnsupportedTokenizerFeatureException,
+)
 from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURL, AudioURLChunk, ContentChunk, TextChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage, SystemMessage, UserMessage
 from mistral_common.protocol.instruct.normalize import get_normalizer
@@ -550,13 +555,11 @@ def test_encode_invalid_audio_url_chunk(tekkenizer: InstructTokenizerV7) -> None
     # Mock an invalid URL
     with patch("mistral_common.tokens.tokenizers.audio._requests_lib.get") as mock_get:
         mock_get.side_effect = requests.RequestException("connection failed")
-        with pytest.raises(
-            ValueError, match=r"Failed to download audio from URL: https://example.com/invalid_audio.wav"
-        ):
+        with pytest.raises(AudioDecodeException, match=r"^Could not download the audio from URL"):
             tekkenizer.audio_encoder(AudioURLChunk(audio_url="https://example.com/invalid_audio.wav"))
 
     # Test with an invalid base64 string
-    with pytest.raises(ValueError, match=r"base64 decoding failed\. Please check the input string is a valid base64\."):
+    with pytest.raises(AudioDecodeException, match=r"^Could not decode the audio"):
         tekkenizer.audio_encoder(AudioURLChunk(audio_url="data:audio/wav;base64,invalid_base64_string"))
 
     # Test with an invalide file path
@@ -1222,7 +1225,7 @@ PUBLIC_SPEECH_ERROR_CASES = (
     pytest.param(
         SYNTHETIC_V7_SPEECH,
         unknown_voice_speech_request,
-        InvalidRequestException,
+        AudioDecodeException,
         r"Unknown voice 'not-configured', expected one of \['preset'\]",
         id="audio-v7-speech-unknown-voice-test",
     ),
