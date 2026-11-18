@@ -74,6 +74,7 @@ docs = [
 test-integrations = [
     "transformers>=5.0.0",
     "regex>=2025.10.22",
+    "minijinja>=3.1.0",
 ]
 
 
@@ -98,7 +99,7 @@ warn_unused_ignores = true
 exclude = ["docs", "tools", "build"]
 
 [[tool.mypy.overrides]]
-module = ["sentencepiece.*", "cv2", "cv2.*","soxr", "soundfile", "llguidance", "llguidance.*", "jinja2", "jinja2.*", "tokenizers", "tokenizers.*", "transformers", "transformers.*", "vllm", "vllm.*"]
+module = ["sentencepiece.*", "cv2", "cv2.*","soxr", "soundfile", "llguidance", "llguidance.*", "jinja2", "jinja2.*", "minijinja", "minijinja.*", "tokenizers", "tokenizers.*", "transformers", "transformers.*", "vllm", "vllm.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
