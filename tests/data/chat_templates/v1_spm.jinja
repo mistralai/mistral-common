@@ -161,6 +161,7 @@
 
     {#- Assistant messages supports text content or text chunks. #}
     {%- elif message['role'] == 'assistant' %}
+        {%- generation -%}
         {%- if message['content'] is string and message['content'] != '' %}
             {{- message['content'] }}
         {%- elif message['content'] | length > 0 %}
@@ -176,6 +177,7 @@
             {{- raise_exception('Assistant message content must be non-empty.') }}
         {%- endif %}
         {{- eos_token}}
+        {%- endgeneration -%}
 
 
     {#- Raise exception for unsupported roles. #}

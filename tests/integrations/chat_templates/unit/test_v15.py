@@ -11,6 +11,7 @@ from mistral_common.integrations.chat_templates.template_generator import Templa
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from tests.integrations.chat_templates.fixtures_data import PARITY_JSON_SCHEMA, PARITY_JSON_SCHEMA_NON_ASCII
 from tests.integrations.chat_templates.helpers import (
+    GenerationBlock,
     render_template,
 )
 
@@ -433,7 +434,7 @@ class TestV15ModelSettings:
                 reasoning_effort_default="none" if has_reasoning_effort else None,
             )
         )
-        environment = ImmutableSandboxedEnvironment(loader=BaseLoader())
+        environment = ImmutableSandboxedEnvironment(loader=BaseLoader(), extensions=[GenerationBlock])
 
         output = environment.from_string(template).render(
             messages=[{"role": "user", "content": "Hello"}],

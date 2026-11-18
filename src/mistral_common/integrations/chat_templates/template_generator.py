@@ -33,6 +33,11 @@ _END_THINK = SpecialTokens.end_think.value
 _BEGIN_MODEL_SETTINGS = SpecialTokens.begin_model_settings.value
 _END_MODEL_SETTINGS = SpecialTokens.end_model_settings.value
 
+# HF Transformers' `{% generation %}` block marks the assistant tokens for `return_assistant_tokens_mask`.
+# The `-` on both sides keeps the rendered text identical to a template without the block.
+_GENERATION_START = "        {%- generation -%}"
+_GENERATION_END = "        {%- endgeneration -%}"
+
 _REASONING_EFFORT_VALUES = tuple(str(effort) for effort in ReasoningEffort)
 
 MODEL_SETTINGS_FIELD_CHOICES: tuple[str, ...] = ("reasoning_effort", "json_schema")
@@ -1427,6 +1432,7 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     lines.append("")
     lines.append(f"    {comment}")
     lines.append("    {%- elif message['role'] == 'assistant' %}")
+    lines.append(_GENERATION_START)
 
     if config.version in [TokenizerVersion.v2, TokenizerVersion.v3]:
         lines.append(
@@ -1494,6 +1500,7 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     if config.version != TokenizerVersion.v2:
         lines.append("")
         lines.append("        {{- " + config.eos_expr + " }}")
+    lines.append(_GENERATION_END)
 
     if config.spm and config.version >= TokenizerVersion.v2:
         lines.append("        {%- set ns.prev_tool=false %}")
@@ -1912,6 +1919,7 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("")
     lines.append("    {#- Assistant messages supports text content or text chunks. #}")
     lines.append("    {%- elif message['role'] == 'assistant' %}")
+    lines.append(_GENERATION_START)
     lines.append("        {%- if message['content'] is string and message['content'] != '' %}")
     lines.append("            {{- message['content'] }}")
     lines.append("        {%- elif message['content'] | length > 0 %}")
@@ -1929,6 +1937,7 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("            {{- raise_exception('Assistant message content must be non-empty.') }}")
     lines.append("        {%- endif %}")
     lines.append("        {{- " + config.eos_expr + "}}")
+    lines.append(_GENERATION_END)
     lines.append("")
     lines.append("")
     lines.append("    {#- Raise exception for unsupported roles. #}")
