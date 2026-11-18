@@ -375,7 +375,7 @@ def _generate_system_prompt_handling_pre_v7(config: TemplateConfig) -> list[str]
     """
     lines = [
         "{#- Extract all system messages and merge into system prompt. #}",
-        "{%- set ns_sys = namespace(system_parts=[], previous_role=none) %}",
+        "{%- set ns_sys = namespace(system_parts=[], text_parts=[], previous_role='') %}",
         "{%- for message in messages %}",
         "    {%- if message['role'] == 'system' %}",
         "        {%- if ns_sys.previous_role in ['assistant', 'tool'] %}",
@@ -384,13 +384,15 @@ def _generate_system_prompt_handling_pre_v7(config: TemplateConfig) -> list[str]
         "        {%- if message['content'] is string %}",
         "            {%- set ns_sys.system_parts = ns_sys.system_parts + ([message['content']] if message['content'] else []) %}",  # noqa: E501
         "        {%- elif message['content'] %}",
+        "            {%- set ns_sys.text_parts = [] %}",
         "            {%- for block in message['content'] %}",
         "                {%- if block['type'] != 'text' %}",
         "                    {{- raise_exception('Only text chunks are supported in system message content.') }}",
         "                {%- endif %}",
+        "                {%- set ns_sys.text_parts = ns_sys.text_parts + ([block['text']] if block['text'] else []) %}",  # noqa: E501
         "            {%- endfor %}",
         "            {#- Like the tokenizer: join the non-empty text chunks. #}",
-        "            {%- set ns_sys.system_parts = ns_sys.system_parts + [message['content'] | map(attribute='text') | select | join('\\n\\n')] %}",  # noqa: E501
+        "            {%- set ns_sys.system_parts = ns_sys.system_parts + [ns_sys.text_parts | join('\\n\\n')] %}",
         "        {%- endif %}",
         "    {%- endif %}",
         "    {%- set ns_sys.previous_role = message['role'] %}",
