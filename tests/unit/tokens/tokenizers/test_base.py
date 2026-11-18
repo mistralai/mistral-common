@@ -8,7 +8,7 @@ from typing import Callable
 import pytest
 
 import mistral_common
-from mistral_common.tokens.tokenizers.base import SpecialTokens, Tokenizer, TokenizerVersion
+from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTokens, Tokenizer, TokenizerVersion
 from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.utils import quick_vocab
@@ -159,3 +159,34 @@ class TestTokenizerSharedMethods:
         assert record[0].category is FutureWarning
         assert "`_control_tokens` is deprecated." in str(record[0].message)
         assert record[0].filename == __file__
+
+
+class TestSpecialTokenPolicyValidate:
+    @pytest.mark.parametrize(
+        ("policy", "expected"),
+        [
+            pytest.param(SpecialTokenPolicy.IGNORE, SpecialTokenPolicy.IGNORE, id="enum-ignore"),
+            pytest.param("ignore", SpecialTokenPolicy.IGNORE, id="string-ignore"),
+            pytest.param(SpecialTokenPolicy.KEEP, SpecialTokenPolicy.KEEP, id="enum-keep"),
+            pytest.param("keep", SpecialTokenPolicy.KEEP, id="string-keep"),
+            pytest.param(SpecialTokenPolicy.RAISE, SpecialTokenPolicy.RAISE, id="enum-raise"),
+            pytest.param("raise", SpecialTokenPolicy.RAISE, id="string-raise"),
+        ],
+    )
+    def test_validate_accepts_enum_and_string_values(
+        self, policy: SpecialTokenPolicy | str, expected: SpecialTokenPolicy
+    ) -> None:
+        r"""Coerce each enum member and its string value to the same policy."""
+        assert SpecialTokenPolicy.validate(policy) is expected
+
+    @pytest.mark.parametrize(
+        "policy",
+        [
+            pytest.param(3, id="int-3"),
+            pytest.param("invalid", id="string-invalid"),
+        ],
+    )
+    def test_validate_rejects_invalid_values_with_project_message(self, policy: object) -> None:
+        r"""Reject values outside the enum with the project-owned diagnostic, not a bare Enum error."""
+        with pytest.raises(ValueError, match=r"Invalid `special_token_policy`"):
+            SpecialTokenPolicy.validate(policy)  # type: ignore[arg-type]
