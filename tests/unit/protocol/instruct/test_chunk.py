@@ -358,3 +358,92 @@ def test_image_url_chunk_conversion(
 def test_image_url_chunk_from_openai_rejects_missing_image_url() -> None:
     with pytest.raises(InvalidRequestException, match="image_url must be provided for image_url chunks."):
         ImageURLChunk.from_openai({"type": "image_url"})
+
+
+def _png_b64() -> str:
+    r"""Encode a 1x1 PNG as base64."""
+    buffer = io.BytesIO()
+    Image.new("RGB", (1, 1)).save(buffer, format="PNG")
+    return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+
+def _wav_b64() -> str:
+    r"""Encode 100 ms of silence as base64 WAV."""
+    buffer = io.BytesIO()
+    sf.write(file=buffer, data=np.zeros(1600, dtype=np.float32), samplerate=16000, format="wav")
+    return base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def test_image_chunk_accepts_data_url_string() -> None:
+    r"""Accept a base64 data URL string where a PIL image is expected."""
+    chunk = ImageChunk(image=f"data:image/png;base64,{_png_b64()}")  # type: ignore[arg-type]
+    assert chunk.image.size == (1, 1)
+
+
+def test_image_chunk_rejects_malformed_data_url() -> None:
+    r"""Fail fast at validation, not later at decode time, on a malformed data URL."""
+    with pytest.raises(ValidationError, match="Invalid base64 data URL"):
+        ImageChunk(image="data:text/plain,hello")  # type: ignore[arg-type]
+
+
+def test_image_chunk_model_dump_add_format_prefix_round_trips() -> None:
+    r"""Serialize with the `data:image/png;base64,` prefix and validate it back."""
+    chunk = ImageChunk(image=Image.new("RGB", (4, 4), "red"))
+    dumped = chunk.model_dump(context={"add_format_prefix": True})
+    assert dumped["image"].startswith("data:image/png;base64,")
+    assert ImageChunk.model_validate(dumped).image.size == (4, 4)
+
+
+@pytest.mark.parametrize(
+    "subtype",
+    [
+        pytest.param("image/x-icon", id="x-icon"),
+        pytest.param("image/svg+xml", id="svg-xml"),
+        pytest.param("image/vnd.microsoft.icon", id="vnd-microsoft-icon"),
+    ],
+)
+def test_image_chunk_from_openai_strips_data_url_with_non_word_subtype(subtype: str) -> None:
+    r"""Strip the data URL prefix for RFC 6838 subtypes containing `-`, `+` or `.`."""
+    chunk = ImageChunk.from_openai({"type": "image_url", "image_url": {"url": f"data:{subtype};base64,{_png_b64()}"}})
+    assert chunk.image.size == (1, 1)
+
+
+def test_image_chunk_from_openai_rejects_malformed_data_url() -> None:
+    r"""Reject a malformed data URL in an OpenAI image chunk."""
+    openai_chunk = {"type": "image_url", "image_url": {"url": "data:text/plain,hello"}}
+    with pytest.raises(ValueError, match="Invalid base64 data URL"):
+        ImageChunk.from_openai(openai_chunk)
+
+
+def test_audio_chunk_to_openai_strips_data_url_with_non_word_subtype() -> None:
+    r"""Strip the data URL prefix for an audio subtype containing `-`."""
+    b64 = _wav_b64()
+    chunk = AudioChunk(input_audio=f"data:audio/x-wav;base64,{b64}")
+
+    result = chunk.to_openai()
+
+    assert result["input_audio"] == {"format": "wav", "data": b64}
+
+
+def test_audio_chunk_to_openai_strips_data_url_with_media_type_parameter() -> None:
+    r"""Treat media-type parameters as part of the data URL header."""
+    b64 = _wav_b64()
+    chunk = AudioChunk(input_audio=f"data:audio/wav;charset=utf-8;base64,{b64}")
+
+    result = chunk.to_openai()
+
+    assert result["input_audio"] == {"format": "wav", "data": b64}
+
+
+def test_audio_chunk_to_openai_rejects_malformed_data_url() -> None:
+    r"""Reject a malformed data URL when serializing to OpenAI."""
+    chunk = AudioChunk(input_audio="data:text/plain,hello")
+    with pytest.raises(ValueError, match="Invalid base64 data URL"):
+        chunk.to_openai()
+
+
+def test_audio_chunk_to_openai_rejects_invalid_base64() -> None:
+    r"""Reject a payload that is not valid base64 when serializing to OpenAI."""
+    chunk = AudioChunk(input_audio="aGVsbG8")  # bad padding
+    with pytest.raises(ValueError, match="base64 decoding failed"):
+        chunk.to_openai()

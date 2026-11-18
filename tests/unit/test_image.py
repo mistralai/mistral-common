@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 import pytest
 import requests
+import soundfile as sf
 from PIL import Image, UnidentifiedImageError
 
 from mistral_common.exceptions import ImageDecodeException
@@ -64,11 +65,12 @@ def test_load_image_rejects_invalid_input(load: Callable[[object], object], imag
 @pytest.mark.parametrize(
     "url",
     [
+        pytest.param("data:text/plain,hello", id="non-base64-data-url"),
         pytest.param("data:image/png;base64", id="no-payload-separator"),
         pytest.param("data:image/png;base64,", id="empty-payload"),
     ],
 )
-def test_image_from_chunk_data_url_without_payload(url: str) -> None:
+def test_image_from_chunk_rejects_malformed_data_url(url: str) -> None:
     with pytest.raises(ValueError, match="Invalid base64 data URL"):
         image_from_chunk(chunk=ImageURLChunk(image_url=url))
 
@@ -251,3 +253,31 @@ def test_download_image_http_error() -> None:
     with patch("mistral_common.image.requests.get", return_value=response):
         with pytest.raises(requests.exceptions.HTTPError, match="404 Client Error"):
             download_image(url="https://invalid.url/image.jpg", timeout=10.0)
+
+
+def test_maybe_load_image_from_str_or_bytes_rejects_malformed_data_url() -> None:
+    with pytest.raises(ValueError, match="Invalid base64 data URL"):
+        maybe_load_image_from_str_or_bytes("data:text/plain,hello")
+
+
+def test_image_from_chunk_accepts_mislabeled_mime_type() -> None:
+    # The MIME type is not checked: the payload is sniffed by PIL, so a real
+    # image under a generic MIME type still loads.
+    png_b64 = base64.b64encode(_png_bytes(_create_test_image((1, 1)))).decode("ascii")
+    data_url = f"data:application/octet-stream;base64,{png_b64}"
+    assert image_from_chunk(chunk=ImageURLChunk(image_url=data_url)).size == (1, 1)
+
+
+def test_image_from_chunk_rejects_non_image_payload() -> None:
+    # Valid base64 of valid audio, passed as an image.
+    wav_buffer = BytesIO()
+    sf.write(file=wav_buffer, data=np.zeros(1600, dtype=np.float32), samplerate=16000, format="wav")
+    data_url = f"data:audio/wav;base64,{base64.b64encode(wav_buffer.getvalue()).decode('ascii')}"
+    with pytest.raises(ValueError, match="payload is not a decodable image"):
+        image_from_chunk(chunk=ImageURLChunk(image_url=data_url))
+
+
+def test_image_from_chunk_rejects_invalid_base64_payload() -> None:
+    chunk = ImageURLChunk(image_url="data:image/png;base64,aGVsbG8")  # bad padding
+    with pytest.raises(ValueError, match="payload is not valid base64"):
+        image_from_chunk(chunk=chunk)
