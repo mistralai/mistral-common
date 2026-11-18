@@ -63,6 +63,8 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_tool_result_after_history_request,
     build_tools_multiturn_request,
     build_tools_singleturn_request,
+    build_trailing_spaces_assistant_chunk_request,
+    build_trailing_spaces_assistant_request,
     build_truncation_drop_by_chunk_1_request,
     build_truncation_drop_by_chunk_2_request,
     build_truncation_drop_first_assistant_request,
@@ -143,6 +145,9 @@ _SYSTEM_MESSAGE_TOOLS_MULTITURN_TOKENS = [
 _TOOL_MESSAGE_TOKENS = [1, 3, 197, 4, 7, 149, 150, 151, 152, 153, 154, 155, 156, 157, 19, 200, 8]
 _ASSISTANT_TOOL_CALLS_TOKENS = [1, 3, 197, 4, 9, 198, 33, 149, 150, 151, 152, 153, 154, 155, 156, 157, 32, 223, 225, 2]
 _ASSISTANT_LIST_CONTENT_TOKENS = [1, 3, 197, 4, 198, 2]
+_TRAILING_SPACES_KEPT_TOKENS = [1, 3, 197, 4, 198, 132, 132, 2]
+_PREFIX_TRAILING_SPACES_STRIPPED_TOKENS = [1, 3, 197, 4, 198]
+_PREFIX_CHUNK_TRAILING_SPACES_KEPT_TOKENS = [1, 3, 197, 4, 198, 132, 132]
 _SYSTEM_AND_USER_WORDS_TOKENS = [
     1, 17, 204, 201, 208, 208, 211, 132, 219, 211, 214, 208, 200, 18, 3, 203, 211, 211, 200, 132, 200, 197, 221, 4
 ]
@@ -264,6 +269,11 @@ _SYSTEM_MESSAGE_TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_SYSTEM_MESSAGE_TOOL
 _TOOL_MESSAGE_EXPECTED = Tokenized(tokens=_TOOL_MESSAGE_TOKENS)
 _ASSISTANT_TOOL_CALLS_EXPECTED = Tokenized(tokens=_ASSISTANT_TOOL_CALLS_TOKENS)
 _ASSISTANT_LIST_CONTENT_EXPECTED = Tokenized(tokens=_ASSISTANT_LIST_CONTENT_TOKENS)
+_TRAILING_SPACES_KEPT_EXPECTED = Tokenized(tokens=_TRAILING_SPACES_KEPT_TOKENS)
+_PREFIX_TRAILING_SPACES_STRIPPED_EXPECTED = Tokenized(tokens=_PREFIX_TRAILING_SPACES_STRIPPED_TOKENS, prefix_ids=[198])
+_PREFIX_CHUNK_TRAILING_SPACES_KEPT_EXPECTED = Tokenized(
+    tokens=_PREFIX_CHUNK_TRAILING_SPACES_KEPT_TOKENS, prefix_ids=[198, 132, 132]
+)
 _SYSTEM_AND_USER_WORDS_EXPECTED = Tokenized(tokens=_SYSTEM_AND_USER_WORDS_TOKENS)
 _TRUNCATION_LAST_USER_AT_LIMIT_EXPECTED = Tokenized(tokens=_TRUNCATION_LAST_USER_AT_LIMIT_TOKENS)
 _ARBITRARY_TOOL_CALL_ID_X_EXPECTED = Tokenized(tokens=_ARBITRARY_TOOL_CALL_ID_X_TOKENS)
@@ -290,6 +300,9 @@ _SYSTEM_MESSAGE_TOOLS_MULTITURN_TEXT = (
 _TOOL_MESSAGE_TEXT = "<s>[INST]a[/INST][TOOL_RESULTS]123456789[TOOL_CONTENT]d[/TOOL_RESULTS]"
 _ASSISTANT_TOOL_CALLS_TEXT = "<s>[INST]a[/INST][TOOL_CALLS]b[CALL_ID]123456789[ARGS]{}</s>"
 _ASSISTANT_LIST_CONTENT_TEXT = "<s>[INST]a[/INST]b</s>"
+_TRAILING_SPACES_KEPT_TEXT = "<s>[INST]a[/INST]b  </s>"
+_PREFIX_TRAILING_SPACES_STRIPPED_TEXT = "<s>[INST]a[/INST]b"
+_PREFIX_CHUNK_TRAILING_SPACES_KEPT_TEXT = "<s>[INST]a[/INST]b  "
 _SYSTEM_AND_USER_WORDS_TEXT = "<s>[SYSTEM_PROMPT]hello world[/SYSTEM_PROMPT][INST]good day[/INST]"
 _TRUNCATION_LAST_USER_AT_LIMIT_TEXT = "<s>[INST]aaaaaaa[/INST]"
 _ARBITRARY_TOOL_CALL_ID_X_TEXT = (
@@ -868,6 +881,34 @@ def audio_tokenizer() -> InstructTokenizerV11:
             _SYSTEM_MESSAGE_EXPECTED,
             _SYSTEM_MESSAGE_TEXT,
             id="default-shared-system-list-content",
+        ),
+        pytest.param(
+            "default",
+            partial(build_trailing_spaces_assistant_request, prefix=False, settings=None),
+            _TRAILING_SPACES_KEPT_EXPECTED,
+            _TRAILING_SPACES_KEPT_TEXT,
+            id="default-shared-trailing-spaces-kept",
+        ),
+        pytest.param(
+            "default",
+            partial(build_trailing_spaces_assistant_request, prefix=True, settings=None),
+            _PREFIX_TRAILING_SPACES_STRIPPED_EXPECTED,
+            _PREFIX_TRAILING_SPACES_STRIPPED_TEXT,
+            id="default-shared-prefix-trailing-spaces-stripped",
+        ),
+        pytest.param(
+            "default",
+            partial(build_trailing_spaces_assistant_chunk_request, prefix=False, settings=None),
+            _TRAILING_SPACES_KEPT_EXPECTED,
+            _TRAILING_SPACES_KEPT_TEXT,
+            id="default-shared-chunk-trailing-spaces-kept",
+        ),
+        pytest.param(
+            "default",
+            partial(build_trailing_spaces_assistant_chunk_request, prefix=True, settings=None),
+            _PREFIX_CHUNK_TRAILING_SPACES_KEPT_EXPECTED,
+            _PREFIX_CHUNK_TRAILING_SPACES_KEPT_TEXT,
+            id="default-shared-prefix-chunk-trailing-spaces-kept",
         ),
     ],
 )

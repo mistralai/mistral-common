@@ -1017,6 +1017,24 @@ def build_assistant_text_chunk_request(*, settings: ModelSettings | None) -> Ins
     )
 
 
+def build_trailing_spaces_assistant_request(
+    *, prefix: bool, settings: ModelSettings | None
+) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build an assistant turn whose text content ends with two spaces."""
+    return build_user_then_assistant_request(
+        assistant=AssistantMessage(content="b  ", prefix=prefix), settings=settings
+    )
+
+
+def build_trailing_spaces_assistant_chunk_request(
+    *, prefix: bool, settings: ModelSettings | None
+) -> InstructRequest[ChatMessage, Tool]:
+    r"""Build an assistant turn whose single text chunk ends with two spaces."""
+    return build_user_then_assistant_request(
+        assistant=AssistantMessage(content=[TextChunk(text="b  ")], prefix=prefix), settings=settings
+    )
+
+
 def build_closed_think_request(*, settings: ModelSettings | None) -> InstructRequest[ChatMessage, Tool]:
     r"""Build a closed assistant think chunk request."""
     return build_user_then_assistant_request(

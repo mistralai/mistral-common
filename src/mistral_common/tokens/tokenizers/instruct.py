@@ -635,7 +635,9 @@ class InstructTokenizerV2(InstructTokenizerV1, Generic[InstructRequestType, FIMR
     def _encode_normal_content_assistant_message(self, message: AssistantMessage) -> list[int]:
         assert message.content, f"Assistant message must have content. Got {message}"
         assert isinstance(message.content, str), "Message content must be a string for tokenizer < V7"
-        return self.tokenizer.encode(message.content.rstrip(" "), bos=False, eos=False)
+        # Only a prefix is continued by the model, so only its trailing spaces are stripped.
+        content = message.content.rstrip(" ") if message.prefix else message.content
+        return self.tokenizer.encode(content, bos=False, eos=False)
 
     def _encode_tool_calls_in_assistant_message(self, message: AssistantMessage) -> list[int]:
         assert message.tool_calls, f"Assistant message must have tool calls. Got {message}"

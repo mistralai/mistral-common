@@ -43,6 +43,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_tool_message_request,
     build_tools_multiturn_request,
     build_tools_singleturn_request,
+    build_trailing_spaces_assistant_request,
     build_user_image_url_request,
 )
 from tests.utils import assert_tokenized_equal, decode_keep, is_unloadable_json
@@ -86,6 +87,10 @@ _TEKKEN_SYSTEM_TOOLS_MULTITURN_TOKENS = [
 ]
 _SPM_PREFIXED_FINAL_MESSAGE_TOKENS = [1, 3, 1032, 4, 1055, 2, 3, 17889, 23294, 781, 781, 29485, 4, 1049]
 _TEKKEN_PREFIXED_FINAL_MESSAGE_TOKENS = [1, 3, 1097, 4, 1098, 2, 3, 101289, 58343, 1267, 1099, 4, 1100]
+_SPM_TRAILING_SPACES_KEPT_TOKENS = [1, 3, 1032, 4, 1055, 1027, 2]
+_SPM_PREFIX_TRAILING_SPACES_STRIPPED_TOKENS = [1, 3, 1032, 4, 1055]
+_TEKKEN_TRAILING_SPACES_KEPT_TOKENS = [1, 3, 1097, 4, 1098, 1256, 2]
+_TEKKEN_PREFIX_TRAILING_SPACES_STRIPPED_TOKENS = [1, 3, 1097, 4, 1098]
 _SPM_ASSISTANT_TOOL_CALLS_TOKENS = [
     1, 3, 1032, 4, 5, 1501, 7567, 1629, 2032, 1113, 29494, 1316, 1113, 17452, 2032, 13450, 1113, 1081, 2032, 1113,
     29508, 29518, 29538, 29549, 29550, 29552, 29555, 29551, 29542, 29507, 10925, 2
@@ -258,6 +263,14 @@ _SPM_SYSTEM_TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_SPM_SYSTEM_TOOLS_MULTIT
 _TEKKEN_SYSTEM_TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_TEKKEN_SYSTEM_TOOLS_MULTITURN_TOKENS)
 _SPM_PREFIXED_FINAL_MESSAGE_EXPECTED = Tokenized(tokens=_SPM_PREFIXED_FINAL_MESSAGE_TOKENS, prefix_ids=[1049])
 _TEKKEN_PREFIXED_FINAL_MESSAGE_EXPECTED = Tokenized(tokens=_TEKKEN_PREFIXED_FINAL_MESSAGE_TOKENS, prefix_ids=[1100])
+_SPM_TRAILING_SPACES_KEPT_EXPECTED = Tokenized(tokens=_SPM_TRAILING_SPACES_KEPT_TOKENS)
+_SPM_PREFIX_TRAILING_SPACES_STRIPPED_EXPECTED = Tokenized(
+    tokens=_SPM_PREFIX_TRAILING_SPACES_STRIPPED_TOKENS, prefix_ids=[1055]
+)
+_TEKKEN_TRAILING_SPACES_KEPT_EXPECTED = Tokenized(tokens=_TEKKEN_TRAILING_SPACES_KEPT_TOKENS)
+_TEKKEN_PREFIX_TRAILING_SPACES_STRIPPED_EXPECTED = Tokenized(
+    tokens=_TEKKEN_PREFIX_TRAILING_SPACES_STRIPPED_TOKENS, prefix_ids=[1098]
+)
 _SPM_ASSISTANT_TOOL_CALLS_EXPECTED = Tokenized(tokens=_SPM_ASSISTANT_TOOL_CALLS_TOKENS)
 _TEKKEN_ASSISTANT_TOOL_CALLS_EXPECTED = Tokenized(tokens=_TEKKEN_ASSISTANT_TOOL_CALLS_TOKENS)
 _SPM_TOOL_MESSAGE_EXPECTED = Tokenized(tokens=_SPM_TOOL_MESSAGE_TOKENS)
@@ -342,6 +355,10 @@ _TEKKEN_SYSTEM_TOOLS_MULTITURN_TEXT = (
 )
 _SPM_PREFIXED_FINAL_MESSAGE_TEXT = "<s>[INST]▁a[/INST]▁b</s>[INST]▁SYSTEM<0x0A><0x0A>c[/INST]▁d"
 _TEKKEN_PREFIXED_FINAL_MESSAGE_TEXT = "<s>[INST]a[/INST]b</s>[INST]SYSTEM\n\nc[/INST]d"
+_SPM_TRAILING_SPACES_KEPT_TEXT = "<s>[INST]▁a[/INST]▁b▁▁</s>"
+_SPM_PREFIX_TRAILING_SPACES_STRIPPED_TEXT = "<s>[INST]▁a[/INST]▁b"
+_TEKKEN_TRAILING_SPACES_KEPT_TEXT = "<s>[INST]a[/INST]b  </s>"
+_TEKKEN_PREFIX_TRAILING_SPACES_STRIPPED_TEXT = "<s>[INST]a[/INST]b"
 _SPM_ASSISTANT_TOOL_CALLS_TEXT = (
     '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"b",▁"arguments":▁{},▁"id":▁"123456789"}]</s>'
 )
@@ -967,6 +984,34 @@ def _build_tool_call_and_content_request() -> InstructRequest[ChatMessage, Tool]
             _TEKKEN_MM_USER_IMAGE_URL_EXPECTED,
             _TEKKEN_MM_USER_IMAGE_URL_TEXT,
             id="tekken-mm-shared-user-image-url",
+        ),
+        pytest.param(
+            "spm",
+            partial(build_trailing_spaces_assistant_request, prefix=False, settings=None),
+            _SPM_TRAILING_SPACES_KEPT_EXPECTED,
+            _SPM_TRAILING_SPACES_KEPT_TEXT,
+            id="spm-shared-trailing-spaces-kept",
+        ),
+        pytest.param(
+            "spm",
+            partial(build_trailing_spaces_assistant_request, prefix=True, settings=None),
+            _SPM_PREFIX_TRAILING_SPACES_STRIPPED_EXPECTED,
+            _SPM_PREFIX_TRAILING_SPACES_STRIPPED_TEXT,
+            id="spm-shared-prefix-trailing-spaces-stripped",
+        ),
+        pytest.param(
+            "tekken",
+            partial(build_trailing_spaces_assistant_request, prefix=False, settings=None),
+            _TEKKEN_TRAILING_SPACES_KEPT_EXPECTED,
+            _TEKKEN_TRAILING_SPACES_KEPT_TEXT,
+            id="tekken-shared-trailing-spaces-kept",
+        ),
+        pytest.param(
+            "tekken",
+            partial(build_trailing_spaces_assistant_request, prefix=True, settings=None),
+            _TEKKEN_PREFIX_TRAILING_SPACES_STRIPPED_EXPECTED,
+            _TEKKEN_PREFIX_TRAILING_SPACES_STRIPPED_TEXT,
+            id="tekken-shared-prefix-trailing-spaces-stripped",
         ),
     ],
 )

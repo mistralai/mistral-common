@@ -91,6 +91,8 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_tools_multiturn_request,
     build_tools_singleturn_request,
     build_trailing_image_moves_first_request,
+    build_trailing_spaces_assistant_chunk_request,
+    build_trailing_spaces_assistant_request,
     build_truncation_drop_by_chunk_1_request,
     build_truncation_drop_by_chunk_2_request,
     build_truncation_drop_first_assistant_request,
@@ -205,6 +207,12 @@ _TEXT_THEN_TWO_IMAGES_TOKENS = [1, 3, 2086, 10, 10, 14, 10, 10, 15, 10, 10, 10, 
 _ONE_IMAGE_WITH_TEXT_TOKENS = [1, 3, 10, 10, 14, 10, 10, 15, 2086, 4]
 _SYSTEM_LIST_CONTENT_TOKENS = [1, 16, 1036, 17, 3, 1032, 4]
 _ASSISTANT_LIST_CONTENT_TOKENS = [1, 3, 1032, 4, 1055, 2]
+_SPM_TRAILING_SPACES_KEPT_TOKENS = [1, 3, 1032, 4, 1055, 1027, 2]
+_SPM_PREFIX_TRAILING_SPACES_STRIPPED_TOKENS = [1, 3, 1032, 4, 1055]
+_SPM_PREFIX_CHUNK_TRAILING_SPACES_KEPT_TOKENS = [1, 3, 1032, 4, 1055, 1027]
+_NO_AUDIO_TRAILING_SPACES_KEPT_TOKENS = [1, 3, 197, 4, 198, 132, 132, 2]
+_NO_AUDIO_PREFIX_TRAILING_SPACES_STRIPPED_TOKENS = [1, 3, 197, 4, 198]
+_NO_AUDIO_PREFIX_CHUNK_TRAILING_SPACES_KEPT_TOKENS = [1, 3, 197, 4, 198, 132, 132]
 _SYSTEM_AND_USER_WORDS_TOKENS = [1, 16, 7080, 29477, 2294, 17, 3, 1947, 2138, 4]
 _TRUNCATION_LAST_USER_AT_LIMIT_TOKENS = [1, 3, 197, 197, 197, 197, 197, 197, 197, 4]
 # fmt: on
@@ -252,6 +260,20 @@ _TEXT_THEN_TWO_IMAGES_EXPECTED = Tokenized(
 _ONE_IMAGE_WITH_TEXT_EXPECTED = Tokenized(tokens=_ONE_IMAGE_WITH_TEXT_TOKENS, images=[_RED_4X4_IMAGE])
 _SYSTEM_LIST_CONTENT_EXPECTED = Tokenized(tokens=_SYSTEM_LIST_CONTENT_TOKENS)
 _ASSISTANT_LIST_CONTENT_EXPECTED = Tokenized(tokens=_ASSISTANT_LIST_CONTENT_TOKENS)
+_SPM_TRAILING_SPACES_KEPT_EXPECTED = Tokenized(tokens=_SPM_TRAILING_SPACES_KEPT_TOKENS)
+_SPM_PREFIX_TRAILING_SPACES_STRIPPED_EXPECTED = Tokenized(
+    tokens=_SPM_PREFIX_TRAILING_SPACES_STRIPPED_TOKENS, prefix_ids=[1055]
+)
+_SPM_PREFIX_CHUNK_TRAILING_SPACES_KEPT_EXPECTED = Tokenized(
+    tokens=_SPM_PREFIX_CHUNK_TRAILING_SPACES_KEPT_TOKENS, prefix_ids=[1055, 1027]
+)
+_NO_AUDIO_TRAILING_SPACES_KEPT_EXPECTED = Tokenized(tokens=_NO_AUDIO_TRAILING_SPACES_KEPT_TOKENS)
+_NO_AUDIO_PREFIX_TRAILING_SPACES_STRIPPED_EXPECTED = Tokenized(
+    tokens=_NO_AUDIO_PREFIX_TRAILING_SPACES_STRIPPED_TOKENS, prefix_ids=[198]
+)
+_NO_AUDIO_PREFIX_CHUNK_TRAILING_SPACES_KEPT_EXPECTED = Tokenized(
+    tokens=_NO_AUDIO_PREFIX_CHUNK_TRAILING_SPACES_KEPT_TOKENS, prefix_ids=[198, 132, 132]
+)
 _SYSTEM_AND_USER_WORDS_EXPECTED = Tokenized(tokens=_SYSTEM_AND_USER_WORDS_TOKENS)
 _TRUNCATION_LAST_USER_AT_LIMIT_EXPECTED = Tokenized(tokens=_TRUNCATION_LAST_USER_AT_LIMIT_TOKENS)
 
@@ -318,6 +340,12 @@ _TEXT_THEN_TWO_IMAGES_TEXT = (
 _ONE_IMAGE_WITH_TEXT_TEXT = "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]▁x[/INST]"
 _SYSTEM_LIST_CONTENT_TEXT = "<s>[SYSTEM_PROMPT]▁s[/SYSTEM_PROMPT][INST]▁a[/INST]"
 _ASSISTANT_LIST_CONTENT_TEXT = "<s>[INST]▁a[/INST]▁b</s>"
+_SPM_TRAILING_SPACES_KEPT_TEXT = "<s>[INST]▁a[/INST]▁b▁▁</s>"
+_SPM_PREFIX_TRAILING_SPACES_STRIPPED_TEXT = "<s>[INST]▁a[/INST]▁b"
+_SPM_PREFIX_CHUNK_TRAILING_SPACES_KEPT_TEXT = "<s>[INST]▁a[/INST]▁b▁▁"
+_NO_AUDIO_TRAILING_SPACES_KEPT_TEXT = "<s>[INST]a[/INST]b  </s>"
+_NO_AUDIO_PREFIX_TRAILING_SPACES_STRIPPED_TEXT = "<s>[INST]a[/INST]b"
+_NO_AUDIO_PREFIX_CHUNK_TRAILING_SPACES_KEPT_TEXT = "<s>[INST]a[/INST]b  "
 _SYSTEM_AND_USER_WORDS_TEXT = "<s>[SYSTEM_PROMPT]▁hello▁world[/SYSTEM_PROMPT][INST]▁good▁day[/INST]"
 _TRUNCATION_LAST_USER_AT_LIMIT_TEXT = "<s>[INST]aaaaaaa[/INST]"
 
@@ -1038,6 +1066,62 @@ def with_audio_tokenizer() -> InstructTokenizer:
             _SPM_USER_IMAGE_URL_EXPECTED,
             _SPM_USER_IMAGE_URL_TEXT,
             id="spm-shared-user-image-url",
+        ),
+        pytest.param(
+            "spm",
+            partial(build_trailing_spaces_assistant_request, prefix=False, settings=None),
+            _SPM_TRAILING_SPACES_KEPT_EXPECTED,
+            _SPM_TRAILING_SPACES_KEPT_TEXT,
+            id="spm-shared-trailing-spaces-kept",
+        ),
+        pytest.param(
+            "spm",
+            partial(build_trailing_spaces_assistant_request, prefix=True, settings=None),
+            _SPM_PREFIX_TRAILING_SPACES_STRIPPED_EXPECTED,
+            _SPM_PREFIX_TRAILING_SPACES_STRIPPED_TEXT,
+            id="spm-shared-prefix-trailing-spaces-stripped",
+        ),
+        pytest.param(
+            "spm",
+            partial(build_trailing_spaces_assistant_chunk_request, prefix=False, settings=None),
+            _SPM_TRAILING_SPACES_KEPT_EXPECTED,
+            _SPM_TRAILING_SPACES_KEPT_TEXT,
+            id="spm-shared-chunk-trailing-spaces-kept",
+        ),
+        pytest.param(
+            "spm",
+            partial(build_trailing_spaces_assistant_chunk_request, prefix=True, settings=None),
+            _SPM_PREFIX_CHUNK_TRAILING_SPACES_KEPT_EXPECTED,
+            _SPM_PREFIX_CHUNK_TRAILING_SPACES_KEPT_TEXT,
+            id="spm-shared-prefix-chunk-trailing-spaces-kept",
+        ),
+        pytest.param(
+            "no_audio",
+            partial(build_trailing_spaces_assistant_request, prefix=False, settings=None),
+            _NO_AUDIO_TRAILING_SPACES_KEPT_EXPECTED,
+            _NO_AUDIO_TRAILING_SPACES_KEPT_TEXT,
+            id="no-audio-shared-trailing-spaces-kept",
+        ),
+        pytest.param(
+            "no_audio",
+            partial(build_trailing_spaces_assistant_request, prefix=True, settings=None),
+            _NO_AUDIO_PREFIX_TRAILING_SPACES_STRIPPED_EXPECTED,
+            _NO_AUDIO_PREFIX_TRAILING_SPACES_STRIPPED_TEXT,
+            id="no-audio-shared-prefix-trailing-spaces-stripped",
+        ),
+        pytest.param(
+            "no_audio",
+            partial(build_trailing_spaces_assistant_chunk_request, prefix=False, settings=None),
+            _NO_AUDIO_TRAILING_SPACES_KEPT_EXPECTED,
+            _NO_AUDIO_TRAILING_SPACES_KEPT_TEXT,
+            id="no-audio-shared-chunk-trailing-spaces-kept",
+        ),
+        pytest.param(
+            "no_audio",
+            partial(build_trailing_spaces_assistant_chunk_request, prefix=True, settings=None),
+            _NO_AUDIO_PREFIX_CHUNK_TRAILING_SPACES_KEPT_EXPECTED,
+            _NO_AUDIO_PREFIX_CHUNK_TRAILING_SPACES_KEPT_TEXT,
+            id="no-audio-shared-prefix-chunk-trailing-spaces-kept",
         ),
     ],
 )
