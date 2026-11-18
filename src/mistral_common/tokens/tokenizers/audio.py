@@ -10,7 +10,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 import requests as _requests_lib
 
-from mistral_common.exceptions import InvalidRequestException, UnsupportedTokenizerFeatureException
+from mistral_common.exceptions import (
+    AudioDecodeException,
+    InvalidRequestException,
+    UnsupportedTokenizerFeatureException,
+)
 from mistral_common.imports import (
     assert_soundfile_installed,
     assert_soxr_installed,
@@ -119,9 +123,11 @@ class Audio:
             response.raise_for_status()
             return Audio.from_bytes(response.content, strict=strict)
         except _requests_lib.RequestException as e:  # Something went wrong with the request.
-            raise ValueError(f"Failed to download audio from URL: {url}") from e
+            raise AudioDecodeException(f"Could not download the audio from URL: {url}") from e
+        except AudioDecodeException:
+            raise
         except Exception as e:  # Something went wrong with the audio file.
-            raise ValueError(f"Failed to create Audio instance from URL: {url} .") from e
+            raise AudioDecodeException(f"Could not decode the audio from URL: {url}.") from e
 
     @staticmethod
     def from_base64(audio_base64: str, strict: bool = True) -> "Audio":
@@ -148,17 +154,14 @@ class Audio:
         try:
             audio_bytes = base64.b64decode(audio_base64)
         except Exception as e:
-            raise ValueError("base64 decoding failed. Please check the input string is a valid base64.") from e
+            raise AudioDecodeException("Could not decode the audio: invalid base64 payload.") from e
 
         try:
             return Audio.from_bytes(audio_bytes, strict=strict)
-        except RuntimeError as e:
-            # soundfile decode failures (LibsndfileError); the multi-channel
-            # ValueError from from_bytes is a validation error and propagates as is
-            raise ValueError(
-                "Failed to decode the base64 payload as audio. "
-                "Verify that the input is a valid audio file (e.g. wav or mp3)."
-            ) from e
+        except AudioDecodeException:
+            raise
+        except Exception as e:
+            raise AudioDecodeException("Could not decode the audio.") from e
 
     @staticmethod
     def from_file(file: str, strict: bool = True) -> "Audio":
@@ -209,18 +212,21 @@ class Audio:
         """
         assert_soundfile_installed()
 
-        with io.BytesIO(audio_bytes) as audio_file:
-            with sf.SoundFile(audio_file) as f:
-                audio_array = f.read(dtype="float32")
-                sampling_rate = f.samplerate
-                audio_format = f.format
+        try:
+            with io.BytesIO(audio_bytes) as audio_file:
+                with sf.SoundFile(audio_file) as f:
+                    audio_array = f.read(dtype="float32")
+                    sampling_rate = f.samplerate
+                    audio_format = f.format
+        except Exception as e:
+            raise AudioDecodeException("Could not decode the audio.") from e
 
         format_enum = AudioFormat(audio_format)
         format = format_enum.value.lower()
 
         if audio_array.ndim != 1:
             if strict:
-                raise ValueError(f"{audio_array.ndim=}")
+                raise AudioDecodeException(f"Could not decode the audio: {audio_array.ndim=} channels, expected mono.")
             else:
                 audio_array = audio_array.mean(axis=1)
 

@@ -7,6 +7,7 @@ import requests
 import soundfile as sf
 from pydantic import ValidationError
 
+from mistral_common.exceptions import AudioDecodeException
 from mistral_common.protocol.instruct.chunk import AudioChunk, AudioURL, AudioURLChunk
 from mistral_common.protocol.transcription.request import TranscriptionRequest
 from mistral_common.tokens.tokenizers.audio import (
@@ -261,7 +262,7 @@ def test_from_bytes_rejects_multichannel_strict() -> None:
         sf.write(buf, stereo, 16_000, format="WAV")
         wav_bytes = buf.getvalue()
 
-    with pytest.raises(ValueError, match=r"audio_array\.ndim=2"):
+    with pytest.raises(AudioDecodeException, match=r"^Could not decode the audio"):
         Audio.from_bytes(wav_bytes, strict=True)
 
     # non-strict averages the channels down to mono
@@ -279,8 +280,8 @@ def test_from_url_transport_failure() -> None:
     with patch("mistral_common.tokens.tokenizers.audio._requests_lib.get") as mock_get:
         mock_get.side_effect = requests.RequestException("connection failed")
         with pytest.raises(
-            ValueError,
-            match="Failed to download audio from URL: https://example.com/invalid_audio.wav",
+            AudioDecodeException,
+            match=r"^Could not download the audio from URL: https://example.com/invalid_audio.wav",
         ):
             Audio.from_url("https://example.com/invalid_audio.wav", strict=True, timeout=None)
 
@@ -292,8 +293,8 @@ def test_from_url_invalid_content() -> None:
         mock_response.content = b"<html>this is not audio</html>"
         mock_get.return_value = mock_response
         with pytest.raises(
-            ValueError,
-            match=r"Failed to create Audio instance from URL: https://example\.com \.",
+            AudioDecodeException,
+            match=r"^Could not decode the audio",
         ):
             Audio.from_url("https://example.com", strict=True, timeout=None)
 
@@ -322,13 +323,13 @@ def test_from_url_passes_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(DOWNLOAD_TIMEOUT_ENV_KEY, "25")
     with patch("mistral_common.tokens.tokenizers.audio._requests_lib.get") as mock_get:
         mock_get.side_effect = requests.RequestException("connection failed")
-        with pytest.raises(ValueError, match="Failed to download audio from URL"):
+        with pytest.raises(AudioDecodeException, match=r"^Could not download the audio from URL"):
             Audio.from_url("https://example.com/a.wav", strict=True, timeout=None)
     assert mock_get.call_args.kwargs.get("timeout") == 25.0
 
     with patch("mistral_common.tokens.tokenizers.audio._requests_lib.get") as mock_get:
         mock_get.side_effect = requests.RequestException("connection failed")
-        with pytest.raises(ValueError, match="Failed to download audio from URL"):
+        with pytest.raises(AudioDecodeException, match=r"^Could not download the audio from URL"):
             Audio.from_url("https://example.com/a.wav", strict=True, timeout=3)
     assert mock_get.call_args.kwargs.get("timeout") == 3.0
 
@@ -372,7 +373,7 @@ def test_audio_base64_round_trip(format: str, prefix: bool) -> None:
 
 
 def test_from_base64_rejects_invalid_base64() -> None:
-    with pytest.raises(ValueError, match=r"base64 decoding failed\. Please check the input string is a valid base64\."):
+    with pytest.raises(AudioDecodeException, match=r"^Could not decode the audio"):
         Audio.from_base64("data:audio/wav;base64,invalid_base64_string")
 
 
@@ -380,7 +381,7 @@ def test_from_base64_rejects_non_audio_payload() -> None:
     import base64
 
     payload = base64.b64encode(b"<html>this is not audio</html>").decode()
-    with pytest.raises(ValueError, match="Failed to decode the base64 payload as audio"):
+    with pytest.raises(AudioDecodeException, match=r"^Could not decode the audio"):
         Audio.from_base64(payload)
 
 
@@ -468,13 +469,14 @@ def test_audio_encoder_chunk_dispatch_transport_failure() -> None:
     with patch("mistral_common.tokens.tokenizers.audio._requests_lib.get") as mock_get:
         mock_get.side_effect = requests.RequestException("connection failed")
         with pytest.raises(
-            ValueError, match=r"Failed to download audio from URL: https://example.com/invalid_audio.wav"
+            AudioDecodeException,
+            match=r"^Could not download the audio from URL: https://example.com/invalid_audio.wav",
         ):
             _audio_encoder()(AudioURLChunk(audio_url="https://example.com/invalid_audio.wav"))
 
 
 def test_audio_encoder_chunk_dispatch_invalid_base64() -> None:
-    with pytest.raises(ValueError, match=r"base64 decoding failed\. Please check the input string is a valid base64\."):
+    with pytest.raises(AudioDecodeException, match=r"^Could not decode the audio"):
         _audio_encoder()(AudioURLChunk(audio_url="data:audio/wav;base64,invalid_base64_string"))
 
 

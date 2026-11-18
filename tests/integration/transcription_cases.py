@@ -9,10 +9,9 @@ cannot satisfy an encode-rejection case. Error cases have no success manifest.
 
 from dataclasses import dataclass
 
-import soundfile as sf
 from pydantic import ValidationError
 
-from mistral_common.exceptions import UnsupportedTokenizerFeatureException
+from mistral_common.exceptions import AudioDecodeException, UnsupportedTokenizerFeatureException
 from tests.integration.tokenizer_configurations import (
     PINNED_V7_AUDIO_TEST,
     PINNED_V7_REALTIME_TEST,
@@ -92,22 +91,22 @@ TRANSCRIPTION_ERROR_CASES: tuple[PublicTranscriptionErrorCase, ...] = (
         case_id="audio-v7-instruct-invalid-base64-rejected-test",
         recipe=TRANSCRIPTION_INVALID_BASE64,
         configuration=SYNTHETIC_V7_INSTRUCT_AUDIO_TEST,
-        expected_exception=ValueError,
-        message_pattern=r"^base64 decoding failed",
+        expected_exception=AudioDecodeException,
+        message_pattern=r"^Could not decode the audio",
     ),
     PublicTranscriptionErrorCase(
         case_id="audio-v7-instruct-non-audio-bytes-rejected-test",
         recipe=TRANSCRIPTION_NON_AUDIO_BYTES,
         configuration=SYNTHETIC_V7_INSTRUCT_AUDIO_TEST,
-        expected_exception=sf.LibsndfileError,
-        message_pattern=r"Format not recognised",
+        expected_exception=AudioDecodeException,
+        message_pattern=r"^Could not decode the audio",
     ),
     PublicTranscriptionErrorCase(
         case_id="audio-v7-instruct-multichannel-rejected-test",
         recipe=TRANSCRIPTION_MULTICHANNEL,
         configuration=SYNTHETIC_V7_INSTRUCT_AUDIO_TEST,
-        expected_exception=ValueError,
-        message_pattern=r"^audio_array\.ndim=2$",
+        expected_exception=AudioDecodeException,
+        message_pattern=r"^Could not decode the audio",
     ),
     PublicTranscriptionErrorCase(
         case_id="audio-v7-instruct-empty-audio-rejected-test",
@@ -120,22 +119,22 @@ TRANSCRIPTION_ERROR_CASES: tuple[PublicTranscriptionErrorCase, ...] = (
         case_id="audio-v7-offline-invalid-base64-rejected-test",
         recipe=TRANSCRIPTION_OFFLINE_INVALID_BASE64,
         configuration=SYNTHETIC_V7_STREAMING_AUDIO_TEST,
-        expected_exception=ValueError,
-        message_pattern=r"^base64 decoding failed",
+        expected_exception=AudioDecodeException,
+        message_pattern=r"^Could not decode the audio",
     ),
     PublicTranscriptionErrorCase(
         case_id="audio-v7-offline-non-audio-bytes-rejected-test",
         recipe=TRANSCRIPTION_OFFLINE_NON_AUDIO_BYTES,
         configuration=SYNTHETIC_V7_STREAMING_AUDIO_TEST,
-        expected_exception=sf.LibsndfileError,
-        message_pattern=r"Format not recognised",
+        expected_exception=AudioDecodeException,
+        message_pattern=r"^Could not decode the audio",
     ),
     PublicTranscriptionErrorCase(
         case_id="audio-v7-offline-multichannel-rejected-test",
         recipe=TRANSCRIPTION_OFFLINE_MULTICHANNEL,
         configuration=SYNTHETIC_V7_STREAMING_AUDIO_TEST,
-        expected_exception=ValueError,
-        message_pattern=r"^audio_array\.ndim=2$",
+        expected_exception=AudioDecodeException,
+        message_pattern=r"^Could not decode the audio",
     ),
     PublicTranscriptionErrorCase(
         case_id="audio-v7-offline-streaming-pad-precedes-decoding-test",

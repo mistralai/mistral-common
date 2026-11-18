@@ -35,6 +35,18 @@ class ImageDecodeException(MistralCommonException):
         super().__init__(message)
 
 
+class AudioDecodeException(MistralCommonException):
+    r"""Exception raised when audio content cannot be decoded."""
+
+    def __init__(self, message: str) -> None:
+        r"""Initialize the audio decode exception with a message.
+
+        Args:
+            message: A human-readable message describing the failure.
+        """
+        super().__init__(message)
+
+
 class TokenizerException(MistralCommonException):
     r"""Exception raised for errors in the tokenizer."""
 

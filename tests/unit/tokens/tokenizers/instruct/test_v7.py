@@ -14,6 +14,7 @@ import soundfile as sf
 from pydantic import ValidationError
 
 from mistral_common.exceptions import (
+    AudioDecodeException,
     InvalidRequestException,
     TokenizerException,
     UnsupportedTokenizerFeatureException,
@@ -1231,8 +1232,8 @@ class _DecodeErrorCase:
     case_id: str
     profile: SyntheticV7AudioProfile
     audio: str | bytes
-    cause_type: type[Exception]
-    cause_message: str
+    cause_type: type[Exception] | None
+    cause_message: str | None
 
 
 _TRANSCRIPTION_DECODE_ERROR_CASES: tuple[_DecodeErrorCase, ...] = (
@@ -1240,8 +1241,8 @@ _TRANSCRIPTION_DECODE_ERROR_CASES: tuple[_DecodeErrorCase, ...] = (
         case_id="audio-v7-instruct-invalid-base64-rejected-test",
         profile=SYNTHETIC_V7_INSTRUCT,
         audio="not base64!",
-        cause_type=ValueError,
-        cause_message=r"^base64 decoding failed",
+        cause_type=binascii.Error,
+        cause_message=r"Invalid base64-encoded string",
     ),
     _DecodeErrorCase(
         case_id="audio-v7-instruct-non-audio-bytes-rejected-test",
@@ -1254,8 +1255,8 @@ _TRANSCRIPTION_DECODE_ERROR_CASES: tuple[_DecodeErrorCase, ...] = (
         case_id="audio-v7-instruct-multichannel-rejected-test",
         profile=SYNTHETIC_V7_INSTRUCT,
         audio=multichannel_wav_bytes(),
-        cause_type=ValueError,
-        cause_message=r"^audio_array\.ndim=2$",
+        cause_type=None,
+        cause_message=None,
     ),
     _DecodeErrorCase(
         case_id="audio-v7-instruct-empty-audio-rejected-test",
@@ -1276,10 +1277,10 @@ def test_direct_transcription_decode_errors(case: _DecodeErrorCase) -> None:
 
     assert_audio_decode_error(
         encode=lambda: tokenizer.instruct_tokenizer.encode_transcription(request),
-        error_type=case.cause_type,
-        message=case.cause_message,
-        cause_type=_base64_cause_type(case.cause_type, case.cause_message),
-        cause_message=_base64_cause_message(case.cause_type, case.cause_message),
+        error_type=ValidationError if not case.audio else AudioDecodeException,
+        message=r"`input_audio` should not be empty" if not case.audio else r"^Could not decode the audio",
+        cause_type=case.cause_type if case.audio else None,
+        cause_message=case.cause_message if case.audio else None,
     )
 
 
@@ -1372,28 +1373,28 @@ _STREAMING_DECODE_ERROR_CASES: tuple[_StreamingDecodeErrorCase, ...] = (
         profile=SYNTHETIC_V7_STREAMING,
         streaming=StreamingMode.OFFLINE,
         audio="not base64!",
-        error_type=ValueError,
-        message=r"^base64 decoding failed",
-        cause_type=None,
-        cause_message=None,
+        error_type=AudioDecodeException,
+        message=r"^Could not decode the audio",
+        cause_type=binascii.Error,
+        cause_message=r"Invalid base64-encoded string",
     ),
     _StreamingDecodeErrorCase(
         case_id="audio-v7-offline-non-audio-bytes-rejected-test",
         profile=SYNTHETIC_V7_STREAMING,
         streaming=StreamingMode.OFFLINE,
         audio=b"not audio",
-        error_type=sf.LibsndfileError,
-        message=r"Format not recognised",
-        cause_type=None,
-        cause_message=None,
+        error_type=AudioDecodeException,
+        message=r"^Could not decode the audio",
+        cause_type=sf.LibsndfileError,
+        cause_message=r"Format not recognised",
     ),
     _StreamingDecodeErrorCase(
         case_id="audio-v7-offline-multichannel-rejected-test",
         profile=SYNTHETIC_V7_STREAMING,
         streaming=StreamingMode.OFFLINE,
         audio=multichannel_wav_bytes(),
-        error_type=ValueError,
-        message=r"^audio_array\.ndim=2$",
+        error_type=AudioDecodeException,
+        message=r"^Could not decode the audio",
         cause_type=None,
         cause_message=None,
     ),
@@ -1433,8 +1434,8 @@ _SPEECH_DECODE_ERROR_CASES: tuple[_DecodeErrorCase, ...] = (
         case_id="audio-v7-speech-invalid-base64-rejected-test",
         profile=SYNTHETIC_V7_SPEECH,
         audio="not base64!",
-        cause_type=ValueError,
-        cause_message=r"^base64 decoding failed",
+        cause_type=binascii.Error,
+        cause_message=r"Invalid base64-encoded string",
     ),
     _DecodeErrorCase(
         case_id="audio-v7-speech-non-audio-bytes-rejected-test",
@@ -1447,15 +1448,15 @@ _SPEECH_DECODE_ERROR_CASES: tuple[_DecodeErrorCase, ...] = (
         case_id="audio-v7-speech-multichannel-rejected-test",
         profile=SYNTHETIC_V7_SPEECH,
         audio=multichannel_wav_bytes(),
-        cause_type=ValueError,
-        cause_message=r"^audio_array\.ndim=2$",
+        cause_type=None,
+        cause_message=None,
     ),
     _DecodeErrorCase(
         case_id="audio-v7-speech-decoding-precedes-marker-test",
         profile=SYNTHETIC_V7_SPEECH_NO_MARKER,
         audio="not base64!",
-        cause_type=ValueError,
-        cause_message=r"^base64 decoding failed",
+        cause_type=binascii.Error,
+        cause_message=r"Invalid base64-encoded string",
     ),
 )
 
@@ -1469,23 +1470,23 @@ def test_direct_speech_decode_errors(case: _DecodeErrorCase) -> None:
 
     assert_audio_decode_error(
         encode=lambda: tokenizer.instruct_tokenizer.encode_speech_request(request),
-        error_type=case.cause_type,
-        message=case.cause_message,
-        cause_type=_base64_cause_type(case.cause_type, case.cause_message),
-        cause_message=_base64_cause_message(case.cause_type, case.cause_message),
+        error_type=ValidationError if not case.audio else AudioDecodeException,
+        message=r"`input_audio` should not be empty" if not case.audio else r"^Could not decode the audio",
+        cause_type=case.cause_type if case.audio else None,
+        cause_message=case.cause_message if case.audio else None,
     )
 
 
 _CHAT_RAW_ERROR_CASES = (
-    pytest.param("not base64!", ValueError, r"^base64 decoding failed", id="invalid-base64"),
-    pytest.param(b"not audio", sf.LibsndfileError, r"Format not recognised", id="non-audio-bytes"),
-    pytest.param(multichannel_wav_bytes(), ValueError, r"^audio_array\.ndim=2$", id="multichannel-wav"),
+    pytest.param("not base64!", AudioDecodeException, r"^Could not decode the audio", id="invalid-base64"),
+    pytest.param(b"not audio", AudioDecodeException, r"^Could not decode the audio", id="non-audio-bytes"),
+    pytest.param(multichannel_wav_bytes(), AudioDecodeException, r"^Could not decode the audio", id="multichannel-wav"),
 )
 
 
 @pytest.mark.parametrize(("audio", "error_type", "message"), _CHAT_RAW_ERROR_CASES)
-def test_chat_audio_decode_errors_stay_raw(audio: str | bytes, error_type: type[Exception], message: str) -> None:
-    r"""Chat inline AudioChunk decoding keeps raising the raw error, not a project error."""
+def test_chat_audio_decode_errors(audio: str | bytes, error_type: type[Exception], message: str) -> None:
+    r"""Chat inline AudioChunk decoding raises the project decode error."""
     tokenizer = build_synthetic_v7_audio_tokenizer(profile=SYNTHETIC_V7_INSTRUCT)
     assert tokenizer.mode == ValidationMode.test
     request = ChatCompletionRequest(messages=[UserMessage(content=[AudioChunk(input_audio=audio)])])
