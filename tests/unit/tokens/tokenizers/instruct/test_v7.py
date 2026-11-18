@@ -47,17 +47,6 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder, ReasoningEffortEnumBuilder
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import get_special_tokens, quick_vocab
-from tests.test_tokenizer_v7_audio import (
-    SYNTHETIC_V7_INSTRUCT,
-    SYNTHETIC_V7_SPEECH,
-    SYNTHETIC_V7_SPEECH_NO_MARKER,
-    SYNTHETIC_V7_STREAMING,
-    SYNTHETIC_V7_STREAMING_NO_PAD,
-    SyntheticV7AudioProfile,
-    _get_audio_chunk,
-    build_synthetic_v7_audio_tokenizer,
-    get_tekkenizer_with_audio,
-)
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_arbitrary_tool_call_id_request,
     build_assistant_list_content_request,
@@ -114,6 +103,17 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_two_images_request,
     build_user_audio_url_request,
     build_user_image_url_request,
+)
+from tests.unit.tokens.tokenizers.instruct.test_audio import (
+    SYNTHETIC_V7_INSTRUCT,
+    SYNTHETIC_V7_SPEECH,
+    SYNTHETIC_V7_SPEECH_NO_MARKER,
+    SYNTHETIC_V7_STREAMING,
+    SYNTHETIC_V7_STREAMING_NO_PAD,
+    SyntheticV7AudioProfile,
+    _get_audio_chunk,
+    build_synthetic_v7_audio_tokenizer,
+    get_tekkenizer_with_audio,
 )
 from tests.utils import assert_tokenized_equal, decode_keep
 

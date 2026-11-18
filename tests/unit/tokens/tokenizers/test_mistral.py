@@ -30,7 +30,7 @@ from mistral_common.tokens.tokenizers.instruct import (
 )
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.test_tekken import get_special_tokens, quick_vocab
-from tests.test_tokenizer_v7_audio import (
+from tests.unit.tokens.tokenizers.instruct.test_audio import (
     SYNTHETIC_V7_INSTRUCT,
     build_synthetic_v7_audio_tokenizer,
     valid_transcription_request,
