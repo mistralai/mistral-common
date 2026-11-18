@@ -85,6 +85,8 @@ mistral-common/
   - `chat_templates/`: Chat template generation for HuggingFace Transformers
     - `chat_templates.py`: Public API for generating chat templates (`generate_chat_template`)
     - `template_generator.py`: Core template generation engine with `TemplateConfig` and `build_chat_template`
+  - `hf_tokenizers/`: HuggingFace `response_template` generation for `parse_response`
+    - `response_template.py`: `generate_response_template` / `convert_tokenizer_to_response_template` with `ThinkingMode`
 
 ### Scripts
 - `scripts/generate_chat_template.py`: CLI for generating and saving chat templates
