@@ -1,4 +1,4 @@
-import re
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -6,19 +6,23 @@ from mistral_common.integrations.chat_templates.template_generator import Templa
 from mistral_common.protocol.instruct.request import ReasoningEffort
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 
-# Python-only Jinja constructs that non-Python Jinja runtimes (e.g. HF Transformers'
-# minijinja) do not support: dict methods and Python boolean/None literals.
-_PYTHON_ONLY_PATTERNS = [
-    re.compile(r"\.get\("),
-    re.compile(r"\.lower\("),
-    re.compile(r"\.strip\("),
-    re.compile(r"\.items\("),
-    re.compile(r"\bTrue\b"),
-    re.compile(r"\bFalse\b"),
-    re.compile(r"\bNone\b"),
-]
+if TYPE_CHECKING:
+    import minijinja
+else:
+    minijinja = pytest.importorskip("minijinja")
 
 _REASONING_EFFORT_VALUES = tuple(str(effort) for effort in ReasoningEffort)
+
+_RENDER_MESSAGES: list[dict[str, Any]] = [
+    {"role": "user", "content": "hi"},
+    {"role": "assistant", "content": "answer", "reasoning_content": "trace"},
+    {"role": "user", "content": "again"},
+    {"role": "assistant", "content": "done"},
+]
+_RENDER_TOOLS: list[dict[str, Any]] = [
+    {"type": "function", "function": {"name": "f", "description": None, "parameters": {"type": "object"}}},
+    {"function": {"name": "g"}},
+]
 
 
 def _model_settings_kwargs(version: TokenizerVersion) -> dict[str, frozenset[str] | tuple[str, ...] | str]:
@@ -70,45 +74,42 @@ def _configs_for_version(version: TokenizerVersion) -> list[TemplateConfig]:
     return configs
 
 
+def _minijinja_env() -> "minijinja.Environment":
+    r"""Build a minijinja environment in non-Python-compat mode, like HF Transformers.
+
+    `pycompat=False` disables the Python-specific methods (e.g. `dict.get`) that
+    minijinja otherwise tolerates, matching the non-Python Jinja runtimes the
+    templates must support. The `raise_exception` global matches what HF registers.
+
+    Returns:
+        A minijinja `Environment` with `pycompat` disabled and `raise_exception` registered.
+    """
+
+    def raise_exception(message: str) -> None:
+        raise minijinja.TemplateError(message)
+
+    env = minijinja.Environment(pycompat=False)
+    env.add_global("raise_exception", raise_exception)
+    return env
+
+
 @pytest.mark.parametrize("version", list(TokenizerVersion))
-def test_generated_template_avoids_python_only_jinja(version: TokenizerVersion) -> None:
-    # Non-Python Jinja runtimes (minijinja in HF Transformers) reject dict methods and
-    # Python literals; generated templates must use `x['k'] if 'k' in x else default`
-    # and the `true`/`false`/`none` literals instead.
+def test_generated_template_renders_under_minijinja(version: TokenizerVersion) -> None:
+    # HF Transformers renders chat templates with a non-Python Jinja runtime (minijinja
+    # in Rust with pycompat off), where Python-only constructs like `dict.get()` are
+    # unknown methods. Rendering must succeed for every version and feature variant.
+    env = _minijinja_env()
     for config in _configs_for_version(version):
         template = build_chat_template(config)
-        for pattern in _PYTHON_ONLY_PATTERNS:
-            assert pattern.search(template) is None, (
-                f"{version.value} config {config} emits Python-only construct {pattern.pattern!r}"
-            )
-
-
-@pytest.mark.parametrize("version", [v for v in TokenizerVersion if v >= TokenizerVersion.v13])
-def test_thinking_templates_use_portable_closed_and_reasoning_expressions(version: TokenizerVersion) -> None:
-    config = TemplateConfig(version=version, thinking_support=True, **_model_settings_kwargs(version))  # type: ignore[arg-type]
-    template = build_chat_template(config)
-
-    assert "(block['closed'] if 'closed' in block else true)" in template
-    assert (
-        "msg['reasoning_content'] if 'reasoning_content' in msg else (msg['reasoning'] if 'reasoning' in msg else none)"
-        in template
-    )
-
-
-def test_v15_template_uses_portable_response_format_expressions() -> None:
-    config = TemplateConfig(version=TokenizerVersion.v15, **_model_settings_kwargs(TokenizerVersion.v15))  # type: ignore[arg-type]
-    template = build_chat_template(config)
-
-    assert "response_format['type'] if 'type' in response_format else 'text'" in template
-    assert "response_format['json_schema'] if 'json_schema' in response_format else none" in template
-    assert "('schema' not in response_json_schema or response_json_schema['schema'] is none)" in template
-
-
-@pytest.mark.parametrize("version", [v for v in TokenizerVersion if v >= TokenizerVersion.v2])
-def test_tool_definition_uses_portable_key_expressions(version: TokenizerVersion) -> None:
-    config = TemplateConfig(version=version, **_model_settings_kwargs(version))  # type: ignore[arg-type]
-    template = build_chat_template(config)
-
-    assert "tool_function['description'] if 'description' in tool_function else none" in template
-    assert "tool_function['parameters'] if 'parameters' in tool_function else none" in template
-    assert "tool['type'] if 'type' in tool else 'function'" in template
+        render_kwargs: dict[str, Any] = {
+            "messages": _RENDER_MESSAGES,
+            "tools": _RENDER_TOOLS,
+            "response_format": {"type": "json_object"},
+            "add_generation_prompt": False,
+            "bos_token": "<s>",
+            "eos_token": "</s>",
+        }
+        if config.version.supports_model_settings:
+            render_kwargs["reasoning_effort"] = "low"
+        rendered = env.render_str(template, **render_kwargs)
+        assert rendered.startswith("<s>")
