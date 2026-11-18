@@ -44,7 +44,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_tools_singleturn_request,
     build_user_image_url_request,
 )
-from tests.utils import assert_tokenized_equal, decode_keep
+from tests.utils import assert_tokenized_equal, decode_keep, is_unloadable_json
 
 # fmt: off
 _SPM_NORMAL_TOKENS = [1, 3, 1032, 4, 1055, 2, 3, 1045, 4, 1049, 2]
@@ -983,12 +983,23 @@ def test_encode_instruct(
     assert decode_keep(tokenizer=tokenizer, tokenized=tokenized) == expected_text
 
 
+_DEEP_NESTING_JSON = "[" * 100_000 + "]" * 100_000
+
+
 @pytest.mark.parametrize(
     argnames="payload",
     argvalues=[
         # Valid JSON that `json.loads` rejects without a JSONDecodeError.
         pytest.param('{"a":' + "1" * 5000 + "}", id="oversized-int"),  # ValueError: over the int digit limit
-        pytest.param("[" * 100_000 + "]" * 100_000, id="deep-nesting"),  # RecursionError
+        # RecursionError below Python 3.14; 3.14+ parses it (C recursion is guarded by stack space).
+        pytest.param(
+            _DEEP_NESTING_JSON,
+            marks=pytest.mark.skipif(
+                not is_unloadable_json(_DEEP_NESTING_JSON),
+                reason="json.loads parses deeply nested JSON on Python 3.14+",
+            ),
+            id="deep-nesting",
+        ),
     ],
 )
 @pytest.mark.parametrize(argnames="backend", argvalues=["spm", "tekken"])
