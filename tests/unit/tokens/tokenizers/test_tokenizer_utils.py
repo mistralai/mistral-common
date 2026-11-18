@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -7,7 +8,11 @@ import pytest
 from huggingface_hub.utils import httpx as hub_httpx
 
 from mistral_common.exceptions import MistralCommonException
-from mistral_common.tokens.tokenizers.utils import download_tokenizer_from_hf_hub, list_local_hf_repo_files
+from mistral_common.tokens.tokenizers.utils import (
+    download_tokenizer_from_hf_hub,
+    get_one_valid_tokenizer_file,
+    list_local_hf_repo_files,
+)
 
 _REPO_ID = "mistralai/Mistral-7B-v0.1"
 _COMMIT = "RANDOM_REVISION"
@@ -128,3 +133,183 @@ def test_download_tokenizer_from_hf_hub_unexpected_error_raises_general_error(
         download_tokenizer_from_hf_hub(repo_id=_REPO_ID, force_download=force_download)
 
     assert isinstance(exc_info.value.__cause__, RuntimeError)
+
+
+@pytest.mark.usefixtures("empty_default_cache")
+@pytest.mark.parametrize(
+    ("revision", "expected"),
+    [
+        (None, ["file2.txt", "tekken.json"]),
+        (_COMMIT, ["file2.txt", "tekken.json"]),
+        ("main", ["file2.txt", "tekken.json"]),
+        ("release-branch", ["file2.txt", "tekken.json"]),
+        ("non_existent_revision", []),
+        ("", []),
+    ],
+    ids=["default-ref", "commit-hash", "default-branch-via-refs", "other-branch-via-refs", "unknown-revision", "empty"],
+)
+def test_list_local_hf_repo_files_resolves_revisions(
+    custom_cache: Path, revision: str | None, expected: list[str]
+) -> None:
+    snapshot = _cached_tokenizer_path(cache_dir=custom_cache).parent
+    (snapshot / "file2.txt").write_text("test")
+    (_cached_tokenizer_path(cache_dir=custom_cache).parents[2] / "refs" / "release-branch").write_text(_COMMIT)
+    assert sorted(list_local_hf_repo_files(repo_id=_REPO_ID, revision=revision, cache_dir=custom_cache)) == expected
+
+
+def test_list_local_hf_repo_files_requires_huggingface_hub() -> None:
+    with patch("mistral_common.tokens.tokenizers.utils._hub_installed", False):
+        with pytest.raises(ImportError, match="huggingface_hub"):
+            list_local_hf_repo_files(repo_id=_REPO_ID, revision=None)
+
+
+def test_download_tokenizer_from_hf_hub_requires_huggingface_hub() -> None:
+    with patch("mistral_common.tokens.tokenizers.utils._hub_installed", False):
+        with pytest.raises(ImportError, match="huggingface_hub"):
+            download_tokenizer_from_hf_hub(repo_id=_REPO_ID)
+
+
+@pytest.mark.parametrize(
+    ("files", "expected"),
+    [
+        ([], None),
+        (["unvalid1.txt", "/path/to/tekken.json"], "/path/to/tekken.json"),
+        (["unvalid1.txt", "tekken.json"], "tekken.json"),
+        (["unvalid1.txt", "/tekken.json"], "/tekken.json"),
+        (["unvalid1.txt", "sentencepiece.model"], "sentencepiece.model"),
+        (["unvalid1.txt", "sentencepiece.model.v1"], "sentencepiece.model.v1"),
+        (["unvalid1.txt", "/path/to/sentencepiece.model.v1", "sentencepiece.model.v1m1"], "sentencepiece.model.v1m1"),
+        (
+            ["unvalid1.txt", "/sentencepiece.model.v1", "/path/to/sentencepiece.model.v1m1"],
+            "/path/to/sentencepiece.model.v1m1",
+        ),
+        (
+            [
+                "unvalid1.txt",
+                "/sentencepiece.model.v1",
+                "/path/to/sentencepiece.model.v1m1",
+                "/sentencepiece.model.v1/tekken.json",
+            ],
+            "/sentencepiece.model.v1/tekken.json",
+        ),
+        (["unvalid1.txt", "sentencepiece.model", "sentencepiece.model.v1m1"], "sentencepiece.model.v1m1"),
+        (["unvalid1.txt", "unvalid2.txt"], None),
+        (["unvalid1.txt", "sentencepiece.model.v99"], None),
+    ],
+    ids=[
+        "empty",
+        "tekken-with-dir",
+        "tekken",
+        "tekken-rooted",
+        "spm",
+        "spm-v1",
+        "spm-v1-and-v1m1",
+        "spm-v1-and-v1m1-absolute",
+        "tekken-in-subdir-wins",
+        "spm-and-v1m1",
+        "no-valid-file",
+        "unknown-version-suffix",
+    ],
+)
+def test_get_one_valid_tokenizer_file_selects(files: list[str], expected: str | None) -> None:
+    if expected is None:
+        with pytest.raises(ValueError, match="No tokenizer file found"):
+            get_one_valid_tokenizer_file(files=files)
+    else:
+        assert get_one_valid_tokenizer_file(files=files) == expected
+
+
+def test_get_one_valid_tokenizer_file_warns_when_multiple_non_tekken_files(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(level=logging.WARNING, logger="mistral_common.tokens.tokenizers.utils"):
+        selected = get_one_valid_tokenizer_file(files=["sentencepiece.model", "sentencepiece.model.v1m1"])
+    assert selected == "sentencepiece.model.v1m1"
+    assert "Multiple valid tokenizer files found. Using sentencepiece.model.v1m1." in caplog.text
+
+
+def test_get_one_valid_tokenizer_file_prefers_tekken_without_warning(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(level=logging.WARNING, logger="mistral_common.tokens.tokenizers.utils"):
+        selected = get_one_valid_tokenizer_file(files=["sentencepiece.model", "tekken.json"])
+    assert selected == "tekken.json"
+    assert "Multiple valid tokenizer files found" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("files", "expected"),
+    [
+        ([], None),
+        (["unvalid1.txt", "path/to/tekken.json"], "path/to/tekken.json"),
+        (["unvalid1.txt", "tekken.json"], "tekken.json"),
+        (["unvalid1.txt", "sentencepiece.model"], "sentencepiece.model"),
+        (["unvalid1.txt", "sentencepiece.model.v1"], "sentencepiece.model.v1"),
+        (["unvalid1.txt", "sentencepiece.model.v1", "sentencepiece.model.v1m1"], "sentencepiece.model.v1m1"),
+        (
+            [
+                "unvalid1.txt",
+                "sentencepiece.model.v1",
+                "sentencepiece.model.v1m1",
+                "sentencepiece.model.v1/tekken.json",
+            ],
+            "sentencepiece.model.v1/tekken.json",
+        ),
+        (["unvalid1.txt", "sentencepiece.model", "sentencepiece.model.v1m1"], "sentencepiece.model.v1m1"),
+        (["unvalid1.txt", "unvalid2.txt"], None),
+    ],
+    ids=[
+        "empty",
+        "tekken-with-dir",
+        "tekken",
+        "spm",
+        "spm-v1",
+        "spm-v1-and-v1m1",
+        "tekken-in-subdir-wins",
+        "spm-and-v1m1",
+        "no-valid-file",
+    ],
+)
+@patch("huggingface_hub.hf_hub_download")
+@patch("huggingface_hub.HfApi.list_repo_files")
+def test_download_tokenizer_from_hf_hub_selects_file_and_forwards_arguments(
+    mock_list_repo_files: MagicMock, mock_hf_hub_download: MagicMock, files: list[str], expected: str | None
+) -> None:
+    mock_list_repo_files.return_value = files
+    if expected is None:
+        with pytest.raises(ValueError, match="No valid tokenizer file found in the repo"):
+            download_tokenizer_from_hf_hub(
+                repo_id=_REPO_ID, token=None, revision=None, local_files_only=False, force_download=False
+            )
+        mock_hf_hub_download.assert_not_called()
+        return
+    mock_hf_hub_download.return_value = expected
+    tokenizer = download_tokenizer_from_hf_hub(
+        repo_id=_REPO_ID, token=None, revision=None, local_files_only=False, force_download=False
+    )
+    assert tokenizer == expected
+    mock_list_repo_files.assert_called_once_with(_REPO_ID, revision=None, token=None)
+    mock_hf_hub_download.assert_called_once_with(
+        repo_id=_REPO_ID,
+        cache_dir=None,
+        filename=expected,
+        token=None,
+        revision=None,
+        local_files_only=False,
+        force_download=False,
+    )
+
+
+def test_download_tokenizer_from_hf_hub_force_download_with_local_files_only_raises() -> None:
+    with pytest.raises(
+        ValueError, match="You cannot force the download of the tokenizer if you only want to use local files."
+    ):
+        download_tokenizer_from_hf_hub(repo_id=_REPO_ID, local_files_only=True, force_download=True)
+
+
+@pytest.mark.usefixtures("custom_cache")
+@patch("huggingface_hub.HfApi.list_repo_files")
+def test_download_tokenizer_from_hf_hub_offline_fallback_uses_default_cache(
+    mock_list_repo_files: MagicMock, empty_default_cache: Path
+) -> None:
+    mock_list_repo_files.side_effect = huggingface_hub.errors.OfflineModeIsEnabled("offline mode is enabled")
+    _populate_hf_cache(cache_dir=empty_default_cache)
+
+    tokenizer_path = download_tokenizer_from_hf_hub(repo_id=_REPO_ID, token=None, revision="main")
+    assert Path(tokenizer_path) == _cached_tokenizer_path(cache_dir=empty_default_cache).resolve()
