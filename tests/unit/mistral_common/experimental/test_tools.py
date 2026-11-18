@@ -28,8 +28,10 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.utils import get_special_tokens, is_unloadable_json, quick_vocab
 
+_TOOL_CALL_TOKEN_ID = 6
 
-def fixture_mistral_tokenizer_v11() -> MistralTokenizer:
+
+def _mistral_tokenizer_v11() -> MistralTokenizer:
     return MistralTokenizer(
         instruct_tokenizer=InstructTokenizerV11(
             Tekkenizer(
@@ -71,7 +73,7 @@ def fixture_mistral_tokenizer_v11() -> MistralTokenizer:
     )
 
 
-def fixture_mistral_tokenizer_v13() -> MistralTokenizer:
+def _mistral_tokenizer_v13() -> MistralTokenizer:
     return MistralTokenizer(
         instruct_tokenizer=InstructTokenizerV13(
             Tekkenizer(
@@ -117,93 +119,55 @@ def fixture_mistral_tokenizer_v13() -> MistralTokenizer:
     )
 
 
-def test_find_content_tool_calls() -> None:
-    # Test 1: No tool calls
-    tokens = [1, 2, 3, 4, 5]
-    assert _split_content_and_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ())
-
-    # Test 2: One tool call
-    tokens = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    assert _split_content_and_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ([6, 7, 8, 9, 10],))
-
-    # Test 3: Multiple tool calls
-    tokens = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 6, 11, 12, 13, 14]
-    assert _split_content_and_tool_calls(tokens, 6) == ([1, 2, 3, 4, 5], ([6, 7, 8, 9, 10], [6, 11, 12, 13, 14]))
-
-    # Test 4: No content
-    tokens = [6, 7, 8, 9, 10]
-    assert _split_content_and_tool_calls(tokens, 6) == ([], ([6, 7, 8, 9, 10],))
-
-
 @pytest.mark.parametrize(
-    "tokenizer",
-    (
-        MistralTokenizer.v2(),
-        MistralTokenizer.v3(),
-        MistralTokenizer.v7(),
-        MistralTokenizer(
-            instruct_tokenizer=InstructTokenizerV11(
-                Tekkenizer(
-                    quick_vocab(
-                        [
-                            b"Hello",
-                            b",",
-                            b" ",
-                            b"world",
-                            b"!",
-                            b"How",
-                            b"can",
-                            b"I",
-                            b"assist",
-                            b"you",
-                            b"today",
-                            b"?",
-                            b'"',
-                            b"a",
-                            b"b",
-                            b"c",
-                            b"d",
-                            b"{",
-                            b"}",
-                            b":",
-                        ]
-                    ),
-                    special_tokens=get_special_tokens(TokenizerVersion.v11),
-                    pattern=r".+",  # single token, whole string
-                    vocab_size=256 + 100,
-                    num_special_tokens=100,
-                    version=TokenizerVersion.v11,
-                ),
-            ),
-            validator=MistralRequestValidatorV5(),
-            request_normalizer=InstructRequestNormalizerV7(
-                UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, None
-            ),
+    ("tokens", "expected"),
+    [
+        pytest.param([1, 2, 3, 4, 5], ([1, 2, 3, 4, 5], ()), id="no-tool-calls"),
+        pytest.param([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], ([1, 2, 3, 4, 5], ([6, 7, 8, 9, 10],)), id="one-tool-call"),
+        pytest.param(
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 6, 11, 12, 13, 14],
+            ([1, 2, 3, 4, 5], ([6, 7, 8, 9, 10], [6, 11, 12, 13, 14])),
+            id="multiple-tool-calls",
         ),
-        fixture_mistral_tokenizer_v11(),
-        fixture_mistral_tokenizer_v13(),
-    ),
+        pytest.param([6, 7, 8, 9, 10], ([], ([6, 7, 8, 9, 10],)), id="no-content"),
+    ],
 )
-@pytest.mark.parametrize(
-    "tool_calls",
-    (
-        [ToolCall(id="call_1", function=FunctionCall(name="ab", arguments="{}"))],
-        [
-            ToolCall(id="call_1", function=FunctionCall(name="ab", arguments="{}")),
-            ToolCall(id="call_2", function=FunctionCall(name="cd", arguments='{"a": "b", "c": "d"}')),
-        ],
-    ),
-)
-def test_decode_tool_calls(tokenizer: MistralTokenizer, tool_calls: list[ToolCall]) -> None:
-    # Test 1:
-    # valid tool calls
+def test_split_content_and_tool_calls(tokens: list[int], expected: tuple[list[int], tuple[list[int], ...]]) -> None:
+    assert _split_content_and_tool_calls(tokens, _TOOL_CALL_TOKEN_ID) == expected
+
+
+_ONE_TOOL_CALL = [ToolCall(id="call_1", function=FunctionCall(name="ab", arguments="{}"))]
+_TWO_TOOL_CALLS = [
+    ToolCall(id="call_1", function=FunctionCall(name="ab", arguments="{}")),
+    ToolCall(id="call_2", function=FunctionCall(name="cd", arguments='{"a": "b", "c": "d"}')),
+]
+
+_VERSIONED_TOKENIZERS = [
+    pytest.param(MistralTokenizer.v2(), id="v2"),
+    pytest.param(MistralTokenizer.v3(), id="v3"),
+    pytest.param(MistralTokenizer.v7(), id="v7"),
+    pytest.param(_mistral_tokenizer_v11(), id="v11"),
+    pytest.param(_mistral_tokenizer_v13(), id="v13"),
+]
+
+_PRE_V11_VERSIONS = [TokenizerVersion.v2, TokenizerVersion.v3, TokenizerVersion.v7]
+
+
+def _encode_tool_calls(tokenizer: MistralTokenizer, tool_calls: list[ToolCall]) -> tuple[list[int], ...]:
     encoded_tool_calls = tokenizer.instruct_tokenizer._encode_tool_calls_in_assistant_message(  # type: ignore[attr-defined]
         AssistantMessage(tool_calls=tool_calls)
     )
-
-    splitted_tool_calls = _split_integer_list_by_value(
+    return _split_integer_list_by_value(
         encoded_tool_calls, tokenizer.instruct_tokenizer.tokenizer.get_special_token("[TOOL_CALLS]")
     )
+
+
+@pytest.mark.parametrize("tokenizer", _VERSIONED_TOKENIZERS)
+@pytest.mark.parametrize(
+    "tool_calls", [pytest.param(_ONE_TOOL_CALL, id="one-call"), pytest.param(_TWO_TOOL_CALLS, id="two-calls")]
+)
+def test_decode_tool_calls_round_trip(tokenizer: MistralTokenizer, tool_calls: list[ToolCall]) -> None:
+    splitted_tool_calls = _encode_tool_calls(tokenizer, tool_calls)
 
     decoded_tool_calls = _decode_tool_calls(splitted_tool_calls, tokenizer.instruct_tokenizer.tokenizer)
     if tokenizer.instruct_tokenizer.tokenizer.version != TokenizerVersion.v11:
@@ -211,35 +175,35 @@ def test_decode_tool_calls(tokenizer: MistralTokenizer, tool_calls: list[ToolCal
         for decoded_tool_call, tool_call in zip(decoded_tool_calls, tool_calls):
             assert decoded_tool_call.model_dump(exclude={"id"}) == tool_call.model_dump(exclude={"id"})
     else:
-        # v11 is the only version that encode the id
+        # v11 is the only version that encodes the id
         assert decoded_tool_calls == tool_calls
 
-    versions_inf_v11 = [
-        TokenizerVersion.v2,
-        TokenizerVersion.v3,
-        TokenizerVersion.v7,
-    ]
 
-    # Test 2:
-    # invalid tool calls (remove a JSON needed token from the args)
-    if tokenizer.instruct_tokenizer.tokenizer.version in versions_inf_v11:
+@pytest.mark.parametrize("tokenizer", _VERSIONED_TOKENIZERS)
+@pytest.mark.parametrize(
+    "tool_calls", [pytest.param(_ONE_TOOL_CALL, id="one-call"), pytest.param(_TWO_TOOL_CALLS, id="two-calls")]
+)
+def test_decode_tool_calls_corrupted_arguments(tokenizer: MistralTokenizer, tool_calls: list[ToolCall]) -> None:
+    splitted_tool_calls = _encode_tool_calls(tokenizer, tool_calls)
+
+    # Remove a JSON token right after the args marker to make the arguments undecodable.
+    if tokenizer.instruct_tokenizer.tokenizer.version in _PRE_V11_VERSIONS:
         arg_index = tokenizer.instruct_tokenizer.tokenizer.get_special_token("[TOOL_CALLS]")
     else:
         arg_index = tokenizer.instruct_tokenizer.tokenizer.get_special_token("[ARGS]")
 
     first_args_index = splitted_tool_calls[0].index(arg_index)
-    splitted_tool_calls = (
-        splitted_tool_calls[0][: first_args_index + 1]
-        + splitted_tool_calls[0][first_args_index + 2 :],  # make the args invalid
+    corrupted_tool_calls = (
+        splitted_tool_calls[0][: first_args_index + 1] + splitted_tool_calls[0][first_args_index + 2 :],
         *splitted_tool_calls[1:],
     )
 
     with pytest.raises(
         InvalidToolCallError
-        if tokenizer.instruct_tokenizer.tokenizer.version in versions_inf_v11
+        if tokenizer.instruct_tokenizer.tokenizer.version in _PRE_V11_VERSIONS
         else InvalidArgsToolCallError
     ):
-        _decode_tool_calls(splitted_tool_calls, tokenizer.instruct_tokenizer.tokenizer)
+        _decode_tool_calls(corrupted_tool_calls, tokenizer.instruct_tokenizer.tokenizer)
 
 
 _DEEP_NESTING_JSON = "[" * 100_000 + "]" * 100_000
@@ -248,21 +212,25 @@ _DEEP_NESTING_JSON = "[" * 100_000 + "]" * 100_000
 @pytest.mark.parametrize(
     "tokenizer",
     (
-        MistralTokenizer.v2(),
-        MistralTokenizer.v3(is_tekken=True),
-        MistralTokenizer.v7(),
+        pytest.param(MistralTokenizer.v2(), id="v2"),
+        pytest.param(MistralTokenizer.v3(is_tekken=True), id="v3-tekken"),
+        pytest.param(MistralTokenizer.v7(), id="v7"),
     ),
 )
 @pytest.mark.parametrize(
     ("tool_calls_json", "expected_error", "expected_message"),
     (
-        ("5", InvalidToolCallError, "Expected a list of tool calls."),
-        ("null", InvalidToolCallError, "Expected a list of tool calls."),
-        ('{"name": "f", "arguments": {}}', InvalidToolCallError, "Expected a list of tool calls."),
-        ("[1]", InvalidToolCallError, "Expected a dict with a name."),
-        ('[{"arguments": {}}]', InvalidToolCallError, "Expected a dict with a name."),
-        ('[{"name": "f"}]', InvalidArgsToolCallError, "Expected a dict."),
-        ('[{"name": "f", "arguments": 1}]', InvalidArgsToolCallError, "Expected a dict."),
+        pytest.param("5", InvalidToolCallError, "Expected a list of tool calls.", id="int"),
+        pytest.param("null", InvalidToolCallError, "Expected a list of tool calls.", id="null"),
+        pytest.param(
+            '{"name": "f", "arguments": {}}', InvalidToolCallError, "Expected a list of tool calls.", id="dict"
+        ),
+        pytest.param("[1]", InvalidToolCallError, "Expected a dict with a name.", id="list-of-int"),
+        pytest.param('[{"arguments": {}}]', InvalidToolCallError, "Expected a dict with a name.", id="missing-name"),
+        pytest.param('[{"name": "f"}]', InvalidArgsToolCallError, "Expected a dict.", id="missing-args"),
+        pytest.param(
+            '[{"name": "f", "arguments": 1}]', InvalidArgsToolCallError, "Expected a dict.", id="non-dict-args"
+        ),
         # Valid JSON that `json.loads` rejects without a JSONDecodeError.
         pytest.param(
             '[{"name": "f", "arguments": {"a": ' + "1" * 5000 + "}}]",
@@ -300,7 +268,7 @@ def test_decode_tool_calls_up_to_v7_malformed(
 
 
 def test_decode_tool_calls_v11_without_id() -> None:
-    tokenizer = fixture_mistral_tokenizer_v11()
+    tokenizer = _mistral_tokenizer_v11()
     tool_call = ToolCall(id="call_1", function=FunctionCall(name="ab", arguments="{}"))
 
     encoded_tool_call: list[int] = tokenizer.instruct_tokenizer._encode_tool_calls_in_assistant_message(  # type: ignore[attr-defined]
