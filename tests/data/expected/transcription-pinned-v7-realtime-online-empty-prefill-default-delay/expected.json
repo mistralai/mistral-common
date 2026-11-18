@@ -1,0 +1,67 @@
+{
+  "case_id": "transcription-pinned-v7-realtime-online-empty-prefill-default-delay",
+  "tokenizer_configuration_id": "pinned-v7-realtime-test",
+  "token_ids": [
+    1,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32,
+    32
+  ],
+  "decoded_text": "<s>[STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD][STREAMING_PAD]",
+  "images": [],
+  "audios": [
+    {
+      "path": "audios/0.npy",
+      "shape": [
+        40960
+      ],
+      "dtype": "float32",
+      "sampling_rate": 16000,
+      "format": "wav"
+    },
+    {
+      "path": "audios/1.npy",
+      "shape": [
+        21760
+      ],
+      "dtype": "float32",
+      "sampling_rate": 16000,
+      "format": "wav"
+    }
+  ]
+}

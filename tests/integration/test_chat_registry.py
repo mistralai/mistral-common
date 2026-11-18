@@ -264,8 +264,13 @@ def test_registry_identities_are_unique() -> None:
 
 
 def test_expected_manifest_directories_match_success_cases() -> None:
+    from tests.integration.speech_cases import SPEECH_SUCCESS_CASES
+    from tests.integration.transcription_cases import TRANSCRIPTION_SUCCESS_CASES
+
     manifest_directories = {path.name for path in _EXPECTED_ROOT.iterdir() if path.is_dir()}
     success_case_ids = {case.case_id for case in ALL_SUCCESS_CASES}
+    success_case_ids.update(case.case_id for case in TRANSCRIPTION_SUCCESS_CASES)
+    success_case_ids.update(case.case_id for case in SPEECH_SUCCESS_CASES)
 
     assert manifest_directories == success_case_ids
 
