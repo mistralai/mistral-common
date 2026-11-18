@@ -1,4 +1,5 @@
 import base64
+import json
 from typing import Sequence
 
 import numpy as np
@@ -20,6 +21,19 @@ TOKENIZED_RTOL: float = 0.0
 
 # Fields `assert_tokenized_equal` compares; a guard test fails when `Tokenized` gains or loses one.
 TOKENIZED_FIELDS: frozenset[str] = frozenset({"tokens", "prefix_ids", "images", "audios"})
+
+
+def is_unloadable_json(payload: str) -> bool:
+    r"""Whether `json.loads` rejects `payload` with `ValueError` or `RecursionError`.
+
+    On Python 3.14+ C recursion is guarded by remaining stack space instead of the recursion limit, so deeply
+    nested JSON may parse instead of raising `RecursionError`, depending on the thread stack size.
+    """
+    try:
+        json.loads(payload)
+    except (ValueError, RecursionError):
+        return True
+    return False
 
 
 def decode_keep(tokenizer: InstructTokenizer | MistralTokenizer, tokenized: Tokenized) -> str:

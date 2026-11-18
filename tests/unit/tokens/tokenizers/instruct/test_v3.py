@@ -1,5 +1,6 @@
 r"""Direct formatting tests for both bundled v3 instruct backends."""
 
+import json
 from collections.abc import Callable
 from functools import partial
 
@@ -43,7 +44,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_tools_singleturn_request,
     build_user_image_url_request,
 )
-from tests.utils import assert_tokenized_equal, decode_keep
+from tests.utils import assert_tokenized_equal, decode_keep, is_unloadable_json
 
 # fmt: off
 _SPM_NORMAL_TOKENS = [1, 3, 1032, 4, 1055, 2, 3, 1045, 4, 1049, 2]
@@ -980,6 +981,42 @@ def test_encode_instruct(
     tokenized = tokenizer.encode_instruct(request=request_builder())
     assert_tokenized_equal(actual=tokenized, expected=expected)
     assert decode_keep(tokenizer=tokenizer, tokenized=tokenized) == expected_text
+
+
+_DEEP_NESTING_JSON = "[" * 100_000 + "]" * 100_000
+
+
+@pytest.mark.parametrize(
+    argnames="payload",
+    argvalues=[
+        # Valid JSON that `json.loads` rejects without a JSONDecodeError.
+        pytest.param('{"a":' + "1" * 5000 + "}", id="oversized-int"),  # ValueError: over the int digit limit
+        # RecursionError where the recursion limit applies; on Python 3.14+ it parses only with a large stack.
+        pytest.param(
+            _DEEP_NESTING_JSON,
+            marks=pytest.mark.skipif(
+                not is_unloadable_json(_DEEP_NESTING_JSON),
+                reason="json.loads accepts deeply nested JSON on this interpreter (Python 3.14+ with a large stack)",
+            ),
+            id="deep-nesting",
+        ),
+    ],
+)
+@pytest.mark.parametrize(argnames="backend", argvalues=["spm", "tekken"])
+def test_encodes_unloadable_json_as_string(request: pytest.FixtureRequest, backend: str, payload: str) -> None:
+    r"""Encode tool-call arguments and tool content that json.loads rejects as plain strings."""
+    tokenizer: InstructTokenizer = request.getfixturevalue(argname=f"{backend}_tokenizer")
+    instruct_request = InstructRequest[ChatMessage, Tool](
+        messages=[
+            UserMessage(content="a"),
+            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="b", arguments=payload))]),
+            ToolMessage(name="b", content=payload, tool_call_id="123456789"),
+        ]
+    )
+
+    text = decode_keep(tokenizer=tokenizer, tokenized=tokenizer.encode_instruct(request=instruct_request))
+
+    assert text.count(json.dumps(payload)) == 2
 
 
 @pytest.mark.parametrize(

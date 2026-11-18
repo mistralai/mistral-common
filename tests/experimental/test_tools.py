@@ -27,6 +27,7 @@ from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV11, Inst
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
 from tests.test_tekken import get_special_tokens, quick_vocab
+from tests.utils import is_unloadable_json
 
 
 def fixture_mistral_tokenizer_v11() -> MistralTokenizer:
@@ -242,6 +243,9 @@ def test_decode_tool_calls(tokenizer: MistralTokenizer, tool_calls: list[ToolCal
         _decode_tool_calls(splitted_tool_calls, tokenizer.instruct_tokenizer.tokenizer)
 
 
+_DEEP_NESTING_JSON = "[" * 100_000 + "]" * 100_000
+
+
 @pytest.mark.parametrize(
     "tokenizer",
     (
@@ -260,6 +264,24 @@ def test_decode_tool_calls(tokenizer: MistralTokenizer, tool_calls: list[ToolCal
         ('[{"arguments": {}}]', InvalidToolCallError, "Expected a dict with a name."),
         ('[{"name": "f"}]', InvalidArgsToolCallError, "Expected a dict."),
         ('[{"name": "f", "arguments": 1}]', InvalidArgsToolCallError, "Expected a dict."),
+        # Valid JSON that `json.loads` rejects without a JSONDecodeError.
+        pytest.param(
+            '[{"name": "f", "arguments": {"a": ' + "1" * 5000 + "}}]",
+            InvalidToolCallError,
+            "Expected a JSON list",
+            id="oversized-int",
+        ),
+        # RecursionError where the recursion limit applies; on Python 3.14+ it parses only with a large stack.
+        pytest.param(
+            _DEEP_NESTING_JSON,
+            InvalidToolCallError,
+            "Expected a JSON list",
+            marks=pytest.mark.skipif(
+                not is_unloadable_json(_DEEP_NESTING_JSON),
+                reason="json.loads accepts deeply nested JSON on this interpreter (Python 3.14+ with a large stack)",
+            ),
+            id="deep-nesting",
+        ),
     ),
 )
 def test_decode_tool_calls_up_to_v7_malformed(

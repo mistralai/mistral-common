@@ -578,7 +578,7 @@ class InstructTokenizerV2(InstructTokenizerV1, Generic[InstructRequestType, FIMR
     def _parse_json_content(self, content: str) -> Any:
         try:
             return json.loads(content)
-        except json.JSONDecodeError:
+        except (ValueError, RecursionError):  # JSONDecodeError, an integer over the int digit limit, or deep nesting
             return content
 
     def _parse_tool_content(self, content: str | list[ContentChunk]) -> Any:

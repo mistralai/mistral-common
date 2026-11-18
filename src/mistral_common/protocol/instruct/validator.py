@@ -424,9 +424,13 @@ class MistralRequestValidator(Generic[UserMessageType, AssistantMessageType, Too
                     assert_never(previous_role)
 
                 if current_role not in expected_roles:
-                    raise InvalidMessageStructureException(
-                        f"Unexpected role '{current_role}' after role '{previous_role}'"
-                    )
+                    error = f"Unexpected role '{current_role}' after role '{previous_role}'"
+                    if current_role == Roles.tool and previous_role == Roles.user:
+                        error += (
+                            ": tool messages must come right after the assistant message that made the tool calls "
+                            "(or after another tool message). Send all tool results first, then any user message."
+                        )
+                    raise InvalidMessageStructureException(error)
 
             previous_role = current_role
 

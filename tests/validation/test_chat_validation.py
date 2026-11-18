@@ -215,7 +215,14 @@ class TestChatValidation:
             )
 
     def test_user_tool_user(self, validator: MistralRequestValidator) -> None:
-        with pytest.raises(InvalidMessageStructureException, match=r"Unexpected role 'tool' after role 'user'"):
+        with pytest.raises(
+            InvalidMessageStructureException,
+            match=(
+                r"^Unexpected role 'tool' after role 'user': tool messages must come right after the assistant "
+                r"message that made the tool calls \(or after another tool message\)\. Send all tool results first, "
+                r"then any user message\.$"
+            ),
+        ):
             validator.validate_messages(
                 messages=[
                     UserMessage(content="foo"),
