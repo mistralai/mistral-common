@@ -22,6 +22,7 @@ from tests.integration.chat_templates.fixtures_data import (
 from tests.integration.chat_templates.transformers.hf_utils import (
     _to_openai_request,
     build_hf_tokenizer,
+    encode_hf_assistant_tokens,
     encode_hf_tokens,
     encode_transformers,
     encode_transformers_from_openai,
@@ -32,6 +33,7 @@ from tests.utils.chat_templates.helpers import (
     build_tekken_json,
     build_template_config,
     encode_mistral_common,
+    encode_mistral_common_assistant_tokens,
 )
 
 
@@ -115,6 +117,14 @@ class TestTransformersMistralCommonParity:
                 hf_tokens = encode_hf_tokens(hf_tokenizer, conversation.model_copy(deep=True), keep_name_for_tools=True)
                 mc_tokens = mistral_tokenizer.encode_chat_completion(conversation.model_copy(deep=True)).tokens
                 assert mc_tokens == hf_tokens
+                # The `{% generation %}` blocks mask exactly the tokens of the assistant messages.
+                hf_assistant_tokens = encode_hf_assistant_tokens(
+                    hf_tokenizer, conversation.model_copy(deep=True), keep_name_for_tools=True
+                )
+                mc_assistant_tokens = encode_mistral_common_assistant_tokens(
+                    mistral_tokenizer, conversation.model_copy(deep=True)
+                )
+                assert hf_assistant_tokens == mc_assistant_tokens
 
             mistral_common_encoded = encode_mistral_common(mistral_tokenizer, conversation, config.spm)
             assert mistral_common_encoded == transformers_encoded
