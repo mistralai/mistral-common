@@ -7,7 +7,9 @@ import numpy as np
 import pytest
 
 from mistral_common.exceptions import TokenizerException
+from mistral_common.protocol.instruct.chunk import TextChunk, ThinkChunk
 from mistral_common.protocol.instruct.messages import (
+    AssistantMessage,
     ChatMessage,
 )
 from mistral_common.protocol.instruct.request import InstructRequest
@@ -1157,3 +1159,16 @@ def test_encode_instruct_rejected(
 
     with pytest.raises(expected_exception=expected_exception, match=expected_message):
         tokenizer.encode_instruct(request=instruct_request)
+
+
+@pytest.mark.parametrize(argnames="prefix", argvalues=[False, True], ids=["final", "prefix"])
+def test_encode_assistant_list_content_keeps_trailing_spaces(
+    with_think_tokenizer: InstructTokenizerV13, prefix: bool
+) -> None:
+    r"""Keep the trailing spaces of list assistant content, also in a prefix message."""
+    message = AssistantMessage(content=[ThinkChunk(thinking="T1"), TextChunk(text="A1  ")], prefix=prefix)
+
+    tokens = with_think_tokenizer.encode_assistant_message(message, is_before_last_user_message=False)
+
+    expected_text = "[THINK]T1[/THINK]A1  " + ("" if prefix else "</s>")
+    assert decode_keep(tokenizer=with_think_tokenizer, tokenized=Tokenized(tokens=tokens)) == expected_text

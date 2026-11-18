@@ -90,7 +90,8 @@ _NON_ASCII_TOOLS_CALLS_AND_RESULTS_TOKENS = [
     1501, 7567, 1629, 2032, 1113, 29490, 1316, 1113, 17452, 2032, 10598, 29512, 2032, 1113, 29565, 29507, 1743,
     29561, 2, 8, 1501, 7567, 1629, 2032, 1113, 29490, 1316, 1113, 4557, 2032, 1113, 29565, 29507, 10925, 9
 ]
-_TRAILING_SPACES_STRIPPED_TOKENS = [1, 3, 1032, 4, 1055, 2]
+_TRAILING_SPACES_KEPT_TOKENS = [1, 3, 1032, 4, 1055, 1027, 2]
+_PREFIX_TRAILING_SPACES_STRIPPED_TOKENS = [1, 3, 1032, 4, 1055]
 _RESULTS_RESET_AT_CALL_TURN_TOKENS = [
     1, 3, 1032, 4, 5, 1501, 7567, 1629, 2032, 1113, 29490, 1316, 1113, 17452, 2032, 1139, 1743, 29561, 2, 8,
     1501, 7567, 1629, 2032, 1113, 29490, 1316, 1113, 4557, 2032, 1113, 29480, 29507, 10925, 9, 5, 1501, 7567,
@@ -129,7 +130,8 @@ _TOOL_RESULT_TEXT_CHUNK_LIST_EXPECTED = Tokenized(tokens=_TOOL_RESULT_TEXT_CHUNK
 _TOOL_RESULT_WITHOUT_CALL_TURN_EXPECTED = Tokenized(tokens=_TOOL_RESULT_WITHOUT_CALL_TURN_TOKENS)
 _MULTIPLE_RESULTS_IN_HISTORY_EXPECTED = Tokenized(tokens=_MULTIPLE_RESULTS_IN_HISTORY_TOKENS)
 _NON_ASCII_TOOLS_CALLS_AND_RESULTS_EXPECTED = Tokenized(tokens=_NON_ASCII_TOOLS_CALLS_AND_RESULTS_TOKENS)
-_TRAILING_SPACES_STRIPPED_EXPECTED = Tokenized(tokens=_TRAILING_SPACES_STRIPPED_TOKENS)
+_TRAILING_SPACES_KEPT_EXPECTED = Tokenized(tokens=_TRAILING_SPACES_KEPT_TOKENS)
+_PREFIX_TRAILING_SPACES_STRIPPED_EXPECTED = Tokenized(tokens=_PREFIX_TRAILING_SPACES_STRIPPED_TOKENS, prefix_ids=[1055])
 _RESULTS_RESET_AT_CALL_TURN_EXPECTED = Tokenized(tokens=_RESULTS_RESET_AT_CALL_TURN_TOKENS)
 _RESULTS_RESET_AT_USER_EXPECTED = Tokenized(tokens=_RESULTS_RESET_AT_USER_TOKENS)
 _RESULTS_WITHOUT_USER_EXPECTED = Tokenized(tokens=_RESULTS_WITHOUT_USER_TOKENS)
@@ -181,7 +183,8 @@ _NON_ASCII_TOOLS_CALLS_AND_RESULTS_TEXT = (
     '][/AVAILABLE_TOOLS][INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"f",▁"arguments":▁{"x":▁"é"}}]</s>'
     '[TOOL_RESULTS]▁[{"name":▁"f",▁"content":▁"é"}][/TOOL_RESULTS]'
 )
-_TRAILING_SPACES_STRIPPED_TEXT = "<s>[INST]▁a[/INST]▁b</s>"
+_TRAILING_SPACES_KEPT_TEXT = "<s>[INST]▁a[/INST]▁b▁▁</s>"
+_PREFIX_TRAILING_SPACES_STRIPPED_TEXT = "<s>[INST]▁a[/INST]▁b"
 _RESULTS_RESET_AT_CALL_TURN_TEXT = (
     '<s>[INST]▁a[/INST][TOOL_CALLS]▁[{"name":▁"f",▁"arguments":▁{}}]</s>'
     '[TOOL_RESULTS]▁[{"name":▁"f",▁"content":▁"r"}][/TOOL_RESULTS]'
@@ -296,9 +299,16 @@ def _build_non_ascii_tools_calls_and_results_request() -> InstructRequest[ChatMe
     )
 
 
-def _build_trailing_spaces_stripped_request() -> InstructRequest[ChatMessage, Tool]:
+def _build_trailing_spaces_kept_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build a v2 request with trailing assistant-content spaces."""
     return InstructRequest[ChatMessage, Tool](messages=[UserMessage(content="a"), AssistantMessage(content="b  ")])
+
+
+def _build_prefix_trailing_spaces_stripped_request() -> InstructRequest[ChatMessage, Tool]:
+    r"""Build a v2 request with trailing spaces in a prefix assistant message."""
+    return InstructRequest[ChatMessage, Tool](
+        messages=[UserMessage(content="a"), AssistantMessage(content="b  ", prefix=True)]
+    )
 
 
 def _build_results_reset_at_call_turn_request() -> InstructRequest[ChatMessage, Tool]:
@@ -461,10 +471,16 @@ def _build_parallel_results_request() -> InstructRequest[ChatMessage, Tool]:
             id="non-ascii-tools-calls-and-results",
         ),
         pytest.param(
-            _build_trailing_spaces_stripped_request,
-            _TRAILING_SPACES_STRIPPED_EXPECTED,
-            _TRAILING_SPACES_STRIPPED_TEXT,
-            id="trailing-spaces-stripped",
+            _build_trailing_spaces_kept_request,
+            _TRAILING_SPACES_KEPT_EXPECTED,
+            _TRAILING_SPACES_KEPT_TEXT,
+            id="trailing-spaces-kept",
+        ),
+        pytest.param(
+            _build_prefix_trailing_spaces_stripped_request,
+            _PREFIX_TRAILING_SPACES_STRIPPED_EXPECTED,
+            _PREFIX_TRAILING_SPACES_STRIPPED_TEXT,
+            id="prefix-trailing-spaces-stripped",
         ),
         pytest.param(
             _build_results_reset_at_call_turn_request,

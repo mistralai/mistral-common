@@ -128,6 +128,23 @@ REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN = ChatCompletionRequest(  # type: ignore[ty
     ]
 )
 
+REQUEST_ASSISTANT_TRAILING_SPACES_TEST = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="User says hello"),
+        AssistantMessage(content="Assistant says hi  "),
+        UserMessage(content="User says how are you ?"),
+    ]
+)
+
+REQUEST_ASSISTANT_TRAILING_SPACES_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="User says hello"),
+        AssistantMessage(content="Assistant says hi  "),
+        UserMessage(content="User says how are you ?"),
+        AssistantMessage(content="Assistant says fine  "),
+    ]
+)
+
 REQUEST_MULTI_TURN_WITH_TOOLS_TEST = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         SystemMessage(content="You are a helpful assistant."),
@@ -1115,6 +1132,11 @@ def get_conversations(
             REQUEST_MULTI_TURN_TRAIN,
             REQUEST_MULTI_TURN_WITH_SYSTEM_TRAIN,
         ]
+    )
+    conversations.append(
+        REQUEST_ASSISTANT_TRAILING_SPACES_TEST
+        if validation_mode == ValidationMode.test
+        else REQUEST_ASSISTANT_TRAILING_SPACES_TRAIN
     )
 
     if tokenizer_version > TokenizerVersion.v1:
