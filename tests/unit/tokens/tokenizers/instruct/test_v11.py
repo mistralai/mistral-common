@@ -21,7 +21,6 @@ from mistral_common.tokens.tokenizers.base import SpecialTokens, Tokenized, Toke
 from mistral_common.tokens.tokenizers.image import DATASET_MEAN, DATASET_STD, ImageConfig, ImageEncoder, SpecialImageIDs
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV11
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-from tests.test_tekken import get_special_tokens, quick_vocab
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_arbitrary_tool_call_id_request,
     build_assistant_list_content_request,
@@ -77,7 +76,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_user_audio_url_request,
     build_user_image_url_request,
 )
-from tests.utils import assert_tokenized_equal, decode_keep
+from tests.utils import assert_tokenized_equal, decode_keep, get_special_tokens, quick_vocab
 
 # fmt: off
 _ONE_CALL_WITHOUT_ID_TOKENS = [1, 3, 197, 4, 9, 197, 195, 197, 195, 197, 32, 134, 198, 208, 197, 198, 208, 197, 134, 2]

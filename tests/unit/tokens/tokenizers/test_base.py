@@ -11,7 +11,7 @@ import mistral_common
 from mistral_common.tokens.tokenizers.base import SpecialTokens, Tokenizer, TokenizerVersion
 from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-from tests.test_tekken import quick_vocab
+from tests.utils import quick_vocab
 
 ALL_VERSIONS = list(TokenizerVersion)
 

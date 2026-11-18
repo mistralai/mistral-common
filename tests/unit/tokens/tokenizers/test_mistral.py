@@ -29,13 +29,12 @@ from mistral_common.tokens.tokenizers.instruct import (
     InstructTokenizerV15,
 )
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from tests.test_tekken import get_special_tokens, quick_vocab
 from tests.unit.tokens.tokenizers.instruct.test_audio import (
     SYNTHETIC_V7_INSTRUCT,
     build_synthetic_v7_audio_tokenizer,
     valid_transcription_request,
 )
-from tests.utils import assert_tokenized_equal, decode_keep
+from tests.utils import assert_tokenized_equal, decode_keep, get_special_tokens, quick_vocab
 
 BUNDLED_TOKENIZERS = [
     "tokenizer.model.v1",
