@@ -26,8 +26,8 @@ TOKENIZED_FIELDS: frozenset[str] = frozenset({"tokens", "prefix_ids", "images", 
 def is_unloadable_json(payload: str) -> bool:
     r"""Whether `json.loads` rejects `payload` with `ValueError` or `RecursionError`.
 
-    Python 3.14+ guards C recursion by remaining stack space instead of the recursion limit, so deeply nested
-    JSON parses there instead of raising `RecursionError`.
+    On Python 3.14+ C recursion is guarded by remaining stack space instead of the recursion limit, so deeply
+    nested JSON may parse instead of raising `RecursionError`, depending on the thread stack size.
     """
     try:
         json.loads(payload)

@@ -271,14 +271,14 @@ _DEEP_NESTING_JSON = "[" * 100_000 + "]" * 100_000
             "Expected a JSON list",
             id="oversized-int",
         ),
-        # RecursionError below Python 3.14; 3.14+ parses it (C recursion is guarded by stack space).
+        # RecursionError where the recursion limit applies; on Python 3.14+ it parses only with a large stack.
         pytest.param(
             _DEEP_NESTING_JSON,
             InvalidToolCallError,
             "Expected a JSON list",
             marks=pytest.mark.skipif(
                 not is_unloadable_json(_DEEP_NESTING_JSON),
-                reason="json.loads parses deeply nested JSON on Python 3.14+",
+                reason="json.loads accepts deeply nested JSON on this interpreter (Python 3.14+ with a large stack)",
             ),
             id="deep-nesting",
         ),
