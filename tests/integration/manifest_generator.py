@@ -18,7 +18,6 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Protocol
 
 import numpy as np
 
@@ -32,13 +31,6 @@ from tests.integration.expected_results import _EXPECTED_ROOT
 from tests.integration.speech_cases import SPEECH_SUCCESS_CASES, PublicSpeechSuccessCase
 from tests.integration.transcription_cases import TRANSCRIPTION_SUCCESS_CASES, PublicTranscriptionSuccessCase
 from tests.utils import decode_keep
-
-
-class _RecipeLike(Protocol):
-    """Structural type for the recipe bound to a success case."""
-
-    def build(self) -> Any: ...
-
 
 _ALL_SUCCESS_CASES: tuple[PublicChatSuccessCase | PublicTranscriptionSuccessCase | PublicSpeechSuccessCase, ...] = (
     *CHAT_SUCCESS_CASES,
