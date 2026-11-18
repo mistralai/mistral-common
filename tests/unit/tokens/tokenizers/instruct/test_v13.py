@@ -75,6 +75,8 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_tools_before_first_user_request,
     build_tools_multiturn_request,
     build_tools_singleturn_request,
+    build_trailing_spaces_assistant_chunk_request,
+    build_trailing_spaces_assistant_request,
     build_truncation_drop_by_chunk_1_request,
     build_truncation_drop_by_chunk_2_request,
     build_truncation_drop_first_assistant_request,
@@ -272,6 +274,9 @@ _SHARED_SYSTEM_MESSAGE_TOOLS_MULTITURN_TOKENS = [
 _SHARED_TOOL_MESSAGE_TOKENS = [1, 3, 197, 4, 7, 200, 8]
 _SHARED_ASSISTANT_TOOL_CALLS_TOKENS = [1, 3, 197, 4, 9, 198, 32, 223, 225, 2]
 _SHARED_ASSISTANT_LIST_CONTENT_TOKENS = [1, 3, 197, 4, 198, 2]
+_SHARED_TRAILING_SPACES_KEPT_TOKENS = [1, 3, 197, 4, 198, 132, 132, 2]
+_SHARED_PREFIX_TRAILING_SPACES_STRIPPED_TOKENS = [1, 3, 197, 4, 198]
+_SHARED_PREFIX_CHUNK_TRAILING_SPACES_KEPT_TOKENS = [1, 3, 197, 4, 198, 132, 132]
 _SHARED_SYSTEM_AND_USER_WORDS_TOKENS = [
     1, 17, 204, 201, 208, 208, 211, 132, 219, 211, 214, 208, 200, 18, 3, 203, 211, 211, 200, 132, 200, 197, 221, 4
 ]
@@ -344,6 +349,13 @@ _SHARED_SYSTEM_MESSAGE_TOOLS_MULTITURN_EXPECTED = Tokenized(tokens=_SHARED_SYSTE
 _SHARED_TOOL_MESSAGE_EXPECTED = Tokenized(tokens=_SHARED_TOOL_MESSAGE_TOKENS)
 _SHARED_ASSISTANT_TOOL_CALLS_EXPECTED = Tokenized(tokens=_SHARED_ASSISTANT_TOOL_CALLS_TOKENS)
 _SHARED_ASSISTANT_LIST_CONTENT_EXPECTED = Tokenized(tokens=_SHARED_ASSISTANT_LIST_CONTENT_TOKENS)
+_SHARED_TRAILING_SPACES_KEPT_EXPECTED = Tokenized(tokens=_SHARED_TRAILING_SPACES_KEPT_TOKENS)
+_SHARED_PREFIX_TRAILING_SPACES_STRIPPED_EXPECTED = Tokenized(
+    tokens=_SHARED_PREFIX_TRAILING_SPACES_STRIPPED_TOKENS, prefix_ids=[198]
+)
+_SHARED_PREFIX_CHUNK_TRAILING_SPACES_KEPT_EXPECTED = Tokenized(
+    tokens=_SHARED_PREFIX_CHUNK_TRAILING_SPACES_KEPT_TOKENS, prefix_ids=[198, 132, 132]
+)
 _SHARED_SYSTEM_AND_USER_WORDS_EXPECTED = Tokenized(tokens=_SHARED_SYSTEM_AND_USER_WORDS_TOKENS)
 _SHARED_TRUNCATION_LAST_USER_AT_LIMIT_EXPECTED = Tokenized(tokens=_SHARED_TRUNCATION_LAST_USER_AT_LIMIT_TOKENS)
 _IMAGE_USER_EXPECTED = Tokenized(tokens=_IMAGE_USER_TOKENS, images=[_RED_4X4_IMAGE])
@@ -394,6 +406,9 @@ _SHARED_SYSTEM_MESSAGE_TOOLS_MULTITURN_TEXT = (
 _SHARED_TOOL_MESSAGE_TEXT = "<s>[INST]a[/INST][TOOL_RESULTS]d[/TOOL_RESULTS]"
 _SHARED_ASSISTANT_TOOL_CALLS_TEXT = "<s>[INST]a[/INST][TOOL_CALLS]b[ARGS]{}</s>"
 _SHARED_ASSISTANT_LIST_CONTENT_TEXT = "<s>[INST]a[/INST]b</s>"
+_SHARED_TRAILING_SPACES_KEPT_TEXT = "<s>[INST]a[/INST]b  </s>"
+_SHARED_PREFIX_TRAILING_SPACES_STRIPPED_TEXT = "<s>[INST]a[/INST]b"
+_SHARED_PREFIX_CHUNK_TRAILING_SPACES_KEPT_TEXT = "<s>[INST]a[/INST]b  "
 _SHARED_SYSTEM_AND_USER_WORDS_TEXT = "<s>[SYSTEM_PROMPT]hello world[/SYSTEM_PROMPT][INST]good day[/INST]"
 _SHARED_TRUNCATION_LAST_USER_AT_LIMIT_TEXT = "<s>[INST]aaaaaaa[/INST]"
 _IMAGE_USER_TEXT = "<s>[INST][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]a[/INST]"
@@ -1033,6 +1048,34 @@ def image_tokenizer() -> InstructTokenizerV13:
             _SHARED_PREFIXED_TEXT_EXPECTED,
             _SHARED_PREFIXED_TEXT_TEXT,
             id="no-think-shared-prefixed-text",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_trailing_spaces_assistant_request, prefix=False, settings=None),
+            _SHARED_TRAILING_SPACES_KEPT_EXPECTED,
+            _SHARED_TRAILING_SPACES_KEPT_TEXT,
+            id="no-think-shared-trailing-spaces-kept",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_trailing_spaces_assistant_request, prefix=True, settings=None),
+            _SHARED_PREFIX_TRAILING_SPACES_STRIPPED_EXPECTED,
+            _SHARED_PREFIX_TRAILING_SPACES_STRIPPED_TEXT,
+            id="no-think-shared-prefix-trailing-spaces-stripped",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_trailing_spaces_assistant_chunk_request, prefix=False, settings=None),
+            _SHARED_TRAILING_SPACES_KEPT_EXPECTED,
+            _SHARED_TRAILING_SPACES_KEPT_TEXT,
+            id="no-think-shared-chunk-trailing-spaces-kept",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_trailing_spaces_assistant_chunk_request, prefix=True, settings=None),
+            _SHARED_PREFIX_CHUNK_TRAILING_SPACES_KEPT_EXPECTED,
+            _SHARED_PREFIX_CHUNK_TRAILING_SPACES_KEPT_TEXT,
+            id="no-think-shared-prefix-chunk-trailing-spaces-kept",
         ),
     ],
 )

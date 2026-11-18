@@ -33,6 +33,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_tool_message_request,
     build_tools_multiturn_request,
     build_tools_singleturn_request,
+    build_trailing_spaces_assistant_request,
 )
 from tests.utils import assert_tokenized_equal, decode_keep
 
@@ -299,18 +300,6 @@ def _build_non_ascii_tools_calls_and_results_request() -> InstructRequest[ChatMe
     )
 
 
-def _build_trailing_spaces_kept_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a v2 request with trailing assistant-content spaces."""
-    return InstructRequest[ChatMessage, Tool](messages=[UserMessage(content="a"), AssistantMessage(content="b  ")])
-
-
-def _build_prefix_trailing_spaces_stripped_request() -> InstructRequest[ChatMessage, Tool]:
-    r"""Build a v2 request with trailing spaces in a prefix assistant message."""
-    return InstructRequest[ChatMessage, Tool](
-        messages=[UserMessage(content="a"), AssistantMessage(content="b  ", prefix=True)]
-    )
-
-
 def _build_results_reset_at_call_turn_request() -> InstructRequest[ChatMessage, Tool]:
     r"""Build a v2 request with one result after each of two call turns."""
     return InstructRequest[ChatMessage, Tool](
@@ -471,16 +460,16 @@ def _build_parallel_results_request() -> InstructRequest[ChatMessage, Tool]:
             id="non-ascii-tools-calls-and-results",
         ),
         pytest.param(
-            _build_trailing_spaces_kept_request,
+            partial(build_trailing_spaces_assistant_request, prefix=False, settings=None),
             _TRAILING_SPACES_KEPT_EXPECTED,
             _TRAILING_SPACES_KEPT_TEXT,
-            id="trailing-spaces-kept",
+            id="shared-trailing-spaces-kept",
         ),
         pytest.param(
-            _build_prefix_trailing_spaces_stripped_request,
+            partial(build_trailing_spaces_assistant_request, prefix=True, settings=None),
             _PREFIX_TRAILING_SPACES_STRIPPED_EXPECTED,
             _PREFIX_TRAILING_SPACES_STRIPPED_TEXT,
-            id="prefix-trailing-spaces-stripped",
+            id="shared-prefix-trailing-spaces-stripped",
         ),
         pytest.param(
             _build_results_reset_at_call_turn_request,
