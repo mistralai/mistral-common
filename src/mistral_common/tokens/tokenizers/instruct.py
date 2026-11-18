@@ -697,6 +697,16 @@ class InstructTokenizerV2(InstructTokenizerV1, Generic[InstructRequestType, FIMR
         Returns:
             The encoded tokens.
         """
+        missing = [
+            name
+            for name, tok in (("[PREFIX]", self.PREFIX), ("[SUFFIX]", self.SUFFIX))
+            if tok is None or not self.tokenizer.is_special(tok)
+        ]
+        if missing:
+            raise UnsupportedTokenizerFeatureException(
+                f"Tokenizer {self.tokenizer.version.value} does not provide the {' and '.join(missing)} "
+                f"special token{'s' if len(missing) > 1 else ''} required for FIM."
+            )
         prefix_tokens = self.tokenizer.encode(request.prompt, bos=False, eos=False)
         suffix_tokens = self._encode_infilling(request.suffix) if request.suffix else []
         tokens = [

@@ -7,6 +7,7 @@ import soundfile as sf
 from PIL import Image
 from pydantic import ValidationError
 
+from mistral_common.exceptions import AudioDecodeException
 from mistral_common.image import maybe_load_image_from_str_or_bytes
 from mistral_common.protocol.instruct.chunk import AudioChunk, ImageChunk, ImageURLChunk
 from mistral_common.tokens.tokenizers.audio import Audio
@@ -169,7 +170,7 @@ def test_image_chunk_from_openai_rejects_malformed_data_url() -> None:
 
 def test_audio_from_base64_rejects_non_audio_payload() -> None:
     # Valid base64 of a valid image, passed as audio.
-    with pytest.raises(ValueError, match="Failed to decode the base64 payload as audio"):
+    with pytest.raises(AudioDecodeException, match=r"^Could not decode the audio"):
         Audio.from_base64(f"data:audio/wav;base64,{_png_b64()}")
 
 

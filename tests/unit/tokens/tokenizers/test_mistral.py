@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from mistral_common.exceptions import TokenizerException
+from mistral_common.exceptions import TokenizerException, UnsupportedTokenizerFeatureException
 from mistral_common.protocol.fim.request import FIMRequest
 from mistral_common.protocol.instruct.chunk import ImageChunk, TextChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage, SystemMessage, ToolMessage, UserMessage
@@ -187,6 +187,9 @@ _V3_SPM_WITHOUT_SUFFIX_TEXT = "<s>[SUFFIX][PREFIX]▁def▁f("
 _DECODE_SPECIAL_TOKENS_MESSAGE = r"^Decoding `tokens` that contain special tokens"
 _NO_MAX_MODEL_LEN_MESSAGE = r"^encoding a chat completion request with truncation, but no max model len was provided$"
 _FIM_NOT_AVAILABLE_MESSAGE = r"^FIM not available for v1$"
+_FIM_MISSING_MARKERS_MESSAGE = (
+    r"^Tokenizer v2 does not provide the \[PREFIX\] and \[SUFFIX\] special tokens required for FIM\.$"
+)
 _UNRECOGNIZED_FILE_MESSAGE = r"^Unrecognized tokenizer file: .+[/\\]tokenizer\.json$"
 _MULTIMODAL_SPM_MESSAGE = r"^Multimodal tokenizer is currently only supported for tekken$"
 
@@ -195,6 +198,12 @@ _MULTIMODAL_SPM_MESSAGE = r"^Multimodal tokenizer is currently only supported fo
 def v1_tokenizer() -> MistralTokenizer:
     r"""Bundled v1 SentencePiece façade."""
     return MistralTokenizer.v1()
+
+
+@pytest.fixture(scope="module")
+def v2_tokenizer() -> MistralTokenizer:
+    r"""Bundled v2 SentencePiece façade (no [PREFIX]/[SUFFIX] markers)."""
+    return MistralTokenizer.v2()
 
 
 @pytest.fixture(scope="module")
@@ -560,3 +569,9 @@ def test_encode_fim_rejected(request: pytest.FixtureRequest) -> None:
     fim_request = _build_with_suffix_request()
     with pytest.raises(expected_exception=TokenizerException, match=_FIM_NOT_AVAILABLE_MESSAGE):
         tokenizer.encode_fim(request=fim_request)
+
+
+def test_encode_fim_v2_missing_markers_rejected(v2_tokenizer: MistralTokenizer) -> None:
+    r"""Reject a v2 FIM request instead of silently emitting <unk> for the markers."""
+    with pytest.raises(expected_exception=UnsupportedTokenizerFeatureException, match=_FIM_MISSING_MARKERS_MESSAGE):
+        v2_tokenizer.encode_fim(request=_build_with_suffix_request())
