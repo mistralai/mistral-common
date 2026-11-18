@@ -20,9 +20,9 @@
     {%- set ns_t = namespace(tools=[]) %}
     {%- for tool in tools %}
         {%- set tool_function = tool['function'] %}
-        {%- set description = tool_function.get('description') %}
-        {%- set parameters = tool_function.get('parameters') %}
-        {%- set ns_t.tools = ns_t.tools + [{'type': tool.get('type', 'function'), 'function': {'name': tool_function['name'], 'description': description if description is not none else '', 'parameters': parameters if parameters is not none else {}}}] %}
+        {%- set description = tool_function['description'] if 'description' in tool_function else none %}
+        {%- set parameters = tool_function['parameters'] if 'parameters' in tool_function else none %}
+        {%- set ns_t.tools = ns_t.tools + [{'type': tool['type'] if 'type' in tool else 'function', 'function': {'name': tool_function['name'], 'description': description if description is not none else '', 'parameters': parameters if parameters is not none else {}}}] %}
     {%- endfor %}
     {%- set available_tools = '[AVAILABLE_TOOLS]' ~ (ns_t.tools| tojson) ~ '[/AVAILABLE_TOOLS]' %}
 {%- endif %}
@@ -37,7 +37,7 @@
                 {{- block['text'] -}}
             {%- elif support_thinking and block['type'] == 'thinking' -%}
                 {{- '[THINK]' ~ block['thinking'] -}}
-                {%- if block.get('closed', true) -%}{{- '[/THINK]' -}}{%- endif -%}
+                {%- if (block['closed'] if 'closed' in block else true) -%}{{- '[/THINK]' -}}{%- endif -%}
             {%- else -%}
                 {{- raise_exception('Only ' ~ supported_types_desc ~ ' chunks are supported in ' ~ context_name ~ '.') -}}
             {%- endif -%}
@@ -58,7 +58,7 @@
             {%- set ns_c = namespace(text_parts=[], chunks=[], has_non_text=false, tool_calls=[]) %}
             {%- for msg in ns_agg.current_group %}
                 {#- Convert reasoning / reasoning_content to a leading thinking chunk. #}
-                {%- set reasoning = msg.get('reasoning_content', msg.get('reasoning', none)) %}
+                {%- set reasoning = msg['reasoning_content'] if 'reasoning_content' in msg else (msg['reasoning'] if 'reasoning' in msg else none) %}
                 {%- if reasoning is not none and reasoning != '' %}
                     {%- if msg['content'] is not none and msg['content'] is not string %}
                         {%- for block in msg['content'] %}

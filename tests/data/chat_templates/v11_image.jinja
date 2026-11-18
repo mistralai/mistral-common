@@ -20,9 +20,9 @@
     {%- set ns_t = namespace(tools=[]) %}
     {%- for tool in tools %}
         {%- set tool_function = tool['function'] %}
-        {%- set description = tool_function.get('description') %}
-        {%- set parameters = tool_function.get('parameters') %}
-        {%- set ns_t.tools = ns_t.tools + [{'type': tool.get('type', 'function'), 'function': {'name': tool_function['name'], 'description': description if description is not none else '', 'parameters': parameters if parameters is not none else {}}}] %}
+        {%- set description = tool_function['description'] if 'description' in tool_function else none %}
+        {%- set parameters = tool_function['parameters'] if 'parameters' in tool_function else none %}
+        {%- set ns_t.tools = ns_t.tools + [{'type': tool['type'] if 'type' in tool else 'function', 'function': {'name': tool_function['name'], 'description': description if description is not none else '', 'parameters': parameters if parameters is not none else {}}}] %}
     {%- endfor %}
     {%- set available_tools = '[AVAILABLE_TOOLS]' ~ (ns_t.tools| tojson) ~ '[/AVAILABLE_TOOLS]' %}
 {%- endif %}
