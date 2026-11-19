@@ -7,7 +7,7 @@ tokenizer configuration and one expected outcome.
 """
 
 import base64
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from io import BytesIO
@@ -133,6 +133,31 @@ def build_two_tool_call_messages(*, tool_results: tuple[tuple[str, str], tuple[s
         *[ToolMessage(content=content, tool_call_id=tool_call_id) for content, tool_call_id in tool_results],
         AssistantMessage(content="A2"),
         UserMessage(content="U2"),
+    ]
+
+
+def build_tool_call_messages(*, call_ids: Sequence[str | None], result_ids: Sequence[str] = ()) -> list[ChatMessage]:
+    r"""Build a user message, an assistant message with one tool call per id, and one tool result per result id.
+
+    Args:
+        call_ids: Tool call ids for the assistant message's calls; `None` leaves the
+            id unset (the model default `"null"`).
+        result_ids: Tool call ids answered by tool result messages, in the given order.
+
+    Returns:
+        Fresh user, assistant and tool messages.
+    """
+    return [
+        UserMessage(content="U"),
+        AssistantMessage(
+            tool_calls=[
+                ToolCall(function=FunctionCall(name="F", arguments="{}"))
+                if call_id is None
+                else ToolCall(id=call_id, function=FunctionCall(name="F", arguments="{}"))
+                for call_id in call_ids
+            ]
+        ),
+        *[ToolMessage(content="R", tool_call_id=result_id) for result_id in result_ids],
     ]
 
 
