@@ -35,7 +35,7 @@ cd mistral-common
 uv sync --frozen --extra image # or --all-extras to install all dependencies.
 ```
 
-For development, you can install the `dev` group and/or the `docs` groups:
+For development, you can install the `dev` group and/or the `docs` group:
 ```sh
 uv sync --frozen --all-extras --group dev # and/or --group docs.
 ```

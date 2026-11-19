@@ -70,7 +70,7 @@ def is_opencv_installed() -> bool:
         # for better UX, let's simply skip all errors that might arise from import for now
         _cv2_available = False
         logger.warning(
-            f"Warning: Your installation of OpenCV appears to be broken: {e}."
+            f"Warning: Your installation of OpenCV appears to be broken: {e}. "
             "Please follow the instructions at https://github.com/opencv/opencv-python/issues/884 "
             "to correct your environment. The import of cv2 has been skipped."
         )
