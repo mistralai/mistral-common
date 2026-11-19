@@ -63,6 +63,16 @@ from tests.integration.chat_recipes import build_tool_call_messages, build_user_
 _Messages = list[UserMessage | AssistantMessage | SystemMessage | ToolMessage]
 
 _ALL_VERSIONS = list(TokenizerVersion)
+_PRE_V3_VERSIONS = [version for version in _ALL_VERSIONS if version < TokenizerVersion.v3]
+_V3_UP_TO_V11_VERSIONS = [
+    version for version in _ALL_VERSIONS if TokenizerVersion.v3 <= version <= TokenizerVersion.v11
+]
+_PRE_V7_VERSIONS = [version for version in _ALL_VERSIONS if version < TokenizerVersion.v7]
+_V7_AND_LATER_VERSIONS = [version for version in _ALL_VERSIONS if version >= TokenizerVersion.v7]
+_PRE_V11_VERSIONS = [version for version in _ALL_VERSIONS if version < TokenizerVersion.v11]
+_POST_V11_VERSIONS = [version for version in _ALL_VERSIONS if version >= TokenizerVersion.v11]
+_PRE_V13_VERSIONS = [version for version in _ALL_VERSIONS if version < TokenizerVersion.v13]
+_POST_V13_VERSIONS = [version for version in _ALL_VERSIONS if version >= TokenizerVersion.v13]
 _PRE_V15_VERSIONS = [version for version in _ALL_VERSIONS if version < TokenizerVersion.v15]
 
 
@@ -124,17 +134,6 @@ _ROLE_CHUNKS: dict[str, tuple[str, ...]] = {
     "assistant": ("text", "think"),
     "tool": ("text", "image", "image_url", "audio", "audio_url"),
 }
-
-
-def _chunk_name(chunk: Any) -> str:
-    return {
-        "TextChunk": "text",
-        "ImageChunk": "image",
-        "ImageURLChunk": "image_url",
-        "AudioChunk": "audio",
-        "AudioURLChunk": "audio_url",
-        "ThinkChunk": "think",
-    }[type(chunk).__name__]
 
 
 @pytest.fixture(params=_ALL_VERSIONS, ids=lambda version: version.value)
@@ -372,15 +371,26 @@ class TestChatStructureAcrossVersions:
             ],
         )
 
-    def test_tool_call_duplicate_ids_same_assistant_messages(
+    @pytest.mark.parametrize("version", _PRE_V11_VERSIONS, ids=lambda v: v.value)
+    def test_tool_call_duplicate_ids_same_assistant_messages_pre_v11(
         self, version: TokenizerVersion, validator_serving: MistralRequestValidator
     ) -> None:
+        # The count-based validator rejects at the final message: 2 calls, 1 result.
         messages = build_tool_call_messages(call_ids=("123456789", "123456789"), result_ids=("123456789",))
-        if version >= TokenizerVersion.v11:
-            match = r"Duplicate tool call id 123456789 in assistant message"
-        else:
-            match = r"Not the same number of function calls and responses"
-        with pytest.raises(InvalidMessageStructureException, match=match):
+        with pytest.raises(
+            InvalidMessageStructureException, match=r"Not the same number of function calls and responses"
+        ):
+            validator_serving.validate_messages(messages=messages)
+
+    @pytest.mark.parametrize("version", _POST_V11_VERSIONS, ids=lambda v: v.value)
+    def test_tool_call_duplicate_ids_same_assistant_messages_post_v11(
+        self, version: TokenizerVersion, validator_serving: MistralRequestValidator
+    ) -> None:
+        # The id-aware validator rejects the duplicate id inside the assistant message.
+        messages = build_tool_call_messages(call_ids=("123456789", "123456789"), result_ids=("123456789",))
+        with pytest.raises(
+            InvalidMessageStructureException, match=r"Duplicate tool call id 123456789 in assistant message"
+        ):
             validator_serving.validate_messages(messages=messages)
 
     def test_tool_call_duplicate_ids_different_assistant_messages(
@@ -405,18 +415,14 @@ class TestChatStructureAcrossVersions:
             ],
         )
 
-    def test_reasoning_effort_policy_across_versions(
+    @pytest.mark.parametrize("version", _PRE_V15_VERSIONS, ids=lambda v: v.value)
+    def test_reasoning_effort_rejected_pre_v15(
         self, version: TokenizerVersion, validator_serving: MistralRequestValidator
     ) -> None:
+        # v15 acceptance is covered by test_v15_accepts_every_reasoning_effort below.
         request = ChatCompletionRequest(messages=[UserMessage(content="Hello")], reasoning_effort=ReasoningEffort.none)
-        if version >= TokenizerVersion.v15:
-            # v15 delegates model-settings validation to its override, which accepts it.
+        with pytest.raises(InvalidRequestException, match="reasoning_effort='none' is not supported for this model"):
             validator_serving._validate_model_settings(request)
-        else:
-            with pytest.raises(
-                InvalidRequestException, match="reasoning_effort='none' is not supported for this model"
-            ):
-                validator_serving._validate_model_settings(request)
 
     @pytest.mark.parametrize("reasoning_effort", [*list(ReasoningEffort), None])
     def test_v15_accepts_every_reasoning_effort(
@@ -426,35 +432,117 @@ class TestChatStructureAcrossVersions:
         validator_v15._validate_model_settings(request)
 
 
+def _tool_message_for_variant(variant: str) -> ToolMessage:
+    if variant == "missing":
+        return ToolMessage(name="foo", content="bar")
+    if variant == "bad_format":
+        return ToolMessage(name="foo", content="bar", tool_call_id="bad_id")
+    if variant == "null":
+        return ToolMessage(name="foo", content="bar", tool_call_id="null")
+    return ToolMessage(name="foo", content="bar", tool_call_id="123456789")
+
+
+def _tool_message_id_expectation(version: TokenizerVersion, variant: str) -> tuple[type[Exception] | None, str | None]:
+    r"""Expected (exception type, match) for a tool-message id, or (None, None) when accepted.
+
+    Derived from the validator dispatch: base has no id rule; v3-v11 require a
+    defined 9-char alphanumeric id; v13+ require a non-empty non-"null" id and
+    dropped the format check.
+    """
+    if variant == "valid":
+        return (None, None)
+    if version < TokenizerVersion.v3:
+        return (None, None)
+    if version >= TokenizerVersion.v13:
+        if variant in ("missing", "null"):
+            return (InvalidToolMessageException, r"Tool call id must be a non-empty string other than 'null'")
+        return (None, None)
+    if variant == "missing":
+        return (InvalidRequestException, r"Tool call id has to be defined")
+    return (InvalidToolMessageException, r"Tool call id was .* but must be a-z, A-Z, 0-9, with a length of 9")
+
+
+_TOOL_MESSAGE_ID_ROWS = [
+    (version, variant, *_tool_message_id_expectation(version, variant))
+    for version in _ALL_VERSIONS
+    for variant in ("missing", "bad_format", "null", "valid")
+]
+
+
+def _chunk_policy_rows(role: str) -> list[tuple[TokenizerVersion, str, bool]]:
+    r"""One row per (version, chunk) with its expected allow-list outcome as data."""
+    allowed = {
+        "user": _user_chunk_allowed,
+        "system": _system_chunk_allowed,
+        "assistant": _assistant_chunk_allowed,
+        "tool": _tool_chunk_allowed,
+    }[role]
+    return [
+        (version, chunk_name, allowed(version, chunk_name))
+        for version in _ALL_VERSIONS
+        for chunk_name in _ROLE_CHUNKS[role]
+    ]
+
+
+def _chunk_policy_ids(rows: list[tuple[TokenizerVersion, str, bool]]) -> list[str]:
+    return [
+        f"{version.value}-{chunk_name}-{'allowed' if allowed else 'rejected'}" for version, chunk_name, allowed in rows
+    ]
+
+
+_CHUNK_TYPE_NAMES = {"audio": "AudioChunk", "image_url": "ImageURLChunk"}
+
+
+def _sorted_unique_rows() -> list[tuple[TokenizerVersion, str | None]]:
+    r"""One row per version with the expected sorted-unique rejection message, or `None` when accepted."""
+    rows: list[tuple[TokenizerVersion, str | None]] = []
+    for version in _ALL_VERSIONS:
+        rejected = sorted(
+            _CHUNK_TYPE_NAMES[name] for name in _CHUNK_TYPE_NAMES if not _user_chunk_allowed(version, name)
+        )
+        match = rf"Unexpected content chunk types in user message: {re.escape(str(rejected))}" if rejected else None
+        rows.append((version, match))
+    return rows
+
+
 class TestChunkPolicyAcrossVersions:
     r"""Per-role content-chunk allow-lists proven on every version."""
 
-    @pytest.mark.parametrize("version", _ALL_VERSIONS, ids=lambda v: v.value)
-    @pytest.mark.parametrize("chunk_name", _ROLE_CHUNKS["user"])
-    def test_user_chunk_policy(self, version: TokenizerVersion, chunk_name: str) -> None:
+    @pytest.mark.parametrize(
+        ("version", "chunk_name", "allowed"),
+        _chunk_policy_rows("user"),
+        ids=_chunk_policy_ids(_chunk_policy_rows("user")),
+    )
+    def test_user_chunk_policy(self, version: TokenizerVersion, chunk_name: str, allowed: bool) -> None:
         validator = get_validator(version, ValidationMode.serving)
         request = build_user_content_request(content=get_content_chunks((chunk_name,)))
-        if _user_chunk_allowed(version, chunk_name):
+        if allowed:
             validator.validate_messages(request.messages)
         else:
             with pytest.raises(InvalidUserMessageException, match="Unexpected content chunk types in user message"):
                 validator.validate_messages(request.messages)
 
-    @pytest.mark.parametrize("version", _ALL_VERSIONS, ids=lambda v: v.value)
-    @pytest.mark.parametrize("chunk_name", _ROLE_CHUNKS["system"])
-    def test_system_chunk_policy(self, version: TokenizerVersion, chunk_name: str) -> None:
+    @pytest.mark.parametrize(
+        ("version", "chunk_name", "allowed"),
+        _chunk_policy_rows("system"),
+        ids=_chunk_policy_ids(_chunk_policy_rows("system")),
+    )
+    def test_system_chunk_policy(self, version: TokenizerVersion, chunk_name: str, allowed: bool) -> None:
         validator = get_validator(version, ValidationMode.serving)
-        if _system_chunk_allowed(version, chunk_name):
+        if allowed:
             validator.validate_messages(_system_convo(get_content_chunks((chunk_name,))))
         else:
             with pytest.raises(InvalidSystemPromptException, match="Unexpected content chunk types in system message"):
                 validator.validate_messages(_system_convo(get_content_chunks((chunk_name,))))
 
-    @pytest.mark.parametrize("version", _ALL_VERSIONS, ids=lambda v: v.value)
-    @pytest.mark.parametrize("chunk_name", _ROLE_CHUNKS["assistant"])
-    def test_assistant_chunk_policy(self, version: TokenizerVersion, chunk_name: str) -> None:
+    @pytest.mark.parametrize(
+        ("version", "chunk_name", "allowed"),
+        _chunk_policy_rows("assistant"),
+        ids=_chunk_policy_ids(_chunk_policy_rows("assistant")),
+    )
+    def test_assistant_chunk_policy(self, version: TokenizerVersion, chunk_name: str, allowed: bool) -> None:
         validator = get_validator(version, ValidationMode.serving)
-        if _assistant_chunk_allowed(version, chunk_name):
+        if allowed:
             validator.validate_messages(_assistant_convo(get_content_chunks((chunk_name,))))
         else:
             with pytest.raises(
@@ -462,79 +550,102 @@ class TestChunkPolicyAcrossVersions:
             ):
                 validator.validate_messages(_assistant_convo(get_content_chunks((chunk_name,))))
 
-    @pytest.mark.parametrize("version", _ALL_VERSIONS, ids=lambda v: v.value)
-    @pytest.mark.parametrize("chunk_name", _ROLE_CHUNKS["tool"])
-    def test_tool_chunk_policy(self, version: TokenizerVersion, chunk_name: str) -> None:
+    @pytest.mark.parametrize(
+        ("version", "chunk_name", "allowed"),
+        _chunk_policy_rows("tool"),
+        ids=_chunk_policy_ids(_chunk_policy_rows("tool")),
+    )
+    def test_tool_chunk_policy(self, version: TokenizerVersion, chunk_name: str, allowed: bool) -> None:
         # "think" is rejected at the Pydantic model level (ToolMessage construction), not by the validator.
         validator = get_validator(version, ValidationMode.serving)
-        if _tool_chunk_allowed(version, chunk_name):
+        if allowed:
             validator.validate_messages(_tool_convo(get_content_chunks((chunk_name,))))
         else:
             with pytest.raises(InvalidToolMessageException, match="Unexpected content chunk types in tool message"):
                 validator.validate_messages(_tool_convo(get_content_chunks((chunk_name,))))
 
-    @pytest.mark.parametrize("version", _ALL_VERSIONS, ids=lambda v: v.value)
-    def test_reports_sorted_unique_invalid_chunk_types(self, version: TokenizerVersion) -> None:
+    @pytest.mark.parametrize(
+        ("version", "match"),
+        _sorted_unique_rows(),
+        ids=[
+            f"{version.value}-{'accepted' if match is None else 'rejected'}" for version, match in _sorted_unique_rows()
+        ],
+    )
+    def test_reports_sorted_unique_invalid_chunk_types(self, version: TokenizerVersion, match: str | None) -> None:
         validator = get_validator(version, ValidationMode.serving)
         chunks = get_content_chunks(("audio", "image_url"))
-        rejected = sorted(
-            type(chunk).__name__ for chunk in chunks if not _user_chunk_allowed(version, _chunk_name(chunk))
-        )
-        if not rejected:
+        if match is None:
             validator.validate_messages(_user_convo(chunks))
         else:
-            with pytest.raises(
-                InvalidUserMessageException,
-                match=rf"Unexpected content chunk types in user message: {re.escape(str(rejected))}",
-            ):
+            with pytest.raises(InvalidUserMessageException, match=match):
                 validator.validate_messages(_user_convo(chunks))
 
-    @pytest.mark.parametrize("version", _ALL_VERSIONS, ids=lambda v: v.value)
-    def test_system_prompt_with_audio_across_versions(
-        self, version: TokenizerVersion, audio_content_chunk: AudioChunk | AudioURLChunk
-    ) -> None:
-        validator = get_validator(version, ValidationMode.serving)
+    def test_system_prompt_with_audio_raises_on_v7(self, audio_content_chunk: AudioChunk | AudioURLChunk) -> None:
+        # Only the V5 validator (selected by v7) forbids system+audio.
+        validator = get_validator(TokenizerVersion.v7, ValidationMode.serving)
         messages = [
             SystemMessage(content="This is a system prompt"),
             UserMessage(content=[audio_content_chunk]),
         ]
-        if version == TokenizerVersion.v7:
-            # Only the V5 validator (selected by v7) forbids system+audio.
-            with pytest.raises(
-                ValueError,
-                match=(
-                    r"Found system messages at indexes \[0\] and audio chunks in messages at indexes \[1\]\. This is "
-                    r"not allowed prior to the tokenizer version 13\."
-                ),
-            ):
-                validator.validate_messages(messages=messages)
-        elif version >= TokenizerVersion.v11:
+        with pytest.raises(
+            ValueError,
+            match=(
+                r"Found system messages at indexes \[0\] and audio chunks in messages at indexes \[1\]\. This is "
+                r"not allowed prior to the tokenizer version 13\."
+            ),
+        ):
             validator.validate_messages(messages=messages)
-        else:
-            # Pre-v7 user messages reject audio chunks before any system/audio rule.
-            with pytest.raises(InvalidUserMessageException, match="Unexpected content chunk types in user message"):
-                validator.validate_messages(messages=messages)
 
-    @pytest.mark.parametrize("version", _ALL_VERSIONS, ids=lambda v: v.value)
-    def test_audio_without_system_prompt_ok(
+    @pytest.mark.parametrize("version", _POST_V11_VERSIONS, ids=lambda v: v.value)
+    def test_system_prompt_with_audio_allowed_post_v11(
         self, version: TokenizerVersion, audio_content_chunk: AudioChunk | AudioURLChunk
     ) -> None:
         validator = get_validator(version, ValidationMode.serving)
-        if version >= TokenizerVersion.v7:
+        validator.validate_messages(
+            messages=[
+                SystemMessage(content="This is a system prompt"),
+                UserMessage(content=[audio_content_chunk]),
+            ],
+        )
+
+    @pytest.mark.parametrize("version", _PRE_V7_VERSIONS, ids=lambda v: v.value)
+    def test_system_prompt_with_audio_rejected_pre_v7(
+        self, version: TokenizerVersion, audio_content_chunk: AudioChunk | AudioURLChunk
+    ) -> None:
+        # Pre-v7 user messages reject audio chunks before any system/audio rule.
+        validator = get_validator(version, ValidationMode.serving)
+        with pytest.raises(InvalidUserMessageException, match="Unexpected content chunk types in user message"):
+            validator.validate_messages(
+                messages=[
+                    SystemMessage(content="This is a system prompt"),
+                    UserMessage(content=[audio_content_chunk]),
+                ],
+            )
+
+    @pytest.mark.parametrize("version", _V7_AND_LATER_VERSIONS, ids=lambda v: v.value)
+    def test_audio_without_system_prompt_allowed_v7_and_later(
+        self, version: TokenizerVersion, audio_content_chunk: AudioChunk | AudioURLChunk
+    ) -> None:
+        validator = get_validator(version, ValidationMode.serving)
+        validator.validate_messages(
+            messages=[
+                UserMessage(content=[audio_content_chunk]),
+                UserMessage(content="User message after audio"),
+            ],
+        )
+
+    @pytest.mark.parametrize("version", _PRE_V7_VERSIONS, ids=lambda v: v.value)
+    def test_audio_without_system_prompt_rejected_pre_v7(
+        self, version: TokenizerVersion, audio_content_chunk: AudioChunk | AudioURLChunk
+    ) -> None:
+        validator = get_validator(version, ValidationMode.serving)
+        with pytest.raises(InvalidUserMessageException, match="Unexpected content chunk types in user message"):
             validator.validate_messages(
                 messages=[
                     UserMessage(content=[audio_content_chunk]),
                     UserMessage(content="User message after audio"),
                 ],
             )
-        else:
-            with pytest.raises(InvalidUserMessageException, match="Unexpected content chunk types in user message"):
-                validator.validate_messages(
-                    messages=[
-                        UserMessage(content=[audio_content_chunk]),
-                        UserMessage(content="User message after audio"),
-                    ],
-                )
 
     def test_system_prompt_without_audio_ok(self, validator_serving: MistralRequestValidator) -> None:
         validator_serving.validate_messages(
@@ -608,79 +719,78 @@ class TestToolCallIdPolicyAcrossVersionsAndModes:
             with pytest.raises(InvalidFunctionCallException, match=match):
                 validator.validate_request(ChatCompletionRequest(messages=messages, model="test"))
 
-    @pytest.mark.parametrize("version", _ALL_VERSIONS, ids=lambda v: v.value)
-    @pytest.mark.parametrize("variant", ("missing", "bad_format", "null", "valid"))
-    def test_tool_message_id_policy(self, version: TokenizerVersion, variant: str) -> None:
-        if variant == "missing":
-            message = ToolMessage(name="foo", content="bar")
-        elif variant == "bad_format":
-            message = ToolMessage(name="foo", content="bar", tool_call_id="bad_id")
-        elif variant == "null":
-            message = ToolMessage(name="foo", content="bar", tool_call_id="null")
-        else:
-            message = ToolMessage(name="foo", content="bar", tool_call_id="123456789")
-
+    @pytest.mark.parametrize(
+        ("version", "variant", "exc_type", "match"),
+        _TOOL_MESSAGE_ID_ROWS,
+        ids=[
+            f"{version.value}-{variant}-{'accepted' if exc is None else 'rejected'}"
+            for version, variant, exc, _ in _TOOL_MESSAGE_ID_ROWS
+        ],
+    )
+    def test_tool_message_id_policy(
+        self,
+        version: TokenizerVersion,
+        variant: str,
+        exc_type: type[Exception] | None,
+        match: str | None,
+    ) -> None:
+        message = _tool_message_for_variant(variant)
         validator = get_validator(version, ValidationMode.serving)
-        if variant == "valid":
+        if exc_type is None:
             validator._validate_tool_message(message)
-        elif version < TokenizerVersion.v3:
-            validator._validate_tool_message(message)
-        elif version >= TokenizerVersion.v13:
-            if variant in ("missing", "null"):
-                with pytest.raises(
-                    InvalidToolMessageException,
-                    match=r"Tool call id must be a non-empty string other than 'null'",
-                ):
-                    validator._validate_tool_message(message)
-            else:
-                # v13+ dropped the 9-char format check; any non-empty non-"null" id is accepted.
-                validator._validate_tool_message(message)
-        elif variant == "missing":
-            with pytest.raises(InvalidRequestException, match=r"Tool call id has to be defined"):
-                validator._validate_tool_message(message)
         else:
-            with pytest.raises(
-                InvalidToolMessageException,
-                match=r"Tool call id was .* but must be a-z, A-Z, 0-9, with a length of 9",
-            ):
+            with pytest.raises(exc_type, match=match):
                 validator._validate_tool_message(message)
 
 
 class TestServingMessagePolicyAcrossVersions:
     r"""Assistant/tool message-level rules proven on every version in serving mode."""
 
-    def test_content_and_tool_calls(self, version: TokenizerVersion) -> None:
-        validator = get_validator(version, ValidationMode.serving)
-        message = AssistantMessage(
+    @staticmethod
+    def _assistant_content_and_tool_calls() -> AssistantMessage:
+        return AssistantMessage(
             role=Roles.assistant,
             content="a",
             tool_calls=[ToolCall(id="AbCd56789", function=FunctionCall(name="a", arguments='{"a": 1}'))],
         )
-        if version >= TokenizerVersion.v7:
-            # V5+ allows content and tool calls together.
-            validator._validate_assistant_message(message)
-        else:
-            with pytest.raises(
-                InvalidAssistantMessageException,
-                match=r"Assistant message must have either content or tool_calls, but not both.",
-            ):
-                validator._validate_assistant_message(message)
+
+    @pytest.mark.parametrize("version", _PRE_V7_VERSIONS, ids=lambda v: v.value)
+    def test_content_and_tool_calls_rejected_pre_v7(self, version: TokenizerVersion) -> None:
+        validator = get_validator(version, ValidationMode.serving)
+        with pytest.raises(
+            InvalidAssistantMessageException,
+            match=r"Assistant message must have either content or tool_calls, but not both.",
+        ):
+            validator._validate_assistant_message(self._assistant_content_and_tool_calls())
+
+    @pytest.mark.parametrize("version", _V7_AND_LATER_VERSIONS, ids=lambda v: v.value)
+    def test_content_and_tool_calls_allowed_v7_and_later(self, version: TokenizerVersion) -> None:
+        # V5+ allows content and tool calls together.
+        validator = get_validator(version, ValidationMode.serving)
+        validator._validate_assistant_message(self._assistant_content_and_tool_calls())
 
     @pytest.mark.parametrize("content,tool_calls", [("", None), (None, None), ("", []), (None, [])])
-    def test_no_content_and_no_tool_calls(
+    @pytest.mark.parametrize("version", _PRE_V7_VERSIONS, ids=lambda v: v.value)
+    def test_no_content_and_no_tool_calls_rejected_pre_v7(
         self, version: TokenizerVersion, content: str | None, tool_calls: list | None
     ) -> None:
         validator = get_validator(version, ValidationMode.serving)
         message = AssistantMessage(role=Roles.assistant, content=content, tool_calls=tool_calls)
-        if version >= TokenizerVersion.v7:
-            # V5+ only enforces the XOR rule when content and tool calls are both set.
+        with pytest.raises(
+            InvalidAssistantMessageException,
+            match=r"Assistant message must have either content or tool_calls, but not both.",
+        ):
             validator._validate_assistant_message(message)
-        else:
-            with pytest.raises(
-                InvalidAssistantMessageException,
-                match=r"Assistant message must have either content or tool_calls, but not both.",
-            ):
-                validator._validate_assistant_message(message)
+
+    @pytest.mark.parametrize("content,tool_calls", [("", None), (None, None), ("", []), (None, [])])
+    @pytest.mark.parametrize("version", _V7_AND_LATER_VERSIONS, ids=lambda v: v.value)
+    def test_no_content_and_no_tool_calls_allowed_v7_and_later(
+        self, version: TokenizerVersion, content: str | None, tool_calls: list | None
+    ) -> None:
+        # V5+ only enforces the XOR rule when content and tool calls are both set.
+        validator = get_validator(version, ValidationMode.serving)
+        message = AssistantMessage(role=Roles.assistant, content=content, tool_calls=tool_calls)
+        validator._validate_assistant_message(message)
 
     def test_no_content_and_tool_calls_OK(self, validator_serving: MistralRequestValidator) -> None:
         validator_serving._validate_assistant_message(
@@ -818,43 +928,59 @@ class TestFinetuningPolicyAcrossVersions:
             ],
         )
 
-    def test_parallel_tool_extra_result_rejected(
-        self, version: TokenizerVersion, validator_finetuning: MistralRequestValidator
-    ) -> None:
-        messages = [
+    @staticmethod
+    def _parallel_tool_extra_result_messages() -> list[ChatMessage]:
+        return [
             *build_tool_call_messages(
                 call_ids=("123456789", "912345678"), result_ids=("912345678", "123456789", "891234567")
             ),
             FinetuningAssistantMessage(content="foo"),
         ]
-        if version >= TokenizerVersion.v11:
-            # The unknown third result id is rejected when it is consumed.
-            match = r"Unexpected tool call id"
-        else:
-            # The count-based validator rejects at the final assistant message.
-            match = r"Not the same number of function calls and responses"
-        with pytest.raises(InvalidMessageStructureException, match=match):
-            validator_finetuning.validate_messages(messages=messages)
 
-    def test_ends_with_tool_call_null(
+    @pytest.mark.parametrize("version", _PRE_V11_VERSIONS, ids=lambda v: v.value)
+    def test_parallel_tool_extra_result_rejected_pre_v11(
         self, version: TokenizerVersion, validator_finetuning: MistralRequestValidator
     ) -> None:
+        # The count-based validator rejects at the final assistant message.
+        with pytest.raises(
+            InvalidMessageStructureException, match=r"Not the same number of function calls and responses"
+        ):
+            validator_finetuning.validate_messages(messages=self._parallel_tool_extra_result_messages())
+
+    @pytest.mark.parametrize("version", _POST_V11_VERSIONS, ids=lambda v: v.value)
+    def test_parallel_tool_extra_result_rejected_post_v11(
+        self, version: TokenizerVersion, validator_finetuning: MistralRequestValidator
+    ) -> None:
+        # The id-aware validator rejects the unknown third result id when it is consumed.
+        with pytest.raises(InvalidMessageStructureException, match=r"Unexpected tool call id"):
+            validator_finetuning.validate_messages(messages=self._parallel_tool_extra_result_messages())
+
+    @staticmethod
+    def _ends_with_tool_call_null_messages() -> list[ChatMessage]:
         function = FunctionCall(name="foo", arguments='{"a": 1}')
-        messages = [
+        return [
             UserMessage(content="foo"),
             FinetuningAssistantMessage(tool_calls=[ToolCall(id="123456789", function=function)]),
             ToolMessage(name="foo", content="bar", tool_call_id="123456789"),
             # tool_call id left "null" as final message
             FinetuningAssistantMessage(tool_calls=[ToolCall(function=function)]),
         ]
-        if version >= TokenizerVersion.v13:
-            with pytest.raises(
-                InvalidFunctionCallException,
-                match=r"Tool call id must be a non-empty string other than 'null'",
-            ):
-                validator_finetuning.validate_messages(messages=messages)
-        else:
-            validator_finetuning.validate_messages(messages=messages)
+
+    @pytest.mark.parametrize("version", _PRE_V13_VERSIONS, ids=lambda v: v.value)
+    def test_ends_with_tool_call_null_accepted_pre_v13(
+        self, version: TokenizerVersion, validator_finetuning: MistralRequestValidator
+    ) -> None:
+        validator_finetuning.validate_messages(messages=self._ends_with_tool_call_null_messages())
+
+    @pytest.mark.parametrize("version", _POST_V13_VERSIONS, ids=lambda v: v.value)
+    def test_ends_with_tool_call_null_rejected_post_v13(
+        self, version: TokenizerVersion, validator_finetuning: MistralRequestValidator
+    ) -> None:
+        with pytest.raises(
+            InvalidFunctionCallException,
+            match=r"Tool call id must be a non-empty string other than 'null'",
+        ):
+            validator_finetuning.validate_messages(messages=self._ends_with_tool_call_null_messages())
 
     def test_ends_with_no_tool_call(
         self, version: TokenizerVersion, validator_finetuning: MistralRequestValidator
@@ -868,32 +994,43 @@ class TestFinetuningPolicyAcrossVersions:
         ]
         validator_finetuning.validate_messages(messages=messages)
 
-    def test_middle_with_tool_call_null_raises(
-        self, version: TokenizerVersion, validator_finetuning: MistralRequestValidator
-    ) -> None:
+    @staticmethod
+    def _middle_with_tool_call_null_messages() -> list[ChatMessage]:
         function = FunctionCall(name="foo", arguments='{"a": 1}')
-        messages = [
+        return [
             UserMessage(content="foo"),
             # tool_call id left "null" as non-final message
             FinetuningAssistantMessage(tool_calls=[ToolCall(function=function)]),
             ToolMessage(name="foo", content="bar", tool_call_id="null"),
             FinetuningAssistantMessage(tool_calls=[ToolCall(function=function)]),
         ]
-        if version < TokenizerVersion.v3:
-            # The base validator has no tool-call-id rule.
-            validator_finetuning.validate_messages(messages=messages)
-        elif version >= TokenizerVersion.v13:
-            with pytest.raises(
-                InvalidFunctionCallException,
-                match=r"Tool call id must be a non-empty string other than 'null'",
-            ):
-                validator_finetuning.validate_messages(messages=messages)
-        else:
-            with pytest.raises(
-                InvalidFunctionCallException,
-                match=r"Tool call id of assistant message that is not last has to be defined in finetuning mode",
-            ):
-                validator_finetuning.validate_messages(messages=messages)
+
+    @pytest.mark.parametrize("version", _PRE_V3_VERSIONS, ids=lambda v: v.value)
+    def test_middle_with_tool_call_null_accepted_pre_v3(
+        self, version: TokenizerVersion, validator_finetuning: MistralRequestValidator
+    ) -> None:
+        # The base validator has no tool-call-id rule.
+        validator_finetuning.validate_messages(messages=self._middle_with_tool_call_null_messages())
+
+    @pytest.mark.parametrize("version", _V3_UP_TO_V11_VERSIONS, ids=lambda v: v.value)
+    def test_middle_with_tool_call_null_rejected_v3_to_v11(
+        self, version: TokenizerVersion, validator_finetuning: MistralRequestValidator
+    ) -> None:
+        with pytest.raises(
+            InvalidFunctionCallException,
+            match=r"Tool call id of assistant message that is not last has to be defined in finetuning mode",
+        ):
+            validator_finetuning.validate_messages(messages=self._middle_with_tool_call_null_messages())
+
+    @pytest.mark.parametrize("version", _POST_V13_VERSIONS, ids=lambda v: v.value)
+    def test_middle_with_tool_call_null_rejected_post_v13(
+        self, version: TokenizerVersion, validator_finetuning: MistralRequestValidator
+    ) -> None:
+        with pytest.raises(
+            InvalidFunctionCallException,
+            match=r"Tool call id must be a non-empty string other than 'null'",
+        ):
+            validator_finetuning.validate_messages(messages=self._middle_with_tool_call_null_messages())
 
 
 class TestAgnosticPolicyAcrossVersions:
@@ -962,58 +1099,89 @@ class TestAgnosticPolicyAcrossVersions:
                 ],
             )
 
-    def test_extra_tool_response(self, version: TokenizerVersion, validator_agnostic: MistralRequestValidator) -> None:
+    @pytest.mark.parametrize("version", _PRE_V11_VERSIONS, ids=lambda v: v.value)
+    def test_extra_tool_response_accepted_pre_v11(
+        self, version: TokenizerVersion, validator_agnostic: MistralRequestValidator
+    ) -> None:
         messages = build_tool_call_messages(call_ids=("123456789",), result_ids=("123456789", "999999999"))
-        if version >= TokenizerVersion.v11:
-            with pytest.raises(InvalidMessageStructureException, match=r"Unexpected tool call id"):
-                validator_agnostic.validate_messages(messages=messages)
-        else:
+        validator_agnostic.validate_messages(messages=messages)
+
+    @pytest.mark.parametrize("version", _POST_V11_VERSIONS, ids=lambda v: v.value)
+    def test_extra_tool_response_rejected_post_v11(
+        self, version: TokenizerVersion, validator_agnostic: MistralRequestValidator
+    ) -> None:
+        messages = build_tool_call_messages(call_ids=("123456789",), result_ids=("123456789", "999999999"))
+        with pytest.raises(InvalidMessageStructureException, match=r"Unexpected tool call id"):
             validator_agnostic.validate_messages(messages=messages)
 
-    def test_duplicate_tool_response(
+    @pytest.mark.parametrize("version", _PRE_V11_VERSIONS, ids=lambda v: v.value)
+    def test_duplicate_tool_response_accepted_pre_v11(
         self, version: TokenizerVersion, validator_agnostic: MistralRequestValidator
     ) -> None:
         messages = build_tool_call_messages(call_ids=("123456789",), result_ids=("123456789", "123456789"))
-        if version >= TokenizerVersion.v11:
-            with pytest.raises(
-                InvalidMessageStructureException,
-                match=r"Duplicate tool call id 123456789 in tool results",
-            ):
-                validator_agnostic.validate_messages(messages=messages)
-        else:
-            validator_agnostic.validate_messages(messages=messages)
+        validator_agnostic.validate_messages(messages=messages)
 
-    def test_final_null_tool_call_id(
+    @pytest.mark.parametrize("version", _POST_V11_VERSIONS, ids=lambda v: v.value)
+    def test_duplicate_tool_response_rejected_post_v11(
         self, version: TokenizerVersion, validator_agnostic: MistralRequestValidator
     ) -> None:
-        messages = build_tool_call_messages(call_ids=(None,))
-        if version >= TokenizerVersion.v13:
-            with pytest.raises(
-                InvalidFunctionCallException,
-                match=r"Tool call id must be a non-empty string other than 'null'",
-            ):
-                validator_agnostic.validate_messages(messages=messages)
-        else:
+        messages = build_tool_call_messages(call_ids=("123456789",), result_ids=("123456789", "123456789"))
+        with pytest.raises(
+            InvalidMessageStructureException,
+            match=r"Duplicate tool call id 123456789 in tool results",
+        ):
             validator_agnostic.validate_messages(messages=messages)
 
-    def test_non_final_null_tool_call_id(
+    @pytest.mark.parametrize("version", _PRE_V13_VERSIONS, ids=lambda v: v.value)
+    def test_final_null_tool_call_id_accepted_pre_v13(
+        self, version: TokenizerVersion, validator_agnostic: MistralRequestValidator
+    ) -> None:
+        validator_agnostic.validate_messages(messages=build_tool_call_messages(call_ids=(None,)))
+
+    @pytest.mark.parametrize("version", _POST_V13_VERSIONS, ids=lambda v: v.value)
+    def test_final_null_tool_call_id_rejected_post_v13(
+        self, version: TokenizerVersion, validator_agnostic: MistralRequestValidator
+    ) -> None:
+        with pytest.raises(
+            InvalidFunctionCallException,
+            match=r"Tool call id must be a non-empty string other than 'null'",
+        ):
+            validator_agnostic.validate_messages(messages=build_tool_call_messages(call_ids=(None,)))
+
+    @pytest.mark.parametrize("version", _PRE_V3_VERSIONS, ids=lambda v: v.value)
+    def test_non_final_null_tool_call_id_accepted_pre_v3(
         self, version: TokenizerVersion, validator_agnostic: MistralRequestValidator
     ) -> None:
         messages = [
             *build_tool_call_messages(call_ids=(None,)),
             UserMessage(content="continue"),
         ]
-        if version < TokenizerVersion.v3:
+        validator_agnostic.validate_messages(messages=messages)
+
+    @pytest.mark.parametrize("version", _V3_UP_TO_V11_VERSIONS, ids=lambda v: v.value)
+    def test_non_final_null_tool_call_id_rejected_v3_to_v11(
+        self, version: TokenizerVersion, validator_agnostic: MistralRequestValidator
+    ) -> None:
+        messages = [
+            *build_tool_call_messages(call_ids=(None,)),
+            UserMessage(content="continue"),
+        ]
+        with pytest.raises(InvalidFunctionCallException, match=r"Tool call id"):
             validator_agnostic.validate_messages(messages=messages)
-        elif version >= TokenizerVersion.v13:
-            with pytest.raises(
-                InvalidFunctionCallException,
-                match=r"Tool call id must be a non-empty string other than 'null'",
-            ):
-                validator_agnostic.validate_messages(messages=messages)
-        else:
-            with pytest.raises(InvalidFunctionCallException, match=r"Tool call id"):
-                validator_agnostic.validate_messages(messages=messages)
+
+    @pytest.mark.parametrize("version", _POST_V13_VERSIONS, ids=lambda v: v.value)
+    def test_non_final_null_tool_call_id_rejected_post_v13(
+        self, version: TokenizerVersion, validator_agnostic: MistralRequestValidator
+    ) -> None:
+        messages = [
+            *build_tool_call_messages(call_ids=(None,)),
+            UserMessage(content="continue"),
+        ]
+        with pytest.raises(
+            InvalidFunctionCallException,
+            match=r"Tool call id must be a non-empty string other than 'null'",
+        ):
+            validator_agnostic.validate_messages(messages=messages)
 
     @pytest.mark.parametrize("weight", [None, 0, 1])
     def test_accepts_valid_finetuning_weight(
