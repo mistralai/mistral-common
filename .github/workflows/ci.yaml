@@ -20,7 +20,9 @@ concurrency:
   cancel-in-progress: ${{ github.event.pull_request.number != null }}
 
 jobs:
-  lint_and_test:
+  # The jobs below run sequentially (needs) on all Python versions and share one cached
+  # .venv per Python version, so each environment is built only once per version per run.
+  static_checks:
     if: ${{ github.event.pull_request.draft != true }}
     runs-on: ubuntu-latest
     strategy:
@@ -46,10 +48,17 @@ jobs:
         run: |
           uv lock --check
 
-      # Install
+      - name: Cache uv environment
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-${{ matrix.python-version }}-
+
       - name: Install Dependencies
         run: |
-          uv sync --frozen --all-extras --group dev
+          uv sync --frozen --all-extras --group dev --group test-integrations
 
       # Ruff Linter
       - name: Ruff Linter
@@ -66,22 +75,20 @@ jobs:
         run: |
           uv run mypy .
 
-      # PyTest
-      - name: Tests
-        run: |
-          uv run pytest --cov=mistral_common tests/ --ignore=tests/integrations --ignore=tests/integration -n auto --dist loadfile --cov-report "xml:coverage.xml"
-      
-      # Doctests
-      - name: Doctests
-        run: |
-          uv run pytest --doctest-modules ./src
-  
-  # Integration tests run in a single job on one Python version, sequentially after one
-  # environment install, instead of one matrix job per suite: each matrix leg built its
-  # own uv environment. Python-version compatibility is already covered by lint_and_test.
-  integration_tests:
+  unit_tests:
     if: ${{ github.event.pull_request.draft != true }}
+    needs: static_checks
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Support all LTS versions of Python
+        python-version: [
+          "3.11",
+          "3.12",
+          "3.13",
+          "3.14",
+          "3.15",
+        ]
     steps:
       - name: Checkout
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -89,15 +96,64 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
-          python-version: "3.14"
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache uv environment
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-${{ matrix.python-version }}-
 
       - name: Install Dependencies
         run: |
           uv sync --frozen --all-extras --group dev --group test-integrations
 
-      - name: Legacy Integration Tests
+      # PyTest
+      - name: Tests
         run: |
-          uv run --no-sync pytest tests/integrations/ -n auto --dist loadfile -v
+          uv run pytest --cov=mistral_common tests/ --ignore=tests/integrations --ignore=tests/integration -n auto --dist loadfile --cov-report "xml:coverage.xml"
+
+      # Doctests
+      - name: Doctests
+        run: |
+          uv run pytest --doctest-modules ./src
+
+  integration_tests:
+    if: ${{ github.event.pull_request.draft != true }}
+    needs: unit_tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Support all LTS versions of Python
+        python-version: [
+          "3.11",
+          "3.12",
+          "3.13",
+          "3.14",
+          "3.15",
+        ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache uv environment
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-${{ matrix.python-version }}-
+
+      - name: Install Dependencies
+        run: |
+          uv sync --frozen --all-extras --group dev --group test-integrations
 
       # The pinned revisions and digests live in the provisioning script, so its hash keys the cache;
       # restored files are still size- and SHA-256-checked by the script before tests run.
@@ -114,3 +170,42 @@ jobs:
       - name: Integration Tests
         run: |
           HF_HUB_OFFLINE=1 uv run --no-sync pytest tests/integration/ -n auto --dist loadfile -v
+
+  integration_legacy_tests:
+    if: ${{ github.event.pull_request.draft != true }}
+    needs: integration_tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Support all LTS versions of Python
+        python-version: [
+          "3.11",
+          "3.12",
+          "3.13",
+          "3.14",
+          "3.15",
+        ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache uv environment
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-${{ matrix.python-version }}-
+
+      - name: Install Dependencies
+        run: |
+          uv sync --frozen --all-extras --group dev --group test-integrations
+
+      - name: Legacy Integration Tests
+        run: |
+          uv run --no-sync pytest tests/integrations/ -n auto --dist loadfile -v
