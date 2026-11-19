@@ -237,6 +237,8 @@ uv run zensical serve                # live preview at http://localhost:8000
 
 Use `uv run zensical build` for a one-shot static build into `site/`.
 
+To publish the docs to GitHub Pages, run `./scripts/publish_docs.sh [ref]` (builds from `origin/main` unless a tag/branch/SHA is given) — it pushes the built `site/` to the `gh-pages` branch, which is the Pages source.
+
 ### Commit
 - After adding your changes before committing ensure pre-commit is installed or run it manually.
 - Use imperative grammar, start with a verb and be concise.
