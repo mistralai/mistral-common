@@ -1468,9 +1468,15 @@ class InstructTokenizerV13(InstructTokenizerV11):
             chunk: The thinking chunk to encode.
         Returns:
             The encoded tokens.
+
+        Raises:
+            UnsupportedTokenizerFeatureException: The tokenizer has no think special tokens.
         """
-        assert self.BEGIN_THINK is not None, "think tokens are not available for this tokenizer."
-        assert self.END_THINK is not None, "think tokens are not available for this tokenizer."
+        if self.BEGIN_THINK is None or self.END_THINK is None:
+            raise UnsupportedTokenizerFeatureException(
+                f"Tokenizer {self.tokenizer.version.value} does not provide the {SpecialTokens.begin_think.value} and "
+                f"{SpecialTokens.end_think.value} special tokens required for think chunks."
+            )
         tokens = self.tokenizer.encode(chunk.thinking, bos=False, eos=False)
         think_tokens = [self.BEGIN_THINK, *tokens]
         if chunk.closed:
