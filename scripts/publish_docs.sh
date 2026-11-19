@@ -29,7 +29,8 @@ git -C "$repo_root" worktree add --detach "$src_wt" "$REF"
 )
 
 git -C "$repo_root" worktree add --detach "$pages_wt" origin/gh-pages
-rsync -a --delete --exclude=.git "$src_wt/site/" "$pages_wt/"
+find "$pages_wt" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+cp -a "$src_wt/site/." "$pages_wt/"
 
 (
   cd "$pages_wt"
