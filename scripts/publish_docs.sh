@@ -38,7 +38,7 @@ cp -a "$src_wt/site/." "$pages_wt/"
   if ! git diff --cached --quiet; then
     git commit --no-verify -m "deploy: $(git -C "$src_wt" rev-parse HEAD)"
   fi
-  git push origin HEAD:gh-pages
+  git push --no-verify origin HEAD:gh-pages
 )
 
 echo "Published docs built from $REF to the gh-pages branch."
