@@ -1,3 +1,5 @@
+r"""Unit tests for `scripts/run_downstream_tests.py`, loaded from its file path."""
+
 import importlib.util
 import json
 import subprocess
@@ -7,7 +9,7 @@ from types import ModuleType
 
 import pytest
 
-SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "run_downstream_tests.py"
+SCRIPT_PATH = Path(__file__).resolve().parents[3] / "scripts" / "run_downstream_tests.py"
 
 
 def _load_script() -> ModuleType:
