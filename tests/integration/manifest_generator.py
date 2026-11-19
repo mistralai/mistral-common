@@ -30,7 +30,7 @@ from tests.integration.chat_registry import ALL_SUCCESS_CASES as CHAT_SUCCESS_CA
 from tests.integration.expected_results import _EXPECTED_ROOT
 from tests.integration.speech_cases import SPEECH_SUCCESS_CASES, PublicSpeechSuccessCase
 from tests.integration.transcription_cases import TRANSCRIPTION_SUCCESS_CASES, PublicTranscriptionSuccessCase
-from tests.utils import decode_keep
+from tests.utils.tokenized import decode_keep
 
 _ALL_SUCCESS_CASES: tuple[PublicChatSuccessCase | PublicTranscriptionSuccessCase | PublicSpeechSuccessCase, ...] = (
     *CHAT_SUCCESS_CASES,

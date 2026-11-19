@@ -25,7 +25,7 @@ from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, TokenizerV
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV13
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-from tests.utils import get_special_tokens, quick_vocab
+from tests.utils.special_tokens import get_special_tokens, quick_vocab
 
 _TEKKEN_FILE = MistralTokenizer._data_path() / "tekken_240911.json"
 _SPM_FILE = MistralTokenizer._data_path() / "mistral_instruct_tokenizer_241114.model.v7m1"

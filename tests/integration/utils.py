@@ -7,7 +7,7 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from tests.integration.chat_cases import PublicChatErrorCase, PublicChatSuccessCase
 from tests.integration.expected_results import assert_public_success, load_expected_success
 from tests.integration.tokenizer_configurations import TokenizerConfiguration
-from tests.utils import decode_keep
+from tests.utils.tokenized import decode_keep
 
 
 def encode_and_expect_error(

@@ -28,7 +28,7 @@ from tests.integration.speech_cases import (
     PublicSpeechSuccessCase,
 )
 from tests.integration.tokenizer_configurations import SYNTHETIC_V7_SPEECH_AUDIO_TEST, TokenizerConfiguration
-from tests.utils import decode_keep
+from tests.utils.tokenized import decode_keep
 
 
 @pytest.mark.parametrize(argnames="case", argvalues=SPEECH_SUCCESS_CASES, ids=lambda case: case.case_id)

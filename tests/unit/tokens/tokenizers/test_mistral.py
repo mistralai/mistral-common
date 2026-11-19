@@ -34,7 +34,8 @@ from tests.unit.tokens.tokenizers.instruct.test_audio import (
     build_synthetic_v7_audio_tokenizer,
     valid_transcription_request,
 )
-from tests.utils import assert_tokenized_equal, decode_keep, get_special_tokens, quick_vocab
+from tests.utils.special_tokens import get_special_tokens, quick_vocab
+from tests.utils.tokenized import assert_tokenized_equal, decode_keep
 
 BUNDLED_TOKENIZERS = [
     "tokenizer.model.v1",

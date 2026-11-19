@@ -30,7 +30,7 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer, load_audi
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder, ReasoningEffortEnumBuilder
 from mistral_common.tokens.tokenizers.tekken import SpecialTokenInfo, Tekkenizer
 from tests.integration.provision_tokenizers import PINNED_TOKENIZERS
-from tests.utils import get_special_tokens, quick_vocab
+from tests.utils.special_tokens import get_special_tokens, quick_vocab
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _BUNDLED_DATA = _REPO_ROOT / "src" / "mistral_common" / "data"

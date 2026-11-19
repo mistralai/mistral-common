@@ -16,7 +16,7 @@ import numpy as np
 
 from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import Tokenized
-from tests.utils import assert_tokenized_equal
+from tests.utils.tokenized import assert_tokenized_equal
 
 _EXPECTED_ROOT = Path(__file__).resolve().parents[1] / "data" / "expected"
 

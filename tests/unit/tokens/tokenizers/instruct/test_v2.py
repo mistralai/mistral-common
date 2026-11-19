@@ -35,7 +35,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_tools_singleturn_request,
     build_trailing_spaces_assistant_request,
 )
-from tests.utils import assert_tokenized_equal, decode_keep
+from tests.utils.tokenized import assert_tokenized_equal, decode_keep
 
 # fmt: off
 _NORMAL_TOKENS = [1, 3, 1032, 4, 1055, 2, 3, 1045, 4, 1049, 2]

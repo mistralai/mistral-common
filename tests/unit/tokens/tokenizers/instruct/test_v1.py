@@ -27,7 +27,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_tools_multiturn_request,
     build_tools_singleturn_request,
 )
-from tests.utils import assert_tokenized_equal, decode_keep
+from tests.utils.tokenized import assert_tokenized_equal, decode_keep
 
 # fmt: off
 _NORMAL_TOKENS = [
