@@ -36,7 +36,7 @@ cp -a "$src_wt/site/." "$pages_wt/"
   cd "$pages_wt"
   git add -A
   if ! git diff --cached --quiet; then
-    git commit -m "deploy: $(git -C "$src_wt" rev-parse HEAD)"
+    git commit --no-verify -m "deploy: $(git -C "$src_wt" rev-parse HEAD)"
   fi
   git push origin HEAD:gh-pages
 )
