@@ -1,3 +1,4 @@
+import re
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -74,6 +75,21 @@ def _configs_for_version(version: TokenizerVersion) -> list[TemplateConfig]:
     return configs
 
 
+def _rewrite_generation_blocks(template: str) -> str:
+    r"""Rewrite HF Transformers' `{% generation %}` blocks as scoped `{% with %}` blocks.
+
+    minijinja has no `generation` tag. Like vLLM's Rust frontend, only the keywords are
+    replaced, so the delimiters and their whitespace control are kept.
+
+    Args:
+        template: The chat template source.
+
+    Returns:
+        The template with each `generation`/`endgeneration` tag replaced by `with`/`endwith`.
+    """
+    return re.sub(r"(\{%[-+]?\s*)(end)?generation(\s*[-+]?%\})", r"\1\2with\3", template)
+
+
 def _minijinja_env() -> "minijinja.Environment":
     r"""Build a minijinja environment in non-Python-compat mode, like HF Transformers.
 
@@ -100,7 +116,7 @@ def test_generated_template_renders_under_minijinja(version: TokenizerVersion) -
     # unknown methods. Rendering must succeed for every version and feature variant.
     env = _minijinja_env()
     for config in _configs_for_version(version):
-        template = build_chat_template(config)
+        template = _rewrite_generation_blocks(build_chat_template(config))
         render_kwargs: dict[str, Any] = {
             "messages": _RENDER_MESSAGES,
             "tools": _RENDER_TOOLS,

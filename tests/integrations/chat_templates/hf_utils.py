@@ -205,21 +205,48 @@ def encode_hf_tokens(
     Returns:
         Token IDs produced by the HuggingFace tokenizer.
     """
+    return cast(list[int], _apply_chat_template(hf_tokenizer, chat_request, keep_name_for_tools, return_dict=False))
+
+
+def encode_hf_assistant_tokens(
+    hf_tokenizer: "PreTrainedTokenizerFast", chat_request: ChatCompletionRequest, keep_name_for_tools: bool = False
+) -> list[int]:
+    r"""Get the token IDs a HuggingFace tokenizer masks as assistant tokens.
+
+    Encodes via `apply_chat_template(return_assistant_tokens_mask=True)`, which masks the
+    tokens rendered inside the template's `{% generation %}` blocks.
+
+    Args:
+        hf_tokenizer: A `PreTrainedTokenizerFast` instance.
+        chat_request: The chat completion request to encode.
+        keep_name_for_tools: If True, preserve tool message `name` fields.
+
+    Returns:
+        The masked token IDs, in order.
+    """
+    result = _apply_chat_template(
+        hf_tokenizer, chat_request, keep_name_for_tools, return_dict=True, return_assistant_tokens_mask=True
+    )
+    return [token for token, mask in zip(result["input_ids"], result["assistant_masks"]) if mask]
+
+
+def _apply_chat_template(
+    hf_tokenizer: "PreTrainedTokenizerFast",
+    chat_request: ChatCompletionRequest,
+    keep_name_for_tools: bool,
+    **kwargs: Any,
+) -> Any:
+    r"""Tokenize a chat request with `apply_chat_template`, forwarding extra keyword arguments."""
     openai_request = _to_openai_request(chat_request, keep_name_for_tools)
-    messages = openai_request["messages"]
-
-    tools = openai_request.get("tools", None)
-
-    result = hf_tokenizer.apply_chat_template(
-        conversation=messages,
-        tools=tools,
+    return hf_tokenizer.apply_chat_template(
+        conversation=openai_request["messages"],
+        tools=openai_request.get("tools", None),
         tokenize=True,
-        return_dict=False,
         padding=False,
         truncation=False,
         **_model_settings_template_kwargs(openai_request),
+        **kwargs,
     )
-    return cast(list[int], result)
 
 
 def _render_via_transformers(chat_template: str, openai_request: dict[str, Any]) -> str:

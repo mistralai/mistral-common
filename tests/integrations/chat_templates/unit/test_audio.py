@@ -10,7 +10,7 @@ from tests.integrations.chat_templates.helpers import render_template
 class TestAudioSystemPrompt:
     @pytest.mark.parametrize(
         "version",
-        [TokenizerVersion.v7, TokenizerVersion.v11, TokenizerVersion.v13],
+        [TokenizerVersion.v7, TokenizerVersion.v11],
     )
     def test_audio_with_system_prompt_raises(self, version: TokenizerVersion) -> None:
         template = generate_chat_template(
@@ -44,10 +44,11 @@ class TestAudioSystemPrompt:
         ):
             render_template(template, messages)
 
-    def test_v15_audio_with_system_prompt_succeeds(self) -> None:
+    @pytest.mark.parametrize("version", [TokenizerVersion.v13, TokenizerVersion.v15])
+    def test_audio_with_system_prompt_succeeds(self, version: TokenizerVersion) -> None:
         template = generate_chat_template(
             spm=False,
-            tokenizer_version=TokenizerVersion.v15,
+            tokenizer_version=version,
             image_support=False,
             audio_support=True,
             thinking_support=False,
@@ -55,8 +56,8 @@ class TestAudioSystemPrompt:
             plain_thinking_support=False,
             use_special_token_variables=True,
             model_settings_fields=None,
-            reasoning_effort_default="none",
-            reasoning_effort_values=("none", "high"),
+            reasoning_effort_default="none" if version.supports_model_settings else None,
+            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
         )
 
         messages: list[dict[str, Any]] = [

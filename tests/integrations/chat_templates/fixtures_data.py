@@ -711,6 +711,31 @@ REQUEST_MULTI_TURN_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var
     ]
 )
 
+REQUEST_SYSTEM_THEN_AUDIO_TEST = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are an audio assistant."),
+        UserMessage(
+            content=[
+                TextChunk(text="Users asks what is this audio ?"),
+                AudioChunk(input_audio=DUMMY_AUDIO_BASE64),
+            ]
+        ),
+    ]
+)
+
+REQUEST_SYSTEM_THEN_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are an audio assistant."),
+        UserMessage(
+            content=[
+                TextChunk(text="Users asks what is this audio ?"),
+                AudioChunk(input_audio=DUMMY_AUDIO_BASE64),
+            ]
+        ),
+        AssistantMessage(content="Assistant answers it is a music."),
+    ]
+)
+
 REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TEST = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         SystemMessage(
@@ -829,6 +854,27 @@ REQUEST_CONSECUTIVE_USERS_TEST = ChatCompletionRequest(
     ]
 )
 
+REQUEST_SYSTEM_BETWEEN_USERS_TEST = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="Hello"),
+        SystemMessage(content="Be concise."),
+        UserMessage(content="World"),
+    ]
+)
+
+REQUEST_SYSTEM_ONLY_TEST = ChatCompletionRequest(
+    messages=[
+        SystemMessage(content="You are a helpful assistant."),
+    ]
+)
+
+REQUEST_SYSTEM_ONLY_WITH_EMPTY_SYSTEM_TEST = ChatCompletionRequest(
+    messages=[
+        SystemMessage(content=""),
+        SystemMessage(content="You are a helpful assistant."),
+    ]
+)
+
 REQUEST_CONSECUTIVE_USERS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         UserMessage(content="Hello"),
@@ -841,6 +887,15 @@ REQUEST_CONSECUTIVE_USERS_WITH_SYSTEM_TRAIN = ChatCompletionRequest(  # type: ig
     messages=[
         SystemMessage(content="You are helpful."),
         UserMessage(content="Hello"),
+        UserMessage(content="World"),
+        AssistantMessage(content="Hi there"),
+    ]
+)
+
+REQUEST_SYSTEM_BETWEEN_USERS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="Hello"),
+        SystemMessage(content="Be concise."),
         UserMessage(content="World"),
         AssistantMessage(content="Hi there"),
     ]
@@ -897,6 +952,61 @@ REQUEST_CONSECUTIVE_ASSISTANTS_TEXT_CHUNKS_TRAIN = ChatCompletionRequest(  # typ
         AssistantMessage(content=[TextChunk(text="Third part A"), TextChunk(text="Third part B")]),
         UserMessage(content="Thanks"),
         AssistantMessage(content="Response"),
+    ]
+)
+
+REQUEST_EMPTY_CONTENT_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="Hello"),
+        UserMessage(content=""),
+        UserMessage(content="World"),
+        AssistantMessage(content="Hi there"),
+    ]
+)
+
+REQUEST_EMPTY_TEXT_CHUNKS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content=[TextChunk(text="Hello"), TextChunk(text=""), TextChunk(text="World")]),
+        UserMessage(content=[TextChunk(text="")]),
+        AssistantMessage(content="Hi there"),
+    ]
+)
+
+REQUEST_EMPTY_SYSTEM_TEXT_CHUNK_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content=[TextChunk(text="You are helpful."), TextChunk(text=""), TextChunk(text="Be concise.")]),
+        UserMessage(content="Hello"),
+        AssistantMessage(content="Hi"),
+    ]
+)
+
+REQUEST_EMPTY_TURN_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content=""),
+        UserMessage(content=""),
+        AssistantMessage(content="Hi"),
+        UserMessage(content="Hello"),
+        AssistantMessage(content="Hey"),
+    ]
+)
+
+REQUEST_EMPTY_SYSTEM_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are helpful."),
+        SystemMessage(content=""),
+        UserMessage(content="Hello"),
+        AssistantMessage(content="Hi"),
+    ]
+)
+
+REQUEST_EMPTY_ASSISTANT_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        UserMessage(content="Hello"),
+        AssistantMessage(content="Hi"),
+        AssistantMessage(content=""),
+        AssistantMessage(content="How can I help?"),
+        UserMessage(content="Thanks"),
+        AssistantMessage(content="You're welcome"),
     ]
 )
 
@@ -1188,6 +1298,13 @@ def get_conversations(
             conversations.extend([REQUEST_MULTI_TURN_AUDIO_URL_TEST, REQUEST_MULTI_TURN_AUDIO_TEST])
         else:
             conversations.extend([REQUEST_MULTI_TURN_AUDIO_URL_TRAIN, REQUEST_MULTI_TURN_AUDIO_TRAIN])
+        # v13+ accept a system prompt alongside audio
+        if tokenizer_version >= TokenizerVersion.v13:
+            conversations.append(
+                REQUEST_SYSTEM_THEN_AUDIO_TEST
+                if validation_mode == ValidationMode.test
+                else REQUEST_SYSTEM_THEN_AUDIO_TRAIN
+            )
 
     if think:
         if validation_mode == ValidationMode.test:
@@ -1207,6 +1324,7 @@ def get_conversations(
             [
                 REQUEST_CONSECUTIVE_USERS_TRAIN,
                 REQUEST_CONSECUTIVE_USERS_WITH_SYSTEM_TRAIN,
+                REQUEST_SYSTEM_BETWEEN_USERS_TRAIN,
                 REQUEST_CONSECUTIVE_ASSISTANTS_TRAIN,
                 REQUEST_MULTIPLE_SYSTEMS_TRAIN,
             ]
@@ -1237,6 +1355,11 @@ def get_conversations(
             )
     else:
         conversations.append(REQUEST_CONSECUTIVE_USERS_TEST)
+        conversations.append(REQUEST_SYSTEM_BETWEEN_USERS_TEST)
+        conversations.append(REQUEST_SYSTEM_ONLY_TEST)
+        # v1-v3 skip the empty system message and render the rest as an empty user message
+        if tokenizer_version < TokenizerVersion.v7:
+            conversations.append(REQUEST_SYSTEM_ONLY_WITH_EMPTY_SYSTEM_TEST)
 
     # v7+ only: mid-conversation system messages and combined aggregation scenarios
     if tokenizer_version >= TokenizerVersion.v7 and validation_mode == ValidationMode.finetuning:
@@ -1259,6 +1382,18 @@ def get_conversations(
         if audio:
             conversations.append(REQUEST_SYSTEM_AUDIO_TRAIN)
             conversations.append(REQUEST_TOOL_AUDIO_TRAIN)
+
+    # Empty content is skipped when same-role messages are merged (finetuning only)
+    if validation_mode == ValidationMode.finetuning:
+        conversations.extend(
+            [REQUEST_EMPTY_CONTENT_TRAIN, REQUEST_EMPTY_SYSTEM_TEXT_CHUNK_TRAIN, REQUEST_EMPTY_TURN_TRAIN]
+        )
+        if tokenizer_version >= TokenizerVersion.v3:
+            conversations.append(REQUEST_EMPTY_TEXT_CHUNKS_TRAIN)
+        if tokenizer_version < TokenizerVersion.v7:
+            conversations.append(REQUEST_EMPTY_SYSTEM_TRAIN)
+        else:
+            conversations.append(REQUEST_EMPTY_ASSISTANT_TRAIN)
 
     conversations = [c.model_copy(deep=True) for c in conversations]
 

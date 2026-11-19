@@ -11,6 +11,16 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
 from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
 
+# Characters to escape when inlining a string in a single-quoted Jinja string literal.
+_JINJA_STRING_ESCAPES: tuple[tuple[str, str], ...] = (
+    # Jinja decodes literals with unicode-escape. Must come first so later escapes are not doubled.
+    ("\\", "\\\\"),
+    # Would close the single-quoted literal.
+    ("'", "\\'"),
+    # The Jinja lexer turns raw carriage returns into newlines.
+    ("\r", "\\r"),
+)
+
 
 def generate_chat_template(
     spm: bool,
@@ -72,7 +82,9 @@ def generate_chat_template(
     if default_system_prompt is not None:
         # Thinking chunks are not a concern here because default system prompts
         # are plain text strings, not structured content with chunk types.
-        escaped_prompt = default_system_prompt.replace("\\", "\\\\").replace("'", "\\'")
+        escaped_prompt = default_system_prompt
+        for char, escape in _JINJA_STRING_ESCAPES:
+            escaped_prompt = escaped_prompt.replace(char, escape)
         template = template.replace(
             "{%- set default_system_message = '' %}",
             "{%- set default_system_message = '" + escaped_prompt + "' %}",

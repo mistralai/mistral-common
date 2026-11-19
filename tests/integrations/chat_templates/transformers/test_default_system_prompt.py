@@ -29,7 +29,7 @@ class TestDefaultSystemPromptInjection:
             (TokenizerVersion.v3, False, "[INST]You are a helpful AI assistant.\n\nHello[/INST]"),
             (TokenizerVersion.v7, False, "[SYSTEM_PROMPT]You are a helpful AI assistant.[/SYSTEM_PROMPT]"),
             (TokenizerVersion.v3, True, "[INST] You are a helpful AI assistant.\n\nHello[/INST]"),
-            (TokenizerVersion.v7, True, "[SYSTEM_PROMPT]You are a helpful AI assistant.[/SYSTEM_PROMPT]"),
+            (TokenizerVersion.v7, True, "[SYSTEM_PROMPT] You are a helpful AI assistant.[/SYSTEM_PROMPT]"),
             (TokenizerVersion.v11, False, "[SYSTEM_PROMPT]You are a helpful AI assistant.[/SYSTEM_PROMPT]"),
             (TokenizerVersion.v13, False, "[SYSTEM_PROMPT]You are a helpful AI assistant.[/SYSTEM_PROMPT]"),
         ],
@@ -82,6 +82,104 @@ class TestDefaultSystemPromptInjection:
 
         assert self.DEFAULT_SYSTEM_PROMPT not in output
         assert "You are a custom assistant." in output
+
+    @pytest.mark.parametrize(
+        ("version", "spm"),
+        [
+            (TokenizerVersion.v3, False),
+            (TokenizerVersion.v3, True),
+            (TokenizerVersion.v7, False),
+            (TokenizerVersion.v7, True),
+            (TokenizerVersion.v13, False),
+        ],
+    )
+    def test_default_prompt_matches_explicit_system_message(self, version: TokenizerVersion, spm: bool) -> None:
+        chat_template = generate_chat_template(
+            spm=spm,
+            tokenizer_version=version,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=self.DEFAULT_SYSTEM_PROMPT,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+            model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
+        )
+        system_message = {"role": "system", "content": self.DEFAULT_SYSTEM_PROMPT}
+        explicit_conv = {"messages": [system_message, *CONV_NO_SYSTEM["messages"]]}
+
+        default_output = encode_transformers_from_openai(chat_template, CONV_NO_SYSTEM)
+        explicit_output = encode_transformers_from_openai(chat_template, explicit_conv)
+
+        assert default_output == explicit_output
+
+    @pytest.mark.parametrize(
+        ("version", "spm"),
+        [
+            (TokenizerVersion.v3, False),
+            (TokenizerVersion.v3, True),
+            (TokenizerVersion.v7, False),
+            (TokenizerVersion.v7, True),
+            (TokenizerVersion.v13, False),
+        ],
+    )
+    def test_default_prompt_with_carriage_returns_matches_explicit_system_message(
+        self, version: TokenizerVersion, spm: bool
+    ) -> None:
+        default_system_prompt = "Line 1\r\nLine 2\rLine 3"
+        chat_template = generate_chat_template(
+            spm=spm,
+            tokenizer_version=version,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=default_system_prompt,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+            model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
+        )
+        system_message = {"role": "system", "content": default_system_prompt}
+        explicit_conv = {"messages": [system_message, *CONV_NO_SYSTEM["messages"]]}
+
+        default_output = encode_transformers_from_openai(chat_template, CONV_NO_SYSTEM)
+        explicit_output = encode_transformers_from_openai(chat_template, explicit_conv)
+
+        assert default_output == explicit_output
+
+    @pytest.mark.parametrize(
+        ("version", "spm"),
+        [
+            (TokenizerVersion.v1, False),
+            (TokenizerVersion.v3, False),
+            (TokenizerVersion.v3, True),
+        ],
+    )
+    def test_default_prompt_used_for_empty_system_only_conversation(self, version: TokenizerVersion, spm: bool) -> None:
+        chat_template = generate_chat_template(
+            spm=spm,
+            tokenizer_version=version,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt=self.DEFAULT_SYSTEM_PROMPT,
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+            model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
+        )
+        empty_system_conv = {"messages": [{"role": "system", "content": ""}]}
+        explicit_conv = {"messages": [{"role": "system", "content": self.DEFAULT_SYSTEM_PROMPT}]}
+
+        default_output = encode_transformers_from_openai(chat_template, empty_system_conv)
+        explicit_output = encode_transformers_from_openai(chat_template, explicit_conv)
+
+        assert self.DEFAULT_SYSTEM_PROMPT in default_output
+        assert default_output == explicit_output
 
     def test_legacy_no_default_prompt(self) -> None:
         chat_template = generate_chat_template(
@@ -154,11 +252,18 @@ class TestSystemPromptEscaping:
             "You're a helpful assistant! Use \"quotes\" and 'apostrophes'.",
             "use \\ for escaping",
             "Line 1\nLine 2\nLine 3",
+            "Line 1\r\nLine 2\rLine 3",
             r"Step \1: initialize, Step \2: run",
             "Use {{ variable }} and {% if true %}block{% endif %}",
         ],
     )
     def test_special_chars_preserved(self, prompt: str) -> None:
+        result = self._render_default_prompt(prompt)
+
+        assert prompt in result
+
+    @staticmethod
+    def _render_default_prompt(prompt: str) -> str:
         template = generate_chat_template(
             spm=False,
             tokenizer_version=TokenizerVersion.v7,
@@ -172,7 +277,24 @@ class TestSystemPromptEscaping:
             reasoning_effort_values=None,
             reasoning_effort_default=None,
         )
+        return encode_transformers_from_openai(template, CONV_NO_SYSTEM)
 
-        result = encode_transformers_from_openai(template, CONV_NO_SYSTEM)
+    @pytest.mark.parametrize(
+        "prompt",
+        [
+            "use \\ for escaping",
+            "You're \"quoted\" and 'apostrophes'",
+            "a\r\nb\rc\nd",
+            "tab\there",
+            "nul\x00here",
+            "emoji \U0001f600 caf\u00e9",
+            "%} {{ }} {# #}",
+            "ls\u2028ps\u2029end",
+            r"literal \n here",
+            "trailing\\",
+        ],
+    )
+    def test_default_prompt_round_trips_exactly(self, prompt: str) -> None:
+        result = self._render_default_prompt(prompt)
 
-        assert prompt in result
+        assert f"[SYSTEM_PROMPT]{prompt}[/SYSTEM_PROMPT]" in result

@@ -5,6 +5,22 @@
 {{- bos_token }}
 
 
+{#- Reject an empty conversation, as the tokenizer does. #}
+{%- if messages | length == 0 %}
+    {{- raise_exception('Conversation must have at least one message') }}
+{%- endif %}
+
+{#- Read the developer role as system, as the tokenizer does. #}
+{%- set ns_dev = namespace(messages=[]) %}
+{%- for message in messages %}
+    {%- if message['role'] == 'developer' %}
+        {%- set ns_dev.messages = ns_dev.messages + [{'role': 'system', 'content': message['content']}] %}
+    {%- else %}
+        {%- set ns_dev.messages = ns_dev.messages + [message] %}
+    {%- endif %}
+{%- endfor %}
+{%- set messages = ns_dev.messages %}
+
 {#- Handle system prompt if it exists. #}
 {%- set loop_messages = messages %}
 {%- if messages[0]['role'] != 'system' and default_system_message != '' %}
@@ -96,12 +112,12 @@
                     {%- endif %}
                 {%- endif %}
                 {%- if msg['content'] is string %}
-                    {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}
+                    {%- set ns_c.text_parts = ns_c.text_parts + ([msg['content']] if msg['content'] else []) %}
                 {%- elif msg['content'] is not none %}
                     {%- set ns_msg = namespace(msg_text_parts=[]) %}
                     {%- for block in msg['content'] %}
                         {%- if block['type'] == 'text' %}
-                            {%- set ns_msg.msg_text_parts = ns_msg.msg_text_parts + [block['text']] %}
+                            {%- set ns_msg.msg_text_parts = ns_msg.msg_text_parts + ([block['text']] if block['text'] else []) %}
                         {%- else %}
                             {%- if ns_msg.msg_text_parts | length > 0 %}
                                 {%- set ns_c.text_parts = ns_c.text_parts + [ns_msg.msg_text_parts | join('')] %}
@@ -203,6 +219,7 @@
 
     {#- Assistant messages supports text and thinking content. #}
     {%- elif message['role'] == 'assistant' %}
+        {%- generation -%}
         {%- if (message['content'] is none or message['content'] == '' or message['content']|length == 0) and (message['tool_calls'] is not defined or message['tool_calls'] is none or message['tool_calls']|length == 0) %}
             {{- raise_exception('Assistant message must have a string or a list of chunks in content or a list of tool calls.') }}
         {%- endif %}
@@ -226,6 +243,7 @@
         {%- endif %}
 
         {{- eos_token }}
+        {%- endgeneration -%}
 
     {#- Tool messages (multimodal). #}
     {%- elif message['role'] == 'tool' %}
