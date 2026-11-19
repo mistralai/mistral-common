@@ -1,3 +1,12 @@
+r"""Unit tests for `mistral_common.guidance.grammar_factory`.
+
+Migrated from the legacy `tests/guidance/test_guidance.py`. Rejection
+boundaries are derived from the tokenizer (byte-length prefix counting),
+never from the matcher under test: each invalid case feeds its
+independently justified valid prefix and then the invalid continuation
+to one matcher.
+"""
+
 import inspect
 import re
 from pathlib import Path
@@ -49,7 +58,7 @@ from mistral_common.tokens.tokenizers.model_settings_builder import ModelSetting
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekkenizer
 from tests.utils.special_tokens import get_special_tokens, quick_vocab
 
-EMOJI_LARK_PATH = Path(__file__).parent.parent / "data" / "emoji.lark"
+EMOJI_LARK_PATH = Path(__file__).parents[2] / "data" / "emoji.lark"
 
 Mode = Literal["auto", "any", "none", "required"]
 
@@ -348,32 +357,26 @@ def _grammar_accepts(
     return all(matcher.consume_token(token) for token in tokens) and matcher.is_stopped()
 
 
-def _find_first_rejection(
-    factory: GrammarFactory,
-    tokens: list[int],
-    tool_choice: ToolChoice | Mode,
-    tools: list[Tool] | None,
-    response_format: ResponseFormat,
-) -> int:
-    r"""Finds the index of the first token rejected by the request grammar.
+def _tool_call_head_tokens(tokenizer: Tokenizer, name: str) -> list[int]:
+    r"""Tokens of a tool call up to and including the `[ARGS]` marker."""
+    return [
+        tokenizer.get_special_token("[TOOL_CALLS]"),
+        *tokenizer.encode(name, bos=False, eos=False),
+        tokenizer.get_special_token("[ARGS]"),
+    ]
 
-    Used where the rejection index depends on llguidance's byte-level parsing.
 
-    Raises:
-        ValueError: If all tokens are accepted.
+def _tool_call_args_boundary(tokenizer: Tokenizer, name: str, arguments: str, args_prefix: str) -> int:
+    r"""Token index where `args_prefix` ends within a tool call's argument tokens.
+
+    Derived from the tokenizer only, never from the matcher under test: the
+    boundary is the head length plus the number of argument tokens covering
+    the byte length of `args_prefix` in the full argument string.
     """
-    grammar = _chat_grammar(
-        factory=factory,
-        tool_choice=tool_choice,
-        tools=tools,
-        response_format=response_format,
-        parallel_tool_calls=True,
+    assert is_tekkenizer(tokenizer)
+    return len(_tool_call_head_tokens(tokenizer=tokenizer, name=name)) + _count_prefix_tokens(
+        tokenizer=tokenizer, full_text=arguments, prefix=args_prefix
     )
-    matcher = llg.LLMatcher(tokenizer=factory.llg_tokenizer, grammar=grammar)
-    for i, token in enumerate(tokens):
-        if not matcher.consume_token(token):
-            return i
-    raise ValueError("All tokens were accepted — expected a rejection")
 
 
 def _token_debug_repr(tokenizer: Tekkenizer, token_id: int) -> str:
@@ -541,7 +544,7 @@ def _generate_tool_call_cases(mistral_tokenizer: MistralTokenizer) -> list[TestC
     return cases
 
 
-def _generate_strict_tool_call_cases(mistral_tokenizer: MistralTokenizer, factory: GrammarFactory) -> list[TestCase]:
+def _generate_strict_tool_call_cases(mistral_tokenizer: MistralTokenizer) -> list[TestCase]:
     instruct_tokenizer = _instruct(mistral_tokenizer=mistral_tokenizer)
     strict_date = [ToolProvider.payment(name="retrieve_payment_date", strict=True)]
     strict_both = ToolProvider.payments(strict=True)
@@ -549,17 +552,18 @@ def _generate_strict_tool_call_cases(mistral_tokenizer: MistralTokenizer, factor
     def encode(*calls: ToolCall) -> list[int]:
         return _encode_content(instruct_tokenizer=instruct_tokenizer, content=list(calls))
 
-    def first_rejection(tokens: list[int]) -> int:
-        return _find_first_rejection(
-            factory=factory,
-            tokens=tokens,
-            tool_choice=ToolChoiceEnum.auto,
-            tools=strict_date,
-            response_format=ResponseFormat(),
-        )
-
+    tokenizer = instruct_tokenizer.tokenizer
+    # Independent oracles, derived from the tokenizer only. Wrong args: the strict payment
+    # schema requires `transaction_id` and forbids additional properties, so the prefix up
+    # to `{"` is valid and the undeclared key `bogus` is the rejected continuation.
     wrong_args = encode(_tool_call(name="retrieve_payment_date", arguments='{"bogus": "12345"}'))
+    wrong_args_boundary = _tool_call_args_boundary(
+        tokenizer=tokenizer, name="retrieve_payment_date", arguments='{"bogus": "12345"}', args_prefix='{"'
+    )
+    # Wrong name: the strict tool set declares `retrieve_payment_date` while the call names
+    # `fn1`, so only the `[TOOL_CALLS]` marker is a valid prefix and the name is rejected.
     wrong_name = encode(_tool_call(name="fn1", arguments=_TRANSACTION_ARGS))
+    wrong_name_boundary = 1
     rows: list[tuple[str, list[int], int | None, list[Tool]]] = [
         (
             "single_non_strict_tool_call",
@@ -573,8 +577,8 @@ def _generate_strict_tool_call_cases(mistral_tokenizer: MistralTokenizer, factor
             None,
             strict_date,
         ),
-        ("strict_tool_call_wrong_args", wrong_args, first_rejection(tokens=wrong_args), strict_date),
-        ("strict_tool_call_wrong_name", wrong_name, first_rejection(tokens=wrong_name), strict_date),
+        ("strict_tool_call_wrong_args", wrong_args, wrong_args_boundary, strict_date),
+        ("strict_tool_call_wrong_name", wrong_name, wrong_name_boundary, strict_date),
         (
             "multiple_strict_tool_calls",
             encode(
@@ -609,8 +613,9 @@ def _generate_strict_tool_call_cases(mistral_tokenizer: MistralTokenizer, factor
     return cases
 
 
-def _generate_named_tool_choice_cases(mistral_tokenizer: MistralTokenizer, factory: GrammarFactory) -> list[TestCase]:
+def _generate_named_tool_choice_cases(mistral_tokenizer: MistralTokenizer) -> list[TestCase]:
     instruct_tokenizer = _instruct(mistral_tokenizer=mistral_tokenizer)
+    tokenizer = instruct_tokenizer.tokenizer
     named = NamedToolChoice(type=ToolTypes.function, function=FunctionName(name="retrieve_payment_date"))
     non_strict = ToolProvider.payments(strict=False)
     strict = [ToolProvider.payment(name="retrieve_payment_date", strict=True)]
@@ -618,26 +623,30 @@ def _generate_named_tool_choice_cases(mistral_tokenizer: MistralTokenizer, facto
     def encode(call: ToolCall) -> list[int]:
         return _encode_content(instruct_tokenizer=instruct_tokenizer, content=[call])
 
-    def first_rejection(tokens: list[int], tools: list[Tool]) -> int:
-        return _find_first_rejection(
-            factory=factory, tokens=tokens, tool_choice=named, tools=tools, response_format=ResponseFormat()
-        )
-
     correct = encode(_tool_call(name="retrieve_payment_date", arguments=_TRANSACTION_ARGS))
     arbitrary_args = encode(
         _tool_call(name="retrieve_payment_date", arguments='{"completely": "arbitrary", "keys": [1, 2, 3]}')
     )
     wrong_tool = encode(_tool_call(name="retrieve_payment_status", arguments=_TRANSACTION_ARGS))
     wrong_args = encode(_tool_call(name="retrieve_payment_date", arguments='{"wrong_arg": "12345"}'))
-    wrong_tool_index = first_rejection(tokens=wrong_tool, tools=non_strict)
-    wrong_args_index = first_rejection(tokens=wrong_args, tools=strict)
+    # Independent oracles, derived from the tokenizer only. Wrong tool: the named choice
+    # selects `retrieve_payment_date` while the call names `retrieve_payment_status`; their
+    # shared `retrieve_payment_` prefix is valid and the conflicting `status` continuation is
+    # rejected. Wrong args: the named strict tool requires `transaction_id` and forbids
+    # extras, so the prefix up to `{"` is valid and the undeclared key `wrong_arg` is rejected.
+    wrong_tool_boundary = 1 + _count_prefix_tokens(
+        tokenizer=tokenizer, full_text="retrieve_payment_status", prefix="retrieve_payment_"
+    )
+    wrong_args_boundary = _tool_call_args_boundary(
+        tokenizer=tokenizer, name="retrieve_payment_date", arguments='{"wrong_arg": "12345"}', args_prefix='{"'
+    )
     rows: list[tuple[str, list[int], int | None, list[Tool], bool]] = [
         ("named_tool_choice_correct", correct, None, non_strict, True),
         ("named_tool_choice_correct_no_parallel", correct, None, non_strict, False),
         ("named_tool_choice_non_strict_arbitrary_args", arbitrary_args, None, non_strict, True),
-        ("named_tool_choice_wrong_tool", wrong_tool, wrong_tool_index, non_strict, True),
+        ("named_tool_choice_wrong_tool", wrong_tool, wrong_tool_boundary, non_strict, True),
         ("named_tool_choice_strict_correct", correct, None, strict, True),
-        ("named_tool_choice_strict_wrong_args", wrong_args, wrong_args_index, strict, True),
+        ("named_tool_choice_strict_wrong_args", wrong_args, wrong_args_boundary, strict, True),
     ]
     return [
         TestCase(
@@ -714,7 +723,7 @@ def _generate_thinking_cases(mistral_tokenizer: MistralTokenizer) -> list[TestCa
     return cases
 
 
-def _generate_json_schema_cases(mistral_tokenizer: MistralTokenizer, factory: GrammarFactory) -> list[TestCase]:
+def _generate_json_schema_cases(mistral_tokenizer: MistralTokenizer) -> list[TestCase]:
     instruct_tokenizer = _instruct(mistral_tokenizer=mistral_tokenizer)
     tokenizer = instruct_tokenizer.tokenizer
     person = SchemaProvider.basic_person()
@@ -724,21 +733,16 @@ def _generate_json_schema_cases(mistral_tokenizer: MistralTokenizer, factory: Gr
     def encode(content: str | list[Any]) -> list[int]:
         return _encode_content(instruct_tokenizer=instruct_tokenizer, content=content)
 
-    swapped_person = encode('{"age": "John", "name": 30}')
+    # Independent oracle, derived from the tokenizer only: the person schema declares `name`
+    # as a string and `age` as an integer, but this instance assigns a string to `age` and a
+    # number to `name`. The valid prefix `{"` is consumed and the type-violating
+    # continuation is rejected by the same matcher.
+    swapped_text = '{"age": "John", "name": 30}'
+    swapped_person = encode(swapped_text)
+    swapped_boundary = _count_prefix_tokens(tokenizer=tokenizer, full_text=swapped_text, prefix='{"')
     rows: list[tuple[str, list[int], int | None, dict[str, Any]]] = [
         ("basic_person_valid", encode(valid_person), None, person),
-        (
-            "basic_person_invalid",
-            swapped_person,
-            _find_first_rejection(
-                factory=factory,
-                tokens=swapped_person,
-                tool_choice="auto",
-                tools=None,
-                response_format=_strict_schema(schema=person),
-            ),
-            person,
-        ),
+        ("basic_person_invalid", swapped_person, swapped_boundary, person),
         ("basic_person_non_strict_valid", swapped_person, None, any_object),
         (
             "domerge_valid",
@@ -811,24 +815,20 @@ def _generate_json_schema_cases(mistral_tokenizer: MistralTokenizer, factory: Gr
     call = _tool_call(name="get_weather", arguments="{}")
     single_call = encode([call])
 
-    def auto_rejection(tokens: list[int]) -> int:
-        return _find_first_rejection(
-            factory=factory,
-            tokens=tokens,
-            tool_choice="auto",
-            tools=tools,
-            response_format=_strict_schema(schema=person),
-        )
-
     text = encode("Hello world!")
     invalid_person = swapped_person
+    # Independent oracle, derived from the tokenizer only: with tools plus a JSON schema,
+    # `auto` allows JSON or tool calls but not plain text. The base template rejects the
+    # text at its first token; the think templates accept the text tokens but require a
+    # call or JSON before EOS, so the EOS token is the rejected continuation.
+    text_boundary = 0 if tokenizer.version < TokenizerVersion.v13 else len(text) - 1
     with_tools: dict[str, tuple[list[int], dict[Mode, int | None], bool]] = {
         "json_schema_with_tools": (single_call, {"auto": None, "none": 0}, True),
         "json_schema_with_tools_json": (encode(valid_person), {"auto": None, "none": None}, True),
-        "json_schema_with_tools_text": (text, {"auto": auto_rejection(tokens=text), "none": 0}, True),
+        "json_schema_with_tools_text": (text, {"auto": text_boundary, "none": 0}, True),
         "json_schema_with_tools_invalid_json": (
             invalid_person,
-            {"auto": auto_rejection(tokens=invalid_person)},
+            {"auto": swapped_boundary},
             True,
         ),
         "json_schema_with_tools_parallel_disallowed": (
@@ -850,22 +850,20 @@ def _generate_json_schema_cases(mistral_tokenizer: MistralTokenizer, factory: Gr
     return cases
 
 
-def _generate_cases(mistral_tokenizer: MistralTokenizer, factory: GrammarFactory) -> list[TestCase]:
+def _generate_cases(mistral_tokenizer: MistralTokenizer) -> list[TestCase]:
     return [
         *_generate_text_cases(mistral_tokenizer=mistral_tokenizer),
         *_generate_emoji_cases(mistral_tokenizer=mistral_tokenizer),
         *_generate_tool_call_cases(mistral_tokenizer=mistral_tokenizer),
-        *_generate_strict_tool_call_cases(mistral_tokenizer=mistral_tokenizer, factory=factory),
-        *_generate_named_tool_choice_cases(mistral_tokenizer=mistral_tokenizer, factory=factory),
+        *_generate_strict_tool_call_cases(mistral_tokenizer=mistral_tokenizer),
+        *_generate_named_tool_choice_cases(mistral_tokenizer=mistral_tokenizer),
         *_generate_thinking_cases(mistral_tokenizer=mistral_tokenizer),
-        *_generate_json_schema_cases(mistral_tokenizer=mistral_tokenizer, factory=factory),
+        *_generate_json_schema_cases(mistral_tokenizer=mistral_tokenizer),
     ]
 
 
 _ALL_CASES: list[TestCase] = [
-    case
-    for version, mistral_tokenizer in _ALL_TOKENIZERS.items()
-    for case in _generate_cases(mistral_tokenizer=mistral_tokenizer, factory=_factory_for(version=version))
+    case for version, mistral_tokenizer in _ALL_TOKENIZERS.items() for case in _generate_cases(mistral_tokenizer)
 ]
 
 
@@ -952,10 +950,11 @@ class TestGrammarFactory:
             ),
         ],
     )
+    @pytest.mark.parametrize("version", list(_ALL_TOKENIZERS), ids=lambda v: v.value)
     def test_get_lark_from_jinja_rejects_invalid_mode_and_tools(
-        self, mode: ToolChoice, tools: list[Tool] | None, error_message: str
+        self, version: TokenizerVersion, mode: ToolChoice, tools: list[Tool] | None, error_message: str
     ) -> None:
-        factory = _factory_for(version=TokenizerVersion.v11)
+        factory = _factory_for(version=version)
         with pytest.raises(ValueError, match=error_message):
             factory.get_lark_from_jinja(
                 template=factory.select_jinja_template(),
@@ -1206,8 +1205,11 @@ def test_convert_tool_calls_force_tool_names_requires_tools() -> None:
         ),
     ],
 )
-def test_get_grammar_for_chat_request_returns_lark(kwargs: dict[str, Any], expects_lark: bool) -> None:
-    factory = _factory_for(version=TokenizerVersion.v11)
+@pytest.mark.parametrize("version", list(_ALL_TOKENIZERS), ids=lambda v: v.value)
+def test_get_grammar_for_chat_request_returns_lark(
+    version: TokenizerVersion, kwargs: dict[str, Any], expects_lark: bool
+) -> None:
+    factory = _factory_for(version=version)
 
     lark = factory.get_grammar_for_chat_request(
         request=_chat_request(**kwargs), template=factory.select_jinja_template()
@@ -1263,15 +1265,19 @@ def test_get_grammar_for_chat_request_returns_lark(kwargs: dict[str, Any], expec
         ),
     ],
 )
-def test_get_grammar_for_chat_request_raises(kwargs: dict[str, Any], error_message: str) -> None:
-    factory = _factory_for(version=TokenizerVersion.v11)
+@pytest.mark.parametrize("version", list(_ALL_TOKENIZERS), ids=lambda v: v.value)
+def test_get_grammar_for_chat_request_raises(
+    version: TokenizerVersion, kwargs: dict[str, Any], error_message: str
+) -> None:
+    factory = _factory_for(version=version)
 
     with pytest.raises(InvalidRequestException, match=re.escape(error_message)):
         factory.get_grammar_for_chat_request(request=_chat_request(**kwargs), template=factory.select_jinja_template())
 
 
-def test_get_grammar_for_chat_request_any_equals_required() -> None:
-    factory = _factory_for(version=TokenizerVersion.v11)
+@pytest.mark.parametrize("version", list(_ALL_TOKENIZERS), ids=lambda v: v.value)
+def test_get_grammar_for_chat_request_any_equals_required(version: TokenizerVersion) -> None:
+    factory = _factory_for(version=version)
     template = factory.select_jinja_template()
     tools = [ToolProvider.make(name="get_weather")]
 
@@ -1283,7 +1289,7 @@ def test_get_grammar_for_chat_request_any_equals_required() -> None:
     assert any_lark == required_lark
 
 
-@pytest.mark.parametrize("version", [TokenizerVersion.v11, TokenizerVersion.v13])
+@pytest.mark.parametrize("version", list(_ALL_TOKENIZERS), ids=lambda v: v.value)
 @pytest.mark.parametrize("strict", [False, True])
 @pytest.mark.parametrize("parallel_tool_calls", [True, False])
 def test_named_tool_choice_grammar(version: TokenizerVersion, strict: bool, parallel_tool_calls: bool) -> None:
@@ -1375,7 +1381,13 @@ def test_json_schema_with_tools_think_grammar(version: TokenizerVersion) -> None
 
 
 @pytest.mark.parametrize(
-    ("version", "text_before_call_allowed"), [(TokenizerVersion.v11, False), (TokenizerVersion.v13, True)]
+    ("version", "text_before_call_allowed"),
+    [
+        (TokenizerVersion.v11, False),
+        (TokenizerVersion.v13, True),
+        (TokenizerVersion.v15, True),
+    ],
+    ids=["v11", "v13", "v15"],
 )
 def test_get_lark_from_jinja_forced_tool_call(version: TokenizerVersion, text_before_call_allowed: bool) -> None:
     r"""`required` and the deprecated `any` render the same `required` template branch."""
@@ -1404,8 +1416,9 @@ def test_get_lark_from_jinja_forced_tool_call(version: TokenizerVersion, text_be
     assert accepts(content=[TextChunk(text="before"), call]) == text_before_call_allowed
 
 
-def test_get_lark_for_json_schema_matches_request_path() -> None:
-    factory = _factory_for(version=TokenizerVersion.v11)
+@pytest.mark.parametrize("version", list(_ALL_TOKENIZERS), ids=lambda v: v.value)
+def test_get_lark_for_json_schema_matches_request_path(version: TokenizerVersion) -> None:
+    factory = _factory_for(version=version)
     schema = SchemaProvider.basic_person()
 
     direct = factory.get_lark_for_json_schema(template=factory.select_jinja_template(), json_schema=schema)
