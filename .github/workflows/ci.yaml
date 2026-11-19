@@ -113,7 +113,7 @@ jobs:
       # PyTest
       - name: Tests
         run: |
-          uv run pytest --cov=mistral_common tests/ --ignore=tests/integrations --ignore=tests/integration -n auto --dist loadfile --cov-report "xml:coverage.xml"
+          uv run pytest --cov=mistral_common tests/ --ignore=tests/integration -n auto --dist loadfile --cov-report "xml:coverage.xml"
 
       # Doctests
       - name: Doctests
@@ -171,41 +171,3 @@ jobs:
         run: |
           HF_HUB_OFFLINE=1 uv run --no-sync pytest tests/integration/ -n auto --dist loadfile -v
 
-  integration_legacy_tests:
-    if: ${{ github.event.pull_request.draft != true }}
-    needs: static_checks
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        # Support all LTS versions of Python
-        python-version: [
-          "3.11",
-          "3.12",
-          "3.13",
-          "3.14",
-          "3.15",
-        ]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Cache uv environment
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
-          restore-keys: |
-            venv-${{ runner.os }}-${{ matrix.python-version }}-
-
-      - name: Install Dependencies
-        run: |
-          uv sync --frozen --all-extras --group dev --group test-integrations
-
-      - name: Legacy Integration Tests
-        run: |
-          uv run --no-sync pytest tests/integrations/ -n auto --dist loadfile -v
