@@ -4,8 +4,7 @@
 # Usage:
 #   ./scripts/publish_docs.sh [ref]   # tag, branch or SHA to build the docs from; defaults to origin/main
 #
-# Publishing is manual because GitHub Actions IPs are blocked by the org IP allowlist:
-# run this from a machine that is allowed to push to the gh-pages branch.
+# Run this from a machine that can push to the gh-pages branch.
 set -euo pipefail
 
 REF="${1:-origin/main}"
