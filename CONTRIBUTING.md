@@ -48,14 +48,6 @@ uv run python docs/gen_api_pages.py  # generate the code reference pages
 uv run zensical serve                # live preview at http://localhost:8000
 ```
 
-To publish the documentation to GitHub Pages, push the built site to the `gh-pages` branch.
-Publishing is manual (GitHub Actions IPs are blocked by the org IP allowlist), so run this
-from a machine that is allowed to push to `gh-pages`:
-
-```bash
-./scripts/publish_docs.sh v1.13.1   # any tag, branch or SHA; defaults to HEAD
-```
-
 Run the checks relevant to your change before opening a pull request:
 
 ```bash

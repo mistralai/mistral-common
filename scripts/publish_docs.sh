@@ -2,13 +2,13 @@
 # Publish the documentation to GitHub Pages by pushing the built site to the gh-pages branch.
 #
 # Usage:
-#   ./scripts/publish_docs.sh [ref]   # tag, branch or SHA to build the docs from; defaults to HEAD
+#   ./scripts/publish_docs.sh [ref]   # tag, branch or SHA to build the docs from; defaults to origin/main
 #
 # Publishing is manual because GitHub Actions IPs are blocked by the org IP allowlist:
 # run this from a machine that is allowed to push to the gh-pages branch.
 set -euo pipefail
 
-REF="${1:-HEAD}"
+REF="${1:-origin/main}"
 
 repo_root="$(git rev-parse --show-toplevel)"
 src_wt="$(mktemp -d)"
@@ -19,7 +19,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-git -C "$repo_root" fetch origin gh-pages
+git -C "$repo_root" fetch origin
 git -C "$repo_root" worktree add --detach "$src_wt" "$REF"
 
 (
