@@ -46,6 +46,9 @@
         <loc>https://mistralai.github.io/mistral-common/code_reference/mistral_common/imports/</loc>
       </url>
       <url>
+        <loc>https://mistralai.github.io/mistral-common/code_reference/mistral_common/types/</loc>
+      </url>
+      <url>
         <loc>https://mistralai.github.io/mistral-common/code_reference/mistral_common/experimental/think/</loc>
       </url>
       <url>
@@ -74,6 +77,9 @@
       </url>
       <url>
         <loc>https://mistralai.github.io/mistral-common/code_reference/mistral_common/integrations/chat_templates/template_generator/</loc>
+      </url>
+      <url>
+        <loc>https://mistralai.github.io/mistral-common/code_reference/mistral_common/integrations/hf_tokenizers/response_template/</loc>
       </url>
       <url>
         <loc>https://mistralai.github.io/mistral-common/code_reference/mistral_common/protocol/base/</loc>
