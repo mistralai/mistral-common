@@ -56,17 +56,18 @@ REQUEST: ChatCompletionRequest = ChatCompletionRequest(
 )
 
 
-@pytest.mark.parametrize("version", list(TokenizerVersion))
-def test_normalizer_and_instruct_request_pickle(version: TokenizerVersion) -> None:
-    builder = ModelSettingsBuilder() if version >= TokenizerVersion.v15 else None
-    normalizer = get_normalizer(version, builder)
-    instruct_request = normalizer.from_chat_completion_request(REQUEST)
+class TestNormalizerPickle:
+    @pytest.mark.parametrize("version", list(TokenizerVersion))
+    def test_normalizer_and_instruct_request_pickle(self, version: TokenizerVersion) -> None:
+        builder = ModelSettingsBuilder() if version >= TokenizerVersion.v15 else None
+        normalizer = get_normalizer(version, builder)
+        instruct_request = normalizer.from_chat_completion_request(REQUEST)
 
-    restored_request = pickle.loads(pickle.dumps(instruct_request))
-    restored_normalizer = pickle.loads(pickle.dumps(normalizer))
+        restored_request = pickle.loads(pickle.dumps(instruct_request))
+        restored_normalizer = pickle.loads(pickle.dumps(normalizer))
 
-    assert restored_request == instruct_request
-    assert restored_normalizer.from_chat_completion_request(REQUEST) == instruct_request
+        assert restored_request == instruct_request
+        assert restored_normalizer.from_chat_completion_request(REQUEST) == instruct_request
 
 
 # Valid JSON that `json.loads` rejects without a JSONDecodeError.
@@ -76,24 +77,29 @@ _UNLOADABLE_JSON = [
 ]
 
 
-@pytest.mark.parametrize(argnames="payload", argvalues=_UNLOADABLE_JSON)
-@pytest.mark.parametrize(argnames="version", argvalues=[TokenizerVersion.v3, TokenizerVersion.v7, TokenizerVersion.v13])
-def test_keeps_unloadable_json_unchanged(version: TokenizerVersion, payload: str) -> None:
-    r"""Pass tool-call arguments and tool content that json.loads rejects through unchanged."""
-    request = ChatCompletionRequest[ChatMessage](
-        messages=[
-            UserMessage(content="a"),
-            AssistantMessage(tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="b", arguments=payload))]),
-            ToolMessage(content=payload, tool_call_id="123456789"),
-        ]
+class TestUnloadableJsonPassthrough:
+    @pytest.mark.parametrize(argnames="payload", argvalues=_UNLOADABLE_JSON)
+    @pytest.mark.parametrize(
+        argnames="version", argvalues=[TokenizerVersion.v3, TokenizerVersion.v7, TokenizerVersion.v13]
     )
+    def test_keeps_unloadable_json_unchanged(self, version: TokenizerVersion, payload: str) -> None:
+        r"""Pass tool-call arguments and tool content that json.loads rejects through unchanged."""
+        request = ChatCompletionRequest[ChatMessage](
+            messages=[
+                UserMessage(content="a"),
+                AssistantMessage(
+                    tool_calls=[ToolCall(id="123456789", function=FunctionCall(name="b", arguments=payload))]
+                ),
+                ToolMessage(content=payload, tool_call_id="123456789"),
+            ]
+        )
 
-    _, assistant, tool = get_normalizer(version=version).from_chat_completion_request(request).messages
+        _, assistant, tool = get_normalizer(version=version).from_chat_completion_request(request).messages
 
-    assert isinstance(assistant, AssistantMessage) and assistant.tool_calls is not None
-    assert assistant.tool_calls[0].function.arguments == payload
-    assert isinstance(tool, ToolMessage)
-    assert tool.content == payload
+        assert isinstance(assistant, AssistantMessage) and assistant.tool_calls is not None
+        assert assistant.tool_calls[0].function.arguments == payload
+        assert isinstance(tool, ToolMessage)
+        assert tool.content == payload
 
 
 def mock_chat_completion(messages: list[ChatMessage]) -> ChatCompletionRequest:
@@ -1493,49 +1499,67 @@ class TestV15Normalization:
         )
 
 
-@pytest.mark.parametrize(
-    ("version", "expected_class", "model_settings_builder"),
-    [
-        pytest.param(TokenizerVersion.v1, InstructRequestNormalizer, None, id="v1"),
-        pytest.param(TokenizerVersion.v2, InstructRequestNormalizer, None, id="v2"),
-        pytest.param(TokenizerVersion.v3, InstructRequestNormalizer, None, id="v3"),
-        pytest.param(TokenizerVersion.v7, InstructRequestNormalizerV7, None, id="v7"),
-        pytest.param(TokenizerVersion.v11, InstructRequestNormalizerV13, None, id="v11-selects-v13"),
-        pytest.param(TokenizerVersion.v13, InstructRequestNormalizerV13, None, id="v13"),
-        pytest.param(TokenizerVersion.v15, InstructRequestNormalizerV15, _V15_BUILDER, id="v15"),
-    ],
-)
-def test_get_normalizer_selects_exact_class(
-    version: TokenizerVersion,
-    expected_class: type[InstructRequestNormalizer],
-    model_settings_builder: ModelSettingsBuilder | None,
-) -> None:
-    normalizer = get_normalizer(version, model_settings_builder)
-    assert type(normalizer) is expected_class
-    assert normalizer._model_settings_builder == model_settings_builder
+class TestGetNormalizer:
+    @pytest.mark.parametrize(
+        ("version", "expected_class", "model_settings_builder"),
+        [
+            pytest.param(TokenizerVersion.v1, InstructRequestNormalizer, None, id="v1"),
+            pytest.param(TokenizerVersion.v2, InstructRequestNormalizer, None, id="v2"),
+            pytest.param(TokenizerVersion.v3, InstructRequestNormalizer, None, id="v3"),
+            pytest.param(TokenizerVersion.v7, InstructRequestNormalizerV7, None, id="v7"),
+            pytest.param(TokenizerVersion.v11, InstructRequestNormalizerV13, None, id="v11-selects-v13"),
+            pytest.param(TokenizerVersion.v13, InstructRequestNormalizerV13, None, id="v13"),
+            pytest.param(TokenizerVersion.v15, InstructRequestNormalizerV15, _V15_BUILDER, id="v15"),
+        ],
+    )
+    def test_get_normalizer_selects_exact_class(
+        self,
+        version: TokenizerVersion,
+        expected_class: type[InstructRequestNormalizer],
+        model_settings_builder: ModelSettingsBuilder | None,
+    ) -> None:
+        normalizer = get_normalizer(version, model_settings_builder)
+        assert type(normalizer) is expected_class
+        assert normalizer._model_settings_builder == model_settings_builder
 
+    @pytest.mark.parametrize(
+        "version",
+        [
+            pytest.param(TokenizerVersion.v1, id="v1"),
+            pytest.param(TokenizerVersion.v2, id="v2"),
+            pytest.param(TokenizerVersion.v3, id="v3"),
+            pytest.param(TokenizerVersion.v7, id="v7"),
+            pytest.param(TokenizerVersion.v11, id="v11"),
+            pytest.param(TokenizerVersion.v13, id="v13"),
+        ],
+    )
+    def test_get_normalizer_pre_v15_rejects_settings_builder(self, version: TokenizerVersion) -> None:
+        with pytest.raises(ValueError, match="model_settings_builder must be None"):
+            get_normalizer(version, _V15_BUILDER)
 
-@pytest.mark.parametrize(
-    "version",
-    [
-        pytest.param(TokenizerVersion.v1, id="v1"),
-        pytest.param(TokenizerVersion.v2, id="v2"),
-        pytest.param(TokenizerVersion.v3, id="v3"),
-        pytest.param(TokenizerVersion.v7, id="v7"),
-        pytest.param(TokenizerVersion.v11, id="v11"),
-        pytest.param(TokenizerVersion.v13, id="v13"),
-    ],
-)
-def test_get_normalizer_pre_v15_rejects_settings_builder(version: TokenizerVersion) -> None:
-    with pytest.raises(ValueError, match="model_settings_builder must be None"):
-        get_normalizer(version, _V15_BUILDER)
+    def test_v15_normalizer_without_builder_rejects_when_building_settings(self) -> None:
+        normalizer = get_normalizer(TokenizerVersion.v15)
+        request = ChatCompletionRequest[ChatMessage](messages=[UserMessage(content="B")])
+        with pytest.raises(InvalidRequestException, match="model_settings_builder must not be None"):
+            normalizer.from_chat_completion_request(request)
 
-
-def test_v15_normalizer_without_builder_rejects_when_building_settings() -> None:
-    normalizer = get_normalizer(TokenizerVersion.v15)
-    request = ChatCompletionRequest[ChatMessage](messages=[UserMessage(content="B")])
-    with pytest.raises(InvalidRequestException, match="model_settings_builder must not be None"):
-        normalizer.from_chat_completion_request(request)
+    @pytest.mark.parametrize(
+        "normalizer_cls",
+        [
+            pytest.param(InstructRequestNormalizer, id="base"),
+            pytest.param(InstructRequestNormalizerV7, id="v7"),
+            pytest.param(InstructRequestNormalizerV13, id="v13"),
+        ],
+    )
+    def test_directly_constructed_pre_v15_normalizer_rejects_builder(
+        self, normalizer_cls: type[InstructRequestNormalizer]
+    ) -> None:
+        normalizer = normalizer_cls(
+            UserMessage, AssistantMessage, ToolMessage, SystemMessage, InstructRequest, _V15_BUILDER
+        )
+        request = ChatCompletionRequest(messages=[UserMessage(content="B")])
+        with pytest.raises(InvalidRequestException, match="model_settings_builder should be None"):
+            normalizer.from_chat_completion_request(request)
 
 
 def _image_chunk() -> ImageChunk:
@@ -1678,24 +1702,26 @@ def _v3_mm_case_text_4() -> tuple[ChatCompletionRequest, InstructRequest[ChatMes
     return request, expected
 
 
-@pytest.mark.parametrize(
-    "case",
-    [
-        pytest.param(_v3_mm_case_image_1, id="image-1"),
-        pytest.param(_v3_mm_case_image_2, id="image-2"),
-        pytest.param(_v3_mm_case_image_3, id="image-3"),
-        pytest.param(_v3_mm_case_image_4, id="image-4"),
-        pytest.param(_v3_mm_case_image_5, id="image-5"),
-        pytest.param(_v3_mm_case_text_1, id="text-1"),
-        pytest.param(_v3_mm_case_text_2, id="text-2"),
-        pytest.param(_v3_mm_case_text_3, id="text-3"),
-        pytest.param(_v3_mm_case_text_4, id="text-4"),
-    ],
-)
-def test_v3_multimodal_normalizer_preserves_complete_content(
-    case: Callable[[], tuple[ChatCompletionRequest, InstructRequest[ChatMessage, Tool]]],
-) -> None:
-    r"""The v3 (base) normalizer keeps image position/payload, coalesces adjacent text and folds system prompts."""
-    request, expected = case()
-    normalizer = get_normalizer(TokenizerVersion.v3)
-    assert normalizer.from_chat_completion_request(request) == expected
+class TestV3MultimodalNormalization:
+    @pytest.mark.parametrize(
+        "case",
+        [
+            pytest.param(_v3_mm_case_image_1, id="image-1"),
+            pytest.param(_v3_mm_case_image_2, id="image-2"),
+            pytest.param(_v3_mm_case_image_3, id="image-3"),
+            pytest.param(_v3_mm_case_image_4, id="image-4"),
+            pytest.param(_v3_mm_case_image_5, id="image-5"),
+            pytest.param(_v3_mm_case_text_1, id="text-1"),
+            pytest.param(_v3_mm_case_text_2, id="text-2"),
+            pytest.param(_v3_mm_case_text_3, id="text-3"),
+            pytest.param(_v3_mm_case_text_4, id="text-4"),
+        ],
+    )
+    def test_v3_multimodal_normalizer_preserves_complete_content(
+        self,
+        case: Callable[[], tuple[ChatCompletionRequest, InstructRequest[ChatMessage, Tool]]],
+    ) -> None:
+        r"""The v3 (base) normalizer keeps image position/payload, coalesces adjacent text and folds system prompts."""
+        request, expected = case()
+        normalizer = get_normalizer(TokenizerVersion.v3)
+        assert normalizer.from_chat_completion_request(request) == expected

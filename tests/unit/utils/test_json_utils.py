@@ -13,6 +13,11 @@ def test_invalid_schema_raises() -> None:
         validate_json_schema_by_draft7(value={"type": 123})
 
 
+def test_non_dict_schema_raises() -> None:
+    with pytest.raises(ValueError, match="'not a dict' is not of type 'object', 'boolean'"):
+        validate_json_schema_by_draft7(value="not a dict")  # type: ignore[arg-type]
+
+
 def test_invalid_schema_error_chains_the_schema_error() -> None:
     with pytest.raises(ValueError, match="123 is not valid under any of the given schemas") as excinfo:
         validate_json_schema_by_draft7(value={"type": 123})
