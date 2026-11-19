@@ -123,9 +123,14 @@ def assert_llguidance_installed() -> None:
 
 @lru_cache()
 def assert_opencv_installed() -> None:
-    r"""Raise ImportError if the dependency is missing, with an install hint."""
+    r"""Raise ImportError if the dependency is missing or fails to import, with an install hint."""
 
     assert_package_installed("cv2", _get_dependency_error_message("opencv", "opencv"))
+    if not is_opencv_installed():
+        raise ImportError(
+            "`opencv` is installed but `import cv2` fails. "
+            "Please reinstall it with `pip install mistral-common[opencv]`"
+        )
 
 
 @lru_cache()

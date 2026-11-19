@@ -240,6 +240,33 @@ def test_is_opencv_installed_logs_broken_install_diagnostic(caplog: pytest.LogCa
 
 
 @pytest.mark.parametrize(
+    "import_error",
+    [
+        pytest.param(ImportError("numpy.core.multiarray failed to import"), id="import-error"),
+        pytest.param(RuntimeError("broken cv2"), id="other-error"),
+    ],
+)
+def test_assert_opencv_installed_when_cv2_is_installed_but_fails_to_import(import_error: Exception) -> None:
+    real_import = builtins.__import__
+
+    def fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name == "cv2":
+            raise import_error
+        return real_import(name, *args, **kwargs)
+
+    with (
+        patch("mistral_common.imports.is_package_installed", return_value=True),
+        patch("builtins.__import__", side_effect=fake_import),
+        pytest.raises(ImportError) as exc_info,
+    ):
+        assert_opencv_installed()
+
+    assert str(exc_info.value) == (
+        "`opencv` is installed but `import cv2` fails. Please reinstall it with `pip install mistral-common[opencv]`"
+    )
+
+
+@pytest.mark.parametrize(
     ("is_installed_fn", "package_name", "expected_installed"),
     _AVAILABILITY_CASES,
 )
@@ -261,6 +288,7 @@ def test_dependency_availability_reports_package_state(
     ("package_name", "assert_installed_fn", "is_installed", "expected_error_message"),
     _ASSERTION_CASES,
 )
+@patch.dict("sys.modules", {"cv2": Mock()})
 @patch("mistral_common.imports.is_package_installed")
 def test_dependency_assertion_reports_package_state(
     mock_is_package_installed: MagicMock,
@@ -284,14 +312,14 @@ def test_dependency_assertion_reports_package_state(
 def test_import_caches_are_cleared_after_a_case_fails() -> None:
     with pytest.raises(RuntimeError, match="simulated test failure"):
         with _isolated_import_caches():
+            with patch.dict("sys.modules", {"cv2": Mock()}):
+                is_opencv_installed()
             with patch("mistral_common.imports.is_package_installed", return_value=True):
                 for _, _, availability_check in _AVAILABILITY_CHECKS:
                     availability_check()
                 for _, _, assertion_check, _ in _ASSERTION_CHECKS:
                     assertion_check()
                 assert_opencv_installed()
-            with patch.dict("sys.modules", {"cv2": Mock()}):
-                is_opencv_installed()
 
             assert all(cached_check.cache_info().currsize == 1 for cached_check in _CACHED_IMPORT_CHECKS)
             raise RuntimeError("simulated test failure")

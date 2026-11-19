@@ -1691,7 +1691,7 @@ requires-dist = [
     { name = "mistral-common", extras = ["soundfile"], marker = "extra == 'audio'" },
     { name = "mistral-common", extras = ["soxr"], marker = "extra == 'audio'" },
     { name = "numpy", specifier = ">=1.25,<3.0" },
-    { name = "opencv-python-headless", marker = "extra == 'opencv'", specifier = ">=4.0.0" },
+    { name = "opencv-python-headless", marker = "extra == 'opencv'", specifier = ">=4.10.0.84" },
     { name = "pillow", specifier = ">=10.3.0" },
     { name = "pydantic", specifier = ">=2.12,<3.0" },
     { name = "pydantic-extra-types", extras = ["pycountry"], specifier = ">=2.10.5" },

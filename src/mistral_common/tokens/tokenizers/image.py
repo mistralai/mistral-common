@@ -223,7 +223,7 @@ def transform_image(image: Image.Image, new_size: tuple[int, int]) -> np.ndarray
         Transformed image with shape (C, H, W), normalized.
 
     Raises:
-        ImportError: If opencv is not installed.
+        ImportError: If opencv is not installed or fails to import.
     """
     assert_opencv_installed()
 
