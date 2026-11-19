@@ -6,7 +6,7 @@ import pytest
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.integrations.hf_tokenizers.response_template import ThinkingMode, generate_response_template
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.hf_utils import build_hf_tokenizer
+from tests.integration.chat_templates.transformers.hf_utils import build_hf_tokenizer
 from tests.utils.chat_templates.helpers import TestConfig, build_tekken_json, render_template
 
 

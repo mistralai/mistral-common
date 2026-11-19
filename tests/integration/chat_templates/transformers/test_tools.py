@@ -10,8 +10,8 @@ from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from tests.integrations.chat_templates.fixtures_data import OPENAI_REQUEST_NON_CANONICAL_TOOLS
-from tests.integrations.chat_templates.hf_utils import encode_transformers_from_openai
+from tests.integration.chat_templates.fixtures_data import OPENAI_REQUEST_NON_CANONICAL_TOOLS
+from tests.integration.chat_templates.transformers.hf_utils import encode_transformers_from_openai
 from tests.utils.chat_templates.configs import ALL_TRANSFORMERS_CONFIGS, TestConfig, format_config_id
 from tests.utils.chat_templates.helpers import (
     build_spm_path,
