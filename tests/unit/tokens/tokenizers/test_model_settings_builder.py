@@ -1,3 +1,4 @@
+import json
 import pickle
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,12 @@ from mistral_common.tokens.tokenizers.model_settings_builder import (
     ValidatorType,
 )
 from tests.integrations.chat_templates.helpers import TestConfig, build_tekken_json
+
+_REASONING_EFFORT_ONLY_BUILDER = ModelSettingsBuilder(
+    reasoning_effort=ReasoningEffortEnumBuilder(
+        accepts_none=True, default=ReasoningEffort.none, values=[ReasoningEffort.none, ReasoningEffort.high]
+    )
+)
 
 
 class StringToIntBuilder(FieldBuilder[str, int]):
@@ -137,14 +144,25 @@ class TestReasoningEffortEnumBuilder:
         with pytest.raises(InvalidRequestException, match="should be one of"):
             builder.build_value(field_name="reasoning_effort", value=ReasoningEffort.max)
 
-    def test_tokenizer_json_loads_reasoning_effort_builder(self, tmp_path: Path) -> None:
-        path = build_tekken_json(config=TestConfig(version=TokenizerVersion.v15), output_dir=tmp_path)
+    @pytest.mark.parametrize("version", list(TokenizerVersion), ids=lambda v: v.name)
+    def test_from_file_admits_builder_only_for_settings_versions(
+        self, version: TokenizerVersion, tmp_path: Path
+    ) -> None:
+        r"""A tokenizer file carrying a builder loads on v15 and is rejected on every pre-v15 version."""
+        path = build_tekken_json(config=TestConfig(version=version), output_dir=tmp_path)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["model_settings_builder"] = _REASONING_EFFORT_ONLY_BUILDER.model_dump(mode="json")
+        path.write_text(json.dumps(data), encoding="utf-8")
 
-        tokenizer = MistralTokenizer.from_file(str(path))
-
-        assert isinstance(
-            tokenizer.instruct_tokenizer.tokenizer.model_settings_builder.reasoning_effort, ReasoningEffortEnumBuilder
-        )
+        if version.supports_model_settings:
+            tokenizer = MistralTokenizer.from_file(str(path))
+            assert isinstance(
+                tokenizer.instruct_tokenizer.tokenizer.model_settings_builder.reasoning_effort,
+                ReasoningEffortEnumBuilder,
+            )
+        else:
+            with pytest.raises(ValueError, match="model_settings_builder is not supported"):
+                MistralTokenizer.from_file(str(path))
 
     def test_model_settings_builder_round_trips_through_pickle(self) -> None:
         settings_builder = ModelSettingsBuilder(
