@@ -46,7 +46,8 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_trailing_spaces_assistant_request,
     build_user_image_url_request,
 )
-from tests.utils import assert_tokenized_equal, decode_keep, is_unloadable_json
+from tests.utils.json import is_unloadable_json
+from tests.utils.tokenized import assert_tokenized_equal, decode_keep
 
 # fmt: off
 _SPM_NORMAL_TOKENS = [1, 3, 1032, 4, 1055, 2, 3, 1045, 4, 1049, 2]

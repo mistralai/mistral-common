@@ -89,7 +89,8 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_user_audio_url_request,
     build_user_image_url_request,
 )
-from tests.utils import assert_tokenized_equal, decode_keep, get_special_tokens, quick_vocab
+from tests.utils.special_tokens import get_special_tokens, quick_vocab
+from tests.utils.tokenized import assert_tokenized_equal, decode_keep
 
 # fmt: off
 _TOOL_RESULT_TEXT_TOKENS = [1, 3, 197, 4, 9, 170, 149, 32, 223, 225, 2, 7, 182, 149, 8]

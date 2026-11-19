@@ -47,7 +47,7 @@ from mistral_common.tokens.tokenizers.instruct import (
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder, ReasoningEffortEnumBuilder
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer, is_tekkenizer
-from tests.utils import get_special_tokens, quick_vocab
+from tests.utils.special_tokens import get_special_tokens, quick_vocab
 
 EMOJI_LARK_PATH = Path(__file__).parent.parent / "data" / "emoji.lark"
 

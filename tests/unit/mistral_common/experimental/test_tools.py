@@ -26,7 +26,8 @@ from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV11, InstructTokenizerV13
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-from tests.utils import get_special_tokens, is_unloadable_json, quick_vocab
+from tests.utils.json import is_unloadable_json
+from tests.utils.special_tokens import get_special_tokens, quick_vocab
 
 _TOOL_CALL_TOKEN_ID = 6
 

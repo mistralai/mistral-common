@@ -6,7 +6,7 @@ from mistral_common.experimental.utils import (
 )
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-from tests.utils import get_special_tokens, quick_vocab
+from tests.utils.special_tokens import get_special_tokens, quick_vocab
 
 
 @pytest.mark.parametrize(

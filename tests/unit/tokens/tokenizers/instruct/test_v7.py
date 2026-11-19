@@ -117,7 +117,8 @@ from tests.unit.tokens.tokenizers.instruct.test_audio import (
     build_synthetic_v7_audio_tokenizer,
     get_tekkenizer_with_audio,
 )
-from tests.utils import assert_tokenized_equal, decode_keep, get_special_tokens, quick_vocab
+from tests.utils.special_tokens import get_special_tokens, quick_vocab
+from tests.utils.tokenized import assert_tokenized_equal, decode_keep
 
 # fmt: off
 _IMAGE_AND_TOOL_RESULT_TOKENS = [1, 3, 10, 10, 14, 10, 10, 15, 1032, 4, 1055, 2, 8, 1055, 18, 1053, 9]

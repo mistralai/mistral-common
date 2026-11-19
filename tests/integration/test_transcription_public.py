@@ -35,7 +35,12 @@ from tests.integration.transcription_cases import (
     PublicTranscriptionErrorCase,
     PublicTranscriptionSuccessCase,
 )
-from tests.utils import TOKENIZED_ATOL, TOKENIZED_RTOL, assert_tokenized_equal, decode_keep
+from tests.utils.tokenized import (
+    TOKENIZED_ATOL,
+    TOKENIZED_RTOL,
+    assert_tokenized_equal,
+    decode_keep,
+)
 
 
 @pytest.mark.parametrize(argnames="case", argvalues=TRANSCRIPTION_SUCCESS_CASES, ids=lambda case: case.case_id)

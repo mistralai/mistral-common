@@ -78,7 +78,8 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_user_audio_url_request,
     build_user_image_url_request,
 )
-from tests.utils import assert_tokenized_equal, decode_keep, get_special_tokens, quick_vocab
+from tests.utils.special_tokens import get_special_tokens, quick_vocab
+from tests.utils.tokenized import assert_tokenized_equal, decode_keep
 
 # fmt: off
 _ONE_CALL_WITHOUT_ID_TOKENS = [1, 3, 197, 4, 9, 197, 195, 197, 195, 197, 32, 134, 198, 208, 197, 198, 208, 197, 134, 2]
