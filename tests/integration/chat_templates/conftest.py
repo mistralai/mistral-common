@@ -1,11 +1,8 @@
-r"""Chat template test configuration for the remaining plural-root consumers.
+r"""Chat-template parity test fixtures.
 
-Provides the package-level invalid-message fixtures and the autouse image
-download mock used by the parity and Transformers tests that still live under
-`tests/integrations/`. The configuration lists and IDs moved to the neutral
-`tests.utils.chat_templates.configs` module and are re-exported here for
-compatibility. Reusable helper functions live in `helpers.py`.
-Test data constants (`REQUEST_*`) live in `fixtures_data.py`.
+Provides the invalid-message fixtures and the package-scoped image-download
+patch used by the parity tests under this subtree. Configuration values come
+from the neutral `tests/utils/chat_templates` package.
 """
 
 from collections.abc import Generator
@@ -14,22 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tests.utils.chat_templates.configs import (
-    ALL_CONFIGS,
-    ALL_TRANSFORMERS_CONFIGS,
-    GOLDEN_CONFIGS,
-    format_config_id,
-    has_released_template,
-)
 from tests.utils.chat_templates.helpers import DUMMY_IMAGE
-
-__all__ = [
-    "ALL_CONFIGS",
-    "ALL_TRANSFORMERS_CONFIGS",
-    "GOLDEN_CONFIGS",
-    "format_config_id",
-    "has_released_template",
-]
 
 
 @pytest.fixture(scope="module")

@@ -161,6 +161,36 @@ def build_tool_call_messages(*, call_ids: Sequence[str | None], result_ids: Sequ
     ]
 
 
+def build_tool_call(*, tool_call_id: str, name: str, arguments: dict[str, Any] | str) -> ToolCall:
+    r"""Create a tool call with the given id, function name and arguments.
+
+    Args:
+        tool_call_id: Unique identifier paired with the tool result message.
+        name: Function name carried by the call.
+        arguments: Call arguments as a JSON string or a dict parsed on construction.
+
+    Returns:
+        A fresh tool call.
+    """
+    return ToolCall(id=tool_call_id, function=FunctionCall(name=name, arguments=arguments))  # type: ignore[arg-type]
+
+
+def build_tool_message(*, content: str | list[ContentChunk], tool_call_id: str, name: str | None = None) -> ToolMessage:
+    r"""Create a tool result message responding to the given tool call.
+
+    Args:
+        content: Tool output, plain text or multimodal chunks.
+        tool_call_id: Identifier of the assistant tool call this answers.
+        name: Optional tool name; omitted when the renderer injects it.
+
+    Returns:
+        A fresh tool message.
+    """
+    if name is None:
+        return ToolMessage(content=content, tool_call_id=tool_call_id)
+    return ToolMessage(name=name, content=content, tool_call_id=tool_call_id)
+
+
 def _call_id_recipe(*, recipe_id: str, tool_call_id: str) -> ChatRecipe:
     r"""Bind a call id to a recipe that creates a fresh request each time.
 

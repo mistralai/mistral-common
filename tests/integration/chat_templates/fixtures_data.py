@@ -6,49 +6,49 @@ from collections.abc import Iterator
 from typing import Any
 
 from mistral_common.protocol.instruct.chunk import (
-    AudioChunk,
-    AudioURLChunk,
     ImageChunk,
-    ImageURLChunk,
     TextChunk,
     ThinkChunk,
 )
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
     SystemMessage,
-    ToolMessage,
     UserMessage,
 )
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
-from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
+from mistral_common.protocol.instruct.tool_calls import Function, Tool
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.utils.chat_templates.configs import TestConfig
-from tests.utils.chat_templates.helpers import (
-    DUMMY_AUDIO_BASE64,
-    DUMMY_IMAGE,
-    DUMMY_IMAGE_URL,
-    build_render_args,
+from tests.fixtures.audio import get_dummy_audio_chunk, get_dummy_audio_url_chunk
+from tests.integration.chat_recipes import (
+    build_function_tool,
+    build_image_url_chunk,
+    build_red_image,
+    build_tool_call,
+    build_tool_message,
 )
+from tests.utils.chat_templates.configs import TestConfig
+from tests.utils.chat_templates.helpers import build_render_args
 
-_TOOLS = [
-    Tool(
-        function=Function(
-            name="tool1",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "location": {
-                        "type": "string",
-                        "description": "The city and state, e.g. San Francisco, CA",
-                        "required": ["location"],
-                    }
-                },
-            },
-        )
-    ),
-    Tool(function=Function(name="tool2", parameters={})),
-]
+_TOOL1_PARAMETERS: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "location": {
+            "type": "string",
+            "description": "The city and state, e.g. San Francisco, CA",
+            "required": ["location"],
+        }
+    },
+}
+
+
+def _build_tools() -> list[Tool]:
+    r"""Build the shared two-tool definition set with fresh schema data per request."""
+    return [
+        build_function_tool(name="tool1", description=None, parameters=_TOOL1_PARAMETERS),
+        build_function_tool(name="tool2", description=None, parameters={}),
+    ]
+
 
 # -- Request fixtures --
 
@@ -140,7 +140,7 @@ REQUEST_MULTI_TURN_WITH_TOOLS_TEST = ChatCompletionRequest(  # type: ignore[type
         AssistantMessage(content="Assistant says hi"),
         UserMessage(content="User says how are you ?"),
     ],
-    tools=_TOOLS,
+    tools=_build_tools(),
 )
 
 REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
@@ -151,7 +151,7 @@ REQUEST_MULTI_TURN_WITH_TOOLS_TRAIN = ChatCompletionRequest(  # type: ignore[typ
         UserMessage(content="User says how are you ?"),
         AssistantMessage(content="Assistant says hi"),
     ],
-    tools=_TOOLS,
+    tools=_build_tools(),
 )
 
 REQUEST_STRICT_TOOLS_TEST = ChatCompletionRequest(
@@ -188,22 +188,20 @@ REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST = ChatCompletionRequest(  # type: ignor
         AssistantMessage(
             content=None,
             tool_calls=[
-                ToolCall(
-                    id="123456789",
-                    function=FunctionCall(
-                        name="tool1",
-                        arguments={  # type: ignore[arg-type]
-                            "location": "San Francisco, CA",
-                        },
-                    ),
+                build_tool_call(
+                    tool_call_id="123456789",
+                    name="tool1",
+                    arguments={
+                        "location": "San Francisco, CA",
+                    },
                 ),
             ],
         ),
-        ToolMessage(content="32", tool_call_id="123456789"),
+        build_tool_message(content="32", tool_call_id="123456789"),
         AssistantMessage(content="Whether is 32 degrees in San Francisco, CA"),
         UserMessage(content=[TextChunk(text="User says thanks.")]),
     ],
-    tools=_TOOLS,
+    tools=_build_tools(),
 )
 
 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2 = ChatCompletionRequest(  # type: ignore[type-var]
@@ -217,27 +215,19 @@ REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TEST_2 = ChatCompletionRequest(  # type: ign
         AssistantMessage(
             content=None,
             tool_calls=[
-                ToolCall(
-                    id="123456789",
-                    function=FunctionCall(
-                        name="tool1",
-                        arguments={  # type: ignore[arg-type]
-                            "location": "San Francisco, CA",
-                        },
-                    ),
+                build_tool_call(
+                    tool_call_id="123456789",
+                    name="tool1",
+                    arguments={
+                        "location": "San Francisco, CA",
+                    },
                 ),
-                ToolCall(
-                    id="023456789",
-                    function=FunctionCall(
-                        name="tool2",
-                        arguments={},  # type: ignore[arg-type]
-                    ),
-                ),
+                build_tool_call(tool_call_id="023456789", name="tool2", arguments={}),
             ],
         ),
-        ToolMessage(content="32", tool_call_id="123456789"),
+        build_tool_message(content="32", tool_call_id="123456789"),
     ],
-    tools=_TOOLS,
+    tools=_build_tools(),
 )
 
 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
@@ -247,23 +237,21 @@ REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN = ChatCompletionRequest(  # type: igno
         AssistantMessage(
             content=None,
             tool_calls=[
-                ToolCall(
-                    id="123456789",
-                    function=FunctionCall(
-                        name="tool1",
-                        arguments={  # type: ignore[arg-type]
-                            "location": "San Francisco, CA",
-                        },
-                    ),
+                build_tool_call(
+                    tool_call_id="123456789",
+                    name="tool1",
+                    arguments={
+                        "location": "San Francisco, CA",
+                    },
                 ),
             ],
         ),
-        ToolMessage(content="32", tool_call_id="123456789"),
+        build_tool_message(content="32", tool_call_id="123456789"),
         AssistantMessage(content="Whether is 32 degrees in San Francisco, CA"),
         UserMessage(content=[TextChunk(text="User says thanks.")]),
         AssistantMessage(content=[TextChunk(text="Assistant says you're welcome.")]),
     ],
-    tools=_TOOLS,
+    tools=_build_tools(),
 )
 
 REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2 = ChatCompletionRequest(  # type: ignore[type-var]
@@ -277,29 +265,21 @@ REQUEST_MULTI_TURN_WITH_TOOLS_CALLS_TRAIN_2 = ChatCompletionRequest(  # type: ig
         AssistantMessage(
             content=None,
             tool_calls=[
-                ToolCall(
-                    id="123456789",
-                    function=FunctionCall(
-                        name="tool1",
-                        arguments={  # type: ignore[arg-type]
-                            "location": "San Francisco, CA",
-                        },
-                    ),
+                build_tool_call(
+                    tool_call_id="123456789",
+                    name="tool1",
+                    arguments={
+                        "location": "San Francisco, CA",
+                    },
                 ),
-                ToolCall(
-                    id="023456789",
-                    function=FunctionCall(
-                        name="tool2",
-                        arguments={},  # type: ignore[arg-type]
-                    ),
-                ),
+                build_tool_call(tool_call_id="023456789", name="tool2", arguments={}),
             ],
         ),
-        ToolMessage(content="32", tool_call_id="123456789"),
-        ToolMessage(content="aya", tool_call_id="023456789"),
+        build_tool_message(content="32", tool_call_id="123456789"),
+        build_tool_message(content="aya", tool_call_id="023456789"),
         AssistantMessage(content="wow 32", tool_calls=[]),
     ],
-    tools=_TOOLS,
+    tools=_build_tools(),
 )
 
 REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST = ChatCompletionRequest(  # type: ignore[type-var]
@@ -313,27 +293,19 @@ REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TEST = ChatCompletionRequest(  #
         AssistantMessage(
             content="Assistant says hi, let me fetch the weather for you.",
             tool_calls=[
-                ToolCall(
-                    id="123456789",
-                    function=FunctionCall(
-                        name="tool1",
-                        arguments={  # type: ignore[arg-type]
-                            "location": "San Francisco, CA",
-                        },
-                    ),
+                build_tool_call(
+                    tool_call_id="123456789",
+                    name="tool1",
+                    arguments={
+                        "location": "San Francisco, CA",
+                    },
                 ),
-                ToolCall(
-                    id="023456789",
-                    function=FunctionCall(
-                        name="tool2",
-                        arguments={},  # type: ignore[arg-type]
-                    ),
-                ),
+                build_tool_call(tool_call_id="023456789", name="tool2", arguments={}),
             ],
         ),
-        ToolMessage(content="32", tool_call_id="123456789"),
+        build_tool_message(content="32", tool_call_id="123456789"),
     ],
-    tools=_TOOLS,
+    tools=_build_tools(),
 )
 
 REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
@@ -347,29 +319,21 @@ REQUEST_MULTI_TURN_WITH_CONTENT_AND_TOOLS_CALLS_TRAIN = ChatCompletionRequest(  
         AssistantMessage(
             content="Assistant says hi, let me fetch the weather for you.",
             tool_calls=[
-                ToolCall(
-                    id="123456789",
-                    function=FunctionCall(
-                        name="tool1",
-                        arguments={  # type: ignore[arg-type]
-                            "location": "San Francisco, CA",
-                        },
-                    ),
+                build_tool_call(
+                    tool_call_id="123456789",
+                    name="tool1",
+                    arguments={
+                        "location": "San Francisco, CA",
+                    },
                 ),
-                ToolCall(
-                    id="023456789",
-                    function=FunctionCall(
-                        name="tool2",
-                        arguments={},  # type: ignore[arg-type]
-                    ),
-                ),
+                build_tool_call(tool_call_id="023456789", name="tool2", arguments={}),
             ],
         ),
-        ToolMessage(content="32", tool_call_id="123456789"),
-        ToolMessage(content="aya", tool_call_id="023456789"),
+        build_tool_message(content="32", tool_call_id="123456789"),
+        build_tool_message(content="aya", tool_call_id="023456789"),
         AssistantMessage(content="wow 32", tool_calls=[]),
     ],
-    tools=_TOOLS,
+    tools=_build_tools(),
 )
 
 REQUEST_TOOL_THEN_USER_TEST = ChatCompletionRequest(  # type: ignore[type-var]
@@ -379,21 +343,19 @@ REQUEST_TOOL_THEN_USER_TEST = ChatCompletionRequest(  # type: ignore[type-var]
         AssistantMessage(
             content=None,
             tool_calls=[
-                ToolCall(
-                    id="123456789",
-                    function=FunctionCall(
-                        name="tool1",
-                        arguments={  # type: ignore[arg-type]
-                            "location": "San Francisco, CA",
-                        },
-                    ),
+                build_tool_call(
+                    tool_call_id="123456789",
+                    name="tool1",
+                    arguments={
+                        "location": "San Francisco, CA",
+                    },
                 ),
             ],
         ),
-        ToolMessage(content="32", tool_call_id="123456789"),
+        build_tool_message(content="32", tool_call_id="123456789"),
         UserMessage(content="What does that mean?"),
     ],
-    tools=_TOOLS,
+    tools=_build_tools(),
 )
 
 REQUEST_TOOL_THEN_USER_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
@@ -403,22 +365,20 @@ REQUEST_TOOL_THEN_USER_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
         AssistantMessage(
             content=None,
             tool_calls=[
-                ToolCall(
-                    id="123456789",
-                    function=FunctionCall(
-                        name="tool1",
-                        arguments={  # type: ignore[arg-type]
-                            "location": "San Francisco, CA",
-                        },
-                    ),
+                build_tool_call(
+                    tool_call_id="123456789",
+                    name="tool1",
+                    arguments={
+                        "location": "San Francisco, CA",
+                    },
                 ),
             ],
         ),
-        ToolMessage(content="32", tool_call_id="123456789"),
+        build_tool_message(content="32", tool_call_id="123456789"),
         UserMessage(content="What does that mean?"),
         AssistantMessage(content="The temperature is 32 degrees in San Francisco."),
     ],
-    tools=_TOOLS,
+    tools=_build_tools(),
 )
 
 REQUEST_TOOL_THEN_USER_FULL_LOOP_TEST = ChatCompletionRequest(  # type: ignore[type-var]
@@ -428,46 +388,36 @@ REQUEST_TOOL_THEN_USER_FULL_LOOP_TEST = ChatCompletionRequest(  # type: ignore[t
         AssistantMessage(
             content=None,
             tool_calls=[
-                ToolCall(
-                    id="123456789",
-                    function=FunctionCall(
-                        name="tool1",
-                        arguments={  # type: ignore[arg-type]
-                            "location": "San Francisco, CA",
-                        },
-                    ),
+                build_tool_call(
+                    tool_call_id="123456789",
+                    name="tool1",
+                    arguments={
+                        "location": "San Francisco, CA",
+                    },
                 ),
-                ToolCall(
-                    id="023456789",
-                    function=FunctionCall(
-                        name="tool2",
-                        arguments={},  # type: ignore[arg-type]
-                    ),
-                ),
+                build_tool_call(tool_call_id="023456789", name="tool2", arguments={}),
             ],
         ),
-        ToolMessage(content="32", tool_call_id="123456789"),
-        ToolMessage(content="sunny", tool_call_id="023456789"),
+        build_tool_message(content="32", tool_call_id="123456789"),
+        build_tool_message(content="sunny", tool_call_id="023456789"),
         UserMessage(content="Now what about Tokyo?"),
         AssistantMessage(
             content=None,
             tool_calls=[
-                ToolCall(
-                    id="234567890",
-                    function=FunctionCall(
-                        name="tool1",
-                        arguments={  # type: ignore[arg-type]
-                            "location": "Tokyo, JP",
-                        },
-                    ),
+                build_tool_call(
+                    tool_call_id="234567890",
+                    name="tool1",
+                    arguments={
+                        "location": "Tokyo, JP",
+                    },
                 ),
             ],
         ),
-        ToolMessage(content="28", tool_call_id="234567890"),
+        build_tool_message(content="28", tool_call_id="234567890"),
         AssistantMessage(content="San Francisco is 32 and sunny, Tokyo is 28."),
         UserMessage(content="Thanks!"),
     ],
-    tools=_TOOLS,
+    tools=_build_tools(),
 )
 
 REQUEST_TOOL_THEN_USER_FULL_LOOP_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
@@ -477,45 +427,35 @@ REQUEST_TOOL_THEN_USER_FULL_LOOP_TRAIN = ChatCompletionRequest(  # type: ignore[
         AssistantMessage(
             content=None,
             tool_calls=[
-                ToolCall(
-                    id="123456789",
-                    function=FunctionCall(
-                        name="tool1",
-                        arguments={  # type: ignore[arg-type]
-                            "location": "San Francisco, CA",
-                        },
-                    ),
+                build_tool_call(
+                    tool_call_id="123456789",
+                    name="tool1",
+                    arguments={
+                        "location": "San Francisco, CA",
+                    },
                 ),
-                ToolCall(
-                    id="023456789",
-                    function=FunctionCall(
-                        name="tool2",
-                        arguments={},  # type: ignore[arg-type]
-                    ),
-                ),
+                build_tool_call(tool_call_id="023456789", name="tool2", arguments={}),
             ],
         ),
-        ToolMessage(content="32", tool_call_id="123456789"),
-        ToolMessage(content="sunny", tool_call_id="023456789"),
+        build_tool_message(content="32", tool_call_id="123456789"),
+        build_tool_message(content="sunny", tool_call_id="023456789"),
         UserMessage(content="Now what about Tokyo?"),
         AssistantMessage(
             content=None,
             tool_calls=[
-                ToolCall(
-                    id="234567890",
-                    function=FunctionCall(
-                        name="tool1",
-                        arguments={  # type: ignore[arg-type]
-                            "location": "Tokyo, JP",
-                        },
-                    ),
+                build_tool_call(
+                    tool_call_id="234567890",
+                    name="tool1",
+                    arguments={
+                        "location": "Tokyo, JP",
+                    },
                 ),
             ],
         ),
-        ToolMessage(content="28", tool_call_id="234567890"),
+        build_tool_message(content="28", tool_call_id="234567890"),
         AssistantMessage(content="San Francisco is 32 and sunny, Tokyo is 28."),
     ],
-    tools=_TOOLS,
+    tools=_build_tools(),
 )
 
 REQUEST_TOOL_THEN_USER_WITH_CONTENT_TEST = ChatCompletionRequest(  # type: ignore[type-var]
@@ -525,29 +465,21 @@ REQUEST_TOOL_THEN_USER_WITH_CONTENT_TEST = ChatCompletionRequest(  # type: ignor
         AssistantMessage(
             content="Let me check the weather for you.",
             tool_calls=[
-                ToolCall(
-                    id="123456789",
-                    function=FunctionCall(
-                        name="tool1",
-                        arguments={  # type: ignore[arg-type]
-                            "location": "San Francisco, CA",
-                        },
-                    ),
+                build_tool_call(
+                    tool_call_id="123456789",
+                    name="tool1",
+                    arguments={
+                        "location": "San Francisco, CA",
+                    },
                 ),
-                ToolCall(
-                    id="023456789",
-                    function=FunctionCall(
-                        name="tool2",
-                        arguments={},  # type: ignore[arg-type]
-                    ),
-                ),
+                build_tool_call(tool_call_id="023456789", name="tool2", arguments={}),
             ],
         ),
-        ToolMessage(content="32", tool_call_id="123456789"),
-        ToolMessage(content="sunny", tool_call_id="023456789"),
+        build_tool_message(content="32", tool_call_id="123456789"),
+        build_tool_message(content="sunny", tool_call_id="023456789"),
         UserMessage(content="What does that mean?"),
     ],
-    tools=_TOOLS,
+    tools=_build_tools(),
 )
 
 REQUEST_TOOL_THEN_USER_WITH_CONTENT_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
@@ -557,30 +489,22 @@ REQUEST_TOOL_THEN_USER_WITH_CONTENT_TRAIN = ChatCompletionRequest(  # type: igno
         AssistantMessage(
             content="Let me check the weather for you.",
             tool_calls=[
-                ToolCall(
-                    id="123456789",
-                    function=FunctionCall(
-                        name="tool1",
-                        arguments={  # type: ignore[arg-type]
-                            "location": "San Francisco, CA",
-                        },
-                    ),
+                build_tool_call(
+                    tool_call_id="123456789",
+                    name="tool1",
+                    arguments={
+                        "location": "San Francisco, CA",
+                    },
                 ),
-                ToolCall(
-                    id="023456789",
-                    function=FunctionCall(
-                        name="tool2",
-                        arguments={},  # type: ignore[arg-type]
-                    ),
-                ),
+                build_tool_call(tool_call_id="023456789", name="tool2", arguments={}),
             ],
         ),
-        ToolMessage(content="32", tool_call_id="123456789"),
-        ToolMessage(content="sunny", tool_call_id="023456789"),
+        build_tool_message(content="32", tool_call_id="123456789"),
+        build_tool_message(content="sunny", tool_call_id="023456789"),
         UserMessage(content="What does that mean?"),
         AssistantMessage(content="It is 32 degrees and sunny in San Francisco."),
     ],
-    tools=_TOOLS,
+    tools=_build_tools(),
 )
 
 REQUEST_MULTI_TURN_IMAGE_URL_TEST = ChatCompletionRequest(  # type: ignore[type-var]
@@ -589,8 +513,8 @@ REQUEST_MULTI_TURN_IMAGE_URL_TEST = ChatCompletionRequest(  # type: ignore[type-
         UserMessage(
             content=[
                 TextChunk(text="User asks what is this image ?"),
-                ImageURLChunk(image_url=DUMMY_IMAGE_URL),
-                ImageURLChunk(image_url=DUMMY_IMAGE_URL),
+                build_image_url_chunk(image=build_red_image()),
+                build_image_url_chunk(image=build_red_image()),
             ]
         ),
         AssistantMessage(content="Assistant answers It is a red square."),
@@ -604,8 +528,8 @@ REQUEST_MULTI_TURN_IMAGE_URL_TRAIN = ChatCompletionRequest(  # type: ignore[type
         UserMessage(
             content=[
                 TextChunk(text="User asks what is this image ?"),
-                ImageURLChunk(image_url=DUMMY_IMAGE_URL),
-                ImageURLChunk(image_url=DUMMY_IMAGE_URL),
+                build_image_url_chunk(image=build_red_image()),
+                build_image_url_chunk(image=build_red_image()),
             ]
         ),
         AssistantMessage(content="Assistant answers It is a red square."),
@@ -620,7 +544,7 @@ REQUEST_MULTI_TURN_IMAGE_TEST = ChatCompletionRequest(  # type: ignore[type-var]
         UserMessage(
             content=[
                 TextChunk(text="User asks what is this image ?"),
-                ImageChunk(image=DUMMY_IMAGE),
+                ImageChunk(image=build_red_image()),
             ]
         ),
         AssistantMessage(content="Assistant answers It is a red square."),
@@ -634,7 +558,7 @@ REQUEST_MULTI_TURN_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[type-var
         UserMessage(
             content=[
                 TextChunk(text="User asks what is this image ?"),
-                ImageChunk(image=DUMMY_IMAGE),
+                ImageChunk(image=build_red_image()),
             ]
         ),
         AssistantMessage(content="Assistant answers It is a red square."),
@@ -648,8 +572,8 @@ REQUEST_MULTI_TURN_AUDIO_URL_TEST = ChatCompletionRequest(  # type: ignore[type-
         UserMessage(
             content=[
                 TextChunk(text="Users asks what is this audio ?"),
-                AudioURLChunk(audio_url=DUMMY_AUDIO_BASE64),
-                AudioURLChunk(audio_url=DUMMY_AUDIO_BASE64),
+                get_dummy_audio_url_chunk(),
+                get_dummy_audio_url_chunk(),
             ]
         ),
         AssistantMessage(content="Assistant answers it is a music."),
@@ -662,7 +586,7 @@ REQUEST_MULTI_TURN_AUDIO_URL_TRAIN = ChatCompletionRequest(  # type: ignore[type
         UserMessage(
             content=[
                 TextChunk(text="Users asks what is this audio ?"),
-                AudioURLChunk(audio_url=DUMMY_AUDIO_BASE64),
+                get_dummy_audio_url_chunk(),
             ]
         ),
         AssistantMessage(content="Assistant answers it is a music."),
@@ -676,7 +600,7 @@ REQUEST_MULTI_TURN_AUDIO_TEST = ChatCompletionRequest(  # type: ignore[type-var]
         UserMessage(
             content=[
                 TextChunk(text="Users asks what is this audio ?"),
-                AudioChunk(input_audio=DUMMY_AUDIO_BASE64),
+                get_dummy_audio_chunk(),
             ]
         ),
         AssistantMessage(content="Assistant answers it is a music."),
@@ -689,8 +613,8 @@ REQUEST_MULTI_TURN_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var
         UserMessage(
             content=[
                 TextChunk(text="Users asks what is this audio ?"),
-                AudioChunk(input_audio=DUMMY_AUDIO_BASE64),
-                AudioChunk(input_audio=DUMMY_AUDIO_BASE64),
+                get_dummy_audio_chunk(),
+                get_dummy_audio_chunk(),
             ]
         ),
         AssistantMessage(content="Assistant answers it is a music."),
@@ -711,7 +635,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TEST = ChatCompletionRequest(  # type: ign
         UserMessage(
             content=[
                 TextChunk(text="User asks what is this image ?"),
-                ImageURLChunk(image_url=DUMMY_IMAGE_URL),
+                build_image_url_chunk(image=build_red_image()),
             ]
         ),
         AssistantMessage(
@@ -791,7 +715,7 @@ REQUEST_MULTI_TURN_IMAGE_AND_THINKING_TRAIN = ChatCompletionRequest(  # type: ig
         UserMessage(
             content=[
                 TextChunk(text="User asks what is this image ?"),
-                ImageURLChunk(image_url=DUMMY_IMAGE_URL),
+                build_image_url_chunk(image=build_red_image()),
             ]
         ),
         AssistantMessage(
@@ -858,7 +782,7 @@ REQUEST_CONSECUTIVE_USERS_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[t
         UserMessage(content="What is this?"),
         UserMessage(
             content=[
-                ImageChunk(image=DUMMY_IMAGE),
+                ImageChunk(image=build_red_image()),
                 TextChunk(text="Describe it"),
             ]
         ),
@@ -891,10 +815,14 @@ REQUEST_CONSECUTIVE_ASSISTANTS_TEXT_CHUNKS_TRAIN = ChatCompletionRequest(  # typ
 REQUEST_CONSECUTIVE_USERS_MULTI_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         UserMessage(
-            content=[TextChunk(text="Describe this"), ImageChunk(image=DUMMY_IMAGE), TextChunk(text="What color?")]
+            content=[
+                TextChunk(text="Describe this"),
+                ImageChunk(image=build_red_image()),
+                TextChunk(text="What color?"),
+            ]
         ),
         UserMessage(
-            content=[TextChunk(text="Also this"), ImageChunk(image=DUMMY_IMAGE), TextChunk(text="What shape?")]
+            content=[TextChunk(text="Also this"), ImageChunk(image=build_red_image()), TextChunk(text="What shape?")]
         ),
         AssistantMessage(content="Both are red squares."),
     ]
@@ -905,14 +833,14 @@ REQUEST_CONSECUTIVE_USERS_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[t
         UserMessage(
             content=[
                 TextChunk(text="Listen to this"),
-                AudioURLChunk(audio_url=DUMMY_AUDIO_BASE64),
+                get_dummy_audio_url_chunk(),
                 TextChunk(text="What language?"),
             ]
         ),
         UserMessage(
             content=[
                 TextChunk(text="And this"),
-                AudioURLChunk(audio_url=DUMMY_AUDIO_BASE64),
+                get_dummy_audio_url_chunk(),
                 TextChunk(text="Transcribe it"),
             ]
         ),
@@ -950,28 +878,21 @@ REQUEST_CONSECUTIVE_ASSISTANTS_TOOL_CALLS_TRAIN = ChatCompletionRequest(  # type
         AssistantMessage(
             content="Fetching data.",
             tool_calls=[
-                ToolCall(
-                    id="123456789",
-                    function=FunctionCall(name="tool1", arguments={"location": "Paris"}),  # type: ignore[arg-type]
-                ),
-                ToolCall(
-                    id="023456789",
-                    function=FunctionCall(name="tool1", arguments={"location": "London"}),  # type: ignore[arg-type]
-                ),
+                build_tool_call(tool_call_id="123456789", name="tool1", arguments={"location": "Paris"}),
+                build_tool_call(tool_call_id="023456789", name="tool1", arguments={"location": "London"}),
             ],
         ),
-        ToolMessage(content="22", tool_call_id="123456789"),
-        ToolMessage(content="15", tool_call_id="023456789"),
+        build_tool_message(content="22", tool_call_id="123456789"),
+        build_tool_message(content="15", tool_call_id="023456789"),
         AssistantMessage(content="Paris: 22, London: 15"),
         UserMessage(content="Thanks"),
         AssistantMessage(content="Welcome"),
     ],
     tools=[
-        Tool(
-            function=Function(
-                name="tool1",
-                parameters={"type": "object", "properties": {"location": {"type": "string"}}},
-            )
+        build_function_tool(
+            name="tool1",
+            description=None,
+            parameters={"type": "object", "properties": {"location": {"type": "string"}}},
         ),
     ],
 )
@@ -1019,25 +940,19 @@ REQUEST_TOOL_IMAGE_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
         AssistantMessage(
             content=None,
             tool_calls=[
-                ToolCall(
-                    id="tl1mg2345",
-                    function=FunctionCall(
-                        name="tool1",
-                        arguments={"location": "San Francisco, CA"},  # type: ignore[arg-type]
-                    ),
-                ),
+                build_tool_call(tool_call_id="tl1mg2345", name="tool1", arguments={"location": "San Francisco, CA"}),
             ],
         ),
-        ToolMessage(
+        build_tool_message(
             content=[
                 TextChunk(text="Here is the result."),
-                ImageURLChunk(image_url=DUMMY_IMAGE_URL),
+                build_image_url_chunk(image=build_red_image()),
             ],
             tool_call_id="tl1mg2345",
         ),
         AssistantMessage(content="The tool returned an image of a red square."),
     ],
-    tools=_TOOLS,
+    tools=_build_tools(),
 )
 
 REQUEST_TOOL_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
@@ -1046,25 +961,19 @@ REQUEST_TOOL_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
         AssistantMessage(
             content=None,
             tool_calls=[
-                ToolCall(
-                    id="tl1mg2345",
-                    function=FunctionCall(
-                        name="tool1",
-                        arguments={"location": "San Francisco, CA"},  # type: ignore[arg-type]
-                    ),
-                ),
+                build_tool_call(tool_call_id="tl1mg2345", name="tool1", arguments={"location": "San Francisco, CA"}),
             ],
         ),
-        ToolMessage(
+        build_tool_message(
             content=[
                 TextChunk(text="Here is the audio result."),
-                AudioChunk(input_audio=DUMMY_AUDIO_BASE64),
+                get_dummy_audio_chunk(),
             ],
             tool_call_id="tl1mg2345",
         ),
         AssistantMessage(content="The tool returned audio of a sine wave."),
     ],
-    tools=_TOOLS,
+    tools=_build_tools(),
 )
 
 REQUEST_SYSTEM_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
@@ -1072,7 +981,7 @@ REQUEST_SYSTEM_AUDIO_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
         SystemMessage(
             content=[
                 TextChunk(text="You are an audio assistant."),
-                AudioChunk(input_audio=DUMMY_AUDIO_BASE64),
+                get_dummy_audio_chunk(),
             ],
         ),
         UserMessage(content="What was that sound?"),

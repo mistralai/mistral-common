@@ -4,9 +4,13 @@ import pytest
 
 from mistral_common.integrations.chat_templates.template_generator import build_chat_template
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.fixtures_data import iter_render_args, parse_tool_call_arguments
+from tests.integration.chat_templates.fixtures_data import iter_render_args, parse_tool_call_arguments
 from tests.utils.chat_templates.configs import ALL_CONFIGS, GOLDEN_CONFIGS, TestConfig, format_config_id
-from tests.utils.chat_templates.helpers import build_template_config, load_golden_template, render_template
+from tests.utils.chat_templates.helpers import (
+    build_template_config,
+    load_golden_template,
+    render_template,
+)
 
 
 @pytest.mark.parametrize("config", GOLDEN_CONFIGS, ids=[format_config_id(c) for c in GOLDEN_CONFIGS])
