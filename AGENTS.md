@@ -196,7 +196,7 @@ uv run pre-commit install
    - Run unit tests with coverage:
 
    ```bash
-   uv run pytest --cov=mistral_common tests/ --ignore=tests/integrations --ignore=tests/integration -n auto --dist loadfile
+   uv run pytest --cov=mistral_common tests/ --ignore=tests/integration -n auto --dist loadfile
    ```
 
    - Run doctests:
@@ -222,7 +222,8 @@ uv run pre-commit install
 
    ```bash
    uv sync --frozen --all-extras --group dev --group test-integrations
-   uv run pytest tests/integrations/ -n auto --dist loadfile
+   uv run --no-sync python tests/integration/provision_tokenizers.py
+   HF_HUB_OFFLINE=1 uv run --no-sync pytest tests/integration/ -n auto --dist loadfile
    ```
 
 ### Build documentation locally
