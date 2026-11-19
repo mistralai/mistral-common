@@ -1,11 +1,12 @@
 import json
-from typing import Annotated
+from typing import Annotated, Any
 
 import requests
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import RedirectResponse
-from pydantic import TypeAdapter, ValidationError
+from pydantic import TypeAdapter
 
+from mistral_common.exceptions import MistralCommonException
 from mistral_common.experimental.app.models import (
     EngineBackend,
     OpenAIChatCompletionRequest,
@@ -24,6 +25,9 @@ main_router = APIRouter(tags=["app"])
 tokenize_router = APIRouter(prefix="/v1/tokenize", tags=["tokenizer", "tokenize"])
 decode_router = APIRouter(prefix="/v1/detokenize", tags=["tokenizer", "detokenize"])
 
+# What request conversion and tokenization raise when the request itself is at fault.
+_REQUEST_ERRORS = (MistralCommonException, ValueError)
+
 
 @main_router.get("/")
 async def redirect_to_docs() -> RedirectResponse:
@@ -31,23 +35,53 @@ async def redirect_to_docs() -> RedirectResponse:
     return RedirectResponse(url="docs")
 
 
+def _convert_openai_request(request: OpenAIChatCompletionRequest) -> tuple[ChatCompletionRequest, dict[str, Any]]:
+    r"""Convert an OpenAI chat completion request to a Mistral one.
+
+    Args:
+        request: The request in OpenAI format.
+
+    Returns:
+        The converted request and the extra fields that were dropped from the OpenAI request.
+
+    Raises:
+        HTTPException: 400 if the request cannot be converted.
+    """
+    try:
+        extra_fields = request.drop_extra_fields()
+        return ChatCompletionRequest.from_openai(**request.model_dump()), extra_fields
+    except _REQUEST_ERRORS as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @tokenize_router.post("/")
 async def tokenize_request(
     request: ChatCompletionRequest | OpenAIChatCompletionRequest,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> list[int]:
-    r"""Tokenize a chat completion request."""
+    r"""Tokenize a chat completion request.
+
+    Args:
+        request: The chat completion request, in Mistral or OpenAI format.
+        settings: The app settings providing the tokenizer.
+
+    Returns:
+        The token IDs of the encoded request.
+
+    Raises:
+        HTTPException: 400 if the request cannot be converted from the OpenAI
+            format, has no messages, or is rejected by the tokenizer.
+    """
     if isinstance(request, OpenAIChatCompletionRequest):
-        try:
-            request.drop_extra_fields()
-            request = ChatCompletionRequest.from_openai(**request.model_dump())
-        except (ValidationError, ValueError) as e:
-            raise HTTPException(status_code=400, detail=str(e))
+        request = _convert_openai_request(request=request)[0]
 
     if request.messages == []:
         raise HTTPException(status_code=400, detail="Messages list cannot be empty.")
 
-    tokenized = settings.tokenizer.encode_chat_completion(request)
+    try:
+        tokenized = settings.tokenizer.encode_chat_completion(request)
+    except _REQUEST_ERRORS as e:
+        raise HTTPException(status_code=400, detail=str(e))
     assert isinstance(tokenized, Tokenized), type(tokenized)
     return tokenized.tokens
 
@@ -180,11 +214,9 @@ async def generate(
         HTTPException: 400 on invalid request or empty messages; 502 if the
             engine fails.
     """
+    extra_fields: dict[str, Any] = {}
     if isinstance(request, OpenAIChatCompletionRequest):
-        extra_fields = request.drop_extra_fields()
-        request = ChatCompletionRequest.from_openai(**request.model_dump())
-    else:
-        extra_fields = {}
+        request, extra_fields = _convert_openai_request(request=request)
     tokens_ids = await tokenize_request(request, settings)
 
     exclude_fields = {"messages", "tools"}
