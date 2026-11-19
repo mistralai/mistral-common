@@ -1,27 +1,31 @@
-name: Mistral Common CI
+name: Docs
 
 on:
   push:
     branches:
       - main
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || 'no-pr' }}
+  cancel-in-progress: ${{ github.event.pull_request.number != null }}
 
+# Publishing to GitHub Pages is deactivated; this workflow only validates that the
+# documentation builds. Re-enable publishing by restoring the artifact upload and
+# deploy-pages steps on push to main.
 jobs:
-  deploy_docs:
-    name: Publish
+  build_docs:
+    name: Build docs
+    if: ${{ github.event.pull_request.draft != true }}
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -33,26 +37,10 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --all-extras --group docs
-          uv pip install -e . --no-deps
+          uv sync --frozen --all-extras --group docs
 
       - name: Generate code reference pages
         run: uv run python docs/gen_api_pages.py
 
       - name: Build documentation
         run: uv run zensical build
-
-      - name: Archive site
-        run: tar -cvf "$RUNNER_TEMP/artifact.tar" -C ./site --exclude=.git --exclude=.github .
-
-      - name: Upload Pages artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: github-pages
-          path: ${{ runner.temp }}/artifact.tar
-          retention-days: 1
-          if-no-files-found: error
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
