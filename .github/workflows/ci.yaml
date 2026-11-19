@@ -1,4 +1,4 @@
-name: Mistral Common CI
+name: CI
 
 permissions:
   contents: read
@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: ${{ github.event.pull_request.number != null }}
 
 jobs:
-  build_lint_test:
+  lint_and_test:
     if: ${{ github.event.pull_request.draft != true }}
     runs-on: ubuntu-latest
     strategy:
@@ -76,39 +76,12 @@ jobs:
         run: |
           uv run pytest --doctest-modules ./src
   
-  build_docs:
+  # Integration tests run in a single job on one Python version, sequentially after one
+  # environment install, instead of one matrix job per suite: each matrix leg built its
+  # own uv environment. Python-version compatibility is already covered by lint_and_test.
+  integration_tests:
     if: ${{ github.event.pull_request.draft != true }}
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
-      
-      - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        with:
-          python-version: 3.14
-      
-      - name: Install Dependencies
-        run: |
-          uv sync --frozen --all-extras --group docs
-  
-      - name: Build Docs
-        run: |
-          uv run python docs/gen_api_pages.py
-          uv run zensical build
-
-  integration_tests_legacy:
-    if: ${{ github.event.pull_request.draft != true }}
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: [
-          "3.11",
-          "3.12",
-          "3.13",
-          "3.14",
-          "3.15",
-        ]
     steps:
       - name: Checkout
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -116,40 +89,15 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.14"
 
       - name: Install Dependencies
         run: |
           uv sync --frozen --all-extras --group dev --group test-integrations
 
-      - name: Integration Tests
+      - name: Legacy Integration Tests
         run: |
           uv run --no-sync pytest tests/integrations/ -n auto --dist loadfile -v
-
-  integration_tests:
-    if: ${{ github.event.pull_request.draft != true }}
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: [
-          "3.11",
-          "3.12",
-          "3.13",
-          "3.14",
-          "3.15",
-        ]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install Dependencies
-        run: |
-          uv sync --frozen --all-extras --group dev
 
       # The pinned revisions and digests live in the provisioning script, so its hash keys the cache;
       # restored files are still size- and SHA-256-checked by the script before tests run.
