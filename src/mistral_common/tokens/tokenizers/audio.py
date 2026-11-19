@@ -544,7 +544,7 @@ class AudioConfig:
     def n_left_pad_tokens(self) -> int:
         r"""Number of left padding tokens to add before the audio.
 
-        Left padding has shown to improve performance by giving the model more
+        Left padding has been shown to improve performance by giving the model more
         compute. Requires `streaming_n_left_pad_tokens` to be set.
 
         Returns:
@@ -583,7 +583,7 @@ class SpecialAudioIDs:
     Attributes:
         audio: Token representing audio.
         begin_audio: Token representing the beginning of audio.
-        streaming_pad: Token representing streaming pad of audio. Only relevant for steaming models.
+        streaming_pad: Token representing streaming pad of audio. Only relevant for streaming models.
         text_to_audio: Token representing intent to convert text to audio.
         audio_to_text: Token representing intent to convert audio to text.
     """

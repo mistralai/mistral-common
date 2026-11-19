@@ -192,7 +192,7 @@ class Tool(MistralBase):
         r"""Create a Tool from an OpenAI tool definition.
 
         Converts OpenAI's tool format to Mistral's format, delegating function
-        parsing to Function.`from_openai`.
+        parsing to `Function.from_openai`.
 
         Args:
             openai_tool: Dictionary matching OpenAI's tool schema. Must have

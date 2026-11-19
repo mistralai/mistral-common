@@ -1,6 +1,6 @@
 # Tools
 
-To execute external tools, like searching the web, LLMs need to be given the ability to call such tools whenever they see fit. This is usually achieved by adding all available tools that the LLM can call into the context of the [ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest] and representing tool calls as well as tool message as its own objects.
+To execute external tools, like searching the web, LLMs need to be given the ability to call such tools whenever they see fit. This is usually achieved by adding all available tools that the LLM can call into the context of the [ChatCompletionRequest][mistral_common.protocol.instruct.request.ChatCompletionRequest] and representing tool calls as well as tool messages as their own objects.
 
 ## Define tools
 

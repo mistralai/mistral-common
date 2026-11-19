@@ -175,7 +175,7 @@ def _decode_tool_calls(tool_call_tokens: Sequence[list[int]], tokenizer: Tokeniz
     Dispatches to the version-specific decoder.
 
     Note:
-        Each list of tool call tokens are expected to be in the format:
+        Each list of tool call tokens is expected to be in the format:
         - v2 to v7: `[TOOL_CALLS][{"name": "name", "arguments": {"arg1": "value1", "arg2": "value2"}}, ...]`
         - v11+ without call ID: `[TOOL_CALLS]name[ARGS]{"arg1": "value1", "arg2": "value2"}`
         - v11+ with call ID: `[TOOL_CALLS]name[CALL_ID]call_id[ARGS]{"arg1": "value1", "arg2": "value2"}`
