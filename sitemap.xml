@@ -138,4 +138,13 @@
       <url>
         <loc>https://mistralai.github.io/mistral-common/code_reference/mistral_common/tokens/tokenizers/utils/</loc>
       </url>
+      <url>
+        <loc>https://mistralai.github.io/mistral-common/code_reference/mistral_common/utils/data_url/</loc>
+      </url>
+      <url>
+        <loc>https://mistralai.github.io/mistral-common/code_reference/mistral_common/utils/download/</loc>
+      </url>
+      <url>
+        <loc>https://mistralai.github.io/mistral-common/code_reference/mistral_common/utils/json_utils/</loc>
+      </url>
 </urlset>
