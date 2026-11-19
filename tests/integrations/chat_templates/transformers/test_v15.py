@@ -16,16 +16,18 @@ from mistral_common.protocol.instruct.request import (
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from tests.integrations.chat_templates.fixtures_data import (
-    PARITY_JSON_SCHEMA,
-    PARITY_JSON_SCHEMA_NON_ASCII,
-)
-from tests.integrations.chat_templates.helpers import TestConfig, build_tekken_json, encode_mistral_common
 from tests.integrations.chat_templates.hf_utils import (
     build_hf_tokenizer,
     encode_hf_tokens,
     encode_transformers,
     encode_transformers_from_openai,
+)
+from tests.utils.chat_templates.helpers import (
+    PARITY_JSON_SCHEMA,
+    PARITY_JSON_SCHEMA_NON_ASCII,
+    TestConfig,
+    build_tekken_json,
+    encode_mistral_common,
 )
 
 

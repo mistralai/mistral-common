@@ -9,11 +9,15 @@ from mistral_common.integrations.chat_templates.template_generator import (
     _render_content_call,
     build_chat_template,
 )
+from mistral_common.protocol.instruct.chunk import TextChunk
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
-from tests.integrations.chat_templates.helpers import (
-    TestConfig,
+from tests.integration.chat_recipes import build_user_assistant_request, build_user_content_request
+from tests.utils.chat_templates.configs import TestConfig
+from tests.utils.chat_templates.helpers import (
+    build_render_args,
     build_template_config,
+    build_test_template,
     load_golden_template,
     render_template,
 )
@@ -22,19 +26,7 @@ from tests.integrations.chat_templates.helpers import (
 class TestGenerateChatTemplateAPI:
     @pytest.fixture()
     def v13_template(self) -> str:
-        return generate_chat_template(
-            spm=False,
-            tokenizer_version=TokenizerVersion.v13,
-            image_support=False,
-            audio_support=False,
-            thinking_support=False,
-            default_system_prompt=None,
-            plain_thinking_support=False,
-            use_special_token_variables=True,
-            model_settings_fields=None,
-            reasoning_effort_values=None,
-            reasoning_effort_default=None,
-        )
+        return build_test_template(TestConfig(version=TokenizerVersion.v13))
 
     def test_basic_generation(self, v13_template: str) -> None:
         assert "{%- set default_system_message = '' %}" in v13_template
@@ -90,22 +82,12 @@ class TestGenerateChatTemplateAPI:
     def test_basic_static_dynamic_parity(self, v13_template: str) -> None:
         config = build_template_config(TestConfig(version=TokenizerVersion.v13))
         static_template = load_golden_template(config)
+        request = build_user_assistant_request(user_content="Hello", assistant_content="Hi there!")
 
-        messages = [
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi there!"},
-        ]
-
-        static_output = render_template(static_template, messages)
-        dynamic_output = render_template(v13_template, messages)
+        static_output = render_template(static_template, **build_render_args(request))
+        dynamic_output = render_template(v13_template, **build_render_args(request))
 
         assert static_output == dynamic_output
-
-    def test_empty_messages_raises(self) -> None:
-        config = TemplateConfig(version=TokenizerVersion.v15, model_settings_fields=frozenset({"json_schema"}))
-        template = build_chat_template(config)
-        with pytest.raises(Exception, match="list object has no element 0"):
-            render_template(template, messages=[])
 
     def test_double_quotes_in_default_system_prompt(self) -> None:
         template = generate_chat_template(
@@ -121,8 +103,8 @@ class TestGenerateChatTemplateAPI:
             reasoning_effort_values=None,
             reasoning_effort_default=None,
         )
-        messages: list[dict[str, Any]] = [{"role": "user", "content": "Hello"}]
-        result = render_template(template, messages=messages)
+        request = build_user_content_request(content=[TextChunk(text="Hello")])
+        result = render_template(template, **build_render_args(request))
         assert 'You are "the best" assistant.' in result
 
 
@@ -223,11 +205,8 @@ class TestTokenVariables:
             reasoning_effort_values=("none", "high"),
         )
         template = build_chat_template(config)
-        messages: list[dict[str, Any]] = [
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi there"},
-        ]
-        result = render_template(template, messages=messages)
+        request = build_user_assistant_request(user_content="Hello", assistant_content="Hi there")
+        result = render_template(template, **build_render_args(request))
         assert "<s>" in result
         assert "</s>" in result
 
@@ -237,26 +216,16 @@ class TestTokenVariables:
 
 
 class TestMessageContentValidation:
-    @pytest.mark.parametrize("content", [[], None])
+    @pytest.mark.parametrize("content", [[], None], ids=["empty-list", "none"])
     @pytest.mark.parametrize("version", [TokenizerVersion.v3, TokenizerVersion.v7, TokenizerVersion.v15])
     def test_user_empty_content_renders_empty_turn(self, version: TokenizerVersion, content: list[Any] | None) -> None:
-        template = generate_chat_template(
-            spm=False,
-            tokenizer_version=version,
-            image_support=False,
-            audio_support=False,
-            thinking_support=False,
-            default_system_prompt=None,
-            plain_thinking_support=False,
-            use_special_token_variables=True,
-            model_settings_fields=None,
-            reasoning_effort_default="none" if version.supports_model_settings else None,
-            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
-        )
-
-        messages: list[dict[str, Any]] = [
-            {"role": "user", "content": content},
-        ]
+        template = build_test_template(TestConfig(version=version))
+        if content is None:
+            # UserMessage does not accept None content, so this variant renders
+            # the raw OpenAI dict directly.
+            messages: list[dict[str, Any]] = [{"role": "user", "content": None}]
+        else:
+            messages = build_render_args(build_user_content_request(content=content))["messages"]
 
         output = render_template(template, messages)
         assert "[INST]" in output
@@ -264,69 +233,26 @@ class TestMessageContentValidation:
 
     @pytest.mark.parametrize("version", [TokenizerVersion.v7, TokenizerVersion.v13, TokenizerVersion.v15])
     def test_assistant_empty_content_no_tool_calls_raises(self, version: TokenizerVersion) -> None:
-        template = generate_chat_template(
-            spm=False,
-            tokenizer_version=version,
-            image_support=False,
-            audio_support=False,
-            thinking_support=False,
-            default_system_prompt=None,
-            plain_thinking_support=False,
-            use_special_token_variables=True,
-            model_settings_fields=None,
-            reasoning_effort_default="none" if version.supports_model_settings else None,
-            reasoning_effort_values=("none", "high") if version.supports_model_settings else None,
-        )
-
-        messages: list[dict[str, Any]] = [
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": ""},
-        ]
+        template = build_test_template(TestConfig(version=version))
+        request = build_user_assistant_request(user_content="Hello", assistant_content="")
 
         with pytest.raises(
             ValueError,
             match="Assistant message must have a string or a list of chunks in content or a list of tool calls",
         ):
-            render_template(template, messages)
+            render_template(template, **build_render_args(request))
 
     def test_v1_empty_assistant_content_raises(self) -> None:
-        template = generate_chat_template(
-            spm=False,
-            tokenizer_version=TokenizerVersion.v1,
-            image_support=False,
-            audio_support=False,
-            thinking_support=False,
-            default_system_prompt=None,
-            plain_thinking_support=False,
-            use_special_token_variables=True,
-            model_settings_fields=None,
-            reasoning_effort_values=None,
-            reasoning_effort_default=None,
-        )
-
-        messages: list[dict[str, Any]] = [
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": []},
-        ]
+        template = build_test_template(TestConfig(version=TokenizerVersion.v1))
+        request = build_user_assistant_request(user_content="Hello", assistant_content=[])
 
         with pytest.raises(ValueError, match="Assistant message content must be non-empty"):
-            render_template(template, messages)
+            render_template(template, **build_render_args(request))
 
     def test_v1_invalid_assistant_chunk_type_raises(self) -> None:
-        template = generate_chat_template(
-            spm=False,
-            tokenizer_version=TokenizerVersion.v1,
-            image_support=False,
-            audio_support=False,
-            thinking_support=False,
-            default_system_prompt=None,
-            plain_thinking_support=False,
-            use_special_token_variables=True,
-            model_settings_fields=None,
-            reasoning_effort_values=None,
-            reasoning_effort_default=None,
-        )
-
+        # AssistantMessage only accepts text/think chunks, so the invalid chunk
+        # type renders through the raw OpenAI dict.
+        template = build_test_template(TestConfig(version=TokenizerVersion.v1))
         messages: list[dict[str, Any]] = [
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": [{"type": "image", "url": "http://example.com/img.png"}]},

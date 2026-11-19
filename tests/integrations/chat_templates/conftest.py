@@ -1,9 +1,10 @@
-r"""Chat template test configuration.
+r"""Chat template test configuration for the remaining plural-root consumers.
 
-Provides package-level fixtures, parametrize config lists, and invalid-message
-fixtures used across all chat template test layers.
-
-Reusable helper functions live in `helpers.py`.
+Provides the package-level invalid-message fixtures and the autouse image
+download mock used by the parity and Transformers tests that still live under
+`tests/integrations/`. The configuration lists and IDs moved to the neutral
+`tests.utils.chat_templates.configs` module and are re-exported here for
+compatibility. Reusable helper functions live in `helpers.py`.
 Test data constants (`REQUEST_*`) live in `fixtures_data.py`.
 """
 
@@ -13,79 +14,22 @@ from unittest.mock import patch
 
 import pytest
 
-from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.helpers import DUMMY_IMAGE, TestConfig
+from tests.utils.chat_templates.configs import (
+    ALL_CONFIGS,
+    ALL_TRANSFORMERS_CONFIGS,
+    GOLDEN_CONFIGS,
+    format_config_id,
+    has_released_template,
+)
+from tests.utils.chat_templates.helpers import DUMMY_IMAGE
 
-# Every supported configuration (including SPM), for output comparison tests.
-ALL_CONFIGS: list[TestConfig] = [
-    # Non-SPM
-    TestConfig(version=TokenizerVersion.v1),
-    TestConfig(version=TokenizerVersion.v2),
-    TestConfig(version=TokenizerVersion.v3),
-    TestConfig(version=TokenizerVersion.v3, image=True),
-    TestConfig(version=TokenizerVersion.v7),
-    TestConfig(version=TokenizerVersion.v7, image=True),
-    TestConfig(version=TokenizerVersion.v7, audio=True),
-    TestConfig(version=TokenizerVersion.v11),
-    TestConfig(version=TokenizerVersion.v11, image=True),
-    TestConfig(version=TokenizerVersion.v11, audio=True),
-    TestConfig(version=TokenizerVersion.v13),
-    TestConfig(version=TokenizerVersion.v13, image=True),
-    TestConfig(version=TokenizerVersion.v13, audio=True),
-    TestConfig(version=TokenizerVersion.v13, think=True),
-    TestConfig(version=TokenizerVersion.v13, image=True, think=True),
-    TestConfig(version=TokenizerVersion.v15),
-    TestConfig(version=TokenizerVersion.v15, image=True),
-    TestConfig(version=TokenizerVersion.v15, audio=True),
-    TestConfig(version=TokenizerVersion.v15, think=True),
-    TestConfig(version=TokenizerVersion.v15, image=True, think=True),
-    # SPM
-    TestConfig(version=TokenizerVersion.v1, spm=True),
-    TestConfig(version=TokenizerVersion.v2, spm=True),
-    TestConfig(version=TokenizerVersion.v3, spm=True),
-    TestConfig(version=TokenizerVersion.v3, spm=True, image=True),
-    TestConfig(version=TokenizerVersion.v7, spm=True),
-    TestConfig(version=TokenizerVersion.v7, spm=True, image=True),
-    # Plain thinking (v11 only)
-    TestConfig(version=TokenizerVersion.v11, plain_think=True),
-    TestConfig(version=TokenizerVersion.v11, image=True, plain_think=True),
-    TestConfig(
-        version=TokenizerVersion.v15,
-        model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
-    ),
-    TestConfig(
-        version=TokenizerVersion.v15,
-        image=True,
-        model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
-    ),
-    TestConfig(
-        version=TokenizerVersion.v15,
-        think=True,
-        model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
-    ),
-    TestConfig(
-        version=TokenizerVersion.v15,
-        image=True,
-        think=True,
-        model_settings_fields=frozenset({"reasoning_effort", "json_schema"}),
-    ),
+__all__ = [
+    "ALL_CONFIGS",
+    "ALL_TRANSFORMERS_CONFIGS",
+    "GOLDEN_CONFIGS",
+    "format_config_id",
+    "has_released_template",
 ]
-
-
-def has_released_template(config: TestConfig) -> bool:
-    r"""Whether a config matches a released chat template; only those keep a golden template."""
-    if config.audio and config.version in (TokenizerVersion.v11, TokenizerVersion.v15):
-        return False
-    if config.version == TokenizerVersion.v15:
-        return config.image and config.think
-    return True
-
-
-# Configurations with a golden template in tests/data/chat_templates.
-GOLDEN_CONFIGS: list[TestConfig] = [c for c in ALL_CONFIGS if has_released_template(c)]
-
-# Parametrization configs for transformers tests (excludes plain_think).
-ALL_TRANSFORMERS_CONFIGS: list[TestConfig] = [c for c in ALL_CONFIGS if not c.plain_think]
 
 
 @pytest.fixture(scope="module")
@@ -210,24 +154,6 @@ def invalid_user_random() -> dict[str, Any]:
             }
         ]
     }
-
-
-def format_config_id(c: TestConfig) -> str:
-    r"""Generate a human-readable test ID for a config."""
-    parts = [c.version.value]
-    if c.spm:
-        parts.append("spm")
-    if c.image:
-        parts.append("img")
-    if c.audio:
-        parts.append("aud")
-    if c.think:
-        parts.append("think")
-    if c.plain_think:
-        parts.append("plain_think")
-    if c.model_settings_fields is not None:
-        parts.extend(sorted(c.model_settings_fields))
-    return "_".join(parts)
 
 
 @pytest.fixture(autouse=True, scope="package")

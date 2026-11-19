@@ -27,7 +27,7 @@ from mistral_common.tokens.tokenizers.model_settings_builder import (
     ReasoningEffortEnumBuilder,
     ValidatorType,
 )
-from tests.integrations.chat_templates.helpers import TestConfig, build_tekken_json
+from tests.utils.chat_templates.helpers import TestConfig, build_tekken_json
 
 _REASONING_EFFORT_ONLY_BUILDER = ModelSettingsBuilder(
     reasoning_effort=ReasoningEffortEnumBuilder(

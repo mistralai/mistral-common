@@ -1,15 +1,16 @@
 r"""Reusable helper functions for chat template tests.
 
-This module contains utility functions used by test files across the
-`unit/` and `transformers/` subdirectories.  It intentionally has no
-fixtures or test data -- those live in `conftest.py` and `fixtures_data.py`.
+This neutral module is imported by the unit lane
+(`tests/unit/integrations/chat_templates/`), the CLI integration lane
+(`tests/integration/chat_templates/`) and, via compatibility re-exports, by
+the remaining plural-root parity and Transformers consumers. It intentionally
+has no fixtures -- those live in the owning `conftest.py` files.
 
-HuggingFace-specific helpers live in `hf_utils.py`.
+HuggingFace-specific helpers live in the parity-owned `hf_utils.py`.
 """
 
 import json
 import shutil
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +22,9 @@ from PIL import Image
 from mistral_common.integrations.chat_templates.template_generator import (
     MODEL_SETTINGS_FIELD_CHOICES,
     TemplateConfig,
+    build_chat_template,
 )
+from mistral_common.protocol.instruct.messages import ReasoningFieldFormat
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, ReasoningEffort
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.audio import Audio
@@ -32,28 +35,26 @@ from mistral_common.tokens.tokenizers.model_settings_builder import (
     ModelSettingsBuilder,
     ReasoningEffortEnumBuilder,
 )
+from tests.utils.chat_templates.configs import TestConfig
 from tests.utils.special_tokens import get_special_tokens
 from tests.utils.tokenized import decode_keep
 
 # Golden template files live in the data/ tree (outside src/).
-_GOLDEN_DIR = Path(__file__).parent.parent.parent / "data" / "chat_templates"
+_GOLDEN_DIR = Path(__file__).parents[2] / "data" / "chat_templates"
 
 SPM_WHITESPACE = "▁"
 
+PARITY_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {"answer": {"type": "string"}},
+    "required": ["answer"],
+}
 
-@dataclass(frozen=True)
-class TestConfig:
-    r"""Test configuration for chat template parametrization."""
-
-    __test__ = False
-
-    version: TokenizerVersion
-    spm: bool = False
-    image: bool = False
-    audio: bool = False
-    think: bool = False
-    plain_think: bool = False
-    model_settings_fields: frozenset[str] | None = None
+PARITY_JSON_SCHEMA_NON_ASCII: dict[str, Any] = {
+    "type": "object",
+    "properties": {"clé": {"type": "string", "description": "L'<é> & Co's"}},
+    "required": ["clé"],
+}
 
 
 def build_template_config(config: TestConfig) -> TemplateConfig:
@@ -74,6 +75,16 @@ def build_template_config(config: TestConfig) -> TemplateConfig:
         reasoning_effort_values=("none", "high") if has_reasoning_effort else None,
         reasoning_effort_default="none" if has_reasoning_effort else None,
     )
+
+
+def build_test_template(config: TestConfig) -> str:
+    r"""Build the dynamic template for a test config.
+
+    Equivalent to `generate_chat_template` with `use_special_token_variables=True`
+    and the standard reasoning-effort options, shared with the parity tests that
+    build the same template through `build_template_config` + `build_chat_template`.
+    """
+    return build_chat_template(build_template_config(config))
 
 
 def load_golden_template(config: TemplateConfig) -> str:
@@ -105,14 +116,18 @@ def load_golden_template(config: TemplateConfig) -> str:
     return path.read_text()
 
 
-def build_render_args(request: ChatCompletionRequest) -> dict[str, Any]:
+def build_render_args(
+    request: ChatCompletionRequest, *, reasoning_field_format: ReasoningFieldFormat | None = None
+) -> dict[str, Any]:
     r"""Convert a ChatCompletionRequest to render_template kwargs.
 
     Enriches tool messages with the `name` field resolved from the preceding
     assistant's `tool_calls`, which the v2 Jinja template requires but
-    `ToolMessage.to_openai()` omits.
+    `ToolMessage.to_openai()` omits. `reasoning_field_format` selects how
+    assistant ThinkChunks serialize: flat `reasoning`/`reasoning_content`
+    fields (default) or inline `thinking` chunks.
     """
-    openai = request.to_openai()
+    openai = request.to_openai(reasoning_field_format=reasoning_field_format)
     messages = openai["messages"]
 
     # Build a mapping from tool_call_id -> function name so tool messages
@@ -138,6 +153,8 @@ def build_render_args(request: ChatCompletionRequest) -> dict[str, Any]:
         kwargs["tools"] = openai["tools"]
     if (reasoning := openai.get("reasoning_effort")) is not None:
         kwargs["reasoning_effort"] = reasoning
+    if (response_format := openai.get("response_format")) is not None:
+        kwargs["response_format"] = response_format
     return kwargs
 
 
