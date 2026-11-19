@@ -27,7 +27,6 @@ from mistral_common.tokens.tokenizers.model_settings_builder import (
     ReasoningEffortEnumBuilder,
 )
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-from tests.test_tekken import get_special_tokens, quick_vocab
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_arbitrary_tool_call_id_request,
     build_assistant_list_content_request,
@@ -90,7 +89,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_user_audio_url_request,
     build_user_image_url_request,
 )
-from tests.utils import assert_tokenized_equal, decode_keep
+from tests.utils import assert_tokenized_equal, decode_keep, get_special_tokens, quick_vocab
 
 # fmt: off
 _SYSTEM_TEXT_TOKENS = [

@@ -26,8 +26,7 @@ from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV11, InstructTokenizerV13
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-from tests.test_tekken import get_special_tokens, quick_vocab
-from tests.utils import is_unloadable_json
+from tests.utils import get_special_tokens, is_unloadable_json, quick_vocab
 
 
 def fixture_mistral_tokenizer_v11() -> MistralTokenizer:

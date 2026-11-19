@@ -11,7 +11,7 @@ from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, SpecialTok
 from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import SpecialTokenInfo, Tekkenizer
-from tests.test_tekken import get_special_tokens, quick_vocab
+from tests.utils import get_special_tokens, quick_vocab
 
 _NUM_SPECIAL_TOKENS = 100
 _EXTRA_TOKENS = [b"a", b"b", b"c", b"f", b"de", b"he", b"llo"]

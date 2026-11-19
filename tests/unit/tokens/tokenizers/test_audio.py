@@ -518,3 +518,30 @@ def test_transcription_request_with_openai_dict() -> None:
         {"audio": {"data": b64, "format": "wav"}, "language": None, "target_streaming_delay_ms": None}
     )
     assert req.audio == b64
+
+
+def test_from_base64_strips_data_url_with_non_word_subtype() -> None:
+    r"""Strip the data URL prefix for an audio subtype containing `-`."""
+    b64 = _make_dummy_base64()
+    audio = Audio.from_base64(f"data:audio/x-wav;base64,{b64}")
+    assert audio.format == "wav"
+
+
+def test_from_base64_rejects_image_payload() -> None:
+    r"""Reject valid base64 of a valid image passed as audio."""
+    import base64
+    import io
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (1, 1)).save(buffer, format="PNG")
+    png_b64 = base64.b64encode(buffer.getvalue()).decode()
+    with pytest.raises(AudioDecodeException, match=r"^Could not decode the audio"):
+        Audio.from_base64(f"data:audio/wav;base64,{png_b64}")
+
+
+def test_from_base64_rejects_malformed_data_url() -> None:
+    r"""Reject a malformed data URL before attempting to decode."""
+    with pytest.raises(ValueError, match="Invalid base64 data URL"):
+        Audio.from_base64("data:text/plain,hello")

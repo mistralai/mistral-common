@@ -32,8 +32,7 @@ from mistral_common.tokens.tokenizers.model_settings_builder import (
     ModelSettingsBuilder,
     ReasoningEffortEnumBuilder,
 )
-from tests.test_tekken import get_special_tokens
-from tests.utils import decode_keep
+from tests.utils import decode_keep, get_special_tokens
 
 # Golden template files live in the data/ tree (outside src/).
 _GOLDEN_DIR = Path(__file__).parent.parent.parent / "data" / "chat_templates"

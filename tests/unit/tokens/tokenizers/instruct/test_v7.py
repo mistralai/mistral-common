@@ -47,7 +47,6 @@ from mistral_common.tokens.tokenizers.instruct import InstructTokenizerV7, Instr
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder, ReasoningEffortEnumBuilder
 from mistral_common.tokens.tokenizers.tekken import Tekkenizer
-from tests.test_tekken import get_special_tokens, quick_vocab
 from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_arbitrary_tool_call_id_request,
     build_assistant_list_content_request,
@@ -118,7 +117,7 @@ from tests.unit.tokens.tokenizers.instruct.test_audio import (
     build_synthetic_v7_audio_tokenizer,
     get_tekkenizer_with_audio,
 )
-from tests.utils import assert_tokenized_equal, decode_keep
+from tests.utils import assert_tokenized_equal, decode_keep, get_special_tokens, quick_vocab
 
 # fmt: off
 _IMAGE_AND_TOOL_RESULT_TOKENS = [1, 3, 10, 10, 14, 10, 10, 15, 1032, 4, 1055, 2, 8, 1055, 18, 1053, 9]
