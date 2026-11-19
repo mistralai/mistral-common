@@ -40,6 +40,7 @@ from mistral_common.protocol.instruct.request import (
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder, ReasoningEffortEnumBuilder
+from tests.integration.chat_recipes import PREFIXED_FINAL, build_function_tool, build_user_content_request
 
 REQUEST: ChatCompletionRequest = ChatCompletionRequest(
     messages=[
@@ -79,9 +80,7 @@ _UNLOADABLE_JSON = [
 
 class TestUnloadableJsonPassthrough:
     @pytest.mark.parametrize(argnames="payload", argvalues=_UNLOADABLE_JSON)
-    @pytest.mark.parametrize(
-        argnames="version", argvalues=[TokenizerVersion.v3, TokenizerVersion.v7, TokenizerVersion.v13]
-    )
+    @pytest.mark.parametrize(argnames="version", argvalues=list(TokenizerVersion), ids=lambda v: v.name)
     def test_keeps_unloadable_json_unchanged(self, version: TokenizerVersion, payload: str) -> None:
         r"""Pass tool-call arguments and tool content that json.loads rejects through unchanged."""
         request = ChatCompletionRequest[ChatMessage](
@@ -94,7 +93,7 @@ class TestUnloadableJsonPassthrough:
             ]
         )
 
-        _, assistant, tool = get_normalizer(version=version).from_chat_completion_request(request).messages
+        _, assistant, tool = _normalizer_for(version).from_chat_completion_request(request).messages
 
         assert isinstance(assistant, AssistantMessage) and assistant.tool_calls is not None
         assert assistant.tool_calls[0].function.arguments == payload
@@ -109,6 +108,22 @@ def mock_chat_completion(messages: list[ChatMessage]) -> ChatCompletionRequest:
         top_p=1.0,
         temperature=0.7,
     )
+
+
+_ALL_VERSIONS = list(TokenizerVersion)
+_V7_PLUS_VERSIONS = [version for version in _ALL_VERSIONS if version >= TokenizerVersion.v7]
+
+
+def _normalizer_for(version: TokenizerVersion) -> InstructRequestNormalizer:
+    builder = _V15_BUILDER if version.supports_model_settings else None
+    return get_normalizer(version, builder)
+
+
+def _expected_settings(version: TokenizerVersion) -> ModelSettings:
+    # The v15 builder resolves an unset effort to its configured default.
+    if version.supports_model_settings:
+        return ModelSettings(reasoning_effort=ReasoningEffort.none)
+    return ModelSettings.none()
 
 
 class TestBaseNormalization:
@@ -1725,3 +1740,152 @@ class TestV3MultimodalNormalization:
         request, expected = case()
         normalizer = get_normalizer(TokenizerVersion.v3)
         assert normalizer.from_chat_completion_request(request) == expected
+
+
+class TestCrossVersionNormalization:
+    r"""The same request normalized by every supported tokenizer version.
+
+    Expected outputs differ only where the version family changes behavior:
+    base (v1-v3) folds system prompts and rejects content+tool calls, v7+
+    retains system messages and allows them, v11+ sorts tool results by call
+    order, and v15 joins intra-message text without a separator.
+    """
+
+    @pytest.mark.parametrize("version", _ALL_VERSIONS, ids=lambda v: v.name)
+    def test_plain_user_request(self, version: TokenizerVersion) -> None:
+        request = build_user_content_request(content=[TextChunk(text="B")])
+        expected = InstructRequest[ChatMessage, Tool](
+            messages=[UserMessage(content="B")], settings=_expected_settings(version)
+        )
+        assert _normalizer_for(version).from_chat_completion_request(request) == expected
+
+    @pytest.mark.parametrize("version", _ALL_VERSIONS, ids=lambda v: v.name)
+    def test_system_message_folded_or_retained(self, version: TokenizerVersion) -> None:
+        request = ChatCompletionRequest[ChatMessage](messages=[SystemMessage(content="S"), UserMessage(content="U")])
+        if version < TokenizerVersion.v7:
+            expected = InstructRequest[ChatMessage, Tool](
+                messages=[UserMessage(content="U")], system_prompt="S", settings=_expected_settings(version)
+            )
+        else:
+            expected = InstructRequest[ChatMessage, Tool](
+                messages=[SystemMessage(content="S"), UserMessage(content="U")], settings=_expected_settings(version)
+            )
+        assert _normalizer_for(version).from_chat_completion_request(request) == expected
+
+    @pytest.mark.parametrize("version", _ALL_VERSIONS, ids=lambda v: v.name)
+    def test_intra_message_text_join(self, version: TokenizerVersion) -> None:
+        request = build_user_content_request(content=[TextChunk(text="A"), TextChunk(text="B")])
+        joined = "AB" if version >= TokenizerVersion.v15 else "A\n\nB"
+        expected = InstructRequest[ChatMessage, Tool](
+            messages=[UserMessage(content=joined)], settings=_expected_settings(version)
+        )
+        assert _normalizer_for(version).from_chat_completion_request(request) == expected
+
+    @pytest.mark.parametrize("version", _ALL_VERSIONS, ids=lambda v: v.name)
+    def test_mixed_assistant_content_and_tool_calls(self, version: TokenizerVersion) -> None:
+        tool_call = ToolCall(function=FunctionCall(name="tool1", arguments='{"input": "11"}'))
+        request = ChatCompletionRequest(messages=[AssistantMessage(content="A", tool_calls=[tool_call])])
+        if version < TokenizerVersion.v7:
+            with pytest.raises(ValueError, match="Tool calls and content cannot be used together in the same message"):
+                _normalizer_for(version).from_chat_completion_request(request)
+        else:
+            expected = InstructRequest[ChatMessage, Tool](
+                messages=[AssistantMessage(content="A", tool_calls=[tool_call])],
+                settings=_expected_settings(version),
+            )
+            assert _normalizer_for(version).from_chat_completion_request(request) == expected
+
+    @pytest.mark.parametrize("version", _ALL_VERSIONS, ids=lambda v: v.name)
+    def test_assistant_prefix_preserved(self, version: TokenizerVersion) -> None:
+        request = PREFIXED_FINAL.build()
+        expected = InstructRequest[ChatMessage, Tool](
+            messages=[UserMessage(content="a"), AssistantMessage(content="b", prefix=True)],
+            settings=_expected_settings(version),
+        )
+        assert _normalizer_for(version).from_chat_completion_request(request) == expected
+
+    @pytest.mark.parametrize("version", _ALL_VERSIONS, ids=lambda v: v.name)
+    def test_available_tools_preserved(self, version: TokenizerVersion) -> None:
+        tool = build_function_tool(name="fn", description="d", parameters={"type": "object"})
+        request = ChatCompletionRequest(messages=[UserMessage(content="q")], tools=[tool])
+        expected = InstructRequest[ChatMessage, Tool](
+            messages=[UserMessage(content="q")],
+            available_tools=[tool],
+            settings=_expected_settings(version),
+        )
+        assert _normalizer_for(version).from_chat_completion_request(request) == expected
+
+    @pytest.mark.parametrize("version", _ALL_VERSIONS, ids=lambda v: v.name)
+    def test_tool_results_sorted_only_from_v11(self, version: TokenizerVersion) -> None:
+        messages: list[ChatMessage] = [
+            SystemMessage(content="S"),
+            UserMessage(content="U1"),
+            AssistantMessage(
+                tool_calls=[
+                    ToolCall(id="123456789", function=FunctionCall(name="F1", arguments="{}")),
+                    ToolCall(id="999999999", function=FunctionCall(name="F2", arguments="{}")),
+                ]
+            ),
+            ToolMessage(content="D", tool_call_id="999999999"),
+            ToolMessage(content="C", tool_call_id="123456789"),
+            AssistantMessage(content="A2"),
+            UserMessage(content="U2"),
+        ]
+        request = ChatCompletionRequest(messages=messages)
+        tool_results = (
+            [ToolMessage(content="C", tool_call_id="123456789"), ToolMessage(content="D", tool_call_id="999999999")]
+            if version >= TokenizerVersion.v11
+            else [
+                ToolMessage(content="D", tool_call_id="999999999"),
+                ToolMessage(content="C", tool_call_id="123456789"),
+            ]
+        )
+        assistant_with_calls = AssistantMessage(
+            content="",
+            tool_calls=[
+                ToolCall(id="123456789", function=FunctionCall(name="F1", arguments="{}")),
+                ToolCall(id="999999999", function=FunctionCall(name="F2", arguments="{}")),
+            ],
+        )
+        if version < TokenizerVersion.v7:
+            expected_messages: list[ChatMessage] = [
+                UserMessage(content="U1"),
+                assistant_with_calls,
+                *tool_results,
+                AssistantMessage(content="A2"),
+                UserMessage(content="U2"),
+            ]
+            expected = InstructRequest[ChatMessage, Tool](
+                messages=expected_messages, system_prompt="S", settings=_expected_settings(version)
+            )
+        else:
+            expected_messages = [
+                SystemMessage(content="S"),
+                UserMessage(content="U1"),
+                assistant_with_calls,
+                *tool_results,
+                AssistantMessage(content="A2"),
+                UserMessage(content="U2"),
+            ]
+            expected = InstructRequest[ChatMessage, Tool](
+                messages=expected_messages, settings=_expected_settings(version)
+            )
+        assert _normalizer_for(version).from_chat_completion_request(request) == expected
+
+    @pytest.mark.parametrize("version", _V7_PLUS_VERSIONS, ids=lambda v: v.name)
+    def test_audio_in_system_message_retained(self, version: TokenizerVersion) -> None:
+        # Base normalizers fold system prompts to a string and cannot carry audio.
+        request = ChatCompletionRequest[ChatMessage](
+            messages=[
+                SystemMessage(content=[TextChunk(text="hello"), AudioChunk(input_audio=b"fake_audio_data")]),
+                UserMessage(content="test"),
+            ]
+        )
+        expected = InstructRequest[ChatMessage, Tool](
+            messages=[
+                SystemMessage(content=[TextChunk(text="hello"), AudioChunk(input_audio=b"fake_audio_data")]),
+                UserMessage(content="test"),
+            ],
+            settings=_expected_settings(version),
+        )
+        assert _normalizer_for(version).from_chat_completion_request(request) == expected
