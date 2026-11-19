@@ -5,7 +5,7 @@ import pytest
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.integrations.chat_templates.template_generator import TemplateConfig, build_chat_template
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.helpers import render_template
+from tests.utils.chat_templates.helpers import render_template
 
 
 def test_template_config_rejects_invalid_reasoning_effort_options() -> None:

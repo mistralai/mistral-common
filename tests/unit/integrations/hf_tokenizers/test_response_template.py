@@ -25,7 +25,7 @@ from mistral_common.tokens.tokenizers.base import (
     TokenizerVersion,
 )
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from tests.integrations.chat_templates.helpers import TestConfig, build_tekken_json
+from tests.utils.chat_templates.helpers import TestConfig, build_tekken_json
 
 _COMMON_CONTENT_FIELD: dict[str, Any] = {
     "close": [SpecialTokens.tool_calls.value, SpecialTokens.eos.value],

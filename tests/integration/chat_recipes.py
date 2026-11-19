@@ -30,7 +30,7 @@ from mistral_common.protocol.instruct.messages import (
     ToolMessage,
     UserMessage,
 )
-from mistral_common.protocol.instruct.request import ChatCompletionRequest, ReasoningEffort
+from mistral_common.protocol.instruct.request import ChatCompletionRequest, ReasoningEffort, ResponseFormat
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from tests.fixtures.audio import get_dummy_audio_chunk
 
@@ -602,7 +602,19 @@ def _build_parallel_calls() -> ChatCompletionRequest[ChatMessage]:
     )
 
 
-def _build_tool_results_request(*, call_count: int, terminal_assistant: bool) -> ChatCompletionRequest[ChatMessage]:
+def build_tool_results_request(
+    *, call_count: int, terminal_assistant: bool, tools: list[Tool] | None = None
+) -> ChatCompletionRequest[ChatMessage]:
+    r"""Build one assistant turn with `call_count` tool calls followed by two tool results.
+
+    Args:
+        call_count: Number of tool calls on the assistant turn.
+        terminal_assistant: Whether to append a final assistant message.
+        tools: Optional tool declarations attached to the request.
+
+    Returns:
+        A fresh request with the parallel tool-call scaffold.
+    """
     tool_calls = [
         ToolCall(id=f"call0000{index}", function=FunctionCall(name=f"tool_{index}", arguments="{}"))
         for index in range(1, call_count + 1)
@@ -618,19 +630,19 @@ def _build_tool_results_request(*, call_count: int, terminal_assistant: bool) ->
     if terminal_assistant:
         messages.append(AssistantMessage(content="The tool work is complete."))
 
-    return ChatCompletionRequest[ChatMessage](model="test", messages=messages)
+    return build_conversation_request(messages=messages, model="test", tools=tools)
 
 
 def _build_parallel_tool_results() -> ChatCompletionRequest[ChatMessage]:
-    return _build_tool_results_request(call_count=2, terminal_assistant=False)
+    return build_tool_results_request(call_count=2, terminal_assistant=False)
 
 
 def _build_mismatched_tool_results() -> ChatCompletionRequest[ChatMessage]:
-    return _build_tool_results_request(call_count=1, terminal_assistant=False)
+    return build_tool_results_request(call_count=1, terminal_assistant=False)
 
 
 def _build_mismatched_tool_results_finetuning() -> ChatCompletionRequest[ChatMessage]:
-    return _build_tool_results_request(call_count=1, terminal_assistant=True)
+    return build_tool_results_request(call_count=1, terminal_assistant=True)
 
 
 NO_TOOLS = ChatRecipe(recipe_id="sample-no-tools", build=_build_no_tools)
@@ -698,3 +710,214 @@ REASONING_EFFORT_UNSUPPORTED = ChatRecipe(
 )
 CALL_ID_X = _call_id_recipe(recipe_id="call-id-x", tool_call_id="x")
 CALL_ID_SLASH = _call_id_recipe(recipe_id="call-id-slash", tool_call_id="call/id-1")
+
+
+def build_conversation_request(
+    *,
+    messages: list[ChatMessage],
+    model: str | None = None,
+    tools: list[Tool] | None = None,
+    reasoning_effort: ReasoningEffort | None = None,
+    response_format: ResponseFormat | None = None,
+) -> ChatCompletionRequest[ChatMessage]:
+    r"""Assemble a fresh request from ready-made messages and optional settings.
+
+    Args:
+        messages: Ordered conversation messages.
+        model: Optional model name carried by the request.
+        tools: Optional tool declarations attached to the request.
+        reasoning_effort: Optional reasoning effort setting.
+        response_format: Optional response format setting.
+
+    Returns:
+        A fresh request carrying the supplied messages and settings.
+    """
+    request_kwargs: dict[str, Any] = {"messages": messages}
+    if model is not None:
+        request_kwargs["model"] = model
+    if tools is not None:
+        request_kwargs["tools"] = tools
+    if reasoning_effort is not None:
+        request_kwargs["reasoning_effort"] = reasoning_effort
+    if response_format is not None:
+        request_kwargs["response_format"] = response_format
+    return ChatCompletionRequest[ChatMessage](**request_kwargs)
+
+
+def build_user_assistant_request(
+    *,
+    user_content: str | list[ContentChunk],
+    assistant_content: str | list[ContentChunk] | None,
+    tools: list[Tool] | None = None,
+    reasoning_effort: ReasoningEffort | None = None,
+    response_format: ResponseFormat | None = None,
+) -> ChatCompletionRequest[ChatMessage]:
+    r"""Build a two-turn user/assistant conversation.
+
+    Args:
+        user_content: User message content (text or ordered chunks).
+        assistant_content: Assistant message content.
+        tools: Optional tool declarations attached to the request.
+        reasoning_effort: Optional reasoning effort setting.
+        response_format: Optional response format setting.
+
+    Returns:
+        A fresh request with the user and assistant turns.
+    """
+    return build_conversation_request(
+        messages=[UserMessage(content=user_content), AssistantMessage(content=assistant_content)],
+        tools=tools,
+        reasoning_effort=reasoning_effort,
+        response_format=response_format,
+    )
+
+
+def build_tool_call_request(
+    *,
+    tool_name: str,
+    call_id: str,
+    arguments: str,
+    result_content: str | list[ContentChunk],
+    result_name: str | None = None,
+    assistant_content: str | None = None,
+    user_content: str = "Hello",
+    terminal_content: str | None = None,
+    follow_up: tuple[str, str] | None = None,
+    tools: list[Tool] | None = None,
+) -> ChatCompletionRequest[ChatMessage]:
+    r"""Build a single tool-call turn: user, assistant call, tool result, optional follow-ups.
+
+    Args:
+        tool_name: Function name of the tool call.
+        call_id: Tool-call id shared by the call and the result.
+        arguments: Raw JSON arguments string of the call.
+        result_content: Tool result content (text or ordered chunks).
+        result_name: Tool name on the result message; `None` omits it (v2 requires it).
+        assistant_content: Text content of the assistant turn carrying the call.
+        user_content: User message content.
+        terminal_content: Optional final assistant message after the result.
+        follow_up: Optional `(user_content, assistant_content)` pair after the result.
+        tools: Optional tool declarations attached to the request.
+
+    Returns:
+        A fresh request with the tool-call conversation.
+    """
+    messages: list[ChatMessage] = [
+        UserMessage(content=user_content),
+        AssistantMessage(
+            content=assistant_content,
+            tool_calls=[ToolCall(id=call_id, function=FunctionCall(name=tool_name, arguments=arguments))],
+        ),
+        ToolMessage(content=result_content, tool_call_id=call_id, name=result_name),
+    ]
+    if terminal_content is not None:
+        messages.append(AssistantMessage(content=terminal_content))
+    if follow_up is not None:
+        messages.append(UserMessage(content=follow_up[0]))
+        messages.append(AssistantMessage(content=follow_up[1]))
+    return build_conversation_request(messages=messages, tools=tools)
+
+
+def build_aggregated_tool_calls_request(*, tools: list[Tool] | None = None) -> ChatCompletionRequest[ChatMessage]:
+    r"""Build two consecutive assistant tool-call turns whose results are aggregated.
+
+    Args:
+        tools: Optional tool declarations attached to the request.
+
+    Returns:
+        A fresh request with both calls, both results, and a closing exchange.
+    """
+    return build_conversation_request(
+        messages=[
+            UserMessage(content="Weather?"),
+            AssistantMessage(
+                content="Checking Paris.",
+                tool_calls=[
+                    ToolCall(id="123456789", function=FunctionCall(name="get_weather", arguments='{"city": "Paris"}'))
+                ],
+            ),
+            AssistantMessage(
+                content="And London.",
+                tool_calls=[
+                    ToolCall(id="023456789", function=FunctionCall(name="get_weather", arguments='{"city": "London"}'))
+                ],
+            ),
+            ToolMessage(name="get_weather", content="22", tool_call_id="123456789"),
+            ToolMessage(name="get_weather", content="15", tool_call_id="023456789"),
+            AssistantMessage(content="Paris: 22, London: 15"),
+            UserMessage(content="Thanks"),
+            AssistantMessage(content="Welcome"),
+        ],
+        tools=tools,
+    )
+
+
+def build_thinking_assistant_request(
+    *,
+    user_content: str = "Hi",
+    thinking: str | None = None,
+    text: str | None = None,
+    closed: bool = True,
+    tool_calls: list[ToolCall] | None = None,
+    reasoning_effort: ReasoningEffort | None = None,
+) -> ChatCompletionRequest[ChatMessage]:
+    r"""Build a user/assistant turn where the assistant optionally carries thinking.
+
+    Args:
+        user_content: User message content.
+        thinking: Thinking text; `None` omits the ThinkChunk.
+        text: Assistant text content; `None` omits the TextChunk.
+        closed: Whether the ThinkChunk is closed.
+        tool_calls: Optional tool calls on the assistant turn.
+        reasoning_effort: Optional reasoning effort setting.
+
+    Returns:
+        A fresh request with the assistant turn built from the given parts.
+    """
+    chunks: list[ContentChunk] = []
+    if thinking is not None:
+        chunks.append(ThinkChunk(thinking=thinking, closed=closed))
+    if text is not None:
+        chunks.append(TextChunk(text=text))
+    content: str | list[ContentChunk] | None
+    if not chunks:
+        content = None
+    elif thinking is None:
+        content = text
+    else:
+        content = chunks
+    return build_conversation_request(
+        messages=[UserMessage(content=user_content), AssistantMessage(content=content, tool_calls=tool_calls)],
+        reasoning_effort=reasoning_effort,
+    )
+
+
+def build_system_content_request(
+    *,
+    system_content: str | list[ContentChunk],
+    user_content: str = "Hello",
+    assistant_content: str = "Hi",
+    tools: list[Tool] | None = None,
+    reasoning_effort: ReasoningEffort | None = None,
+) -> ChatCompletionRequest[ChatMessage]:
+    r"""Build a conversation starting with a system message of the given content.
+
+    Args:
+        system_content: System message content (text or ordered chunks).
+        user_content: User message content.
+        assistant_content: Assistant message content.
+        tools: Optional tool declarations attached to the request.
+        reasoning_effort: Optional reasoning effort setting.
+
+    Returns:
+        A fresh request with system, user, and assistant turns.
+    """
+    return build_conversation_request(
+        messages=[
+            SystemMessage(content=system_content),
+            UserMessage(content=user_content),
+            AssistantMessage(content=assistant_content),
+        ],
+        tools=tools,
+        reasoning_effort=reasoning_effort,
+    )

@@ -12,27 +12,27 @@ from mistral_common.protocol.instruct.messages import AssistantMessage, UserMess
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from tests.integrations.chat_templates.conftest import (
-    ALL_TRANSFORMERS_CONFIGS,
-    format_config_id,
-)
 from tests.integrations.chat_templates.fixtures_data import (
     get_parity_conversations,
     iter_render_args,
     parse_tool_call_arguments,
-)
-from tests.integrations.chat_templates.helpers import (
-    TestConfig,
-    build_spm_path,
-    build_tekken_json,
-    build_template_config,
-    encode_mistral_common,
 )
 from tests.integrations.chat_templates.hf_utils import (
     build_hf_tokenizer,
     encode_hf_tokens,
     encode_transformers,
     encode_transformers_from_openai,
+)
+from tests.utils.chat_templates.configs import (
+    ALL_TRANSFORMERS_CONFIGS,
+    TestConfig,
+    format_config_id,
+)
+from tests.utils.chat_templates.helpers import (
+    build_spm_path,
+    build_tekken_json,
+    build_template_config,
+    encode_mistral_common,
 )
 
 

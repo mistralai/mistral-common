@@ -23,11 +23,11 @@ from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.tool_calls import Function, FunctionCall, Tool, ToolCall
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
-from tests.integrations.chat_templates.helpers import (
+from tests.utils.chat_templates.configs import TestConfig
+from tests.utils.chat_templates.helpers import (
     DUMMY_AUDIO_BASE64,
     DUMMY_IMAGE,
     DUMMY_IMAGE_URL,
-    TestConfig,
     build_render_args,
 )
 
@@ -49,18 +49,6 @@ _TOOLS = [
     ),
     Tool(function=Function(name="tool2", parameters={})),
 ]
-
-PARITY_JSON_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {"answer": {"type": "string"}},
-    "required": ["answer"],
-}
-
-PARITY_JSON_SCHEMA_NON_ASCII: dict[str, Any] = {
-    "type": "object",
-    "properties": {"clé": {"type": "string", "description": "L'<é> & Co's"}},
-    "required": ["clé"],
-}
 
 # -- Request fixtures --
 
