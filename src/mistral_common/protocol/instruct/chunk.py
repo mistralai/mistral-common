@@ -535,8 +535,11 @@ def _convert_openai_content_chunks(openai_content_chunks: dict[str, Any]) -> Con
         The ContentChunk instance corresponding to the OpenAI chunk type.
 
     Raises:
+        InvalidRequestException: If the chunk is not a dictionary.
         ValueError: If the chunk has no "type" field or the type is unknown.
     """
+    if not isinstance(openai_content_chunks, dict):
+        raise InvalidRequestException(f"Content chunk must be an object, got {type(openai_content_chunks).__name__}.")
     content_type_str = openai_content_chunks.get("type")
 
     if content_type_str is None:

@@ -45,3 +45,16 @@ def test_from_openai_chat_completion_request_with_developer_role() -> None:
     ]
     assert request.temperature == 0.2
     assert request.max_tokens == 256
+
+
+@pytest.mark.parametrize(
+    "message",
+    [{"role": "user"}, {"role": "system"}, {"role": "assistant"}, {"role": "tool", "tool_call_id": "123456789"}],
+    ids=["user", "system", "assistant", "tool"],
+)
+@pytest.mark.parametrize("chunk", ["hi", None, ["hi"]], ids=["str", "none", "list"])
+def test_from_openai_chat_completion_request_rejects_non_object_content_chunk(
+    message: dict[str, str], chunk: Any
+) -> None:
+    with pytest.raises(InvalidRequestException, match=r"^Content chunk must be an object, got "):
+        ChatCompletionRequest.from_openai(messages=[{**message, "content": [chunk]}])
