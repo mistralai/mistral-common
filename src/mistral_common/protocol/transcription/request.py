@@ -180,8 +180,9 @@ class TranscriptionRequest(BaseCompletionRequest):
     def from_openai(cls, openai_request: dict[str, Any], strict: bool = False) -> "TranscriptionRequest":
         r"""Create a TranscriptionRequest from an OpenAI request dictionary.
 
-        The "file" entry is read (BytesIO or file-like object with a .file
-        attribute), decoded via Audio, and re-encoded as a base64 string.
+        The "file" entry is read (BytesIO, an upload wrapper with a .file
+        attribute, or a binary file object such as `open(path, "rb")`), decoded
+        via Audio, and re-encoded as a base64 string.
 
         Args:
             openai_request: Dictionary matching OpenAI's transcription request
@@ -205,9 +206,11 @@ class TranscriptionRequest(BaseCompletionRequest):
         assert file is not None, file
         if isinstance(file, io.BytesIO):
             audio_bytes = file.getvalue()
-        else:
+        elif hasattr(file, "file"):
             # for example if file is UploadFile, this should work
             audio_bytes = file.file.read()
+        else:
+            audio_bytes = file.read()
 
         audio = Audio.from_bytes(audio_bytes, strict=strict)
         audio_str = audio.to_base64(audio.format)
