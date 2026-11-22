@@ -21,7 +21,7 @@ def hertz_to_mel(freq: float | np.ndarray) -> float | np.ndarray:
     mels = 3.0 * freq / 200.0
 
     if isinstance(freq, np.ndarray):
-        assert isinstance(mels, np.ndarray), type(mels)
+        mels = np.asarray(mels)
         log_region = freq >= min_log_hertz
         mels[log_region] = min_log_mel + np.log(freq[log_region] / min_log_hertz) * logstep
     elif freq >= min_log_hertz:
@@ -42,7 +42,7 @@ def mel_to_hertz(mels: np.ndarray) -> np.ndarray:
     min_log_hertz = 1000.0
     min_log_mel = 15.0
     logstep = np.log(6.4) / 27.0
-    freq = 200.0 * mels / 3.0
+    freq = np.asarray(200.0 * mels / 3.0)
 
     log_region = mels >= min_log_mel
     freq[log_region] = min_log_hertz * np.exp(logstep * (mels[log_region] - min_log_mel))
