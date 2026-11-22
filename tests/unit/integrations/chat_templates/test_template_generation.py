@@ -79,6 +79,31 @@ class TestGenerateChatTemplateAPI:
         )
         assert "You are a helpful assistant." in template_with_prompt
 
+    @pytest.mark.parametrize("version", [TokenizerVersion.v3, TokenizerVersion.v7, TokenizerVersion.v13])
+    def test_leading_developer_message_replaces_default_system_prompt(self, version: TokenizerVersion) -> None:
+        # The developer role is mapped to system in the aggregation, after the default system prompt is chosen.
+        template = generate_chat_template(
+            spm=False,
+            tokenizer_version=version,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt="Default prompt.",
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+            model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
+        )
+        outputs = {
+            role: render_template(
+                template, [{"role": role, "content": "Be brief."}, {"role": "user", "content": "Hello"}]
+            )
+            for role in ["system", "developer"]
+        }
+        assert outputs["developer"] == outputs["system"]
+        assert "Default prompt." not in outputs["developer"]
+
     def test_basic_static_dynamic_parity(self, v13_template: str) -> None:
         config = build_template_config(TestConfig(version=TokenizerVersion.v13))
         static_template = load_golden_template(config)

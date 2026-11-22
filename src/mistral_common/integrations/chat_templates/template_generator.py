@@ -325,8 +325,9 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
     in the message processing loop. Only emit default system prompt if no system
     message is at position 0.
 
-    An empty conversation is rejected for every version, as the tokenizer does, and the
-    OpenAI `developer` role is read as `system`, as `ChatCompletionRequest.from_openai` does.
+    An empty conversation is rejected for every version, as the tokenizer does. The OpenAI
+    `developer` role is read as `system`, as `ChatCompletionRequest.from_openai` does; the
+    aggregation maps it, so the checks before it accept both roles.
 
     Args:
         config: The template configuration.
@@ -340,17 +341,6 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
         "{%- if messages | length == 0 %}",
         "    {{- raise_exception('Conversation must have at least one message') }}",
         "{%- endif %}",
-        "",
-        "{#- Read the developer role as system, as the tokenizer does. #}",
-        "{%- set ns_dev = namespace(messages=[]) %}",
-        "{%- for message in messages %}",
-        "    {%- if message['role'] == 'developer' %}",
-        "        {%- set ns_dev.messages = ns_dev.messages + [{'role': 'system', 'content': message['content']}] %}",
-        "    {%- else %}",
-        "        {%- set ns_dev.messages = ns_dev.messages + [message] %}",
-        "    {%- endif %}",
-        "{%- endfor %}",
-        "{%- set messages = ns_dev.messages %}",
         "",
         "{#- Handle system prompt if it exists. #}",
     ]
@@ -366,7 +356,8 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
 def _generate_system_prompt_handling_pre_v7(config: TemplateConfig) -> list[str]:
     r"""Generate pre-v7 system prompt handling that extracts all system messages.
 
-    Loops through all messages to collect system content. System messages stay
+    Loops through all messages to collect system content, reading `developer` as
+    `system`, since the aggregation maps it only later. System messages stay
     in `loop_messages` so that, as in the mistral-common normalizer, they split
     the surrounding user messages; the aggregation then drops them. A system
     message after an `assistant` or `tool` message is rejected, as in
@@ -382,7 +373,7 @@ def _generate_system_prompt_handling_pre_v7(config: TemplateConfig) -> list[str]
         "{#- Extract all system messages and merge into system prompt. #}",
         "{%- set ns_sys = namespace(system_parts=[], text_parts=[], previous_role='') %}",
         "{%- for message in messages %}",
-        "    {%- if message['role'] == 'system' %}",
+        "    {%- if message['role'] in ['system', 'developer'] %}",
         "        {%- if ns_sys.previous_role in ['assistant', 'tool'] %}",
         "            {{- raise_exception('Unexpected role \\'system\\' after role \\'' ~ ns_sys.previous_role ~ '\\'') }}",  # noqa: E501
         "        {%- endif %}",
@@ -421,7 +412,7 @@ def _generate_system_prompt_handling_v7_plus(config: TemplateConfig) -> list[str
 
     Sets `loop_messages = messages` (no filtering needed since system messages
     are kept in place) and emits the default system prompt if the first message
-    is not a system message.
+    is not a system or developer message.
 
     Args:
         config: The template configuration.
@@ -432,7 +423,7 @@ def _generate_system_prompt_handling_v7_plus(config: TemplateConfig) -> list[str
     begin_system = _BEGIN_SYSTEM + " " if config.spm else _BEGIN_SYSTEM
     lines = [
         "{%- set loop_messages = messages %}",
-        "{%- if messages[0]['role'] != 'system' and default_system_message != '' %}",
+        "{%- if messages[0]['role'] not in ['system', 'developer'] and default_system_message != '' %}",
         "    {{- '" + begin_system + "' ~ default_system_message ~ '" + _END_SYSTEM + "' }}",
         "{%- endif %}",
     ]
@@ -440,7 +431,7 @@ def _generate_system_prompt_handling_v7_plus(config: TemplateConfig) -> list[str
     if config.audio_support and config.version < TokenizerVersion.v13:
         lines.extend(
             [
-                "{%- if messages[0]['role'] == 'system' or default_system_message != '' %}",
+                "{%- if messages[0]['role'] in ['system', 'developer'] or default_system_message != '' %}",
                 "    {%- set has_sp = true %}",
                 "{%- else %}",
                 "    {%- set has_sp = false %}",
@@ -864,6 +855,8 @@ def _generate_message_aggregation(config: TemplateConfig) -> str:
       joined with `"\\n\\n"`), but NOT merged across consecutive messages. Before v7
       they are dropped after the aggregation, since the system prompt holds their content.
     - **Tool messages**: passed through as-is.
+    - **Developer messages**: read as system messages with the same content, as
+      `ChatCompletionRequest.from_openai` does.
 
     Non-text chunk type validation is deferred to the message rendering loop.
 
@@ -883,6 +876,8 @@ def _generate_message_aggregation(config: TemplateConfig) -> str:
         "{#- A sentinel message is appended so the last group gets flushed inside the loop. #}",
         "{%- set ns_agg = namespace(messages=[], current_group=[], current_role=none) %}",
         "{%- for message in loop_messages + [{'role': '__sentinel__'}] %}",
+        "    {#- Read the developer role as system, as the tokenizer does. #}",
+        "    {%- set message = {'role': 'system', 'content': message['content']} if message['role'] == 'developer' else message %}",  # noqa: E501
         "    {%- if message['role'] != ns_agg.current_role or message['role'] == 'system' or message['role'] == 'tool' %}",  # noqa: E501
     ]
 

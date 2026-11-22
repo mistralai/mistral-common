@@ -10,22 +10,11 @@
     {{- raise_exception('Conversation must have at least one message') }}
 {%- endif %}
 
-{#- Read the developer role as system, as the tokenizer does. #}
-{%- set ns_dev = namespace(messages=[]) %}
-{%- for message in messages %}
-    {%- if message['role'] == 'developer' %}
-        {%- set ns_dev.messages = ns_dev.messages + [{'role': 'system', 'content': message['content']}] %}
-    {%- else %}
-        {%- set ns_dev.messages = ns_dev.messages + [message] %}
-    {%- endif %}
-{%- endfor %}
-{%- set messages = ns_dev.messages %}
-
 {#- Handle system prompt if it exists. #}
 {#- Extract all system messages and merge into system prompt. #}
 {%- set ns_sys = namespace(system_parts=[], text_parts=[], previous_role='') %}
 {%- for message in messages %}
-    {%- if message['role'] == 'system' %}
+    {%- if message['role'] in ['system', 'developer'] %}
         {%- if ns_sys.previous_role in ['assistant', 'tool'] %}
             {{- raise_exception('Unexpected role \'system\' after role \'' ~ ns_sys.previous_role ~ '\'') }}
         {%- endif %}
@@ -56,6 +45,8 @@
 {#- A sentinel message is appended so the last group gets flushed inside the loop. #}
 {%- set ns_agg = namespace(messages=[], current_group=[], current_role=none) %}
 {%- for message in loop_messages + [{'role': '__sentinel__'}] %}
+    {#- Read the developer role as system, as the tokenizer does. #}
+    {%- set message = {'role': 'system', 'content': message['content']} if message['role'] == 'developer' else message %}
     {%- if message['role'] != ns_agg.current_role or message['role'] == 'system' or message['role'] == 'tool' %}
         {%- if ns_agg.current_role == 'tool' %}
             {%- set ns_agg.messages = ns_agg.messages + ns_agg.current_group %}
