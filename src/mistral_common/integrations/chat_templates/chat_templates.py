@@ -34,6 +34,7 @@ def generate_chat_template(
     model_settings_fields: frozenset[str] | None,
     reasoning_effort_values: tuple[str, ...] | None,
     reasoning_effort_default: str | None,
+    use_generation_blocks: bool = True,
 ) -> str:
     r"""Generate a chat template based on configuration.
 
@@ -61,6 +62,9 @@ def generate_chat_template(
         reasoning_effort_default: Exposed reasoning effort rendered when the request
             leaves the effort unset. Required when the `reasoning_effort` model
             settings field is enabled and must be one of `reasoning_effort_values`.
+        use_generation_blocks: Whether to wrap each assistant turn in a `{% generation %}`
+            block, which HF Transformers uses for `return_assistant_tokens_mask`. The rendered
+            text is the same either way. Set to `False` for Jinja engines that do not parse the tag.
 
     Returns:
         The generated Jinja2 template as a string.
@@ -76,6 +80,7 @@ def generate_chat_template(
         model_settings_fields=model_settings_fields,
         reasoning_effort_values=reasoning_effort_values,
         reasoning_effort_default=reasoning_effort_default,
+        use_generation_blocks=use_generation_blocks,
     )
     template = _build_chat_template(config)
 
@@ -98,6 +103,7 @@ def convert_tokenizer_to_chat_template(
     system_prompt: str | None = None,
     use_special_token_variables: bool = True,
     plain_thinking_support: bool | None = None,
+    use_generation_blocks: bool = True,
 ) -> str:
     r"""Load a tokenizer file and auto-detect its capabilities to generate a matching chat template.
 
@@ -140,6 +146,9 @@ def convert_tokenizer_to_chat_template(
         plain_thinking_support: Override for plain-text thinking chunk support.
             `None` keeps the auto-detected heuristic, `False` suppresses it, and
             `True` asserts it for a tokenizer that already qualifies.
+        use_generation_blocks: Whether to wrap each assistant turn in a `{% generation %}`
+            block, which HF Transformers uses for `return_assistant_tokens_mask`. The rendered
+            text is the same either way. Set to `False` for Jinja engines that do not parse the tag.
 
     Returns:
         The generated Jinja2 chat template string matching the tokenizer's capabilities.
@@ -196,4 +205,5 @@ def convert_tokenizer_to_chat_template(
         model_settings_fields=model_settings_fields,
         reasoning_effort_values=reasoning_effort_values,
         reasoning_effort_default=reasoning_effort_default,
+        use_generation_blocks=use_generation_blocks,
     )

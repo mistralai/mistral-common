@@ -70,6 +70,15 @@ def main() -> None:
         action="store_true",
         help="Embed literal BOS/EOS values instead of using bos_token/eos_token variables",
     )
+    parser.add_argument(
+        "--no_generation_blocks",
+        action="store_true",
+        help=(
+            "Leave out the generation blocks around assistant turns, which only Transformers' "
+            "return_assistant_tokens_mask uses, for Jinja engines that do not parse the generation tag. "
+            "The rendered text is the same."
+        ),
+    )
     args = parser.parse_args()
 
     if args.plain_thinking and args.no_plain_thinking:
@@ -104,6 +113,7 @@ def main() -> None:
                 system_prompt=args.default_system_prompt,
                 use_special_token_variables=not args.no_special_token_variables,
                 plain_thinking_support=plain_thinking_support,
+                use_generation_blocks=not args.no_generation_blocks,
             )
         except ValueError as e:
             parser.error(str(e))
@@ -140,6 +150,7 @@ def main() -> None:
                 model_settings_fields=model_settings_fields,
                 reasoning_effort_values=reasoning_effort_values,
                 reasoning_effort_default=args.reasoning_effort_default,
+                use_generation_blocks=not args.no_generation_blocks,
             )
         except ValueError as e:
             parser.error(str(e))

@@ -90,6 +90,9 @@ class TemplateConfig:
         reasoning_effort_default: Exposed reasoning effort rendered when the request
             leaves the effort unset. Required when the `reasoning_effort` model
             settings field is enabled, and must be one of `reasoning_effort_values`.
+        use_generation_blocks: Whether to wrap each assistant turn in a `{% generation %}`
+            block, which HF Transformers uses for `return_assistant_tokens_mask`. The rendered
+            text is the same either way. Set to `False` for Jinja engines that do not parse the tag.
 
     Raises:
         ValueError: If the configuration is invalid (e.g., conflicting options like
@@ -113,6 +116,7 @@ class TemplateConfig:
     model_settings_fields: frozenset[str] | None = None
     reasoning_effort_values: tuple[str, ...] | None = None
     reasoning_effort_default: str | None = None
+    use_generation_blocks: bool = True
 
     def __post_init__(self) -> None:
         explicit_model_settings_fields = self.model_settings_fields is not None
@@ -1427,7 +1431,8 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     lines.append("")
     lines.append(f"    {comment}")
     lines.append("    {%- elif message['role'] == 'assistant' %}")
-    lines.append(_GENERATION_START)
+    if config.use_generation_blocks:
+        lines.append(_GENERATION_START)
 
     if config.version in [TokenizerVersion.v2, TokenizerVersion.v3]:
         lines.append(
@@ -1495,7 +1500,8 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     if config.version != TokenizerVersion.v2:
         lines.append("")
         lines.append("        {{- " + config.eos_expr + " }}")
-    lines.append(_GENERATION_END)
+    if config.use_generation_blocks:
+        lines.append(_GENERATION_END)
 
     if config.spm and config.version >= TokenizerVersion.v2:
         lines.append("        {%- set ns.prev_tool=false %}")
@@ -1914,7 +1920,8 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("")
     lines.append("    {#- Assistant messages supports text content or text chunks. #}")
     lines.append("    {%- elif message['role'] == 'assistant' %}")
-    lines.append(_GENERATION_START)
+    if config.use_generation_blocks:
+        lines.append(_GENERATION_START)
     lines.append("        {%- if message['content'] is string and message['content'] != '' %}")
     lines.append("            {{- message['content'] }}")
     lines.append("        {%- elif message['content'] | length > 0 %}")
@@ -1932,7 +1939,8 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("            {{- raise_exception('Assistant message content must be non-empty.') }}")
     lines.append("        {%- endif %}")
     lines.append("        {{- " + config.eos_expr + "}}")
-    lines.append(_GENERATION_END)
+    if config.use_generation_blocks:
+        lines.append(_GENERATION_END)
     lines.append("")
     lines.append("")
     lines.append("    {#- Raise exception for unsupported roles. #}")
