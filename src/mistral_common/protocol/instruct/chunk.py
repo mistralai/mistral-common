@@ -540,7 +540,7 @@ def _convert_openai_content_chunks(openai_content_chunks: dict[str, Any]) -> Con
         ValueError: If the chunk has no "type" field or the type is unknown.
     """
     if not isinstance(openai_content_chunks, Mapping):
-        raise InvalidRequestException(f"Content chunk must be an object, got {type(openai_content_chunks).__name__}.")
+        raise InvalidRequestException(f"Content chunk must be a mapping, got {type(openai_content_chunks).__name__}.")
     content_type_str = openai_content_chunks.get("type")
 
     if content_type_str is None:
