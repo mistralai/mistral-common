@@ -329,9 +329,10 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
     in the message processing loop. Only emit default system prompt if no system
     message is at position 0.
 
-    An empty conversation is rejected for every version, as the tokenizer does. The OpenAI
-    `developer` role is read as `system`, as `ChatCompletionRequest.from_openai` does; the
-    aggregation maps it, so the checks before it accept both roles.
+    An empty conversation, or a single message that is not a user or system message, is
+    rejected for every version, as the tokenizer does. The OpenAI `developer` role is read
+    as `system`, as `ChatCompletionRequest.from_openai` does; the aggregation maps it, so
+    the checks before it accept both roles.
 
     Args:
         config: The template configuration.
@@ -344,6 +345,11 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
         "{#- Reject an empty conversation, as the tokenizer does. #}",
         "{%- if messages | length == 0 %}",
         "    {{- raise_exception('Conversation must have at least one message') }}",
+        "{%- endif %}",
+        "",
+        "{#- A single message must be a user or system message, as the tokenizer requires. #}",
+        "{%- if messages | length == 1 and messages[0]['role'] not in ['user', 'system', 'developer'] %}",
+        "    {{- raise_exception('Conversation must start with a user message or system message') }}",
         "{%- endif %}",
         "",
         "{#- Handle system prompt if it exists. #}",
@@ -857,7 +863,8 @@ def _generate_message_aggregation(config: TemplateConfig) -> str:
       with `"\\n\\n"`, `tool_calls` lists concatenated.
     - **System messages**: each message coalesced individually (adjacent `TextChunks`
       joined with `"\\n\\n"`), but NOT merged across consecutive messages. Before v7
-      they are dropped after the aggregation, since the system prompt holds their content.
+      they are dropped after the aggregation, since the system prompt holds their content,
+      and an empty user message is added before a system-only or assistant-first conversation.
     - **Tool messages**: passed through as-is.
     - **Developer messages**: read as system messages with the same content, as
       `ChatCompletionRequest.from_openai` does.
@@ -902,15 +909,16 @@ def _generate_message_aggregation(config: TemplateConfig) -> str:
     )
 
     if config.version < TokenizerVersion.v7:
-        # Like the mistral-common normalizer, render system-only conversations as an empty user message.
+        # Like the mistral-common normalizer, render an empty user message before system-only or
+        # assistant-first conversations.
         # System messages are dropped here: they only split user messages, and the system prompt holds their content.
         lines.extend(
             [
                 "{#- System messages split user messages but are rendered with the system prompt. #}",
                 "{%- set loop_messages = loop_messages | rejectattr('role', 'equalto', 'system') | list %}",
-                "{#- A conversation with only system messages gets an empty user message for the system prompt. #}",
-                "{%- if messages | length > 0 and loop_messages | length == 0 %}",
-                "    {%- set loop_messages = [{'role': 'user', 'content': ''}] %}",
+                "{#- A conversation with only system messages or starting with an assistant message gets an empty user message first. #}",  # noqa: E501
+                "{%- if loop_messages | length == 0 or loop_messages[0]['role'] == 'assistant' %}",
+                "    {%- set loop_messages = [{'role': 'user', 'content': ''}] + loop_messages %}",
                 "{%- endif %}",
             ]
         )
@@ -1113,7 +1121,8 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
     if config.version >= TokenizerVersion.v2 and config.version < TokenizerVersion.v13:
         ns_vars.append("max_idx_user=-1")
     if config.spm and config.version >= TokenizerVersion.v2:
-        ns_vars.append("add_space=false")
+        # SentencePiece prefixes assistant content with a space, also when the conversation starts with it.
+        ns_vars.append("add_space=true")
     if config.version == TokenizerVersion.v2 and config.spm:
         ns_vars.append("prev_tool=false")
     if config.version >= TokenizerVersion.v13:
@@ -1128,11 +1137,14 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
 
     # First-message constraint
     if config.version >= TokenizerVersion.v7:
-        # v7+: system messages remain in loop_messages, so first message can be user or system
-        first_msg_cond = "{%- if loop_messages | length > 0 and loop_messages[0]['role'] not in ['user', 'system'] %}"
-        first_msg_err = "    {{- raise_exception('Conversation must start with a user or system message, got ' ~ loop_messages[0]['role'] ~ '.') }}"  # noqa: E501
+        # v7+: system messages remain in loop_messages, and the tokenizer renders a leading assistant message as is
+        first_msg_cond = (
+            "{%- if loop_messages | length > 0 and loop_messages[0]['role'] not in ['user', 'system', 'assistant'] %}"  # noqa: E501
+        )
+        first_msg_err = "    {{- raise_exception('Conversation must start with a user, system or assistant message, got ' ~ loop_messages[0]['role'] ~ '.') }}"  # noqa: E501
     else:
-        # pre-v7: system messages are extracted, so first message must be user
+        # pre-v7: system messages are extracted and a leading assistant message gets an empty user message first,
+        # so first message must be user
         first_msg_cond = "{%- if loop_messages | length > 0 and loop_messages[0]['role'] != 'user' %}"
         first_msg_err = "    {{- raise_exception('Conversation must start with a user message, got ' ~ loop_messages[0]['role'] ~ '.') }}"  # noqa: E501
     lines.append(first_msg_cond)

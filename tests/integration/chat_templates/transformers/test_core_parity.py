@@ -175,21 +175,26 @@ class TestTransformersMistralCommonParity:
             reasoning_effort_values=("none", "high") if reasoning_effort_default is not None else None,
         )
 
-        # Starting with assistant is rejected by the first-message constraint
-        invalid_starts_with_assistant = {
-            "messages": [
-                {"role": "assistant", "content": "Hi"},
-                {"role": "user", "content": "Hello"},
-            ]
-        }
+        # A single message must be a user or system message, as in the tokenizer
+        with pytest.raises(TemplateError, match=r"Conversation must start with a user message or system message"):
+            encode_transformers_from_openai(chat_template, {"messages": [{"role": "assistant", "content": "Hi"}]})
 
-        if config.version >= TokenizerVersion.v7:
-            first_msg_match = r"Conversation must start with a user or system message, got assistant\."
-        else:
-            first_msg_match = r"Conversation must start with a user message, got assistant\."
+        # Starting with tool is rejected by the first-message constraint
+        if config.version >= TokenizerVersion.v2:
+            invalid_starts_with_tool = {
+                "messages": [
+                    {"role": "tool", "content": "result", "tool_call_id": "123456789", "name": "f"},
+                    {"role": "user", "content": "Hello"},
+                ]
+            }
 
-        with pytest.raises(TemplateError, match=first_msg_match):
-            encode_transformers_from_openai(chat_template, invalid_starts_with_assistant)
+            if config.version >= TokenizerVersion.v7:
+                first_msg_match = r"Conversation must start with a user, system or assistant message, got tool\."
+            else:
+                first_msg_match = r"Conversation must start with a user message, got tool\."
+
+            with pytest.raises(TemplateError, match=first_msg_match):
+                encode_transformers_from_openai(chat_template, invalid_starts_with_tool)
 
         # Invalid role after user is caught by the transition table
         invalid_role = {

@@ -787,6 +787,21 @@ REQUEST_SYSTEM_ONLY_WITH_EMPTY_SYSTEM_TEST = ChatCompletionRequest(
     ]
 )
 
+REQUEST_ASSISTANT_FIRST_TEST = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        AssistantMessage(content="Hi, how can I help?"),
+        UserMessage(content="Hello"),
+    ]
+)
+
+REQUEST_ASSISTANT_FIRST_WITH_SYSTEM_TEST = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are a helpful assistant."),
+        AssistantMessage(content="Hi, how can I help?"),
+        UserMessage(content="Hello"),
+    ]
+)
+
 REQUEST_CONSECUTIVE_USERS_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
     messages=[
         UserMessage(content="Hello"),
@@ -809,6 +824,23 @@ REQUEST_SYSTEM_BETWEEN_USERS_TRAIN = ChatCompletionRequest(  # type: ignore[type
         UserMessage(content="Hello"),
         SystemMessage(content="Be concise."),
         UserMessage(content="World"),
+        AssistantMessage(content="Hi there"),
+    ]
+)
+
+REQUEST_ASSISTANT_FIRST_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        AssistantMessage(content="Hi, how can I help?"),
+        UserMessage(content="Hello"),
+        AssistantMessage(content="Hi there"),
+    ]
+)
+
+REQUEST_ASSISTANT_FIRST_WITH_SYSTEM_TRAIN = ChatCompletionRequest(  # type: ignore[type-var]
+    messages=[
+        SystemMessage(content="You are a helpful assistant."),
+        AssistantMessage(content="Hi, how can I help?"),
+        UserMessage(content="Hello"),
         AssistantMessage(content="Hi there"),
     ]
 )
@@ -1224,6 +1256,8 @@ def get_conversations(
                 REQUEST_SYSTEM_BETWEEN_USERS_TRAIN,
                 REQUEST_CONSECUTIVE_ASSISTANTS_TRAIN,
                 REQUEST_MULTIPLE_SYSTEMS_TRAIN,
+                REQUEST_ASSISTANT_FIRST_TRAIN,
+                REQUEST_ASSISTANT_FIRST_WITH_SYSTEM_TRAIN,
             ]
         )
         if tokenizer_version >= TokenizerVersion.v3:
@@ -1254,6 +1288,7 @@ def get_conversations(
         conversations.append(REQUEST_CONSECUTIVE_USERS_TEST)
         conversations.append(REQUEST_SYSTEM_BETWEEN_USERS_TEST)
         conversations.append(REQUEST_SYSTEM_ONLY_TEST)
+        conversations.extend([REQUEST_ASSISTANT_FIRST_TEST, REQUEST_ASSISTANT_FIRST_WITH_SYSTEM_TEST])
         # v1-v3 skip the empty system message and render the rest as an empty user message
         if tokenizer_version < TokenizerVersion.v7:
             conversations.append(REQUEST_SYSTEM_ONLY_WITH_EMPTY_SYSTEM_TEST)
