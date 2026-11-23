@@ -58,7 +58,7 @@ def test_from_openai_chat_completion_request_with_developer_role() -> None:
 def test_from_openai_chat_completion_request_rejects_non_object_content_chunk(
     message: dict[str, str], chunk: Any
 ) -> None:
-    with pytest.raises(InvalidRequestException, match=r"^Content chunk must be an object, got "):
+    with pytest.raises(InvalidRequestException, match=r"^Content chunk must be a mapping, got "):
         ChatCompletionRequest.from_openai(messages=[{**message, "content": [chunk]}])
 
 
