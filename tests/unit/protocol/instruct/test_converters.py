@@ -1,8 +1,10 @@
+from types import MappingProxyType
 from typing import Any
 
 import pytest
 
 from mistral_common.exceptions import InvalidRequestException
+from mistral_common.protocol.instruct.chunk import TextChunk
 from mistral_common.protocol.instruct.converters import convert_openai_messages
 from mistral_common.protocol.instruct.messages import AssistantMessage, SystemMessage, UserMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
@@ -58,3 +60,11 @@ def test_from_openai_chat_completion_request_rejects_non_object_content_chunk(
 ) -> None:
     with pytest.raises(InvalidRequestException, match=r"^Content chunk must be an object, got "):
         ChatCompletionRequest.from_openai(messages=[{**message, "content": [chunk]}])
+
+
+def test_from_openai_chat_completion_request_accepts_mapping_content_chunk() -> None:
+    chunk: Any = MappingProxyType({"type": "text", "text": "hi"})
+
+    request = ChatCompletionRequest.from_openai(messages=[{"role": "user", "content": [chunk]}])
+
+    assert request.messages == [UserMessage(content=[TextChunk(text="hi")])]
