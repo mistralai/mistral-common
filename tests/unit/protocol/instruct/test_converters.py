@@ -1,8 +1,10 @@
+from types import MappingProxyType
 from typing import Any
 
 import pytest
 
 from mistral_common.exceptions import InvalidRequestException
+from mistral_common.protocol.instruct.chunk import TextChunk
 from mistral_common.protocol.instruct.converters import convert_openai_messages
 from mistral_common.protocol.instruct.messages import AssistantMessage, SystemMessage, UserMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
@@ -45,3 +47,24 @@ def test_from_openai_chat_completion_request_with_developer_role() -> None:
     ]
     assert request.temperature == 0.2
     assert request.max_tokens == 256
+
+
+@pytest.mark.parametrize(
+    "message",
+    [{"role": "user"}, {"role": "system"}, {"role": "assistant"}, {"role": "tool", "tool_call_id": "123456789"}],
+    ids=["user", "system", "assistant", "tool"],
+)
+@pytest.mark.parametrize("chunk", ["hi", None, ["hi"]], ids=["str", "none", "list"])
+def test_from_openai_chat_completion_request_rejects_non_object_content_chunk(
+    message: dict[str, str], chunk: Any
+) -> None:
+    with pytest.raises(InvalidRequestException, match=r"^Content chunk must be a mapping, got "):
+        ChatCompletionRequest.from_openai(messages=[{**message, "content": [chunk]}])
+
+
+def test_from_openai_chat_completion_request_accepts_mapping_content_chunk() -> None:
+    chunk: Any = MappingProxyType({"type": "text", "text": "hi"})
+
+    request = ChatCompletionRequest.from_openai(messages=[{"role": "user", "content": [chunk]}])
+
+    assert request.messages == [UserMessage(content=[TextChunk(text="hi")])]
