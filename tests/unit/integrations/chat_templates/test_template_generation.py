@@ -1,9 +1,12 @@
 from typing import Any
 
 import pytest
+from jinja2 import Environment, TemplateSyntaxError
 
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.integrations.chat_templates.template_generator import (
+    _GENERATION_END,
+    _GENERATION_START,
     MODEL_SETTINGS_FIELD_CHOICES,
     TemplateConfig,
     _render_content_call,
@@ -78,6 +81,69 @@ class TestGenerateChatTemplateAPI:
             reasoning_effort_default=None,
         )
         assert "You are a helpful assistant." in template_with_prompt
+
+    @pytest.mark.parametrize("version", [TokenizerVersion.v3, TokenizerVersion.v7, TokenizerVersion.v13])
+    def test_leading_developer_message_replaces_default_system_prompt(self, version: TokenizerVersion) -> None:
+        # The developer role is mapped to system in the aggregation, after the default system prompt is chosen.
+        template = generate_chat_template(
+            spm=False,
+            tokenizer_version=version,
+            image_support=False,
+            audio_support=False,
+            thinking_support=False,
+            default_system_prompt="Default prompt.",
+            plain_thinking_support=False,
+            use_special_token_variables=True,
+            model_settings_fields=None,
+            reasoning_effort_values=None,
+            reasoning_effort_default=None,
+        )
+        outputs = {
+            role: render_template(
+                template, [{"role": role, "content": "Be brief."}, {"role": "user", "content": "Hello"}]
+            )
+            for role in ["system", "developer"]
+        }
+        assert outputs["developer"] == outputs["system"]
+        assert "Default prompt." not in outputs["developer"]
+
+    @pytest.mark.parametrize(
+        "version", [TokenizerVersion.v1, TokenizerVersion.v3, TokenizerVersion.v7, TokenizerVersion.v13]
+    )
+    def test_generation_blocks_can_be_left_out(self, version: TokenizerVersion) -> None:
+        templates = {
+            use_generation_blocks: generate_chat_template(
+                spm=False,
+                tokenizer_version=version,
+                image_support=False,
+                audio_support=False,
+                thinking_support=False,
+                default_system_prompt=None,
+                plain_thinking_support=False,
+                use_special_token_variables=True,
+                model_settings_fields=None,
+                reasoning_effort_values=None,
+                reasoning_effort_default=None,
+                use_generation_blocks=use_generation_blocks,
+            )
+            for use_generation_blocks in [True, False]
+        }
+        # Only the two tag lines are left out.
+        assert _GENERATION_START in templates[True]
+        assert _GENERATION_END in templates[True]
+        assert templates[False] == templates[True].replace(_GENERATION_START + "\n", "").replace(
+            _GENERATION_END + "\n", ""
+        )
+        # A Jinja2 environment without a `generation` extension only parses the template without the blocks.
+        with pytest.raises(TemplateSyntaxError, match="generation"):
+            Environment().parse(templates[True])
+        Environment().parse(templates[False])
+        messages = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi"},
+            {"role": "user", "content": "Bye"},
+        ]
+        assert render_template(templates[False], messages) == render_template(templates[True], messages)
 
     def test_basic_static_dynamic_parity(self, v13_template: str) -> None:
         config = build_template_config(TestConfig(version=TokenizerVersion.v13))

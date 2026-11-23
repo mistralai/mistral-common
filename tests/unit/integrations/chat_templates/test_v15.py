@@ -34,6 +34,7 @@ from tests.utils.chat_templates.configs import TestConfig
 from tests.utils.chat_templates.helpers import (
     PARITY_JSON_SCHEMA,
     PARITY_JSON_SCHEMA_NON_ASCII,
+    GenerationBlock,
     build_render_args,
     build_test_template,
     render_template,
@@ -379,7 +380,7 @@ class TestV15ModelSettings:
             messages=[UserMessage(content="Hello")],
             response_format=ResponseFormat(type=ResponseFormats.json_object),
         )
-        environment = ImmutableSandboxedEnvironment(loader=BaseLoader())
+        environment = ImmutableSandboxedEnvironment(loader=BaseLoader(), extensions=[GenerationBlock])
         render_kwargs = build_render_args(request)
 
         output = environment.from_string(template).render(

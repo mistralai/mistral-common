@@ -5,10 +5,12 @@ from typing import Any
 import pytest
 from jinja2.exceptions import TemplateError
 
+from mistral_common.exceptions import InvalidMessageStructureException
 from mistral_common.integrations.chat_templates.chat_templates import generate_chat_template
 from mistral_common.integrations.chat_templates.template_generator import build_chat_template
 from mistral_common.protocol.instruct.chunk import TextChunk
 from mistral_common.protocol.instruct.messages import AssistantMessage, UserMessage
+from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
@@ -18,7 +20,9 @@ from tests.integration.chat_templates.fixtures_data import (
     parse_tool_call_arguments,
 )
 from tests.integration.chat_templates.transformers.hf_utils import (
+    _to_openai_request,
     build_hf_tokenizer,
+    encode_hf_assistant_tokens,
     encode_hf_tokens,
     encode_transformers,
     encode_transformers_from_openai,
@@ -29,6 +33,7 @@ from tests.utils.chat_templates.helpers import (
     build_tekken_json,
     build_template_config,
     encode_mistral_common,
+    encode_mistral_common_assistant_tokens,
 )
 
 
@@ -93,6 +98,13 @@ class TestTransformersMistralCommonParity:
             # Run transformers first since encode_mistral_common may mutate the conversation in-place
             transformers_encoded = encode_transformers(chat_template, conversation, keep_name_for_tools=True)
 
+            # `ChatCompletionRequest.from_openai` reads the OpenAI `developer` role as `system`; so must the template.
+            developer_request = _to_openai_request(conversation, keep_name_for_tools=True)
+            for openai_message in developer_request["messages"]:
+                if openai_message["role"] == "system":
+                    openai_message["role"] = "developer"
+            developer_encoded = encode_transformers_from_openai(chat_template, developer_request)
+
             # Token ID comparison: apply_chat_template(tokenize=True) vs mistral-common
             # Skipped for image/audio configs because multimodal tokens are generated
             # by encoders (not from text), so token IDs won't match.
@@ -105,9 +117,18 @@ class TestTransformersMistralCommonParity:
                 hf_tokens = encode_hf_tokens(hf_tokenizer, conversation.model_copy(deep=True), keep_name_for_tools=True)
                 mc_tokens = mistral_tokenizer.encode_chat_completion(conversation.model_copy(deep=True)).tokens
                 assert mc_tokens == hf_tokens
+                # The `{% generation %}` blocks mask exactly the tokens of the assistant messages.
+                hf_assistant_tokens = encode_hf_assistant_tokens(
+                    hf_tokenizer, conversation.model_copy(deep=True), keep_name_for_tools=True
+                )
+                mc_assistant_tokens = encode_mistral_common_assistant_tokens(
+                    mistral_tokenizer, conversation.model_copy(deep=True)
+                )
+                assert hf_assistant_tokens == mc_assistant_tokens
 
             mistral_common_encoded = encode_mistral_common(mistral_tokenizer, conversation, config.spm)
             assert mistral_common_encoded == transformers_encoded
+            assert mistral_common_encoded == developer_encoded
 
     @pytest.mark.parametrize(
         "config",
@@ -192,18 +213,105 @@ class TestTransformersMistralCommonParity:
             with pytest.raises(TemplateError, match=r"Unexpected role 'tool' after role 'user'"):
                 encode_transformers_from_openai(chat_template, invalid_tool_after_user)
 
-        # System after assistant is rejected for v7+ (system stays in loop_messages)
-        if config.version >= TokenizerVersion.v7:
+        # System after assistant is rejected, also when sent as the OpenAI developer role
+        for system_role in ["system", "developer"]:
             invalid_system_after_assistant = {
                 "messages": [
                     {"role": "user", "content": "Hello"},
                     {"role": "assistant", "content": "Hi"},
-                    {"role": "system", "content": "New system prompt"},
+                    {"role": system_role, "content": "New system prompt"},
                     {"role": "user", "content": "World"},
                 ]
             }
             with pytest.raises(TemplateError, match=r"Unexpected role 'system' after role 'assistant'"):
                 encode_transformers_from_openai(chat_template, invalid_system_after_assistant)
+
+        # System after tool is rejected
+        if config.version >= TokenizerVersion.v2:
+            invalid_system_after_tool = {
+                "messages": [
+                    {"role": "user", "content": "Hello"},
+                    {
+                        "role": "assistant",
+                        "tool_calls": [
+                            {"id": "123456789", "type": "function", "function": {"name": "f", "arguments": "{}"}}
+                        ],
+                    },
+                    {"role": "tool", "content": "result", "tool_call_id": "123456789", "name": "f"},
+                    {"role": "system", "content": "New system prompt"},
+                    {"role": "user", "content": "World"},
+                ]
+            }
+            with pytest.raises(TemplateError, match=r"Unexpected role 'system' after role 'tool'"):
+                encode_transformers_from_openai(chat_template, invalid_system_after_tool)
+
+    @pytest.mark.parametrize(
+        "config",
+        ALL_TRANSFORMERS_CONFIGS,
+        ids=[format_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
+    )
+    def test_empty_conversation_raises(self, config: TestConfig, tmp_path: Path) -> None:
+        # The tokenizer rejects an empty conversation in every mode; the template does too, default prompt or not.
+        if config.spm:
+            tokenizer_path = build_spm_path(config=config, output_dir=tmp_path)
+        else:
+            tokenizer_path = build_tekken_json(config=config, output_dir=tmp_path)
+        for mode in [ValidationMode.test, ValidationMode.finetuning]:
+            mistral_tokenizer = MistralTokenizer.from_file(str(tokenizer_path), mode=mode)
+            with pytest.raises(InvalidMessageStructureException, match="Conversation must have at least one message"):
+                mistral_tokenizer.encode_chat_completion(ChatCompletionRequest(messages=[]))
+
+        has_reasoning_effort = config.version.supports_model_settings and (
+            config.model_settings_fields is None or "reasoning_effort" in config.model_settings_fields
+        )
+        for default_system_prompt in [None, "Default prompt."]:
+            chat_template = generate_chat_template(
+                spm=config.spm,
+                tokenizer_version=config.version,
+                image_support=config.image,
+                audio_support=config.audio,
+                thinking_support=config.think,
+                default_system_prompt=default_system_prompt,
+                plain_thinking_support=False,
+                use_special_token_variables=True,
+                model_settings_fields=config.model_settings_fields,
+                reasoning_effort_default="none" if has_reasoning_effort else None,
+                reasoning_effort_values=("none", "high") if has_reasoning_effort else None,
+            )
+            with pytest.raises(TemplateError, match="Conversation must have at least one message"):
+                encode_transformers_from_openai(chat_template, {"messages": []})
+
+    @pytest.mark.parametrize(
+        "config",
+        ALL_TRANSFORMERS_CONFIGS,
+        ids=[format_config_id(c) for c in ALL_TRANSFORMERS_CONFIGS],
+    )
+    def test_empty_messages_keep_system_order_check(self, config: TestConfig) -> None:
+        # Skipping empty content must not hide a misplaced system message, nor flag a well-placed one.
+        chat_template = build_chat_template(config=build_template_config(config))
+
+        for empty_content in ["", [{"type": "text", "text": ""}]]:
+            invalid_empty_system_after_assistant = {
+                "messages": [
+                    {"role": "user", "content": "Hello"},
+                    {"role": "assistant", "content": "Hi"},
+                    {"role": "system", "content": empty_content},
+                    {"role": "user", "content": "World"},
+                ]
+            }
+            with pytest.raises(TemplateError, match=r"Unexpected role 'system' after role 'assistant'"):
+                encode_transformers_from_openai(chat_template, invalid_empty_system_after_assistant)
+
+        system_after_empty_user = {
+            "messages": [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi"},
+                {"role": "user", "content": ""},
+                {"role": "system", "content": "New system prompt"},
+                {"role": "user", "content": "World"},
+            ]
+        }
+        assert "New system prompt" in encode_transformers_from_openai(chat_template, system_after_empty_user)
 
     @pytest.mark.parametrize(
         "config",

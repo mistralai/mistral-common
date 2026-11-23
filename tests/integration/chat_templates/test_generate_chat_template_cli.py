@@ -405,6 +405,32 @@ def test_cli_no_special_token_variables_flag(tmp_path: Path) -> None:
     assert "eos_token" not in content
 
 
+@pytest.mark.parametrize("no_generation_blocks", [False, True])
+def test_cli_no_generation_blocks_flag(tmp_path: Path, no_generation_blocks: bool) -> None:
+    """CLI keeps the generation blocks by default; --no_generation_blocks leaves them out."""
+    output_path = tmp_path / "template.jinja"
+    flags = ["--no_generation_blocks"] if no_generation_blocks else []
+    result = run_cli("--version", "v7", *flags, "--saving_path", str(output_path))
+    content = assert_cli_success(result, output_path)
+    assert ("{%- generation -%}" in content) is not no_generation_blocks
+    assert ("{%- endgeneration -%}" in content) is not no_generation_blocks
+
+
+def test_autodetect_no_generation_blocks_flag(tmp_path: Path, tekken_think_v13_path: Path) -> None:
+    """Auto-detect mode with --no_generation_blocks leaves out the generation blocks."""
+    output_path = tmp_path / "template.jinja"
+    result = run_cli(
+        "--tokenizer_file",
+        str(tekken_think_v13_path),
+        "--no_generation_blocks",
+        "--saving_path",
+        str(output_path),
+    )
+    content = assert_cli_success(result, output_path)
+    assert "[THINK]" in content
+    assert "generation" not in content
+
+
 def test_autodetect_happy_path(tmp_path: Path, tekken_think_v13_path: Path) -> None:
     """Auto-detect mode with v13 think tokenizer generates template containing [THINK]."""
     output_path = tmp_path / "template.jinja"

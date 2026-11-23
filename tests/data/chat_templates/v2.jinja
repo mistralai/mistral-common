@@ -5,32 +5,41 @@
 {{- bos_token }}
 
 
+{#- Reject an empty conversation, as the tokenizer does. #}
+{%- if messages | length == 0 %}
+    {{- raise_exception('Conversation must have at least one message') }}
+{%- endif %}
+
 {#- Handle system prompt if it exists. #}
 {#- Extract all system messages and merge into system prompt. #}
-{%- set ns_sys = namespace(system_parts=[], filtered=[]) %}
+{%- set ns_sys = namespace(system_parts=[], text_parts=[], previous_role='') %}
 {%- for message in messages %}
-    {%- if message['role'] == 'system' %}
+    {%- if message['role'] in ['system', 'developer'] %}
+        {%- if ns_sys.previous_role in ['assistant', 'tool'] %}
+            {{- raise_exception('Unexpected role \'system\' after role \'' ~ ns_sys.previous_role ~ '\'') }}
+        {%- endif %}
         {%- if message['content'] is string %}
-            {%- set ns_sys.system_parts = ns_sys.system_parts + [message['content']] %}
-        {%- else %}
+            {%- set ns_sys.system_parts = ns_sys.system_parts + ([message['content']] if message['content'] else []) %}
+        {%- elif message['content'] %}
+            {%- set ns_sys.text_parts = [] %}
             {%- for block in message['content'] %}
-                {%- if block['type'] == 'text' %}
-                    {%- set ns_sys.system_parts = ns_sys.system_parts + [block['text']] %}
-                {%- else %}
+                {%- if block['type'] != 'text' %}
                     {{- raise_exception('Only text chunks are supported in system message content.') }}
                 {%- endif %}
+                {%- set ns_sys.text_parts = ns_sys.text_parts + ([block['text']] if block['text'] else []) %}
             {%- endfor %}
+            {#- Like the tokenizer: join the non-empty text chunks. #}
+            {%- set ns_sys.system_parts = ns_sys.system_parts + [ns_sys.text_parts | join('\n\n')] %}
         {%- endif %}
-    {%- else %}
-        {%- set ns_sys.filtered = ns_sys.filtered + [message] %}
     {%- endif %}
+    {%- set ns_sys.previous_role = message['role'] %}
 {%- endfor %}
 {%- if ns_sys.system_parts | length > 0 %}
     {%- set system_message = ns_sys.system_parts | join('\n\n') %}
 {%- else %}
     {%- set system_message = default_system_message %}
 {%- endif %}
-{%- set loop_messages = ns_sys.filtered %}
+{%- set loop_messages = messages %}
 
 
 {#- Tools definition #}
@@ -69,6 +78,8 @@
 {#- A sentinel message is appended so the last group gets flushed inside the loop. #}
 {%- set ns_agg = namespace(messages=[], current_group=[], current_role=none) %}
 {%- for message in loop_messages + [{'role': '__sentinel__'}] %}
+    {#- Read the developer role as system, as the tokenizer does. #}
+    {%- set message = {'role': 'system', 'content': message['content']} if message['role'] == 'developer' else message %}
     {%- if message['role'] != ns_agg.current_role or message['role'] == 'system' or message['role'] == 'tool' %}
         {%- if ns_agg.current_role == 'tool' %}
             {%- set ns_agg.messages = ns_agg.messages + ns_agg.current_group %}
@@ -76,11 +87,11 @@
             {%- set ns_c = namespace(text_parts=[], chunks=[], has_non_text=false, tool_calls=[]) %}
             {%- for msg in ns_agg.current_group %}
                 {%- if msg['content'] is string %}
-                    {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}
+                    {%- set ns_c.text_parts = ns_c.text_parts + ([msg['content']] if msg['content'] else []) %}
                 {%- elif msg['content'] is not none %}
                     {%- for block in msg['content'] %}
                         {%- if block['type'] == 'text' %}
-                            {%- set ns_c.text_parts = ns_c.text_parts + [block['text']] %}
+                            {%- set ns_c.text_parts = ns_c.text_parts + ([block['text']] if block['text'] else []) %}
                         {%- else %}
                             {%- if ns_c.text_parts | length > 0 %}
                                 {%- set ns_c.chunks = ns_c.chunks + [{'type': 'text', 'text': ns_c.text_parts | join('\n\n')}] %}
@@ -118,6 +129,12 @@
     {%- endif %}
 {%- endfor %}
 {%- set loop_messages = ns_agg.messages %}
+{#- System messages split user messages but are rendered with the system prompt. #}
+{%- set loop_messages = loop_messages | rejectattr('role', 'equalto', 'system') | list %}
+{#- A conversation with only system messages gets an empty user message for the system prompt. #}
+{%- if messages | length > 0 and loop_messages | length == 0 %}
+    {%- set loop_messages = [{'role': 'user', 'content': ''}] %}
+{%- endif %}
 
 {#- Validates message ordering. #}
 {%- set ns = namespace(max_idx_user=-1) %}
@@ -172,6 +189,7 @@
 
     {#- Assistant messages supports text content. #}
     {%- elif message['role'] == 'assistant' %}
+        {%- generation -%}
         {%- if message['content'] is not none and message['content'] | length > 0 and message['tool_calls'] is defined and message['tool_calls'] is not none and message['tool_calls']|length > 0 %}
             {{- raise_exception('Assistant message cannot have both content and tool calls.') }}
         {%- endif %}
@@ -200,6 +218,7 @@
         {%- else %}
             {{- raise_exception('Assistant message must have a string or a list of chunks in content or a list of tool calls.') }}
         {%- endif %}
+        {%- endgeneration -%}
 
     {#- Tool messages supports int, float or text content. #}
     {%- elif message['role'] == 'tool' and ns.index > ns.max_idx_user %}

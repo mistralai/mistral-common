@@ -11,6 +11,16 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import ModelSettingsBuilder
 from mistral_common.tokens.tokenizers.sentencepiece import SentencePieceTokenizer
 
+# Characters to escape when inlining a string in a single-quoted Jinja string literal.
+_JINJA_STRING_ESCAPES: tuple[tuple[str, str], ...] = (
+    # Jinja decodes literals with unicode-escape. Must come first so later escapes are not doubled.
+    ("\\", "\\\\"),
+    # Would close the single-quoted literal.
+    ("'", "\\'"),
+    # The Jinja lexer turns raw carriage returns into newlines.
+    ("\r", "\\r"),
+)
+
 
 def generate_chat_template(
     spm: bool,
@@ -24,6 +34,7 @@ def generate_chat_template(
     model_settings_fields: frozenset[str] | None,
     reasoning_effort_values: tuple[str, ...] | None,
     reasoning_effort_default: str | None,
+    use_generation_blocks: bool = True,
 ) -> str:
     r"""Generate a chat template based on configuration.
 
@@ -51,6 +62,9 @@ def generate_chat_template(
         reasoning_effort_default: Exposed reasoning effort rendered when the request
             leaves the effort unset. Required when the `reasoning_effort` model
             settings field is enabled and must be one of `reasoning_effort_values`.
+        use_generation_blocks: Whether to wrap each assistant turn in a `{% generation %}`
+            block, which HF Transformers uses for `return_assistant_tokens_mask`. The rendered
+            text is the same either way. Set to `False` for Jinja engines that do not parse the tag.
 
     Returns:
         The generated Jinja2 template as a string.
@@ -66,13 +80,16 @@ def generate_chat_template(
         model_settings_fields=model_settings_fields,
         reasoning_effort_values=reasoning_effort_values,
         reasoning_effort_default=reasoning_effort_default,
+        use_generation_blocks=use_generation_blocks,
     )
     template = _build_chat_template(config)
 
     if default_system_prompt is not None:
         # Thinking chunks are not a concern here because default system prompts
         # are plain text strings, not structured content with chunk types.
-        escaped_prompt = default_system_prompt.replace("\\", "\\\\").replace("'", "\\'")
+        escaped_prompt = default_system_prompt
+        for char, escape in _JINJA_STRING_ESCAPES:
+            escaped_prompt = escaped_prompt.replace(char, escape)
         template = template.replace(
             "{%- set default_system_message = '' %}",
             "{%- set default_system_message = '" + escaped_prompt + "' %}",
@@ -86,6 +103,7 @@ def convert_tokenizer_to_chat_template(
     system_prompt: str | None = None,
     use_special_token_variables: bool = True,
     plain_thinking_support: bool | None = None,
+    use_generation_blocks: bool = True,
 ) -> str:
     r"""Load a tokenizer file and auto-detect its capabilities to generate a matching chat template.
 
@@ -128,6 +146,9 @@ def convert_tokenizer_to_chat_template(
         plain_thinking_support: Override for plain-text thinking chunk support.
             `None` keeps the auto-detected heuristic, `False` suppresses it, and
             `True` asserts it for a tokenizer that already qualifies.
+        use_generation_blocks: Whether to wrap each assistant turn in a `{% generation %}`
+            block, which HF Transformers uses for `return_assistant_tokens_mask`. The rendered
+            text is the same either way. Set to `False` for Jinja engines that do not parse the tag.
 
     Returns:
         The generated Jinja2 chat template string matching the tokenizer's capabilities.
@@ -184,4 +205,5 @@ def convert_tokenizer_to_chat_template(
         model_settings_fields=model_settings_fields,
         reasoning_effort_values=reasoning_effort_values,
         reasoning_effort_default=reasoning_effort_default,
+        use_generation_blocks=use_generation_blocks,
     )

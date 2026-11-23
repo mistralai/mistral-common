@@ -33,6 +33,11 @@ _END_THINK = SpecialTokens.end_think.value
 _BEGIN_MODEL_SETTINGS = SpecialTokens.begin_model_settings.value
 _END_MODEL_SETTINGS = SpecialTokens.end_model_settings.value
 
+# HF Transformers' `{% generation %}` block marks the assistant tokens for `return_assistant_tokens_mask`.
+# The `-` on both sides keeps the rendered text identical to a template without the block.
+_GENERATION_START = "        {%- generation -%}"
+_GENERATION_END = "        {%- endgeneration -%}"
+
 _REASONING_EFFORT_VALUES = tuple(str(effort) for effort in ReasoningEffort)
 
 MODEL_SETTINGS_FIELD_CHOICES: tuple[str, ...] = ("reasoning_effort", "json_schema")
@@ -85,6 +90,9 @@ class TemplateConfig:
         reasoning_effort_default: Exposed reasoning effort rendered when the request
             leaves the effort unset. Required when the `reasoning_effort` model
             settings field is enabled, and must be one of `reasoning_effort_values`.
+        use_generation_blocks: Whether to wrap each assistant turn in a `{% generation %}`
+            block, which HF Transformers uses for `return_assistant_tokens_mask`. The rendered
+            text is the same either way. Set to `False` for Jinja engines that do not parse the tag.
 
     Raises:
         ValueError: If the configuration is invalid (e.g., conflicting options like
@@ -108,6 +116,7 @@ class TemplateConfig:
     model_settings_fields: frozenset[str] | None = None
     reasoning_effort_values: tuple[str, ...] | None = None
     reasoning_effort_default: str | None = None
+    use_generation_blocks: bool = True
 
     def __post_init__(self) -> None:
         explicit_model_settings_fields = self.model_settings_fields is not None
@@ -320,6 +329,10 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
     in the message processing loop. Only emit default system prompt if no system
     message is at position 0.
 
+    An empty conversation is rejected for every version, as the tokenizer does. The OpenAI
+    `developer` role is read as `system`, as `ChatCompletionRequest.from_openai` does; the
+    aggregation maps it, so the checks before it accept both roles.
+
     Args:
         config: The template configuration.
 
@@ -327,6 +340,11 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
         The system prompt handling section of the chat template.
     """
     lines = [
+        "",
+        "{#- Reject an empty conversation, as the tokenizer does. #}",
+        "{%- if messages | length == 0 %}",
+        "    {{- raise_exception('Conversation must have at least one message') }}",
+        "{%- endif %}",
         "",
         "{#- Handle system prompt if it exists. #}",
     ]
@@ -342,8 +360,12 @@ def _generate_system_prompt_handling(config: TemplateConfig) -> str:
 def _generate_system_prompt_handling_pre_v7(config: TemplateConfig) -> list[str]:
     r"""Generate pre-v7 system prompt handling that extracts all system messages.
 
-    Loops through all messages to collect system content and filters them
-    out of `loop_messages`.
+    Loops through all messages to collect system content, reading `developer` as
+    `system`, since the aggregation maps it only later. System messages stay
+    in `loop_messages` so that, as in the mistral-common normalizer, they split
+    the surrounding user messages; the aggregation then drops them. A system
+    message after an `assistant` or `tool` message is rejected, as in
+    `_validate_message_order`.
 
     Args:
         config: The template configuration.
@@ -353,30 +375,34 @@ def _generate_system_prompt_handling_pre_v7(config: TemplateConfig) -> list[str]
     """
     lines = [
         "{#- Extract all system messages and merge into system prompt. #}",
-        "{%- set ns_sys = namespace(system_parts=[], filtered=[]) %}",
+        "{%- set ns_sys = namespace(system_parts=[], text_parts=[], previous_role='') %}",
         "{%- for message in messages %}",
-        "    {%- if message['role'] == 'system' %}",
+        "    {%- if message['role'] in ['system', 'developer'] %}",
+        "        {%- if ns_sys.previous_role in ['assistant', 'tool'] %}",
+        "            {{- raise_exception('Unexpected role \\'system\\' after role \\'' ~ ns_sys.previous_role ~ '\\'') }}",  # noqa: E501
+        "        {%- endif %}",
         "        {%- if message['content'] is string %}",
-        "            {%- set ns_sys.system_parts = ns_sys.system_parts + [message['content']] %}",
-        "        {%- else %}",
+        "            {%- set ns_sys.system_parts = ns_sys.system_parts + ([message['content']] if message['content'] else []) %}",  # noqa: E501
+        "        {%- elif message['content'] %}",
+        "            {%- set ns_sys.text_parts = [] %}",
         "            {%- for block in message['content'] %}",
-        "                {%- if block['type'] == 'text' %}",
-        "                    {%- set ns_sys.system_parts = ns_sys.system_parts + [block['text']] %}",
-        "                {%- else %}",
+        "                {%- if block['type'] != 'text' %}",
         "                    {{- raise_exception('Only text chunks are supported in system message content.') }}",
         "                {%- endif %}",
+        "                {%- set ns_sys.text_parts = ns_sys.text_parts + ([block['text']] if block['text'] else []) %}",  # noqa: E501
         "            {%- endfor %}",
+        "            {#- Like the tokenizer: join the non-empty text chunks. #}",
+        "            {%- set ns_sys.system_parts = ns_sys.system_parts + [ns_sys.text_parts | join('\\n\\n')] %}",
         "        {%- endif %}",
-        "    {%- else %}",
-        "        {%- set ns_sys.filtered = ns_sys.filtered + [message] %}",
         "    {%- endif %}",
+        "    {%- set ns_sys.previous_role = message['role'] %}",
         "{%- endfor %}",
         "{%- if ns_sys.system_parts | length > 0 %}",
         "    {%- set system_message = ns_sys.system_parts | join('\\n\\n') %}",
         "{%- else %}",
         "    {%- set system_message = default_system_message %}",
         "{%- endif %}",
-        "{%- set loop_messages = ns_sys.filtered %}",
+        "{%- set loop_messages = messages %}",
     ]
     return lines
 
@@ -390,7 +416,7 @@ def _generate_system_prompt_handling_v7_plus(config: TemplateConfig) -> list[str
 
     Sets `loop_messages = messages` (no filtering needed since system messages
     are kept in place) and emits the default system prompt if the first message
-    is not a system message.
+    is not a system or developer message.
 
     Args:
         config: The template configuration.
@@ -398,17 +424,18 @@ def _generate_system_prompt_handling_v7_plus(config: TemplateConfig) -> list[str
     Returns:
         Lines of Jinja2 template code for v7+ system prompt handling.
     """
+    begin_system = _BEGIN_SYSTEM + " " if config.spm else _BEGIN_SYSTEM
     lines = [
         "{%- set loop_messages = messages %}",
-        "{%- if messages[0]['role'] != 'system' and default_system_message != '' %}",
-        "    {{- '" + _BEGIN_SYSTEM + "' ~ default_system_message ~ '" + _END_SYSTEM + "' }}",
+        "{%- if messages[0]['role'] not in ['system', 'developer'] and default_system_message != '' %}",
+        "    {{- '" + begin_system + "' ~ default_system_message ~ '" + _END_SYSTEM + "' }}",
         "{%- endif %}",
     ]
 
-    if config.audio_support and config.version < TokenizerVersion.v15:
+    if config.audio_support and config.version < TokenizerVersion.v13:
         lines.extend(
             [
-                "{%- if messages[0]['role'] == 'system' or default_system_message != '' %}",
+                "{%- if messages[0]['role'] in ['system', 'developer'] or default_system_message != '' %}",
                 "    {%- set has_sp = true %}",
                 "{%- else %}",
                 "    {%- set has_sp = false %}",
@@ -642,7 +669,7 @@ def _generate_macros(config: TemplateConfig) -> str:
     # Audio branch
     if config.audio_support:
         lines.append("            {%- elif support_audio and block['type'] in ['input_audio', 'audio_url'] -%}")
-        if config.audio_support and config.version < TokenizerVersion.v15:
+        if config.audio_support and config.version < TokenizerVersion.v13:
             lines.append("                {%- if has_sp -%}")
             lines.append(
                 "                    {{- raise_exception('Audio chunks are not supported in user message content when system prompt is provided.') -}}"  # noqa: E501
@@ -829,8 +856,11 @@ def _generate_message_aggregation(config: TemplateConfig) -> str:
     - **Assistant messages**: consecutive messages merged into one, text content joined
       with `"\\n\\n"`, `tool_calls` lists concatenated.
     - **System messages**: each message coalesced individually (adjacent `TextChunks`
-      joined with `"\\n\\n"`), but NOT merged across consecutive messages.
+      joined with `"\\n\\n"`), but NOT merged across consecutive messages. Before v7
+      they are dropped after the aggregation, since the system prompt holds their content.
     - **Tool messages**: passed through as-is.
+    - **Developer messages**: read as system messages with the same content, as
+      `ChatCompletionRequest.from_openai` does.
 
     Non-text chunk type validation is deferred to the message rendering loop.
 
@@ -850,6 +880,8 @@ def _generate_message_aggregation(config: TemplateConfig) -> str:
         "{#- A sentinel message is appended so the last group gets flushed inside the loop. #}",
         "{%- set ns_agg = namespace(messages=[], current_group=[], current_role=none) %}",
         "{%- for message in loop_messages + [{'role': '__sentinel__'}] %}",
+        "    {#- Read the developer role as system, as the tokenizer does. #}",
+        "    {%- set message = {'role': 'system', 'content': message['content']} if message['role'] == 'developer' else message %}",  # noqa: E501
         "    {%- if message['role'] != ns_agg.current_role or message['role'] == 'system' or message['role'] == 'tool' %}",  # noqa: E501
     ]
 
@@ -868,6 +900,20 @@ def _generate_message_aggregation(config: TemplateConfig) -> str:
             "{%- set loop_messages = ns_agg.messages %}",
         ]
     )
+
+    if config.version < TokenizerVersion.v7:
+        # Like the mistral-common normalizer, render system-only conversations as an empty user message.
+        # System messages are dropped here: they only split user messages, and the system prompt holds their content.
+        lines.extend(
+            [
+                "{#- System messages split user messages but are rendered with the system prompt. #}",
+                "{%- set loop_messages = loop_messages | rejectattr('role', 'equalto', 'system') | list %}",
+                "{#- A conversation with only system messages gets an empty user message for the system prompt. #}",
+                "{%- if messages | length > 0 and loop_messages | length == 0 %}",
+                "    {%- set loop_messages = [{'role': 'user', 'content': ''}] %}",
+                "{%- endif %}",
+            ]
+        )
 
     return "\n".join(lines)
 
@@ -916,7 +962,7 @@ def _generate_flush_logic(config: TemplateConfig) -> list[str]:
             "                    {%- set ns_msg = namespace(msg_text_parts=[]) %}",
             "                    {%- for block in msg['content'] %}",
             "                        {%- if block['type'] == 'text' %}",
-            "                            {%- set ns_msg.msg_text_parts = ns_msg.msg_text_parts + [block['text']] %}",
+            "                            {%- set ns_msg.msg_text_parts = ns_msg.msg_text_parts + ([block['text']] if block['text'] else []) %}",  # noqa: E501
             "                        {%- else %}",
             "                            {%- if ns_msg.msg_text_parts | length > 0 %}",
             "                                {%- set ns_c.text_parts = ns_c.text_parts + [ns_msg.msg_text_parts | join('')] %}",  # noqa: E501
@@ -940,7 +986,7 @@ def _generate_flush_logic(config: TemplateConfig) -> list[str]:
             "                {%- elif msg['content'] is not none %}",
             "                    {%- for block in msg['content'] %}",
             "                        {%- if block['type'] == 'text' %}",
-            "                            {%- set ns_c.text_parts = ns_c.text_parts + [block['text']] %}",
+            "                            {%- set ns_c.text_parts = ns_c.text_parts + ([block['text']] if block['text'] else []) %}",  # noqa: E501
             "                        {%- else %}",
             "                            {%- if ns_c.text_parts | length > 0 %}",
             "                                {%- set ns_c.chunks = ns_c.chunks + [{'type': 'text', 'text': ns_c.text_parts | join('\\n\\n')}] %}",  # noqa: E501
@@ -956,7 +1002,7 @@ def _generate_flush_logic(config: TemplateConfig) -> list[str]:
     lines.extend(
         [
             "                {%- if msg['content'] is string %}",
-            "                    {%- set ns_c.text_parts = ns_c.text_parts + [msg['content']] %}",
+            "                    {%- set ns_c.text_parts = ns_c.text_parts + ([msg['content']] if msg['content'] else []) %}",  # noqa: E501
             *list_content_lines,
             "                {%- if msg['tool_calls'] is defined and msg['tool_calls'] is not none %}",
             "                    {%- set ns_c.tool_calls = ns_c.tool_calls + msg['tool_calls'] | list %}",
@@ -1005,7 +1051,8 @@ def _generate_system_message_handling(config: TemplateConfig) -> str:
     ]
 
     if config.spm and config.version >= TokenizerVersion.v7:
-        lines.append("        {{- '" + _BEGIN_SYSTEM + " ' -}}")
+        # SentencePiece encodes empty text to no tokens, so there is no space before empty content.
+        lines.append("        {{- '" + _BEGIN_SYSTEM + "' ~ (' ' if message['content'] else '') -}}")
     else:
         lines.append("        {{- '" + _BEGIN_SYSTEM + "' -}}")
 
@@ -1048,8 +1095,8 @@ def _generate_alternation_check(config: TemplateConfig) -> str:
     - After `assistant`: `assistant`, `user`, `tool`
     - After `tool`: `assistant`, `tool`, `user`
 
-    For pre-v7 templates, system messages are extracted before this check,
-    so only `user`, `assistant`, and `tool` roles are seen.
+    For pre-v7 templates, system messages are extracted (and their position
+    checked) before this check, so only `user`, `assistant`, and `tool` roles are seen.
 
     Args:
         config: The template configuration.
@@ -1231,8 +1278,10 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
             lines.append("            {%- set user_content = message['content'] %}")
 
             if config.spm and config.image_support:
-                # SPM + prev_img: string content gets [INST] with space
-                lines.append("            {%- set inst_tag = '" + _BEGIN_INST + " ' %}")
+                # SPM + prev_img: string content gets [INST] with a space, unless it is empty
+                lines.append(
+                    "            {%- set inst_tag = '" + _BEGIN_INST + "' ~ (' ' if message['content'] else '') %}"
+                )
 
             lines.append("        {%- endif %}")
 
@@ -1240,7 +1289,7 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
         if config.spm and config.image_support:
             lines.append("        {{- inst_tag -}}")
         elif config.spm:
-            lines.append("        {{- '" + _BEGIN_INST + " ' -}}")
+            lines.append("        {{- '" + _BEGIN_INST + "' ~ (' ' if message['content'] else '') -}}")
         else:
             lines.append("        {{- '" + _BEGIN_INST + "' -}}")
 
@@ -1272,7 +1321,7 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
             lines.append("        {%- if (ns.index == ns.max_idx_user) and system_message != '' %}")
             lines.append("            {%- set added_sp = true %}")
             lines.append("            {{- ' ' ~ system_message ~ '\\n\\n' }}")
-            lines.append("        {%- elif message['content'] is string %}")
+            lines.append("        {%- elif message['content'] is string and message['content'] %}")
             lines.append("            {{- ' '  }}")
             lines.append("        {%- endif %}")
             lines.append("")
@@ -1293,12 +1342,17 @@ def _generate_user_message_handling(config: TemplateConfig) -> str:
             lines.append("            {{- " + rc_str + " -}}")
             lines.append("        {%- elif message['content'] | length > 0 %}")
         else:
-            lines.append(f"        {{{{- '{inst_open}' }}}}")
+            # v2+ SentencePiece encodes empty text to no tokens, so there is no space before empty content.
+            spm_space = config.spm and config.version >= TokenizerVersion.v2
+            lines.append(f"        {{{{- '{_BEGIN_INST if spm_space else inst_open}' }}}}")
             if config.version == TokenizerVersion.v1:
                 lines.append("        {%- if loop.index0 == 0 and system_message != '' %}")
             else:
                 lines.append("        {%- if (ns.index == ns.max_idx_user) and system_message != '' %}")
-            lines.append("            {{- system_message ~ '\\n\\n' }}")
+            lines.append("            {{- " + ("' ' ~ " if spm_space else "") + "system_message ~ '\\n\\n' }}")
+            if spm_space:
+                lines.append("        {%- elif message['content'] %}")
+                lines.append("            {{- ' ' }}")
             lines.append("        {%- endif %}")
             lines.append("        {%- if message['content'] is string %}")
             # Pre-v7 plain string branch (call site 2 for non-SPM): simple text-only
@@ -1377,6 +1431,8 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     lines.append("")
     lines.append(f"    {comment}")
     lines.append("    {%- elif message['role'] == 'assistant' %}")
+    if config.use_generation_blocks:
+        lines.append(_GENERATION_START)
 
     if config.version in [TokenizerVersion.v2, TokenizerVersion.v3]:
         lines.append(
@@ -1444,6 +1500,8 @@ def _generate_assistant_message_handling(config: TemplateConfig) -> str:
     if config.version != TokenizerVersion.v2:
         lines.append("")
         lines.append("        {{- " + config.eos_expr + " }}")
+    if config.use_generation_blocks:
+        lines.append(_GENERATION_END)
 
     if config.spm and config.version >= TokenizerVersion.v2:
         lines.append("        {%- set ns.prev_tool=false %}")
@@ -1855,12 +1913,15 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("        {%- endif %}")
     lines.append("        {{- ' " + _END_INST + "' }}")
     if config.spm:
-        lines.append("        {%- if loop.index < loop.length %}")
+        # SentencePiece prefixes the assistant content with a space. A following user message has its own.
+        lines.append("        {%- if loop.index < loop.length and loop_messages[loop.index]['role'] == 'assistant' %}")
         lines.append('            {{- " " }}')
         lines.append("        {%- endif %}")
     lines.append("")
     lines.append("    {#- Assistant messages supports text content or text chunks. #}")
     lines.append("    {%- elif message['role'] == 'assistant' %}")
+    if config.use_generation_blocks:
+        lines.append(_GENERATION_START)
     lines.append("        {%- if message['content'] is string and message['content'] != '' %}")
     lines.append("            {{- message['content'] }}")
     lines.append("        {%- elif message['content'] | length > 0 %}")
@@ -1878,6 +1939,8 @@ def _generate_v1_template(config: TemplateConfig) -> str:
     lines.append("            {{- raise_exception('Assistant message content must be non-empty.') }}")
     lines.append("        {%- endif %}")
     lines.append("        {{- " + config.eos_expr + "}}")
+    if config.use_generation_blocks:
+        lines.append(_GENERATION_END)
     lines.append("")
     lines.append("")
     lines.append("    {#- Raise exception for unsupported roles. #}")

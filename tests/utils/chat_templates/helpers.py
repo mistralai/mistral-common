@@ -15,7 +15,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from jinja2 import BaseLoader
+from jinja2 import BaseLoader, nodes
+from jinja2.ext import Extension
+from jinja2.parser import Parser
 from jinja2.sandbox import ImmutableSandboxedEnvironment
 from PIL import Image
 
@@ -24,11 +26,12 @@ from mistral_common.integrations.chat_templates.template_generator import (
     TemplateConfig,
     build_chat_template,
 )
-from mistral_common.protocol.instruct.messages import ReasoningFieldFormat
+from mistral_common.protocol.instruct.messages import AssistantMessage, ReasoningFieldFormat
 from mistral_common.protocol.instruct.request import ChatCompletionRequest, ReasoningEffort
 from mistral_common.protocol.instruct.validator import ValidationMode
 from mistral_common.tokens.tokenizers.audio import Audio
 from mistral_common.tokens.tokenizers.base import TokenizerVersion
+from mistral_common.tokens.tokenizers.instruct import InstructTokenizerBase
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.model_settings_builder import (
     JSONSchemaBuilder,
@@ -186,6 +189,17 @@ def _build_model_settings_builder(config: TestConfig) -> ModelSettingsBuilder | 
     )
 
 
+class GenerationBlock(Extension):
+    r"""Parse HF Transformers' `{% generation %}` block as a scoped no-op, like its `AssistantTracker`."""
+
+    tags = {"generation"}
+
+    def parse(self, parser: Parser) -> nodes.Node:
+        lineno = next(parser.stream).lineno
+        body = parser.parse_statements(("name:endgeneration",), drop_needle=True)
+        return nodes.Scope(body, lineno=lineno)
+
+
 def render_template(
     template: str,
     messages: list[Any],
@@ -207,7 +221,7 @@ def render_template(
     def tojson(value: Any) -> str:
         return json.dumps(obj=value, ensure_ascii=False)
 
-    env = ImmutableSandboxedEnvironment(loader=BaseLoader())
+    env = ImmutableSandboxedEnvironment(loader=BaseLoader(), extensions=[GenerationBlock])
     env.globals["raise_exception"] = raise_exception
     env.filters["tojson"] = tojson
     jinja_template = env.from_string(template)
@@ -246,6 +260,31 @@ def encode_mistral_common(mistral_tokenizer: MistralTokenizer, chat_request: Cha
     if spm:
         mistral_encoded = mistral_encoded.replace(SPM_WHITESPACE, " ").replace("<0x0A>", "\n")
     return mistral_encoded
+
+
+def encode_mistral_common_assistant_tokens(
+    mistral_tokenizer: MistralTokenizer, chat_request: ChatCompletionRequest
+) -> list[int]:
+    r"""Get the tokens mistral-common encodes for the assistant messages of a chat request.
+
+    Args:
+        mistral_tokenizer: The tokenizer encoding the request.
+        chat_request: The chat completion request to encode.
+
+    Returns:
+        The concatenated tokens of each assistant message, in order.
+    """
+    instruct_request = mistral_tokenizer._instruct_request_normalizer.from_chat_completion_request(chat_request)
+    instruct_tokenizer = mistral_tokenizer.instruct_tokenizer
+    assert isinstance(instruct_tokenizer, InstructTokenizerBase)
+    _, last_user_idx = instruct_tokenizer.find_first_last_user(instruct_request)
+    tokens: list[int] = []
+    for idx, message in enumerate(instruct_request.messages):
+        if isinstance(message, AssistantMessage):
+            tokens += instruct_tokenizer.encode_assistant_message(
+                message=message, is_before_last_user_message=idx < last_user_idx
+            )
+    return tokens
 
 
 def _create_dummy_image() -> Image.Image:
