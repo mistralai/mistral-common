@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Iterator
 
@@ -118,12 +119,18 @@ def _filter_valid_tokenizer_files(files: list[str]) -> list[tuple[str, str]]:
     return valid_tokenizer_files
 
 
+def _natural_sort_key(name: str) -> tuple[str | int, ...]:
+    r"""Sort key that compares the digit runs of `name` as numbers, so `v13` sorts after `v7`."""
+    return tuple(int(part) if part.isdecimal() else part for part in re.split(r"(\d+)", name))
+
+
 def get_one_valid_tokenizer_file(files: list[str]) -> str:
     r"""Get one valid tokenizer file from a list of files.
 
     Valid files are `tekken.json` or sentencepiece files with a known version
     suffix. If multiple valid files exist, `tekken.json` wins; otherwise the
-    last one in sorted order is chosen with a warning.
+    last one in sorted order is chosen with a warning. Numbers in the file
+    names are compared numerically, so `.model.v13` wins over `.model.v7`.
 
     Args:
         files: The list of file paths to choose from.
@@ -142,7 +149,7 @@ def get_one_valid_tokenizer_file(files: list[str]) -> str:
         for file_name, tokenizer_file in valid_tokenizer_file_names_and_files:
             if "tekken.json" == file_name:
                 return tokenizer_file
-        tokenizer_file = sorted(valid_tokenizer_file_names_and_files, key=lambda x: x[0])[-1][1]
+        tokenizer_file = sorted(valid_tokenizer_file_names_and_files, key=lambda x: _natural_sort_key(x[0]))[-1][1]
         logger.warning(f"Multiple valid tokenizer files found. Using {tokenizer_file}.")
     else:
         tokenizer_file = valid_tokenizer_file_names_and_files[0][1]
