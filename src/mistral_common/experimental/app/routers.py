@@ -190,6 +190,8 @@ async def generate(
     exclude_fields = {"messages", "tools"}
 
     request_json = request.model_dump()
+    # llama.cpp reads the sampling seed from `seed` and ignores `random_seed`.
+    request_json["seed"] = request_json.pop("random_seed")
     request_json.update(extra_fields)
 
     request_json = {k: v for k, v in request_json.items() if k not in exclude_fields}
