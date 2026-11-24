@@ -499,12 +499,12 @@ def test_generate_forwards_seed(
     seed_field: str, seed: int, mistral_tokenizer_v13: MistralTokenizer, tekken_v13_client: TestClient
 ) -> None:
     output_tokens = mistral_tokenizer_v13.instruct_tokenizer.encode_assistant_message(  # type: ignore[attr-defined]
-        AssistantMessage(content="Hello, world!"), False
+        message=AssistantMessage(content="Hello, world!"), is_before_last_user_message=False
     )
     body = {"messages": [{"role": "user", "content": "Hello, world!"}], seed_field: seed}
 
     with patch("mistral_common.experimental.app.routers.requests.post") as mock_generate:
-        mock_generate.return_value = MockResponse(200, {"tokens": output_tokens})
+        mock_generate.return_value = MockResponse(status_code=200, json_data={"tokens": output_tokens})
         response = tekken_v13_client.post("/v1/chat/completions", json=body)
 
     assert response.status_code == 200
