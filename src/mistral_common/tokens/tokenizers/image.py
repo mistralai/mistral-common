@@ -160,13 +160,17 @@ def _convert_to_rgb(image: Image.Image) -> Image.Image:
     r"""Convert a PIL image to RGB.
 
     Transparent areas become white: RGBA images are composited over a white
-    background before the final RGB conversion.
+    background before the final RGB conversion. 16-bit grayscale images are
+    scaled down to 8 bits first.
 
     Returns:
         The image in RGB mode, or the input unchanged if already RGB.
     """
     if image.mode == "RGB":
         return image
+    if image.mode.startswith("I;16"):
+        # Pillow clips 16-bit values to 255 when converting, instead of scaling them.
+        image = Image.fromarray((np.asarray(image) >> 8).astype(np.uint8))
     if image.mode != "RGBA":
         image = image.convert("RGBA")
     white_bg: Image.Image = Image.new("RGBA", image.size, "WHITE")
