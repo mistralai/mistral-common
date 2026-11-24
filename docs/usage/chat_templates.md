@@ -46,7 +46,7 @@ The repository's tests check that Transformers' `apply_chat_template` produces t
 
 ## Generation blocks
 
-The template wraps each assistant turn, up to and including its EOS token, in a `{% generation %}` block. Transformers uses these blocks to mark the assistant tokens when you pass `return_assistant_tokens_mask=True` to `apply_chat_template`, for example to train on the assistant tokens only. The blocks do not change the rendered text.
+The template wraps each assistant turn, up to and including its EOS token, in a `{% generation %}` block. Transformers' `apply_chat_template` reads these blocks when you pass `return_assistant_tokens_mask=True`, and returns an `assistant_masks` field that marks the assistant tokens. TRL's `SFTTrainer` uses this mask to train on the assistant tokens only when you set `assistant_only_loss=True` in its `SFTConfig`. The blocks do not change the rendered text.
 
 Jinja engines that do not know the `generation` tag fail to parse the template: plain Jinja2 raises `Encountered unknown tag 'generation'` and minijinja raises `unknown statement generation`. For these engines, generate the template without the blocks:
 
