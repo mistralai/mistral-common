@@ -1,4 +1,6 @@
 import base64
+import io
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -97,3 +99,29 @@ def test_transcription_request_to_openai_rejects_invalid_audio_bytes() -> None:
 
     with pytest.raises(ValueError, match="Failed to detect audio format"):
         request.to_openai()
+
+
+def test_transcription_request_from_openai_accepts_binary_file_object(
+    audio_samples: np.ndarray, tmp_path: Path
+) -> None:
+    raw_audio = audio_bytes(samples=audio_samples, fmt="wav")
+    audio_path = tmp_path / "recording.wav"
+    audio_path.write_bytes(raw_audio)
+    expected = TranscriptionRequest.from_openai({"file": io.BytesIO(raw_audio), "model": "model"})
+
+    with audio_path.open("rb") as audio_file:
+        request = TranscriptionRequest.from_openai({"file": audio_file, "model": "model"})
+
+    assert request == expected
+
+
+def test_transcription_request_from_openai_accepts_upload_wrapper(audio_samples: np.ndarray) -> None:
+    raw_audio = audio_bytes(samples=audio_samples, fmt="wav")
+
+    class UploadWrapper:
+        def __init__(self, data: bytes) -> None:
+            self.file = io.BytesIO(data)
+
+    request = TranscriptionRequest.from_openai({"file": UploadWrapper(raw_audio), "model": "model"})
+
+    assert request == TranscriptionRequest.from_openai({"file": io.BytesIO(raw_audio), "model": "model"})
