@@ -4,6 +4,24 @@ import pytest
 from mistral_common.audio import hertz_to_mel, mel_filter_bank, mel_to_hertz
 
 
+@pytest.mark.parametrize("freq", [0.0, 100.0, 1000.0, 4000.0])
+def test_hertz_to_mel_zero_dimensional_array(freq: float) -> None:
+    """Scalar-shaped arrays follow the scalar conversion and keep their shape."""
+    result = hertz_to_mel(freq=np.array(freq))
+    assert isinstance(result, np.ndarray)
+    assert result.shape == ()
+    assert result.item() == pytest.approx(hertz_to_mel(freq=freq))
+
+
+@pytest.mark.parametrize("freq", [0.0, 100.0, 1000.0, 4000.0])
+def test_mel_to_hertz_zero_dimensional_array(freq: float) -> None:
+    """A zero-dimensional mel array round-trips the scalar frequency."""
+    result = mel_to_hertz(mels=np.array(hertz_to_mel(freq=freq)))
+    assert isinstance(result, np.ndarray)
+    assert result.shape == ()
+    assert result.item() == pytest.approx(freq)
+
+
 @pytest.mark.parametrize(
     ("num_frequency_bins", "num_mel_bins", "min_frequency", "max_frequency", "match"),
     [
