@@ -14,7 +14,9 @@ from mistral_common.integrations.chat_templates.chat_templates import convert_to
 repo_id = "mistralai/Ministral-3-3B-Instruct-2512"
 tokenizer_file = hf_hub_download(repo_id=repo_id, filename="tekken.json")
 
-chat_template = convert_tokenizer_to_chat_template(tokenizer_file, system_prompt="You are a helpful assistant.")
+chat_template = convert_tokenizer_to_chat_template(
+    tokenizer_file=tokenizer_file, system_prompt="You are a helpful assistant."
+)
 
 with open("chat_template.jinja", "w", encoding="utf-8") as f:
     f.write(chat_template)
@@ -31,9 +33,9 @@ Render the template with the conversation as `messages` in the OpenAI format, an
 ```python
 from transformers import PreTrainedTokenizerFast
 
-hf_tokenizer = PreTrainedTokenizerFast.from_pretrained(repo_id, fix_mistral_regex=True)
+hf_tokenizer = PreTrainedTokenizerFast.from_pretrained(pretrained_model_name_or_path=repo_id, fix_mistral_regex=True)
 hf_tokenizer.apply_chat_template(
-    [{"role": "user", "content": "Hello, how are you?"}], chat_template=chat_template, tokenize=False
+    conversation=[{"role": "user", "content": "Hello, how are you?"}], chat_template=chat_template, tokenize=False
 )
 # '<s>[SYSTEM_PROMPT]You are a helpful assistant.[/SYSTEM_PROMPT][INST]Hello, how are you?[/INST]'
 ```
@@ -49,7 +51,7 @@ The template wraps each assistant turn, up to and including its EOS token, in a 
 Jinja engines that do not know the `generation` tag fail to parse the template: plain Jinja2 raises `Encountered unknown tag 'generation'` and minijinja raises `unknown statement generation`. For these engines, generate the template without the blocks:
 
 ```python
-chat_template = convert_tokenizer_to_chat_template(tokenizer_file, use_generation_blocks=False)
+chat_template = convert_tokenizer_to_chat_template(tokenizer_file=tokenizer_file, use_generation_blocks=False)
 ```
 
 ## Without a tokenizer file
