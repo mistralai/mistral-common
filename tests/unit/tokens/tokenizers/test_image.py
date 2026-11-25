@@ -229,6 +229,21 @@ def test_image_encoder_formats(spatial_merge_size: int) -> None:
         assert output.tokens == outputs[0].tokens
 
 
+def test_image_encoder_16_bit_grayscale_png() -> None:
+    image_encoder = _encoder(spatial_merge_size=1)
+
+    levels = np.tile(np.arange(256, dtype=np.uint16), (16, 1))
+    png_16_bit = _png_bytes(Image.fromarray(levels * 257))
+    png_8_bit = _png_bytes(Image.fromarray(levels.astype(np.uint8)))
+    assert Image.open(BytesIO(png_16_bit)).mode == "I;16"
+
+    def encode(png: bytes) -> np.ndarray:
+        data_url = f"data:image/png;base64,{base64.b64encode(png).decode('utf-8')}"
+        return image_encoder(ImageURLChunk(image_url=data_url)).image
+
+    np.testing.assert_allclose(encode(png_16_bit), encode(png_8_bit), rtol=0, atol=1e-6)
+
+
 @pytest.mark.parametrize(
     ("dtype", "expected_dtype"),
     [
