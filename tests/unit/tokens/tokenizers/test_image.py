@@ -1,15 +1,18 @@
 import base64
+import tracemalloc
 from io import BytesIO
 from pathlib import Path
 from typing import Any
 from unittest.mock import Mock, patch
 
+import cv2
 import numpy as np
 import pytest
 import requests
 from PIL import Image
 
 from mistral_common.protocol.instruct.chunk import ImageChunk, ImageURLChunk
+from mistral_common.tokens.tokenizers import image as image_module
 from mistral_common.tokens.tokenizers.image import (
     DATASET_MEAN,
     DATASET_STD,
@@ -250,3 +253,71 @@ def test_transform_image_returns_float32() -> None:
     pil_img = _create_test_image((128, 128))
     transformed = transform_image(pil_img, (64, 64))
     assert transformed.dtype == np.float32, f"Expected float32 but got {transformed.dtype}"
+
+
+def _random_image(mode: str, size: tuple[int, int]) -> Image.Image:
+    rng = np.random.default_rng(seed=0)
+    width, height = size
+    if mode == "P":
+        # Palette image where palette index 0 is fully transparent.
+        image = Image.fromarray(rng.integers(0, 16, (height, width), dtype=np.uint8), mode="P")
+        image.putpalette(rng.integers(0, 256, 16 * 3, dtype=np.uint8).tolist())
+        image.info["transparency"] = 0
+        return image
+    channels = {"1": 1, "L": 1, "LA": 2, "RGB": 3, "RGBA": 4}[mode]
+    pixels = rng.integers(0, 256, (height, width, channels), dtype=np.uint8)
+    if mode == "1":
+        return Image.fromarray(pixels[:, :, 0] > 127)
+    return Image.fromarray(pixels[:, :, 0] if channels == 1 else pixels, mode=mode)
+
+
+def _transform_image_whole(image: Image.Image, new_size: tuple[int, int]) -> np.ndarray:
+    """Convert the whole image to float32 and resize it in a single call."""
+    if image.mode != "RGB":
+        image = image.convert("RGBA")
+        white_background = Image.new("RGBA", image.size, "WHITE")
+        white_background.paste(image, (0, 0), image)
+        image = white_background.convert("RGB")
+    resized = cv2.resize(np.array(image, dtype=np.float32), new_size, interpolation=cv2.INTER_CUBIC)
+    return normalize(resized, DATASET_MEAN, DATASET_STD)
+
+
+@pytest.mark.parametrize("mode", ["1", "L", "LA", "P", "RGB", "RGBA"])
+@pytest.mark.parametrize(
+    ("size", "new_size"),
+    [
+        pytest.param((40, 50), (16, 20), id="downscale"),
+        pytest.param((40, 50), (64, 80), id="upscale"),
+        pytest.param((40, 50), (40, 50), id="same-size"),
+        pytest.param((300, 3), (48, 16), id="wide"),
+    ],
+)
+def test_transform_image_banded_matches_whole_image_resize(
+    monkeypatch: pytest.MonkeyPatch, mode: str, size: tuple[int, int], new_size: tuple[int, int]
+) -> None:
+    image = _random_image(mode, size)
+    expected = _transform_image_whole(image, new_size)
+
+    # 300 pixels per band gives several bands, the last one shorter than the others.
+    monkeypatch.setattr(image_module, "_RESIZE_BAND_PIXELS", 300)
+    actual = transform_image(image, new_size)
+
+    assert actual.dtype == np.float32
+    assert actual.shape == (3, new_size[1], new_size[0])
+    np.testing.assert_allclose(actual, expected, rtol=0, atol=1e-5)
+
+
+@pytest.mark.parametrize("mode", ["L", "RGB"])
+def test_transform_image_peak_memory_is_below_float32_input_size(mode: str) -> None:
+    side = 8000
+    image = Image.new(mode, (side, side))
+
+    tracemalloc.start()
+    try:
+        transform_image(image, (64, 64))
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    # A float32 RGB copy of the input alone takes 12 bytes per pixel.
+    assert peak < 4 * side * side, f"peak of {peak / 2**20:.0f} MiB for a {side}x{side} {mode} image"
