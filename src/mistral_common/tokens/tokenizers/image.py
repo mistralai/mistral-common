@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 if is_opencv_installed():
     import cv2
 
+# Pixels converted to float32 at a time when resizing a large image (48 MiB as RGB).
+_RESIZE_BAND_PIXELS = 1 << 22
+
 
 @dataclass
 class ImageEncoding:
@@ -209,11 +212,43 @@ def normalize(
     return np_image.transpose(2, 0, 1)
 
 
+def _resize_rgb_float32(image: Image.Image, new_size: tuple[int, int]) -> np.ndarray:
+    r"""Convert a PIL image to RGB float32 and resize it with cubic interpolation.
+
+    Images above `_RESIZE_BAND_PIXELS` pixels are converted and resized in
+    horizontal bands, so no float32 copy of the full-size image is made. Cubic
+    resizing is separable, so resizing the width band by band (the height is
+    unchanged, which is an identity) and then the height gives the same result
+    as one call on the whole image.
+
+    Args:
+        image: PIL image to resize.
+        new_size: Target (width, height) in pixels.
+
+    Returns:
+        The resized image with shape (H, W, 3) and values in [0, 255].
+    """
+    width, height = image.size
+    band_height = max(_RESIZE_BAND_PIXELS // width, 1)
+    if band_height >= height:
+        return cv2.resize(np.array(_convert_to_rgb(image), dtype=np.float32), new_size, interpolation=cv2.INTER_CUBIC)
+
+    new_width, _ = new_size
+    resized_width = np.empty((height, new_width, 3), dtype=np.float32)
+    for top in range(0, height, band_height):
+        bottom = min(top + band_height, height)
+        band = np.array(_convert_to_rgb(image.crop((0, top, width, bottom))), dtype=np.float32)
+        resized_width[top:bottom] = cv2.resize(band, (new_width, bottom - top), interpolation=cv2.INTER_CUBIC)
+    return cv2.resize(resized_width, new_size, interpolation=cv2.INTER_CUBIC)
+
+
 def transform_image(image: Image.Image, new_size: tuple[int, int]) -> np.ndarray:
     r"""Resize and normalize an image for the model.
 
     Converts to RGB (transparent backgrounds become white), resizes with cubic
-    interpolation, then normalizes with the dataset statistics.
+    interpolation, then normalizes with the dataset statistics. Large images
+    are converted and resized in bands, so memory use does not grow with the
+    float32 size of the input image.
 
     Args:
         image: PIL image to transform.
@@ -227,7 +262,7 @@ def transform_image(image: Image.Image, new_size: tuple[int, int]) -> np.ndarray
     """
     assert_opencv_installed()
 
-    np_image = cv2.resize(np.array(_convert_to_rgb(image), dtype=np.float32), new_size, interpolation=cv2.INTER_CUBIC)
+    np_image = _resize_rgb_float32(image, new_size)
     return normalize(np_image, DATASET_MEAN, DATASET_STD)
 
 
