@@ -408,6 +408,16 @@ def test_finetuning_assistant_message_openai_round_trip_omits_weight() -> None:
             AssistantMessage(content=[ThinkChunk(thinking="Only reasoning", closed=True), TextChunk(text="Hi")]),
             id="reasoning-content-before-string-content",
         ),
+        pytest.param(
+            {"role": "assistant", "content": "Hi", "reasoning": ""},
+            AssistantMessage(content="Hi"),
+            id="empty-reasoning-is-dropped",
+        ),
+        pytest.param(
+            {"role": "assistant", "content": "Hi", "reasoning_content": ""},
+            AssistantMessage(content="Hi"),
+            id="empty-reasoning-content-is-dropped",
+        ),
     ],
 )
 def test_from_openai_reasoning_in_assistant_message(openai_message: dict[str, Any], expected: AssistantMessage) -> None:
