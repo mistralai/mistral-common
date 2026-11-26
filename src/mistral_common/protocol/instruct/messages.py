@@ -387,7 +387,8 @@ class AssistantMessage(BaseMessage):
         r"""Create an AssistantMessage from OpenAI format.
 
         Handles conversion of OpenAI's `reasoning`/`reasoning_content` fields to
-        Mistral's ThinkChunk format.
+        Mistral's ThinkChunk format. An empty `reasoning`/`reasoning_content` is
+        treated as absent, as in the generated chat templates.
 
         Args:
             openai_message: Dictionary matching OpenAI's assistant message schema.
@@ -428,7 +429,7 @@ class AssistantMessage(BaseMessage):
                     raise ValueError("`reasoning_content` and `reasoning` should be equal.")
                 openai_thinking = reasoning
 
-        if openai_thinking is not None:
+        if openai_thinking is not None and openai_thinking != "":
             has_thinking_chunks = isinstance(content, list) and any(isinstance(chunk, ThinkChunk) for chunk in content)
             if has_thinking_chunks:
                 raise InvalidAssistantMessageException(
