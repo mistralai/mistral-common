@@ -233,7 +233,6 @@ class Tekkenizer(Tokenizer):
         self._special_token_ids = {t["rank"] for t in special_tokens}
         self._special_tokens_reverse_vocab = {t["token_str"]: t["rank"] for t in special_tokens}
         self._vocab = [self.id_to_piece(i) for i in range(vocab_size)]
-        self._special_token_policy = SpecialTokenPolicy.IGNORE
         self._file_path = Path(_path) if _path is not None else None
         self._model_settings_builder = model_settings_builder
 
@@ -491,12 +490,11 @@ class Tekkenizer(Tokenizer):
                         f"Decoding `tokens` that contain special tokens ({list(group)}) is not allowed. \n"
                         "Either make sure `tokens` do not include any special tokens or, "
                         "if you want to decode `tokens` that includes special tokens, "
-                        "change the tokenizer's special token policy to IGNORE or KEEP: \n"
-                        "```\nfrom mistral_common.tokens.tokenizers.mistral import MistralTokenizer"
-                        "\nfrom mistral_common.tokens.tokenizers.tekken import SpecialTokenPolicy"
-                        "\n\ntokenizer = MistralTokenizer.v3(is_tekken=True)"
-                        "\ntekken = tokenizer.instruct_tokenizer.tokenizer"
-                        "\ntekken.special_token_policy = SpecialTokenPolicy.IGNORE  # or SpecialTokenPolicy.KEEP"
+                        "pass `special_token_policy=SpecialTokenPolicy.IGNORE` or `SpecialTokenPolicy.KEEP` "
+                        "to `decode`: \n"
+                        "```\nfrom mistral_common.tokens.tokenizers.base import SpecialTokenPolicy"
+                        "\n\ntokenizer.decode(tokens, special_token_policy=SpecialTokenPolicy.IGNORE)"
+                        "  # or SpecialTokenPolicy.KEEP"
                         "\n```"
                     )
                 elif special_token_policy == SpecialTokenPolicy.KEEP:

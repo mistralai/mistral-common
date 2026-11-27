@@ -6,7 +6,7 @@ from functools import partial
 import numpy as np
 import pytest
 
-from mistral_common.exceptions import TokenizerException
+from mistral_common.exceptions import TokenizerException, UnsupportedTokenizerFeatureException
 from mistral_common.protocol.instruct.chunk import TextChunk, ThinkChunk
 from mistral_common.protocol.instruct.messages import (
     AssistantMessage,
@@ -30,6 +30,7 @@ from tests.unit.tokens.tokenizers.instruct.request_builders import (
     build_assistant_list_content_request,
     build_assistant_text_chunk_request,
     build_assistant_text_request,
+    build_assistant_think_request,
     build_assistant_tool_calls_request,
     build_audio_user_request,
     build_call_with_id_before_last_user_request,
@@ -236,6 +237,9 @@ _TOOL_RESULT_IMAGE_TEXT = (
     "<s>[INST]a[/INST][TOOL_CALLS]F1[ARGS]{}</s>[TOOL_RESULTS][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END][/TOOL_RESULTS]"
 )
 
+_THINK_TOKENS_REQUIRED_MESSAGE = (
+    r"^Tokenizer v13 does not provide the \[THINK\] and \[/THINK\] special tokens required for think chunks\.$"
+)
 _INVALID_ASSISTANT_MESSAGE = r"^Invalid assistant message:"
 _TRUNCATION_FAILED_MESSAGE = r"^Input couldn't fit in truncate_at_max_token$"
 
@@ -1186,6 +1190,13 @@ def test_encode_instruct(
             TokenizerException,
             _INVALID_ASSISTANT_MESSAGE,
             id="audio-shared-empty-assistant",
+        ),
+        pytest.param(
+            "no_think",
+            partial(build_assistant_think_request, settings=None),
+            UnsupportedTokenizerFeatureException,
+            _THINK_TOKENS_REQUIRED_MESSAGE,
+            id="no-think-assistant-think",
         ),
     ],
 )
