@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from enum import StrEnum, auto
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from typing_extensions import assert_never
 
@@ -13,7 +13,6 @@ from mistral_common.imports import (
     assert_jinja2_installed,
     assert_llguidance_installed,
     is_jinja2_installed,
-    is_llguidance_installed,
 )
 from mistral_common.protocol.instruct.request import (
     ChatCompletionRequest,
@@ -25,7 +24,7 @@ from mistral_common.tokens.tokenizers.base import SpecialTokens, TokenizerVersio
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import is_tekkenizer
 
-if is_llguidance_installed():
+if TYPE_CHECKING:
     import llguidance as llg
 
 if is_jinja2_installed():
