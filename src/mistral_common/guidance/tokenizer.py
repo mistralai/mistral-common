@@ -1,11 +1,12 @@
 import re
+from typing import TYPE_CHECKING
 
-from mistral_common.imports import assert_llguidance_installed, is_llguidance_installed
+from mistral_common.imports import assert_llguidance_installed
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy, Tokenizer
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistral_common.tokens.tokenizers.tekken import is_tekkenizer
 
-if is_llguidance_installed():
+if TYPE_CHECKING:
     import llguidance as llg
 
 
@@ -118,6 +119,8 @@ def from_mistral_tokenizer(tokenizer: MistralTokenizer) -> "llg.LLTokenizer":
         TypeError: If the underlying tokenizer is not a Tekkenizer.
     """
     assert_llguidance_installed()
+    import llguidance as llg
+
     inner_tokenizer = tokenizer.instruct_tokenizer.tokenizer
     tokenizer_data = MistralLLGTokenizer(inner_tokenizer)
     return llg.LLTokenizer(llg.TokenizerWrapper(tokenizer_data))

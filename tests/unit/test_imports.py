@@ -325,3 +325,38 @@ def test_import_caches_are_cleared_after_a_case_fails() -> None:
             raise RuntimeError("simulated test failure")
 
     assert all(cached_check.cache_info().currsize == 0 for cached_check in _CACHED_IMPORT_CHECKS)
+
+
+def test_guidance_modules_import_without_loading_llguidance() -> None:
+    real_import = builtins.__import__
+
+    def fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name == "llguidance" or name.startswith("llguidance."):
+            raise ImportError("Simulated unloadable llguidance native library")
+        return real_import(name, *args, **kwargs)
+
+    with patch("builtins.__import__", side_effect=fake_import):
+        import importlib
+
+        import mistral_common.guidance.grammar_factory
+        import mistral_common.guidance.tokenizer
+
+        importlib.reload(mistral_common.guidance.tokenizer)
+        importlib.reload(mistral_common.guidance.grammar_factory)
+
+
+def test_from_mistral_tokenizer_fails_when_llguidance_cannot_load() -> None:
+    real_import = builtins.__import__
+
+    def fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name == "llguidance" or name.startswith("llguidance."):
+            raise ImportError("Simulated unloadable llguidance native library")
+        return real_import(name, *args, **kwargs)
+
+    mock_tokenizer = MagicMock()
+    with patch("mistral_common.guidance.tokenizer.assert_llguidance_installed"):
+        with patch("builtins.__import__", side_effect=fake_import):
+            from mistral_common.guidance.tokenizer import from_mistral_tokenizer
+
+            with pytest.raises(ImportError, match="Simulated unloadable llguidance"):
+                from_mistral_tokenizer(mock_tokenizer)
